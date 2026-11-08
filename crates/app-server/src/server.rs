@@ -3945,13 +3945,28 @@ impl AppServer {
             Some(ClientMethod::MessageHistoryClear) => {
                 self.message_history_processor.clear(connection.authority)
             }
-            Some(ClientMethod::AutomationList) => self.automation_processor.automation_list(),
+            Some(ClientMethod::AutomationList) => {
+                let include_chat = if request.params.is_null() {
+                    false
+                } else {
+                    let params: ash_app_server_protocol::protocol::automation::AutomationListParams =
+                        decode(&request.params)?;
+                    params.include_chat == Some(true)
+                };
+                self.automation_processor
+                    .automation_list(include_chat && !connection.code_sessions_only())
+            }
             Some(ClientMethod::AutomationPreview) => self
                 .automation_processor
                 .automation_preview(&request.params),
             Some(ClientMethod::AutomationWrite) => {
                 let params: ash_app_server_protocol::protocol::automation::AutomationWriteParams =
                     decode(&request.params)?;
+                if connection.code_sessions_only()
+                    && params.definition.session == ash_protocol::AutomationSession::NewChat
+                {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
                 if params.status == ash_protocol::AutomationStatus::Enabled
                     && !self
                         .artifact_binding_is_current(&params.definition)

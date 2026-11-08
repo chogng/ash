@@ -5,8 +5,8 @@ import type { ICreateAutomationOptions, IUpdateAutomationOptions } from './autom
 export type AutomationDialogCreateInitialValues = Partial<ICreateAutomationOptions>;
 
 export type IShowAutomationDialogOptions = (
-	| { readonly existing: IAutomationDescriptor; readonly initialValues?: never; }
-	| { readonly existing?: never; readonly initialValues?: AutomationDialogCreateInitialValues; }
+	| { readonly existing: IAutomationDescriptor; readonly initialValues?: never; readonly sessionKind?: never; }
+	| { readonly existing?: never; readonly initialValues?: AutomationDialogCreateInitialValues; readonly sessionKind?: 'chat'; }
 ) & { readonly commit?: (result: IAutomationDialogResult) => Promise<void>; };
 
 export type IAutomationDialogResult =

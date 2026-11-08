@@ -118,9 +118,9 @@ export class ChatWorkspaceContribution extends Disposable {
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
 		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, (_accessor, source) => showAshChat(source)));
-		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, accessor => {
+		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, (accessor, source) => {
 			const command = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'ash' ? SHOW_ASH_CHAT_COMMAND : openWebChatCommand;
-			return accessor.get(ICommandService).executeCommand(command);
+			return accessor.get(ICommandService).executeCommand(command, source);
 		}));
 		// The desktop contribution registers after the shared opener, which handles Code and other hosts.
 		this._register(opener.registerOpener({

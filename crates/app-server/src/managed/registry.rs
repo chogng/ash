@@ -813,9 +813,11 @@ impl ash_automation::AutomationExecutor for ProfileAppServerRegistry {
         run: &ash_protocol::AutomationRun,
         now: ash_protocol::UnixMillis,
     ) -> Result<ash_protocol::AutomationRun, String> {
+        let directory = (run.definition.session != ash_protocol::AutomationSession::NewChat)
+            .then(|| PathBuf::from(&run.definition.directory));
         let options = ConnectionOptions::new(
             self.host.profile_root(),
-            Some(PathBuf::from(&run.definition.directory)),
+            directory,
             GrantSource::UserConfig,
             self.host.product_services().map(Path::to_path_buf),
         );

@@ -295,6 +295,71 @@ fn automation_commands_are_shared_across_connections_and_reject_stale_edits() {
 }
 
 #[test]
+fn chat_schedules_use_the_profile_and_keep_code_catalogues_compatible() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
+    let server = server().with_automation_store(Arc::clone(&store));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let now = ash_automation::now().unwrap();
+    let code = create_run(&store, dir.path(), AutomationSession::New);
+    let mut definition = serde_json::to_value(&code.definition).unwrap();
+    definition["session"] = json!({"type":"newChat"});
+    definition["directory"] = json!("");
+    let mut params = json!({
+        "commandId":"chat-create", "id":"chat", "expectedRevision":0, "status":"paused",
+        "definition":definition
+    });
+    let created = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":2, "method":"automation/write", "params":params}),
+    );
+    assert_eq!(
+        created["result"]["definition"]["session"]["type"], "newChat",
+        "{created}"
+    );
+    for (request_id, include_chat, expected_count) in [(3, false, 1), (4, true, 2)] {
+        let list = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":request_id, "method":"automation/list",
+                "params":if include_chat { json!({"includeChat":true}) } else { json!({}) }}),
+        );
+        assert_eq!(
+            list["result"]["automations"].as_array().unwrap().len(),
+            expected_count,
+            "{list}"
+        );
+    }
+    params["commandId"] = json!("change-kind");
+    params["expectedRevision"] = json!(1);
+    params["definition"] = serde_json::to_value(&code.definition).unwrap();
+    let rejected = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":5, "method":"automation/write", "params":params}),
+    );
+    assert_eq!(rejected["error"]["message"], "InvalidParams");
+
+    let run = store.run_now("chat", "run-chat", now).unwrap();
+    let started = server.advance_automation_run(&run, now).unwrap();
+    let retry = server.advance_automation_run(&run, now).unwrap();
+    assert_eq!(retry.session_id, started.session_id);
+    assert_eq!(retry.turn_id, started.turn_id);
+    assert!(started.turn_id.is_some(), "{started:?}");
+    let session_id = started.session_id.unwrap();
+    let saved = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0", "id":6, "method":"session/read", "params":{"sessionId":session_id}}),
+    );
+    let session = &saved["result"]["session"];
+    assert_eq!(session["kind"], "chat", "{saved}");
+    assert!(session["executionTarget"].is_null(), "{saved}");
+}
+
+#[test]
 fn automation_retry_reconciles_the_same_accepted_turn() {
     let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();

@@ -20,9 +20,9 @@ export class AutomationDialog extends Disposable {
 	private readonly dialog: Dialog;
 	private readonly name: HTMLInputElement;
 	private readonly prompt: HTMLTextAreaElement;
-	private readonly directory: HTMLInputElement;
+	private readonly directory?: HTMLInputElement;
 	private readonly provider: HTMLSelectElement;
-	private readonly conversation: HTMLSelectElement;
+	private readonly conversation?: HTMLSelectElement;
 	private readonly schedule: HTMLSelectElement;
 	private readonly minutes: HTMLInputElement;
 	private readonly once: HTMLInputElement;
@@ -55,7 +55,9 @@ export class AutomationDialog extends Disposable {
 			schedule: options.existing.schedule,
 			enabled: options.existing.enabled,
 		} : options.initialValues;
+		const chat = initial?.target?.session.type === 'newChat';
 		this.form = h(document, 'form', { className: 'ash-automation-form' });
+		this.form.dataset.automationKind = chat ? 'chat' : 'code';
 		this.form.id = generateUuid();
 		this.form.append(h(document, 'h3', {}, localize('automations.taskSection', 'What to do')));
 		this.name = this.input(this.form, localize('automations.name', 'Name'));
@@ -68,13 +70,35 @@ export class AutomationDialog extends Disposable {
 		this.form.append(h(document, 'h3', {}, localize('automations.environmentSection', 'Where to run')));
 		this.provider = this.select(this.form, localize('automations.provider', 'Run on'), providers.map(item => [item.id, item.label]));
 		this.provider.disabled = !!options.existing;
-		this.directory = this.input(this.form, localize('automations.directory', 'Directory'));
-		const advanced = h(document, 'details');
-		advanced.append(h(document, 'summary', {}, localize('automations.conversation', 'Conversation')));
-		this.form.append(advanced);
-		this.conversation = this.select(advanced, localize('automations.conversation', 'Conversation'), [
-			['new', localize('automations.newConversation', 'New conversation for each run')],
-		]);
+		this.provider.value = initial?.target?.providerId ?? providers[0]?.id ?? '';
+		if (!chat) {
+			const directory = this.directory = this.input(this.form, localize('automations.directory', 'Directory'));
+			directory.value = initial?.target?.directory ?? '';
+			const advanced = h(document, 'details');
+			advanced.append(h(document, 'summary', {}, localize('automations.conversation', 'Conversation')));
+			this.form.append(advanced);
+			const conversation = this.conversation = this.select(advanced, localize('automations.conversation', 'Conversation'), []);
+			const updateConversations = (): void => {
+				conversation.replaceChildren(this.option(localize('automations.newConversation', 'New conversation for each run'), 'new'));
+				for (const item of conversations) {
+					// A destination without an owner must never be offered on a different host.
+					if (item.providerId !== this.provider.value) { continue; }
+					conversation.append(this.option(item.title, JSON.stringify({ type: 'continue', sessionId: item.sessionId, threadId: item.threadId })));
+				}
+			};
+			updateConversations();
+			this._register(addDisposableListener(this.provider, 'change', () => {
+				// A new host cannot use the previous host's directory or Session identity.
+				directory.value = '';
+				updateConversations();
+			}));
+			if (initial?.target?.session.type === 'continue') {
+				advanced.open = true;
+				const value = JSON.stringify(initial.target.session);
+				if (![...conversation.options].some(option => option.value === value)) conversation.append(this.option(localize('automations.savedConversation', 'Saved conversation'), value));
+				conversation.value = value;
+			}
+		}
 		this.form.append(h(document, 'h3', {}, localize('automations.timingSection', 'When to run')));
 		this.schedule = this.select(this.form, localize('automations.schedule', 'Schedule'), [
 			['daily', localize('automations.everyDay', 'Every day')],
@@ -111,28 +135,6 @@ export class AutomationDialog extends Disposable {
 		this.enabled.checked = initial?.enabled !== false;
 		this.name.value = initial?.name ?? '';
 		this.prompt.value = initial?.prompt ?? '';
-		this.directory.value = initial?.target?.directory ?? '';
-		this.provider.value = initial?.target?.providerId ?? providers[0]?.id ?? '';
-		const updateConversations = (): void => {
-			this.conversation.replaceChildren(this.option(localize('automations.newConversation', 'New conversation for each run'), 'new'));
-			for (const item of conversations) {
-				// A destination without an owner must never be offered on a different host.
-				if (item.providerId !== this.provider.value) { continue; }
-				this.conversation.append(this.option(item.title, JSON.stringify({ type: 'continue', sessionId: item.sessionId, threadId: item.threadId })));
-			}
-		};
-		updateConversations();
-		this._register(addDisposableListener(this.provider, 'change', () => {
-			// Changing hosts must not retain a directory or raw Session identity selected on the previous host.
-			this.directory.value = '';
-			updateConversations();
-		}));
-		if (initial?.target?.session.type === 'continue') {
-			advanced.open = true;
-			const value = JSON.stringify(initial.target.session);
-			if (![...this.conversation.options].some(option => option.value === value)) this.conversation.append(this.option(localize('automations.savedConversation', 'Saved conversation'), value));
-			this.conversation.value = value;
-		}
 		const schedule = initial?.schedule;
 		this.schedule.value = schedule?.type ?? 'daily';
 		if (schedule?.type === 'interval') this.minutes.value = String(schedule.minutes);
@@ -167,12 +169,14 @@ export class AutomationDialog extends Disposable {
 			renderBody: body => body.append(this.form),
 			renderFooter: footer => footer.append(actions),
 		});
-		const title = options.existing ? localize('automations.edit', 'Edit automation') : localize('automations.new', 'New automation');
+		const title = chat
+			? options.existing ? localize('scheduled.edit', 'Edit scheduled task') : localize('scheduled.new', 'New scheduled task')
+			: options.existing ? localize('automations.edit', 'Edit routine') : localize('automations.new', 'New routine');
 		this.dialog = this._register(new Dialog(parent, title, [], dialogOptions));
 		// Commit stays a native form action, and the caller owns only its business controls.
 		this.save = this._register(new Button(actions, {
 			...defaultButtonStyles,
-			label: localize('automations.save', 'Save automation'),
+			label: chat ? localize('scheduled.save', 'Save scheduled task') : localize('automations.save', 'Save routine'),
 			presentation: 'primary',
 			type: 'submit',
 		}));
@@ -289,8 +293,9 @@ export class AutomationDialog extends Disposable {
 			schedule: this.readSchedule(),
 			target: {
 				providerId: this.provider.value,
-				directory: this.directory.value.trim(),
-				session: this.conversation.value === 'new' ? { type: 'new' as const } : JSON.parse(this.conversation.value)
+				directory: this.directory?.value.trim() ?? '',
+				session: !this.conversation ? { type: 'newChat' as const }
+					: this.conversation.value === 'new' ? { type: 'new' as const } : JSON.parse(this.conversation.value)
 			}
 		};
 		return this.options.existing ? { kind: 'update', id: this.options.existing.id, value } : { kind: 'create', value };

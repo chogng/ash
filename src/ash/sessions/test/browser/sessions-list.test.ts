@@ -898,7 +898,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	};
 	const filter = (list: SessionsList): IAction => {
 		const action = submenuAction(list, 'sessions.list.show', 'sessions.list.toggleAutomationSessions');
-		assert.equal(action.label, '显示自动化会话');
+		assert.equal(action.label, '显示任务运行会话');
 		return action;
 	};
 

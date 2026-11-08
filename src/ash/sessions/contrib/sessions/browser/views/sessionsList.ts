@@ -481,9 +481,9 @@ export class SessionsList extends DomWidget {
 						model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
 					new Separator(),
 				] : []),
-				choice('sessions.list.toggleAutomationSessions', localize('sessions.list.showAutomationSessions', 'Show Automation Sessions'),
+				choice('sessions.list.toggleAutomationSessions', localize('sessions.list.showAutomationSessions', 'Show Task Run Conversations'),
 					automation === 'always', () => model.setAutomationSessionsMode(automation === 'always' ? 'never' : 'always')),
-				choice('sessions.list.showAutomationSessionsAfterReply', localize('sessions.list.showAutomationSessionsAfterReply', 'Show Automation Sessions After Reply'),
+				choice('sessions.list.showAutomationSessionsAfterReply', localize('sessions.list.showAutomationSessionsAfterReply', 'Show Task Run Conversations After Reply'),
 					automation === 'afterReply', () => model.setAutomationSessionsMode(automation === 'afterReply' ? 'never' : 'afterReply')),
 			]),
 		], [...contributed]);

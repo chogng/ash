@@ -375,6 +375,8 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	using menus = registerMenus(services);
 	const contexts = services.get(IContextKeyService);
 	contexts.setContext('sessions.automationsAvailable', true);
+	contexts.setContext('sessions.scheduledAvailable', true);
+	contexts.setContext('sessions.workspaceMode', 'chat');
 	const chatOrder = ['sessions.open.creator', 'sessions.newSession', 'sessions.search', 'sessions.open.projects'];
 	const codeOrder = ['sessions.newSession', 'sessions.open.customize', 'sessions.open.symphony', 'sessions.open.collaboration'];
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(chatOrder), StorageScope.PROFILE, StorageTarget.USER);
@@ -382,7 +384,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	storage.store('sessions.activityBar.pinnedCodeActions', JSON.stringify(['sessions.open.symphony']), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
 	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation .ash-sessions-activity-item')].map(button => button.textContent);
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize', 'More']);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize', 'Scheduled', 'More']);
 	assert.equal(storage.get('sessions.activityBar.codeActionOrder', StorageScope.PROFILE), undefined);
 	assert.deepEqual(JSON.parse(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE)!), [...chatOrder, ...codeOrder.slice(1)]);
 	const newButton = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.newSession"] button')!;
@@ -394,7 +396,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	assert.equal(more.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'ellipsis');
 	more.click();
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
-	assert.deepEqual(shown.map(action => action.label), ['Symphony', 'Automations']);
+	assert.deepEqual(shown.map(action => action.label), ['Symphony', 'Routines']);
 	hideMenu?.();
 	assert.equal(more.getAttribute('aria-expanded'), 'false');
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
@@ -403,7 +405,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	await shown[0]!.run();
 	assert.deepEqual(labels(), ['New', 'Customize', 'Search', 'Symphony', 'More']);
 	contexts.setContext('sessions.workspaceMode', 'chat');
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Customize', 'Projects', 'Search', 'More']);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Customize', 'Projects', 'Search', 'Scheduled', 'More']);
 	more.click();
 	assert.deepEqual(shown.map(action => action.label), ['Collab']);
 	hideMenu?.();

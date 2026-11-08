@@ -86,6 +86,7 @@ await import('../../../../sessions/browser/sessions.contribution.js');
 const resources = new DisposableStore();
 
 const services = resources.add(new InstantiationService());
+services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected opener request'); } } as unknown as IOpenerService);
 services.registerInstance(IChatWidgetService, resources.add(new ChatWidgetService()));
 services.registerInstance(ISessionProviderScopeService, { onDidChangeScopes: Event.None, getScopes: () => [] } as unknown as ISessionProviderScopeService);
 
@@ -366,7 +367,6 @@ if (parameters.has('hosts')) {
 		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 		showContextMenu() { throw new Error('Unexpected Quick Input context menu'); }, hideContextMenu() { },
 	});
-	services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected host picker link'); } } as unknown as IOpenerService);
 	services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 	services.registerInstance(IRemoteConnectionApi, {
 		available: true, list: async () => hostTargets,

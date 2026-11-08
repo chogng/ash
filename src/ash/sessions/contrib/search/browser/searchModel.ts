@@ -118,7 +118,7 @@ export class SessionsSearchModel extends Disposable {
 	async refresh(): Promise<void> {
 		this.error.set(undefined);
 		await Promise.all([this.projects.reload(), this.automations.refresh().catch(() => {
-			if (!this.isDisposed) { this.error.set(localize('sessions.search.schedulesFailed', 'Could not load schedules. Try opening Search again.')); }
+			if (!this.isDisposed) { this.error.set(localize('sessions.search.schedulesFailed', 'Could not load tasks. Try opening Search again.')); }
 		})]);
 	}
 }

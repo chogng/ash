@@ -14,13 +14,17 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { Menus } from '../../../../browser/menus.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
+import { AUTOMATIONS_CUSTOM_VIEW_ID, SCHEDULED_CUSTOM_VIEW_ID, belongsToAutomationView } from '../automationsConstants.js';
+import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { automationRunStatusLabel, registerAutomationsAccessibility } from './automationsAccessibility.js';
 import { addDisposableListener, getActiveElement, h, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { isWeb } from '../../../../../base/common/platform.js';
+import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { constObservable, autorun, autorunWithStore, derived, observableSignalFromEvent, observableValue, transaction, type IObservable } from '../../../../../base/common/observable.js';
@@ -87,10 +91,11 @@ export class AutomationsCardsWidget extends Disposable {
 	private readonly details: HTMLElement;
 	private readonly attention: HTMLElement;
 	private readonly attentionItems = new Map<string, Button>();
+	private readonly displayPlans: IObservable<readonly IAutomationDescriptor[]>;
 	private readonly displayRuns: IObservable<readonly IAutomationRun[]>;
 	private returnFocus: HTMLElement | undefined;
 
-	constructor(container: HTMLElement,
+	constructor(container: HTMLElement, private readonly sessionKind: 'chat' | 'code',
 		@IAutomationService private readonly automations: IAutomationService,
 		@IAutomationDialogService private readonly dialogs: IAutomationDialogService,
 		@IAutomationRunner private readonly runner: IAutomationRunner,
@@ -102,8 +107,13 @@ export class AutomationsCardsWidget extends Disposable {
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@IChatWidgetService chatWidgets: IChatWidgetService,
 		@ISessionProviderScopeService providerScopes: ISessionProviderScopeService,
+		@ISessionsProvidersService providers: ISessionsProvidersService,
+		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super();
+		const chat = sessionKind === 'chat';
+		const providersChanged = observableSignalFromEvent(this, providers.onDidChangeProviders);
+		this.displayPlans = derived(reader => automations.automations.read(reader).filter(plan => belongsToAutomationView(plan.target, sessionKind)));
 		const widgetsChanged = observableSignalFromEvent(this, chatWidgets.onDidChangeWidgets);
 		const scopesChanged = observableSignalFromEvent(this, providerScopes.onDidChangeScopes);
 		const localProgressChanged = observableValue(this, 0);
@@ -117,23 +127,25 @@ export class AutomationsCardsWidget extends Disposable {
 			widgetsChanged.read(reader);
 			scopesChanged.read(reader);
 			localProgressChanged.read(reader);
-			const runs = automations.runs.read(reader);
+			const runs = automations.runs.read(reader).filter(run => belongsToAutomationView(run.definition.target, sessionKind));
 			const widgets = chatWidgets.getAllWidgets();
 			if (!runs.length || !widgets.length) return runs;
 			const scopes = providerScopes.getScopes();
 			return runs.map(run => automationRunWithLocalProgress(run, widgets, scopes.find(scope => scope.providerId === run.providerId)));
 		});
 		const document = container.ownerDocument;
-		this.element = h(document, 'section', { className: 'ash-automations', attributes: { 'aria-label': localize('automations.title', 'Automations') }, properties: { tabIndex: -1 } });
+		this.element = h(document, 'section', { className: 'ash-automations', attributes: { 'aria-label': chat ? localize('scheduled.title', 'Scheduled') : localize('automations.title', 'Routines'), 'data-automation-kind': sessionKind }, properties: { tabIndex: -1 } });
 		this._register(contexts.createScoped(this.element)).createKey('sessionsAutomationsFocused', true);
 		this.message = h(document, 'p', { className: 'ash-automation-notice', attributes: { role: 'status' } });
-		const plansSection = h(document, 'section', { className: 'ash-automation-plans-section', attributes: { 'aria-label': localize('automations.plans', 'Your automations') } });
+		const plansLabel = chat ? localize('scheduled.plans', 'Your scheduled tasks') : localize('automations.plans', 'Your routines');
+		const plansSection = h(document, 'section', { className: 'ash-automation-plans-section', attributes: { 'aria-label': plansLabel } });
 		const plansHeader = h(document, 'div', { className: 'ash-automation-section-heading' });
-		const plansHeading = h(document, 'h2', {}, localize('automations.plans', 'Your automations'));
+		const plansHeading = h(document, 'h2', {}, plansLabel);
 		const summary = h(document, 'p', { className: 'ash-automation-summary' });
 		plansHeader.append(plansHeading, summary);
 		const controls = h(document, 'div', { className: 'ash-automation-controls' });
-		const filters = h(document, 'div', { className: 'ash-automation-filters', attributes: { role: 'group', 'aria-label': localize('automations.filter', 'Filter automations') } });
+		const filterLabel = chat ? localize('scheduled.filter', 'Filter scheduled tasks') : localize('automations.filter', 'Filter routines');
+		const filters = h(document, 'div', { className: 'ash-automation-filters', attributes: { role: 'group', 'aria-label': filterLabel } });
 		const filterButtons = ([
 			{ value: 'all', label: localize('automations.all', 'All') },
 			{ value: 'enabled', label: localize('automations.enabled', 'Enabled') },
@@ -148,12 +160,13 @@ export class AutomationsCardsWidget extends Disposable {
 			return { value: item.value, button };
 		});
 		const search = h(document, 'div', { className: 'ash-automation-search' });
+		const searchLabel = chat ? localize('scheduled.search', 'Search scheduled tasks') : localize('automations.search', 'Search routines');
 		appendIcon(Lxicon.search, search);
 		this.search = this._register(new InputBox(search, {
 			inputBoxStyles: defaultInputBoxStyles,
 			type: 'search',
-			ariaLabel: localize('automations.search', 'Search automations'),
-			placeholder: localize('automations.search', 'Search automations'),
+			ariaLabel: searchLabel,
+			placeholder: searchLabel,
 		}));
 		this._register(this.search.onDidChange(value => this.query.set(value, undefined)));
 		controls.append(filters, search);
@@ -162,11 +175,13 @@ export class AutomationsCardsWidget extends Disposable {
 		const emptyIcon = h(document, 'div', { className: 'ash-automation-empty-icon' });
 		appendIcon(Lxicon.clockface, emptyIcon);
 		empty.append(emptyIcon,
-			h(document, 'h3', {}, localize('automations.emptyTitle', 'Create your first automation')),
-			h(document, 'p', {}, localize('automations.emptyDescription', 'Give your agent a task and a schedule. Start from a template, or create your own.')));
-		this.templates = this.createTemplates(empty);
+			h(document, 'h3', {}, chat ? localize('scheduled.emptyTitle', 'Create your first scheduled task') : localize('automations.emptyTitle', 'Create your first routine')),
+			h(document, 'p', {}, chat ? localize('scheduled.emptyDescription', 'Give Chat instructions and a schedule. Each run starts a new conversation.') : localize('automations.emptyDescription', 'Give your agent a task and a schedule. Start from a template, or create your own.')));
+		this.templates = chat ? [] : this.createTemplates(empty);
 		const noMatches = h(document, 'div', { className: 'ash-automation-no-matches' });
-		noMatches.append(h(document, 'p', { attributes: { role: 'status' } }, localize('automations.noMatches', 'No automations match your filters.')));
+		noMatches.append(h(document, 'p', { attributes: { role: 'status' } }, chat
+			? localize('scheduled.noMatches', 'No scheduled tasks match your filters.')
+			: localize('automations.noMatches', 'No routines match your filters.')));
 		this._register(new Button(noMatches, {
 			...defaultButtonStyles,
 			label: localize('automations.clearFilters', 'Clear filters'),
@@ -182,13 +197,13 @@ export class AutomationsCardsWidget extends Disposable {
 		const heading = h(document, 'h2', {}, localize('automations.history', 'Run history'));
 		historyHeader.append(heading, h(document, 'p', { className: 'ash-automation-section-description' }, localize('automations.historyHint', 'Review results and pick up where your agent left off.')));
 		const historyMessage = h(document, 'p', { className: 'ash-automation-notice', attributes: { role: 'status' } });
-		const historyEmpty = h(document, 'p', { className: 'ash-automation-empty-history' }, localize('automations.emptyHistory', 'No runs yet. Run an automation now or wait for its next scheduled time.'));
+		const historyEmpty = h(document, 'p', { className: 'ash-automation-empty-history' }, this.emptyHistoryLabel());
 		this.history = h(document, 'div', { className: 'ash-automation-history' });
 		historySection.append(historyHeader, historyMessage, historyEmpty, this.history);
 		const overview = h(document, 'div', { className: 'ash-automation-overview' });
 		const notificationPreference = h(document, 'label', { className: 'ash-automation-notification-preference' });
 		const notifySuccess = h(document, 'input', { properties: { type: 'checkbox' } });
-		notificationPreference.append(notifySuccess, h(document, 'span', {}, localize('automations.notifySuccess', 'Notify when an automation completes')));
+		notificationPreference.append(notifySuccess, h(document, 'span', {}, localize('automations.notifySuccess', 'Notify when a run succeeds')));
 		const sessionVisibilityChanged = observableSignalFromEvent(this, this.listModel.onDidChange);
 		const sessionCatalogChanged = observableSignalFromEvent(this, this.sessions.onDidChange);
 		const configurationChanged = observableSignalFromEvent(this, configuration.onDidChangeConfiguration);
@@ -201,7 +216,7 @@ export class AutomationsCardsWidget extends Disposable {
 		}));
 		this.attention = h(document, 'section', { className: 'ash-automation-attention', attributes: { 'aria-label': localize('automations.attention', 'Needs attention') } });
 		this.attention.append(h(document, 'h2', {}, localize('automations.attention', 'Needs attention')));
-		this.details = h(document, 'section', { className: 'ash-automation-details', attributes: { 'aria-label': localize('automations.details', 'Automation details') } });
+		this.details = h(document, 'section', { className: 'ash-automation-details', attributes: { 'aria-label': chat ? localize('scheduled.details', 'Scheduled task details') : localize('automations.details', 'Routine details') } });
 		overview.append(this.attention, plansSection, historySection, notificationPreference);
 		this.element.append(this.message, overview, this.details);
 		this._register(autorun(reader => {
@@ -211,10 +226,10 @@ export class AutomationsCardsWidget extends Disposable {
 			this.renderDetails(selected);
 		}));
 		this._register(CommandsRegistry.register('sessions.automations.openRun', (_accessor, id) => {
-			if (typeof id === 'string' && this.automations.runs.get().some(run => run.id === id)) this.openDetails({ kind: 'run', id });
+			if (typeof id === 'string' && this.displayRuns.get().some(run => run.id === id)) this.openDetails({ kind: 'run', id });
 		}));
 		this._register(addDisposableListener(this.element, 'focusin', event => {
-			if (!this.element.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.Automations)) status(localize('automations.helpHint', 'Press Alt+F1 for Automations keyboard help.'));
+			if (!this.element.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.Automations)) status(chat ? localize('scheduled.helpHint', 'Press Alt+F1 for Scheduled keyboard help.') : localize('automations.helpHint', 'Press Alt+F1 for Routines keyboard help.'));
 		}));
 		this._register(toDisposable(() => {
 			for (const card of this.cards.values()) card.lifetime.dispose();
@@ -223,10 +238,12 @@ export class AutomationsCardsWidget extends Disposable {
 			this.element.remove();
 		}));
 		this._register(autorun(reader => {
-			const plans = automations.automations.read(reader);
+			const plans = this.displayPlans.read(reader);
 			const runs = this.displayRuns.read(reader);
-			const state = automations.catalogueState.read(reader);
-			const historyState = automations.historyState?.read(reader);
+			providersChanged.read(reader);
+			const localStore = chat ? providers.getProvider(LOCAL_AGENT_HOST_PROVIDER_ID)?.automations : undefined;
+			const state = chat ? localStore?.catalogueState.read(reader) ?? 'unavailable' : automations.catalogueState.read(reader);
+			const historyState = chat ? localStore?.historyState?.read(reader) : automations.historyState?.read(reader);
 			this.query.read(reader);
 			const filter = this.filter.read(reader);
 			const canCreate = automations.availableProviders.read(reader).length > 0;
@@ -236,7 +253,7 @@ export class AutomationsCardsWidget extends Disposable {
 				? localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.')
 				: (historyState ?? state) === 'loading' ? localize('sessions.loadingHistory', 'Loading history…') : '';
 			historyMessage.hidden = !historyMessage.textContent;
-			this.message.textContent = getAutomationCatalogueMessage(state);
+			this.message.textContent = getAutomationCatalogueMessage(state, sessionKind);
 			this.message.hidden = !this.message.textContent;
 			plansSection.setAttribute('aria-busy', String(state === 'loading'));
 			historySection.setAttribute('aria-busy', String((historyState ?? state) === 'loading'));
@@ -364,6 +381,7 @@ export class AutomationsCardsWidget extends Disposable {
 				? localize('automations.runsOn', 'Runs on {0} in {1}', host, plan.target.directory)
 				: localize('automations.runsIn', 'Runs in {0}', plan.target.directory);
 			card.directory.title = card.directory.textContent;
+			card.directory.hidden = this.sessionKind === 'chat';
 			card.detail.textContent = plan.nextRunAt === null ? localize('automations.noScheduledRun', 'No scheduled run') : localize('automations.nextRun', 'Next {0}', new Date(plan.nextRunAt).toLocaleString(getNLSLanguage()));
 			card.pause.label = plan.enabled ? localize('automations.pause', 'Pause') : localize('automations.enable', 'Enable');
 			const idle = !this.pending.has(plan.id);
@@ -372,6 +390,19 @@ export class AutomationsCardsWidget extends Disposable {
 			card.remove.enabled = idle && this.automations.canDeleteAutomation(plan.id);
 		}
 		this.orderRows(this.plans, plans.map(plan => this.cards.get(plan.id)!.element));
+	}
+
+	private openRunConversation(run: IAutomationRun): void {
+		const { sessionId, threadId, providerId } = run;
+		if (!sessionId || !threadId) return;
+		void this.perform(run.id, async () => {
+			if (this.sessionKind === 'chat') {
+				const opened = await this.opener.open(buildOpenSessionLinkUri(sessionId, threadId, 'local'));
+				if (!opened) throw new Error(localize('scheduled.conversationUnavailable', 'This scheduled conversation is unavailable.'));
+			} else {
+				await this.navigation.openConversation(sessionId, threadId, providerId);
+			}
+		});
 	}
 
 	private runSession(run: IAutomationRun) {
@@ -414,7 +445,7 @@ export class AutomationsCardsWidget extends Disposable {
 					label: localize('automations.openConversation', 'Open conversation'),
 					onClick: () => {
 						const current = this.automations.runs.get().find(item => item.id === run.id);
-						if (current?.sessionId && current.threadId) void this.perform(run.id, () => this.navigation.openConversation(current.sessionId!, current.threadId!, current.providerId));
+						if (current) this.openRunConversation(current);
 					},
 				}));
 				const visibility = lifetime.add(new Button(actions, {
@@ -503,9 +534,13 @@ export class AutomationsCardsWidget extends Disposable {
 		const lifetime = new DisposableStore();
 		this.detailLifetime.value = lifetime;
 		const document = this.element.ownerDocument;
+		const chat = this.sessionKind === 'chat';
+		const backToTask = selected.kind === 'run' && selected.planId;
 		lifetime.add(new Button(this.details, {
 			...defaultButtonStyles,
-			label: selected.kind === 'run' && selected.planId ? localize('automations.backToTask', 'Back to automation') : localize('automations.backToList', 'Back to automations'),
+			label: chat
+				? backToTask ? localize('scheduled.backToTask', 'Back to scheduled task') : localize('scheduled.backToList', 'Back to scheduled tasks')
+				: backToTask ? localize('automations.backToTask', 'Back to routine') : localize('automations.backToList', 'Back to routines'),
 			onClick: () => {
 				if (selected.kind === 'run' && selected.planId) this.openDetails({ kind: 'plan', id: selected.planId });
 				else {
@@ -531,7 +566,7 @@ export class AutomationsCardsWidget extends Disposable {
 			facts.append(group);
 			return value;
 		};
-		const directory = fact(localize('automations.directory', 'Directory'));
+		const directory = this.sessionKind === 'code' ? fact(localize('automations.directory', 'Directory')) : undefined;
 		const schedule = fact(localize('automations.schedule', 'Schedule'));
 		const revision = fact(localize('automations.version', 'Task version'));
 		if (selected.kind === 'plan') {
@@ -539,7 +574,7 @@ export class AutomationsCardsWidget extends Disposable {
 			const host = fact(localize('automations.provider', 'Run on'));
 			const edit = lifetime.add(new Button(actions, {
 				...defaultButtonStyles,
-				label: localize('automations.edit', 'Edit automation'),
+				label: chat ? localize('scheduled.edit', 'Edit scheduled task') : localize('automations.edit', 'Edit routine'),
 				presentation: 'secondary',
 				onClick: () => {
 					const plan = this.automations.getAutomation(selected.id);
@@ -578,7 +613,7 @@ export class AutomationsCardsWidget extends Disposable {
 			this.details.append(h(document, 'p', { className: 'ash-automation-section-description' }, localize('automations.executionRules', 'Closing this window keeps enabled schedules on their host. The device must be awake and the host running. Missed recurring runs and overlapping runs are skipped; a missed one-time task runs after recovery.')));
 			this.details.append(h(document, 'h3', {}, localize('automations.history', 'Run history')));
 			const history = h(document, 'div', { className: 'ash-automation-detail-history' });
-			const empty = h(document, 'p', {}, localize('automations.emptyHistory', 'No runs yet. Run an automation now or wait for its next scheduled time.'));
+			const empty = h(document, 'p', {}, this.emptyHistoryLabel());
 			this.details.append(history, empty);
 			const links = new Map<string, Button>();
 			lifetime.add(toDisposable(() => { for (const button of links.values()) button.dispose(); }));
@@ -587,10 +622,10 @@ export class AutomationsCardsWidget extends Disposable {
 				this.pendingChanged.read(reader);
 				const runs = this.displayRuns.read(reader).filter(run => run.automationId === selected.id);
 				const providers = this.automations.availableProviders.read(reader);
-				heading.textContent = plan?.name ?? localize('automations.deleted', 'Deleted automation');
+				heading.textContent = plan?.name ?? localize('automations.deleted', 'Deleted task');
 				state.textContent = plan?.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused');
 				prompt.textContent = plan?.prompt ?? '';
-				directory.textContent = plan?.target.directory ?? '';
+				if (directory) directory.textContent = plan?.target.directory ?? '';
 				schedule.textContent = plan ? this.scheduleLabel(plan.schedule) : '';
 				revision.textContent = plan ? String(plan.revision) : '';
 				next.textContent = plan?.nextRunAt ? new Date(plan.nextRunAt).toLocaleString(getNLSLanguage()) : localize('automations.noScheduledRun', 'No scheduled run');
@@ -602,7 +637,7 @@ export class AutomationsCardsWidget extends Disposable {
 				pause.label = plan?.enabled ? localize('automations.pause', 'Pause') : localize('automations.enable', 'Enable');
 				pause.enabled = this.automations.canUpdateAutomation(selected.id) && !this.pending.has(selected.id);
 				notice.textContent = runs.some(run => !['completed', 'failed', 'stopped', 'skipped'].includes(run.status))
-					? localize('automations.alreadyRunning', 'This automation has an unfinished run. Open its details to review it or stop it before starting another run.') : '';
+					? localize('automations.alreadyRunning', 'This task has an unfinished run. Open its details to review it or stop it before starting another run.') : '';
 				notice.hidden = !notice.textContent;
 				empty.hidden = runs.length > 0;
 				for (const [id, button] of links) if (!runs.some(run => run.id === id)) { button.dispose(); links.delete(id); }
@@ -627,8 +662,10 @@ export class AutomationsCardsWidget extends Disposable {
 			const output = h(document, 'pre', { className: 'ash-automation-result', properties: { tabIndex: 0 } });
 			const files = h(document, 'ul', { className: 'ash-automation-result-files' });
 			const resultState = h(document, 'p', { attributes: { role: 'status' } });
-			this.details.append(h(document, 'h3', {}, localize('automations.result', 'Result')), resultState, output,
-				h(document, 'h3', {}, localize('automations.changedFiles', 'Changed files')), files);
+			this.details.append(h(document, 'h3', {}, localize('automations.result', 'Result')), resultState, output);
+			if (this.sessionKind === 'code') {
+				this.details.append(h(document, 'h3', {}, localize('automations.changedFiles', 'Changed files')), files);
+			}
 			let resultKey = '';
 			let generation = 0;
 			lifetime.add(toDisposable(() => { generation++; }));
@@ -644,6 +681,7 @@ export class AutomationsCardsWidget extends Disposable {
 					output.textContent = result.output;
 					resultState.textContent = result.output ? '' : localize('automations.noResult', 'No final response has been recorded for this run.');
 					resultState.hidden = !!result.output;
+					if (this.sessionKind === 'chat') return;
 					if (result.files === undefined) files.append(h(document, 'li', {}, localize('automations.filesUnavailable', 'File changes could not be loaded. Refresh the result to try again.')));
 					else if (!result.files.length) files.append(h(document, 'li', {}, localize('automations.noFiles', 'No recorded file changes.')));
 					else for (const file of result.files) files.append(h(document, 'li', {}, localize('automations.fileSummary', '{0} · +{1} −{2}', file.path, file.additions, file.deletions)));
@@ -661,7 +699,7 @@ export class AutomationsCardsWidget extends Disposable {
 				label: localize('automations.openConversation', 'Open conversation'),
 				onClick: () => {
 					const run = this.automations.runs.get().find(run => run.id === selected.id);
-					if (run?.sessionId && run.threadId) void this.perform(run.id, () => this.navigation.openConversation(run.sessionId!, run.threadId!, run.providerId));
+					if (run) this.openRunConversation(run);
 				},
 			}));
 			const stop = lifetime.add(new Button(actions, {
@@ -687,7 +725,7 @@ export class AutomationsCardsWidget extends Disposable {
 				heading.textContent = run?.definition.name ?? localize('automations.runUnavailable', 'Run unavailable');
 				state.textContent = displayRun ? automationRunStatusLabel(displayRun.status) : '';
 				prompt.textContent = run?.definition.prompt ?? '';
-				directory.textContent = run?.definition.target.directory ?? '';
+				if (directory) directory.textContent = run?.definition.target.directory ?? '';
 				schedule.textContent = run ? this.scheduleLabel(run.definition.schedule) : '';
 				revision.textContent = run ? String(run.revision) : '';
 				const time = (value: number | null | undefined) => value == null ? '—' : new Date(value).toLocaleString(getNLSLanguage());
@@ -712,6 +750,12 @@ export class AutomationsCardsWidget extends Disposable {
 				}
 			}));
 		}
+	}
+
+	private emptyHistoryLabel(): string {
+		return this.sessionKind === 'chat'
+			? localize('scheduled.emptyHistory', 'No runs yet. Run a task now or wait for its next scheduled time.')
+			: localize('automations.emptyHistory', 'No runs yet. Run a routine now or wait for its next scheduled time.');
 	}
 
 	private scheduleLabel(schedule: IAutomationSchedule): string {
@@ -744,7 +788,7 @@ export class AutomationsCardsWidget extends Disposable {
 		const restoreFocus = isHTMLElement(focused) && this.element.contains(focused);
 		this.pending.add(id);
 		this.pendingChanged.set(this.pendingChanged.get() + 1, undefined);
-		this.updatePlans(this.automations.automations.get());
+		this.updatePlans(this.displayPlans.get());
 		this.updateRuns(this.displayRuns.get());
 		try { await operation(); }
 		catch (error) { if (!this.isDisposed) this.notifications.error(String(error)); }
@@ -752,7 +796,7 @@ export class AutomationsCardsWidget extends Disposable {
 			this.pending.delete(id);
 			this.pendingChanged.set(this.pendingChanged.get() + 1, undefined);
 			if (!this.isDisposed) {
-				this.updatePlans(this.automations.automations.get());
+				this.updatePlans(this.displayPlans.get());
 				this.updateRuns(this.displayRuns.get());
 				// Disabling an in-flight action can blur its button. Restore only if the user has not moved elsewhere.
 				if (restoreFocus && getActiveElement(document) === document.body) {
@@ -765,14 +809,20 @@ export class AutomationsCardsWidget extends Disposable {
 }
 
 export class AutomationsCustomView extends AbstractCustomView {
-	readonly title = constObservable(localize('automations.title', 'Automations'));
-	override readonly description = constObservable(localize('automations.pageDescription', 'Let your agent handle recurring work. Manage schedules and pick up the results here.'));
+	readonly title;
+	override readonly description;
 	private widget: AutomationsCardsWidget | undefined;
 
-	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) { super(); }
+	constructor(private readonly sessionKind: 'chat' | 'code', @IInstantiationService private readonly instantiation: IInstantiationService) {
+		super();
+		this.title = constObservable(sessionKind === 'chat' ? localize('scheduled.title', 'Scheduled') : localize('automations.title', 'Routines'));
+		this.description = constObservable(sessionKind === 'chat'
+			? localize('scheduled.description', 'Schedule work in Ash Chat and open the conversation for each run.')
+			: localize('automations.pageDescription', 'Run recurring work in Code. Manage routines and review their results here.'));
+	}
 
 	render(container: HTMLElement): void {
-		this.widget = this._register(this.instantiation.createInstance(AutomationsCardsWidget, container));
+		this.widget = this._register(this.instantiation.createInstance(AutomationsCardsWidget, container, this.sessionKind));
 		container.append(this.widget.element);
 	}
 
@@ -796,18 +846,29 @@ export class AutomationsCustomViewContribution extends Disposable {
 	) {
 		super();
 		const registrations = this._register(new MutableDisposable<DisposableStore>());
+		const scheduledRegistration = this._register(new MutableDisposable<DisposableStore>());
 		const changed = observableSignalFromEvent(this, providers.onDidChangeProviders);
 		const available = contexts.createKey<boolean>('sessions.automationsAvailable', false);
 		const canCreate = contexts.createKey<boolean>('sessions.automationsCanCreate', false);
 		const selected = contexts.createKey<boolean>('sessions.activity.automationsSelected', false);
+		const scheduledAvailable = contexts.createKey<boolean>('sessions.scheduledAvailable', false);
+		const scheduledCanCreate = contexts.createKey<boolean>('sessions.scheduledCanCreate', false);
+		const scheduledSelected = contexts.createKey<boolean>('sessions.activity.scheduledSelected', false);
 		this._register(toDisposable(() => {
 			available.reset();
 			canCreate.reset();
 			selected.reset();
+			scheduledAvailable.reset();
+			scheduledCanCreate.reset();
+			scheduledSelected.reset();
 		}));
 		this._register(autorun(reader => {
-			canCreate.set(automations.availableProviders.read(reader).length > 0);
-			selected.set(views.activeCustomView.read(reader)?.id === AUTOMATIONS_CUSTOM_VIEW_ID);
+			const availableProviders = automations.availableProviders.read(reader);
+			const active = views.activeCustomView.read(reader)?.id;
+			canCreate.set(availableProviders.length > 0);
+			selected.set(active === AUTOMATIONS_CUSTOM_VIEW_ID);
+			scheduledCanCreate.set(availableProviders.some(provider => provider.id === LOCAL_AGENT_HOST_PROVIDER_ID && provider.supportsChatSchedules));
+			scheduledSelected.set(active === SCHEDULED_CUSTOM_VIEW_ID);
 		}));
 		const previous = new Map<string, IAutomationRun['status']>();
 		const knownProviders = new Set<string>();
@@ -825,6 +886,8 @@ export class AutomationsCustomViewContribution extends Disposable {
 			}
 			for (const id of previous.keys()) if (!runs.some(run => run.id === id)) previous.delete(id);
 			for (const run of runs) {
+				const chat = run.definition.target.session.type === 'newChat';
+				if (chat && (isWeb || !belongsToAutomationView(run.definition.target, 'chat'))) continue;
 				if (!ready.has(run.providerId) || previous.get(run.id) === run.status) continue;
 				previous.set(run.id, run.status);
 				notices.get(run.id)?.close();
@@ -835,7 +898,10 @@ export class AutomationsCustomViewContribution extends Disposable {
 					: run.status === 'needsInput' ? Severity.Warning
 						: run.status === 'completed' && configuration.getValue<boolean>('sessions.automations.notifyOnSuccess') === true ? Severity.Info : undefined;
 				if (severity === undefined) continue;
-				const message = localize('automations.runFailed', 'Automation {0}: {1}', run.definition.name, run.message ?? automationRunStatusLabel(run.status));
+				const status = run.message ?? automationRunStatusLabel(run.status);
+				const message = chat
+					? localize('scheduled.runFailed', 'Scheduled task {0}: {1}', run.definition.name, status)
+					: localize('automations.runFailed', 'Routine {0}: {1}', run.definition.name, status);
 				const notice = notifications.notify({
 					severity, message, actions: {
 						primary: [{
@@ -843,7 +909,8 @@ export class AutomationsCustomViewContribution extends Disposable {
 							enabled: true,
 							id: 'sessions.automations.viewResult', label: localize('automations.viewResult', 'View result'),
 							run: async () => {
-								views.showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID);
+								if (chat && !scheduledAvailable.get()) return;
+								views.showCustomView(chat ? SCHEDULED_CUSTOM_VIEW_ID : AUTOMATIONS_CUSTOM_VIEW_ID);
 								await commands.executeCommand('sessions.automations.openRun', run.id);
 							}
 						}]
@@ -856,6 +923,34 @@ export class AutomationsCustomViewContribution extends Disposable {
 		this._register(autorun(reader => {
 			changed.read(reader);
 			const supported = providers.getProviders().some(provider => provider.automations !== undefined);
+			const chatSupported = !isWeb && !!providers.getProvider(LOCAL_AGENT_HOST_PROVIDER_ID)?.automations;
+			scheduledAvailable.set(chatSupported);
+			if (chatSupported && !scheduledRegistration.value) {
+				const lifetime = new DisposableStore();
+				scheduledRegistration.value = lifetime;
+				lifetime.add(views.registerCustomView({
+					id: SCHEDULED_CUSTOM_VIEW_ID,
+					ctor: new SyncDescriptor(AutomationsCustomView, ['chat']),
+					entryCommand: SHOW_CHAT_WORKSPACE_COMMAND,
+					actions: { menuId: Menus.CustomViewScheduled, primaryActionId: 'sessionsView.newScheduledTask' }
+				}));
+				lifetime.add(registerAction2(class NewScheduledTask extends Action2 {
+					constructor() {
+						super({
+							id: 'sessionsView.newScheduledTask',
+							title: localize2('scheduled.new', 'New scheduled task'),
+							icon: Lxicon.add,
+							precondition: ContextKeyExpr.has('sessions.scheduledCanCreate'),
+							menu: { id: Menus.CustomViewScheduled, group: 'navigation', order: 1 }
+						});
+					}
+					override async run(accessor: ServicesAccessor): Promise<void> {
+						await accessor.get(IAutomationDialogService).showAutomationDialog({ sessionKind: 'chat' });
+					}
+				}));
+			} else if (!chatSupported) {
+				scheduledRegistration.clear();
+			}
 			available.set(supported);
 			if (!supported) {
 				registrations.clear();
@@ -866,7 +961,8 @@ export class AutomationsCustomViewContribution extends Disposable {
 			registrations.value = lifetime;
 			lifetime.add(views.registerCustomView({
 				id: AUTOMATIONS_CUSTOM_VIEW_ID,
-				ctor: new SyncDescriptor(AutomationsCustomView),
+				ctor: new SyncDescriptor(AutomationsCustomView, ['code']),
+				entryCommand: 'sessions.open.code',
 				actions: { menuId: Menus.CustomViewAutomations, primaryActionId: 'sessionsView.newAutomation' }
 			}));
 			lifetime.add(registerAutomationsAccessibility());
@@ -874,7 +970,7 @@ export class AutomationsCustomViewContribution extends Disposable {
 				constructor() {
 					super({
 						id: 'sessionsView.newAutomation',
-						title: localize2('automations.new', 'New automation'),
+						title: localize2('automations.new', 'New routine'),
 						icon: Lxicon.add,
 						precondition: ContextKeyExpr.has('sessions.automationsCanCreate'),
 						menu: { id: Menus.CustomViewAutomations, group: 'navigation', order: 1 }
@@ -888,10 +984,16 @@ export class AutomationsCustomViewContribution extends Disposable {
 						id: 'sessions.automations.refresh',
 						title: localize2('automations.refresh', 'Refresh'),
 						icon: Lxicon.refresh,
-						menu: { id: Menus.CustomViewAutomations, group: 'navigation', order: 2 }
+						menu: [Menus.CustomViewAutomations, Menus.CustomViewScheduled].map(id => ({ id, group: 'navigation', order: 2 }))
 					});
 				}
-				override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(IAutomationService).refresh(); }
+				override async run(accessor: ServicesAccessor): Promise<void> {
+					if (accessor.get(ICustomViewService).activeCustomView.get()?.id === SCHEDULED_CUSTOM_VIEW_ID) {
+						await accessor.get(ISessionsProvidersService).getProvider(LOCAL_AGENT_HOST_PROVIDER_ID)?.automations?.refresh();
+					} else {
+						await accessor.get(IAutomationService).refresh();
+					}
+				}
 			}));
 		}));
 	}

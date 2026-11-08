@@ -373,6 +373,8 @@ use crate::protocol::attachments::AttachmentUploadWriteResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationDeleteParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::automation::AutomationListParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationPreviewParams;
@@ -3854,7 +3856,7 @@ client_methods! {
         params: EmptyParams, response: (), serialization: GlobalExclusive,
     },
     AutomationList => "automation/list" {
-        params: EmptyParams, response: AutomationListResult, serialization: None,
+        params: AutomationListParams, response: AutomationListResult, serialization: None,
     },
     AutomationPreview => "automation/preview" {
         params: AutomationPreviewParams, response: AutomationPreviewResult, serialization: None,
@@ -7610,6 +7612,7 @@ typescript_bindings! {
     MessageHistoryEntry,
     MessageHistoryReadParams,
     MessageHistoryPage,
+    AutomationListParams,
     AutomationListResult,
     AutomationPreviewParams,
     AutomationPreviewResult,

@@ -260,6 +260,14 @@ impl AppServer {
             );
         }
         if self.automation_processor.is_available() {
+            if !connection.code_sessions_only() {
+                capabilities.contracts.insert(
+                    "chatSchedules".into(),
+                    ash_app_server_protocol::protocol::initialize::CapabilityContract {
+                        version: 1,
+                    },
+                );
+            }
             capabilities.contracts.insert(
                 "automationConditions".into(),
                 ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },

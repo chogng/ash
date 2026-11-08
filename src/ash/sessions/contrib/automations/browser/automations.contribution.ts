@@ -14,13 +14,13 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	scope: ConfigurationScope.APPLICATION,
 	defaultValue: false,
 	parse: value => {
-		if (typeof value !== 'boolean') throw new TypeError(localize('automations.notificationBoolean', 'Automation completion notifications must be a boolean.'));
+		if (typeof value !== 'boolean') throw new TypeError(localize('automations.notificationBoolean', 'Run completion notifications must be a boolean.'));
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
-		title: localize('automations.notifySuccess', 'Notify when an automation completes'),
-		description: localize('automations.notifyDescription', 'Show successful automation results in this window. Failures and requests for input are always notified while the window is open.')
+		title: localize('automations.notifySuccess', 'Notify when a run succeeds'),
+		description: localize('automations.notifyDescription', 'Notify when a Scheduled or Routines run succeeds in this window. Failures and requests for input are always notified while the window is open.')
 	}
 });
 

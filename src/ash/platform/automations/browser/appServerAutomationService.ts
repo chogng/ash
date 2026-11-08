@@ -23,13 +23,21 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 		return this.client.capabilities?.contracts?.automationConditions?.version === 1;
 	}
 
+	public get supportsChatSchedules(): boolean {
+		return this.client.capabilities?.contracts?.chatSchedules?.version === 1;
+	}
+
 	public async list(): Promise<readonly Automation[]> {
-		return (await this.client.request(APP_SERVER_METHODS['automation/list'], {}).catch(explain)).automations;
+		const params = this.supportsChatSchedules ? { includeChat: true } : {};
+		return (await this.client.request(APP_SERVER_METHODS['automation/list'], params).catch(explain)).automations;
 	}
 
 	public save(id: string, revision: number, definition: AutomationDefinition, status: AutomationStatus): Promise<Automation> {
+		if (definition.session.type === 'newChat' && !this.supportsChatSchedules) {
+			return Promise.reject(new Error(localize('automations.chatHostUnavailable', 'Chat schedules require a connected host that supports them.')));
+		}
 		if (definition.condition && !this.supportsPullRequestFollowUp) {
-			return Promise.reject(new Error(localize('automations.followUpUnavailable', 'PR follow-up requires a backend that supports conditional automations. Update or reconnect to the owning host.')));
+			return Promise.reject(new Error(localize('automations.followUpUnavailable', 'PR follow-up requires a backend that supports conditional execution. Update or reconnect to the owning host.')));
 		}
 		const schedule = definition.schedule.type === 'weekly' ? { ...definition.schedule, weekdays: [...definition.schedule.weekdays] } : definition.schedule;
 		return this.client.request(APP_SERVER_METHODS['automation/write'], { id, expectedRevision: revision, commandId: generateUuid(), definition: { ...definition, schedule }, status }).catch(explain);
@@ -66,6 +74,7 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 		const result = await this.client.request(APP_SERVER_METHODS['session/thread/read'], source);
 		const turn = result.thread.turns.find(turn => turn.turnId === run.turnId);
 		const output = turn?.items.flatMap(item => item.type === 'agentMessage' && (item.phase === 'final_answer' || item.phase == null) ? [item.text] : []).join('\n\n') ?? '';
+		if (run.definition.session.type === 'newChat') return { output, files: [] };
 		// A continued conversation may contain many runs. Never attribute another Turn's output or files to this run.
 		let files: AutomationRunResult['files'];
 		try {
@@ -87,11 +96,11 @@ export class AppServerAutomationService extends Disposable implements IAutomatio
 function explain(error: unknown): never {
 	if (error instanceof AppServerRemoteError) {
 		switch (error.errorName) {
-			case 'AutomationConflict': throw new Error('This automation changed in another window. Select it again to load the latest version.');
-			case 'AutomationBusy': throw new Error('This automation still has an unfinished run. Stop it or wait for it to finish.');
-			case 'AutomationNotFound': throw new Error('This automation no longer exists. Refresh the list.');
-			case 'AutomationUnavailable': throw new Error('Automations are unavailable on this backend.');
-			case 'InvalidParams': throw new Error('Check the instructions, execution directory and schedule.');
+			case 'AutomationConflict': throw new Error(localize('automations.remoteConflict', 'This task changed in another window. Select it again to load the latest version.'));
+			case 'AutomationBusy': throw new Error(localize('automations.remoteBusy', 'This task still has an unfinished run. Stop it or wait for it to finish.'));
+			case 'AutomationNotFound': throw new Error(localize('automations.remoteNotFound', 'This task no longer exists. Refresh the list.'));
+			case 'AutomationUnavailable': throw new Error(localize('automations.remoteUnavailable', 'The execution host does not support tasks.'));
+			case 'InvalidParams': throw new Error(localize('automations.remoteInvalid', 'Check the instructions, schedule and execution settings.'));
 		}
 	}
 	throw error;

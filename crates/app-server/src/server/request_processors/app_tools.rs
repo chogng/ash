@@ -333,11 +333,11 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
         context: &AppToolContext,
     ) -> Result<Value, CoreError> {
         let result = match operation {
-            AutomationOperation::List {} => self.automation_processor.automation_list(),
+            AutomationOperation::List {} => self.automation_processor.automation_list(false),
             AutomationOperation::View { id } => {
                 let list = self
                     .automation_processor
-                    .automation_list()
+                    .automation_list(false)
                     .map_err(rpc_error)?;
                 return list["automations"]
                     .as_array()

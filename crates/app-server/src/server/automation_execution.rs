@@ -10,6 +10,7 @@ use ash_protocol::AutomationSession;
 use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
+use ash_protocol::SessionKind;
 use ash_protocol::TurnStatus;
 use ash_protocol::UnixMillis;
 use core_api::AgentRuntime;
@@ -55,7 +56,7 @@ impl AppServer {
                 Some(id) => Some(id.clone()),
                 None => match &run.definition.session {
                     AutomationSession::Continue { session_id, .. } => Some(session_id.clone()),
-                    AutomationSession::New => {
+                    AutomationSession::New | AutomationSession::NewChat => {
                         // Execution may have created the Session before the scheduler saved its
                         // first observation. Resolve the same durable creation receipt.
                         let command = command_id("session", &run.id)
@@ -111,7 +112,7 @@ impl AppServer {
     }
 
     /// Advances one durable automation run through the existing Session and Turn execution path.
-    /// The caller supplies a directory-scoped server and retains the original run identity.
+    /// The caller supplies the execution host and retains the original run identity.
     pub fn advance_automation_run(
         &self,
         run: &AutomationRun,
@@ -142,10 +143,11 @@ impl AppServer {
         let mut observed = run.clone();
         observed.message = None;
         let command = command_id("start", &run.id)?;
+        let chat = run.definition.session == AutomationSession::NewChat;
         let snapshot = match &run.thread_id {
             Some(id) => self.agent_runtime().read_thread(id),
             None => match &run.definition.session {
-                AutomationSession::New => {
+                AutomationSession::New | AutomationSession::NewChat => {
                     let session_command = command_id("session", &run.id)?;
                     match self
                         .agent_runtime()
@@ -159,15 +161,21 @@ impl AppServer {
                             return Ok(observed);
                         }
                         None => match self.agent_runtime().start_thread(StartThreadRequest {
-                            kind: ash_protocol::SessionKind::Code,
+                            kind: if chat {
+                                SessionKind::Chat
+                            } else {
+                                SessionKind::Code
+                            },
                             branch_name: None,
                             worktree_start: None,
                             agent_id: None,
                             agent: None,
                             command_id: session_command.clone(),
                             title: run.definition.title.clone(),
-                            execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
-                                root: run.definition.directory.clone().into(),
+                            execution_target: (!chat).then(|| {
+                                ash_protocol::SessionExecutionTarget::Local {
+                                    root: run.definition.directory.clone().into(),
+                                }
                             }),
                         }) {
                             Ok(snapshot) => Ok(snapshot),
@@ -278,7 +286,7 @@ impl AppServer {
                         expected_sequence: snapshot.sequence,
                     },
                     snapshot.thread_id.clone(),
-                    Some(ash_protocol::ApprovalMode::default()),
+                    (!chat).then(ash_protocol::ApprovalMode::default),
                     ash_protocol::CollaborationMode::Agent,
                     TurnModelSelection::Current,
                     None,

@@ -42,10 +42,13 @@ impl AutomationRequestProcessor {
         self.store.is_some()
     }
 
-    pub(super) fn automation_list(&self) -> Result<Value, RpcError> {
-        result(&AutomationListResult {
-            automations: self.automation_store()?.list().map_err(error)?,
-        })
+    pub(super) fn automation_list(&self, include_chat: bool) -> Result<Value, RpcError> {
+        let mut automations = self.automation_store()?.list().map_err(error)?;
+        if !include_chat {
+            automations
+                .retain(|plan| plan.definition.session != ash_protocol::AutomationSession::NewChat);
+        }
+        result(&AutomationListResult { automations })
     }
 
     pub(super) fn automation_preview(&self, params: &Value) -> Result<Value, RpcError> {

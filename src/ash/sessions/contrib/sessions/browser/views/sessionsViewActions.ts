@@ -3,7 +3,7 @@ import { captureSessionActionTarget, resolveSessionThreadSelection } from '../..
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { Menus } from '../../../../browser/menus.js';
-import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
+import { AUTOMATIONS_CUSTOM_VIEW_ID, SCHEDULED_CUSTOM_VIEW_ID } from '../automationsConstants.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -48,7 +48,7 @@ registerAction2(class CloseSessionAction extends Action2 {
 registerAction2(class ManageAutomationsAction extends Action2 {
 	constructor() {
 		super({
-			id: 'sessionsView.manageAutomations', title: localize2('automations.title', 'Automations'),
+			id: 'sessionsView.manageAutomations', title: localize2('automations.title', 'Routines'),
 			icon: Lxicon.clockface,
 			precondition: ContextKeyExpr.has('sessions.automationsAvailable'),
 			toggled: ContextKeyExpr.has('sessions.activity.automationsSelected'),
@@ -58,6 +58,24 @@ registerAction2(class ManageAutomationsAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): void {
 		accessor.get(ICustomViewService).showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID);
+	}
+});
+
+registerAction2(class ManageScheduledTasksAction extends Action2 {
+	constructor() {
+		const available = ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('chat'), ContextKeyExpr.has('sessions.scheduledAvailable'));
+		super({
+			id: 'sessionsView.manageScheduledTasks',
+			title: localize2('scheduled.title', 'Scheduled'),
+			icon: Lxicon.clockface,
+			precondition: available,
+			toggled: ContextKeyExpr.has('sessions.activity.scheduledSelected'),
+			menu: { id: Menus.ActivityBar, group: 'navigation', order: 35, when: available },
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(ICustomViewService).showCustomView(SCHEDULED_CUSTOM_VIEW_ID);
 	}
 });
 

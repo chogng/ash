@@ -61,6 +61,8 @@ pub enum AutomationSchedule {
 )]
 pub enum AutomationSession {
     New,
+    /// Starts an independent Chat session on the profile host, without a workspace.
+    NewChat,
     Continue {
         session_id: crate::SessionId,
         thread_id: crate::ThreadId,
@@ -72,7 +74,7 @@ pub enum AutomationSession {
 pub struct AutomationDefinition {
     pub title: String,
     pub prompt: String,
-    /// Explicit local execution directory; never resolved from the active window.
+    /// Explicit local execution directory for Code, empty for a profile-host Chat.
     pub directory: String,
     pub session: AutomationSession,
     pub schedule: AutomationSchedule,

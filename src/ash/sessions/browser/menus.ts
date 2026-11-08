@@ -4,6 +4,7 @@ export const Menus = {
 	ActivityBar: new MenuId('SessionsActivityBar'),
 	ActivityBarContext: new MenuId('SessionsActivityBarContext'),
 	CustomViewAutomations: new MenuId('CustomViewAutomations'),
+	CustomViewScheduled: new MenuId('CustomViewScheduled'),
 	CustomViewCanvas: new MenuId('CustomViewCanvas'),
 	SidebarChatSessionContext: new MenuId('SidebarChatSessionContext'),
 	SidebarCodeSessionContext: new MenuId('SidebarCodeSessionContext'),

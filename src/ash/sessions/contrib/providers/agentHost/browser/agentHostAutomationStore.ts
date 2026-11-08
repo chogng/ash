@@ -24,13 +24,15 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	private refreshing: Promise<void> | undefined;
 	private readonly backend: IAutomationBackendService;
 
+	get supportsChatSchedules(): boolean { return this.backend.supportsChatSchedules === true; }
+
 	constructor(
 		private readonly providerId: string,
 		private readonly connection: IObservable<'connecting' | 'connected' | 'disconnected'>,
 		@IAgentConnection host: IAgentConnection,
 	) {
 		super();
-		if (!host.automation) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
+		if (!host.automation) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning execution host and try again.'));
 		this.backend = host.automation;
 		this._register(this.backend.onDidChange(() => { void this.refresh().catch(() => { }); }));
 		this._register(connection.onDidChange(state => {
@@ -131,7 +133,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	async updateAutomation(id: string, patch: IUpdateAutomationOptions): Promise<IAutomationDescriptor> {
 		const expected = this.requireAutomation(id);
 		const result = await this.updateAutomationIfUnchanged(id, patch, expected);
-		if (result.kind === 'conflict') throw new Error(localize('automations.editConflict', 'This automation changed. Refresh it before saving.'));
+		if (result.kind === 'conflict') throw new Error(localize('automations.editConflict', 'This task changed. Refresh it before saving.'));
 		return result.automation;
 	}
 
@@ -141,7 +143,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		if (!current || current.revision !== expected.revision) return { kind: 'conflict', current };
 		if (current.kind) {
 			if (Object.keys(patch).some(key => key !== 'enabled')) {
-				throw new Error(localize('automations.followUpControls', 'Use the PR follow-up controls in Checks to change this automation.'));
+				throw new Error(localize('automations.followUpControls', 'Use the PR follow-up controls in Checks to change this routine.'));
 			}
 			const connectionEpoch = this.connectionEpoch;
 			const source = (await this.backend.list()).find(plan => plan.id === this.backendId(id));
@@ -272,7 +274,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 				const run = this.runs.get().find(item => item.id === id);
 				if (!this.isCurrentConnection(connectionEpoch)) {
 					watching.dispose();
-					reject(new Error(localize('automations.observationLost', 'The automation host is unavailable. Its run may still be active.')));
+					reject(new Error(localize('automations.observationLost', 'The execution host is unavailable. Its run may still be active.')));
 				} else if (run && terminal(run)) {
 					watching.dispose();
 					resolve();
@@ -329,17 +331,17 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		let value: unknown;
 		try { value = JSON.parse(id); } catch { /* Invalid public identity follows the same unavailable path. */ }
 		if (Array.isArray(value) && value.length === 2 && value[0] === this.providerId && typeof value[1] === 'string' && value[1]) return value[1];
-		throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
+		throw new Error(localize('automations.missing', 'This task or run is unavailable on its owning provider.'));
 	}
 
 	private requireAutomation(id: string): IAutomationDescriptor {
 		const value = this.getAutomation(id);
-		if (!value) throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
+		if (!value) throw new Error(localize('automations.missing', 'This task or run is unavailable on its owning provider.'));
 		return value;
 	}
 
 	private assertReady(): void {
-		if (this.isDisposed || this.connection.get() !== 'connected') throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
+		if (this.isDisposed || this.connection.get() !== 'connected') throw new Error(localize('automations.hostUnavailable', 'Connect to the owning execution host and try again.'));
 	}
 
 	private isCurrentConnection(connectionEpoch: number): boolean {
@@ -347,7 +349,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	}
 
 	private assertTarget(providerId: string): void {
-		if (providerId !== this.providerId) throw new Error(localize('automations.providerMismatch', 'An automation cannot be moved to another provider. Create a new automation on that provider.'));
+		if (providerId !== this.providerId) throw new Error(localize('automations.providerMismatch', 'A task cannot be moved to another provider. Create a new task on that provider.'));
 	}
 }
 

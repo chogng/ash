@@ -32,10 +32,15 @@ export type IAutomationRunRequestResult = {
 	cancel(): void;
 };
 
-export interface IAutomationProviderDescriptor { readonly id: string; readonly label: string; }
+export interface IAutomationProviderDescriptor {
+	readonly id: string;
+	readonly label: string;
+	readonly supportsChatSchedules?: boolean;
+}
 
 /** Provider-owned frontend catalogues; persistence and execution remain on the host. */
 export interface IAutomationStore {
+	readonly supportsChatSchedules?: boolean;
 	readonly catalogueState: IObservable<AutomationCatalogueState>;
 	/** History failures do not invalidate definitions already confirmed by the host. */
 	readonly historyState?: IObservable<AutomationCatalogueState>;

@@ -166,7 +166,7 @@ export class SessionsSearchPicker extends Disposable {
 			{ id: 'all', label: localize('sessions.search.all', 'All') },
 			{ id: 'sessions', label: localize('sessions.search.sessions', 'Sessions') },
 			{ id: 'projects', label: localize('sessions.search.projects', 'Projects') },
-			{ id: 'scheduled', label: localize('sessions.search.scheduled', 'Scheduled') },
+			{ id: 'scheduled', label: localize('sessions.search.scheduled', 'Tasks') },
 		].map(item => ({
 			...item,
 			value: item.id as SearchCategory,

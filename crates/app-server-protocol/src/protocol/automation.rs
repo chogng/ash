@@ -11,6 +11,15 @@ use serde::Serialize;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct AutomationListParams {
+    /// Opt in to Chat plans so older Code clients can still decode the catalogue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub include_chat: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct AutomationListResult {
     pub automations: Vec<Automation>,
 }
