@@ -18,6 +18,9 @@ pub(super) const MAX_QUEUE_RECORDS: usize = 128;
 pub(super) const MAX_RETAINED_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const MAX_ACTIVE_ATTEMPTS: usize = 64;
 pub(super) const MAX_TRACKED_CAPTURES: usize = 128;
+const MAX_BATCH_RECORDS: usize = 32;
+const BATCH_WINDOW: Duration = Duration::from_millis(10);
+const MAINTENANCE_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(super) struct Capture {
     pub(super) session_id: SessionId,
@@ -112,15 +115,35 @@ impl Worker {
             .name("ash-trace-recorder".into())
             .spawn(move || {
                 let _exit = WorkerExit(worker_shared.clone());
+                let mut batch = Vec::with_capacity(MAX_BATCH_RECORDS);
+                let mut next_maintenance = Instant::now();
                 loop {
                     match receiver.recv_timeout(Duration::from_millis(25)) {
                         Ok(record) => {
-                            if !record.capture.retired.load(Ordering::Acquire) {
-                                storage.process(&record);
+                            batch.push(record);
+                            let deadline = Instant::now() + BATCH_WINDOW;
+                            while batch.len() < MAX_BATCH_RECORDS {
+                                let remaining = deadline.saturating_duration_since(Instant::now());
+                                let Ok(record) = receiver.recv_timeout(remaining) else {
+                                    break;
+                                };
+                                batch.push(record);
                             }
-                            record.capture.pending.fetch_sub(1, Ordering::Release);
-                            worker_shared.pending.fetch_sub(1, Ordering::Release);
-                            drop(record);
+                            // Coalesce interleaved captures while keeping each session's record order.
+                            batch.sort_by(|a, b| a.capture.session_id.cmp(&b.capture.session_id));
+                            for group in batch.chunk_by(|a, b| Arc::ptr_eq(&a.capture, &b.capture))
+                            {
+                                let capture = &group[0].capture;
+                                storage.process_batch(capture, group);
+                                capture
+                                    .pending
+                                    .fetch_sub(group.len() as u64, Ordering::Release);
+                            }
+                            let processed = batch.len() as u64;
+                            batch.clear();
+                            worker_shared
+                                .pending
+                                .fetch_sub(processed, Ordering::Release);
                             let _guard = worker_shared
                                 .progress_lock
                                 .lock()
@@ -130,19 +153,22 @@ impl Worker {
                         Err(mpsc::RecvTimeoutError::Timeout) => {}
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     }
-                    let captures = worker_shared
-                        .captures
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .values()
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    for capture in captures {
-                        storage.maintain(&capture);
+                    let closing = worker_shared.closed.load(Ordering::Acquire)
+                        && worker_shared.pending.load(Ordering::Acquire) == 0;
+                    if closing || Instant::now() >= next_maintenance {
+                        let captures = worker_shared
+                            .captures
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .values()
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        for capture in captures {
+                            storage.maintain(&capture);
+                        }
+                        next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
                     }
-                    if worker_shared.closed.load(Ordering::Acquire)
-                        && worker_shared.pending.load(Ordering::Acquire) == 0
-                    {
+                    if closing {
                         break;
                     }
                 }
