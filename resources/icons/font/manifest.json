@@ -363,7 +363,8 @@
     "sign-out": "E168",
     "open-in-window": "E169",
     "inbox": "E16A",
-    "personalization": "E16B"
+    "personalization": "E16B",
+    "bot": "E16C"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -393,6 +394,7 @@
     "bold": "e1f92ba521215eb1de99b3387ccd1db5f02e72c51d121d63b6c942a54c44e476",
     "book": "c8a4e917269adb6c983dee9c5725880ca95173dc7fe8bf78748be6dccc10f044",
     "books": "aeb95114c6f28dfa78ba9278b4a238802c5f5a5591f78604efab2ed4e0dfadaf",
+    "bot": "5d6a7f315f8a6a0c97b301fcd4f99cadfb9f8c28aef958035b361114f32987db",
     "brain": "06772a870d4d00c914e28e932ad5029b49cbcef2e59d36f3c5d5b5b0aed30a7e",
     "briefcase-filled": "f9088259f0062ecd1ee868c689672d432c67f58f96f68c3bc3dec398c3f601a9",
     "briefcase": "31e88f8d27ec97d1a898f73d434d0bd1124d1c4e435be0f4098074d1ae66219c",

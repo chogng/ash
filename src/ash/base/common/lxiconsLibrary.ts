@@ -31,6 +31,7 @@ export const lxiconsLibrary = {
 	bold: registerLxicon("bold", 0xe019),
 	book: registerLxicon("book", 0xe01a),
 	books: registerLxicon("books", 0xe01b),
+	bot: registerLxicon("bot", 0xe16c),
 	brain: registerLxicon("brain", 0xe166),
 	briefcase: registerLxicon("briefcase", 0xe01d),
 	briefcaseFilled: registerLxicon("briefcase-filled", 0xe01c),

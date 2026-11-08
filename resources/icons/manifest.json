@@ -137,6 +137,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "bot",
+      "file": "bot.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "brain",
       "file": "brain.svg",
       "rendering": "symbolic"
