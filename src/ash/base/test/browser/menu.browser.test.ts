@@ -222,6 +222,23 @@ suite('Menu browser behavior', () => {
 		assert.ok(Math.abs(firstChild.y - anchor.y) < 3);
 	});
 
+	test('aligns an async submenu to its trigger before and after replacing the loading row', async () => {
+		await open('async');
+		const trigger = browser.page.getByRole('menuitem', { name: 'First', exact: true });
+		await trigger.press('ArrowRight');
+		const anchor = await trigger.boundingBox();
+		assert.ok(anchor);
+
+		const loading = browser.page.getByRole('menuitem', { name: 'Loading', exact: true });
+		await expect(loading).toBeVisible();
+		expect((await loading.boundingBox())!.y).toBeCloseTo(anchor.y, 0);
+
+		await browser.page.evaluate(() => window.ashMenuTest.resolveSubmenu());
+		const loaded = browser.page.getByRole('menuitem', { name: 'Loaded', exact: true });
+		await expect(loaded).toBeFocused();
+		expect((await loaded.boundingBox())!.y).toBeCloseTo(anchor.y, 0);
+	});
+
 	test('touch panning keeps a clamped menu open and dismisses it only after a real scroll', async () => {
 		await open('long');
 		await browser.page.evaluate(() => { window.ashMenuTest.focus(12); window.ashMenuTest.trigger(12); });

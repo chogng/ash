@@ -9,6 +9,7 @@ import type { Button, IButtonStyles } from '../button/button.js';
 import type { IKeybindingLabelStyles } from '../keybindinglabel/keybindinglabel.js';
 import { getActionForAltMode, type IAction, type IActionRunner, Separator, SubmenuAction } from '../../../common/actions.js';
 import { RunOnceScheduler } from '../../../common/async.js';
+import { onUnexpectedError } from '../../../common/errors.js';
 import { addDisposableListener, isNode, h, ModifierKeyEmitter, getActiveElement } from '../../dom.js';
 import type { ResolvedKeybinding } from '../../../common/keybindings.js';
 import { MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
@@ -138,9 +139,8 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 		if (this.renderedIcon !== action.icon) {
 			this.actionIcon?.remove();
 			this.actionIcon = undefined;
-			if (!this.iconSlot) {
-				this.button.icon = action.icon;
-			} else if (action.icon) {
+			// A submenu with trailing icons reserves its only slot for the arrow.
+			if (this.iconSlot && action.icon) {
 				const icon = this.actionIcon = h(this.button.domNode.ownerDocument, 'span', { className: 'ash-menu-action-icon' });
 				appendIcon(action.icon, icon);
 				this.iconSlot.prepend(icon);
@@ -252,6 +252,7 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	}, 750));
 	private contextView: ContextView | undefined;
 	private menu: Menu | undefined;
+	private loadVersion = 0;
 	private pointerInside = false;
 	private lastPointerPosition: { x: number; y: number; } | undefined;
 
@@ -382,6 +383,8 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		}
 		this.showScheduler.cancel();
 		if (!this.isExpanded) {
+			const loadActions = this.submenuAction.loadActions;
+			if (loadActions) this.menu.setActions(this.submenuAction.actions);
 			// A popup can be rendered before it mounts. Use its overlay host once the anchor is attached.
 			const overlayHost = this.button.domNode.closest('.ash-context-view')?.parentNode;
 			if (!this.options.submenuOptions?.submenuContextView && !this.contextViewContainer && overlayHost && this.contextView.element.parentNode !== overlayHost) {
@@ -389,14 +392,21 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 			}
 			this.onWillOpenSubmenu?.(this);
 			const content = this.menu.getContainer();
-			const rows = content.querySelectorAll(':scope > .ash-action-view-item > .ash-button');
+			const rowSelector = ':scope > .ash-action-view-item > .ash-button';
 			const alignBottom = this.options.submenuOptions?.submenuVerticalAlignment === 'bottom';
 			const shown = this.contextView.show({
 				anchor: this.button.domNode,
 				content,
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-				alignTopTo: alignBottom ? undefined : rows[0],
-				alignBottomTo: alignBottom ? rows[rows.length - 1] : undefined,
+				// Resolve the alignment row at layout time because loading can replace it.
+				get alignTopTo() {
+					return alignBottom ? undefined : content.querySelector(rowSelector) ?? undefined;
+				},
+				get alignBottomTo() {
+					if (!alignBottom) return undefined;
+					const rows = content.querySelectorAll(rowSelector);
+					return rows[rows.length - 1];
+				},
 				// Nested menus align to the parent row; vertical direction positions the MenuBar popup.
 				anchorAlignment: AnchorAlignment.Left,
 				anchorPosition: (this.options.submenuOptions?.expandDirection?.horizontal ??
@@ -411,6 +421,22 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 			});
 			if (!shown) return;
 			this.button.domNode.setAttribute('aria-expanded', 'true');
+			if (loadActions) {
+				const menu = this.menu;
+				const version = ++this.loadVersion;
+				void loadActions().then(actions => {
+					if (version !== this.loadVersion || !this.isExpanded) return;
+					const hadFocus = menu.isFocused();
+					menu.setActions(actions);
+					this.contextView?.layout();
+					if (hadFocus) menu.focusFirst();
+				}, error => {
+					if (version !== this.loadVersion || !this.isExpanded) return;
+					this.close();
+					this.button.focus();
+					onUnexpectedError(error);
+				});
+			}
 		}
 		if (selectFirst) this.menu.focusFirst();
 	}
@@ -433,6 +459,7 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	}
 
 	private onSubmenuHidden(reason: ContextViewHideReason): void {
+		this.loadVersion++;
 		this.showScheduler.cancel();
 		this.hideScheduler.cancel();
 		this.menu?.closeSubmenus();

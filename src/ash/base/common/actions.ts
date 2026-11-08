@@ -147,6 +147,8 @@ export class SubmenuAction implements IAction {
 		readonly label: string,
 		readonly actions: readonly IAction[],
 		readonly icon?: Icon,
+		/** If present, load fresh children on expansion while showing `actions` as placeholders. */
+		readonly loadActions?: () => Promise<readonly IAction[]>,
 	) { }
 
 	run(): void { }
