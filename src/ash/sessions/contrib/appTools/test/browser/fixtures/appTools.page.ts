@@ -36,6 +36,7 @@ import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_S
 import { createTestInitializeResult } from '../../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
 import type { AppHostOperation } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { AppToolsHost } from '../../../browser/appToolsHost.js';
+import { IModelEvaluationTools } from '../../../../../services/appTools/browser/appTools.js';
 import { AppServerAppToolsHost } from '../../../../../services/appTools/browser/appServerAppToolsHost.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../../../services/sessions/browser/sessionGroupsService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
@@ -163,6 +164,8 @@ const container = document.createElement('main');
 document.body.append(container);
 const listModel = new SessionsListModelService(storage);
 const services = resources.add(new InstantiationService());
+services.registerInstance(IStorageService, storage);
+services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
 services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
 services.registerInstance(IQuickInputService, fixtureOptions.has('leadingIcons')
 	? resources.add(new TestQuickInputService({ container: document.body, instantiationService: services }))
@@ -171,7 +174,6 @@ services.registerInstance(IDialogService, resources.add(new DialogService()));
 services.registerInstance(ILogService, new NullLoggerService());
 const listProjects = { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService;
 resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, listProjects, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), { blockedSessions: constObservable([]), ignore: () => undefined }, services.get(IQuickInputService), services.get(IDialogService), services.get(ILogService), resources.add(new ProjectsService(listProjects, storage)), undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
-services.registerInstance(IStorageService, storage);
 services.registerInstance(ISessionsListModelService, listModel);
 services.registerInstance(ISecretStorageService, resources.add(new BaseSecretStorageService()));
 const platform = new URL(location.href).searchParams.get('os') ?? 'linux';
@@ -236,7 +238,6 @@ services.registerSingleton(ITerminalProfileService, () => services.createInstanc
 services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
-services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
 services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
 const useEditorTerminals = new URL(location.href).searchParams.has('editorTerminals');
 if (useEditorTerminals) {
@@ -262,6 +263,7 @@ services.registerInstance(ITerminalService, terminals);
 services.registerInstance(IViewsService, { openView: async (id: string, focus: boolean | undefined) => { if (viewFailure) throw new Error('Terminal view unavailable'); terminalViews.push({ id, focus }); } } as unknown as IViewsService);
 services.registerInstance(IChatSessionNavigationService, { openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as IChatSessionNavigationService);
 services.registerInstance(ISessionGroupsService, groups);
+services.registerInstance(IModelEvaluationTools, { execute: async (caller, operation) => ({ caller, operation }) });
 
 let taskSource = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'compiler', presentation: { reveal: new URL(location.href).searchParams.has('revealTask') ? 'always' : 'never' } }, { label: 'Interactive', command: '${input:value}' }] });
 services.registerInstance(IFileService, {

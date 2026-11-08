@@ -2,7 +2,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import { APP_SERVER_SERVER_REQUESTS, type AppHostOperation } from '../../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_SERVER_REQUESTS, type AppHostRequestParams } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IAppToolsHost } from './appTools.js';
 
 /** Binds one renderer connection to its window-owned application capabilities. */
@@ -17,7 +17,7 @@ export class AppServerAppToolsHost extends Disposable {
 		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['app/request'], async (params, context) => {
 			const signal = AbortSignal.any([context.signal, this.lifetime.signal]);
 			throwIfCancelled(signal);
-			const result = await this.execute(params.operation, signal);
+			const result = await this.execute(params, signal);
 			throwIfCancelled(signal);
 			return { json: JSON.stringify(result) };
 		}));
@@ -28,8 +28,13 @@ export class AppServerAppToolsHost extends Disposable {
 		}));
 	}
 
-	private async execute(operation: AppHostOperation, signal: AbortSignal): Promise<unknown> {
+	private async execute({ operation, ...caller }: AppHostRequestParams, signal: AbortSignal): Promise<unknown> {
 		switch (operation.type) {
+			case 'getComparisonModels':
+			case 'createModelComparison':
+			case 'listModelComparisons':
+			case 'readModelComparison':
+				return this.host.modelEvaluation.execute(caller, operation, signal);
 			case 'tasksList': return this.host.taskRunner.listTasks(operation.directory, signal);
 			case 'tasksDescribe': return this.host.taskRunner.describeTask(operation.directory, operation.taskId, operation.revision, signal);
 			case 'tasksRun': return this.host.taskRunner.runTask(operation.directory, operation.taskId, operation.revision, signal);

@@ -7,6 +7,8 @@ pub use tool::AppToolHost;
 pub use tool::AppToolOperation;
 pub use tool::AppToolPolicy;
 pub use tool::AppToolService;
+pub use tool::ModelEvaluationSelection;
+pub use tool::ModelEvaluationWorkspace;
 pub use tool::OpenTarget;
 pub use tool::TaskRecipe;
 

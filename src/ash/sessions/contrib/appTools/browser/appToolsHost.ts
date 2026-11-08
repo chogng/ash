@@ -6,7 +6,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import type { IAppToolsHost } from '../../../services/appTools/browser/appTools.js';
+import { IModelEvaluationTools, type IAppToolsHost } from '../../../services/appTools/browser/appTools.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
@@ -44,6 +44,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 		@ICommandService private readonly commands: ICommandService,
+		@IModelEvaluationTools readonly modelEvaluation: IModelEvaluationTools,
 	) {
 		super();
 		this.sessionsList = instantiation.createInstance(SessionsListTools);

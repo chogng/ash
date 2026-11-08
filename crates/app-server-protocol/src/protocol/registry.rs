@@ -6772,6 +6772,8 @@ typescript_bindings! {
     crate::protocol::app_tools::AppToolsCapability,
     crate::protocol::app_tools::AppHostRequestParams,
     crate::protocol::app_tools::AppHostOperation,
+    crate::protocol::app_tools::ModelComparisonWorkspaceMode,
+    crate::protocol::app_tools::ModelComparisonSelection,
     crate::protocol::app_tools::AppHostResult,
     TextDocumentsCapability,
     ExtensionClientOperation,

@@ -23,6 +23,7 @@ suite('Sessions Chat accessibility help', () => {
 			const text = await content.inputValue();
 			expect(text).toMatch(locale === 'en' ? /Chat: Configure Tools/ : /聊天：配置工具/);
 			expect(text).toMatch(locale === 'en' ? /run Compare Agents from the Command Palette/ : /从命令面板运行“比较 Agent”/);
+			expect(text).toMatch(locale === 'en' ? /Enable model evaluation tools in Settings/ : /在设置中启用模型评测工具/);
 			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Pull Request/ : /打开添加上下文（\+），选择拉取请求/);
 			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Issue/ : /打开添加上下文（\+），选择 Issue/);
 			expect(text).toMatch(locale === 'en' ? /type #session to find conversations on the same host/ : /输入 #session 可查找同一主机上的对话/);

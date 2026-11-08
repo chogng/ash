@@ -7,6 +7,7 @@ suite('appTools browser component', () => {
 	for (const mode of ['Code', 'Chat']) {
 		test(`${mode} scrolls overflowing root and nested conversation titles beside the toolbar`, async () => {
 			const { page } = browserTests;
+			await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'no-preference' });
 			const rootTitle = '测试主对话的长标题，悬停以后应完整显示最后几个字';
 			const nestedTitle = '测试分支对话的长标题，悬停以后也应完整显示末尾';
 			const params = new URLSearchParams({ nested: '', leadingIcons: '', locale: 'zh-CN', rootTitle, nestedTitle });
@@ -27,7 +28,8 @@ suite('appTools browser component', () => {
 				const label = button.locator('.ash-sessions-list-label');
 				const text = label.locator('span');
 				const toolbar = row.locator('.ash-sessions-list-actions');
-				await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+				await expect(label).toHaveCSS('text-overflow', 'clip');
+				await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
 				await button.hover();
 				await expect(toolbar).toBeVisible();
 				await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
@@ -83,6 +85,15 @@ suite('appTools browser component', () => {
 		expect(await page.evaluate(() => window.ashAppToolsIntegration.openedUrls)).toEqual(['https://example.com/review?item=1']);
 	});
 
+	test('forwards model evaluation with the exact calling Turn', async () => {
+		const { page } = browserTests;
+		await page.goto('/appTools.html');
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		const operation = { type: 'readModelComparison', comparisonId: 'comparison-1' } as const;
+		const result = await page.evaluate(operation => window.ashAppToolsIntegration.call(operation), operation);
+		expect(result).toEqual({ caller: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1' }, operation });
+	});
+
 	test('application tools update the visible sidebar, preserve focus, persist and return explicit failures', async function () {
 		const { page } = browserTests;
 
@@ -106,7 +117,7 @@ suite('appTools browser component', () => {
 		});
 		expect(tree).toMatchObject({
 			mode: 'code', automationSessions: 'never',
-			sections: [{
+			sections: [{ id: 'projects', kind: 'section', children: [] }, {
 				id: 'recent', children: [
 					{ id: `group:${group.sectionId}`, label: 'Ship', children: [{ sessionId: 'session-2', threadId: 'thread-2' }] },
 					{ sessionId: 'session-1', threadId: 'thread-1' },
@@ -168,7 +179,7 @@ suite('appTools browser component', () => {
 		const result = await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }));
 		expect(result).toMatchObject({
 			tree: {
-				sections: [{
+				sections: [{ id: 'projects', kind: 'section', children: [] }, {
 					id: 'recent', collapsed: true, children: [
 						{ sessionId: 'session-1' },
 						{ sessionId: 'session-2', children: [{ sessionId: 'session-2', threadId: 'follow-up', kind: 'chat' }] },
@@ -197,7 +208,7 @@ suite('appTools browser component', () => {
 		const result = await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }));
 		expect(result).toMatchObject({
 			tree: {
-				sections: [{
+				sections: [{ id: 'projects', kind: 'section', children: [] }, {
 					id: 'recent', collapsed: false, children: [
 						{ sessionId: 'session-2', children: [{ threadId: 'follow-up', kind: 'chat' }] },
 					],

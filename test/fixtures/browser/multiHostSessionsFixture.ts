@@ -15,6 +15,7 @@ import { IChatService, type ThreadRead, type Thread, type StartTurnOptions, type
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IPromptsService, type IAgentSkill } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { ISessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
+import { ISessionComparisonService } from '../../../src/ash/sessions/services/sessions/browser/sessionComparisonService.js';
 import { ISessionsProvidersService } from '../../../src/ash/sessions/services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
@@ -56,13 +57,14 @@ export function installMultiHostSessionsFixture(): {
 	const nestedDraft = params.has('nestedDraft');
 	const sideChatHostSwitch = params.has('sideChatHostSwitch');
 	const background = params.has('backgroundActivities');
+	const comparisonPreview = params.has('comparisonPreview');
 	registerWorkbenchServiceContribution({
 		service: createServiceIdentifier<object>('test.multiHostSessionsFixture'),
 		dependencies: [ISessionsProvidersService, ISessionsManagementService, ISessionsService],
 		install: context => {
 			services = context.container;
 			const registry = services.get(ISessionsProvidersService);
-			for (const name of ['Host A', 'Host B']) {
+			for (const name of comparisonPreview ? ['Host A', 'Host B', 'Judge'] : ['Host A', 'Host B']) {
 				const lifetime = context.register(new DisposableStore());
 				const child = lifetime.add(services.createChild());
 				const host = createDisconnectedRendererApi();
@@ -134,7 +136,8 @@ export function installMultiHostSessionsFixture(): {
 					github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] },
 				});
 				const automations = automation ? lifetime.add(child.createInstance(AgentHostAutomationStore, name, observableValue<'connected'>('searchFixtureConnection', 'connected'))) : undefined;
-				let session: ISession = { sessionId: 'same', kind: 'code' as const, title: params.has('comparisonPreview') ? `Attempt ${name === 'Host A' ? 1 : 2} · ${name}` : `Task from ${name}`, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }, ...(sideThreads ? [{ threadId: 'side', title: 'Follow-up chat', status: 'active' as const, origin: { type: 'fork' as const, parentThreadId: 'same', parentSequence: 1 } }] : [])], agentTree: background ? [{
+				const title = comparisonPreview && name !== 'Judge' ? `Attempt ${name === 'Host A' ? 1 : 2} · ${name}` : `Task from ${name}`;
+				let session: ISession = { sessionId: 'same', kind: 'code' as const, title, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }, ...(sideThreads ? [{ threadId: 'side', title: 'Follow-up chat', status: 'active' as const, origin: { type: 'fork' as const, parentThreadId: 'same', parentSequence: 1 } }] : [])], agentTree: background ? [{
 					threadId: 'side', threadSequence: 1, title: 'Research worker',
 					origin: { type: 'agentSpawn', parentThreadId: 'same', parentSequence: 1, delegationId: 'delegate' },
 					membershipStatus: 'active', executionStatus: 'running', usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [{
@@ -231,10 +234,16 @@ export function installMultiHostSessionsFixture(): {
 		async showComparisonGroup() {
 			const groups = services.get(ISessionGroupsService);
 			const group = await groups.create('Compare · Refactor the cache', undefined, 'comparison');
-			for (const name of ['Host A', 'Host B']) {
+			const [first, second, judge] = ['Host A', 'Host B', 'Judge'].map(name => {
 				const id = sessionIdentity(name, 'same', 'local-agent-host');
-				await groups.move(id, group.sectionId);
-			}
+				return { sessionId: id, threadId: id };
+			});
+			for (const participant of [first, second, judge]) await groups.move(participant.sessionId, group.sectionId);
+			await services.get(ISessionComparisonService).save({
+				id: group.sectionId, providerId: 'Host A', source: first, sourceSequence: 1,
+				task: 'Refactor the cache', isolated: true, judge, judgeFailed: true,
+				attempts: [{ ...first, agent: 'Host A', number: 1 }, { ...second, agent: 'Host B', number: 2 }],
+			});
 		},
 		activeProvider: () => services.get(ISessionsManagementService).activeUntitledSession?.providerId,
 		open: async (name, sideBySide = false) => {

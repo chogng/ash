@@ -7,10 +7,14 @@ use super::project_projection;
 use app_tools::AppToolContext;
 use app_tools::AppToolOperation;
 use app_tools::AutomationOperation;
+use app_tools::ModelEvaluationSelection;
+use app_tools::ModelEvaluationWorkspace;
 use app_tools::OpenTarget;
 use ash_app_server_protocol::protocol::app_tools::AppHostOperation;
 use ash_app_server_protocol::protocol::app_tools::AppHostRequestParams;
 use ash_app_server_protocol::protocol::app_tools::AppHostResult;
+use ash_app_server_protocol::protocol::app_tools::ModelComparisonSelection;
+use ash_app_server_protocol::protocol::app_tools::ModelComparisonWorkspaceMode;
 use ash_app_server_protocol::protocol::automation::AutomationDeleteParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunsParams;
@@ -154,6 +158,26 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
             AppToolOperation::AutomationUpdate { operation } => self.execute_app_automation(operation, &command_id, context)?,
             other => {
                 let operation = match other {
+                    AppToolOperation::GetComparisonModels { workspace_mode } => AppHostOperation::GetComparisonModels {
+                        workspace_mode: comparison_workspace(workspace_mode),
+                    },
+                    AppToolOperation::CreateModelComparison { workspace_mode, prompt, attempts, judge, synthesizer } => {
+                        if matches!(caller.origin, ash_protocol::ThreadOrigin::Comparison { .. })
+                            || comparison_evidence(&caller, context).is_ok() {
+                            return Err(CoreError::Policy("comparison participants cannot launch further comparisons".into()));
+                        }
+                        AppHostOperation::CreateModelComparison {
+                            workspace_mode: comparison_workspace(workspace_mode),
+                            prompt,
+                            attempts: attempts.into_iter().map(comparison_selection).collect(),
+                            judge: judge.map(comparison_selection),
+                            synthesizer: synthesizer.map(comparison_selection),
+                        }
+                    }
+                    AppToolOperation::ListModelComparisons { include_archived, workspace, comparison_ids, cursor } => AppHostOperation::ListModelComparisons {
+                        include_archived, workspace, comparison_ids, cursor,
+                    },
+                    AppToolOperation::ReadModelComparison { comparison_id } => AppHostOperation::ReadModelComparison { comparison_id },
                     AppToolOperation::TasksList { directory } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Read)?; AppHostOperation::TasksList { directory } }
                     AppToolOperation::TasksDescribe { directory, task_id, revision } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Execute)?; AppHostOperation::TasksDescribe { directory, task_id, revision } }
                     AppToolOperation::TasksRun { directory, task_id, revision } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Execute)?; AppHostOperation::TasksRun { directory, task_id, revision } }
@@ -567,6 +591,22 @@ fn host_error(error: crate::client_host::ClientHostError) -> CoreError {
     match error {
         crate::client_host::ClientHostError::Cancelled(reason) => CoreError::Cancelled(reason),
         other => CoreError::Execution(format!("{other:?}")),
+    }
+}
+
+fn comparison_workspace(mode: ModelEvaluationWorkspace) -> ModelComparisonWorkspaceMode {
+    match mode {
+        ModelEvaluationWorkspace::Worktree => ModelComparisonWorkspaceMode::Worktree,
+        ModelEvaluationWorkspace::Folderless => ModelComparisonWorkspaceMode::Folderless,
+    }
+}
+
+fn comparison_selection(selection: ModelEvaluationSelection) -> ModelComparisonSelection {
+    ModelComparisonSelection {
+        source_id: selection.source_id,
+        agent: selection.agent,
+        model: selection.model,
+        reasoning_effort: selection.reasoning_effort,
     }
 }
 

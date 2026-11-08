@@ -33,6 +33,7 @@ import { SessionsListSearch } from './sessionsListSearch.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { OPEN_SESSION_COMPARISON_COMMAND_ID } from '../../../../services/sessions/common/sessionComparison.js';
 import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
@@ -1429,7 +1430,9 @@ export class SessionsList extends DomWidget {
 			}
 			if (this.search.hasQuery && !members.length && !this.search.matches(group.name)) continue;
 			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code' ? 'subgroup' : 'section', {
-				open: group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined,
+				open: group.kind === 'comparison' ? () => {
+					void this.commands.executeCommand(OPEN_SESSION_COMPARISON_COMMAND_ID, group.sectionId).catch(error => this.notifications.error(String(error)));
+				} : undefined,
 				group,
 			}));
 		}
@@ -1551,25 +1554,6 @@ export class SessionsList extends DomWidget {
 	private syncTreeSelection(): void {
 		const current = this.tree.getVisibleElements().find(element => element.classList.contains('selected'));
 		this.tree.setSelection(current ? [SessionsListTree.id(current)] : []);
-	}
-
-	private async openComparison(sessionIds: readonly string[]): Promise<void> {
-		for (const id of sessionIds) {
-			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === id && candidate.status === 'active');
-			const thread = session?.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root')
-				?? session?.chats.find(candidate => candidate.status === 'active');
-			if (!thread) continue;
-			const revision = this.viewService.navigationRevision;
-			try {
-				await this.viewService.openThread(id, thread.threadId, { sideBySide: true });
-			} catch (error) {
-				this.notifications.error(String(error));
-				if (this.viewService.navigationRevision !== revision + 1) break;
-				continue;
-			}
-			const active = this.viewService.activeSelection;
-			if (active?.kind !== 'session' || active.active.session.sessionId !== id || active.active.threadId !== thread.threadId) break;
-		}
 	}
 
 }

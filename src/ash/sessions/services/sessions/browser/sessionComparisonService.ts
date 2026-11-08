@@ -1,4 +1,5 @@
 import type { Event } from '../../../../base/common/event.js';
+import { approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -23,8 +24,11 @@ export class SessionComparisonService {
 			const value: unknown = JSON.parse(this.storage.get(this.key(id), StorageScope.PROFILE) ?? 'null');
 			if (!isRecord(value) || value.id !== id || typeof value.task !== 'string' || typeof value.isolated !== 'boolean'
 				|| typeof value.providerId !== 'string' || !Number.isSafeInteger(value.sourceSequence) || !isComparisonThread(value.source)
+				|| (value.folderless !== undefined && typeof value.folderless !== 'boolean')
+				|| (value.workspace !== undefined && typeof value.workspace !== 'string')
 				|| !Array.isArray(value.attempts) || value.attempts.length < 2
-				|| !value.attempts.every(attempt => isRecord(attempt) && isComparisonThread(attempt) && Number.isSafeInteger(attempt.number) && typeof attempt.agent === 'string' && isOptionalParticipantSettings(attempt.settings))
+				|| !value.attempts.every(attempt => isComparisonThread(attempt) && isAttemptConfiguration(attempt))
+				|| (value.failedAttempts !== undefined && (!Array.isArray(value.failedAttempts) || !value.failedAttempts.every(isAttemptConfiguration)))
 				|| !isOptionalAgent(value.judgeAgent) || !isOptionalAgent(value.synthesisAgent)
 				|| !isOptionalParticipantSettings(value.judgeSettings) || !isOptionalParticipantSettings(value.synthesisSettings)
 				|| (value.judgeFailed !== undefined && typeof value.judgeFailed !== 'boolean')
@@ -35,6 +39,14 @@ export class SessionComparisonService {
 		} catch {
 			return undefined;
 		}
+	}
+
+	list(): readonly SessionComparison[] {
+		const prefix = this.key('');
+		return this.storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE).flatMap(key => {
+			const comparison = key.startsWith(prefix) ? this.get(key.slice(prefix.length)) : undefined;
+			return comparison ? [comparison] : [];
+		});
 	}
 
 	async save(comparison: SessionComparison): Promise<void> {
@@ -82,6 +94,10 @@ export class SessionComparisonService {
 	}
 }
 
+function isAttemptConfiguration(value: unknown): boolean {
+	return isRecord(value) && Number.isSafeInteger(value.number) && typeof value.agent === 'string' && isOptionalParticipantSettings(value.settings);
+}
+
 function isOptionalAgent(value: unknown): boolean {
 	return value === undefined || isRecord(value) && typeof value.name === 'string'
 		&& typeof value.sourceId === 'string' && typeof value.description === 'string';
@@ -91,7 +107,7 @@ function isOptionalParticipantSettings(value: unknown): boolean {
 	return value === undefined || isRecord(value)
 		&& (value.model === undefined || isRecord(value.model) && typeof value.model.provider === 'string' && typeof value.model.model === 'string')
 		&& (value.reasoningEffort === undefined || ['none', 'minimal', 'low', 'medium', 'high', 'extraHigh', 'max'].some(effort => effort === value.reasoningEffort))
-		&& (value.approvalMode === undefined || value.approvalMode === 'auto' || value.approvalMode === 'manual');
+		&& (value.approvalMode === undefined || approvalModeDefinitions.some(mode => mode.id === value.approvalMode));
 }
 
 function isComparisonThread(value: unknown): value is ComparisonThread {

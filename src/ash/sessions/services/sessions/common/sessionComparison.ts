@@ -1,5 +1,8 @@
 import type { ChatAgent, StartTurnOptions } from '../../../../workbench/services/chat/common/chatService.js';
 
+export const OPEN_SESSION_COMPARISON_COMMAND_ID = 'sessions.openComparison';
+export const COMPARE_AGENTS_TOOLS_ENABLED_SETTING = 'sessions.chat.compareAgents.tools.enabled';
+
 export interface ComparisonThread {
 	readonly sessionId: string;
 	readonly threadId: string;
@@ -8,11 +11,13 @@ export interface ComparisonThread {
 
 export type ComparisonParticipantSettings = Pick<StartTurnOptions, 'model' | 'reasoningEffort' | 'approvalMode'>;
 
-export interface ComparisonAttempt extends ComparisonThread {
+export interface ComparisonAttemptConfiguration {
 	readonly number: number;
 	readonly agent: string;
 	readonly settings?: ComparisonParticipantSettings;
 }
+
+export interface ComparisonAttempt extends ComparisonThread, ComparisonAttemptConfiguration { }
 
 export interface ComparisonDecision {
 	readonly topic: string;
@@ -36,7 +41,10 @@ export interface SessionComparison {
 	readonly sourceSequence: number;
 	readonly task: string;
 	readonly isolated: boolean;
+	readonly folderless?: boolean;
+	readonly workspace?: string;
 	readonly attempts: readonly ComparisonAttempt[];
+	readonly failedAttempts?: readonly ComparisonAttemptConfiguration[];
 	readonly judgeAgent?: ChatAgent;
 	readonly judgeSettings?: ComparisonParticipantSettings;
 	readonly synthesisAgent?: ChatAgent;

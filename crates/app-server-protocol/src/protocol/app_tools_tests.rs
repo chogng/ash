@@ -32,3 +32,18 @@ fn task_host_operations_preserve_run_and_recipe_identities() {
     }
     assert!(serde_json::from_value::<AppHostOperation>(json!({"type":"tasksOutput","directory":"/repo","runId":"run-1","cursor":-1,"maxCharacters":4096})).is_err());
 }
+
+#[test]
+fn model_comparison_host_operation_keeps_selections_separate_from_caller_identity() {
+    let first = json!({"sourceId":"directory","agent":"Review","model":{"provider":"one","model":"same"},"reasoningEffort":"high"});
+    let second = json!({"sourceId":"directory","agent":"Review","model":{"provider":"two","model":"same"},"reasoningEffort":null});
+    let wire = json!({"sessionId":"session-1","threadId":"thread-1","turnId":"turn-1","operation":{
+        "type":"createModelComparison","workspaceMode":"folderless","prompt":"Review the patch",
+        "attempts":[first,second],"judge":null,"synthesizer":null
+    }});
+    let request: AppHostRequestParams = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), wire);
+    let mut invalid = wire;
+    invalid["operation"]["attempts"][0]["approvalMode"] = json!("bypassPermissions");
+    assert!(serde_json::from_value::<AppHostRequestParams>(invalid).is_err());
+}

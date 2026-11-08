@@ -47,7 +47,13 @@ The Judge result uses the persisted structured verdict and provider-neutral part
 
 `readAttemptComparison` is intentionally a bounded manifest rather than a second transcript API. Agent Host already owns transcript retrieval through `get_session_context`, including summary, digest, and full detail levels. For attempts owned by the same provider authority as the Judge, the manifest maps provider-neutral participant records to exact provider-owned targets accepted by that existing tool. Cross-provider or cross-host attempts remain comparable through their bounded change, worktree, and validation evidence, but do not advertise an unusable transcript target.
 
-Both comparison tools are registered as ordinary workbench language-model tools and members of a hidden internal tool set. This follows the same client-tool publication path as other workbench-provided Agent Host tools: `AgentHostActiveClientService` publishes enabled tool-set members through `SessionActiveClient.tools`, and the owning VS Code client executes their implementations. Registering a tool without adding it to a tool set does not make it available to Agent Host sessions.
+Ash App Tools publishes the comparison tools. `read_attempt_comparison` and `complete_attempt_comparison` consume evidence from the owning Turn and return their results through App Server.
+
+## Agent-initiated evaluations
+
+When `sessions.chat.compareAgents.tools.enabled` is enabled, the initiating Agents Window serves `get_comparison_models`, `create_model_comparison`, `list_model_comparisons`, and `read_model_comparison` through the bound App Tools connection. Model and Agent selections are resolved on that host. Creating a comparison requires tool approval and inherits the originating Turn's approval mode. Worktree attempts share the initiating conversation's Git checkpoint. Folderless attempts start separate Ask conversations. Comparison participants cannot launch further comparisons.
+
+Agent-initiated and interactive comparisons share the launch workflow, group membership, and profile records. When at least two attempts launch, the record retains the failed selections alongside the launched attempts. Listing and reading use the same profile records and can recover a comparison ID after an interrupted tool response. Judge orchestration and user-initiated synthesis use the existing comparison lifecycle.
 
 ## End-to-end flow
 
