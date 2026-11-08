@@ -21,6 +21,7 @@ description: Build, revise, or review visible components in the Ash Agent Window
 ## Learnings
 
 - Agent Window 设置内容区的普通文字操作使用共享 `Button` 的 `secondary` 变体，例如 Install、Cancel 和 Manage accounts。由设置页统一提供默认浅灰底（深色主题使用对应的中性色）、悬停加深和无描边外观，保留键盘焦点环与高对比度描边。主操作、危险操作、纯图标按钮和进度指示使用各自的样式。
+- Agent Window 新增图标入口时，按控件角色核对实际字形尺寸和窗口字体，即使沿用已注册的图标。遇到 Inbox 这类以填充路径绘制的线框，按 [SVG 图标字体技能](../svg-icon-font/SKILL.md) 核对 Sessions 字体的轮廓分类并验证生成字形，保留现有语义 ID。
 - 表单弹窗使用共享 `Dialog` 的 `form` 布局。共享组件拥有标题截断、正文和底部插槽的布局规则，Agent Window 的 `style.css` 提供窗口级尺寸变量和配色，各功能的 CSS 负责自己的弹窗尺寸、字段和内容滚动。
 - 浮层外观依赖开关状态时，由持有生命周期的组件输出状态类。例如共享 `Dialog` 在自己的放弃确认打开时标记父弹窗，由 `dialog.css` 根据该状态切换遮罩。验收时同时覆盖确认打开、关闭恢复和无关模态打开的情况。
 

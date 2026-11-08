@@ -750,6 +750,63 @@ suite('sessions browser component', () => {
 
 	});
 
+	test('Inbox follows the workspace mode and keeps unanswered requests after opening them', async function () {
+		const { page, info } = browserTests;
+		await page.goto('/sessions.html?multiHost&inbox&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const modes = page.locator('.ash-window-mode-control');
+		const code = modes.getByRole('button', { name: '代码', exact: true });
+		const chat = modes.getByRole('button').first();
+		const inbox = page.getByRole('button', { name: /^收件箱/u });
+		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const icon = inbox.locator('[data-ash-icon-id="inbox"]');
+		await expect(icon).toHaveCSS('font-family', '"Ash UI Variable"');
+		await expect(icon).toHaveCSS('font-size', '18px');
+		await chat.click();
+		await expect(inbox).toHaveAccessibleName('收件箱');
+		await inbox.press('Enter');
+		await expect(panel).toContainText('没有需要关注的会话。');
+		await page.keyboard.press('Escape');
+		await expect(inbox).toBeFocused();
+		await inbox.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/使用 Tab 聚焦侧栏底部的收件箱/u);
+		await page.keyboard.press('Escape');
+		await expect(inbox).toBeFocused();
+
+		await code.click();
+		await expect(inbox).toHaveAccessibleName('收件箱，2 项需要关注');
+		await expect(inbox.locator('.ash-sessions-inbox-dot')).toBeVisible();
+		const accounts = page.locator('.ash-sessions-sidebar-accounts button');
+		const accountBounds = (await accounts.boundingBox())!;
+		const inboxBounds = (await inbox.boundingBox())!;
+		expect(accountBounds.x + accountBounds.width).toBeLessThanOrEqual(inboxBounds.x);
+		expect(inboxBounds.y + inboxBounds.height / 2).toBeCloseTo(accountBounds.y + accountBounds.height / 2);
+		await inbox.press('Enter');
+		const waiting = panel.getByRole('button', { name: 'Task from Host B 等待你的输入' });
+		const unread = panel.getByRole('button', { name: 'Task from Host A 未读回复' });
+		await expect(waiting).toBeVisible();
+		await expect(unread).toBeVisible();
+		const panelBounds = (await panel.boundingBox())!;
+		expect(panelBounds.y + panelBounds.height).toBeLessThan(inboxBounds.y);
+		await page.screenshot({ path: info.outputPath('sessions-inbox-zh-CN.png') });
+		await expect(waiting).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(unread).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
+		await page.keyboard.press('Enter');
+		await expect(panel).toBeHidden();
+		await expect(inbox).toHaveAccessibleName('收件箱，2 项需要关注');
+
+		await inbox.press('Enter');
+		await unread.press('Enter');
+		await expect(inbox).toHaveAccessibleName('收件箱，1 项需要关注');
+		await expect(page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
+		await chat.click();
+		await expect(inbox).toHaveAccessibleName('收件箱');
+		await code.click();
+		await expect(inbox).toHaveAccessibleName('收件箱，1 项需要关注');
+	});
+
 	test('Activity Bar uses fixed sizes across positions and preserves account ownership', async function () {
 		const { page } = browserTests;
 		const activityBar = page.locator('[data-part="activitybar"]');

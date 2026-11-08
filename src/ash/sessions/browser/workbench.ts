@@ -360,7 +360,7 @@ import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompos
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from './parts/sessionsPart.js';
-import { SidebarPart } from './parts/sidebarPart.js';
+import { ISessionsSidebarFooter, SidebarPart } from './parts/sidebarPart.js';
 import { registerSessionsNavigation } from '../contrib/sessions/browser/views/sessionsView.js';
 import { ISessionsTitlebarService, type TitlebarPart } from './parts/titlebarPart.js';
 
@@ -847,6 +847,7 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));
 		this._register(registerSessionsNavigation());
 		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode));
+		services.registerInstance(ISessionsSidebarFooter, sidebar);
 		const recoveredDrafts = migrateNewChatDraftState(storage, chatInputStatePersistence, error => notificationService.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
 		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
 			const request = value as { readonly prompt: string; readonly content: string; };

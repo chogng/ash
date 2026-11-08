@@ -67,6 +67,7 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 					createdAt: thread.createdAtUnixMs,
 					updatedAt: thread.lastActivityAtUnixMs ?? thread.createdAtUnixMs,
 					selected: selectedId === id,
+					selectedThreadId: selectedId === id && active.kind === 'thread' ? active.threadId : undefined,
 					status: session.manager.status === 'working' ? working : undefined,
 					defaultIcon: Lxicon.chatSession,
 					iconId: list.getRowIcon(`session:${id}`),

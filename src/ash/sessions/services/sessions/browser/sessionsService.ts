@@ -33,6 +33,7 @@ export interface ISessionsService {
 	readonly canNavigateForward: boolean;
 	readonly recentSessions: readonly SessionRecencyEntry[];
 	getLastViewedAt(entry: SessionRecencyEntry): number | undefined;
+	markVisibleThreadViewed(entry: SessionRecencyEntry): void;
 	initialize(): Promise<void>;
 	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId, options?: ISessionOpenOptions): Promise<void>;
@@ -113,9 +114,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 	markVisibleThreadViewed(entry: SessionRecencyEntry): void {
 		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === entry.sessionId && candidate.status === 'active');
 		const thread = session?.chats.find(candidate => candidate.threadId === entry.threadId && candidate.status === 'active');
-		if (thread?.updatedAt) {
+		if (thread) {
 			// Record the activity seen in this window, even when the provider's clock differs from ours.
-			this.recency.markViewed(entry, thread.updatedAt.getTime());
+			const management = thread.management ?? (session?.chats.filter(chat => chat.status === 'active' && chat.origin.type !== 'agentSpawn').length === 1 ? session.management : undefined);
+			this.recency.markViewed(entry, Math.max(thread.updatedAt?.getTime() ?? 0, management?.statusChangedAtUnixMs ?? 0));
 		}
 	}
 	get navigationRevision(): number { return this._navigationRevision; }

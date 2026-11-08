@@ -159,6 +159,10 @@ export function installMultiHostSessionsFixture(): {
 				if (params.has('blockedTitlebar') && name === 'Host B') {
 					session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 1 } };
 				}
+				if (params.has('inbox')) {
+					const status = name === 'Host A' ? 'completed' : 'needsInput';
+					session = { ...session, management: { status, statusChangedAtUnixMs: Date.now() - 1000 } };
+				}
 				const provider = Object.assign(lifetime.add(new class extends Disposable { }()), {
 					automations,
 					id: name, label: name, order: 1, instantiationService: child, onDidChangeCatalog: Event.None, onDidChangeSession: Event.None,

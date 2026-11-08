@@ -79,6 +79,7 @@ test('Sessions owns its New Session command and routes explicit provider choices
 	const viewService: ISessionsService = {
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
+		markVisibleThreadViewed() { },
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: onDidChange.event,

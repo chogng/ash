@@ -37,14 +37,33 @@
 	border-bottom: 0;
 }
 
+.ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host.bottom {
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
 .ash-sessions-window
 	.ash-workbench-sidebar
 	.ash-sessions-activity-host.bottom.integrated {
 	margin-top: auto;
 }
 
-.ash-sessions-window .ash-workbench-sidebar .ash-sessions-activity-host.bottom {
+.ash-sessions-sidebar-footer {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size80) var(--ash-sessions-sidebar-row-inset);
+}
+
+.ash-sessions-activity-host.bottom:not(.integrated)
+	> .ash-sessions-sidebar-footer {
 	border-top: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-sidebar-accounts {
+	flex: 1;
+	min-width: 0;
 }
 
 .ash-sessions-update-status {

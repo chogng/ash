@@ -68,6 +68,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
+		markVisibleThreadViewed() { },
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: changed.event,

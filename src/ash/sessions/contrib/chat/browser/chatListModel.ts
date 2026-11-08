@@ -33,6 +33,7 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly updatedAt?: number;
 	readonly projectId?: string;
 	readonly selected: boolean;
+	readonly selectedThreadId?: string;
 	readonly status?: ISessionStatusIcon;
 	readonly disabled?: boolean;
 	readonly actionsDisabled?: boolean;

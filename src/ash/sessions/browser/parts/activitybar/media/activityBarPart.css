@@ -94,10 +94,6 @@
 	gap: var(--ash-spacing-size20);
 }
 
-.ash-sessions-activity-bottom.labeled {
-	padding: var(--ash-spacing-size80) var(--ash-sessions-sidebar-row-inset);
-}
-
 .ash-sessions-activity-content.labeled .ash-sessions-activity-item,
 .ash-sessions-activity-bottom.labeled .ash-sessions-activity-item {
 	display: flex;

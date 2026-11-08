@@ -9,7 +9,7 @@ import { SidebarPart as WorkbenchSidebarPart } from '../../../workbench/browser/
 import { IViewDescriptorService } from '../../../workbench/common/views.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
-import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IWorkbenchLayoutService } from '../../../workbench/services/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -22,12 +22,21 @@ import { Lxicon } from '../../../base/common/lxicons.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 
+export interface ISessionsSidebarFooter {
+	/** Window-owned mount point. Contributions manage their own footer controls. */
+	readonly footer: HTMLElement;
+}
+
+export const ISessionsSidebarFooter = createServiceIdentifier<ISessionsSidebarFooter>('sessionsSidebarFooter');
+
 /** Shared container host with Sessions Activity Bar placement and sizing. */
 export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly topActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
+	private readonly bottomNavigationHost: HTMLDivElement;
 	private readonly updateStatus: HTMLDivElement;
-	public get activityBarAccountHost(): HTMLElement { return this.bottomActivityBarHost; }
+	public readonly activityBarAccountHost: HTMLDivElement;
+	public readonly footer: HTMLDivElement;
 	override get minimumWidth(): number { return isWeb ? 270 : 170; }
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number {
@@ -58,7 +67,11 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this.domNode.insertBefore(this.topActivityBarHost, this.titleDomNode);
 		this.bottomActivityBarHost = h(container.ownerDocument, 'div');
 		this.bottomActivityBarHost.className = 'ash-sessions-activity-host bottom';
-		this.bottomActivityBarHost.hidden = true;
+		this.bottomNavigationHost = h(container.ownerDocument, 'div');
+		this.footer = h(container.ownerDocument, 'div', { className: 'ash-sessions-sidebar-footer' });
+		this.activityBarAccountHost = h(container.ownerDocument, 'div', { className: 'ash-sessions-sidebar-accounts' });
+		this.footer.append(this.activityBarAccountHost);
+		this.bottomActivityBarHost.append(this.bottomNavigationHost, this.footer);
 		this.updateStatus = h(container.ownerDocument, 'div');
 		this.updateStatus.className = 'ash-sessions-update-status';
 		this.updateStatus.setAttribute('role', 'status');
@@ -116,9 +129,8 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		const integrated = location === ActivityBarPosition.DEFAULT;
 		const atBottom = location === ActivityBarPosition.BOTTOM;
 		this.topActivityBarHost.classList.toggle('integrated', integrated);
-		this.bottomActivityBarHost.classList.toggle('integrated', integrated);
+		this.bottomActivityBarHost.classList.toggle('integrated', !atBottom);
 		this.topActivityBarHost.hidden = atBottom;
-		this.bottomActivityBarHost.hidden = !integrated && !atBottom;
-		return atBottom ? this.bottomActivityBarHost : this.topActivityBarHost;
+		return atBottom ? this.bottomNavigationHost : this.topActivityBarHost;
 	}
 }
