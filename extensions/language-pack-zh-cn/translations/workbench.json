@@ -1,5 +1,9 @@
 {
   "ash": {
+    "comments.review.openLine": "打开第 {0} 行的评论",
+    "comments.review.addLine": "在第 {0} 行添加评论",
+    "comments.review.lineComments": "第 {0} 行的评论",
+    "comments.review.close": "关闭行内评论",
     "iconPicker.changeIcon": "更换图标",
     "iconPicker.resetIcon": "恢复默认图标",
     "agentSessionsWelcome.title": "Agent 会话欢迎页",

@@ -675,3 +675,91 @@ suite('changes browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.notifications().at(-1))).toContain('The published branch differs from the local commit. Review the pull request before merging.');
 	});
 });
+
+suite('session Code Review', () => {
+	const browserTests = useBrowserTests();
+
+	test('keeps Changes independent, batches line drafts and opens the saved comparison from its reply', async function () {
+		const { page } = browserTests;
+		await page.goto('/changes.html?locale=zh-CN');
+		await page.evaluate(() => window.ashChangesIntegration.openCodeReview());
+		const review = page.locator('#code-review');
+		const changes = page.locator('#existing-changes-editor .ash-sessions-changes-editor');
+		await expect(review.getByRole('region', { name: '代码审查' })).toBeVisible();
+		await expect(changes).toContainText('Reviewed');
+		await expect(changes.getByRole('region', { name: '代码审查' })).toHaveCount(0);
+		await expect(review.getByRole('button', { name: '切换并排 Diff' })).toHaveAttribute('aria-pressed', 'false');
+		await expect(review.getByLabel('新增 3 行，删除 2 行')).toBeVisible();
+		const scope = review.getByRole('combobox', { name: '比较范围' });
+		await scope.selectOption('lastTurn');
+		await expect(review.locator('.ash-session-code-review-diff')).toContainText('After');
+		await scope.selectOption('thread');
+		await expect(review.locator('.ash-session-code-review-diff')).toContainText('Reviewed');
+
+		const seen = review.getByRole('checkbox', { name: '已阅', exact: true });
+		await seen.check();
+		await expect(review.getByRole('status').filter({ hasText: '1/1 已阅' })).toBeVisible();
+		const file = review.locator('.stanza-multi-diff-editor-header-toggle');
+		await expect(file).toHaveAttribute('aria-expanded', 'false');
+		await review.getByRole('combobox', { name: '跳到文件' }).selectOption('1');
+		await expect(file).toHaveAttribute('aria-expanded', 'true');
+
+		await review.locator('.stanza-diff-editor-side.modified .line-numbers').getByText('2', { exact: true }).hover({ force: true });
+		await review.getByRole('button', { name: '在第 2 行添加评论', exact: true }).click();
+		const composer = review.getByRole('textbox', { name: '给 Agent 的评论' });
+		const save = review.getByRole('button', { name: '保存草稿', exact: true });
+		await composer.fill('Explain this replacement');
+		await save.click();
+		await page.evaluate(() => window.ashChangesIntegration.focusReviewLine(1, 3));
+		await page.keyboard.press('K');
+		await expect(composer).toHaveValue('K');
+		await composer.fill('Keep the order');
+		await save.click();
+		await expect(review.getByRole('button', { name: /第 1–3 行.*Keep the order/ })).toBeVisible();
+		await expect(review.getByRole('status').filter({ hasText: '2 条评论草稿' })).toBeVisible();
+		const split = await review.locator('.ash-session-code-review-workspace').evaluate(element => {
+			const comments = element.querySelector('.ash-session-code-review')!.getBoundingClientRect();
+			const diff = element.querySelector('.ash-session-code-review-comparison')!.getBoundingClientRect();
+			return { left: comments.right <= diff.left, codeLeads: diff.width > comments.width };
+		});
+		expect(split).toEqual({ left: true, codeLeads: true });
+		await browserTests.info.attach('code-review.png', { body: await review.screenshot(), contentType: 'image/png' });
+		const send = review.getByRole('button', { name: '发送给 Agent', exact: true });
+		await page.evaluate(() => window.ashChangesIntegration.activeTurn(true));
+		await send.click();
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.notifications())).toContain('Error: 请等当前 Agent 回合结束后再发送审查评论。');
+		expect(await page.evaluate(() => window.ashChangesIntegration.agentRequests())).toHaveLength(0);
+		await page.evaluate(() => window.ashChangesIntegration.activeTurn(false));
+		await send.click();
+		await expect(review.getByRole('status').filter({ hasText: '0 条评论草稿' })).toBeVisible();
+		const requests = await page.evaluate(() => window.ashChangesIntegration.agentRequests());
+		expect(requests).toHaveLength(1);
+		const [{ action, request }] = requests as [{ action: string; request: { commandId: string; contexts: { content: string; }[]; }; }];
+		expect(action).toBe('start');
+		expect(request.commandId).toMatch(/^ash-code-review-/);
+		expect(JSON.parse(request.contexts[0]!.content)).toMatchObject([
+			{ line: 2, code: 'Original\nReviewed\nThird', feedback: 'Explain this replacement' },
+			{ line: 1, endLine: 3, feedback: 'Keep the order' },
+		]);
+
+		await page.evaluate(() => window.ashChangesIntegration.replaceReviewCode());
+		await expect(review).toContainText('Current content');
+		await expect(changes).toContainText('Reviewed');
+		await page.evaluate(() => window.ashChangesIntegration.openReviewReply());
+		await expect(review).toContainText('2 条评论 · 已保存的比较');
+		await expect(review).toContainText('Reviewed');
+		await expect(review).toContainText('Explain this replacement');
+		await review.getByRole('button', { name: /第 1–3 行.*Keep the order/ }).click();
+		await expect(review.locator('.ash-review-zone-body')).toContainText('Keep the order');
+		await review.getByRole('button', { name: '查看最新版本' }).click();
+		await expect(review.locator('.ash-session-code-review-diff')).toContainText('Current content');
+		await expect(review.getByRole('status').filter({ hasText: '0/1 已阅' })).toBeVisible();
+		await review.evaluate(element => { element.style.width = '440px'; });
+		const stacked = await review.locator('.ash-session-code-review-workspace').evaluate(element => {
+			const comments = element.querySelector('.ash-session-code-review')!.getBoundingClientRect();
+			const diff = element.querySelector('.ash-session-code-review-comparison')!.getBoundingClientRect();
+			return diff.bottom <= comments.top && diff.height > 0 && comments.height > 0;
+		});
+		expect(stacked).toBe(true);
+	});
+});

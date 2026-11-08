@@ -37,6 +37,8 @@ import type { Range } from '../../../common/core/range.js';
 export interface RevealOptions {
 	readonly range?: Range;
 	readonly highlight: boolean;
+	readonly side?: 'original' | 'modified';
+	readonly onRevealed?: (editor: DiffEditorWidget) => void;
 }
 import { MultiDiffEditorLogger } from './multiDiffEditorLogging.js';
 import {
@@ -101,6 +103,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private navigationAbortController = new AbortController();
 	private previewEnabled: boolean;
 	private readonly onOpenEditor: IMultiDiffEditorWidgetOptions['onOpenEditor'];
+	private readonly attachEditor: IMultiDiffEditorWidgetOptions['attachEditor'];
 	private readonly expandedPreviewRegions = new WeakMap<DiffModel, Set<number>>();
 	private visible = true;
 	private restoredScrollAnchor: MultiDiffEditorViewState['scrollAnchor'];
@@ -116,6 +119,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.logger = new MultiDiffEditorLogger(logService);
 		validateMultiDiffEditorOptions(options);
 		this.previewEnabled = options.preview ?? false;
+		this.attachEditor = options.attachEditor;
 		this.onOpenEditor = options.onOpenEditor;
 		this.layoutStyle = options.layoutStyle ?? 'modern';
 		this.items = options.model.items;
@@ -445,6 +449,10 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		}
 	}
 
+	public setItemCollapsed(itemId: string, collapsed: boolean): void {
+		if (this.viewModel.isCollapsed(itemId) !== collapsed) this.toggleItem(itemId);
+	}
+
 	public toggleItem(itemId: string): boolean {
 		const index = this.items.findIndex(item => item.id === itemId);
 		const collapsed = this.viewModel.toggleItem(itemId);
@@ -529,9 +537,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
 				this.project();
 				const editor = this.sections.get(index)?.editor;
-				const control = item.modifiedUri ? editor?.modifiedEditor : editor?.originalEditor;
+				const side = options.side ?? (item.modifiedUri ? 'modified' : 'original');
+				const control = side === 'modified' ? editor?.modifiedEditor : editor?.originalEditor;
 				control?.revealRange(range);
 				if (options.highlight) { control?.setSelection(range); }
+				if (editor) options.onRevealed?.(editor);
 			}).catch(() => { /* The file header owns reporting its resolution error. */ });
 		}
 	}
@@ -711,7 +721,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 						// Only other cursors need restoration before compacting their regions.
 						hideUnchangedRegions: restoresCursor ? { ...hiddenRegions, enabled: false } : hiddenRegions,
 						...this.editorOptions,
-					}), dimension);
+					}), dimension, editor => this.attachEditor?.(item, editor));
 					if (restoresCursor) {
 						section.editor!.setHideUnchangedRegionsOptions(hiddenRegions);
 					}

@@ -335,6 +335,7 @@ export class ChatListItemRenderer extends Disposable {
 		const context = lifetime.add(this.contextKeys.createScoped(actions));
 		const hasText = ChatContextKeys.responseHasText.bindTo(context);
 		const hasFeedbackSurvey = ChatContextKeys.responseHasFeedbackSurvey.bindTo(context);
+		const requestClientId = ChatContextKeys.responseRequestClientId.bindTo(context);
 		const hasConversationLink = ChatContextKeys.responseHasConversationLink.bindTo(context);
 		const hasLoadedSkills = ChatContextKeys.responseHasLoadedSkills.bindTo(context);
 		const canFork = ChatContextKeys.responseCanFork.bindTo(context);
@@ -373,6 +374,7 @@ export class ChatListItemRenderer extends Disposable {
 			const hasCompletedSource = !!this.item.feedbackSource && !this.item.transient && !this.item.isError;
 			hasFeedbackSurvey.set(hasCompletedSource && this.item.canGiveModelFeedback === true);
 			hasConversationLink.set(hasCompletedSource);
+			requestClientId.set(hasCompletedSource ? this.item.requestClientId ?? '' : '');
 			hasLoadedSkills.set(!!this.item.loadedSkills?.length);
 			canFork.set(hasCompletedSource && this.item.canForkAfterResponse === true);
 			canCompareResults.set(hasCompletedSource && this.item.canCompareResults === true);
@@ -968,6 +970,7 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& left.feedbackSource?.sessionId === right.feedbackSource?.sessionId
 		&& left.feedbackSource?.threadId === right.feedbackSource?.threadId && left.feedbackSource?.turnId === right.feedbackSource?.turnId
 		&& left.feedbackSource?.itemId === right.feedbackSource?.itemId
+		&& left.requestClientId === right.requestClientId
 		&& left.turnChanges?.files === right.turnChanges?.files && left.turnChanges?.additions === right.turnChanges?.additions
 		&& left.turnChanges?.deletions === right.turnChanges?.deletions
 		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId

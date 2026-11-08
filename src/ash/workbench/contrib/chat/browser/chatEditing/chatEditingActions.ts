@@ -219,6 +219,11 @@ class ThreadChangesNotCurrentError extends Error {
 
 /** Opens precisely the checkpoint revision advertised by the composer, across all repositories. */
 export async function createThreadMultiDiffEditorInput(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string, signal?: AbortSignal): Promise<MultiDiffEditorInput> {
+	return (await readThreadChangesComparison(chat, sessionId, threadId, expectedRevision, signal)).input;
+}
+
+/** Returns the comparison and the metadata from the same checkpoint revision. */
+export async function readThreadChangesComparison(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string, signal?: AbortSignal) {
 	const read = <T>(promise: Promise<T>): Promise<T> => signal ? raceCancellationError(promise, signal) : promise;
 	if (signal) { throwIfCancelled(signal); }
 	const summary = await read(chat.readThreadChanges(sessionId, threadId));
@@ -246,11 +251,12 @@ export async function createThreadMultiDiffEditorInput(chat: IChatService, sessi
 	// A history move between the final file read and publication must not publish a stale review.
 	if (items.length && (await read(chat.readThreadChanges(sessionId, threadId))).revision !== summary.revision) throw changed();
 	const label = localize('chat.changes.conversationTitle', 'Conversation Changes');
-	return createMultiDiffEditorInput(
+	const input = createMultiDiffEditorInput(
 		URI.from({ scheme: 'ash-multi-diff', path: `/conversation/${sessionId}/${threadId}`, query: summary.revision }),
 		items, summary.warnings.length ? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', label, summary.warnings.join('; ')) : label,
 		{ kind: 'snapshot', label },
 	);
+	return { input, summary };
 }
 
 export function registerChatChangesActions(): void {

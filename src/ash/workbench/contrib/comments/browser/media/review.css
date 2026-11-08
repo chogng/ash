@@ -1,0 +1,48 @@
+.ash-review-glyph {
+	box-sizing: border-box;
+	padding: 0;
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.ash-review-glyph:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-review-glyph:focus-visible,
+.ash-review-zone-panel:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -2px;
+}
+
+.ash-review-zone-panel {
+	box-sizing: border-box;
+	max-block-size: 18rem;
+	overflow: auto;
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-inline-start-color: var(--ash-focusBorder);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	font-family: var(--ash-font-family, system-ui);
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.4;
+}
+
+.ash-review-zone-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-review-zone-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size80);
+}

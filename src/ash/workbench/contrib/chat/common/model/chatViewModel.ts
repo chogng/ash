@@ -36,6 +36,8 @@ export interface IChatListItem {
 	/** Execution directory of this reply, independent of the currently selected workspace. */
 	readonly fileReferenceDirectory?: FileSearchDirectory;
 	readonly feedbackSource?: ChatResponseFeedbackTarget;
+	/** Client identity of the accepted user request that produced this reply. */
+	readonly requestClientId?: string;
 	readonly canGiveModelFeedback?: boolean;
 	readonly canForkAfterResponse?: boolean;
 	readonly turnChanges?: TurnChangeSetSummary['statistics'];
@@ -167,8 +169,12 @@ export function chatTranscriptListItems(
 		if (skills) skills.push(entry.skill);
 		else skillsByTurn.set(entry.turnId, [entry.skill]);
 	}
+	const requestClientIds = new Map<string, string>();
 	const finalReplies = new Map<string, string>();
 	for (const entry of entries) {
+		if (entry.type === 'item' && entry.item.type === 'userMessage' && entry.item.clientId && !entry.transient && !requestClientIds.has(entry.turnId)) {
+			requestClientIds.set(entry.turnId, entry.item.clientId);
+		}
 		if (entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && (turnChanges.has(entry.turnId) || skillsByTurn.has(entry.turnId))) {
 			finalReplies.set(entry.turnId, entry.entryId);
 		}
@@ -272,6 +278,7 @@ export function chatTranscriptListItems(
 			item = {
 				...item,
 				feedbackSource: { sessionId: source.sessionId, threadId: source.threadId, turnId: entry.turnId, itemId: entry.item.itemId },
+				requestClientId: requestClientIds.get(entry.turnId) ?? completedTurns.get(entry.turnId)?.items.find(item => item.type === 'userMessage')?.clientId ?? undefined,
 				canGiveModelFeedback: !!completedTurns.get(entry.turnId)?.model,
 				canForkAfterResponse: !forkHistory?.archived,
 				...(changes ? { turnChanges: changes } : {}),

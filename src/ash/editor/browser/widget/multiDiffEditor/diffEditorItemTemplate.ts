@@ -200,7 +200,7 @@ export class DiffEditorItemTemplate extends Disposable {
 		if (!this.modelRetention.value) this.modelRetention.value = this.item.retain?.();
 	}
 
-	public mount(editor: DiffEditorWidget, dimension: IDimension): void {
+	public mount(editor: DiffEditorWidget, dimension: IDimension, attachEditor?: (editor: DiffEditorWidget) => IDisposable | undefined): void {
 		this.editorListeners.clear();
 		this.editorSlot.value = Object.assign(toDisposable(() => this.releaseEditor(editor)), { editor });
 		this.editorLayout = dimension;
@@ -221,6 +221,8 @@ export class DiffEditorItemTemplate extends Disposable {
 			this.editorListeners.add(editor.onDidContentSizeChange(updateContentHeight));
 		}
 		this.restoreEditorState();
+		const contribution = attachEditor?.(editor);
+		if (contribution) this.editorListeners.add(contribution);
 	}
 
 	public unmount(): void {

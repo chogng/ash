@@ -12,6 +12,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import type { IAction } from '../../../../base/common/actions.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
 import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
@@ -25,7 +26,7 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { GitHubNotificationFilter, GitHubForkBranches, GitHubDiffSide, GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod, GitHubReviewEvent, GitHubReviewThreadState, GitHubReviewerChange, IGitHubService, type GitHubFileContent, type GitHubPullRequestFile, type GitHubReviewThread } from '../../../../platform/github/common/githubService.js';
+import { GitHubNotificationFilter, GitHubForkBranches, GitHubDiffSide, GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod, GitHubReviewEvent, GitHubReviewThreadState, GitHubReviewerChange, IGitHubService, type GitHubFileContent, type GitHubPullRequest, type GitHubPullRequestFile, type GitHubRepository, type GitHubReviewThread } from '../../../../platform/github/common/githubService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -35,6 +36,7 @@ import { readLocalRepositories } from '../common/localRepository.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { ReviewZoneWidget } from '../../comments/browser/commentThreadZoneWidget.js';
 import { IGitHubReviewModel, isReviewLine, type GitHubComposeDraft } from './githubReviewModel.js';
 
 export const githubEditorId = 'ash.githubEditor';
@@ -68,7 +70,6 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private diffNotice!: HTMLParagraphElement;
 	private reviewSection!: HTMLDivElement;
 	private reviewBody!: HTMLTextAreaElement;
-	private inlineBody!: HTMLTextAreaElement;
 	private lineLabel!: HTMLParagraphElement;
 	private inlineActions!: WorkbenchToolBar;
 	private drafts!: HTMLDivElement;
@@ -105,12 +106,16 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private selectedSide = GitHubDiffSide.Right;
 	private selectedLine = 1;
 	private diffIdentity: string | undefined;
+	private diffLoad: Promise<void> | undefined;
+	private diffComments: { readonly zones: ReadonlyMap<GitHubDiffSide, ReviewZoneWidget>; readonly ready: () => boolean; } | undefined;
 	private readonly diffSession = this._register(new MutableDisposable<DisposableStore>());
 	private diffCancellation = new CancellationTokenSource();
 	private readonly listResources = this._register(new DisposableStore());
 	private readonly threadResources = this._register(new DisposableStore());
 	private readonly draftResources = this._register(new DisposableStore());
 	private readonly replies = new Map<string, string>();
+	private readonly commentInputs = new Map<string, string>();
+	private commentScope: string | undefined;
 	private accountEpoch = 0;
 
 	constructor(
@@ -191,7 +196,6 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		this.diffNotice = h(parent.ownerDocument, 'p'); this.diffNotice.setAttribute('role', 'status'); this.reviewSection.append(this.diffNotice);
 		this.diffContainer = this.element(this.reviewSection, 'github-diff');
 		this.lineLabel = h(parent.ownerDocument, 'p'); this.reviewSection.append(this.lineLabel);
-		this.inlineBody = this.textarea(this.reviewSection, localize('github.editor.inlineComment', 'Comment on selected line'), 'inlineComment');
 		this.inlineActions = this.toolbar(this.reviewSection, localize('github.editor.inlineActions', 'Line comment actions'));
 		this.drafts = this.element(this.reviewSection, 'github-draft-comments');
 		this.reviewBody = this.textarea(this.reviewSection, localize('github.editor.reviewSummary', 'Review summary'), 'reviewSummary');
@@ -256,8 +260,14 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		const model = this.model;
 		const active = this.root.ownerDocument.activeElement;
 		const focusKey = active instanceof HTMLElement && this.root.contains(active) ? active.dataset.githubFocus ?? active.getAttribute('aria-label') : null;
+		const commentScope = model.pullRequest && JSON.stringify([model.accountEpoch, model.repositoryKey, model.pullRequest.number, model.baseCommit, model.pullRequest.headCommit]);
+		if (commentScope !== this.commentScope) {
+			this.commentScope = commentScope;
+			this.commentInputs.clear();
+			this.replies.clear();
+		}
 		if (model.accountEpoch !== this.accountEpoch) {
-			this.accountEpoch = model.accountEpoch; this.replies.clear(); this.form.hidden = true; this.formBody.value = ''; this.inlineBody.value = ''; this.issueReply.value = '';
+			this.accountEpoch = model.accountEpoch; this.form.hidden = true; this.formBody.value = ''; this.issueReply.value = '';
 			for (const input of [this.formTitle, this.formHead, this.formBase, this.formLabels, this.formAssignees]) { input.value = ''; }
 		}
 		if (this.shownAccounts !== model.accounts) {
@@ -290,7 +300,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 					presentation: 'quiet',
 					onClick: () => {
 						if (notification) { model.selectNotification(notification); return; }
-						if ('number' in item) { this.inlineBody.value = ''; this.issueReply.value = ''; void (model.mode === 'pullRequests' ? model.openPullRequest(item.number) : model.openIssue(item.number)); }
+						if ('number' in item) { this.issueReply.value = ''; void (model.mode === 'pullRequests' ? model.openPullRequest(item.number) : model.openIssue(item.number)); }
 					},
 				}));
 				button.domNode.dataset.githubFocus = notification ? `notification-${notification.id}` : `item-${'number' in item ? item.number : ''}`;
@@ -377,7 +387,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		]);
 
 		const editable = model.canWrite;
-		this.reviewBody.disabled = !editable; this.inlineBody.disabled = !editable;
+		this.reviewBody.disabled = !editable;
 		this.reviewBody.value = model.draft?.body ?? '';
 		this.updateInlineActions();
 		const draftIdentity = JSON.stringify({ comments: model.draft?.comments ?? [], busy: model.busy, uncertain: model.submissionUncertain });
@@ -419,15 +429,18 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			this.action('moreThreads', localize('github.editor.moreThreads', 'Load more discussions'), !model.busy && !!model.nextThreadsCursor, () => model.moreThreads()),
 			this.action('moreReviews', localize('github.editor.moreReviews', 'Load more reviews'), !model.busy && model.nextReviewsPage !== null, () => model.moreReviews()),
 		]);
+		this.updateDiffComments();
 	}
 
-	private renderThread(thread: GitHubReviewThread): void {
-		const row = this.element(this.discussions, 'github-thread'); row.dataset.threadId = thread.id;
-		row.append(h(this.root.ownerDocument, 'strong', `${thread.path}:${thread.line ?? ''}`), h(this.root.ownerDocument, 'p', thread.outdated ? localize('github.editor.outdated', 'Outdated') : thread.resolved ? localize('github.editor.resolved', 'Resolved') : localize('github.editor.unresolved', 'Unresolved')));
+	private renderThread(thread: GitHubReviewThread, parent: HTMLElement = this.discussions, resources = this.threadResources): void {
+		const inline = parent !== this.discussions;
+		const row = this.element(parent, 'github-thread'); row.dataset.threadId = thread.id;
+		if (!inline) row.append(h(this.root.ownerDocument, 'strong', `${thread.path}:${thread.line ?? ''}`));
+		row.append(h(this.root.ownerDocument, 'p', thread.outdated ? localize('github.editor.outdated', 'Outdated') : thread.resolved ? localize('github.editor.resolved', 'Resolved') : localize('github.editor.unresolved', 'Unresolved')));
 		for (const comment of thread.comments.comments) {
 			const item = this.element(row, 'github-review-comment');
 			this.link(item, comment.author ?? localize('github.editor.deletedAuthor', 'Deleted account'), comment.url); item.append(h(this.root.ownerDocument, 'pre', comment.body));
-			const actions = this.toolbar(item, localize('github.editor.commentActions', 'Comment actions'), this.threadResources);
+			const actions = this.toolbar(item, localize('github.editor.commentActions', 'Comment actions'), resources, inline);
 			actions.setActions([
 				this.action(`editComment-${comment.id}`, localize('github.editor.editComment', 'Edit review comment'), comment.canUpdate && !this.model.busy && !this.model.submissionUncertain, async () => {
 					const selection = this.selection();
@@ -440,25 +453,38 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 				}),
 			]);
 		}
-		const reply = this.threadResources.add(new InputBox(row, {
+		const reply = resources.add(new InputBox(row, {
 			inputBoxStyles: defaultInputBoxStyles,
 			ariaLabel: localize('github.editor.reply', 'Reply to discussion'),
 			presentation: 'field',
 		}));
-		reply.inputElement.dataset.githubFocus = `reply-${thread.id}`; reply.value = this.replies.get(thread.id) ?? '';
-		this.threadResources.add(reply.onDidChange(value => this.replies.set(thread.id, value)));
-		const actions = this.toolbar(row, localize('github.editor.threadActions', 'Discussion actions'), this.threadResources);
+		reply.inputElement.dataset.githubFocus = `${inline ? 'inline-' : ''}reply-${thread.id}`;
+		reply.inputElement.dataset.reviewReply = thread.id;
+		reply.value = this.replies.get(thread.id) ?? '';
+		reply.enabled = !this.model.busy && !this.model.submissionUncertain;
+		resources.add(reply.onDidChange(value => this.setReplyText(thread.id, value)));
+		const actions = this.toolbar(row, localize('github.editor.threadActions', 'Discussion actions'), resources, inline);
 		actions.setActions([
+			...(!inline && this.hasThreadAnchor(thread) ? [this.action(`showThread-${thread.id}`, localize('github.editor.showThreadInDiff', 'Show discussion in diff'), !this.model.busy, () => this.revealThread(thread))] : []),
 			this.action(`reply-${thread.id}`, localize('github.editor.sendReply', 'Send reply'), !this.model.busy && !this.model.submissionUncertain, async () => {
 				if (this.model.busy || this.model.submissionUncertain || !reply.value.trim()) { return; }
+				const scope = this.commentScope;
 				await this.model.reply(thread, reply.value);
-				if (!this.model.error) { this.replies.delete(thread.id); const current = [...this.discussions.querySelectorAll<HTMLInputElement>('input')].find(input => input.dataset.githubFocus === `reply-${thread.id}`); if (current) { current.value = ''; } }
+				if (!this.model.error && scope === this.commentScope) this.setReplyText(thread.id, '');
 			}),
 			this.action(`resolve-${thread.id}`, thread.resolved ? localize('github.editor.unresolve', 'Reopen discussion') : localize('github.editor.resolve', 'Resolve discussion'), thread.canResolve && !this.model.busy && !this.model.submissionUncertain, () => {
 				if (!this.model.busy && !this.model.submissionUncertain) { return this.model.resolve(thread, thread.resolved ? GitHubReviewThreadState.Unresolved : GitHubReviewThreadState.Resolved); }
 			}),
 			this.action(`more-${thread.id}`, localize('github.editor.moreReplies', 'Load more replies'), !this.model.busy && !!thread.comments.nextCursor, () => this.model.moreThreadComments(thread)),
 		]);
+	}
+
+	private setReplyText(threadId: string, value: string): void {
+		if (value) this.replies.set(threadId, value);
+		else this.replies.delete(threadId);
+		for (const input of this.root.querySelectorAll<HTMLInputElement>('input[data-review-reply]')) {
+			if (input.dataset.reviewReply === threadId && input.value !== value) input.value = value;
+		}
 	}
 
 	private renderIssue(): void {
@@ -474,11 +500,18 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private async openFile(): Promise<void> {
 		const file = this.model.files.find(item => item.filename === this.files.value);
 		const repo = this.model.repository; const pr = this.model.pullRequest; const base = this.model.baseCommit;
-		const identity = file && repo && pr && base ? `${this.accountEpoch}/${repo.owner}/${repo.name}/${pr.headCommit}/${base}/${file.filename}` : undefined;
-		if (identity === this.diffIdentity) { return; }
-		this.diffIdentity = identity; this.selectedFile = file; this.diffCancellation.dispose(true); this.diffCancellation = new CancellationTokenSource(); this.diffSession.clear(); this.diffContainer.replaceChildren();
+		const identity = file && repo && pr && base ? JSON.stringify([this.commentScope, base, file.filename]) : undefined;
+		if (identity === this.diffIdentity) return this.diffLoad;
+		this.diffIdentity = identity; this.selectedFile = file; this.diffCancellation.dispose(true); this.diffCancellation = new CancellationTokenSource();
+		this.diffLoad = undefined; this.diffComments = undefined; this.diffSession.clear(); this.diffContainer.replaceChildren();
 		this.selectedLine = 1; this.selectedSide = GitHubDiffSide.Right; this.updateInlineActions();
 		if (!file || !repo || !pr || !base) { this.diffNotice.textContent = ''; return; }
+		const load = this.diffLoad = this.loadDiff(file, repo, pr, base);
+		try { await load; }
+		finally { if (this.diffLoad === load) this.diffLoad = undefined; }
+	}
+
+	private async loadDiff(file: GitHubPullRequestFile, repo: GitHubRepository, pr: GitHubPullRequest, base: string): Promise<void> {
 		const cancellation = this.diffCancellation; const token = cancellation.token;
 		const controller = new AbortController(); const resources = new DisposableStore();
 		resources.add(token.onCancellationRequested(() => controller.abort()));
@@ -501,22 +534,145 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			const factory = resources.add(this.instantiation.createInstance(WorkerBasedDiffProviderFactoryService));
 			const computation = resources.add(factory.createDiffProvider());
 			const diff = resources.add(new DiffModel({ original: original.model, modified: modified.model, diffProvider: computation, diffOptions: { ignoreTrimWhitespace: false, maxComputationTimeMs: 5000, computeMoves: false } }));
+			const commentResources = resources.add(new DisposableStore());
 			const widget = resources.add(this.instantiation.createInstance(DiffEditorWidget, { container: this.diffContainer, model: diff, readOnly: true, originalAriaLabel: localize('github.editor.original', 'Original file'), modifiedAriaLabel: localize('github.editor.modified', 'Modified file') }));
+			widget.updateOptions({ glyphMargin: true });
+			const zones = new Map<GitHubDiffSide, ReviewZoneWidget>();
 			for (const [editor, side] of [[widget.originalEditor, GitHubDiffSide.Left], [widget.modifiedEditor, GitHubDiffSide.Right]] as const) {
 				const select = () => { this.selectedSide = side; this.selectedLine = editor.getPosition()?.lineNumber ?? 1; this.updateInlineActions(); };
 				resources.add(editor.onDidFocusEditorText(select)); resources.add(editor.onDidChangeCursorPosition(select));
+				const original = side === GitHubDiffSide.Left;
+				const otherSide = original ? GitHubDiffSide.Right : GitHubDiffSide.Left;
+				zones.set(side, commentResources.add(new ReviewZoneWidget(editor, {
+					canAdd: line => !!diff.diff && this.canAddLineComment(file, side, line),
+					render: (line, parent, content) => this.renderInlineComments(file, side, line, parent, content),
+					onOpen: () => zones.get(otherSide)?.close(),
+					comparison: { editor: original ? widget.modifiedEditor : widget.originalEditor, original, rows: () => diff.diff?.rows },
+				})));
 			}
+			this.diffComments = { zones, ready: () => !!diff.diff };
+			const settled = new DeferredPromise<void>();
+			commentResources.add(diff.onDidChange(state => {
+				this.updateDiffComments();
+				this.updateInlineActions();
+				if (state.kind !== 'loading') void settled.complete();
+			}));
+			commentResources.add(toDisposable(() => void settled.complete()));
 			this.diffSession.value = resources;
+			this.updateDiffComments();
+			this.updateInlineActions();
 			this.diffNotice.textContent = file.patch ? '' : localize('github.editor.noPatch', 'GitHub did not provide a patch for this file. Line comments are unavailable.');
+			if (diff.state.kind === 'loading') await settled.p;
 		} catch (error) { resources.dispose(); if (!token.isCancellationRequested) { this.diffNotice.textContent = githubErrorMessage(error); } }
 	}
 
 	private updateInlineActions(): void {
 		this.lineLabel.textContent = this.selectedFile ? localize('github.editor.selectedLine', '{0}, {1}, line {2}', this.selectedFile.filename, this.selectedSide === GitHubDiffSide.Left ? localize('github.editor.originalSide', 'original') : localize('github.editor.modifiedSide', 'modified'), this.selectedLine) : '';
-		this.inlineActions.setActions([this.action('addLineComment', localize('github.editor.addLineComment', 'Add line comment to review'), this.model.canWrite && isReviewLine(this.selectedFile?.patch, this.selectedLine, this.selectedSide), () => {
-			if (!this.selectedFile || !this.inlineBody.value.trim()) { return; }
-			this.model.addComment({ path: this.selectedFile.filename, line: this.selectedLine, side: this.selectedSide, body: this.inlineBody.value }); this.inlineBody.value = '';
+		const file = this.selectedFile;
+		this.inlineActions.setActions([this.action('addLineComment', localize('github.editor.openLineComment', 'Write comment on selected line'), !!file && !!this.diffComments?.ready() && this.canAddLineComment(file, this.selectedSide, this.selectedLine), () => {
+			this.diffComments?.zones.get(this.selectedSide)?.show(this.selectedLine, true);
 		})]);
+	}
+
+	private canAddLineComment(file: GitHubPullRequestFile, side: GitHubDiffSide, line: number): boolean {
+		return this.model.canWrite && (this.model.draft?.comments.length ?? 0) < 100 && isReviewLine(file.patch, line, side);
+	}
+
+	private hasThreadAnchor(thread: GitHubReviewThread): thread is GitHubReviewThread & { readonly line: number; } {
+		return !thread.outdated && thread.line !== null && thread.line > 0;
+	}
+
+	private matchesThreadFile(thread: GitHubReviewThread, file: GitHubPullRequestFile): boolean {
+		return thread.path === file.filename || (thread.side === GitHubDiffSide.Left && thread.path === file.previousFilename);
+	}
+
+	private updateDiffComments(): void {
+		const file = this.selectedFile;
+		const diff = this.diffComments;
+		if (!file || !diff?.ready()) return;
+		for (const [side, zone] of diff.zones) {
+			const lines = new Set<number>();
+			for (const thread of this.model.threads) {
+				if (thread.side === side && this.hasThreadAnchor(thread) && this.matchesThreadFile(thread, file)) lines.add(thread.line);
+			}
+			if (!this.model.staleDraft) {
+				for (const comment of this.model.draft?.comments ?? []) {
+					if (comment.path === file.filename && comment.side === side) lines.add(comment.line);
+				}
+			}
+			zone.update(lines);
+		}
+	}
+
+	private renderInlineComments(file: GitHubPullRequestFile, side: GitHubDiffSide, line: number, parent: HTMLElement, resources: DisposableStore): HTMLElement | undefined {
+		for (const thread of this.model.threads) {
+			if (thread.side === side && thread.line === line && this.hasThreadAnchor(thread) && this.matchesThreadFile(thread, file)) {
+				this.renderThread(thread, parent, resources);
+			}
+		}
+		const draft = this.model.draft;
+		if (draft && !this.model.staleDraft) {
+			for (const [index, comment] of draft.comments.entries()) {
+				if (comment.path !== file.filename || comment.line !== line || comment.side !== side) continue;
+				const row = this.element(parent, 'github-thread');
+				row.append(h(parent.ownerDocument, 'strong', localize('github.editor.pendingLineComment', 'Pending review comment')), h(parent.ownerDocument, 'pre', comment.body));
+				this.toolbar(row, localize('github.editor.draftActions', 'Draft comment actions'), resources).setActions([
+					this.action(`removeInline-${index}`, localize('github.editor.removeComment', 'Remove comment'), !this.model.busy && !draft.uncertain, () => this.model.removeComment(index)),
+				]);
+			}
+		}
+		const key = JSON.stringify([file.filename, side, line]);
+		const canAdd = this.canAddLineComment(file, side, line);
+		if (!canAdd && !this.commentInputs.has(key)) return undefined;
+		const composer = this.textarea(parent, localize('github.editor.inlineComment', 'Comment on selected line'), key);
+		composer.value = this.commentInputs.get(key) ?? '';
+		composer.readOnly = !canAdd;
+		resources.add(addDisposableListener(composer, 'input', () => {
+			if (composer.value) this.commentInputs.set(key, composer.value);
+			else this.commentInputs.delete(key);
+		}));
+		this.toolbar(parent, localize('github.editor.inlineActions', 'Line comment actions'), resources, true).setActions([
+			this.action('saveInlineComment', localize('github.editor.addLineComment', 'Add line comment to review'), canAdd, () => {
+				const body = composer.value;
+				if (!body.trim()) { composer.focus(); return; }
+				this.commentInputs.delete(key);
+				try { this.model.addComment({ path: file.filename, line, side, body }); }
+				catch (error) { this.commentInputs.set(key, body); throw error; }
+				this.diffComments?.zones.get(side)?.show(line, true);
+			}),
+		]);
+		return composer;
+	}
+
+	private async revealThread(thread: GitHubReviewThread): Promise<void> {
+		const selection = this.selection();
+		const scope = this.commentScope;
+		let file = this.model.files.find(candidate => this.matchesThreadFile(thread, candidate));
+		while (!file && this.model.nextFilesPage !== null) {
+			const page = this.model.nextFilesPage;
+			await this.model.moreFiles();
+			selection();
+			file = this.model.files.find(candidate => this.matchesThreadFile(thread, candidate));
+			if (this.model.nextFilesPage === page) break;
+		}
+		if (!file || !this.hasThreadAnchor(thread)) {
+			this.showUnavailableThread();
+			return;
+		}
+		this.files.value = file.filename;
+		await this.openFile();
+		selection();
+		const current = this.model.threads.find(item => item.id === thread.id);
+		if (this.commentScope !== scope || this.selectedFile?.filename !== file.filename || !current || !this.hasThreadAnchor(current)
+			|| !this.diffComments?.zones.get(current.side)?.show(current.line)) {
+			this.showUnavailableThread();
+			return;
+		}
+		this.diffContainer.scrollIntoView({ block: 'nearest' });
+	}
+
+	private showUnavailableThread(): void {
+		this.status.textContent = localize('github.editor.threadLineUnavailable', 'This discussion has no available line in the current diff.');
 	}
 
 	private async merge(auto: boolean): Promise<void> {
@@ -644,7 +800,10 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			}
 		};
 	}
-	private toolbar(parent: HTMLElement, ariaLabel: string, resources?: DisposableStore): WorkbenchToolBar { const toolbar = new WorkbenchToolBar(parent, this.contextMenu, { ariaLabel }); return resources ? resources.add(toolbar) : this._register(toolbar); }
+	private toolbar(parent: HTMLElement, ariaLabel: string, resources?: DisposableStore, responsive = false): WorkbenchToolBar {
+		const toolbar = new WorkbenchToolBar(parent, this.contextMenu, { ariaLabel, responsiveBehavior: responsive ? { enabled: true } : undefined });
+		return resources ? resources.add(toolbar) : this._register(toolbar);
+	}
 	private input(parent: HTMLElement, text: string, focusKey: string): InputBox {
 		const label = this.element(parent, 'github-field', 'label'); label.append(h(parent.ownerDocument, 'span', text)); const input = this._register(new InputBox(label, {
 			inputBoxStyles: defaultInputBoxStyles,
