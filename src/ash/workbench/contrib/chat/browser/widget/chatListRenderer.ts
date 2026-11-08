@@ -62,6 +62,7 @@ export interface ChatResponseActions {
 
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
+	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
 	readonly onDidRequestEdit: (requestId: string) => void | Promise<void>;
 	readonly canEditRequest: () => boolean;
 	readonly cancelRequestEdit: () => boolean;
@@ -810,7 +811,15 @@ export class ChatListItemRenderer extends Disposable {
 		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
 		if (item.type === 'userMessage' || item.type === 'queuedMessage') article.classList.add('ash-chat-user-message');
 		if (item.type === 'userMessage' || item.type === 'agentMessage') {
-			article.setAttribute('aria-label', this.accessibilityProvider.getAriaLabel(item));
+			const presentation = this.options.messagePresentation;
+			const participant = item.type === 'userMessage' ? presentation?.user : presentation?.assistant;
+			article.setAttribute('aria-label', participant?.name ?? this.accessibilityProvider.getAriaLabel(item));
+			if (participant) {
+				const document = article.ownerDocument;
+				const avatar = h(document, 'span', { className: 'ash-chat-participant-avatar', attributes: { 'aria-hidden': 'true' } });
+				if (participant.icon) appendIcon(participant.icon, avatar);
+				article.append(h(document, 'header', { className: 'ash-chat-participant' }, avatar, h(document, 'span', participant.name)));
+			}
 		} else if (item.type !== 'reasoning') {
 			const label = h(article.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
 			label.className = `${this.options.classPrefix}-item-label`;
@@ -897,6 +906,19 @@ export class ChatListItemRenderer extends Disposable {
 						.catch(error => notifications.error(error));
 				}),
 			}));
+		}
+		const references = this.options.messagePresentation?.getReferences?.(item);
+		if (references?.length) {
+			const actions = h(article.ownerDocument, 'div', { className: 'ash-chat-message-references' });
+			body.append(actions);
+			for (const reference of references) {
+				const button = disposables.add(new Button(actions, {
+					...defaultButtonStyles, label: reference.label, icon: Lxicon.codeReview,
+					presentation: 'quiet', size: 'small',
+				}));
+				button.domNode.dataset.chatReferenceId = reference.id;
+				disposables.add(button.onDidClick(() => reference.open(button.domNode)));
+			}
 		}
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;

@@ -41,6 +41,7 @@ export class SessionCodeReviewWidget extends Disposable {
 	constructor(
 		public readonly element: HTMLElement,
 		private readonly reveal: (comment: CodeReviewComment) => boolean,
+		private readonly openComparison: ((resource: URI) => Promise<void>) | undefined,
 		@ISessionCodeReviewService private readonly reviews: SessionCodeReviewService,
 		@IEditorService private readonly editors: IEditorService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -55,7 +56,7 @@ export class SessionCodeReviewWidget extends Disposable {
 		const heading = h(document, 'header', { className: 'ash-session-code-review-notes-header' },
 			icon, h(document, 'h3', localize('sessions.codeReview.comments', 'Review comments')));
 		this.notes = h(document, 'div', { className: 'ash-session-code-review-notes' });
-		this.sendButton = button(document, localize('sessions.codeReview.send', 'Send to Agent'), 'secondary');
+		this.sendButton = button(document, localize('sessions.bots.sendReview', 'Send to Code Review'), 'secondary');
 		this.status = h(document, 'span', { className: 'ash-session-code-review-status', attributes: { role: 'status' } });
 		const footer = h(document, 'footer', { className: 'ash-session-code-review-footer' }, this.status, this.sendButton);
 		element.append(heading, this.notes, footer);
@@ -200,7 +201,7 @@ export class SessionCodeReviewWidget extends Disposable {
 		this.sendButton.disabled = sending || !comparison.isCurrent() || !count && !pending;
 		this.sendButton.textContent = pending && !sending
 			? localize('sessions.codeReview.retry', 'Confirm or Retry Send')
-			: localize('sessions.codeReview.send', 'Send to Agent');
+			: localize('sessions.bots.sendReview', 'Send to Code Review');
 		this.status.textContent = sending ? localize('sessions.codeReview.sending', 'Sending review…')
 			: pending ? localize('sessions.codeReview.unconfirmed', 'Review submission unconfirmed')
 				: comparison.history ? localize('sessions.codeReview.snapshot', '{0} comments · Saved comparison', count)
@@ -273,9 +274,8 @@ export class SessionCodeReviewWidget extends Disposable {
 	private async openNote(comparison: CodeReviewComparison, comment: CodeReviewComment, history?: string): Promise<void> {
 		if (this.comparison !== comparison) return;
 		if (history === comparison.history && this.reveal(comment)) return;
-		await this.editors.openEditor({
-			resource: codeReviewResource(comparison.target, history ?? 'draft').with({ fragment: comment.id }),
-		}, { pinned: true });
+		const resource = codeReviewResource(comparison.target, history ?? 'draft').with({ fragment: comment.id });
+		await (this.openComparison?.(resource) ?? this.editors.openEditor({ resource }, { pinned: true }));
 	}
 
 	private renderComment(comparison: CodeReviewComparison, body: HTMLElement, listeners: DisposableStore, comment: CodeReviewComment | undefined,

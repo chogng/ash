@@ -19,7 +19,7 @@ registerEditorPane({
 	name: 'Code Review',
 	canOpen: input => input.resource.scheme === codeReviewScheme ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	createInput: source => ({ ...source, label: localize('sessions.codeReview.title', 'Code Review'), readOnly: true, getIcon: () => Lxicon.codeReview }),
-	create: options => options.instantiationService!.createInstance(SessionCodeReviewEditor),
+	create: options => options.instantiationService!.createInstance(SessionCodeReviewEditor, undefined),
 });
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
@@ -31,7 +31,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = pane.getContainer()?.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.DiffEditor, { type }, () => type === AccessibleViewType.View
 				? pane.getAccessibleContent()
-				: localize('sessions.codeReview.help', 'On a comparison line, press Control+Alt+M (Command+Option+M on macOS) to open a comment. You can also select code and start typing a comment. Use the comparison and file pickers to change scope or jump to a file. Mark a file Seen to fold it. Save each draft, then choose Send to Agent. The comments list jumps to the original code. View Latest returns from a saved comparison.'),
+				: localize('sessions.codeReview.help', 'On a comparison line, press Control+Alt+M (Command+Option+M on macOS) to open a comment. You can also select code and start typing a comment. Use the comparison and file pickers to change scope or jump to a file. Mark a file Seen to fold it. Save each draft, then choose Send to Code Review to create a thread in Bots. The comments list jumps to the original code. View Latest returns from a saved comparison.'),
 				() => { if (isHTMLElement(focused) && focused.isConnected) focused.focus(); else pane.focus(); },
 				AccessibilityVerbositySettingId.DiffEditor);
 		},

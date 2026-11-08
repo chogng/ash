@@ -46,6 +46,7 @@ import { ChatResponseAccessibleView } from '../accessibility/chatResponseAccessi
 import { ChatFindWidget, computeRevealScrollTop, type IChatFindHost } from './chatFind/chatFindWidget.js';
 
 interface ChatListWidgetOptions {
+	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
 	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
 	readonly canEditRequest?: () => boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
@@ -500,7 +501,9 @@ export class ChatListWidget extends DomWidget {
 		};
 		const active = this.element.ownerDocument.activeElement;
 		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
-		const focusedActionRowId = (focusedRow?.item.requestSource || focusedRow?.item.queueTarget || focusedRow?.item.historyRedoTarget || focusedRow?.item.turnChanges) && focusedRow.element.contains(active)
+		const focusedReferenceId = isHTMLElement(active) ? active.dataset.chatReferenceId : undefined;
+		const focusedActionRowId = focusedRow?.element.contains(active)
+			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
 			? focusedRow.item.id : undefined;
 		const focusedActionId = focusedActionRowId ? active?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 		const imageFocus = isHTMLElement(active) && [...this.imageBatches].some(([, entry]) => entry.part.domNode.contains(active)) ? active : undefined;
@@ -599,8 +602,11 @@ export class ChatListWidget extends DomWidget {
 		}
 		if (focusedActionRowId && !active?.isConnected && this.element.ownerDocument.activeElement === this.element.ownerDocument.body) {
 			const row = this.renderedItems.get(focusedActionRowId);
-			const replacement = focusedActionId && row && Array.from(row.element.querySelectorAll<HTMLButtonElement>('[data-action-id] > button'))
-				.find(button => button.parentElement?.dataset.actionId === focusedActionId && !button.disabled);
+			const replacement = focusedReferenceId
+				? Array.from(row?.element.querySelectorAll<HTMLButtonElement>('[data-chat-reference-id]') ?? [])
+					.find(button => button.dataset.chatReferenceId === focusedReferenceId)
+				: focusedActionId && row && Array.from(row.element.querySelectorAll<HTMLButtonElement>('[data-action-id] > button'))
+					.find(button => button.parentElement?.dataset.actionId === focusedActionId && !button.disabled);
 			if (replacement) replacement.focus({ preventScroll: true });
 			else if (row) this.focus(row.item);
 			else this.focusReadingPosition();

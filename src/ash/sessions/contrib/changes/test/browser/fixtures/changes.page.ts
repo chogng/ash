@@ -17,6 +17,7 @@ import { createTestEditorServices } from '../../../../../../workbench/test/commo
 import { ChatResponseActionContext } from '../../../../../../workbench/contrib/chat/browser/chat.js';
 import { chatTranscriptListItems } from '../../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import type { StartTurnOptions, ThreadTranscriptEntry, Turn } from '../../../../../../workbench/services/chat/common/chatService.js';
+import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
 import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
 import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { BrowserContextMenuService } from '../../../../../../platform/contextview/browser/contextMenuService.js';
@@ -171,13 +172,37 @@ let failFile: ((error: Error) => void) | undefined;
 let fileReadStarted = false;
 let holdNextLedger: { key: string; missingSecond: boolean; } | undefined;
 const heldLedgers = new Map<string, { resolve(): void; reject(error: Error): void; }>();
+const reviewForks: Parameters<IAgentThreadService['fork']>[0][] = [];
+const reviewThreadId = 'review-thread';
+let loseReviewAcknowledgement = false;
+let acceptedReview: StartTurnOptions | undefined;
+services.registerInstance(IAgentThreadService, {
+	fork: async (request: Parameters<IAgentThreadService['fork']>[0]) => {
+		reviewForks.push(request);
+		return { sessionId: request.sessionId, threadId: reviewThreadId };
+	},
+} as IAgentThreadService);
 services.registerInstance(ISessionsService, {
 	onDidChange: changed.event,
 	get activeSelection() { return { kind: 'session', active: { session: { sessionId, kind: 'code' as const, status: 'active', title: 'Test changes', chats: [{ threadId, status: 'active', origin: { type: 'root' } }], workspace: { authorityId: 'local', root: '/workspace' } }, threadId } }; },
 } as unknown as ISessionsService);
 services.registerInstance(IChatService, {
-	readThread: async () => ({ thread: { sessionId, threadId: 'thread', status: 'active', sequence: 7, turns: activeTurn ? [{ status: 'running' }] : codeReviewMode ? [{ turnId: details.summary.turnId, status: 'completed', items: [] }] : [] } }),
-	startTurn: async (request: unknown) => { agentRequests.push({ action: 'start', request }); },
+	readThread: async (_sessionId: string, id: string) => {
+		const accepted = acceptedReview?.threadId === id ? acceptedReview : undefined;
+		const turns = activeTurn ? [{ status: 'running' }] : codeReviewMode ? [{
+			turnId: details.summary.turnId, status: 'completed',
+			items: accepted ? [{ type: 'userMessage', clientId: accepted.commandId }] : [],
+		}] : [];
+		return { thread: { sessionId, threadId: id, status: 'active', sequence: accepted ? 8 : 7, turns } };
+	},
+	startTurn: async (request: StartTurnOptions) => {
+		agentRequests.push({ action: 'start', request });
+		if (loseReviewAcknowledgement) {
+			loseReviewAcknowledgement = false;
+			acceptedReview = request;
+			throw new Error('Review acknowledgement lost');
+		}
+	},
 	queueTurn: async (request: unknown) => { agentRequests.push({ action: 'queue', request }); },
 	onDidUpdateThread: threadUpdates.event, onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None,
 	listTurnChanges: async (sessionId: string, threadId: string) => {
@@ -321,6 +346,8 @@ declare global {
 			rejectFile(): void;
 			agentRequests(): readonly unknown[];
 			openCodeReview(options?: { multipleRepositories?: boolean; }): Promise<void>;
+			reviewForks(): readonly unknown[];
+			loseReviewAcknowledgement(): void;
 			focusReviewLine(line: number, endLine?: number): void;
 			openReviewReply(): Promise<void>;
 			replaceReviewCode(): Promise<void>;
@@ -351,6 +378,8 @@ window.ashChangesIntegration = {
 	disposeCounter: () => counterOwner.clear(),
 	reduceMotion: value => configuration.updateValue('workbench.reduceMotion', value),
 	agentRequests: () => agentRequests,
+	reviewForks: () => reviewForks,
+	loseReviewAcknowledgement: () => { loseReviewAcknowledgement = true; },
 	openCodeReview: async options => {
 		codeReviewMode = true;
 		setIconResolver(document, getIconDefinition);
@@ -400,7 +429,8 @@ window.ashChangesIntegration = {
 			{ type: 'agentMessage', itemId: 'reply', turnId: 'review-turn', text: 'I addressed the comments.' },
 		] as const;
 		const entries = items.map(item => ({ type: 'item', entryId: item.itemId, turnId: item.turnId, transient: false, item })) as readonly ThreadTranscriptEntry[];
-		const reply = chatTranscriptListItems(entries, 'review-turn', [{ turnId: 'review-turn', status: 'completed', items } as unknown as Turn], { sessionId, threadId }).find(item => item.type === 'agentMessage');
+		const reply = chatTranscriptListItems(entries, 'review-turn', [{ turnId: 'review-turn', status: 'completed', items } as unknown as Turn],
+			{ sessionId, threadId: request.threadId }).find(item => item.type === 'agentMessage');
 		using context = new ChatResponseActionContext(reply!, reviewHost!, window, () => true, () => { });
 		await CommandsRegistry.getCommand('sessions.openResponseCodeReview')!(reviewServices!, context);
 	},

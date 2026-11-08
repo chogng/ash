@@ -7,19 +7,16 @@ import { IsSessionsWindowContext } from '../../../../workbench/common/contextkey
 import { ChatResponseActionContext } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { Menus } from '../../../browser/menus.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { codeReviewRequestPrefix, codeReviewResource, ISessionCodeReviewService } from './sessionCodeReviewService.js';
 
-const title = localize2('sessions.codeReview.title', 'Code Review');
+const title = localize2('sessions.codeReview.reviewChanges', 'Review Changes');
 
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.openCodeReview', title, icon: Lxicon.codeReview, f1: true,
 			precondition: IsSessionsWindowContext.isEqualTo(true),
-			menu: { id: Menus.ActivityBar, group: 'navigation', order: 25, when: SessionsWorkspaceModeContext.isEqualTo('code') },
 		});
 	}
 
@@ -51,10 +48,10 @@ registerAction2(class extends Action2 {
 		if (!(context instanceof ChatResponseActionContext) || !context.visible) return;
 		const { feedbackSource: target, requestClientId: id } = context.item;
 		if (!target || !id?.startsWith(codeReviewRequestPrefix)) return;
-		const batch = accessor.get(ISessionCodeReviewService).batch(target, id);
-		if (!batch) throw new Error(localize('sessions.codeReview.missing', 'This review snapshot is unavailable.'));
+		const snapshot = accessor.get(ISessionCodeReviewService).snapshotForMessage(target, id);
+		if (!snapshot) throw new Error(localize('sessions.codeReview.missing', 'This review snapshot is unavailable.'));
 		await accessor.get(IEditorService).openEditor({
-			resource: codeReviewResource(target, batch.id),
+			resource: codeReviewResource(snapshot.source, snapshot.batch.id),
 		}, { pinned: true, revealIfOpened: true });
 	}
 });

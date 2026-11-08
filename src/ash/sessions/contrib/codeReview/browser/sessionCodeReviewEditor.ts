@@ -58,6 +58,7 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 	private review!: SessionCodeReviewWidget;
 
 	constructor(
+		private readonly openComparison: ((resource: IResourceEditorInput['resource']) => Promise<void>) | undefined,
 		@IChatService private readonly chat: IChatService,
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IContextKeyService private readonly contexts: IContextKeyService,
@@ -78,7 +79,7 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 		this.message = h(document, 'p', { className: 'ash-session-code-review-message', attributes: { role: 'status' } });
 		const notes = h(document, 'aside');
 		this.review = this._register(this.instantiation.createInstance(SessionCodeReviewWidget, notes,
-			(comment: CodeReviewComment) => this.reveal(comment)));
+			(comment: CodeReviewComment) => this.reveal(comment), this.openComparison));
 		this.diffHost = h(document, 'div', { className: 'ash-session-code-review-diff' }, this.message);
 		this.workspace = h(document, 'div', { className: 'ash-session-code-review-workspace' }, notes,
 			h(document, 'section', { className: 'ash-session-code-review-comparison' }, this.createHeader(document), this.diffHost));
@@ -143,8 +144,12 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 		}));
 		this._register(addDisposableListener(this.latest, 'click', () => {
 			const target = this.input && codeReviewTarget(this.input.resource);
-			if (target) void this.editors.openEditor({ resource: codeReviewResource(target) }, { pinned: true, revealIfOpened: true, forceReload: true })
-				.catch(error => this.notifications.error(error));
+			if (target) {
+				const resource = codeReviewResource(target);
+				const opening = this.openComparison?.(resource)
+					?? this.editors.openEditor({ resource }, { pinned: true, revealIfOpened: true, forceReload: true });
+				void opening.catch(error => this.notifications.error(error));
+			}
 		}));
 		this._register(addDisposableListener(this.mode, 'click', () => {
 			this.setViewMode(this.viewMode === 'inline' ? 'sideBySide' : 'inline');

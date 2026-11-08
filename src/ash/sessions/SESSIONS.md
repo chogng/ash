@@ -35,6 +35,13 @@ An active native Chat Thread with a bound workspace can also be opened in Code.
 Code uses the original Session and Thread, including their history and execution
 policy. Opening the Thread does not change its kind or its default Chat link destination.
 
+Each new Code Review submission forks the source Thread in its Session. App Server
+owns the fork's execution directory and transcript, and Bots shows the conversation
+starting at the first review request. Code Review stores the source identity and
+the reviewed comparison together with the request identity so references can
+reopen that exact comparison. Earlier submissions continue to resolve against
+their original Thread.
+
 ## Architecture
 
 ```text

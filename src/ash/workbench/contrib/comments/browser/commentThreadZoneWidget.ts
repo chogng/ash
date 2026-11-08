@@ -1,5 +1,6 @@
 import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -180,8 +181,9 @@ export class ReviewZoneWidget extends Disposable {
 			peer.changeViewZones(accessor => { spacerId = accessor.addZone(peerZone); });
 			resources.add(toDisposable(() => peer.changeViewZones(accessor => accessor.removeZone(spacerId))));
 		}
-		resources.add(observeElementSize(panel, ({ height }) => {
-			const pixels = Math.ceil(height);
+		let pixels = 0;
+		// Laying out the zone can resize both diff editors. Do it outside observer delivery.
+		const layout = resources.add(new AnimationFrameScheduler(getWindow(panel), () => {
 			if (!pixels || pixels === zone.heightInPx) return;
 			zone.heightInPx = pixels;
 			this.editor.changeViewZones(accessor => accessor.layoutZone(zoneId));
@@ -189,6 +191,10 @@ export class ReviewZoneWidget extends Disposable {
 				spacer.heightInPx = pixels;
 				peer.changeViewZones(accessor => accessor.layoutZone(spacerId));
 			}
+		}));
+		resources.add(observeElementSize(panel, ({ height }) => {
+			pixels = Math.ceil(height);
+			layout.schedule();
 		}));
 	}
 

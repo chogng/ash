@@ -724,19 +724,29 @@ suite('session Code Review', () => {
 		});
 		expect(split).toEqual({ left: true, codeLeads: true });
 		await browserTests.info.attach('code-review.png', { body: await review.screenshot(), contentType: 'image/png' });
-		const send = review.getByRole('button', { name: '发送给 Agent', exact: true });
+		const send = review.getByRole('button', { name: '发送给代码审查', exact: true });
 		await page.evaluate(() => window.ashChangesIntegration.activeTurn(true));
 		await send.click();
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.notifications())).toContain('Error: 请等当前 Agent 回合结束后再发送审查评论。');
 		expect(await page.evaluate(() => window.ashChangesIntegration.agentRequests())).toHaveLength(0);
-		await page.evaluate(() => window.ashChangesIntegration.activeTurn(false));
+		expect(await page.evaluate(() => window.ashChangesIntegration.reviewForks())).toHaveLength(0);
+		await page.evaluate(() => {
+			window.ashChangesIntegration.activeTurn(false);
+			window.ashChangesIntegration.loseReviewAcknowledgement();
+		});
 		await send.click();
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.notifications())).toContain('Error: Review acknowledgement lost');
+		await review.getByRole('button', { name: '确认或重试发送', exact: true }).click();
 		await expect(review.getByRole('status').filter({ hasText: '0 条评论草稿' })).toBeVisible();
 		const requests = await page.evaluate(() => window.ashChangesIntegration.agentRequests());
 		expect(requests).toHaveLength(1);
-		const [{ action, request }] = requests as [{ action: string; request: { commandId: string; contexts: { content: string; }[]; }; }];
+		const [{ action, request }] = requests as [{ action: string; request: { commandId: string; threadId: string; contexts: { content: string; }[]; }; }];
 		expect(action).toBe('start');
 		expect(request.commandId).toMatch(/^ash-code-review-/);
+		expect(request.threadId).toBe('review-thread');
+		expect(await page.evaluate(() => window.ashChangesIntegration.reviewForks())).toEqual([{
+			sessionId: 'session', threadId: 'thread', target: 'thread', commandId: request.commandId + '-thread', title: '审查 main.ts',
+		}]);
 		expect(JSON.parse(request.contexts[0]!.content)).toMatchObject([
 			{ repositoryId: 'repository', path: 'src/a-long-directory-name/main.ts', line: 2, code: 'Original\nReviewed\nThird', feedback: 'Explain this replacement' },
 			{ line: 1, endLine: 3, feedback: 'Keep the order' },
@@ -780,7 +790,7 @@ suite('session Code Review', () => {
 				await composer.fill('Same feedback');
 				await review.getByRole('button', { name: 'Save Draft' }).click();
 			}
-			await review.getByRole('button', { name: 'Send to Agent' }).click();
+			await review.getByRole('button', { name: 'Send to Code Review' }).click();
 			await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.agentRequests().length)).toBe(1);
 			const [entry] = await page.evaluate(() => window.ashChangesIntegration.agentRequests()) as [{ request: { contexts: { content: string; }[]; }; }];
 			expect(JSON.parse(entry.request.contexts[0]!.content)).toMatchObject(['repository', 'nested-repository'].map(repositoryId => ({

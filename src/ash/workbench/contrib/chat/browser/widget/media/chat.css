@@ -28,7 +28,10 @@
 	min-width: 0;
 	flex: 1 1 auto;
 	flex-direction: column;
-	background: var(--ash-editor-background);
+	background: var(
+		--ash-chat-transcript-surface,
+		var(--ash-editor-background)
+	);
 }
 
 .ash-chat[hidden] {

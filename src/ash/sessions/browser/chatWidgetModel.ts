@@ -51,7 +51,12 @@ export type ChatWidgetState =
 
 /** The local or durable identity currently displayed by a Chat pane. */
 export type ChatWidgetSelection =
-	| { readonly kind: 'session'; readonly active: IActiveSessionThread; }
+	| {
+		readonly kind: 'session';
+		readonly active: IActiveSessionThread;
+		/** The host can present the conversation from its first request after inherited context. */
+		readonly firstRequestClientId?: string;
+	}
 	| { readonly kind: 'untitled'; readonly session: IUntitledChatSession; };
 
 /**
@@ -269,9 +274,15 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get olderHistory(): { readonly loading: boolean; readonly error?: string; } | undefined {
-		return this.historyBoundary?.hasOlderTurns && this.historyBoundary.oldestTurnId
+		return this.historyBoundary?.hasOlderTurns && this.historyBoundary.oldestTurnId && !this.hasFirstPresentedRequest
 			? { loading: !!this.olderHistoryRequest, error: this.olderHistoryError }
 			: undefined;
+	}
+
+	private get hasFirstPresentedRequest(): boolean {
+		const firstRequest = this.selection.kind === 'session' && this.selection.firstRequestClientId;
+		return !!firstRequest && this.transcriptEntries.some(entry => entry.type === 'item'
+			&& entry.item.type === 'userMessage' && entry.item.clientId === firstRequest);
 	}
 
 	/** Older pages never replace the live cursor, execution state or interaction offer. */
@@ -280,7 +291,7 @@ export class ChatWidgetModel extends Disposable {
 		if (this.olderHistoryRequest) return this.olderHistoryRequest;
 		const active = this.activeSession;
 		const boundary = this.historyBoundary;
-		if (!active || !boundary?.hasOlderTurns || !boundary.oldestTurnId) return Promise.resolve();
+		if (!active || !boundary?.hasOlderTurns || !boundary.oldestTurnId || this.hasFirstPresentedRequest) return Promise.resolve();
 		const cursor = boundary.oldestTurnId;
 		const generation = this.generation;
 		const readPage = (turnId: string) => this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'before', turnId, turnLimit: historyPageTurns });
@@ -441,6 +452,11 @@ export class ChatWidgetModel extends Disposable {
 		let transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
 		}, this._changeSets);
+		const firstRequest = this.selection.kind === 'session' && this.selection.firstRequestClientId;
+		if (firstRequest) {
+			const start = transcript.findIndex(item => item.type === 'userMessage' && item.requestClientId === firstRequest);
+			if (start > 0) transcript = transcript.slice(start);
+		}
 		if (thread && this.isCodeConversation && (this._changeSets.length || this.comparableVersionTurns.size)) {
 			const captured = new Map<string, boolean>();
 			for (const change of this._changeSets) {

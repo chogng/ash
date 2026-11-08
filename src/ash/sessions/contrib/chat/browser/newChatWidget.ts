@@ -12,7 +12,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { IChatWidgetService, type ChatMessagePresentation } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
@@ -41,6 +41,7 @@ interface INewChatWidgetOptions {
 	readonly panelId: string;
 	readonly model: ChatWidgetModel;
 	readonly createNewSession: () => void;
+	readonly messagePresentation?: ChatMessagePresentation;
 }
 
 /** Owns the native conversation and projects its composer for the active workspace. */
@@ -56,7 +57,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 
 	constructor(
 		container: HTMLElement,
-		{ panelId, model, createNewSession }: INewChatWidgetOptions,
+		{ panelId, model, createNewSession, messagePresentation }: INewChatWidgetOptions,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
@@ -127,6 +128,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				return composer.input;
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
+			messagePresentation,
 			welcomeTitle,
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		this.composer = this._register(composer);

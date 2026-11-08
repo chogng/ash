@@ -262,6 +262,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
 			canEditRequest: () => !this.isTranscriptProgressActive,
 			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
+			messagePresentation: this.viewOptions?.messagePresentation,
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
 			readResponseResource: model.readResponseResource?.bind(model),
 			getResponseLinkOpener: model.getResponseLinkOpener?.bind(model),

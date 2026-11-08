@@ -437,27 +437,42 @@ suite('sessions browser component', () => {
 		}
 	});
 
-	test('Projects, Artifacts and Customize show the shared editor area background', async function () {
+	test('Product pages show the shared editor area background', async function () {
 		const { page } = browserTests;
 		const navigation = page.locator('.ash-sessions-activity-content');
 		const editorArea = page.locator('.ash-desktop-editor-area');
+		const modes = page.locator('.ash-window-mode-control');
+		const assertSurface = async (selector: string, theme: string) => {
+			const pageSurface = editorArea.locator(selector);
+			await expect(pageSurface).toBeVisible();
+			const backgroundOwner = await pageSurface.evaluate(element => {
+				for (let current: Element | null = element; current; current = current.parentElement) {
+					if (getComputedStyle(current).backgroundColor !== 'rgba(0, 0, 0, 0)') {
+						return current.classList.contains('ash-desktop-editor-area');
+					}
+				}
+				return false;
+			});
+			expect(backgroundOwner, `${selector} uses the editor area background in ${theme}`).toBe(true);
+			await expect(pageSurface).not.toHaveCSS('color', await editorArea.evaluate(element => getComputedStyle(element).backgroundColor));
+		};
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			for (const [label, selector] of [['Projects', '.ash-projects'], ['Artifacts', '.ash-creator'], ['Customize', '.ash-customize']]) {
 				await navigation.getByRole('button', { name: label, exact: true }).click();
-				const pageSurface = editorArea.locator(selector);
-				await expect(pageSurface).toBeVisible();
-				const backgroundOwner = await pageSurface.evaluate(element => {
-					for (let current: Element | null = element; current; current = current.parentElement) {
-						if (getComputedStyle(current).backgroundColor !== 'rgba(0, 0, 0, 0)') {
-							return current.classList.contains('ash-desktop-editor-area');
-						}
-					}
-					return false;
-				});
-				expect(backgroundOwner, `${label} uses the editor area background in ${theme}`).toBe(true);
-				await expect(pageSurface).not.toHaveCSS('color', await editorArea.evaluate(element => getComputedStyle(element).backgroundColor));
+				await assertSurface(selector, theme);
 			}
+			await modes.getByRole('button', { name: 'Code', exact: true }).click();
+			await navigation.getByRole('button', { name: 'Bots', exact: true }).click();
+			await assertSurface('.ash-bots-page', theme);
+			await expect(editorArea.locator('.ash-bots-header')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			if (theme === 'ash-light') {
+				const titlebar = await page.locator('.ash-sessions-titlebar').evaluate(element =>
+					getComputedStyle(element).getPropertyValue('--ash-sessions-titlebar-background').trim());
+				await expect(editorArea).toHaveCSS('background-color', Color.Format.CSS.formatRGB(Color.fromHex(titlebar)));
+			}
+			await page.locator('.ash-bots-sidebar').getByRole('button', { name: 'Back', exact: true }).click();
+			await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		}
 	});
 

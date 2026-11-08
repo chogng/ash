@@ -36,7 +36,7 @@ export interface IChatListItem {
 	/** Execution directory of this reply, independent of the currently selected workspace. */
 	readonly fileReferenceDirectory?: FileSearchDirectory;
 	readonly feedbackSource?: ChatResponseFeedbackTarget;
-	/** Client identity of the accepted user request that produced this reply. */
+	/** Client identity of the accepted request represented by this message or reply. */
 	readonly requestClientId?: string;
 	readonly canGiveModelFeedback?: boolean;
 	readonly canForkAfterResponse?: boolean;
@@ -417,6 +417,7 @@ function revisePresentation(label: string, detail: string): { readonly label: st
 export function chatListItem(item: ThreadItem, transient = false): IChatListItem {
 	switch (item.type) {
 		case 'userMessage':
+			return { id: item.itemId, type: item.type, text: item.text, transient, requestClientId: item.clientId ?? undefined };
 		case 'agentMessage':
 		case 'reasoning':
 		case 'plan':

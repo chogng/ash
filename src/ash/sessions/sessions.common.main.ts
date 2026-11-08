@@ -63,6 +63,7 @@ import './contrib/cowork/browser/cowork.contribution.js';
 import './contrib/editor/browser/diffEditor.sessions.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/codeReview/browser/codeReview.contribution.js';
+import './contrib/codeReview/browser/bots.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
 import './contrib/artifacts/browser/creatorEditor.contribution.js';
 import './contrib/artifacts/browser/artifacts.contribution.js';

@@ -10,6 +10,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import type { Event } from '../../../../base/common/event.js';
+import type { Icon } from '../../../../base/common/icon.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
@@ -153,8 +154,19 @@ export interface IChatWidgetViewOptions {
 	readonly showPromptTimeline?: boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
+	readonly messagePresentation?: ChatMessagePresentation;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
+}
+
+export interface ChatMessagePresentation {
+	readonly user: { readonly name: string; readonly icon?: Icon; };
+	readonly assistant: { readonly name: string; readonly icon?: Icon; };
+	readonly getReferences?: (item: IChatListItem) => readonly {
+		readonly id: string;
+		readonly label: string;
+		readonly open: (trigger: HTMLElement) => void;
+	}[];
 }
 
 export type ChatTurnChangesOpener = (source: NonNullable<IChatListItem['feedbackSource']>, signal: AbortSignal) => Promise<void>;

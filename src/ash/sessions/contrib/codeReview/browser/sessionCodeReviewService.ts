@@ -1,12 +1,16 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { derived, observableSignalFromEvent, observableValue } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
+import { IAgentThreadService } from '../../../../platform/agentHost/common/agentService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import type { ISession } from '../../../services/sessions/common/session.js';
 
 export const codeReviewScheme = 'ash-code-review';
 export const codeReviewRequestPrefix = 'ash-code-review-';
@@ -41,9 +45,26 @@ export interface CodeReviewDraft {
 	readonly comments: readonly CodeReviewComment[];
 }
 
-export interface CodeReviewBatch extends CodeReviewDraft {
+interface CodeReviewBatch extends CodeReviewDraft {
 	readonly id: string;
-	readonly pending?: { readonly expectedSequence: number; };
+	readonly title?: string;
+	readonly threadId?: string;
+	readonly createdAt?: number;
+	readonly pending?: { readonly expectedSequence?: number; };
+}
+
+interface CodeReviewConversation {
+	readonly source: CodeReviewTarget;
+	readonly threadId: string;
+	readonly title?: string;
+	readonly createdAt?: number;
+	readonly firstRequestClientId?: string;
+}
+
+interface CodeReviewEntry extends CodeReviewConversation {
+	readonly session: ISession;
+	readonly label: string;
+	readonly detail: string;
 }
 
 interface ReviewState {
@@ -71,7 +92,11 @@ function isDraft(value: unknown): value is CodeReviewDraft {
 
 function isBatch(value: unknown): value is CodeReviewBatch {
 	return isRecord(value) && typeof value.id === 'string' && value.id.startsWith(codeReviewRequestPrefix)
-		&& (value.pending === undefined || isRecord(value.pending) && Number.isSafeInteger(value.pending.expectedSequence))
+		&& (value.title === undefined || typeof value.title === 'string')
+		&& (value.threadId === undefined || typeof value.threadId === 'string')
+		&& (value.createdAt === undefined || Number.isSafeInteger(value.createdAt))
+		&& (value.pending === undefined || isRecord(value.pending)
+			&& (Number.isSafeInteger(value.pending.expectedSequence) || value.pending.expectedSequence === undefined && typeof value.title === 'string'))
 		&& isDraft(value) && value.comments.length > 0;
 }
 
@@ -115,18 +140,47 @@ export const ISessionCodeReviewService = createServiceIdentifier<SessionCodeRevi
 export class SessionCodeReviewService extends Disposable {
 	private readonly changed = this._register(new Emitter<string>());
 	private readonly sending = new Set<string>();
+	private readonly conversationCache = new Map<string, readonly CodeReviewConversation[]>();
 	private stateCache: { readonly key: string; readonly state: ReviewState; } | undefined;
 
 	public readonly onDidChange = this.changed.event;
+	private readonly selection = observableValue<CodeReviewTarget | undefined>(this, undefined);
+	public readonly entries = derived<readonly CodeReviewEntry[]>(reader => {
+		this.reviewChanges.read(reader);
+		this.catalogChanges.read(reader);
+		const sessions = new Map(this.catalog.sessions.map(session => [session.sessionId, session]));
+		return this.conversations().flatMap(conversation => {
+			const session = sessions.get(conversation.source.sessionId);
+			if (!session) return [];
+			const thread = session.chats.find(chat => chat.threadId === conversation.threadId);
+			return [{
+				...conversation, session,
+				createdAt: conversation.createdAt ?? thread?.updatedAt?.getTime(),
+				label: thread?.title || conversation.title || session.title,
+				detail: session.workspace?.root.split(/[\\/]/).filter(Boolean).at(-1) || session.title,
+			}];
+		}).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+	});
+	public readonly activeEntry = derived(reader => {
+		const selected = this.selection.read(reader);
+		const entries = this.entries.read(reader);
+		return entries.find(entry => entry.session.sessionId === selected?.sessionId && entry.threadId === selected.threadId) ?? entries[0];
+	});
+	private readonly reviewChanges = observableSignalFromEvent(this, this.onDidChange);
+	private readonly catalogChanges;
 
 	constructor(
 		@IStorageService private readonly storage: IStorageService,
 		@IChatService private readonly chat: IChatService,
+		@IAgentThreadService private readonly threads: IAgentThreadService,
+		@ISessionsManagementService private readonly catalog: ISessionsManagementService,
 	) {
 		super();
+		this.catalogChanges = observableSignalFromEvent(this, catalog.onDidChange);
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.WORKSPACE && event.key.startsWith(storagePrefix)) {
 				if (this.stateCache?.key === event.key) this.stateCache = undefined;
+				this.conversationCache.delete(event.key);
 				this.changed.fire(event.key);
 			}
 		}));
@@ -151,11 +205,46 @@ export class SessionCodeReviewService extends Disposable {
 	}
 
 	public affects(target: CodeReviewTarget, key: string): boolean { return key === storageKey(target); }
+	public select(target: CodeReviewTarget): void { this.selection.set(target, undefined); }
 	public draft(target: CodeReviewTarget): CodeReviewDraft { return this.read(target).draft; }
 	public batch(target: CodeReviewTarget, id: string): CodeReviewBatch | undefined {
 		return this.batches(target).find(batch => batch.id === id);
 	}
 	public batches(target: CodeReviewTarget): readonly CodeReviewBatch[] { return this.read(target).batches; }
+	private conversations(): readonly CodeReviewConversation[] {
+		return this.storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).flatMap(key => {
+			if (!key.startsWith(storagePrefix)) return [];
+			const cached = this.conversationCache.get(key);
+			if (cached) return cached;
+			let identity: unknown;
+			try { identity = JSON.parse(key.slice(storagePrefix.length)); } catch { return []; }
+			if (!Array.isArray(identity) || identity.length !== 2 || typeof identity[0] !== 'string' || typeof identity[1] !== 'string') return [];
+			const source = { sessionId: identity[0], threadId: identity[1] };
+			const conversations: CodeReviewConversation[] = [];
+			for (const batch of this.batches(source)) {
+				if (batch.pending) continue;
+				if (batch.threadId) {
+					conversations.push({
+						source, threadId: batch.threadId, title: batch.title,
+						createdAt: batch.createdAt, firstRequestClientId: batch.id,
+					});
+				} else if (!conversations.some(conversation => conversation.threadId === source.threadId)) {
+					conversations.push({ source, threadId: source.threadId });
+				}
+			}
+			this.conversationCache.set(key, conversations);
+			return conversations;
+		});
+	}
+
+	public snapshotForMessage(target: CodeReviewTarget, id: string): { readonly source: CodeReviewTarget; readonly batch: CodeReviewBatch; } | undefined {
+		const legacy = this.batch(target, id);
+		if (legacy && !legacy.threadId) return { source: target, batch: legacy };
+		const conversation = this.conversations().find(item => item.source.sessionId === target.sessionId && item.threadId === target.threadId);
+		const batch = conversation && this.batch(conversation.source, id);
+		if (conversation && batch?.threadId === target.threadId) return { source: conversation.source, batch };
+		return undefined;
+	}
 	public pending(target: CodeReviewTarget): CodeReviewBatch | undefined {
 		return this.read(target).batches.find(batch => !!batch.pending);
 	}
@@ -197,48 +286,81 @@ export class SessionCodeReviewService extends Disposable {
 		this.sending.add(key);
 		this.changed.fire(key);
 		try {
-			const { thread } = await this.chat.readThread(target.sessionId, target.threadId);
-			if (!isCurrent()) return;
-			if (thread.status === 'archived') throw new Error(localize('sessions.codeReview.archived', 'This conversation is archived.'));
 			const state = this.read(target);
 			let batch = state.batches.find(batch => !!batch.pending);
-			if (batch && thread.turns.some(turn => turn.items.some(item => item.type === 'userMessage' && item.clientId === batch?.id))) {
-				this.finishSubmission(target, batch.id);
-				return;
-			}
-			if (thread.turns.some(turn => !['completed', 'failed', 'interrupted'].includes(turn.status))) {
-				throw new Error(localize('sessions.codeReview.agentBusy', 'Wait for the current agent turn to finish before sending review comments.'));
-			}
 			if (!batch) {
 				if (!state.draft.comments.length) return;
-				let current = state;
-				let files = state.draft.files;
+				const { thread } = await this.chat.readThread(target.sessionId, target.threadId);
+				if (!isCurrent()) return;
+				if (thread.status === 'archived') throw new Error(localize('sessions.codeReview.archived', 'This conversation is archived.'));
+				if (thread.turns.some(turn => !['completed', 'failed', 'interrupted'].includes(turn.status))) {
+					throw new Error(localize('sessions.codeReview.agentBusy', 'Wait for the current agent turn to finish before sending review comments.'));
+				}
+				let current = this.read(target);
+				const draft = current.draft;
+				if (!draft.comments.length || current.batches.some(batch => batch.pending)) return;
+				let files = draft.files;
 				if (files.some(file => file.repositoryId === undefined)) {
 					files = await this.resolveDraftRepositories(target, files);
 					current = this.read(target);
 					if (!isCurrent() || current.batches.some(batch => batch.pending)
-						|| (current.draft !== state.draft && JSON.stringify(current.draft) !== JSON.stringify(state.draft))) {
+						|| (current.draft !== draft && JSON.stringify(current.draft) !== JSON.stringify(draft))) {
 						return;
 					}
 				}
-				batch = { ...state.draft, files, id: codeReviewRequestPrefix + generateUuid(), pending: { expectedSequence: thread.sequence } };
+				const file = files[0];
+				const name = Array.from(file.path.split('/').at(-1) || file.path).slice(0, 100).join('');
+				batch = {
+					...draft, files, id: codeReviewRequestPrefix + generateUuid(),
+					title: localize('sessions.bots.reviewThreadTitle', 'Review {0}', name),
+					createdAt: Date.now(), pending: {},
+				};
 				this.write(target, { ...current, draft: emptyDraft, batches: [...current.batches, batch] });
-			} else if (batch.pending?.expectedSequence !== thread.sequence) {
-				// The old command can no longer be admitted. Keep its snapshot in history and
-				// allow subsequent reviews without retrying an unconfirmed submission.
-				this.finishSubmission(target, batch.id);
+				await this.storage.flush();
+			}
+			if (!isCurrent()) return;
+			if (batch.title && !batch.threadId) {
+				// Creation and first send have stable identities so a lost response can be retried.
+				const created = await this.threads.fork({
+					...target, target: 'thread', commandId: batch.id + '-thread', title: batch.title,
+				});
+				batch = { ...batch, threadId: created.threadId };
+				this.replaceBatch(target, batch);
+				await this.storage.flush();
+				if (!isCurrent()) return;
+			}
+			const destination = { sessionId: target.sessionId, threadId: batch.threadId ?? target.threadId };
+			const { thread } = await this.chat.readThread(destination.sessionId, destination.threadId);
+			if (!isCurrent()) return;
+			const id = batch.id;
+			if (thread.turns.some(turn => turn.items.some(item => item.type === 'userMessage' && item.clientId === id))) {
+				this.finishSubmission(target, batch, destination, true);
+				return;
+			}
+			if (thread.status === 'archived') throw new Error(localize('sessions.codeReview.archived', 'This conversation is archived.'));
+			if (batch.pending?.expectedSequence !== undefined && batch.pending.expectedSequence !== thread.sequence) {
+				// Preserve the snapshot even when the recorded send can no longer be retried.
+				this.replaceBatch(target, { ...batch, pending: undefined });
 				throw new Error(localize('sessions.codeReview.changed', 'The conversation changed before this submission could be confirmed. Your review is still available here.'));
 			}
+			if (thread.turns.some(turn => !['completed', 'failed', 'interrupted'].includes(turn.status))) {
+				throw new Error(localize('sessions.codeReview.agentBusy', 'Wait for the current agent turn to finish before sending review comments.'));
+			}
 			// Persist the exact comparison and command identity before the backend can accept it.
+			this.replaceBatch(target, { ...batch, pending: { expectedSequence: thread.sequence } });
 			await this.storage.flush();
 			if (!isCurrent()) return;
+			const prompt = localize('sessions.codeReview.prompt', 'Please address these code review comments. Use each comment number when replying. The code shown is from the comparison I reviewed.');
+			const text = batch.threadId
+				? [prompt, ...batch.comments.map((comment, index) => `${index + 1}. ${comment.text}`)].join('\n\n')
+				: prompt;
 			await this.chat.startTurn({
-				...target, commandId: batch.id, expectedSequence: thread.sequence,
+				...destination, commandId: batch.id, expectedSequence: thread.sequence,
 				mode: 'agent', commandInterpretation: 'literal',
-				text: localize('sessions.codeReview.prompt', 'Please address these code review comments. Use each comment number when replying. The code shown is from the comparison I reviewed.'),
+				text,
 				contexts: [{ name: localize('sessions.codeReview.title', 'Code Review'), content: reviewContext(batch) }],
 			});
-			this.finishSubmission(target, batch.id);
+			this.finishSubmission(target, batch, destination, isCurrent());
 		} finally {
 			this.sending.delete(key);
 			this.changed.fire(key);
@@ -262,9 +384,14 @@ export class SessionCodeReviewService extends Disposable {
 		});
 	}
 
-	private finishSubmission(target: CodeReviewTarget, id: string): void {
+	private replaceBatch(target: CodeReviewTarget, batch: CodeReviewBatch): void {
 		const state = this.read(target);
-		this.write(target, { ...state, batches: state.batches.map(batch => batch.id === id ? { ...batch, pending: undefined } : batch) });
+		this.write(target, { ...state, batches: state.batches.map(existing => existing.id === batch.id ? batch : existing) });
+	}
+
+	private finishSubmission(source: CodeReviewTarget, batch: CodeReviewBatch, destination: CodeReviewTarget, select: boolean): void {
+		this.replaceBatch(source, { ...batch, pending: undefined });
+		if (select) this.select(destination);
 	}
 }
 

@@ -5,6 +5,36 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 
+test('Bots keeps Code navigation and search separate', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const navigation = page.locator('.ash-sessions-activity-content');
+	await navigation.getByRole('button', { name: 'Bots', exact: true }).click();
+	const sidebar = page.getByRole('region', { name: 'Bots', exact: true }).filter({ has: page.getByRole('button', { name: 'Back', exact: true }) });
+	const back = sidebar.getByRole('button', { name: 'Back', exact: true });
+	const search = sidebar.getByRole('searchbox', { name: 'Search Bots and Threads' });
+	const bot = sidebar.getByRole('button', { name: 'Code Review', exact: true });
+	await expect(back).toBeVisible();
+	await expect(page.locator('.ash-bots-page').getByRole('heading', { name: 'Code Review' })).toBeVisible();
+	await expect(navigation).toBeHidden();
+	await expect(bot).toHaveAttribute('aria-expanded', 'true');
+	await bot.press('Enter');
+	await expect(bot).toHaveAttribute('aria-expanded', 'false');
+	await search.fill('no matching thread');
+	await expect(sidebar.getByText('No matching bots or threads.')).toBeVisible();
+	await expect(bot).toBeHidden();
+	await search.fill('Code Review');
+	await expect(bot).toBeVisible();
+	await expect(bot).toHaveAttribute('aria-expanded', 'true');
+	await search.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Bots groups conversations by assistant/);
+	await page.keyboard.press('Escape');
+	await expect(search).toBeFocused();
+	await back.click();
+	await expect(sidebar).toBeHidden();
+	await expect(navigation.getByRole('button', { name: 'Bots', exact: true })).toBeVisible();
+});
+
 test('Sessions discards an unavailable saved entry and completes restoration without losing the draft', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const draft = 'Keep this draft when a saved entry disappears';
