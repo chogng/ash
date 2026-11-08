@@ -226,6 +226,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					details: entry.detailsContainerId !== undefined,
 					documents: documents && this.controller.hasDocumentEditors,
 				};
+				const detailsContainerId = !documents && state.details ? entry.detailsContainerId : undefined;
 				this.controller.setDocumentGroupsVisible(documents);
 				this.editor.setGroupVisible(this.pageGroupId, productEditor);
 				this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
@@ -240,7 +241,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					this.layout.setPartAvailable('sessions', !productEditor);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
 					this.setVisible('editor', productEditor || (documents && state.documents));
-					this.setVisible('auxiliarybar', !documents && state.details);
+					// A saved visibility flag can outlive the view that once occupied the side bar.
+					if (!detailsContainerId || this.views.getVisibleViewContainer(ViewContainerLocation.AuxiliaryBar)?.id !== detailsContainerId) {
+						this.layout.hidePart('auxiliarybar');
+					}
 				});
 				const focusSidebar = entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get();
 				// Keep the workspace sidebar attached while only the central page changes.
@@ -249,15 +253,17 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				}
 				if (this.isDisposed) { return; }
 				this.setVisible('sidebar', sidebarVisible);
-				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
-				if (this.isDisposed) { return; }
+				if (detailsContainerId) {
+					const details = await this.views.openViewContainer(detailsContainerId);
+					if (this.isDisposed) { return; }
+					if (!details) { this.layout.hidePart('auxiliarybar'); }
+				}
 				if (documents && !this.customViews.activeCustomView.get()) {
 					const filesDetailsOpen = (this.editor as DesktopEditorParts).filesDetailsOpen
 						|| this.storage.getBoolean('sessions.code.filesVisible', StorageScope.PROFILE, false);
 					// A retained Files preference must not open a side pane that is closed.
 					await this.controller.activate(state.documents && filesDetailsOpen);
 				}
-				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				this.storage.store(activeEntryModeKey, sharedWorkspace ? entry.workspaceMode : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -279,7 +285,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		});
 	}
 
-	private setVisible(id: 'sidebar' | 'editor' | 'auxiliarybar', visible: boolean): void {
+	private setVisible(id: 'sidebar' | 'editor', visible: boolean): void {
 		if (visible) { this.layout.showPart(id); }
 		else { this.layout.hidePart(id); }
 	}
@@ -290,7 +296,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const files = this.isDocumentContent ? (this.editor as DesktopEditorParts) : undefined;
 		this.visibility.set(entry.id, {
 			// File navigation belongs to the retained editor group, independently of properties.
-			details: files?.filesDetailsOpen ?? this.layout.isPartRequested('auxiliarybar'),
+			details: files?.filesDetailsOpen ?? (entry.detailsContainerId !== undefined && this.layout.isPartRequested('auxiliarybar')),
 			documents: this.isDocumentContent && this.layout.isPartRequested('editor'),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
