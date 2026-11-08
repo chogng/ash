@@ -338,7 +338,15 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 
 	private async capture(recording: Recording, deviceId: string | null, onChunk: (samples: Float32Array) => void): Promise<void> {
 		const window = recording.window;
-		const stream = await window.navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+		const audio: MediaTrackConstraints = { channelCount: 1, echoCancellation: true, noiseSuppression: true };
+		let stream: MediaStream;
+		try {
+			stream = await window.navigator.mediaDevices.getUserMedia({ audio: { ...audio, deviceId: deviceId ? { exact: deviceId } : undefined } });
+		} catch (error) {
+			if (!deviceId || this.recording !== recording || recording.cancelled || this.isDisposed
+				|| !(error instanceof window.DOMException) || (error.name !== 'NotFoundError' && error.name !== 'OverconstrainedError')) throw error;
+			stream = await window.navigator.mediaDevices.getUserMedia({ audio });
+		}
 		if (this.recording !== recording || recording.cancelled || this.isDisposed) { stream.getTracks().forEach(track => track.stop()); throw canceled(); }
 		let context: AudioContext | undefined;
 		try {

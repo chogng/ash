@@ -447,7 +447,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.interaction.setAttribute('aria-live', 'polite');
 		const surface = this._register(new ChatInputSurface(this.element, contextMenuService, {
 			createEditor: editorHost => {
-				ChatContextKeys.inChatInput.bindTo(this._register(context.createScoped(editorHost))).set(true);
+				const editorContext = this._register(context.createScoped(editorHost));
+				ChatContextKeys.inChatInput.bindTo(editorContext).set(true);
+				const dictationConfigured = ChatContextKeys.speechToTextConfigured.bindTo(editorContext);
+				dictationConfigured.set(this.speechToText.isConfigured);
+				this._register(this.speechToText.onDidChangeState(() => dictationConfigured.set(this.speechToText.isConfigured)));
 				return editorProvider.create({
 					container: editorHost,
 					placeholder: 'Ask Ash',

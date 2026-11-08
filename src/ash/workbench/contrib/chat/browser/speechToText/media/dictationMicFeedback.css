@@ -1,0 +1,27 @@
+.ash-dictation-recording {
+	position: relative;
+}
+
+.ash-dictation-recording::after {
+	content: "";
+	position: absolute;
+	inset-block-start: var(--ash-spacing-size20);
+	inset-inline-end: var(--ash-spacing-size20);
+	inline-size: var(--ash-spacing-size60);
+	block-size: var(--ash-spacing-size60);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-charts-red);
+	box-shadow: 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
+	pointer-events: none;
+}
+
+.ash-dictation-volume {
+	position: absolute;
+	inset: var(--ash-spacing-size20);
+	border-radius: inherit;
+	box-shadow: inset 0 0 0 var(--ash-spacing-size20)
+		color-mix(in srgb, var(--ash-charts-red) 65%, transparent);
+	opacity: 0;
+	pointer-events: none;
+}

@@ -624,7 +624,7 @@ test('Chat shows that dictation is recording during model preparation and stops 
 		using part = inputPart(sharedNotifications, undefined, 'agent', {}, undefined, {
 			_serviceBrand: undefined, isSupported: true,
 			onDidChangeModels: AshEvent.None, onDidChangeModelStatus: modelStatus.event, onDidTranscribe: AshEvent.None,
-			getModel: async model => ({ model, available: true, sizeBytes: 0 }),
+			getModel: async model => ({ model, available: false, sizeBytes: 0 }),
 			getCacheDirectory: async () => 'C:/models',
 			getModelStatus: async () => ({ state: LocalTranscriptionModelState.Idle }),
 			listModels: async () => [],
@@ -875,7 +875,9 @@ test('Closing an input during microphone acquisition closes the resulting sessio
 	const part = inputPart(sharedNotifications, { start: () => new Promise(resolve => { completeStart = resolve; void acquiring.complete(); }) });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await acquiring.p;
-	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.disabled, true);
+	const microphone = part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!;
+	assert.equal(microphone.disabled, false);
+	assert.ok(microphone.querySelector('.ash-loading-spinner'));
 	part.dispose();
 	completeStart({ stop: async () => { stopped++; }, cancel: async () => { stopped++; } });
 	await new Promise(resolve => setTimeout(resolve, 0));
@@ -2370,6 +2372,48 @@ suite('chatInput browser component', () => {
 		await mic.press('Enter');
 		await expect(label).toHaveCount(0);
 		await expect(mic).toHaveAccessibleName(locale === 'en' ? 'Dictate message' : '听写');
+	});
+
+	test('Chat dictation reflects microphone volume and uses a static mark with reduced motion', async () => {
+		const { page } = browserTests;
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await page.goto('/chatInput.html?inlineCode&compact&dictation');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const composer = page.locator('.ash-chat-input-container');
+		const mic = composer.locator('.ash-chat-input-mic-action');
+		const volume = mic.locator('.ash-dictation-volume');
+		const staticMark = () => mic.evaluate(element => getComputedStyle(element, '::after').content);
+		await mic.click();
+		await expect(mic).toHaveAccessibleName('Stop dictation');
+		await expect(volume).toHaveAttribute('aria-hidden', 'true');
+		await expect(volume).toHaveCSS('opacity', '0');
+		expect(await staticMark()).toBe('""');
+
+		await page.evaluate(() => window.ashChatInputIntegration.setDictationLevel(0.5));
+		const opacity = () => volume.evaluate(element => Number(getComputedStyle(element).opacity));
+		await expect.poll(opacity).toBeGreaterThan(0.7);
+		await page.evaluate(() => window.ashChatInputIntegration.setDictationLevel(0));
+		await expect.poll(opacity).toBeLessThan(0.1);
+
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await expect(volume).toHaveCount(0);
+		expect(await staticMark()).toBe('""');
+		const samples = await page.evaluate(async () => {
+			const reads = () => window.ashChatInputIntegration.dictationLevelReads();
+			const before = reads();
+			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			return reads() - before;
+		});
+		expect(samples).toBe(0);
+
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await expect(volume).toHaveCount(1);
+		await page.evaluate(() => window.ashChatInputIntegration.setReduceMotion('on'));
+		await expect(volume).toHaveCount(0);
+		expect(await staticMark()).toBe('""');
+		await composer.locator('.stanza-editor-input').press('Escape');
+		await expect(mic).toHaveAccessibleName('Dictate message');
+		expect(await staticMark()).toBe('none');
 	});
 
 	for (const outcome of ['success', 'empty', 'failure'] as const) test(`Rich compact input finalizes dictation before Enter submission (${outcome})`, async () => {

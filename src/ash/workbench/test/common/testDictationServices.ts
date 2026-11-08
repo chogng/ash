@@ -78,24 +78,33 @@ export function createTestDictationBackend(owner: DisposableStore, capture: Test
 }
 
 /** Scoped browser-device fixture; capture processing and client delivery still use production code. */
-export function installTestDictationAudio(target: Window & typeof globalThis): IDisposable & { emit(samples: Float32Array): void; readonly requests: MediaStreamConstraints[]; readonly tracks: { stopped: boolean; }[]; readonly contexts: { state: string; }[]; } {
+export function installTestDictationAudio(target: Window & typeof globalThis): IDisposable & { emit(samples: Float32Array): void; setLevel(level: number): void; readonly levelReads: number; readonly requests: MediaStreamConstraints[]; readonly tracks: { stopped: boolean; }[]; readonly contexts: { state: string; }[]; } {
 	const lifetime = new DisposableStore();
 	const ports: { onmessage: MessagePort['onmessage']; postMessage(message: unknown): void; }[] = [];
 	const requests: MediaStreamConstraints[] = [];
 	const tracks: { stopped: boolean; }[] = [];
 	const contexts: { state: string; }[] = [];
+	let level = 0;
+	let levelReads = 0;
 	const replace = (object: object, key: string, value: unknown): void => {
 		const previous = Object.getOwnPropertyDescriptor(object, key);
 		Object.defineProperty(object, key, { configurable: true, value });
 		lifetime.add(toDisposable(() => { if (previous) Object.defineProperty(object, key, previous); else Reflect.deleteProperty(object, key); }));
 	};
 	class AudioNode { connect() { return this; } disconnect() { } }
+	class Analyser extends AudioNode {
+		readonly fftSize = 2048;
+		getByteTimeDomainData(samples: Uint8Array): void {
+			levelReads++;
+			samples.fill(Math.round(128 + level * 127));
+		}
+	}
 	class Context {
 		constructor() { contexts.push(this); }
 		state = 'running';
 		readonly destination = new AudioNode();
 		readonly audioWorklet = { addModule: async () => { } };
-		createAnalyser() { return new AudioNode(); }
+		createAnalyser() { return new Analyser(); }
 		createMediaStreamSource() { return new AudioNode(); }
 		async resume() { }
 		async close() { this.state = 'closed'; }
@@ -122,6 +131,8 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 	}));
 	return {
 		requests, tracks, contexts,
+		setLevel: value => { level = value; },
+		get levelReads() { return levelReads; },
 		emit: samples => { for (const port of ports) port.onmessage?.call(port as unknown as MessagePort, { data: samples } as MessageEvent); },
 		dispose: () => lifetime.dispose(),
 		[Symbol.dispose]: () => lifetime.dispose(),

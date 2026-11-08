@@ -39,7 +39,7 @@ class Recognition extends Disposable implements IChatSpeechToTextService {
 	readonly onDidChangeDownloadingModel = Event.None;
 	readonly onDidChangeModelDownloadProgress = Event.None;
 	readonly isConfigured = true;
-	readonly showTranscriptWhileDictating = true;
+	showTranscriptWhileDictating = true;
 	readonly isPreparingModel = false;
 	readonly isDownloadingModel = false;
 	readonly modelDownloadProgress = undefined;
@@ -205,6 +205,36 @@ suite('Dictation editor binding', () => {
 		assert.equal(f.model.getValue().includes('first'), false);
 		assert.equal(f.model.getValue().includes('next'), true);
 	});
+	test('cancelling removes unedited speech and restores the replaced selection text', async () => {
+		using f = fixture();
+		f.model.setValue('left right');
+		f.editor.setSelection(new Selection(1, 6, 1, 11));
+		await startDictation(f.speech, f.editor, f.window, f.log);
+		f.speech.transcripts.fire({ text: 'first', finalizedText: 'first' });
+		f.speech.transcripts.fire({ text: 'first second', finalizedText: 'first second' });
+		cancelDictation();
+		await stopDictation();
+		assert.equal(f.model.getValue(), 'left right');
+	});
+	test('hidden transcript waits for the final result before changing the draft', async () => {
+		using f = fixture();
+		f.speech.showTranscriptWhileDictating = false;
+		f.speech.finalText = 'corrected words';
+		await startDictation(f.speech, f.editor, f.window, f.log);
+		f.speech.transcripts.fire({ text: 'early words', finalizedText: 'early' });
+		assert.equal(f.model.getValue(), '');
+		await stopDictation();
+		assert.equal(f.model.getValue(), 'corrected words');
+	});
+	test('cancelling speech preserves text typed after a provisional phrase', async () => {
+		using f = fixture();
+		await startDictation(f.speech, f.editor, f.window, f.log);
+		f.speech.transcripts.fire({ text: 'first', finalizedText: 'first' });
+		f.editor.executeEdits('keyboard', [{ range: new Selection(1, 6, 1, 6), text: ' typed' }]);
+		cancelDictation();
+		await stopDictation();
+		assert.equal(f.model.getValue(), ' typed');
+	});
 	test('model replacement cancels the capture and submission settles accuracy once', async () => {
 		using f = fixture();
 		f.speech.finalText = 'draft';
@@ -258,7 +288,7 @@ function commandFixture() {
 	services.registerInstance(ISpeechService, { hasSpeechProvider: true } as ISpeechService);
 	services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected settings'); } } as unknown as IPreferencesService);
 	services.registerInstance(IDictationOnboardingService, { showIfNeeded: () => false } as IDictationOnboardingService);
-	services.registerInstance(IKeybindingService, { enableKeybindingHoldMode: () => released.p } as unknown as IKeybindingService);
+	services.registerInstance(IKeybindingService, { enableKeybindingHoldMode: (command: string) => command.endsWith('.holdToSpeechToText') ? released.p : undefined } as unknown as IKeybindingService);
 	const run = (id = 'toggleSpeechToText', context?: unknown) => services.invokeFunction(accessor => CommandsRegistry.getCommand(`workbench.action.chat.${id}`)!(accessor, context));
 	return { ...f, services, widgets, widget, hidden, changed, released, registration, run, [Symbol.dispose]: () => resources.dispose() };
 }
@@ -360,6 +390,27 @@ suite('Chat dictation command targeting', () => {
 		await run;
 		assert.equal(f.model.getValue(), 'held message');
 		assert.equal(f.speech.stops, 1);
+	});
+
+	for (const heldMs of [100, 600]) test(`the default dictation shortcut ${heldMs < 500 ? 'toggles on with a tap' : 'stops when released after a hold'}`, async () => {
+		using f = commandFixture();
+		Object.assign(f.services.get(IKeybindingService), { enableKeybindingHoldMode: () => f.released.p });
+		mock.timers.enable({ apis: ['Date'], now: 1000 });
+		f.speech.finalText = 'spoken words';
+		const started = new DeferredPromise<void>();
+		using listener = f.speech.onDidChangeState(() => { void started.complete(); });
+		const run = f.run();
+		await started.p;
+		mock.timers.tick(heldMs);
+		await f.released.complete();
+		await run;
+		if (heldMs < 500) {
+			assert.equal(activeDictationEditor(), f.editor);
+			assert.equal(f.speech.stops, 0);
+			await f.run();
+		}
+		assert.equal(f.speech.stops, 1);
+		assert.equal(f.model.getValue(), 'spoken words');
 	});
 
 	test('a retired hold cannot stop a replacement recording in the same editor', async () => {

@@ -177,6 +177,9 @@ declare global {
 		toggleNoticeFocus(): Promise<unknown>;
 		noticeAccessibility(): { help?: string; content?: string; };
 		dictationState(): { stops: number; errors: string[]; };
+		setDictationLevel(level: number): void;
+		dictationLevelReads(): number;
+		setReduceMotion(value: 'auto' | 'on' | 'off'): Promise<void>;
 		emitDictation(text: string, final: boolean): void;
 		finishDictation(text: string, error?: string): void;
 		setInputBlocked(blocked: boolean): void;
@@ -572,8 +575,8 @@ let emitDictation: ((text: string, final: boolean) => void) | undefined;
 let finishDictation: ((result: { text: string; error?: string; }) => void) | undefined;
 const dictationFixture = new URLSearchParams(location.search).has('dictation');
 const dictationConnecting = new URLSearchParams(location.search).has('dictationConnecting');
+const dictationAudio = dictationFixture ? resources.add(installTestDictationAudio(window)) : undefined;
 if (dictationFixture) {
-	resources.add(installTestDictationAudio(window));
 	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 }
 services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixture ? createTestDictationBackend(resources, {
@@ -1155,6 +1158,9 @@ window.ashChatInputIntegration = {
 	recoveryState: () => ({ pending: finishSubmission !== undefined, drafts: recoveryDrafts }),
 	setInputBlocked: inputBlocked => { state = { ...state, inputBlocked }; part.render(state); },
 	dictationState: () => ({ stops: dictationStops, errors: notifications.model.getNotifications().map(item => item.message) }),
+	setDictationLevel: level => dictationAudio?.setLevel(level),
+	dictationLevelReads: () => dictationAudio?.levelReads ?? 0,
+	setReduceMotion: value => services.get(IConfigurationService).updateValue('workbench.reduceMotion', value),
 	emitDictation: (text, final) => emitDictation?.(text, final),
 	finishDictation: (text, error) => finishDictation?.({ text, error }),
 	finishPaste: () => CopyPasteController.get(inlineEditor!.codeEditor)!.finishedPaste(),

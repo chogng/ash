@@ -11,6 +11,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { autorun, type IObservable } from '../../../../../base/common/observable.js';
 import { localize } from '../../../../../nls.js';
+import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import type { MenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -21,6 +22,7 @@ import { IKeybindingService } from '../../../../../platform/keybinding/common/ke
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { DictationConfiguration } from '../../common/constants.js';
 import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
+import { readDictationLevel, showDictationMicFeedback } from './dictationMicFeedback.js';
 import { getDictationMicrophoneChoices, readDictationOptions } from './dictationInput.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
 import { addMicButtonContextMenuListener, getDictationContextMenuActions, SELECT_MICROPHONE_COMMAND } from './micButtonMenuActions.js';
@@ -48,6 +50,7 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		@ISpeechService private readonly speechProviders: ISpeechService,
 		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
 		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
+		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 	) {
 		const label = localize('dictation.openSettings', 'Dictation settings');
 		const dropdown: IAction = { id: 'chat.dictation.settings', label, tooltip: label, enabled: true, run() { } };
@@ -75,6 +78,7 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 			button.append(createLoadingSpinner(button.ownerDocument), label);
 		}
 		this._register(autorun(reader => button.setAttribute('aria-pressed', String(this.isActive.read(reader)))));
+		this._register(showDictationMicFeedback(button, this.isActive, this.speech, this.accessibility));
 		this._register(addMicButtonContextMenuListener(container, () =>
 			getDictationContextMenuActions(this.commands, this.configuration, this.keybindings, this.action.id), this.contextMenus));
 	}
@@ -121,6 +125,7 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 			getActionViewItem: action => action === level ? new DictationLevelViewItem(level, () => this.isActive.get() ? this.speech.analyserNode : undefined) : undefined,
 			getCheckedActionsRepresentation: () => 'radio',
 			getMenuClassName: () => 'ash-dictation-settings-menu',
+			iconPlacement: 'trailing',
 			anchorAlignment: AnchorAlignment.Right,
 			anchorPosition: AnchorPosition.Above,
 		});
@@ -171,8 +176,7 @@ class DictationLevelViewItem extends ActionViewItem {
 		let frame = 0;
 		const update = (): void => {
 			if (this.getAnalyser() !== analyser) { meter.value = 0; return; }
-			analyser.getByteTimeDomainData(samples);
-			meter.value = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length);
+			meter.value = readDictationLevel(analyser, samples);
 			frame = window.requestAnimationFrame(update);
 		};
 		frame = window.requestAnimationFrame(update);

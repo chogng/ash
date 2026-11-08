@@ -2,11 +2,14 @@ import { localize, localize2 } from '../../../../../nls.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Event } from '../../../../../base/common/event.js';
+import { Keybinding, logicalKey } from '../../../../../base/common/keybindings.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
+import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL, ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { getDictationMicrophoneChoices, readDictationInputDevices, readDictationPreparation } from '../speechToText/dictationInput.js';
@@ -17,6 +20,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IDictationOnboardingService, SHOW_DICTATION_ONBOARDING_COMMAND, RESET_DICTATION_ONBOARDING_COMMAND } from '../speechToText/dictationOnboarding.js';
 import { ChatSpeechToTextState, IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechToText/chatSpeechToTextService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { DictationConfiguration } from '../../common/constants.js';
 
 // Command admission while local model discovery is pending; capture state belongs to the speech service.
@@ -68,7 +72,8 @@ async function toggle(accessor: ServicesAccessor, context?: unknown): Promise<vo
 		return;
 	}
 	if (isDictating()) return;
-	await record(accessor, widget);
+	const released = accessor.get(IKeybindingService).enableKeybindingHoldMode(ToggleChatSpeechToTextAction.ID);
+	await record(accessor, widget, released, true);
 }
 
 function targetWidget(widgets: IChatWidgetService, context: unknown): IChatWidget | undefined {
@@ -77,7 +82,7 @@ function targetWidget(widgets: IChatWidgetService, context: unknown): IChatWidge
 	return widget?.visible && !widget.isTranscriptProgressActive && widget.inputEditor ? widget : undefined;
 }
 
-async function record(accessor: ServicesAccessor, widget: IChatWidget, released?: Promise<void>): Promise<void> {
+async function record(accessor: ServicesAccessor, widget: IChatWidget, released?: Promise<void>, tapToggles = false): Promise<void> {
 	const editor = widget.inputEditor;
 	const service = accessor.get(IChatSpeechToTextService);
 	if (!editor || !service.isConfigured || service.isBusy || preparations.has(service)) return;
@@ -104,6 +109,7 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	lifetime.add(Event.once(editor.onDidDispose)(cancel));
 	lifetime.add(Event.once(editor.onWillChangeModel)(cancel));
 	let owned = false;
+	let stopOnRelease = false;
 	lifetime.add(onDidChangeDictationEditor(() => {
 		if (activeDictationEditor() === editor) owned = true;
 		else if (owned) cancel();
@@ -111,32 +117,48 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	const heldFrom = Date.now();
 	// Observe release before any preparation or provider acquisition can suspend this command.
 	const release = released?.then(() => {
-		if (Date.now() - heldFrom < 500 || !owned) cancel();
+		stopOnRelease = Date.now() - heldFrom >= 500;
+		if (tapToggles ? stopOnRelease && (!owned || service.isPreparingModel && service.currentBackend !== 'local') : !stopOnRelease || !owned) cancel();
 	});
 	try {
 		const model = await readDictationPreparation(configuration, local, speech);
 		if (controller.signal.aborted || !widget.visible || widget.isTranscriptProgressActive || !widgets.getAllWidgets().includes(widget) || service.isBusy || isDictating()) return;
-		if (model && (!model.available || isModelPreparing(model.status))) { await preferences.openSettings({ section: 'dictation' }); return; }
+		if (model && (isModelPreparing(model.status) || !model.available && model.model !== DEFAULT_LOCAL_TRANSCRIPTION_MODEL)) { await preferences.openSettings({ section: 'dictation' }); return; }
 		onboarding.showIfNeeded();
 		if (preparations.get(service) === preparation) preparations.delete(service);
 		await startDictation(service, editor, editor.getContainerDomNode().ownerDocument.defaultView as Window & typeof globalThis, log, 'chat', controller.signal);
 		if (release) {
 			await release;
-			if (!controller.signal.aborted && activeDictationEditor() === editor) await stopDictation();
+			if (stopOnRelease && !controller.signal.aborted && activeDictationEditor() === editor) await stopDictation();
 		}
 	} catch (error) {
 		if (!isCancellationError(error)) throw error;
 	} finally {
 		if (preparations.get(service) === preparation) preparations.delete(service);
 		// A toggle returns after acquisition; its listeners retire with this exact recording.
-		if (release || !owned || controller.signal.aborted) lifetime.dispose();
+		if (stopOnRelease || !owned || controller.signal.aborted) lifetime.dispose();
 	}
 }
 
 export class ToggleChatSpeechToTextAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.toggleSpeechToText';
 
-	constructor() { super({ id: ToggleChatSpeechToTextAction.ID, title: localize2('chat.input.dictate', 'Dictate message'), f1: true }); }
+	constructor() {
+		super({
+			id: ToggleChatSpeechToTextAction.ID,
+			title: localize2('chat.input.dictate', 'Dictate message'),
+			f1: true,
+			keybinding: {
+				primary: Keybinding.single(logicalKey('i', { primaryKey: true })),
+				weight: KeybindingWeight.WorkbenchContrib + 1,
+				when: ContextKeyExpr.and(
+					ChatContextKeys.inChatInput.isEqualTo(true),
+					ChatContextKeys.speechToTextConfigured.isEqualTo(true),
+					ChatContextKeys.transcriptProgressActive.isEqualTo(false),
+				),
+			},
+		});
+	}
 	public override run(accessor: ServicesAccessor, context?: unknown): Promise<void> { return toggle(accessor, context); }
 }
 class HoldDictationAction extends Action2 {

@@ -8,6 +8,7 @@ export namespace ChatContextKeys {
 	export const requestInProgress = new RawContextKey<boolean>('chatRequestInProgress', false);
 	export const inputBlocked = new RawContextKey<boolean>('chatInputBlocked', false);
 	export const transcriptProgressActive = new RawContextKey<boolean>('chatTranscriptProgressActive', false);
+	export const speechToTextConfigured = new RawContextKey<boolean>('chatSpeechToTextConfigured', false);
 	export enum EditingRequestType { Sent = 's', Queue = 'q', Steer = 'st' }
 	export const editingRequestType = new RawContextKey<EditingRequestType | undefined>('chatEditingSentRequest', undefined);
 	/** The window's Chat implementation is available and its UI preference permits use. */

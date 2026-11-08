@@ -117,7 +117,7 @@ suite('Builtin dictation ownership', () => {
 		await configuration.reloadConfiguration();
 		assert.deepEqual(await configuration.read(), first);
 	});
-	const captureWindow = { navigator: {}, URL, Blob, setTimeout, clearTimeout } as unknown as Window & typeof globalThis;
+	const captureWindow = { navigator: {}, URL, Blob, DOMException, setTimeout, clearTimeout } as unknown as Window & typeof globalThis;
 
 	function services(owner: DisposableStore, start: (onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => Promise<TestDictationSession>, options: { source?: string; local?: ILocalTranscriptionService & ILocalTranscriptionModelService; start?: TestDictationCapture['start']; window?: Window & typeof globalThis; } = {}) {
 		const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IChatSpeechToTextService || id === ISpeechService || id === IVoiceCodeTranscriptionClient);
@@ -511,6 +511,25 @@ suite('Builtin dictation ownership', () => {
 			assert.equal(await stopping, local.finalText);
 		}
 		assert.equal(fixture.speech.isPreparingModel, false);
+	});
+
+	test('a disconnected microphone retries with the system default', async () => {
+		using owner = new DisposableStore();
+		const fixture = services(owner, async () => ({ stop: async () => { }, cancel: async () => { } }), {
+			source: '{"dictation.backend":"cloud","dictation.inputDevice":"disconnected"}',
+		});
+		const devices = captureWindow.navigator.mediaDevices;
+		const capture = devices.getUserMedia;
+		const requested: (ConstrainDOMString | undefined)[] = [];
+		devices.getUserMedia = async constraints => {
+			const device = (constraints?.audio as MediaTrackConstraints).deviceId;
+			requested.push(device);
+			if (device) throw new DOMException('Device disconnected', 'NotFoundError');
+			return capture.call(devices, constraints);
+		};
+		await fixture.speech.start(captureWindow);
+		assert.deepEqual(requested, [{ exact: 'disconnected' }, undefined]);
+		await fixture.speech.cancel();
 	});
 
 	test('host failure during acquisition reports once and never opens the microphone', async () => {
