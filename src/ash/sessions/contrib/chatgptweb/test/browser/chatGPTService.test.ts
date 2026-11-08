@@ -705,6 +705,33 @@ suite('ChatGPT shared service', () => {
 		assert.deepEqual(offline.state.get().messages, []);
 	});
 
+	test('refresh recalibrates recent pagination when a later page changes but the head stays the same', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
+		const offsets: number[] = [];
+		let ids = ['one', 'two', 'three', 'four', 'five', 'six', 'seven'];
+		using chat = fixture(async path => {
+			if (!path.includes('/conversations?')) { return response(path); }
+			const offset = Number(new URL(path, 'https://fixture.invalid').searchParams.get('offset'));
+			offsets.push(offset);
+			return Response.json({ items: ids.slice(offset, offset + 2).map(id => ({ id, title: id })), total: ids.length });
+		});
+		await chat.reload();
+		await chat.loadMore();
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids.slice(0, 4));
+
+		ids = ids.filter(id => id !== 'three');
+		mock.timers.tick(5 * 60_000);
+		await chat.refresh();
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['one', 'two', 'three', 'four']);
+		await chat.loadMore();
+		await chat.loadMore();
+
+		assert.deepEqual(offsets, [0, 2, 0, 2, 4]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id).slice(0, ids.length), ids);
+		assert.equal(chat.state.get().hasMore, false);
+	});
+
 	test('a remote snapshot in flight cannot undo an acknowledged local delete', async () => {
 		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
 		using clock = toDisposable(() => mock.timers.reset());

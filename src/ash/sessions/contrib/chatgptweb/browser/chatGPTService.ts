@@ -1528,11 +1528,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				this.forgetRemoteConversation(retained);
 				deleted.add(retained);
 			}
-			// If the head moved, the old offset can skip rows. Keep the cached
-			// tail visible and let the next scroll continue from the new head.
-			const keepRecentOffset = recent && !fullRecent && recent.hasMore && this.recentOffset > recent.nextOffset
-				&& equals(recent.items.map(item => item.id), [...this.recentIds].slice(0, recent.items.length));
-			if (recent && !keepRecentOffset) { this.resetRecentPage(recent); }
+			// Changes beyond the refreshed pages can shift the old offset even
+			// when the head is unchanged. Keep cached rows visible while the
+			// next scroll continues from the last page actually read.
+			if (recent) { this.resetRecentPage(recent); }
 			if (readRecent) { this.recentFetchedAt = recent ? Date.now() : undefined; }
 			if (!this.native) {
 				if (readProjects) { this.projectsFetchedAt = projects.status === 'fulfilled' ? now : undefined; }
@@ -1556,7 +1555,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				connected: true, busy: false, loading: undefined,
 				...(catalog ? { models: catalog.models } : {}),
 				...(selected ? { model: selected.id, modelPreset: this.resolveModelPreset(selected, state.modelPreset) } : {}),
-				conversations: this.withLocalConversations([...items.values()]), hasMore: keepRecentOffset ? state.hasMore : recent?.hasMore ?? state.hasMore,
+				conversations: this.withLocalConversations([...items.values()]), hasMore: recent?.hasMore ?? state.hasMore,
 				historyListFailed: readRecent ? conversations.status === 'rejected' : state.historyListFailed,
 				projects: currentProjects,
 				...(!background ? { error: modelError } : {}),

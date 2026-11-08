@@ -142,7 +142,11 @@ export class ProjectsService extends Disposable implements IProjectsService {
 			if (project) {
 				this.patch({
 					projects: [...state.projects.filter(item => item.id !== project.id), project],
-					...(open || state.selectedId === project.id ? { selectedId: project.archived ? undefined : project.id, selected: project.archived ? undefined : project } : {}),
+					...(open || state.selectedId === project.id ? {
+						conversationProjectId: undefined,
+						selectedId: project.archived ? undefined : project.id,
+						selected: project.archived ? undefined : project,
+					} : {}),
 					loading: false,
 				});
 			} else {

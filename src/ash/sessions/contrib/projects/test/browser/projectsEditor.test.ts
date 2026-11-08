@@ -10,6 +10,55 @@ suite('Projects toolbar', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`sidebar creation keeps the remote project on cancel and renames the new local project on save (${locale})`, async () => {
+			const { page } = browser;
+			const chinese = locale === 'zh-CN';
+			await page.goto(`/sessions.html?projectCreation&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			const projectsAction = page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item');
+			await projectsAction.click();
+			const projects = page.locator('.ash-projects');
+			const remote = projects.getByRole('button', { name: 'Remote research', exact: true });
+			await remote.click();
+			const breadcrumb = page.locator('.ash-projects-breadcrumb');
+			const remoteTitle = breadcrumb.getByRole('button', { name: 'Remote research', exact: true });
+			await expect(remoteTitle).toBeDisabled();
+
+			const createLabel = chinese ? '创建项目' : 'Create project';
+			const create = page.locator('.ash-sessions-activity-content').getByRole('button', { name: createLabel, exact: true });
+			const dialog = page.getByRole('dialog');
+			const name = dialog.getByRole('textbox').first();
+			await projectsAction.hover();
+			await create.click();
+			await name.fill('Discarded project');
+			await dialog.getByRole('button', { name: chinese ? '取消' : 'Cancel', exact: true }).click();
+			await expect(dialog).toHaveCount(0);
+			await expect(create).toBeFocused();
+			await expect(remoteTitle).toBeDisabled();
+			await expect(projects).toHaveAttribute('aria-label', 'Remote research');
+
+			await create.press('Enter');
+			await name.fill('Local research');
+			await dialog.getByRole('button', { name: createLabel, exact: true }).click();
+			await expect(dialog).toHaveCount(0);
+			await expect(projects).toHaveAttribute('aria-label', 'Local research');
+			await expect(projects.locator('.ash-projects-composer')).toBeVisible();
+			const renameLabel = chinese ? '重命名项目' : 'Rename project';
+			await breadcrumb.getByRole('button', { name: `${renameLabel} Local research`, exact: true }).press('Enter');
+			const input = breadcrumb.getByRole('textbox');
+			await expect(input).toHaveValue('Local research');
+			await input.fill('Renamed research');
+			await input.press('Enter');
+			await expect(breadcrumb.getByRole('button', { name: `${renameLabel} Renamed research`, exact: true })).toBeFocused();
+			await expect(projects).toHaveAttribute('aria-label', 'Renamed research');
+
+			await breadcrumb.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
+			await expect(projects.getByRole('button', { name: 'Renamed research', exact: true })).toBeVisible();
+			await expect(projects.getByRole('button', { name: 'Discarded project', exact: true })).toHaveCount(0);
+			await remote.click();
+			await expect(remoteTitle).toBeDisabled();
+		});
+
 		test(`retains the project chat editor and draft across refresh and page navigation (${locale})`, async () => {
 			const { page, info } = browser;
 			const chinese = locale === 'zh-CN';

@@ -13,7 +13,10 @@ import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/com
 import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
+import type { Project } from '../../../src/ash/platform/projects/common/projectService.js';
+import type { ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
 import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from '../../../src/ash/platform/update/common/updateService.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -160,6 +163,43 @@ if (new URL(location.href).searchParams.has('creator') || new URL(location.href)
 }
 const projectChanges = new Emitter<void>();
 window.addEventListener('pagehide', () => projectChanges.dispose(), { once: true });
+if (new URL(location.href).searchParams.has('projectCreation')) {
+	const { ChatListCatalog, IChatListCatalog } = await import('../../../src/ash/sessions/contrib/chat/browser/chatListModel.js');
+	const remote = new SyncDescriptor(class implements ChatListSource {
+		readonly snapshot = constObservable({
+			entries: [],
+			projects: [{ id: 'g-p-research', title: 'Remote research', history: { state: 'complete' as const } }],
+		});
+	});
+	getSingletonServiceDescriptors().find(([id]) => id === IChatListCatalog)![1] = new SyncDescriptor(ChatListCatalog, [[remote]]);
+	const projects = new Map<string, Project>();
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		projects: {
+			...disconnectedApi.projects,
+			onDidChange: projectChanges.event,
+			list: async () => [...projects.values()],
+			read: async id => {
+				const project = projects.get(id);
+				if (!project) throw new Error('Project not found');
+				return project;
+			},
+			create: async (id, name, description, materials) => {
+				const project: Project = { id, name, description, materials, revision: 1, archived: false, sessionCount: 0, sessionIds: [] };
+				projects.set(id, project);
+				projectChanges.fire();
+				return project;
+			},
+			update: async (project, name, description, materials) => {
+				if (projects.get(project.id)?.revision !== project.revision) throw new Error('Unexpected project revision');
+				const saved = { ...project, name, description, materials, revision: project.revision + 1 };
+				projects.set(saved.id, saved);
+				projectChanges.fire();
+				return saved;
+			},
+		},
+	} };
+}
 if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {
 	const updatedAt = new URL(location.href).searchParams.get('projectUpdatedAt');
 	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
