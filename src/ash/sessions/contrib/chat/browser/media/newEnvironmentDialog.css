@@ -1,34 +1,3 @@
-.ash-dialog.ash-new-environment-dialog {
-	max-block-size: calc(100dvh - var(--ash-spacing-size320));
-	overflow: auto;
-	border-radius: var(--ash-cornerRadius-xLarge);
-	box-shadow: 0 8px 24px
-		color-mix(in srgb, var(--ash-dialog-shadow) 70%, transparent);
-}
-
-.ash-dialog.ash-new-environment-dialog::backdrop {
-	background: color-mix(
-		in srgb,
-		var(--ash-dialog-backdropBackground) 65%,
-		transparent
-	);
-}
-
-:is(.hc-black, .hc-light) .ash-dialog.ash-new-environment-dialog {
-	border-color: var(--ash-contrastBorder);
-	box-shadow: none;
-}
-
-:is(.hc-black, .hc-light) .ash-new-environment-dialog::backdrop {
-	background: var(--ash-dialog-backdropBackground);
-}
-
-.ash-new-environment-dialog .ash-dialog-title {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .ash-new-environment-dialog .ash-environment-fields {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
@@ -48,10 +17,6 @@
 
 .ash-new-environment-dialog .ash-environment-field + button {
 	align-self: end;
-}
-
-.ash-new-environment-dialog .ash-dialog-footer {
-	margin-block-start: var(--ash-spacing-size160);
 }
 
 .ash-new-environment-dialog :is(input, textarea) {
@@ -81,8 +46,7 @@
 	outline-offset: var(--ash-spacing-size20);
 }
 
-.ash-new-environment-dialog .ash-environment-row,
-.ash-new-environment-dialog .ash-environment-actions {
+.ash-new-environment-dialog .ash-environment-row {
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
@@ -110,11 +74,6 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.ash-new-environment-dialog .ash-environment-actions {
-	justify-content: flex-end;
-	flex-wrap: wrap;
 }
 
 .ash-new-environment-dialog [role="alert"]:not(:empty) {
@@ -149,7 +108,7 @@
 		.ash-environment-fields,
 		.ash-environment-field,
 		.ash-environment-row,
-		.ash-environment-actions
+		.ash-sessions-form-actions
 	)[hidden],
 .ash-new-environment-dialog .ash-environment-folders:empty {
 	display: none;
@@ -162,7 +121,9 @@
 	text-align: start;
 }
 
-.ash-new-environment-dialog .ash-environment-folder .ash-environment-menu-field {
+.ash-new-environment-dialog
+	.ash-environment-folder
+	.ash-environment-menu-field {
 	max-inline-size: 48%;
 	border-radius: var(--ash-cornerRadius-medium);
 }

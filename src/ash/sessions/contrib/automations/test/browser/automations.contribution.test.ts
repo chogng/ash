@@ -670,14 +670,16 @@ suite('automations browser component', () => {
 			await expect(page.locator('.ash-automation-summary')).toContainText(zh ? '1 项需要输入' : '1 need input');
 			await expect(page.locator('.ash-automation-run[data-status="needsInput"]')).toContainText(zh ? '需要输入' : 'Needs input');
 			await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-overview.png') });
-			await page.getByRole('button', { name: zh ? '新建自动化' : 'New automation', exact: true }).press('Enter');
-			const dialog = page.getByRole('dialog');
+			const create = page.getByRole('button', { name: zh ? '新建自动化' : 'New automation', exact: true });
+			await create.press('Enter');
+			const dialog = page.getByRole('dialog', { name: zh ? '新建自动化' : 'New automation', exact: true });
 			const name = dialog.getByLabel(zh ? '名称' : 'Name', { exact: true });
 			await page.addStyleTag({ path: 'src/ash/base/browser/ui/dialog/dialog.css' });
 			await expect(dialog).toHaveCSS('width', '560px');
-			await expect(dialog).toHaveCSS('padding', '0px');
+			await expect(dialog).toHaveCSS('padding', '12px');
+			await expect(dialog).toHaveCSS('border-radius', '12px');
 			await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('display', 'flex');
-			await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('padding', '0px 20px 16px');
+			await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('padding', '0px');
 			await expect(name).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(dialog.getByLabel(zh ? '指令' : 'Instructions', { exact: true })).toBeFocused();
@@ -723,8 +725,10 @@ suite('automations browser component', () => {
 			expect(geometry.fits).toBe(true);
 			await expect(cancel).toBeInViewport();
 			await dialog.screenshot({ path: browserTests.info.outputPath('automation-dialog-narrow.png') });
-			await page.keyboard.press('Escape');
+			await cancel.click();
+			await page.getByRole('button', { name: zh ? '放弃更改' : 'Discard', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
+			await expect(create).toBeFocused();
 			expect(await page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-cards.png') });
 			await page.getByRole('button', { name: zh ? '打开对话' : 'Open conversation', exact: true }).press('Enter');
@@ -757,6 +761,7 @@ suite('automations browser component', () => {
 		await dialog.getByRole('button', { name: '保存自动化', exact: true }).press('Enter');
 		await expect(dialog.getByRole('status', { name: '保存状态' })).toContainText('已发生更改');
 		await page.keyboard.press('Escape');
+		await page.getByRole('button', { name: '放弃更改', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		await expect(edit).toBeFocused();
 		expect(await page.evaluate(() => window.ashAutomations.saved)).toEqual([]);
@@ -1051,6 +1056,7 @@ suite('automations browser component', () => {
 			await expect(conversation.locator('option')).toHaveCount(1);
 			await expect(conversation).toHaveValue('new');
 			await page.keyboard.press('Escape');
+			await page.getByRole('button', { name: chinese ? '放弃更改' : 'Discard', exact: true }).click();
 			await expect(form).toHaveCount(0);
 			await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
 			await hosts.getByRole('button', { name: chinese ? '断开连接：build-a' : 'Disconnect: build-a', exact: true }).press('Enter');

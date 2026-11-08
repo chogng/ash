@@ -338,6 +338,82 @@
 	outline-offset: var(--ash-spacing-size20);
 }
 
+.ash-sessions-window .ash-dialog-form {
+	--ash-dialog-form-padding: var(--ash-spacing-size120);
+	--ash-dialog-form-viewport-margin: var(--ash-spacing-size200);
+	--ash-dialog-form-radius: var(--ash-cornerRadius-xLarge);
+	--ash-dialog-form-header-height: var(--ash-spacing-size280);
+	--ash-dialog-nonmodal-backdrop: var(--ash-dialog-backdropBackground);
+}
+
+:is(.hc-black, .hc-light) :where(.ash-sessions-window) .ash-dialog-form {
+	--ash-dialog-nonmodal-backdrop: color-mix(
+		in srgb,
+		var(--ash-dialog-backdropBackground) 35%,
+		transparent
+	);
+}
+
+.ash-sessions-form-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+:where(
+		.ash-workbench:is(
+			[data-color-scheme="light"],
+			[data-color-scheme="dark"]
+		)
+	)
+	:where(.ash-sessions-window)
+	.ash-dialog-close-confirmation
+	:is(.ash-button-secondary, .ash-button-danger) {
+	border-color: transparent;
+}
+
+:where(
+		.ash-workbench:is(
+			[data-color-scheme="light"],
+			[data-color-scheme="dark"]
+		)
+	)
+	:where(.ash-sessions-window)
+	.ash-dialog-close-confirmation
+	.ash-button-secondary {
+	background: color-mix(in srgb, var(--ash-foreground) 6%, transparent);
+}
+
+:where(
+		.ash-workbench:is(
+			[data-color-scheme="light"],
+			[data-color-scheme="dark"]
+		)
+	)
+	:where(.ash-sessions-window)
+	.ash-dialog-close-confirmation
+	.ash-button-danger {
+	background: color-mix(
+		in srgb,
+		var(--ash-error-foreground) 10%,
+		transparent
+	);
+}
+
+:is(.hc-black, .hc-light) :where(.ash-sessions-window) .ash-dialog-form {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light)
+	:where(.ash-sessions-window)
+	.ash-dialog-form
+	.ash-button:focus-visible {
+	outline-offset: var(--ash-spacing-size20);
+}
+
 .ash-sessions-directory-permission-dialog {
 	inline-size: min(36rem, calc(100vw - var(--ash-spacing-size320)));
 	border-radius: var(--ash-cornerRadius-xLarge);

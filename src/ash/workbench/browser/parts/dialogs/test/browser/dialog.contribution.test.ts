@@ -599,6 +599,26 @@ suite('dialog browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('0');
 	});
 
+	test('disposing a dialog closes its pending discard confirmation and restores focus', async () => {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => {
+			const trigger = document.createElement('button');
+			trigger.id = 'dialog-trigger';
+			document.body.append(trigger);
+			trigger.focus();
+			window.ashDialogIntegration.showCore('confirm-close');
+		});
+		const dialog = page.getByRole('dialog', { name: 'Core dialog', exact: true });
+		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+		const confirmation = page.getByRole('dialog', { name: 'Discard unsaved changes?', exact: true });
+		await expect(confirmation.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+		await page.evaluate(() => window.ashDialogIntegration.disposeBare());
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(page.locator('#dialog-trigger')).toBeFocused();
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult)).toEqual({ button: 1 });
+	});
+
 	test('input dialog returns typed values and checkbox state', async function () {
 		const { page } = browserTests;
 

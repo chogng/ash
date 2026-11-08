@@ -499,7 +499,7 @@ test.describe('Projects sorting persistence', () => {
 			await page.locator('.ash-projects').getByRole('button', { name: '新建项目', exact: true }).first().click();
 			const dialog = page.getByRole('dialog', { name: '创建项目' });
 			await dialog.getByRole('textbox', { name: '你正在做什么？', exact: true }).fill(name);
-			await dialog.getByRole('button', { name: '创建项目', exact: true }).click();
+			await dialog.getByRole('button', { name: '创建', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
 			await expect(page.getByRole('heading', { name: '项目对话', exact: true })).toBeVisible();
 			await expect(page.getByText('此项目中没有聊天', { exact: true })).toBeVisible();
@@ -545,7 +545,7 @@ test(
 		await dialog
 			.getByRole('textbox', { name: 'What are you trying to achieve?', exact: true })
 			.fill('Keep the project goals when renaming.');
-		await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		const breadcrumb = page.locator('.ash-sessions-titlebar .ash-projects-breadcrumb');
 		const input = breadcrumb.getByRole('textbox', { name: 'Project name', exact: true });
@@ -604,10 +604,11 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
 	const dialog = page.getByRole('dialog', { name: 'Create a project' });
 	await expect(dialog.getByRole('textbox', { name: 'What are you working on?' })).toBeFocused();
-	await expect(dialog.getByRole('button', { name: 'Create project', exact: true })).toBeDisabled();
+	await expect(dialog.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
 	await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Design research');
-	await expect(dialog.getByRole('button', { name: 'Create project', exact: true })).toBeEnabled();
+	await expect(dialog.getByRole('button', { name: 'Create', exact: true })).toBeEnabled();
 	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'Discard', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 	await expect(projects.getByRole('button', { name: 'New project', exact: true }).first()).toBeFocused();
 	await page.keyboard.press('Alt+F1');
@@ -635,7 +636,7 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Research workspace');
 	await dialog.getByRole('textbox', { name: 'What are you trying to achieve?' }).fill('Collect images, papers and working documents.');
 	await page.screenshot({ path: testInfo.outputPath('projects-create.png') });
-	await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+	await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 	await expect(projects.getByRole('heading', { level: 1 })).toHaveCount(0);
 	const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name');
@@ -777,7 +778,7 @@ test('Sessions Projects keeps PDFs and arbitrary file references inside a projec
 		const dialog = page.getByRole('dialog', { name: 'Create a project' });
 		await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Mixed materials');
 		await dialog.getByRole('button', { name: 'Use a folder', exact: true }).click();
-		await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		await expect(projects.locator('.ash-projects-material')).toHaveCount(1);
 		await application.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, paths);

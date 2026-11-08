@@ -25,7 +25,7 @@ import { BrowserStorageService } from '../../../../../../services/storage/browse
 import { ICodeEditorService } from '../../../../../../../editor/browser/services/codeEditorService.js';
 import { IMenuService } from '../../../../../../../platform/actions/common/actions.js';
 import type { IQuickPick, IQuickPickItem, IQuickPickDidAcceptEvent } from '../../../../../../../platform/quickinput/common/quickInput.js';
-import { BrowserDialogHandler } from '../../../dialog.js';
+import { BrowserDialogHandler, createWorkbenchDialogOptions } from '../../../dialog.js';
 import { DialogHandlerContribution } from '../../../dialog.web.contribution.js';
 import { CommandsQuickAccessProvider } from '../../../../../../contrib/quickaccess/browser/commandsQuickAccess.js';
 import { CommandService } from '../../../../../../services/commands/common/commandService.js';
@@ -45,7 +45,7 @@ declare global {
 			showInput(): void;
 			showCheckboxConfirmation(): void;
 			showBare(): void;
-			showCore(kind: 'standard' | 'custom' | 'blocked' | 'detail' | 'footer' | 'default' | 'buttons' | 'search' | 'vertical' | 'cancel-focus'): void;
+			showCore(kind: 'standard' | 'custom' | 'blocked' | 'detail' | 'footer' | 'default' | 'buttons' | 'search' | 'vertical' | 'cancel-focus' | 'confirm-close'): void;
 			updateCoreMessage(message: string): void;
 			lastCoreResult?: IDialogResult;
 			visibility: boolean[];
@@ -192,11 +192,9 @@ window.ashDialogIntegration = {
 		link.textContent = 'Details link';
 		detail.append(link);
 		const labels = kind === 'default' ? undefined : kind === 'blocked' ? ['Complete'] : kind === 'footer' ? [] : ['Keep', 'Cancel', 'Discard'];
-		const dialog = resources.add(new Dialog(document.body, 'Core dialog', labels, {
-			buttonStyles: defaultButtonStyles,
-			checkboxStyles: defaultCheckboxStyles,
-			inputBoxStyles: defaultInputBoxStyles,
+		const dialog = resources.add(new Dialog(document.body, 'Core dialog', labels, createWorkbenchDialogOptions({
 			dialogStyles: { ...defaultDialogStyles, textLinkForeground: 'rgb(4, 5, 6)' },
+			shouldConfirmDiscard: kind === 'confirm-close' ? () => true : undefined,
 			cancelId: kind === 'blocked' ? 0 : 1,
 			alignment: kind === 'vertical' ? DialogContentsAlignment.Vertical : undefined,
 			buttonOptions: kind === 'buttons' ? [{ styleButton: button => { button.enabled = false; } }] : undefined,
@@ -233,7 +231,7 @@ window.ashDialogIntegration = {
 				}));
 				footer.append(link);
 			} : undefined,
-		}));
+		})));
 		bareDialog = dialog;
 		void dialog.show().then(result => {
 			window.ashDialogIntegration.lastCoreResult = result;

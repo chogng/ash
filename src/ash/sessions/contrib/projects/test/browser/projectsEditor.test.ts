@@ -32,6 +32,7 @@ suite('Projects toolbar', () => {
 			await create.click();
 			await name.fill('Discarded project');
 			await dialog.getByRole('button', { name: chinese ? '取消' : 'Cancel', exact: true }).click();
+			await page.getByRole('button', { name: chinese ? '放弃更改' : 'Discard', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
 			await expect(create).toBeFocused();
 			await expect(remoteTitle).toBeDisabled();
@@ -39,7 +40,7 @@ suite('Projects toolbar', () => {
 
 			await create.press('Enter');
 			await name.fill('Local research');
-			await dialog.getByRole('button', { name: createLabel, exact: true }).click();
+			await dialog.getByRole('button', { name: chinese ? '创建' : 'Create', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
 			await expect(projects).toHaveAttribute('aria-label', 'Local research');
 			await expect(projects.locator('.ash-projects-composer')).toBeVisible();
@@ -118,17 +119,25 @@ suite('Projects toolbar', () => {
 			const lateBaseStyles = await page.addStyleTag({ path: 'src/ash/base/browser/ui/dialog/dialog.css' });
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
-				for (const width of [1280, 600]) {
-					await page.setViewportSize({ width, height: 720 });
-					await expect(dialog).toHaveCSS('width', `${Math.min(700, width - 40)}px`);
-					await expect(dialog).toHaveCSS('padding', '0px');
+				for (const { width, height } of [{ width: 1280, height: 720 }, { width: 500, height: 360 }]) {
+					await page.setViewportSize({ width, height });
+					await expect(dialog).toHaveCSS('width', `${Math.min(520, width - 40)}px`);
+					await expect(dialog).toHaveCSS('height', `${Math.min(360, height - 40)}px`);
+					await expect(dialog).toHaveCSS('padding', '12px');
+					await expect(dialog).toHaveCSS('border-radius', '12px');
 					await expect(dialog.locator('.ash-dialog-header')).toHaveCSS('gap', '8px');
+					await expect(dialog.locator('.ash-dialog-header')).toHaveCSS('height', '28px');
 					await expect(dialog.locator('.ash-dialog-close')).toHaveCSS('width', '28px');
 					await expect(dialog.locator('.ash-dialog-close')).toHaveCSS('height', '28px');
-					await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('padding', '0px 20px 16px');
+					await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('padding', '0px');
 					const bounds = (await dialog.boundingBox())!;
 					expect(bounds.x).toBeGreaterThanOrEqual(20);
 					expect(bounds.x + bounds.width).toBeLessThanOrEqual(width - 20);
+					expect(bounds.y).toBeGreaterThanOrEqual(20);
+					expect(bounds.y + bounds.height).toBeLessThanOrEqual(height - 20);
+					if (height >= 400) {
+						expect(await dialog.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+					}
 					if (theme === 'ash-light') await page.screenshot({ path: info.outputPath(`project-dialog-${locale}-${width}.png`) });
 				}
 			}
@@ -420,7 +429,7 @@ suite('Projects toolbar', () => {
 			const sort = toolbar.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
 			const create = toolbar.getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true });
 			await expect(toolbar).toHaveClass(/ash-toolbar/);
-			await expect(toolbar.getByRole('button')).toHaveCount(4);
+			await expect(toolbar.getByRole('button')).toHaveCount(3);
 			await expect(create).toHaveClass(/ash-button-primary/);
 			await expect(create).toBeFocused();
 			await expect(toolbar.locator('button[tabindex="0"]')).toHaveCount(1);
@@ -441,8 +450,6 @@ suite('Projects toolbar', () => {
 			await expect(sort).toHaveAttribute('aria-expanded', 'false');
 			expect(await sortNode!.evaluate(element => element.isConnected)).toBe(true);
 			await page.keyboard.press('ArrowRight');
-			await expect(toolbar.getByRole('button', { name: chinese ? '已归档' : 'Archived', exact: true })).toBeFocused();
-			await page.keyboard.press('ArrowRight');
 			await expect(create).toBeFocused();
 			await page.keyboard.press('Enter');
 			const dialog = page.getByRole('dialog', { name: chinese ? '创建项目' : 'Create a project', exact: true });
@@ -461,11 +468,12 @@ suite('Projects toolbar', () => {
 			await dialog
 				.getByRole('textbox', { name: chinese ? '你正在做什么？' : 'What are you working on?', exact: true })
 				.fill('Unavailable project save');
-			const submit = dialog.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
+			const submit = dialog.getByRole('button', { name: chinese ? '创建' : 'Create', exact: true });
 			await submit.click();
 			await expect(dialog.locator('.ash-projects-form-error')).not.toBeEmpty();
 			await expect(submit).toBeEnabled();
 			await page.keyboard.press('Escape');
+			await page.getByRole('button', { name: chinese ? '放弃更改' : 'Discard', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
 			await expect(create).toBeFocused();
 			expect(await sortNode!.evaluate(element => element.isConnected)).toBe(true);
@@ -505,11 +513,20 @@ suite('Projects toolbar', () => {
 			await page.keyboard.press('Alt+F1');
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
 				chinese
-					? /使用左右方向键在搜索、排序、已归档和新建项目之间移动/
-					: /Left and Right Arrow to move between Search, Sort, Archived and New project/,
+					? /使用左右方向键在搜索、排序和新建项目之间移动/
+					: /Left and Right Arrow to move between Search, Sort and New project/,
 			);
 			await page.keyboard.press('Escape');
 			await expect(sort).toBeFocused();
+
+			const command = chinese ? '切换已归档项目视图' : 'Toggle Archived Projects';
+			const palette = page.locator('.ash-quick-pick');
+			for (const heading of chinese ? ['已归档', '项目'] : ['Archived', 'Projects']) {
+				await page.keyboard.press('F1');
+				await palette.getByRole('combobox').fill(`>${command}`);
+				await palette.getByText(command, { exact: true }).click();
+				await expect(page.locator('.ash-projects-heading').getByRole('heading', { name: heading, exact: true })).toBeFocused();
+			}
 		});
 
 		test(`expands search beside the heading without moving the project list (${locale})`, async () => {

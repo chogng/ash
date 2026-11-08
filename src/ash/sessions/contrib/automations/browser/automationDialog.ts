@@ -1,5 +1,5 @@
-import { defaultButtonStyles, defaultDialogStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
@@ -11,6 +11,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import type { IAutomationSchedule } from '../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { IAutomationProviderDescriptor } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { IAutomationDialogResult, IShowAutomationDialogOptions } from '../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
+import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import './media/automationDialog.css';
 
 /** One editing transaction. A rejected commit leaves the user's form and captured revision intact. */
@@ -151,19 +152,23 @@ export class AutomationDialog extends Disposable {
 		this.form.append(preview);
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-label': localize('automations.saveStatus', 'Save status') } });
 		this.form.append(this.message);
-		const actions = h(document, 'div', { className: 'ash-dialog-actions' });
-		this.dialog = this._register(new Dialog(parent, options.existing ? localize('automations.edit', 'Edit automation') : localize('automations.new', 'New automation'), [], {
-			buttonStyles: defaultButtonStyles,
-			checkboxStyles: defaultCheckboxStyles,
-			inputBoxStyles: defaultInputBoxStyles,
-			dialogStyles: defaultDialogStyles,
+		const fields = [...this.form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea')];
+		const fieldValue = (field: typeof fields[number]) => 'checked' in field && field.type === 'checkbox' ? field.checked : field.value;
+		const initialValues = fields.map(fieldValue);
+		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
+		const dialogOptions = createWorkbenchDialogOptions({
 			extraClasses: ['ash-automation-dialog'],
-			disableCloseButton: true,
+			layout: 'form',
+			modal: false,
+			closeOnBackdropClick: true,
 			disableDefaultAction: true,
-			keyEventProcessor: event => { if (this.busy && event.key === 'Escape') event.stop({ preventDefault: true }); },
+			canClose: () => !this.busy,
+			shouldConfirmDiscard: () => fields.some((field, index) => fieldValue(field) !== initialValues[index]),
 			renderBody: body => body.append(this.form),
 			renderFooter: footer => footer.append(actions),
-		}));
+		});
+		const title = options.existing ? localize('automations.edit', 'Edit automation') : localize('automations.new', 'New automation');
+		this.dialog = this._register(new Dialog(parent, title, [], dialogOptions));
 		// Commit stays a native form action, and the caller owns only its business controls.
 		this.save = this._register(new Button(actions, {
 			...defaultButtonStyles,
@@ -176,7 +181,7 @@ export class AutomationDialog extends Disposable {
 			...defaultButtonStyles,
 			label: localize('automations.cancel', 'Cancel'),
 			presentation: 'secondary',
-			onClick: () => this.dialog.dispose(),
+			onClick: () => void this.dialog.requestClose(),
 		}));
 		for (const scope of [this.form, actions]) this._register(contexts.createScoped(scope)).createKey('sessionsAutomationDialogFocused', true);
 		this._register(addDisposableListener(this.form, 'submit', event => {
@@ -224,6 +229,8 @@ export class AutomationDialog extends Disposable {
 				this.save.enabled = true;
 				this.form.removeAttribute('aria-busy');
 				this.cancel.enabled = true;
+				const document = this.form.ownerDocument;
+				if (getActiveElement(document) === document.body) this.save.focus();
 			}
 		}
 	}

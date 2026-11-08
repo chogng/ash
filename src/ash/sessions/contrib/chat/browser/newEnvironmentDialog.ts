@@ -11,7 +11,8 @@ import { localize } from '../../../../nls.js';
 import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import type { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import type { SessionExecutionTarget } from '../../../services/sessions/common/session.js';
 
 interface EnvironmentHost {
@@ -240,6 +241,7 @@ export class NewEnvironmentDialog extends Disposable {
 			closeRecent();
 			if (host?.source && host.source.type !== 'local') {
 				remotePathRow.hidden = false;
+				remotePath.defaultValue = host.source.root;
 				remotePath.value = host.source.root;
 				remotePath.focus();
 				return;
@@ -365,11 +367,11 @@ export class NewEnvironmentDialog extends Disposable {
 		this._register(addDisposableListener(variableButton, 'click', () => switchPage(true)));
 		const mainActions = doc.createElement('div');
 		const editorActions = doc.createElement('div');
-		mainActions.className = editorActions.className = 'ash-environment-actions';
+		mainActions.className = editorActions.className = 'ash-sessions-form-actions';
 		editorActions.hidden = true;
 		footer.append(mainActions, editorActions);
 		const close = () => this.dispose();
-		button(mainActions, localize('sessions.environment.cancel', 'Cancel'), close);
+		button(mainActions, localize('sessions.environment.cancel', 'Cancel'), () => void this.dialog.requestClose());
 		button(mainActions, localize('sessions.environment.create', 'Create environment'), () => void run(async () => {
 			if (!name.value.trim()) { name.focus(); throw new Error(localize('sessions.environment.nameRequired', 'Enter an environment name.')); }
 			const current = await resolveHost();
@@ -392,13 +394,27 @@ export class NewEnvironmentDialog extends Disposable {
 			variableButton.setAttribute('aria-description', label);
 		}, 'primary');
 		variableButton.setAttribute('aria-description', noVariables);
-		this.dialog = this._register(new Dialog(container, this.title, [], {
-			buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles,
-			dialogStyles: defaultDialogStyles, disableDefaultAction: true, extraClasses: ['ash-new-environment-dialog'],
+		const draft = () => JSON.stringify({
+			name: name.value,
+			selectedHost,
+			workspace: connectionWorkspace.value,
+			folders,
+			variables: editor.hidden ? variables : textarea.value,
+			pendingFolder: !remotePathRow.hidden && remotePath.value !== remotePath.defaultValue ? remotePath.value : undefined,
+		});
+		const initialDraft = draft();
+		const dialogOptions = createWorkbenchDialogOptions({
+			extraClasses: ['ash-new-environment-dialog'],
+			layout: 'form',
+			modal: false,
 			closeOnBackdropClick: true,
+			disableDefaultAction: true,
+			canClose: () => !busy,
+			shouldConfirmDiscard: () => draft() !== initialDraft,
 			renderBody: body => body.append(main, editor, error),
 			renderFooter: element => element.append(footer),
-		}));
+		});
+		this.dialog = this._register(new Dialog(container, this.title, [], dialogOptions));
 	}
 
 	async show(): Promise<void> { await this.dialog.show(); }

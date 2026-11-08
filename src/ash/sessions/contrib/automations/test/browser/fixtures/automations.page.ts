@@ -25,6 +25,7 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import { TestNotificationService } from '../../../../../../../../test/fixtures/browser/notificationFixture.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../../workbench/browser/media/style.css';
+import '../../../../../browser/media/style.css';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';

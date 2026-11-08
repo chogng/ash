@@ -15,7 +15,6 @@ import { IProjectsService, type ProjectsState } from './projectsService.js';
 export class ProjectsToolbar extends Disposable {
 	private readonly search: HTMLInputElement;
 	private searchActionViewItem!: ToolbarSearchActionViewItem;
-	private readonly tools: HTMLElement;
 	private readonly toolbar: WorkbenchToolBar;
 	private toolbarActions: readonly IAction[];
 	private createActionViewItem!: ButtonActionViewItem;
@@ -25,7 +24,6 @@ export class ProjectsToolbar extends Disposable {
 	constructor(
 		container: HTMLElement,
 		actions: ProjectsActions,
-		toggleArchived: () => void,
 		@IProjectsService private readonly projects: IProjectsService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 	) {
@@ -90,12 +88,10 @@ export class ProjectsToolbar extends Disposable {
 				},
 			}),
 		);
-		this.tools = this.toolbar.element;
-		this.tools.classList.add('ash-projects-tools');
+		this.toolbar.element.classList.add('ash-projects-tools');
 		const searchLabel = localize('projects.search', 'Search projects');
 		const sortLabel = localize('projects.sort', 'Sort projects');
 		const createLabel = localize('projects.new', 'New project');
-		const archivedLabel = localize('projects.archived', 'Archived');
 		this.toolbarActions = [
 			{
 				id: 'projects.search',
@@ -117,13 +113,6 @@ export class ProjectsToolbar extends Disposable {
 				run: () => this.sortDropdown.show(),
 			},
 			{
-				id: 'projects.archived',
-				label: archivedLabel,
-				tooltip: archivedLabel,
-				enabled: true,
-				run: toggleArchived,
-			},
-			{
 				id: 'projects.create',
 				label: createLabel,
 				tooltip: '',
@@ -135,8 +124,7 @@ export class ProjectsToolbar extends Disposable {
 		this._register(addDisposableListener(this.search, 'input', () => this.projects.setQuery(this.search.value)));
 	}
 
-	update(state: Pick<ProjectsState, 'query' | 'busy'>, catalogVisible: boolean, archived: boolean): void {
-		this.tools.querySelector('[data-action-id="projects.archived"] button')?.setAttribute('aria-pressed', String(archived));
+	update(state: Pick<ProjectsState, 'query' | 'busy'>, catalogVisible: boolean): void {
 		this.setSearchVisible(catalogVisible && (this.searchActionViewItem.expanded || !!state.query));
 		this.search.value = state.query;
 		const createAction = this.toolbarActions.find(action => action.id === 'projects.create')!;

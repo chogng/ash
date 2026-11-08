@@ -18,6 +18,11 @@ description: Build, revise, or review visible components in the Ash Agent Window
 - 菜单可用两种不同的图标布局。例如需要左侧动作图标与右侧勾选或展开箭头的菜单可用 `leading-with-trailing-check`；命令图标也需要放右侧的菜单可用 `trailing`。从当前页面的行语义选变体。
 - 按任务使用 [设计](../design-philosophy/SKILL.md)、[无障碍](../accessibility/SKILL.md)、[布局](../ux-css-layout/SKILL.md) 和 [主题](../ux-theming/SKILL.md) 技能。涉及的业务状态继续由现有模型或服务持有。
 
+## Learnings
+
+- 表单弹窗使用共享 `Dialog` 的 `form` 布局。共享组件拥有标题截断、正文和底部插槽的布局规则，Agent Window 的 `style.css` 提供窗口级尺寸变量和配色，各功能的 CSS 负责自己的弹窗尺寸、字段和内容滚动。
+- 浮层外观依赖开关状态时，由持有生命周期的组件输出状态类。例如共享 `Dialog` 在自己的放弃确认打开时标记父弹窗，由 `dialog.css` 根据该状态切换遮罩。验收时同时覆盖确认打开、关闭恢复和无关模态打开的情况。
+
 ## 在真实呈现中验收
 
 - 从正常入口打开控件，在本次构建的 Agent Window 中观察反馈所指的状态。用截图核对呈现，用浏览器几何、计算样式或交互断言验证具体要求。核对时直接测量目标元素，例如可见行、图标和焦点所在控件。

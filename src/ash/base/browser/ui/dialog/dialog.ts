@@ -1,6 +1,7 @@
 import './dialog.css';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement } from '../../dom.js';
 import { StandardKeyboardEvent } from '../../keyboardEvent.js';
+import { onUnexpectedError } from '../../../common/errors.js';
 import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { focusFirst, getTabbableElements, isTabbable, restoreFocus, trapTabFocus } from '../../focus.js';
 import { observeResize } from '../../observer.js';
@@ -41,8 +42,23 @@ export interface IDialogStyles {
 	readonly textLinkForeground: string | undefined;
 }
 
-/** The base widget owns modal interaction and standard controls; hosts render custom content. */
+interface IDialogCloseConfirmation {
+	readonly shouldConfirm: () => boolean;
+	readonly message: string;
+	readonly detail?: string;
+	readonly confirmButton: string;
+	readonly cancelButton: string;
+	readonly confirmPresentation?: ButtonPresentation;
+}
+
+/** The base widget owns dismissal and standard controls; hosts render custom content. */
 export interface IDialogOptions {
+	readonly modal?: boolean;
+	readonly layout?: 'form';
+	/** Approves user-initiated dismissal. Programmatic disposal always closes the dialog. */
+	readonly canClose?: () => boolean | Promise<boolean>;
+	/** Checked after canClose allows dismissal. The dialog owns the confirmation lifetime. */
+	readonly confirmClose?: IDialogCloseConfirmation;
 	readonly cancelId?: number;
 	readonly detail?: string;
 	readonly detailElement?: HTMLElement;
@@ -79,7 +95,7 @@ export interface IDialogResult {
 	readonly values?: string[];
 }
 
-/** A service-independent dialog with native top-layer modality and index-based results. */
+/** A service-independent dialog with native presentation and index-based results. */
 export class Dialog extends Disposable {
 	private readonly element: HTMLDialogElement;
 	private readonly headingDomNode: HTMLHeadingElement;
@@ -91,15 +107,18 @@ export class Dialog extends Disposable {
 	private resolve: ((result: IDialogResult) => void) | undefined;
 	private shown = false;
 	private visible = false;
+	private closePending = false;
+	private closeConfirmation: Dialog | undefined;
 	private focusToReturn: HTMLElement | undefined;
 
-	constructor(container: HTMLElement, message: string, buttons: string[] | undefined, private readonly options: IDialogOptions) {
+	constructor(private readonly container: HTMLElement, message: string, buttons: string[] | undefined, private readonly options: IDialogOptions) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'dialog');
 		this.element = element;
 		element.className = 'ash-dialog';
 		element.classList.add(...(options.extraClasses ?? []));
+		element.classList.toggle('ash-dialog-form', options.layout === 'form');
 		element.classList.toggle('ash-dialog-vertical', options.alignment === DialogContentsAlignment.Vertical);
 		if (options.type) element.dataset.dialogSeverity = options.type;
 		const colors = {
@@ -112,7 +131,8 @@ export class Dialog extends Disposable {
 			if (value !== undefined) element.style.setProperty(property, value);
 		}
 		element.tabIndex = -1;
-		element.setAttribute('aria-modal', 'true');
+		if (options.modal !== false) element.setAttribute('aria-modal', 'true');
+		else element.classList.add('ash-dialog-nonmodal');
 		const header = h(ownerDocument, 'header', { className: 'ash-dialog-header' });
 		if (options.icon || options.type && options.type !== 'none') {
 			const icon = h(ownerDocument, 'span', { className: 'ash-dialog-icon', attributes: { 'aria-hidden': 'true' } });
@@ -132,7 +152,7 @@ export class Dialog extends Disposable {
 				ariaLabel: label,
 				actions: [{
 					id: 'dialog.close', label, tooltip: label, icon: Lxicon.dialogClose, enabled: true,
-					run: () => this.finish(options.cancelId ?? 0),
+					run: () => this.requestClose(),
 				}],
 				actionViewItemProvider: (action, actionOptions) => new LabelActionViewItem(action, {
 					...actionOptions, label: '', ariaLabel: action.label,
@@ -197,7 +217,13 @@ export class Dialog extends Disposable {
 					...options.buttonStyles,
 					label,
 					presentation: buttonOptions?.presentation ?? (index === 0 ? 'primary' : 'secondary'),
-					onClick: () => this.finish(index),
+					onClick: () => {
+						if (index === options.cancelId && (options.canClose || options.confirmClose)) {
+							void this.requestClose();
+						} else {
+							this.finish(index);
+						}
+					},
 				}));
 				this.buttons.push(button);
 				if (buttonOptions?.sublabel) {
@@ -221,7 +247,27 @@ export class Dialog extends Disposable {
 		element.append(header, body);
 		container.append(element);
 		if (options.closeOnBackdropClick && !options.disableCloseAction) {
-			if (typeof element.closedBy === 'string') {
+			if (options.modal === false) {
+				const isOutside = (event: MouseEvent): boolean => {
+					if (!this.visible || this.closePending || event.defaultPrevented || ownerDocument.querySelector(':modal')) return false;
+					// A menu may live in its own top-layer element, including its click shield.
+					return !event.composedPath().some(target => target === element ||
+						isHTMLElement(target) && target.matches('dialog[open], :popover-open'));
+				};
+				let pressedOutside = false;
+				this._register(addDisposableListener(ownerDocument, 'pointerdown', event => {
+					pressedOutside = event.isPrimary && event.button === 0 && isOutside(event);
+					// Keep the editing control focused while a dismissal is being decided.
+					if (pressedOutside) event.preventDefault();
+				}, true));
+				this._register(addDisposableListener(ownerDocument, 'click', event => {
+					if (!pressedOutside || event.detail === 0 || !isOutside(event)) return;
+					pressedOutside = false;
+					event.preventDefault();
+					event.stopPropagation();
+					void this.requestClose();
+				}, true));
+			} else if (typeof element.closedBy === 'string') {
 				element.setAttribute('closedby', 'any');
 			} else {
 				// The dialog also receives clicks on its own padding. Check where the pointer started and ended.
@@ -237,7 +283,7 @@ export class Dialog extends Disposable {
 				this._register(addDisposableListener(element, 'click', event => {
 					if (!pressedBackdrop || event.detail === 0 || !isBackdrop(event)) return;
 					event.stopPropagation();
-					this.finish(options.cancelId ?? 0);
+					void this.requestClose();
 				}));
 			}
 		}
@@ -248,7 +294,7 @@ export class Dialog extends Disposable {
 				// Native search fields consume Escape before the dialog's cancel event.
 				event.preventDefault();
 				event.stopPropagation();
-				if (!options.disableCloseAction) this.finish(options.cancelId ?? 0);
+				void this.requestClose();
 				return;
 			}
 			if (isMacintosh && event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
@@ -284,10 +330,10 @@ export class Dialog extends Disposable {
 		}));
 		this._register(addDisposableListener(element, 'cancel', event => {
 			event.preventDefault();
-			if (!options.disableCloseAction) this.finish(options.cancelId ?? 0);
+			void this.requestClose();
 		}));
 		this._register(addDisposableListener(element, 'close', () => this.finish(options.cancelId ?? 0)));
-		this._register(trapTabFocus(element));
+		if (options.modal !== false) this._register(trapTabFocus(element));
 		this._register(toDisposable(() => {
 			this.finish(options.cancelId ?? 0);
 			element.remove();
@@ -299,6 +345,48 @@ export class Dialog extends Disposable {
 		this.headingDomNode.title = message;
 	}
 
+	public async requestClose(): Promise<void> {
+		if (!this.resolve || this.options.disableCloseAction || this.closePending) return;
+		this.closePending = true;
+		try {
+			const allowed = this.options.canClose?.() ?? true;
+			if (!(typeof allowed === 'boolean' ? allowed : await allowed) || !this.resolve) return;
+			const confirmation = this.options.confirmClose;
+			if (confirmation?.shouldConfirm() && !await this.confirmDismissal(confirmation)) return;
+			this.finish(this.options.cancelId ?? 0);
+		} catch (error) {
+			onUnexpectedError(error);
+		} finally {
+			this.closePending = false;
+		}
+	}
+
+	private async confirmDismissal(confirmation: IDialogCloseConfirmation): Promise<boolean> {
+		const dialog = new Dialog(this.container, confirmation.message, [confirmation.confirmButton, confirmation.cancelButton], {
+			buttonStyles: this.options.buttonStyles,
+			checkboxStyles: this.options.checkboxStyles,
+			inputBoxStyles: this.options.inputBoxStyles,
+			dialogStyles: this.options.dialogStyles,
+			layout: this.options.layout,
+			extraClasses: ['ash-dialog-close-confirmation'],
+			detail: confirmation.detail,
+			buttonOptions: [{ presentation: confirmation.confirmPresentation }, { presentation: 'secondary' }],
+			cancelId: 1,
+			focusCancelButton: true,
+			disableCloseButton: true,
+			disableDefaultAction: true,
+		});
+		this.closeConfirmation = dialog;
+		this.element.classList.add('ash-dialog-confirming-close');
+		try {
+			return (await dialog.show()).button === 0;
+		} finally {
+			this.element.classList.remove('ash-dialog-confirming-close');
+			this.closeConfirmation = undefined;
+			dialog.dispose();
+		}
+	}
+
 	public show(): Promise<IDialogResult> {
 		this.assertNotDisposed();
 		if (this.shown) throw new Error('Dialog instances can only be shown once');
@@ -307,7 +395,14 @@ export class Dialog extends Disposable {
 		if (isHTMLElement(activeElement)) this.focusToReturn = activeElement;
 		const result = new Promise<IDialogResult>(resolve => { this.resolve = resolve; });
 		try {
-			this.element.showModal();
+			if (this.options.modal === false) {
+				this.element.show();
+				// Use the top layer without making the rest of the window inert.
+				this.element.popover = 'manual';
+				this.element.showPopover();
+			} else {
+				this.element.showModal();
+			}
 			this.visible = true;
 			this.options.onVisibilityChange?.(getWindow(this.element), true);
 			const input = this.inputs[0];
@@ -335,11 +430,13 @@ export class Dialog extends Disposable {
 		const resolve = this.resolve;
 		if (!resolve) return;
 		this.resolve = undefined;
+		this.closeConfirmation?.dispose();
 		const result: IDialogResult = {
 			button,
 			...(this.checkbox ? { checkboxChecked: this.checkbox.checked } : {}),
 			...(this.inputs.length ? { values: this.inputs.map(input => input.value) } : {}),
 		};
+		if (this.options.modal === false && this.element.matches(':popover-open')) this.element.hidePopover();
 		if (this.element.open) this.element.close();
 		try {
 			if (this.visible) {

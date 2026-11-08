@@ -37,9 +37,8 @@ export class BrowserContextViewService
 				'targetWindow' in options.anchor ? (options.anchor as { targetWindow: Window; }).targetWindow : getWindow(this.layoutService.activeContainer);
 			container = this.layoutService.getContainer(targetWindow);
 		}
-		// Native modals occupy the browser's top layer. Their overlays must be
-		// descendants to remain visible and interactive above the dialog.
-		if (isHTMLElement(options.anchor)) container = options.anchor.closest<HTMLElement>('dialog:modal') ?? container;
+		// Keep anchored overlays inside the dialog's interaction and focus scope.
+		if (isHTMLElement(options.anchor)) container = options.anchor.closest<HTMLElement>('dialog[open]') ?? container;
 		if (this.contextView.element.parentElement !== container) {
 			this.hide();
 			container.append(this.contextView.element);

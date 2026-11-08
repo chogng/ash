@@ -1,6 +1,6 @@
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
+import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -9,7 +9,8 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { Project, ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import type { ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
 import { IProjectsService } from './projectsService.js';
 import './media/projectDialog.css';
@@ -40,6 +41,7 @@ export class ProjectDialog extends Disposable {
 		const document = this.container.ownerDocument;
 		const previousFocus = getActiveElement(document);
 		const form = h(document, 'form', { className: 'ash-projects-form' });
+		form.id = generateUuid();
 		const nameLabel = h(document, 'label', {}, localize('projects.nameLabel', 'What are you working on?'));
 		const name = h(document, 'input', {
 			properties: {
@@ -65,12 +67,15 @@ export class ProjectDialog extends Disposable {
 			},
 		});
 		descriptionLabel.append(description);
+		const initialName = name.value;
+		const initialDescription = description.value;
 		let materials = [...(project?.materials ?? [])];
 		let base = project;
 		let needsMerge = false;
 		const unresolved = new Set<HTMLInputElement | HTMLTextAreaElement>();
 		const mergeControls = store.add(new DisposableStore());
 		let chosenFolder: ProjectMaterial | undefined;
+		let pickingFolder = false;
 		const folderRow = h(document, 'div', { className: 'ash-projects-folder-choice' });
 		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
 		const folder = store.add(
@@ -83,6 +88,8 @@ export class ProjectDialog extends Disposable {
 					'Ash can work in this folder when you use the project from this computer.',
 				),
 				onClick: () => {
+					if (pickingFolder) return;
+					pickingFolder = true;
 					void this.files
 						.showOpenDialog({ canSelectFiles: false, canSelectFolders: true })
 						.then(resources => {
@@ -107,15 +114,16 @@ export class ProjectDialog extends Disposable {
 									'Could not add these materials. Try again.',
 								);
 							}
-						});
+						})
+						.finally(() => { pickingFolder = false; });
 				},
 			}),
 		);
-		const actions = h(document, 'footer', { className: 'ash-projects-form-actions' });
+		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
 		form.append(nameLabel, descriptionLabel);
 		if (!conversation) form.append(folderRow);
-		form.append(feedback, conflicts, actions);
+		form.append(feedback, conflicts);
 		let didSave = false;
 		const dialog = store.add(
 			new Dialog(
@@ -124,17 +132,19 @@ export class ProjectDialog extends Disposable {
 					? localize('projects.edit', 'Edit details')
 					: localize('projects.createTitle', 'Create a project'),
 				[],
-				{
-					buttonStyles: defaultButtonStyles,
-					checkboxStyles: defaultCheckboxStyles,
-					inputBoxStyles: defaultInputBoxStyles,
-					dialogStyles: defaultDialogStyles,
-					type: 'none',
-					alignment: DialogContentsAlignment.Vertical,
+				createWorkbenchDialogOptions({
 					extraClasses: ['ash-projects-dialog'],
+					layout: 'form',
+					modal: false,
+					closeOnBackdropClick: true,
 					disableDefaultAction: true,
+					canClose: () => !name.disabled && !pickingFolder,
+					shouldConfirmDiscard: () => name.value !== (base?.name ?? initialName) ||
+						description.value !== (base?.description ?? initialDescription) ||
+						!!chosenFolder || unresolved.size > 0,
 					renderBody: body => body.append(form),
-				},
+					renderFooter: footer => footer.append(actions),
+				}),
 			),
 		);
 		const reload = store.add(
@@ -153,7 +163,7 @@ export class ProjectDialog extends Disposable {
 				...defaultButtonStyles,
 				label: localize('projects.cancel', 'Cancel'),
 				presentation: 'secondary',
-				onClick: () => dialog.dispose(),
+				onClick: () => void dialog.requestClose(),
 			}),
 		);
 		const submit = store.add(
@@ -161,12 +171,13 @@ export class ProjectDialog extends Disposable {
 				...defaultButtonStyles,
 				label: project || conversation
 					? localize('projects.save', 'Save changes')
-					: localize('projects.create', 'Create project'),
+					: localize('projects.create', 'Create'),
 				presentation: 'primary',
 				type: 'submit',
 				enabled: !!name.value.trim(),
 			}),
 		);
+		submit.domNode.setAttribute('form', form.id);
 		const updateSubmit = () => {
 			submit.enabled = !!name.value.trim() && !needsMerge && unresolved.size === 0;
 		};
@@ -323,7 +334,7 @@ export class ProjectDialog extends Disposable {
 			addDisposableListener(form, 'submit', event => {
 				event.preventDefault();
 				if (
-					!name.value.trim() ||
+					name.disabled || pickingFolder || !name.value.trim() ||
 					this.projects.state.get().busy ||
 					needsMerge ||
 					unresolved.size ||
@@ -356,7 +367,7 @@ export class ProjectDialog extends Disposable {
 						description.disabled = false;
 						folder.enabled = true;
 						updateSubmit();
-						offerMerge();
+						if (!offerMerge() && getActiveElement(document) === document.body) name.focus();
 					}
 				});
 			}),

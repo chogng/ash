@@ -1360,6 +1360,53 @@ suite('sessions browser component', () => {
 		expect(createBounds.y - rowBounds.y).toBeCloseTo(4);
 		await create.click();
 		await expect(name).toBeFocused();
+		await expect(dialog).not.toHaveAttribute('aria-modal', 'true');
+		const backdrop = () => dialog.evaluate(element => getComputedStyle(element, '::backdrop').backgroundColor);
+		const formBackdrop = await backdrop();
+		expect(formBackdrop).not.toBe('rgba(0, 0, 0, 0)');
+		const backdropWithAnotherModal = await dialog.evaluate(element => {
+			const modal = element.ownerDocument.createElement('dialog');
+			element.after(modal);
+			modal.showModal();
+			try {
+				return getComputedStyle(element, '::backdrop').backgroundColor;
+			} finally {
+				modal.close();
+				modal.remove();
+			}
+		});
+		expect(backdropWithAnotherModal).toBe(formBackdrop);
+		await name.fill('Reverted draft');
+		await name.clear();
+		await page.mouse.click(8, 100);
+		await expect(dialog).toHaveCount(0);
+		await expect(create).toBeFocused();
+
+		await create.press('Enter');
+		await name.fill('Project draft');
+		await page.mouse.click(8, 100);
+		const confirmation = page.getByRole('dialog', {
+			name: chinese ? '放弃未保存的更改？' : 'Discard unsaved changes?',
+			exact: true,
+		});
+		const keep = confirmation.getByRole('button', { name: chinese ? '继续编辑' : 'Keep editing', exact: true });
+		const discard = confirmation.getByRole('button', { name: chinese ? '放弃更改' : 'Discard', exact: true });
+		await expect(confirmation).toHaveAttribute('aria-modal', 'true');
+		expect(await backdrop()).toBe('rgba(0, 0, 0, 0)');
+		await expect(keep).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(discard).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(keep).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(confirmation).toHaveCount(0);
+		await expect(name).toBeFocused();
+		await expect(name).toHaveValue('Project draft');
+		expect(await backdrop()).toBe(formBackdrop);
+		await dialog.getByRole('button', { name: chinese ? '取消' : 'Cancel', exact: true }).click();
+		await discard.click();
+		await expect(dialog).toHaveCount(0);
+		await expect(create).toBeFocused();
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Code opens and creates an environment from the new conversation (${locale})`, async () => {
@@ -1405,7 +1452,7 @@ suite('sessions browser component', () => {
 		expect(bounds.y + bounds.height).toBeLessThan(composerBounds.y);
 		await page.screenshot({ path: testInfo.outputPath(`new-chat-environment-${locale}.png`) });
 		await trigger.press('Enter');
-		await expect(dialog).toHaveAttribute('aria-modal', 'true');
+		await expect(dialog).not.toHaveAttribute('aria-modal', 'true');
 		await expect(name).toBeFocused();
 		await expect(name).toHaveValue('host-a');
 		const runInLabel = chinese ? '运行位置' : 'Run in';
@@ -1451,6 +1498,10 @@ suite('sessions browser component', () => {
 		await expect(trigger).toBeFocused();
 		await trigger.press('Space');
 		await name.fill('Fixture environment');
+		await dialog.getByRole('button', { name: chinese ? '关闭对话框' : 'Close Dialog', exact: true }).click();
+		const confirmation = page.getByRole('dialog', { name: chinese ? '放弃未保存的更改？' : 'Discard unsaved changes?', exact: true });
+		await confirmation.getByRole('button', { name: chinese ? '继续编辑' : 'Keep editing', exact: true }).click();
+		await expect(name).toHaveValue('Fixture environment');
 		await dialog.getByRole('button', { name: chinese ? '创建环境' : 'Create environment', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		await expect(host).toHaveText('Fixture environment');

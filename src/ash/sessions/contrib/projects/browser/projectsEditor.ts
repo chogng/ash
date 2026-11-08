@@ -112,10 +112,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			},
 			isVisible: () => this.isVisible(),
 		}));
-		this.projectToolbar = this._register(this.instantiationService.createInstance(ProjectsToolbar, this.catalogHeading, this.projectActions, () => {
-			this.showArchived.set(!this.showArchived.get(), undefined);
-			this.catalogTitle.focus();
-		}));
+		this.projectToolbar = this._register(this.instantiationService.createInstance(ProjectsToolbar, this.catalogHeading, this.projectActions));
 		const feedback = h(document, 'div', { className: 'ash-projects-feedback' });
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-live': 'polite' } });
 		this.retry = this._register(
@@ -161,6 +158,16 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	public createProject(): void {
 		this.projectActions.createProject();
+	}
+
+	public toggleArchivedProjects(): void {
+		if (this.catalogHeading.hidden) {
+			this.showArchived.set(true, undefined);
+			this.projects.showProjects();
+		} else {
+			this.showArchived.set(!this.showArchived.get(), undefined);
+		}
+		this.focusPage();
 	}
 
 	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
@@ -223,7 +230,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.catalogTitle.textContent = catalogTitle;
 		this.catalogTitle.title = catalogTitle;
 		this.domNode.setAttribute('aria-label', projectName ?? projectsTitle);
-		this.projectToolbar.update(state, !this.catalogHeading.hidden, !!archived);
+		this.projectToolbar.update(state, !this.catalogHeading.hidden);
 		this.message.textContent =
 			state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
 		this.message.parentElement!.hidden = !state.message && !state.loading;
