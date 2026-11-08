@@ -155,7 +155,8 @@
 	pointer-events: auto;
 }
 
-.ash-menu .ash-sessions-navigation-menu-row {
+/* Keep the two-button layout when the shared menu stylesheet loads later. */
+.ash-menu.ash-sessions-navigation-menu > .ash-sessions-navigation-menu-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
 }
