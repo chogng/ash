@@ -389,10 +389,13 @@ impl<'a> DictationRequestProcessor<'a> {
         let size_bytes = realtime_voice::DictationModelManager::size_bytes(&root, &model_id)
             .map_err(dictation_error)?;
         let stage = self.dictation_models.progress(&model_id).map(model_stage);
+        let download = realtime_voice::DictationModelManager::download_info(&model_id);
         Ok(DictationModelStatus {
             model_id,
             available,
             size_bytes,
+            download_size_bytes: download.map(|(size, _)| size),
+            recommended_language: download.map(|(_, language)| language.to_owned()),
             stage,
         })
     }

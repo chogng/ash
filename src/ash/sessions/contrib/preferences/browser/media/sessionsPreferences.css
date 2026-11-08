@@ -158,7 +158,9 @@
 	inset-inline: 0;
 }
 
-.ash-sessions-settings-page .ash-settings-card > .ash-configuration-setting {
+.ash-sessions-settings-page
+	:is(.ash-settings-card, .ash-local-transcription-model-controls)
+	> .ash-configuration-setting {
 	padding-inline: 0 var(--ash-spacing-size80);
 	border-radius: var(--ash-cornerRadius-large);
 }

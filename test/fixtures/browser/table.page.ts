@@ -212,9 +212,9 @@ services.registerInstance(ILanguageModelsService, {
 });
 const changed = resources.add(new Emitter<void>());
 let models: ILocalTranscriptionModelSnapshot[] = [
-	{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, available: false, sizeBytes: 0 },
+	{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, available: false, sizeBytes: 0, downloadSizeBytes: 238_322_681, recommendedLanguage: 'cmn' },
 	{ model: 'imported-model', available: true, sizeBytes: 1024 * 1024 },
-];
+].filter(model => !new URLSearchParams(location.search).has('noInstalledModels') || !model.available);
 const operations: string[] = [];
 let finish: ((state: DictationModelState.Ready | DictationModelState.Cancelled) => void) | undefined;
 function publish(status: IDictationModelStatus): void {

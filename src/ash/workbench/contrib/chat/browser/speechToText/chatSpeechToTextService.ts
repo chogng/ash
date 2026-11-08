@@ -11,7 +11,7 @@ import { generateUuid } from '../../../../../base/common/uuid.js';
 import { IVoiceCodeTranscriptionClient } from './voiceCodeTranscriptionClient.js';
 import { createPcmCaptureNode, type IPcmCaptureNode } from '../pcmCaptureWorklet.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState, resolveLocalTranscriptionModel } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -242,7 +242,10 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 						recording.error = result.error;
 						if (!recording.stopping) this.finish(recording);
 					}));
-					const cacheDir = await this.localModels.getCacheDirectory();
+					const [cacheDir, model] = await Promise.all([
+						this.localModels.getCacheDirectory(),
+						resolveLocalTranscriptionModel(this.localModels, backend.modelId),
+					]);
 					if (recording.cancelled || this.recording !== recording || this.isDisposed) throw canceled();
 					const handle: RecordingHandle = {
 						stop: async () => { if (recording.capture) { await recording.capture.pcm.flush(); await this.closeCapture(recording.capture); } return this.localTranscription.stop(); },
@@ -250,7 +253,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 					};
 					recording.handle = handle;
 					recording.lifetime.add(toDisposable(() => { void this.cancelHandle(recording).catch(() => undefined); }));
-					await this.localTranscription.start({ cacheDir, model: backend.modelId });
+					await this.localTranscription.start({ cacheDir, model: model.model });
 					if (this.recording !== recording || recording.cancelled || this.isDisposed) await this.cancelHandle(recording);
 					else {
 						await this.capture(recording, recording.inputDevice, samples => {

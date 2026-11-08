@@ -1,6 +1,7 @@
 //! Model operations never acquire the microphone. Packages are immutable once published.
 use crate::DictationManager;
 use crate::LocalSpeechMode;
+use crate::model_package::BUILTIN_MODEL;
 use crate::model_package::ModelPackage;
 use async_utils::CancellationSource;
 use async_utils::CancellationToken;
@@ -96,8 +97,7 @@ impl DictationModelManager {
     }
 
     pub fn list(&self, root: &std::path::Path) -> Result<Vec<String>, String> {
-        let mut models =
-            std::collections::BTreeSet::from([crate::model_package::DEFAULT_MODEL_ID.to_owned()]);
+        let mut models = std::collections::BTreeSet::from([BUILTIN_MODEL.id.clone()]);
         if root.exists() {
             for entry in std::fs::read_dir(root).map_err(|error| error.to_string())? {
                 let entry = entry.map_err(|error| error.to_string())?;
@@ -164,6 +164,17 @@ impl DictationModelManager {
                 .map_err(|error| error.to_string())
         })
     }
+
+    /// Returns the transfer size in bytes and recommended language of a downloadable package.
+    pub fn download_info(model_id: &str) -> Option<(u64, &'static str)> {
+        (model_id == BUILTIN_MODEL.id).then(|| {
+            (
+                BUILTIN_MODEL.download_size_bytes(),
+                BUILTIN_MODEL.recommended_language.as_str(),
+            )
+        })
+    }
+
     /// Availability describes an installed package, not a currently loaded recognizer.
     pub fn is_available(root: &std::path::Path, model_id: &str) -> Result<bool, String> {
         ModelPackage::validate_id(model_id)?;

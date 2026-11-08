@@ -33,11 +33,18 @@ export interface ILocalTranscriptionModelSnapshot {
 	readonly model: string;
 	readonly available: boolean;
 	readonly sizeBytes: number;
+	readonly downloadSizeBytes?: number;
+	readonly recommendedLanguage?: string;
 	readonly status?: IDictationModelStatus;
 }
 
 export function isModelPreparing(status: IDictationModelStatus | undefined): boolean {
 	return status?.state === DictationModelState.Checking || status?.state === DictationModelState.Downloading || status?.state === DictationModelState.Loading;
+}
+
+/** Keep the saved preference when installed. Otherwise use the first installed package in inventory order. */
+export function preferredInstalledModel(models: readonly ILocalTranscriptionModelSnapshot[], preferred: string): ILocalTranscriptionModelSnapshot | undefined {
+	return models.find(model => model.available && model.model === preferred) ?? models.find(model => model.available);
 }
 
 /** Disposing detaches delivery. Only cancel explicitly stops the process-owned preparation. */
@@ -63,6 +70,12 @@ export interface ILocalTranscriptionModelService {
 	/** Loads an installed model without opening an audio stream. Desktop only. */
 	warmModel?(model: string): ILocalTranscriptionModelOperation;
 	importPackage(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation;
+}
+
+/** Retain the configured package for first-use download or preparation when nothing is installed. */
+export async function resolveLocalTranscriptionModel(service: ILocalTranscriptionModelService, preferred: string): Promise<ILocalTranscriptionModelSnapshot> {
+	const configured = await service.getModel(preferred);
+	return configured.available ? configured : preferredInstalledModel(await service.listModels(), preferred) ?? configured;
 }
 export interface ILocalTranscriptionModelImportResult { readonly model: string; readonly version: number; }
 export const enum LocalTranscriptionModelState {

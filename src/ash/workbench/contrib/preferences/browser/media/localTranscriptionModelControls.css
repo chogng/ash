@@ -3,10 +3,7 @@
 	flex-direction: column;
 	min-width: 0;
 	padding-top: var(--ash-spacing-size240);
-	gap: var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-regular);
-	line-height: 1.5;
+	gap: var(--ash-spacing-size120);
 }
 
 .ash-settings-card > .ash-local-transcription-model-controls::before {
@@ -15,8 +12,16 @@
 
 .ash-local-transcription-model-heading {
 	margin: 0;
-	font-size: var(--ash-fontSize-body1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-size: inherit;
+}
+
+.ash-local-transcription-model-selection.ash-configuration-setting {
+	min-height: 0;
+	padding-block: 0;
+}
+
+.ash-local-transcription-model-selection > .ash-select-box {
+	max-width: 100%;
 }
 
 .ash-local-transcription-model-row-state {
@@ -33,6 +38,9 @@
 	width: 100%;
 	table-layout: fixed;
 	border-collapse: collapse;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	line-height: 1.5;
 }
 
 .ash-local-transcription-model-table :is(th, td) {
@@ -43,7 +51,7 @@
 }
 
 .ash-local-transcription-model-table thead {
-	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-local-transcription-model-table thead th:first-child {
@@ -51,11 +59,7 @@
 }
 
 .ash-local-transcription-model-table thead th:last-child {
-	width: 36%;
-}
-
-.ash-local-transcription-model-table :is(th, td):last-child {
-	text-align: end;
+	width: 24%;
 }
 
 .ash-local-transcription-model-table tbody tr {
@@ -70,7 +74,6 @@
 .ash-local-transcription-model-actions {
 	display: flex;
 	flex-wrap: wrap;
-	justify-content: flex-end;
 	gap: var(--ash-spacing-size80);
 }
 

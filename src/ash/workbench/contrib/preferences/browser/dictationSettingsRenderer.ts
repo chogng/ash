@@ -165,7 +165,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 					const focused = document.activeElement as HTMLElement;
 					if (!this.visible || !this.controls.domNode.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.DictationModels, { type },
-						() => type === AccessibleViewType.Help ? localize('dictation.models.help', 'Local dictation models\nUse Tab to reach model actions. Install downloads the model, Use model selects an installed model, and Cancel stops preparation. Uninstall requires confirmation. Preparation continues after Settings closes.') : this.controls.getAccessibleContent(),
+						() => type === AccessibleViewType.Help ? localize('dictation.models.help', 'Local dictation models\nUse the Dictation models selector to switch between installed models. Use Tab to reach model actions. Install downloads the model and Cancel stops preparation. Uninstall requires confirmation. Preparation continues after Settings closes.') : this.controls.getAccessibleContent(),
 						() => focused.focus(), AccessibilityVerbositySettingId.DictationModels);
 				},
 			}));

@@ -50,7 +50,7 @@ import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
 import { registerChatChangesActions, registerChatEditRequestAction, registerChatHistoryActions, registerChatRestoreCheckpointAction } from './chatEditing/chatEditingActions.js';
 import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
-import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL, ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL, ILocalTranscriptionModelService, resolveLocalTranscriptionModel, type ILocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { DictationConfiguration, dictationBackend, parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -636,14 +636,17 @@ registerWorkbenchContribution('workbench.contrib.dictationWarmup', WorkbenchPhas
 	const models = accessor.get(ILocalTranscriptionModelService);
 	if (!models.isSupported || !models.warmModel) return Disposable.None;
 	const log = accessor.get(ILogService);
-	try {
-		const operation = models.warmModel(backend.modelId);
-		void operation.completed.catch(error => log.debug('Local dictation model warmup:', error));
-		return toDisposable(() => { void operation.cancel().catch(() => undefined); });
-	} catch (error) {
-		log.debug('Local dictation model warmup:', error);
-		return Disposable.None;
-	}
+	let disposed = false;
+	let operation: ILocalTranscriptionModelOperation | undefined;
+	void resolveLocalTranscriptionModel(models, backend.modelId).then(model => {
+		if (disposed || !model.available) return;
+		operation = models.warmModel?.(model.model);
+		return operation?.completed;
+	}).catch(error => log.debug('Local dictation model warmup:', error));
+	return toDisposable(() => {
+		disposed = true;
+		void operation?.cancel().catch(() => undefined);
+	});
 });
 
 Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMigration).registerConfigurationMigrations([{

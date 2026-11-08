@@ -52,7 +52,14 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 }
 
 function modelSnapshot(status: DictationModelStatus) {
-	return { model: status.modelId, available: status.available, sizeBytes: status.sizeBytes, status: status.stage ? modelStatus(status.stage) : undefined };
+	return {
+		model: status.modelId,
+		available: status.available,
+		sizeBytes: status.sizeBytes,
+		downloadSizeBytes: status.downloadSizeBytes ?? undefined,
+		recommendedLanguage: status.recommendedLanguage ?? undefined,
+		status: status.stage ? modelStatus(status.stage) : undefined,
+	};
 }
 
 function modelStatus(stage: DictationModelStage): IDictationModelStatus {

@@ -36,7 +36,7 @@ Ash Code TUI 的 `/voice` 通过 App Server 把识别文字填入当前草稿，
 
 双向音频语音对话的每轮还要关联用户音频、模型音频、输入与输出转写，以及完成或打断。现有 `voice-agent` 负责持续的双向传输；模型事件尚无响应 ID，停止播报后需要新建模型会话，双向音频的产品入口尚未接通。
 
-本地听写默认使用 [Paraformer-large-online ONNX 包](https://www.modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx/summary)，模型 ID 为 `paraformer-large-online-ec6a3c64`。通过模型准备操作下载该版本的量化编码器、解码器、CMVN 和词表，校验原始文件的 SHA-256，再把编码器所需的前端元数据写入 ONNX 文件。模型位于 Ash home 的 `dictation-models/<模型 ID>/`；录音和识别由 sherpa-onnx 流式执行。
+本地听写默认使用 [Paraformer-large-online ONNX 包](https://www.modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx/summary)，模型 ID 为 `paraformer-large-online-ec6a3c64`。内置模型的来源、推荐语言、文件大小和 SHA-256 由 [模型清单](models/paraformer.json) 定义。模型准备会下载并校验清单中的量化编码器、解码器、CMVN 和词表，再把编码器所需的前端元数据写入 ONNX 文件。模型位于 Ash home 的 `dictation-models/<模型 ID>/`；录音和识别由 sherpa-onnx 流式执行。
 
 本地模型可以按 ID 更换。Workbench 和 Sessions 的“设置 → 语音”可下载默认模型、查看已安装包和大小、选择或删除模型，或将兼容的流式 Paraformer 包导入所选的新 ID。源目录包含 `encoder.onnx`、`decoder.onnx`、`tokens.txt` 和内容为 `{"format":"sherpa-online-paraformer-v1"}` 的 `dictation-model.json`。Rust 在临时目录中复制、验证并实际加载，成功后发布到 Ash home；同一模型的安装受跨进程文件锁保护，已安装包不被覆盖。模型准备属于 App Server 进程；关闭设置或发起连接不会取消操作，其他产品窗口会收到模型状态变化通知并读取当前阶段。只有明确取消才停止操作并清理未完成的临时目录，已发布包保留。删除仅移除 Ash 管理的包文件，保留导入源目录；准备中或语音使用中拒绝删除。三端使用同一份模型包和识别实现；Electron 桌面在设置中修改 `dictation.localModel`，Rust 桌面在 `[gui]` 中设置 `dictationLocalModel = "<新 ID>"`。模型 ID 只接受字母、数字、`_` 和 `-`。不同 ONNX 模型架构仍需要各自的识别适配，不能仅替换文件名。
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::model_package::BUILTIN_MODEL;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -37,7 +38,7 @@ async fn stopping_a_stalled_model_download_closes_the_connection_and_cleans_stag
                 home: root.path().into(),
                 media_network: test_media_network(),
                 input_device: None,
-                model_id: DEFAULT_MODEL_ID.into(),
+                model_id: BUILTIN_MODEL.id.clone(),
                 model_root: root.path().into(),
                 audio_host: root.path().join("must-not-start-audio"),
                 network,
@@ -60,7 +61,9 @@ async fn stopping_a_stalled_model_download_closes_the_connection_and_cleans_stag
     .await
     .unwrap();
     assert!(headers.starts_with(b"CONNECT modelscope.cn:443 "));
-    let staging = root.path().join(format!(".{DEFAULT_MODEL_ID}.installing"));
+    let staging = root
+        .path()
+        .join(format!(".{}.installing", BUILTIN_MODEL.id));
     assert!(staging.join("encoder.onnx.download").is_file());
 
     let stopping = Arc::clone(&manager);
@@ -77,7 +80,7 @@ async fn stopping_a_stalled_model_download_closes_the_connection_and_cleans_stag
     );
     assert!(!manager.is_active());
     assert!(!staging.exists());
-    assert!(!root.path().join(DEFAULT_MODEL_ID).exists());
+    assert!(!root.path().join(&BUILTIN_MODEL.id).exists());
     let events: Vec<_> = receive.try_iter().collect();
     assert_eq!(events.last(), Some(&DictationEvent::Ended { error: None }));
     assert!(
@@ -98,7 +101,7 @@ async fn stopping_a_stalled_model_download_closes_the_connection_and_cleans_stag
     let lock = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
-        .open(root.path().join(format!(".{DEFAULT_MODEL_ID}.lock")))
+        .open(root.path().join(format!(".{}.lock", BUILTIN_MODEL.id)))
         .unwrap();
     lock.try_lock().unwrap();
     assert_eq!(lock.metadata().unwrap().len(), 0);
@@ -223,7 +226,7 @@ fn request() -> DictationRequest {
         home: PathBuf::new(),
         media_network: test_media_network(),
         input_device: None,
-        model_id: DEFAULT_MODEL_ID.into(),
+        model_id: BUILTIN_MODEL.id.clone(),
         model_root: PathBuf::new(),
         audio_host: PathBuf::new(),
         network: http_client::OutboundNetworkSnapshot::new(http_client::HttpClientConfig::new())

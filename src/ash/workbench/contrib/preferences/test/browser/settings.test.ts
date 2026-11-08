@@ -4340,7 +4340,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	const installed: string[] = [];
 	services.registerInstance(ILocalTranscriptionModelService, {
 		isSupported: true,
-		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, status: modelStatus }),
+		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, downloadSizeBytes: 1024 * 1024, recommendedLanguage: 'cmn', status: modelStatus }),
 		listModels: async () => [],
 		onDidChangeModels: changed.event,
 		cancelModel: async () => {
@@ -4365,12 +4365,13 @@ test('Local model controls share translated snapshots and keep preparation runni
 		},
 	} as unknown as LocalTranscriptionService);
 	const root = h(browserEnvironment.window.document, 'div');
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
 	controls.setVisible(true);
 	await nextTurn();
 	const status = root.querySelector<HTMLElement>('[role="status"]')!;
 	assert.equal(status.textContent, '');
-	assert.match(controls.getAccessibleContent(), /Paraformer · — · 未安装/u);
+	assert.match(controls.getAccessibleContent(), /paraformer-large-online-ec6a3c64 · 1.0 MiB · 未安装 · 普通话/u);
 	assert.equal(root.querySelector('input'), null);
 	const buttons = [...root.querySelectorAll<HTMLButtonElement>('button')];
 	const installButton = buttons.find(button => button.textContent === '安装')!;

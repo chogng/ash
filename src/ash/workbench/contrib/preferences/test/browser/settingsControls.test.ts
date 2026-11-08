@@ -201,15 +201,19 @@ suite('table browser component', () => {
 
 		await page.goto('/table.html');
 		const models = page.getByRole('group', { name: 'Local dictation models' });
+		const selector = models.getByRole('combobox', { name: 'Dictation models', exact: true });
 		await expect(models.getByRole('heading', { name: 'Dictation models' })).toBeVisible();
-		await expect(models.getByRole('columnheader')).toHaveText(['Model', 'Best for', 'Actions']);
+		await expect(models.getByRole('columnheader')).toHaveText(['Model', 'Best for', 'Download size', 'Actions']);
 		await expect(models.getByRole('textbox')).toHaveCount(0);
-		const missing = models.locator('[data-model-id]').filter({ hasText: 'Paraformer' });
+		const missing = models.locator('[data-model-id="paraformer-large-online-ec6a3c64"]');
 		const installed = models.locator('[data-model-id]').filter({ hasText: 'imported-model' });
+		await expect(missing.getByRole('rowheader')).toContainText('paraformer-large-online-ec6a3c64');
 		await expect(missing.getByRole('cell', { name: 'Mandarin Chinese', exact: true })).toBeVisible();
-		await expect(installed.getByRole('cell', { name: '—', exact: true })).toBeVisible();
+		await expect(missing.getByRole('cell', { name: '227.3 MiB', exact: true })).toBeVisible();
+		await expect(installed.getByRole('cell', { name: '—', exact: true })).toHaveCount(2);
 		await expect(missing.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
-		await expect(installed.getByRole('button', { name: 'Use model', exact: true })).toBeEnabled();
+		await expect(selector).toHaveText('imported-model');
+		await expect(selector).toBeDisabled();
 		await missing.getByRole('button', { name: 'Install', exact: true }).click();
 		const cancel = missing.getByRole('button', { name: 'Cancel', exact: true });
 		await cancel.focus();
@@ -224,7 +228,9 @@ suite('table browser component', () => {
 		const completion = models.locator('.ash-local-transcription-model-status');
 		await expect(completion).toHaveCSS('clip-path', 'inset(50%)');
 		await expect(completion.getByRole('status')).toHaveText('Model verified and ready to use.');
-		await installed.getByRole('button', { name: 'Use model', exact: true }).click();
+		await expect(selector).toBeEnabled();
+		await selector.press('Enter');
+		await page.getByRole('option', { name: 'imported-model', exact: true }).click();
 		await expect(installed.getByText('Ready', { exact: true })).toBeVisible();
 		const uninstall = installed.getByRole('button', { name: 'Uninstall', exact: true });
 		await expect(uninstall).toHaveClass(/ash-button-danger/u);
@@ -235,6 +241,8 @@ suite('table browser component', () => {
 		await uninstall.click();
 		await confirm.getByRole('button', { name: 'Uninstall', exact: true }).click();
 		await expect(installed).toContainText('Not installed');
+		await expect(selector).toHaveText('paraformer-large-online-ec6a3c64');
+		await expect(selector).toBeDisabled();
 		expect(await page.evaluate(() => window.ashTableIntegration.operations)).toEqual([
 			'install:paraformer-large-online-ec6a3c64', 'cancel:paraformer-large-online-ec6a3c64',
 			'install:paraformer-large-online-ec6a3c64', 'uninstall:imported-model',
@@ -244,7 +252,7 @@ suite('table browser component', () => {
 	test('model actions are keyboard accessible and translated', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/table.html?locale=zh-CN');
+		await page.goto('/table.html?locale=zh-CN&noInstalledModels');
 		const models = page.getByRole('group', { name: '本地听写模型' });
 		const install = models.getByRole('button', { name: '安装', exact: true });
 		await models.focus();
@@ -256,7 +264,10 @@ suite('table browser component', () => {
 		}
 		await expect(models.getByRole('heading', { name: '听写模型' })).toBeVisible();
 		await expect(models.getByRole('cell', { name: '普通话', exact: true })).toBeVisible();
-		await expect(models.getByRole('button', { name: '使用模型', exact: true })).toBeVisible();
+		await expect(models.getByRole('columnheader', { name: '下载大小' })).toBeVisible();
+		const selector = models.getByRole('combobox', { name: '听写模型', exact: true });
+		await expect(selector).toHaveText('无');
+		await expect(selector).toBeDisabled();
 	});
 
 	for (const locale of ['en', 'zh-CN']) {

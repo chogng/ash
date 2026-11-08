@@ -66,7 +66,7 @@ fn installations_are_exclusive_and_released_after_failure() {
 }
 
 #[test]
-fn publication_preserves_unknown_files_and_replaces_only_unfinished_outputs() {
+fn publication_refuses_old_partial_destinations_without_removing_files() {
     let root = tempfile::tempdir().unwrap();
     let destination = root.path().join("model");
     std::fs::create_dir(&destination).unwrap();
@@ -84,12 +84,18 @@ fn publication_preserves_unknown_files_and_replaces_only_unfinished_outputs() {
         b"preserved"
     );
     std::fs::remove_file(destination.join("user-file")).unwrap();
+    assert!(install.publish(&destination).is_err());
+    assert_eq!(
+        std::fs::read(destination.join("encoder.onnx.download")).unwrap(),
+        b"partial"
+    );
+    std::fs::remove_file(destination.join("encoder.onnx.download")).unwrap();
+    std::fs::remove_dir(&destination).unwrap();
     install.publish(&destination).unwrap();
     assert_eq!(
         std::fs::read(destination.join("dictation-model.json")).unwrap(),
         b"verified"
     );
-    assert!(!destination.join("encoder.onnx.download").exists());
     // A published package is immutable, even if the caller still holds the install lock.
     assert!(install.publish(&destination).is_err());
 }
@@ -221,7 +227,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
     for id in ["cold", "warm", "startup", "during-startup", "evicted"] {
         let overlaps_warmup = id == "during-startup";
         if matches!(id, "startup" | "during-startup" | "evicted") {
-            manager.forget_local_model(&root, DEFAULT_MODEL_ID);
+            manager.forget_local_model(&root, &BUILTIN_MODEL.id);
         }
         let pending_warmup = if id == "startup" || overlaps_warmup {
             let (send, receive) = std::sync::mpsc::channel();
@@ -235,7 +241,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
                         home: root.clone(),
                         media_network: test_network(),
                         model_root: root.clone(),
-                        model_id: DEFAULT_MODEL_ID.into(),
+                        model_id: BUILTIN_MODEL.id.clone(),
                         operation: crate::ModelOperation::Warm,
                     },
                     move |event| {
@@ -252,7 +258,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
                 ModelProgress::Loading
             );
             assert!(!manager.is_active());
-            assert_eq!(models.progress(DEFAULT_MODEL_ID), None);
+            assert_eq!(models.progress(&BUILTIN_MODEL.id), None);
             if overlaps_warmup {
                 Some((resume, receive))
             } else {
@@ -274,7 +280,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
                     home: root.clone(),
                     media_network: test_network(),
                     model_root: root.clone(),
-                    model_id: DEFAULT_MODEL_ID.into(),
+                    model_id: BUILTIN_MODEL.id.clone(),
                     audio_host: Default::default(),
                     network: network.clone(),
                     input_device: None,
@@ -311,10 +317,10 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
             assert!(progress.contains(&ModelProgress::Loading));
         }
     }
-    assert!(crate::DictationModelManager::is_available(&root, DEFAULT_MODEL_ID).unwrap());
+    assert!(crate::DictationModelManager::is_available(&root, &BUILTIN_MODEL.id).unwrap());
     assert!(
         !root
-            .join(format!(".{DEFAULT_MODEL_ID}.installing"))
+            .join(format!(".{}.installing", BUILTIN_MODEL.id))
             .exists()
     );
 }
