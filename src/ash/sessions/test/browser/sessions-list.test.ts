@@ -88,7 +88,7 @@ test('Code folder migration waits for the primary catalog and retries when it re
 		untitledSessions: [], state: 'ready', onDidChange: catalogChanged.event,
 	} as unknown as ISessionsManagementService;
 	let project: Project = {
-		id: 'folder', name: 'Workspace', revision: 1, archived: false, sessionCount: 0, description: '',
+		id: 'folder', name: 'Workspace', revision: 1, archived: false, createdAtMs: 1, updatedAtMs: 1, sessionCount: 0, description: '',
 		materials: [{ kind: 'folder', resource: folder, name: 'Workspace' }], sessionIds: [],
 	};
 	const firstMigrationRead = new DeferredPromise<void>();
@@ -149,7 +149,7 @@ test('Sidebar project load failures offer retry only in notifications', async ()
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using locale = toDisposable(resetNlsResolver);
 	const project: Project = {
-		id: 'release', name: 'Release', revision: 1, archived: false, sessionCount: 0, description: '', materials: [], sessionIds: [],
+		id: 'release', name: 'Release', revision: 1, archived: false, createdAtMs: 1, updatedAtMs: 1, sessionCount: 0, description: '', materials: [], sessionIds: [],
 	};
 	let fail = false;
 	const cause = new Error('App Server disconnected');
@@ -864,7 +864,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	let menu: IContextMenuDelegate | undefined;
 	const context = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const project: Project = {
-		id: 'release', name: 'Release', revision: 1, archived: false, sessionCount: 2,
+		id: 'release', name: 'Release', revision: 1, archived: false, createdAtMs: 1, updatedAtMs: 1, sessionCount: 2,
 		description: '', materials: [], sessionIds: ['manual', 'run'],
 	};
 	const projects = { onDidChange: Event.None, list: async () => [project], read: async () => project } as unknown as IProjectService;

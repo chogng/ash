@@ -277,16 +277,6 @@ suite('Projects toolbar', () => {
 			await caption.hover();
 			await expect(page.getByRole('tooltip')).toHaveText(absoluteTime!);
 			await page.screenshot({ path: info.outputPath(`projects-relative-time-${locale}.png`) });
-			await page.goto(`/sessions.html?search&locale=${locale}&projectCreatedAt=${createdAt}`);
-			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
-			await expect(caption).toHaveAttribute('datetime', new Date(createdAt).toISOString());
-			await expect(caption).toHaveText(chinese ? '8天前' : '8 days ago');
-			await page.goto(`/sessions.html?search&locale=${locale}`);
-			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
-			await expect(card).toBeVisible();
-			await expect(caption).toHaveCount(0);
 		});
 
 		test(`reveals Pin with More Actions and keeps the pinned glyph visible at rest (${locale})`, async () => {

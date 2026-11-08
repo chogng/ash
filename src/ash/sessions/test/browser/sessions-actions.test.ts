@@ -439,7 +439,7 @@ test('The project appearance command uses the project revision and the shared lo
 		const input = new TestQuickInputService(['聊天', '默认', null]);
 		services.registerInstance(IQuickInputService, input);
 		const project: Project = {
-			id: 'review', revision: 3, name: 'Review', archived: false, sessionCount: 0,
+			id: 'review', revision: 3, name: 'Review', archived: false, createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
 			description: '', materials: [], sessionIds: [], color: 'terminal.ansiRed',
 		};
 		const updates: unknown[][] = [];

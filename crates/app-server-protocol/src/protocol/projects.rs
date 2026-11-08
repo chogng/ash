@@ -57,11 +57,11 @@ pub struct ProjectDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
-    /// Unix epoch milliseconds; absent for legacy projects with unknown creation time.
-    #[ts(type = "number | null")]
-    pub created_at_ms: Option<u64>,
-    #[ts(type = "number | null")]
-    pub updated_at_ms: Option<u64>,
+    /// Unix epoch milliseconds.
+    #[ts(type = "number")]
+    pub created_at_ms: u64,
+    #[ts(type = "number")]
+    pub updated_at_ms: u64,
     pub status: ProjectStatusDto,
     pub name: String,
     pub description: String,
@@ -82,10 +82,10 @@ pub struct ProjectSummaryDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
-    #[ts(type = "number | null")]
-    pub created_at_ms: Option<u64>,
-    #[ts(type = "number | null")]
-    pub updated_at_ms: Option<u64>,
+    #[ts(type = "number")]
+    pub created_at_ms: u64,
+    #[ts(type = "number")]
+    pub updated_at_ms: u64,
     pub status: ProjectStatusDto,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

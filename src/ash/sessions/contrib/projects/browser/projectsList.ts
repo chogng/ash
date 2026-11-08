@@ -93,7 +93,7 @@ export class ProjectsList extends Disposable {
 			});
 			appendIcon((project.icon && getRegisteredIcon(project.icon, document)) || Lxicon.projects, mark);
 			if (project.color) mark.style.color = `var(${colorCssVariable(project.color)})`;
-			card.append(mark, this.renderCardContent(card, project.name, project.createdAtMs, project.updatedAtMs, disposables));
+			card.append(mark, this.renderCardContent(card, project.name, project.updatedAtMs, disposables));
 			const actionsHost = this.renderCardActions(row, project.id, project.name, this.actions.getProjectActions(project), disposables);
 			disposables.add(this.hover.setupDelayedHover(card, { content: project.name }));
 			disposables.add(
@@ -114,7 +114,7 @@ export class ProjectsList extends Disposable {
 			card.dataset.conversationProject = '';
 			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
 			appendIcon(Lxicon.projects, mark);
-			card.append(mark, this.renderCardContent(card, project.title, project.project?.createdAt, project.project?.updatedAt, disposables));
+			card.append(mark, this.renderCardContent(card, project.title, project.project?.updatedAt, disposables, project.project?.createdAt));
 			disposables.add(addDisposableListener(card, 'click', () => {
 				this.projects.openConversationProject(project.key);
 				this.options.openedProject();
@@ -129,7 +129,7 @@ export class ProjectsList extends Disposable {
 		}
 	}
 
-	private renderCardContent(card: HTMLButtonElement, title: string, createdAt: number | undefined, updatedAt: number | undefined, disposables: DisposableStore): HTMLElement {
+	private renderCardContent(card: HTMLButtonElement, title: string, updatedAt: number | undefined, disposables: DisposableStore, createdAt?: number): HTMLElement {
 		const document = card.ownerDocument;
 		card.setAttribute('aria-label', title);
 		const content = h(document, 'span', { className: 'ash-projects-card-content' },

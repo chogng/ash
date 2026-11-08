@@ -401,7 +401,7 @@ test('sidebar destination commands act on the captured chat and reread the proje
 	const added: unknown[] = [];
 	const moved: unknown[] = [];
 	const projectScopes: (string | undefined)[] = [];
-	const project: Project = { id: 'project', name: 'Test project', revision: 9, archived: false, description: '', materials: [], sessionIds: [], sessionCount: 0 };
+	const project: Project = { id: 'project', name: 'Test project', revision: 9, archived: false, description: '', materials: [], sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0 };
 	current.services.registerInstance(IProjectService, {
 		onDidChange: Event.None,
 		list: async scope => { projectScopes.push(scope); return [{ ...project, revision: 1 }]; },
@@ -448,7 +448,7 @@ for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSe
 		writeNewChatDraftState(storage, text, `untitled:${draft.untitledSessionId}`, chatInputStatePersistence);
 		services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: true }) } as unknown as IDialogService);
 		quickInput.input = async () => 'Named before sending';
-		const project: Project = { id: 'project', name: 'Project', revision: 1, archived: false, description: '', materials: [], sessionIds: [], sessionCount: 0 };
+		const project: Project = { id: 'project', name: 'Project', revision: 1, archived: false, description: '', materials: [], sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0 };
 		const linked: string[] = [];
 		services.registerInstance(IProjectService, {
 			onDidChange: Event.None, list: async () => [project], read: async () => project,

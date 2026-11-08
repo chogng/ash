@@ -20,7 +20,7 @@ function fixture() {
 	};
 	const sessions = { onDidChange: Event.None, sessions: [session, { ...session, sessionId: 'old', status: 'archived' }], untitledSessions: [], state: 'ready' } as unknown as ISessionsManagementService;
 	const projectState = observableValue<ProjectsState>('projects', {
-		projects: [{ id: 'beta', revision: 1, name: 'Beta project', archived: false, sessionCount: 0 }],
+		projects: [{ id: 'beta', revision: 1, name: 'Beta project', archived: false, createdAtMs: 1, updatedAtMs: 1, sessionCount: 0 }],
 		query: 'Unrelated page filter', sortOrder: 'updated', loading: false, busy: false, selectedId: undefined, selected: undefined, message: undefined,
 	});
 	const projects = { state: projectState, reload: async () => { } } as unknown as IProjectsService;

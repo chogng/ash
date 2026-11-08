@@ -24,7 +24,7 @@ export class AppServerProjectService implements IProjectService {
 			const result = await appServerRequest(this.connection, 'project/list', { scope });
 			return result.projects.map(project => ({
 				id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount,
-				createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
+				createdAtMs: project.createdAtMs, updatedAtMs: project.updatedAtMs,
 				icon: project.icon, color: project.color,
 			}));
 		} catch (error) { throw projectError(error); }
@@ -107,7 +107,7 @@ export class AppServerProjectService implements IProjectService {
 function fromDto(project: ProjectDto): Project {
 	return {
 		id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived',
-		createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
+		createdAtMs: project.createdAtMs, updatedAtMs: project.updatedAtMs,
 		icon: project.icon, color: project.color,
 		description: project.description, sessionIds: project.sessionIds, sessionCount: project.sessionIds.length,
 		roots: project.roots.map(root => URI.parse(root.path)),

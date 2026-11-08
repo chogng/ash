@@ -62,7 +62,7 @@ test('project archive retries after a partial catalog and only requires the prim
 	using primaryRegistration = registry.registerProvider(primary);
 	using remoteRegistration = registry.registerProvider(remote);
 	using management = new SessionsManagementService(primary.id, registry);
-	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: ['same'], sessionCount: 1 };
+	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: ['same'], createdAtMs: 1, updatedAtMs: 1, sessionCount: 1 };
 	const projects = {
 		read: async () => project,
 		archive: async () => {
@@ -113,7 +113,7 @@ test('materializing a Project draft links the durable session before resolving, 
 	using registry = new SessionsProvidersService();
 	using primary = new Provider('primary');
 	using registration = registry.registerProvider(primary);
-	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: [], sessionCount: 0 };
+	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0 };
 	const linked: [number, string][] = [];
 	const projects = {
 		onDidChange: Event.None,

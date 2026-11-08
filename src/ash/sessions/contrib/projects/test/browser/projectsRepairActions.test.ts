@@ -30,7 +30,7 @@ function session(id: string, root = '/workspace'): ISession {
 
 function project(id: string, sessionIds: readonly string[], archived = false): Project {
 	return {
-		id, name: id, revision: 1, description: '', sessionIds, archived, sessionCount: sessionIds.length,
+		id, name: id, revision: 1, description: '', sessionIds, archived, createdAtMs: 1, updatedAtMs: 1, sessionCount: sessionIds.length,
 		materials: [{ kind: 'folder', name: id, resource: URI.file(`/${id}`) }],
 	};
 }

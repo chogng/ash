@@ -208,7 +208,8 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 						throw new Error('Synthetic save failure');
 					}
 				}
-				const project: Project = { id, name, description, materials, ...appearance, revision: 1, archived: false, sessionCount: 0, sessionIds: [] };
+				const now = Date.now();
+				const project: Project = { id, name, description, materials, ...appearance, revision: 1, archived: false, createdAtMs: now, updatedAtMs: now, sessionCount: 0, sessionIds: [] };
 				projects.set(id, project);
 				scopes.set(id, scope);
 				projectChanges.fire();
@@ -225,15 +226,15 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 	} };
 }
 if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {
-	const updatedAt = new URL(location.href).searchParams.get('projectUpdatedAt');
-	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
+	const updatedAt = Number(new URL(location.href).searchParams.get('projectUpdatedAt') ?? Date.now());
+	const createdAt = Number(new URL(location.href).searchParams.get('projectCreatedAt') ?? updatedAt);
 	const project = {
 		id: 'search-project', revision: 1, name: 'Search project fixture', archived: false, sessionCount: 0,
 		description: 'Synthetic project for Search navigation',
 		materials: new URL(location.href).searchParams.has('projectPicker')
 			? [{ kind: 'folder' as const, name: 'source', resource: URI.file('/workspace/host-a') }] : [],
 		sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [],
-		updatedAtMs: updatedAt === null ? undefined : Number(updatedAt), createdAtMs: createdAt === null ? undefined : Number(createdAt),
+		updatedAtMs: updatedAt, createdAtMs: createdAt,
 	};
 	const codeProject = new URL(location.href).searchParams.has('projectPicker')
 		? { ...project, id: 'code-project', name: 'Code project fixture' } : project;

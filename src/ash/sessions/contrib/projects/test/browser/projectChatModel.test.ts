@@ -47,6 +47,8 @@ class ProjectChatFixture extends Disposable {
 		archived: false,
 		materials: [],
 		sessionIds: [],
+		createdAtMs: 1,
+		updatedAtMs: 1,
 		sessionCount: 0,
 	};
 	linkFailure: Error | undefined;
