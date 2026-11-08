@@ -1,0 +1,25 @@
+.ash-inline-rename-input {
+	box-sizing: border-box;
+	field-sizing: content;
+	min-width: min(64px, 100%);
+	max-width: 100%;
+	min-height: 28px;
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size40);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, transparent);
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	font-size: var(--ash-button-small-font-size, var(--ash-fontSize-label2));
+	user-select: text;
+	-webkit-app-region: no-drag;
+}
+
+.ash-inline-rename-input:focus {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

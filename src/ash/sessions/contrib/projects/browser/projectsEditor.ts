@@ -2,7 +2,7 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
-import { addDisposableListener, getActiveElement, h, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -20,7 +20,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ProjectChatInput } from './projectChatInput.js';
 import { ProjectDialog } from './projectDialog.js';
 import { ProjectMaterials } from './projectMaterials.js';
-import { ProjectTitleBarWidget } from './projectTitleBarWidget.js';
+import type { ProjectTitleBarContent } from './projectTitleBarWidget.js';
 import { ProjectsActions } from './projectsActions.js';
 import { ProjectsList } from './projectsList.js';
 import { ProjectsToolbar } from './projectsToolbar.js';
@@ -34,10 +34,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private projectDialog!: ProjectDialog;
 	private catalogHeading!: HTMLElement;
 	private catalogTitle!: HTMLElement;
-	private breadcrumb!: HTMLElement;
-	private breadcrumbProjects!: Button;
-	private breadcrumbSeparator!: HTMLElement;
-	private projectTitlebar!: ProjectTitleBarWidget;
 	private projectMaterials!: ProjectMaterials;
 	private projectList!: ProjectsList;
 	private projectActions!: ProjectsActions;
@@ -49,7 +45,32 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private activeProjectInput: ProjectChatInput | undefined;
 	private readonly conversationProjects = derived(reader =>
 		this.chatCatalog.sources.map(source => source.snapshot.read(reader)));
+	private readonly projectGroups = derived(reader => groupChatList(this.conversationProjects.read(reader), 'projects'));
+	private readonly shown = observableValue(this, false);
 	private readonly showArchived = observableValue(this, false);
+	readonly projectTitleBarContent = derived<ProjectTitleBarContent | undefined>(reader => {
+		if (!this.shown.read(reader)) return undefined;
+		const state = this.projects.state.read(reader);
+		if (state.selectedId === undefined && state.conversationProjectId === undefined) return undefined;
+		const selected = this.projectGroups.read(reader).find(group => group.key === state.conversationProjectId);
+		const project = state.selected;
+		const loading = !!state.selectedId && !project && state.loading;
+		return {
+			kind: 'breadcrumb',
+			name: selected?.title ?? project?.name ?? '',
+			editor: this.domNode,
+			loading,
+			busy: state.busy,
+			showSeparator: !!(selected || project || loading),
+			catalogCurrent: !state.selectedId && !selected,
+			rename: project && { id: project.id, save: name => this.projects.update(project, name, project.description, project.materials) },
+			open: () => {
+				const projectId = this.projects.state.get().conversationProjectId;
+				this.projects.showProjects();
+				if (!projectId || !this.projectList.focusCard(projectId)) this.projectToolbar.focusCreate();
+			},
+		};
+	});
 
 	constructor(
 		@IProjectsService private readonly projects: IProjectsService,
@@ -81,35 +102,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}));
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
-		this.breadcrumb = h(document, 'nav', {
-			className: 'ash-projects-breadcrumb',
-			attributes: { 'aria-label': localize('projects.breadcrumb', 'Project navigation') },
-		});
-		this._register(this.contextKeys.createScoped(this.breadcrumb)).createKey('sessionsProjectsFocused', true);
-		this.breadcrumbProjects = this._register(
-			new Button(this.breadcrumb, {
-				...defaultButtonStyles,
-				label: localize('projects.title', 'Projects'),
-				onClick: () => {
-					const projectId = this.projects.state.get().conversationProjectId;
-					this.projects.showProjects();
-					if (!projectId || !this.projectList.focusCard(projectId)) this.projectToolbar.focusCreate();
-				},
-			}),
-		);
-		this.breadcrumbSeparator = h(
-			document,
-			'span',
-			{ className: 'ash-projects-breadcrumb-separator', attributes: { 'aria-hidden': 'true' } },
-			'/',
-		);
-		this.breadcrumb.append(this.breadcrumbSeparator);
-		this.projectTitlebar = this._register(
-			this.instantiationService.createInstance(ProjectTitleBarWidget, this.breadcrumb, {
-				size: 'small',
-				editable: true,
-			}),
-		);
 		this.catalogHeading = h(document, 'header', { className: 'ash-projects-heading' });
 		this.catalogTitle = h(document, 'h1', { properties: { tabIndex: -1 } }, localize('projects.title', 'Projects'));
 		this.catalogHeading.append(this.catalogTitle);
@@ -143,24 +135,18 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}));
 		main.append(this.catalogHeading, feedback, this.body);
 		this.domNode.append(main);
-		for (const container of [this.domNode, this.breadcrumb]) {
-			this._register(
-				addDisposableListener(container, 'focusin', event => {
-					if (
-						!this.domNode.contains(event.relatedTarget as Node) &&
-						!this.breadcrumb.contains(event.relatedTarget as Node) &&
-						this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Projects)
-					) {
-						status(localize('projects.helpHint', 'Press Alt+F1 for Projects accessibility help.'));
-					}
-				}),
-			);
-		}
+		this._register(addDisposableListener(this.domNode, 'focusin', event => {
+			const from = event.relatedTarget;
+			if (isHTMLElement(from) && (this.domNode.contains(from) || from.closest('.ash-projects-breadcrumb'))) return;
+			if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Projects)) {
+				status(localize('projects.helpHint', 'Press Alt+F1 for Projects accessibility help.'));
+			}
+		}));
 		this._register(autorun(reader => {
 			const state = this.projects.state.read(reader);
 			const id = state.conversationProjectId;
 			const snapshots = this.conversationProjects.read(reader);
-			const groups = groupChatList(snapshots, 'projects');
+			const groups = this.projectGroups.read(reader);
 			const archived = this.showArchived.read(reader) && !id && !state.selectedId;
 			const selected = groups.find(group => group.key === id);
 			const projectChats = state.selected?.sessionIds.length
@@ -183,10 +169,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		super.setVisible(visible);
 		this.activeProjectInput?.setVisible(visible);
 		if (!visible && this.activeProjectInput?.submitted) this.activeProjectInput = undefined;
-		this.updateTitlebar();
+		this.shown.set(visible, undefined);
 		if (visible) {
 			void this.projects.reload();
-			const history = groupChatList(this.conversationProjects.get(), 'projects').find(group => group.key === (this.projects.state.get().conversationProjectId ?? this.projects.state.get().selectedId))?.project?.history;
+			const history = this.projectGroups.get().find(group => group.key === (this.projects.state.get().conversationProjectId ?? this.projects.state.get().selectedId))?.project?.history;
 			if (history?.state === 'idle') history.load();
 		} else {
 			this.projectList.stopUpdatingTimes();
@@ -216,13 +202,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}
 	}
 
-	private updateTitlebar(): void {
-		// The list has its own heading; only an opened project needs breadcrumb navigation.
-		const { selectedId, conversationProjectId } = this.projects.state.get();
-		this.projectTitlebar.setVisible(this.isVisible() && (selectedId !== undefined || conversationProjectId !== undefined));
-	}
-
 	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, archived: readonly ChatListGroup[] | undefined, projectChats: readonly ChatListEntry[]): void {
+		const loadingProject = !!state.selectedId && !state.selected && state.loading;
+		const projectName = selected?.title ?? state.selected?.name;
 		// Metadata can refresh while the editor has a selection or an IME composition.
 		// Keep the same detail DOM and composer in that case, replacing only its supporting content.
 		const retainedInput = this.activeProjectInput;
@@ -230,29 +212,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			&& this.body.querySelector('.ash-projects-detail:not(.ash-projects-skeleton)') !== null;
 		const focusedInComposer = retainedInput?.element.contains(getActiveElement(this.domNode.ownerDocument)) ?? false;
 		if (state.selectedId) this.projectToolbar.closeSortMenu();
-		const loadingProject = !!state.selectedId && !state.selected && state.loading;
-		const projectName = selected?.title ?? state.selected?.name;
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		this.projectList.stopUpdatingTimes();
 		this.content.clear();
 		if (!retainDetail) this.body.replaceChildren();
-		this.breadcrumbSeparator.hidden = !selected && !state.selected && !loadingProject;
-		const project = state.selected;
-		this.projectTitlebar.setName(projectName ?? '', {
-			rename: project && {
-				id: project.id,
-				save: name => this.projects.update(project, name, project.description, project.materials),
-			},
-			busy: state.busy,
-			loading: loadingProject,
-		});
-		if (state.selectedId || selected) {
-			this.breadcrumbProjects.domNode.removeAttribute('aria-current');
-		} else {
-			this.breadcrumbProjects.domNode.setAttribute('aria-current', 'page');
-		}
-		this.updateTitlebar();
 		const projectsTitle = localize('projects.title', 'Projects');
 		const catalogTitle = archived ? localize('projects.archived', 'Archived') : projectsTitle;
 		this.catalogHeading.hidden = !!state.selectedId || !!selected;

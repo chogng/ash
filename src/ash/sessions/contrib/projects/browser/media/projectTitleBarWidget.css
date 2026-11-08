@@ -2,11 +2,22 @@
 	min-width: 0;
 }
 
-.ash-project-titlebar > .ash-project-titlebar-name {
+.ash-project-titlebar-name {
 	min-width: 0;
 	max-width: 100%;
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	-webkit-app-region: no-drag;
+}
+
+.ash-projects-breadcrumb-title {
+	display: flex;
+	align-items: center;
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-projects-breadcrumb.ash-project-titlebar {
+	flex: 1;
 }
 
 .ash-project-titlebar-name .ash-button-label {
@@ -15,23 +26,7 @@
 	white-space: nowrap;
 }
 
-.ash-projects-rename {
-	box-sizing: border-box;
-	min-width: 0;
-	max-width: 100%;
-	min-height: 28px;
-	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid
-		var(--ash-input-border, transparent);
+.ash-projects-breadcrumb-title > .ash-inline-rename-input {
+	padding-inline: var(--ash-spacing-size80);
 	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-input-background);
-	color: var(--ash-input-foreground);
-	font: inherit;
-	user-select: text;
-	-webkit-app-region: no-drag;
-}
-
-.ash-projects-rename:focus {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
 }

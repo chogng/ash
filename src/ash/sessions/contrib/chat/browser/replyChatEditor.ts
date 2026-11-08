@@ -1,8 +1,7 @@
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { IChatListCatalog } from './chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { autorun, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
+import { autorun, derived, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -28,7 +27,7 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { ProjectTitleBarWidget } from '../../projects/browser/projectTitleBarWidget.js';
+import type { ProjectTitleBarContent } from '../../projects/browser/projectTitleBarWidget.js';
 import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import './media/chatInput.css';
@@ -78,6 +77,22 @@ export class ReplyChatEditor extends EditorPane {
 	readonly id: string;
 	private widget: ChatWidget<IReplyChatEditorModel> | undefined;
 	private readonly shown = observableValue(this, false);
+	readonly projectTitleBarContent = derived<ProjectTitleBarContent | undefined>(reader => {
+		if (!this.shown.read(reader)) return undefined;
+		const snapshots = this.chatCatalog.sources.map(source => source.snapshot.read(reader));
+		const entry = snapshots.flatMap(snapshot => snapshot.entries).find(entry => entry.selected);
+		const project = entry?.projectId && snapshots.flatMap(snapshot => snapshot.projects ?? [])
+			.find(project => project.id === entry.projectId && !project.archived);
+		if (!project) return undefined;
+		return {
+			kind: 'shortcut',
+			name: project.title,
+			open: () => {
+				void this.commands.executeCommand('sessions.open.projects', project.id)
+					.catch(error => this.notifications.error(toErrorMessage(error)));
+			},
+		};
+	});
 	constructor(
 		private readonly options: ReplyChatEditorOptions,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
@@ -115,29 +130,6 @@ export class ReplyChatEditor extends EditorPane {
 		services.set(IContextKeyService, contextKeys);
 		const instantiation = this._register(this.instantiation.createChild(services));
 		const model = instantiation.createInstance(this.options.model);
-		let projectId: string | undefined;
-		const projectTitlebar = this._register(instantiation.createInstance(ProjectTitleBarWidget, h(parent.ownerDocument, 'div'), {
-			icon: Lxicon.projects,
-			onClick: () => {
-				if (!projectId) return;
-				void this.commands.executeCommand('sessions.open.projects', projectId)
-					.catch(error => this.notifications.error(toErrorMessage(error)));
-			},
-		}));
-		this._register(autorun(reader => {
-			if (!this.shown.read(reader)) {
-				projectId = undefined;
-				projectTitlebar.setVisible(false);
-				return;
-			}
-			const snapshots = this.chatCatalog.sources.map(source => source.snapshot.read(reader));
-			const entry = snapshots.flatMap(snapshot => snapshot.entries).find(entry => entry.selected);
-			const project = entry?.projectId && snapshots.flatMap(snapshot => snapshot.projects ?? [])
-				.find(project => project.id === entry.projectId && !project.archived);
-			projectId = project ? project.id : undefined;
-			projectTitlebar.setName(project ? project.title : '');
-			projectTitlebar.setVisible(!!project);
-		}));
 		const createDraftPicker = this.options.createDraftPicker;
 		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, this.options.advanceWelcomePhrase !== false));
 		try {

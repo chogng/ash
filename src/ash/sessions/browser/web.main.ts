@@ -109,6 +109,7 @@ export class SessionsBrowserMain extends Disposable {
 					'sessions.contrib.sharedChatInputComposer',
 					'sessions.contrib.automationsCustomView',
 					'sessions.contrib.titleBarWidget',
+					'sessions.contrib.projectTitleBar',
 					'workbench.contrib.sessionsMouseNavigation',
 					'sessions.automationSessionsListing',
 					'chat.edits.editorOverlay',

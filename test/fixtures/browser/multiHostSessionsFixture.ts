@@ -1,6 +1,7 @@
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IAgentConnection } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { Event } from '../../../src/ash/base/common/event.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
@@ -40,11 +41,14 @@ export function installMultiHostSessionsFixture(): {
 	openSideChat(): Promise<void>;
 	saveLegacyNestedDraft(): Promise<void>;
 	showAttentionDraft(): void;
+	pauseNextRename(): void;
+	rejectPausedRename(): void;
 	calls: { host: string; method: string; sessionId: string; threadId: string; }[];
 	submissions: Submission[];
 } {
 	const calls: { host: string; method: string; sessionId: string; threadId: string; }[] = [];
 	const submissions: Submission[] = [];
+	let pausedRename: DeferredPromise<void> | undefined;
 	let services: InstantiationService;
 	const registrations = new Map<string, { dispose(): void; }>();
 	const params = new URL(location.href).searchParams;
@@ -165,6 +169,7 @@ export function installMultiHostSessionsFixture(): {
 					readCatalog: async () => catalogSession(), subscribe: async () => session, unsubscribe: async () => { },
 					renameSession: async (target: ISession, title: string) => {
 						record('rename', target.sessionId, 'same');
+						await pausedRename?.p;
 						session = { ...session, title };
 						return session;
 					},
@@ -192,6 +197,15 @@ export function installMultiHostSessionsFixture(): {
 	return {
 		calls,
 		submissions,
+		pauseNextRename() {
+			pausedRename = new DeferredPromise<void>();
+		},
+		rejectPausedRename() {
+			const pending = pausedRename;
+			if (!pending) throw new Error('No rename is paused');
+			pausedRename = undefined;
+			void pending.error(new Error('Synthetic rename failure'));
+		},
 		showAttentionDraft() {
 			const view = services.get(ISessionsService);
 			view.openNewSession();

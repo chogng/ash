@@ -12,13 +12,16 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Dimension } from '../../../base/browser/dom.js';
+import { ButtonActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { IMenuService, MenusRegistry } from '../../../platform/actions/common/actions.js';
+import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
@@ -292,16 +295,26 @@ test('Sessions titlebar initializes localized actions and closes the application
 	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
 	const chatMode = modeHost.querySelector<HTMLButtonElement>('button')!;
 	try {
-		const firstPage = browser.window.document.createElement('nav');
-		const nextPage = browser.window.document.createElement('nav');
-		const firstMount = titlebar.setPageContent(firstPage);
-		assert.equal(titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.firstElementChild, firstPage);
-		const nextMount = titlebar.setPageContent(nextPage);
-		assert.equal(firstPage.isConnected, false, 'Replacing a page detaches its retained titlebar content');
-		firstMount.dispose();
-		assert.equal(nextPage.isConnected, true, 'Releasing an old page must preserve the visible page titlebar');
-		nextMount.dispose();
-		assert.equal(titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.childElementCount, 0);
+		const pageSlot = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-titlebar-page-content')!;
+		assert.equal(pageSlot.hidden, true);
+		{
+			const command = { id: 'test.sessions.titlebarPage', title: 'Test page' };
+			class PageViewItem extends ButtonActionViewItem {
+				override render(container: HTMLElement): void {
+					super.render(container);
+					this.button.domNode.dataset.pageTitle = 'true';
+				}
+			}
+			using presentation = services.get(IActionViewItemService).register(Menus.TitleBarPageContent, command.id,
+				(action, options) => new PageViewItem(action, options));
+			using entry = MenusRegistry.appendMenuItem(Menus.TitleBarPageContent, { command, when: ContextKeyExpr.has('test.pageVisible') });
+			contextKeys.setContext('test.pageVisible', true);
+			assert.equal(pageSlot.hidden, false);
+			assert.equal(pageSlot.querySelector('button[data-page-title]')?.textContent, 'Test page');
+			contextKeys.removeContext('test.pageVisible');
+			assert.equal(pageSlot.hidden, true);
+			assert.equal(pageSlot.querySelector('button'), null);
+		}
 		assert.equal(modeHost.hidden, false);
 		menuButton().click();
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'true');

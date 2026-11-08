@@ -289,6 +289,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'sessions.contrib.tunnelAgentHostContribution',
 					'sessions.contrib.automationsCustomView',
 					'sessions.contrib.titleBarWidget',
+					'sessions.contrib.projectTitleBar',
 					'workbench.contrib.sessionsMouseNavigation',
 					'sessions.automationSessionsListing',
 					SessionsApplicationBadge.ID,

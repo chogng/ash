@@ -13,10 +13,11 @@ import {
 } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { URI } from '../../../../base/common/uri.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -26,6 +27,7 @@ import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
 import { groupChatList, IChatListCatalog } from '../../chat/browser/chatListModel.js';
 import { ProjectsEditorPane } from './projectsEditor.js';
+import { ProjectTitleBarContribution } from './projectTitleBarWidget.js';
 import { IProjectsService, ProjectsService } from './projectsService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
@@ -35,6 +37,8 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import './projectsRepairActions.js';
 
 registerSingleton(IProjectsService, ProjectsService, InstantiationType.Delayed);
+registerWorkbenchContribution(ProjectTitleBarContribution.ID, WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(ProjectTitleBarContribution));
 
 CommandsRegistry.register('sessions.show.projects', (accessor, source) =>
 	accessor

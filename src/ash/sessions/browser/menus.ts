@@ -15,6 +15,7 @@ export const Menus = {
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),
 	TitleBarLeftLayout: new MenuId('SessionsTitleBarLeftLayout'),
+	TitleBarPageContent: new MenuId('SessionsTitleBarPageContent'),
 	TitleBarRightLayout: new MenuId('SessionsTitleBarRightLayout'),
 	CodeAddTab: new MenuId('SessionsAddTab'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),

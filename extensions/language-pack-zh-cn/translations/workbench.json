@@ -2969,6 +2969,7 @@
     "additionalViews": "其他视图",
     "applicationMenu": "应用程序菜单",
     "titleBarLeftActions": "标题栏左侧操作",
+    "titleBarPageActions": "页面标题操作",
     "searchCommands": "搜索命令",
     "editor": "编辑器",
     "editorActions": "编辑器操作",

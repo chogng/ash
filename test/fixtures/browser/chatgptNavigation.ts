@@ -3,7 +3,10 @@ import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewAct
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
 import { IProjectsService, ProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
-import { ISessionsTitlebarService } from '../../../src/ash/sessions/browser/parts/titlebarPart.js';
+import { Menus } from '../../../src/ash/sessions/browser/menus.js';
+import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
+import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
+import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -347,14 +350,11 @@ const titlebarContent = document.createElement('div');
 titlebarContent.className = 'ash-sessions-titlebar-page-content';
 titlebarContent.style.display = 'contents';
 document.body.prepend(titlebarContent);
-services.registerInstance(ISessionsTitlebarService, {
-	setPageContent: content => {
-		titlebarContent.replaceChildren(content);
-		return toDisposable(() => {
-			if (content.parentElement === titlebarContent) content.remove();
-		});
-	},
-} as ISessionsTitlebarService);
+const presentations = services.get(IActionViewItemService);
+resources.add(new MenuWorkbenchToolBar(titlebarContent, menuService, services.get(IContextMenuService), Menus.TitleBarPageContent, {
+	toolbarOptions: { primaryGroup: () => true },
+	actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarPageContent, action.id)?.(action, options, services, 0),
+}));
 widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));
 widget.create(document.getElementById('editor')!);
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
@@ -369,11 +369,15 @@ const view = resources.add(services.createInstance(PaneComposite, host, {
 	onDidFailCreateView: (error: unknown) => { throw error; },
 }));
 view.setVisible(true);
+let activePane: ProjectsEditorPane | ReplyChatEditor = widget;
 if (parameters.has('projects')) {
 	const projects = resources.add(services.createInstance(ProjectsEditorPane));
 	projects.create(document.getElementById('editor')!);
 	projects.setVisible(true);
+	activePane = projects;
 }
+services.registerInstance(IEditorPart, { activeGroup: { activePane }, onDidChangeEditors: Event.None } as unknown as IEditorPart);
+resources.add(services.createInstance(ProjectTitleBarContribution));
 const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
 resize.observe(host);
 resources.add(toDisposable(() => resize.disconnect()));

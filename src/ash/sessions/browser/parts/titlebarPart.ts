@@ -5,7 +5,7 @@ import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/t
 import './media/titlebarpart.css';
 import './titlebar/media/menubarControl.css';
 import { sessionsConversationBackground } from '../../common/theme.js';
-import { h } from '../../../base/browser/dom.js';
+import { getWindowId, h } from '../../../base/browser/dom.js';
 import { observeResize } from '../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { Color } from '../../../base/common/color.js';
@@ -14,6 +14,7 @@ import type { IAction } from '../../../base/common/actions.js';
 import { environment } from '../../../base/common/platform.js';
 import { localize } from '../../../nls.js';
 import { IMenuService } from '../../../platform/actions/common/actions.js';
+import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
 import { WebTitlebarPart } from '../../../workbench/browser/parts/titlebar/titlebarPart.js';
@@ -42,9 +43,7 @@ export function getSessionsTitlebarBackground(theme: IColorTheme): string | unde
 	return Color.Format.CSS.formatHex(background.flatten(shell ?? workbench, workbench));
 }
 
-/** The window owns the titlebar host; the visible page owns its content and mount lifetime. */
 export interface ISessionsTitlebarService {
-	setPageContent(content: HTMLElement): IDisposable;
 	setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable;
 }
 
@@ -75,6 +74,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		@IStorageService storageService: IStorageService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IActionViewItemService presentations: IActionViewItemService,
 	) {
 		super(container, themeService, storageService, 0);
 		const ownerWindow = container.ownerDocument.defaultView!;
@@ -138,6 +138,25 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		this.pageContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-page-content' });
 		this.sessionContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-session-content' });
 		this.contentDomNode.append(this.pageContent, this.sessionContent);
+		const pageActions = this._register(new MenuWorkbenchToolBar(this.pageContent, menuService, contextMenus, Menus.TitleBarPageContent, {
+			ariaLabel: localize({ bundle: 'ash.regions', key: 'titleBarPageActions' }, 'Page title actions'),
+			contextKeyService: contextKeys,
+			toolbarOptions: { primaryGroup: () => true },
+			actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarPageContent, action.id)?.(
+				action, options, instantiationService, getWindowId(ownerWindow) ?? 0,
+			),
+		}));
+		const updatePageVisibility = (): void => {
+			this.pageContent.hidden = pageActions.element.hidden;
+		};
+		this._register(pageActions.onDidChangeMenuItems(updatePageVisibility));
+		this._register(presentations.onDidChange(menu => {
+			if (menu === Menus.TitleBarPageContent) {
+				pageActions.refresh();
+				updatePageVisibility();
+			}
+		}));
+		updatePageVisibility();
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.contentDomNode.append(right);
@@ -155,7 +174,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 					enabled: true,
 					observedElement: this.contentDomNode,
 					getAvailableWidth: () => {
-						const center = this.pageContent.childElementCount ? this.pageContent : this.sessionContent;
+						const center = this.pageContent.hidden ? this.sessionContent : this.pageContent;
 						const accounts = this.activityActions?.element;
 						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
 						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
@@ -179,13 +198,6 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 
 	public override updateStyles(): void {
 		this.domNode.style.setProperty('--ash-sessions-titlebar-background', getSessionsTitlebarBackground(this.theme) ?? '');
-	}
-
-	public setPageContent(content: HTMLElement): IDisposable {
-		this.pageContent.replaceChildren(content);
-		return toDisposable(() => {
-			if (content.parentElement === this.pageContent) { content.remove(); }
-		});
 	}
 
 	public setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable {

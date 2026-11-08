@@ -71,31 +71,36 @@
 	display: none;
 }
 
-.ash-sessions-titlebar-page-content {
-	display: flex;
-	flex: 1;
-	min-width: 0;
-	align-items: center;
-	align-self: stretch;
-	box-sizing: border-box;
-}
-
-.ash-sessions-titlebar-page-content:not(:empty) {
-	padding: 0 var(--ash-spacing-size120);
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
-}
-
-.ash-sessions-titlebar-page-content:empty {
-	display: none;
-}
-
+.ash-sessions-titlebar-page-content,
 .ash-sessions-titlebar-session-content {
 	display: flex;
 	flex: 1;
 	min-width: 0;
-	align-self: stretch;
 	align-items: center;
+	align-self: stretch;
 	padding-inline-start: var(--ash-spacing-size40);
+}
+
+.ash-sessions-titlebar-page-content {
+	box-sizing: border-box;
+	padding-inline-end: var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-titlebar-page-content[hidden] {
+	display: none;
+}
+
+.ash-sessions-titlebar-page-content > .ash-toolbar,
+.ash-sessions-titlebar-page-content > .ash-toolbar > .ash-action-view-item {
+	min-width: 0;
+}
+
+.ash-sessions-titlebar-page-content > .ash-toolbar,
+.ash-sessions-titlebar-page-content
+	> .ash-toolbar
+	> .ash-action-view-item:only-child {
+	flex: 1;
 }
 
 .ash-sessions-titlebar-session-content.session-menu-open {
@@ -103,7 +108,7 @@
 	-webkit-app-region: no-drag;
 }
 
-.ash-sessions-titlebar-page-content:not(:empty)
+.ash-sessions-titlebar-page-content:not([hidden])
 	+ .ash-sessions-titlebar-session-content {
 	display: none;
 }
