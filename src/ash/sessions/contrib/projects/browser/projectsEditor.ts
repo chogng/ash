@@ -23,20 +23,18 @@ import { ProjectMaterials } from './projectMaterials.js';
 import type { ProjectTitleBarContent } from './projectTitleBarWidget.js';
 import { ProjectsActions } from './projectsActions.js';
 import { ProjectsList } from './projectsList.js';
-import { ProjectsToolbar } from './projectsToolbar.js';
+import { ProjectsView } from './projectsView.js';
 import './projects.css';
 
-/** Projects own the front page. Material types appear only inside an opened project. */
+/** Hosts the Projects overview and opened project details. */
 export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.projects';
 	public domNode!: HTMLElement;
 	private readonly content = this._register(new DisposableStore());
-	private catalogHeading!: HTMLElement;
-	private catalogTitle!: HTMLElement;
 	private projectMaterials!: ProjectMaterials;
 	private projectList!: ProjectsList;
 	private projectActions!: ProjectsActions;
-	private projectToolbar!: ProjectsToolbar;
+	private projectsView!: ProjectsView;
 	private body!: HTMLElement;
 	private message!: HTMLElement;
 	private retry!: Button;
@@ -66,7 +64,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			open: () => {
 				const projectId = this.projects.state.get().conversationProjectId;
 				this.projects.showProjects();
-				if (!projectId || !this.projectList.focusCard(projectId)) this.projectToolbar.focusCreate();
+				if (!projectId || !this.projectList.focusCard(projectId)) this.projectsView.focusCreate();
 			},
 		};
 	});
@@ -100,17 +98,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this._register(toDisposable(() => this.projectDialogs.close(this.domNode)));
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
-		this.catalogHeading = h(document, 'header', { className: 'ash-projects-heading' });
-		this.catalogTitle = h(document, 'h1', { properties: { tabIndex: -1 } }, localize('projects.title', 'Projects'));
-		this.catalogHeading.append(this.catalogTitle);
 		this.projectActions = this._register(this.instantiationService.createInstance(ProjectsActions, {
 			showDialog: (project?: Project, conversation?: ConversationProjectEditor) => this.showProjectDialog(project, conversation),
 			focusList: () => {
-				if (!this.projectList.focusCard()) this.projectToolbar.focusCreate();
+				if (!this.projectList.focusCard()) this.projectsView.focusCreate();
 			},
 			isVisible: () => this.isVisible(),
 		}));
-		this.projectToolbar = this._register(this.instantiationService.createInstance(ProjectsToolbar, this.catalogHeading, this.projectActions));
 		const feedback = h(document, 'div', { className: 'ash-projects-feedback' });
 		this.message = h(document, 'p', { attributes: { role: 'status', 'aria-live': 'polite' } });
 		this.retry = this._register(
@@ -128,7 +122,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			openedProject: () => this.focusPage(),
 			isVisible: () => this.isVisible(),
 		}));
-		main.append(this.catalogHeading, feedback, this.body);
+		this.projectsView = this._register(this.instantiationService.createInstance(ProjectsView, this.body, this.projectList, this.projectActions));
+		main.append(this.projectsView.heading, feedback, this.body);
 		this.domNode.append(main);
 		this._register(addDisposableListener(this.domNode, 'focusin', event => {
 			const from = event.relatedTarget;
@@ -165,7 +160,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	public toggleArchivedProjects(): void {
-		if (this.catalogHeading.hidden) {
+		if (this.projectsView.heading.hidden) {
 			this.showArchived.set(true, undefined);
 			this.projects.showProjects();
 		} else {
@@ -182,12 +177,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (!visible && this.activeProjectInput?.submitted) this.activeProjectInput = undefined;
 		this.shown.set(visible, undefined);
 		if (visible) {
-			void this.projects.reload();
-			const history = this.projectGroups.get().find(group => group.key === (this.projects.state.get().conversationProjectId ?? this.projects.state.get().selectedId))?.project?.history;
+			const state = this.projects.state.get();
+			if (!state.loading) void this.projects.reload();
+			const history = this.projectGroups.get().find(group => group.key === (state.conversationProjectId ?? state.selectedId))?.project?.history;
 			if (history?.state === 'idle') history.load();
 		} else {
 			this.projectList.stopUpdatingTimes();
-			this.projectToolbar.closeSortMenu();
+			this.projectsView.closeSortMenu();
 			this.projectActions.cancelPendingEdit();
 			this.projectDialogs.close(this.domNode);
 		}
@@ -200,16 +196,16 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			if (this.activeProjectInput) this.activeProjectInput.focus();
 			else this.focusPage();
 		} else {
-			this.projectToolbar.focusCreate();
+			this.projectsView.focusCreate();
 		}
 	}
 
 	private focusPage(): void {
-		if (this.catalogHeading.hidden) {
+		if (this.projectsView.heading.hidden) {
 			this.domNode.scrollTop = 0;
 			this.domNode.focus();
 		} else {
-			this.catalogTitle.focus();
+			this.projectsView.focusHeading();
 		}
 	}
 
@@ -222,19 +218,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const retainDetail = !!state.selected && retainedInput === this.projectInputs.get(state.selected.id)
 			&& this.body.querySelector('.ash-projects-detail:not(.ash-projects-skeleton)') !== null;
 		const focusedInComposer = retainedInput?.element.contains(getActiveElement(this.domNode.ownerDocument)) ?? false;
-		if (state.selectedId) this.projectToolbar.closeSortMenu();
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		this.projectList.stopUpdatingTimes();
 		this.content.clear();
 		if (!retainDetail) this.body.replaceChildren();
-		const projectsTitle = localize('projects.title', 'Projects');
-		const catalogTitle = archived ? localize('projects.archived', 'Archived') : projectsTitle;
-		this.catalogHeading.hidden = !!state.selectedId || !!selected;
-		this.catalogTitle.textContent = catalogTitle;
-		this.catalogTitle.title = catalogTitle;
-		this.domNode.setAttribute('aria-label', projectName ?? projectsTitle);
-		this.projectToolbar.update(state, !this.catalogHeading.hidden);
+		this.domNode.setAttribute('aria-label', projectName ?? localize('projects.title', 'Projects'));
 		this.message.textContent =
 			state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
 		this.message.parentElement!.hidden = !state.message && !state.loading;
@@ -243,6 +232,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.retry.domNode.hidden = !state.message;
 		this.retry.enabled = !state.loading && !state.busy;
 		this.body.setAttribute('aria-busy', String(state.loading));
+		this.projectsView.render(state, !state.selectedId && !selected, groups, archived, this.content);
 		if (selected) {
 			this.projectList.renderConversations(this.body, selected.rows, selected.project, this.content);
 		} else if (state.selected) {
@@ -250,8 +240,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			this.renderProject(state.selected, [...projectChats, ...(conversations?.rows ?? [])], conversations?.project);
 		} else if (loadingProject) {
 			this.renderDetailLoading();
-		} else {
-			this.projectList.renderCatalog(state, groups, archived, this.content);
 		}
 		if (!state.selected) {
 			this.activeProjectInput?.setVisible(false);

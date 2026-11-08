@@ -6,7 +6,6 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IAutomationService } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { IAutomationDialogService } from '../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { IProjectsService } from '../../projects/browser/projectsService.js';
 import { SessionsSearchPicker } from './searchPicker.js';
 import type { SearchResult } from './searchModel.js';
 
@@ -28,7 +27,6 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ILayoutService private readonly layout: ILayoutService,
 		@ISessionsService private readonly sessions: ISessionsService,
-		@IProjectsService private readonly projects: IProjectsService,
 		@IAutomationService private readonly automations: IAutomationService,
 		@IAutomationDialogService private readonly automationDialogs: IAutomationDialogService,
 		@ICommandService private readonly commands: ICommandService,
@@ -52,10 +50,7 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 			case 'contributed': await target.open(); break;
 			case 'draft': await this.sessions.openUntitledSession(target.id, { reveal: 'code' }); break;
 			case 'session': await this.sessions.openSession(target.sessionId, target.threadId, { reveal: 'code' }); break;
-			case 'project':
-				await this.projects.openProject(target.id);
-				await this.commands.executeCommand('sessions.open.projects');
-				break;
+			case 'project': await this.commands.executeCommand('sessions.open.projects', target.id); break;
 			case 'automation': {
 				const plan = this.automations.getAutomation(target.id);
 				if (plan) { await this.automationDialogs.showAutomationDialog({ existing: plan }); }

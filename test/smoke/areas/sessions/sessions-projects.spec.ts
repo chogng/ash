@@ -314,8 +314,8 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			const projects = page.locator('.ash-projects');
 			const card = projects.getByRole('button', { name: project.name, exact: true });
 			const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name').getByText(project.name, { exact: true });
-			await expect(card.or(projectTitle)).toBeVisible();
-			if (await card.isVisible()) await card.click();
+			await expect(card).toBeVisible();
+			await card.click();
 			await expect(projectTitle).toBeVisible();
 		};
 		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).getByRole('button');
@@ -395,6 +395,7 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		await openProject();
 		await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Projects', exact: true }).click();
 		const card = page.locator('.ash-projects-row').filter({ has: page.getByRole('button', { name: project.name, exact: true }) });
+		await card.hover();
 		await card.locator('[data-action-id="projects.pin"] button').click();
 		await expect(sidebar().locator('.ash-chat-navigation-project[data-parent-section="pinned"]')).toContainText(project.name);
 		await expect(projectName()).toHaveAttribute('aria-expanded', 'true');
@@ -752,6 +753,8 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		await page.locator('.ash-projects h1').focus();
 		await page.locator('.ash-projects h1').hover();
 		await expect(rowFor(first.name).locator('.ash-toolbar-more-actions')).toHaveCSS('opacity', '0');
+		await expect(pinFor(first.name).locator('..')).toHaveCSS('opacity', '0');
+		await rowFor(first.name).hover();
 		await pinFor(first.name).hover();
 		const hoverColor = await pinFor(first.name).evaluate(button => getComputedStyle(button).backgroundColor);
 		expect(hoverColor).not.toBe('rgba(0, 0, 0, 0)');
@@ -761,6 +764,7 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		// The pinned control previews the unpin action while hovered or focused.
 		await page.locator('.ash-projects h1').focus();
 		await page.locator('.ash-projects h1').hover();
+		await expect(pinFor(first.name).locator('..')).toHaveCSS('opacity', '1');
 		await expect(pinFor(first.name).locator('.ash-icon-pin-filled')).toHaveCount(1);
 		await connection.close();
 		({ application, workbench } = await reloadWorkbench('quit'));

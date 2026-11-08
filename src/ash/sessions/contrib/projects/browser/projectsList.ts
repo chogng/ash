@@ -74,66 +74,7 @@ export class ProjectsList extends Disposable {
 		this.relativeTimeUpdate.cancel();
 	}
 
-	renderCatalog(state: ProjectsState, groups: readonly ChatListGroup[], archived: readonly ChatListGroup[] | undefined, content: DisposableStore): void {
-		const query = state.query.trim().toLocaleLowerCase();
-		if (archived) {
-			this.renderArchivedProjects(state, archived, query, content);
-			return;
-		}
-		const localIds = new Set(state.projects.map(project => project.id));
-		const conversationCards = groups.filter(group => !localIds.has(group.key) && group.title.toLocaleLowerCase().includes(query));
-		const projects = this.projects.getProjects();
-		if (!state.selectedId && (projects.length || conversationCards.length)) {
-			this.renderCards(projects, conversationCards, content);
-		} else if (state.loading) {
-			this.renderLoading();
-		} else if (!state.message) {
-			this.renderEmpty(!!state.query, content);
-		}
-	}
-
-	private renderEmpty(searching: boolean, content: DisposableStore): void {
-		const document = this.body.ownerDocument;
-		const empty = h(document, 'div', { className: 'ash-projects-empty' });
-		const illustration = h(
-			document,
-			'div',
-			{ className: 'ash-projects-illustration', attributes: { 'aria-hidden': 'true' } },
-			h(document, 'span'),
-			h(document, 'span'),
-			h(document, 'span'),
-		);
-		empty.append(
-			illustration,
-			h(
-				document,
-				'h2',
-				{},
-				searching
-					? localize('projects.noResults', 'No matching projects')
-					: localize('projects.emptyTitle', 'Looking to start a project?'),
-			),
-			h(
-				document,
-				'p',
-				{},
-				searching
-					? localize('projects.searchHint', 'Try another name or clear your search.')
-					: localize('projects.emptyDescription', 'Bring your materials and goals together in one space.'),
-			),
-		);
-		content.add(new Button(empty, {
-			...defaultButtonStyles,
-			label: searching
-				? localize('projects.clearSearch', 'Clear search')
-				: localize('projects.new', 'New project'),
-			presentation: 'secondary',
-			onClick: () => (searching ? this.projects.setQuery('') : this.actions.createProject()),
-		}));
-		this.body.append(empty);
-	}
-
-	private renderCards(projects: readonly ProjectSummary[], conversationCards: readonly ChatListGroup[], disposables: DisposableStore): void {
+	renderCards(projects: readonly ProjectSummary[], conversationCards: readonly ChatListGroup[], disposables: DisposableStore): void {
 		const document = this.body.ownerDocument;
 		const list = h(document, 'ul', {
 			className: 'ash-projects-grid',
@@ -213,7 +154,7 @@ export class ProjectsList extends Disposable {
 		return content;
 	}
 
-	private renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string, content: DisposableStore): void {
+	renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string, content: DisposableStore): void {
 		const document = this.body.ownerDocument;
 		const projects = [
 			...state.projects.filter(project => project.archived).map(project => ({
@@ -350,7 +291,7 @@ export class ProjectsList extends Disposable {
 		}
 	}
 
-	private renderLoading(): void {
+	renderLoading(): void {
 		const document = this.body.ownerDocument;
 		const placeholder = (className: string) =>
 			h(document, 'span', { className: `ash-projects-placeholder ${className}` });

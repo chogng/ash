@@ -107,6 +107,7 @@ for (const locale of ['en', 'zh-CN'])
 			name: locale === 'en' ? 'Search categories' : '搜索分类',
 			exact: true,
 		});
+		const tasksLabel = locale === 'en' ? 'Tasks' : '任务';
 		const input = picker.getByRole('combobox');
 		await expect(input).toBeFocused();
 		await expect(picker).toHaveAttribute('aria-modal', 'true');
@@ -136,7 +137,7 @@ for (const locale of ['en', 'zh-CN'])
 		}
 		await input.focus();
 		await expect(categories.getByRole('tab')).toHaveText(
-			locale === 'en' ? ['All', 'Sessions', 'Projects', 'Scheduled'] : ['全部', '会话', '项目', '计划'],
+			locale === 'en' ? ['All', 'Sessions', 'Projects', tasksLabel] : ['全部', '会话', '项目', tasksLabel],
 		);
 		await expect(picker.getByRole('option', { name: /Search project fixture/ })).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath(`sessions-search-full-${locale}.png`) });
@@ -176,11 +177,11 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(search).toBeFocused();
 		await search.click();
 		await input.fill('Daily search fixture');
-		await categories.getByRole('tab', { name: locale === 'en' ? 'Scheduled' : '计划', exact: true }).click();
+		await categories.getByRole('tab', { name: tasksLabel, exact: true }).click();
 		await expect(picker.getByRole('option')).toHaveCount(1);
 		await picker.getByRole('option').click();
 		const scheduleDialog = page.getByRole('dialog', {
-			name: locale === 'en' ? 'Edit automation' : '编辑自动化',
+			name: locale === 'en' ? 'Edit routine' : '编辑例行任务',
 			exact: true,
 		});
 		await expect(scheduleDialog).toBeVisible();
