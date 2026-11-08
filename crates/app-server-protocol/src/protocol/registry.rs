@@ -2462,6 +2462,12 @@ use crate::protocol::speech::SpeechInstructionsWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::speech::SpeechInstructionsWriteResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::storage::StorageOverview;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::storage::StorageWorktree;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::storage::StorageWorktreeCleanupParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::CodeSnapshot;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::SnapshotInfo;
@@ -3966,6 +3972,8 @@ client_methods! {
     VoiceOptions => "voice/options" { params: EmptyParams, response: VoiceOptions, serialization: GlobalSharedRead, },
     SpeechInstructionsRead => "speech/instructions/read" { params: SpeechInstructionsReadParams, response: SpeechInstructionsDocument, serialization: GlobalSharedRead, },
     SpeechInstructionsWrite => "speech/instructions/write" { params: SpeechInstructionsWriteParams, response: SpeechInstructionsWriteResult, serialization: GlobalExclusive, },
+    StorageOverview => "storage/overview" { params: EmptyParams, response: StorageOverview, serialization: None, },
+    StorageWorktreeCleanup => "storage/worktree/cleanup" { params: StorageWorktreeCleanupParams, response: (), serialization: SessionExclusive, },
     VoiceStart => "voice/start" { params: VoiceStartParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), cancellation: "operationId" => PreserveOutcome, },
     VoiceStartCancel => "voice/start/cancel" { params: VoiceStartCancelParams, response: (), serialization: None, },
     VoiceRead => "voice/read" { params: VoiceResourceParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), },
@@ -6813,6 +6821,9 @@ typescript_bindings! {
     SpeechInstructionsDocument,
     SpeechInstructionsWriteParams,
     SpeechInstructionsWriteResult,
+    StorageOverview,
+    StorageWorktree,
+    StorageWorktreeCleanupParams,
     VoiceStartParams,
     VoiceInputControl,
     VoiceInputMode,

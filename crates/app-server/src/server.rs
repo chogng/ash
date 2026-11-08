@@ -274,6 +274,7 @@ mod session_execution_router;
 mod speech_instructions;
 #[cfg(test)]
 mod speech_instructions_tests;
+mod storage_overview;
 #[cfg(test)]
 mod testing_operations_tests;
 mod thread_dir_binding;
@@ -3474,6 +3475,13 @@ impl AppServer {
         match client_method(&request.method) {
             Some(ClientMethod::Initialize | ClientMethod::TransportHello) => {
                 unreachable!("startup requests are handled before the initialization gate")
+            }
+            Some(ClientMethod::StorageOverview) => {
+                decode::<ash_app_server_protocol::protocol::common::EmptyParams>(&request.params)?;
+                self.storage_overview(connection, cancellation)
+            }
+            Some(ClientMethod::StorageWorktreeCleanup) => {
+                self.storage_worktree_cleanup(connection, decode(&request.params)?)
             }
             Some(ClientMethod::BrowserConfigure) => self
                 .browser_processor()

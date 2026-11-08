@@ -57,6 +57,7 @@ pub mod session;
 pub mod skills;
 pub mod slash_commands;
 pub mod speech;
+pub mod storage;
 pub mod symphony;
 pub mod syntax;
 pub mod task_delivery;

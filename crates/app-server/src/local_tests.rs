@@ -5140,6 +5140,89 @@ fn message_restore_points_preserve_git_versions_after_restart() {
 }
 
 #[test]
+fn storage_cleanup_preserves_archived_session_and_refuses_dirty_worktree() {
+    let profile = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    run_local_git(repo.path(), &["init", "--quiet", "--initial-branch=main"]);
+    run_local_git(repo.path(), &["config", "user.name", "Ash Test"]);
+    run_local_git(repo.path(), &["config", "user.email", "ash@example.test"]);
+    std::fs::write(repo.path().join("tracked.txt"), "initial\n").unwrap();
+    run_local_git(repo.path(), &["add", "."]);
+    run_local_git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_dir_root(repo.path()),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut connection = server.product_host_connection();
+    let mut call = |id, method: &str, params| {
+        local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": id, "method": method, "params": params,
+            }),
+        )
+    };
+    let initialized = call(
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"storage-test","version":"1"},"capabilities":{}}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let created = call(
+        2,
+        "session/create",
+        serde_json::json!({"commandId":"storage-create","title":"Storage fixture","kind":"code","executionTarget":{"type":"local","root":repo.path()}}),
+    );
+    assert!(created.get("error").is_none(), "{created}");
+    let session_id = &created["result"]["session"]["sessionId"];
+    let archived = call(
+        3,
+        "session/request",
+        serde_json::json!({"commandId":"storage-archive","sessionId":session_id,"request":{"type":"archive"}}),
+    );
+    assert!(archived.get("error").is_none(), "{archived}");
+    let overview = call(4, "storage/overview", serde_json::json!({}));
+    assert!(overview.get("error").is_none(), "{overview}");
+    let worktree = &overview["result"]["worktrees"][0];
+    assert!(worktree["sizeBytes"].as_u64().unwrap() > 0, "{overview}");
+    assert_eq!(overview["result"]["worktreeBytes"], worktree["sizeBytes"]);
+    assert!(overview["result"]["sessionBytes"].as_u64().unwrap() > 0);
+    let identity = &worktree["identity"];
+    let checkout = std::path::Path::new(identity["checkoutRoot"].as_str().unwrap());
+    let uncommitted = checkout.join("uncommitted.txt");
+    std::fs::write(&uncommitted, "keep me").unwrap();
+    let refused = call(5, "storage/worktree/cleanup", identity.clone());
+    assert!(refused.get("error").is_some(), "{refused}");
+    assert_eq!(std::fs::read_to_string(&uncommitted).unwrap(), "keep me");
+    run_local_git(checkout, &["add", "uncommitted.txt"]);
+    run_local_git(checkout, &["commit", "--quiet", "-m", "detached change"]);
+    let refused = call(6, "storage/worktree/cleanup", identity.clone());
+    assert!(refused.get("error").is_some(), "{refused}");
+    assert!(uncommitted.is_file());
+    run_local_git(
+        checkout,
+        &["switch", "--quiet", "-c", "keep-detached-change"],
+    );
+    let cleaned = call(7, "storage/worktree/cleanup", identity.clone());
+    assert!(cleaned.get("error").is_none(), "{cleaned}");
+    assert!(!checkout.exists());
+    assert_eq!(
+        run_local_git(
+            repo.path(),
+            &["show", "keep-detached-change:uncommitted.txt"]
+        ),
+        "keep me"
+    );
+    let sessions = call(8, "session/list", serde_json::json!({}));
+    assert_eq!(sessions["result"]["sessions"][0]["sessionId"], *session_id);
+    assert_eq!(sessions["result"]["sessions"][0]["status"], "archived");
+}
+
+#[test]
 fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_contents() {
     let profile = tempfile::tempdir().unwrap();
     let repo = tempfile::tempdir().unwrap();

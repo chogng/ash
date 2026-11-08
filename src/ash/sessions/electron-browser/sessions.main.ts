@@ -59,6 +59,8 @@ import { IMainProcessService } from '../../platform/ipc/common/mainProcessServic
 import { ISecretStorageService } from '../../platform/secrets/common/secrets.js';
 import { SecretStorageService } from '../../workbench/services/secrets/electron-browser/secretStorageService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+import { desktopStorageChannelName, IProfileStorageService } from '../../platform/storage/common/profileStorageService.js';
+import { DesktopProfileStorageService } from '../../platform/storage/electron-browser/desktopProfileStorageService.js';
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
@@ -148,7 +150,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = sessions.add(profileServices.createInstance(NativeLogService, 'agents'));
 		serviceCollection.set(ILoggerService, logger);
+		serviceCollection.set(IProfileStorageService, {
+			_serviceBrand: undefined,
+			readOverview: async () => { throw new Error('Local App Server is unavailable'); },
+			cleanWorktree: async () => { throw new Error('Local App Server is unavailable'); },
+		});
 		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => {
+			serviceCollection.set(IProfileStorageService, new DesktopProfileStorageService(localClient, mainProcessService.getChannel(desktopStorageChannelName)));
 			const localTrust = createAppServerWorkspaceTrustApi(localClient);
 			serviceCollection.set(ISessionFolderAuthorizationService, {
 				isTrusted: async path => {

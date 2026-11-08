@@ -6,7 +6,7 @@ use ash_hooks::DeclarativeHookRuntime;
 use ash_protocol::ThreadId;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, Mutex, RwLock, Weak};
 use worktree::{ManagedDirBinding, WorktreeManager, WorktreeSettings};
 
 /// App Server composition of Thread directory bindings and their local execution services.
@@ -17,6 +17,7 @@ pub(super) struct ThreadDirs {
     pub(super) switched_worktrees: WorktreeManager,
     pub(super) runtime: tokio::runtime::Runtime,
     pub(super) bindings: RwLock<BTreeMap<ThreadId, ManagedDirBinding>>,
+    pub(super) cleanup_gate: Mutex<()>,
     pub(super) file_access: Arc<DirGrants>,
     pub(super) hooks: Arc<DeclarativeHookRuntime>,
     // The runtime's Turn executor retains this directory owner as its observer. Keep the reverse
@@ -98,6 +99,7 @@ impl ThreadDirs {
             switched_worktrees,
             runtime,
             bindings: RwLock::new(bindings),
+            cleanup_gate: Mutex::new(()),
             file_access,
             hooks,
             env_runtime,

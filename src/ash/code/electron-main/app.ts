@@ -151,6 +151,8 @@ import { StorageScope, StorageTarget } from '../../platform/storage/common/stora
 import { AgentsWindowInvitationState, EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY, AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY, type IAgentHostEditorState } from '../../platform/chat/common/agentsWindowInvitation.js';
 import { AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, validateAgentHostEditorState } from '../../platform/native/common/nativeHost.js';
 import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
+import { DesktopStorageChannel } from '../../platform/storage/electron-main/desktopStorageChannel.js';
+import { desktopStorageChannelName } from '../../platform/storage/common/profileStorageService.js';
 import { LoggerService } from '../../platform/log/electron-main/loggerService.js';
 import { spawn } from 'node:child_process';
 import { hostLogExecutable, hostIntegrityExecutable } from '../../../../.build/desktop/hostLogs.js';
@@ -673,6 +675,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('browserPasswords', browserPasswordChannel(browserPasswords));
 		this.windowServices.registerInstance(ILogService, this.logService);
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
+		this.mainProcessIpcServer.registerChannel(desktopStorageChannelName, new DesktopStorageChannel(app.getPath('userData'), this.profileRoot));
 		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IStateService, this.services.state);
 		this.workspacesHistory = this._register(launchServices.createInstance(WorkspacesHistoryMainService));

@@ -1,0 +1,114 @@
+.ash-sessions-storage-summary {
+	display: grid;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size160);
+}
+
+.ash-sessions-storage-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-sessions-storage-total {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-storage-chart:not([hidden]) {
+	display: flex;
+	overflow: hidden;
+	block-size: var(--ash-spacing-size240);
+	border-radius: var(--ash-cornerRadius-medium);
+	outline: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-storage-chart > .ash-sessions-storage-worktrees,
+.ash-sessions-storage-worktrees > .ash-sessions-storage-marker {
+	background-color: var(--ash-charts-green);
+}
+
+.ash-sessions-storage-chart > .ash-sessions-storage-sessions,
+.ash-sessions-storage-sessions > .ash-sessions-storage-marker {
+	background-color: var(--ash-charts-blue);
+}
+
+.ash-sessions-storage-chart > .ash-sessions-storage-other,
+.ash-sessions-storage-other > .ash-sessions-storage-marker {
+	background-color: var(--ash-description-foreground);
+}
+
+.ash-sessions-storage-marker {
+	inline-size: var(--ash-spacing-size80);
+	block-size: var(--ash-spacing-size80);
+	border-radius: 50%;
+}
+
+.ash-sessions-storage-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size200);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-sessions-storage-legend > li {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-storage-details {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	overflow-wrap: anywhere;
+	white-space: pre-line;
+}
+
+.ash-sessions-storage-management {
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-sessions-storage-management > summary {
+	cursor: pointer;
+}
+
+.ash-sessions-storage-management > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-sessions-storage-management[open] > :not(summary) {
+	margin-block-start: var(--ash-spacing-size120);
+}
+
+.ash-sessions-storage-worktree-list {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-storage-worktree-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: var(--ash-spacing-size160);
+}
+
+.ash-sessions-storage-worktree-row > .ash-toggle {
+	min-inline-size: 0;
+}
+
+.ash-sessions-storage-worktree-row > :last-child {
+	flex-shrink: 0;
+}
+
+.ash-sessions-storage-worktree-label {
+	display: grid;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
