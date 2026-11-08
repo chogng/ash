@@ -1458,11 +1458,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				Promise.allSettled([
 					readProjects ? this.client.projects(signal) : undefined,
 					readPins ? this.client.pinnedConversations(signal) : undefined,
-					readRecent ? (fullRecent ? this.readLoadedRecentPages(signal) : this.client.conversations(0, signal)) : undefined,
+					readRecent ? this.readRecentPages(signal, fullRecent) : undefined,
 				]),
 			]);
 			if (generation !== this.generation || background?.signal.aborted) { return; }
 			const recent = conversations.status === 'fulfilled' ? conversations.value : undefined;
+			const recentFailed = conversations.status === 'rejected' || recent?.rateLimit !== undefined;
 			// Recent history is auxiliary to restoring a known conversation and its
 			// continuation. Its rate limit must not disable an otherwise usable chat.
 			const items = new Map((recent?.items ?? this.model.get().conversations.filter(item => !item.local)).map(item => [item.id, item]));
@@ -1498,7 +1499,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const missing = recent ? before.conversations.filter(item => !item.local && !item.projectOnly && !items.has(item.id) && !hidden.has(item.id)) : [];
 			const retained = this.retainedConversation() ?? before.conversationId;
 			const histories = new Map<string, PromiseSettledResult<ChatGPTHistory>>();
-			const ids = fullRecent ? missing.filter(item => item.id !== retained && (pinned || !item.pinned)).map(item => item.id) : [];
+			const ids = fullRecent && !recentFailed ? missing.filter(item => item.id !== retained && (pinned || !item.pinned)).map(item => item.id) : [];
 			if (retained && !retained.startsWith('local:') && !retained.startsWith('pending:') && !this.outbox?.isDeleted(retained) && retained.length < 1024) {
 				const needsHistory = before.uncertain || !this.freshHistory(retained, before.parentId);
 				if (!background || this.native || readRecent && needsHistory) { ids.unshift(retained); }
@@ -1534,7 +1535,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			// next scroll continues from the last page actually read.
 			if (recent) { this.resetRecentPage(recent); }
 			const fetchedAt = Date.now();
-			if (readRecent) { this.recentFetchedAt = recent ? fetchedAt : undefined; }
+			if (readRecent) { this.recentFetchedAt = recent && !recentFailed ? fetchedAt : undefined; }
 			if (readProjects) { this.projectsFetchedAt = projects.status === 'fulfilled' ? fetchedAt : undefined; }
 			if (readPins) { this.pinsFetchedAt = pins.status === 'fulfilled' ? fetchedAt : undefined; }
 			const state = this.model.get();
@@ -1556,13 +1557,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				...(catalog ? { models: catalog.models } : {}),
 				...(selected ? { model: selected.id, modelPreset: this.resolveModelPreset(selected, state.modelPreset) } : {}),
 				conversations: this.withLocalConversations([...items.values()]), hasMore: recent?.hasMore ?? state.hasMore,
-				historyListFailed: readRecent ? conversations.status === 'rejected' : state.historyListFailed,
+				historyListFailed: readRecent ? recentFailed : state.historyListFailed,
 				projects: currentProjects,
 				...(!background ? { error: modelError } : {}),
 			});
 			const failures = [conversations, projects, pins].filter(result => result.status === 'rejected');
-			const failure = failures.find(result => isChatGPTRateLimit(result.reason)) ?? failures[0];
-			this.setHistoryFailure('catalog', failure && { error: failure.reason, retry: this.reloadHistory });
+			const failure = recent?.rateLimit ?? (failures.find(result => isChatGPTRateLimit(result.reason)) ?? failures[0])?.reason;
+			this.setHistoryFailure('catalog', failure && { error: failure, retry: this.reloadHistory });
 			const requested = this.retainedConversation();
 			if (!background && requested && requested !== retained && !requested.startsWith('local:')) {
 				await this.select(requested);
@@ -1598,14 +1599,16 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 	}
 
-	private async readLoadedRecentPages(signal: AbortSignal): ReturnType<ChatGPTClient['conversations']> {
+	private async readRecentPages(signal: AbortSignal, includeOlder: boolean): Promise<Awaited<ReturnType<ChatGPTClient['conversations']>> & { rateLimit?: ChatGPTRequestError; }> {
+		if (!includeOlder) { return this.client.conversations(0, signal); }
 		const depth = Math.max(this.recentOffset, this.model.get().conversations.filter(item => !item.local && !item.pinned && !item.projectOnly).length);
 		let page = await this.client.conversations(0, signal);
 		const items = [...page.items];
 		while (page.hasMore && page.nextOffset < depth) {
 			try { page = await this.client.conversations(page.nextOffset, signal); }
 			catch (error) {
-				if (isChatGPTRateLimit(error)) { throw error; }
+				// Publish the pages already read while the unread tail is cooling down.
+				if (isChatGPTRateLimit(error)) { return { ...page, items, rateLimit: error }; }
 				break;
 			}
 			items.push(...page.items);

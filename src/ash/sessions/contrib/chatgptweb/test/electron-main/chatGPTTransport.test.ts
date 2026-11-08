@@ -36,7 +36,7 @@ class Authentication extends Disposable implements IChatGPTAuthentication {
 	public recovered: Headers | undefined;
 	public recoveries = 0;
 	public readonly grants = new Map<string, AbortController>();
-	constructor() {
+	constructor(public cacheScope?: string) {
 		super();
 		this._register(toDisposable(() => { for (const controller of this.grants.values()) { controller.abort(); } this.grants.clear(); }));
 	}
@@ -48,7 +48,7 @@ class Authentication extends Disposable implements IChatGPTAuthentication {
 		this.grants.set(id, controller);
 		const release = toDisposable(() => { this.grants.delete(id); controller.abort(); });
 		return {
-			headers: new Headers(this.headers), signal: AbortSignal.any([signal, controller.signal]),
+			headers: new Headers(this.headers), signal: AbortSignal.any([signal, controller.signal]), cacheScope: this.cacheScope,
 			recoverUnauthorized: async () => { this.recoveries++; return this.recovered; },
 			dispose: () => release.dispose(), [Symbol.dispose]: () => release.dispose()
 		};
@@ -89,39 +89,61 @@ suite('ChatGPT transport', () => {
 			try {
 				const statePath = join(directory, 'workbench-state.json');
 				const account = 'a'.repeat(64);
-				const signal = new AbortController().signal;
 				const retryAfter = native ? 120 : 30;
 				let upstreamCalls = 0;
+				let upstream: DeferredPromise<Response> | undefined;
+				const requested = new DeferredPromise<void>();
 				const fetch = async () => {
 					upstreamCalls++;
-					return Response.json({});
+					if (upstream) { void requested.complete(); return upstream.p; }
+					return Response.json({ items: [] });
+				};
+				const openWindow = (resources: DisposableStore, gate: ChatGPTRecentHistoryGate, scope = account, channel = native) => {
+					const auth = resources.add(new Authentication(scope));
+					const transport = resources.add(new ChatGPTTransport({
+						native: channel ? true : undefined, recentHistoryGate: gate, authentication: auth,
+						readVerificationScript: async () => '', createRuntime: () => runtime(fetch),
+					}, new NullLoggerService()));
+					const request = createChatGPTFetch(adapt(transport, auth));
+					return () => request('/service/backend-api/conversations?offset=0');
 				};
 				{
 					using storage = new StorageMainService(statePath);
 					await storage.initialize();
 					using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
-					const upstream = new DeferredPromise<Response>();
-					const first = gate.request(account, native, signal, async () => { upstreamCalls++; return upstream.p; });
-					const fromAnotherWindow = gate.request(account, native, signal, fetch);
+					using windows = new DisposableStore();
+					const firstWindow = openWindow(windows, gate);
+					const secondWindow = openWindow(windows, gate);
+					upstream = new DeferredPromise<Response>();
+					const first = firstWindow();
+					await requested.p;
+					const fromAnotherWindow = secondWindow();
 					await upstream.complete(new Response(null, { status: 429, headers: { 'Retry-After': String(retryAfter) } }));
 					assert.equal((await first).headers.get('Retry-After'), String(retryAfter));
-					assert.equal((await fromAnotherWindow).status, 429);
+					const blocked = await fromAnotherWindow;
+					assert.equal(blocked.status, 429);
+					assert.equal(blocked.headers.get('Retry-After'), String(retryAfter));
 					assert.equal(upstreamCalls, 1);
+					upstream = undefined;
 					await storage.close();
 				}
 				{
 					using storage = new StorageMainService(statePath);
 					await storage.initialize();
 					using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
+					using windows = new DisposableStore();
+					const reopened = openWindow(windows, gate);
 					mock.timers.tick((retryAfter - 5) * 1000);
-					const blocked = await gate.request(account, native, signal, fetch);
+					const blocked = await reopened();
 					assert.equal(blocked.status, 429);
 					assert.equal(blocked.headers.get('Retry-After'), '5');
 					assert.equal(upstreamCalls, 1);
-					assert.equal((await gate.request('b'.repeat(64), native, signal, fetch)).status, 200);
-					mock.timers.tick(5000);
-					assert.equal((await gate.request(account, native, signal, fetch)).status, 200);
+					await (await openWindow(windows, gate, 'b'.repeat(64))()).json();
+					await (await openWindow(windows, gate, account, !native)()).json();
 					assert.equal(upstreamCalls, 3);
+					mock.timers.tick(5000);
+					assert.deepEqual(await (await reopened()).json(), { items: [] });
+					assert.equal(upstreamCalls, 4);
 					await storage.close();
 				}
 			} finally {

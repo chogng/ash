@@ -70,72 +70,82 @@ suite('ChatGPT shared service', () => {
 	const mainWindowDisposables = getWindowById(1)?.disposables;
 	suiteTeardown(() => mainWindowDisposables?.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('native recent history and sidebar groups have independent freshness after reopening', async () => {
-		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
-		using clock = toDisposable(() => mock.timers.reset());
-		const values = new Map<string, string>();
-		const reads = { recent: 0, projects: 0, pins: 0, history: 0 };
-		let projectTitle = 'Project';
-		let pinned = true;
-		const respond = async (path: string) => {
-			if (path.includes('/gizmos/snorlax/sidebar?')) {
-				reads.projects++;
-				return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: projectTitle } } }], cursor: null });
+	for (const native of [undefined, true] as const) {
+		test(`${native ? 'Native' : 'Web'} recent history and sidebar groups have independent freshness after reopening`, async () => {
+			mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+			using clock = toDisposable(() => mock.timers.reset());
+			const values = new Map<string, string>();
+			const reads = { recent: 0, projects: 0, pins: 0, history: 0 };
+			let projectTitle = 'Project';
+			let pinned = true;
+			let ids = ['one', 'two'];
+			const respond = async (path: string) => {
+				if (path.includes('/gizmos/snorlax/sidebar?')) {
+					reads.projects++;
+					return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: projectTitle } } }], cursor: null });
+				}
+				if (path.includes('/pins?')) {
+					reads.pins++;
+					return Response.json(pinned ? [{ item: { id: 'pin', title: 'Pin' } }] : []);
+				}
+				if (path.includes('/conversations?')) {
+					reads.recent++;
+					return Response.json({ items: ids.map(id => ({ id, title: id })) });
+				}
+				if (native && path.includes('/conversations/')) {
+					if (path.includes('/conversations/one?')) { reads.history++; }
+					return Response.json({ title: 'Conversation', current_node: 'reply', messages: [], page_info: { has_previous_page: false } });
+				}
+				if (path.endsWith('/conversation/one')) { reads.history++; }
+				return response(path);
+			};
+			{
+				using chat = fixture(respond, { values, native });
+				await chat.reload();
+				await chat.refresh();
+				assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
 			}
-			if (path.includes('/pins?')) {
-				reads.pins++;
-				return Response.json(pinned ? [{ item: { id: 'pin', title: 'Pin' } }] : []);
-			}
-			if (path.includes('/conversations?')) { reads.recent++; }
-			if (path.includes('/conversations/')) {
-				if (path.includes('/conversations/one?')) { reads.history++; }
-				return Response.json({ title: 'Conversation', current_node: 'reply', messages: [], page_info: { has_previous_page: false } });
-			}
-			return response(path);
-		};
-		{
-			using chat = fixture(respond, { values, native: true });
-			await chat.reload();
-			await chat.refresh();
+			using reopened = fixture(respond, { values, native });
+			const connected = new DeferredPromise<void>();
+			using ready = autorun(reader => {
+				if (reopened.state.read(reader).connected) void connected.complete();
+			});
+			reopened.initialize();
+			await connected.p;
+			assert.equal(reopened.state.get().projects[0]?.title, 'Project');
+			assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
 			assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
-		}
-		using reopened = fixture(respond, { values, native: true });
-		const connected = new DeferredPromise<void>();
-		using ready = autorun(reader => {
-			if (reopened.state.read(reader).connected) void connected.complete();
+			ids = ['new', ...ids];
+			mock.timers.tick(5 * 60_000 - 1);
+			await reopened.refresh();
+			assert.equal(reopened.state.get().conversations.some(item => item.id === 'new'), false);
+			assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
+			mock.timers.tick(1);
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 2, projects: 1, pins: 1, history: 0 });
+			assert.equal(reopened.state.get().conversations[0]?.id, 'new');
+			assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
+
+			projectTitle = 'Renamed project';
+			pinned = false;
+			mock.timers.tick(10 * 60_000 - 1);
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 3, projects: 1, pins: 1, history: 0 });
+			mock.timers.tick(1);
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 3, projects: 2, pins: 2, history: 0 });
+			assert.equal(reopened.state.get().projects[0]?.title, 'Renamed project');
+			assert.equal(reopened.state.get().conversations.some(item => item.pinned), false);
+
+			await reopened.reload();
+			assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: 0 }, 'Manual reload can refresh fresh lists');
+			await reopened.select('one');
+			assert.equal(reopened.state.get().conversationId, 'one');
+			const historyReads = reads.history;
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: historyReads + Number(!!native) });
 		});
-		reopened.initialize();
-		await connected.p;
-		assert.equal(reopened.state.get().projects[0]?.title, 'Project');
-		assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
-		assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
-		mock.timers.tick(5 * 60_000 - 1);
-		await reopened.refresh();
-		assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
-		mock.timers.tick(1);
-		await reopened.refresh();
-		assert.deepEqual(reads, { recent: 2, projects: 1, pins: 1, history: 0 });
-		assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
-
-		projectTitle = 'Renamed project';
-		pinned = false;
-		mock.timers.tick(10 * 60_000 - 1);
-		await reopened.refresh();
-		assert.deepEqual(reads, { recent: 3, projects: 1, pins: 1, history: 0 });
-		mock.timers.tick(1);
-		await reopened.refresh();
-		assert.deepEqual(reads, { recent: 3, projects: 2, pins: 2, history: 0 });
-		assert.equal(reopened.state.get().projects[0]?.title, 'Renamed project');
-		assert.equal(reopened.state.get().conversations.some(item => item.pinned), false);
-
-		await reopened.reload();
-		assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: 0 }, 'Manual reload can refresh fresh lists');
-		await reopened.select('one');
-		assert.equal(reopened.state.get().conversationId, 'one');
-		const historyReads = reads.history;
-		await reopened.refresh();
-		assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: historyReads + 1 });
-	});
+	}
 
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
 		const values = new Map<string, string>();
@@ -736,6 +746,44 @@ suite('ChatGPT shared service', () => {
 		await offline.reload();
 		assert.deepEqual(offline.state.get().conversations.map(item => item.id), ids);
 		assert.deepEqual(offline.state.get().messages, []);
+	});
+
+	test('manual reload shows the latest Web chats when an older page is rate-limited', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
+		const offsets: number[] = [];
+		let ids = ['one', 'two', 'older'];
+		let rateLimited = false;
+		using chat = fixture(async path => {
+			if (!path.includes('/conversations?')) return response(path);
+			const offset = Number(new URL(path, 'https://fixture.invalid').searchParams.get('offset'));
+			offsets.push(offset);
+			if (offset && rateLimited) return new Response(null, { status: 429, headers: { 'Retry-After': '30' } });
+			return Response.json({ items: ids.slice(offset, offset + 2).map(id => ({ id, title: id })), total: ids.length });
+		});
+		await chat.reload();
+		await chat.loadMore();
+		ids = ['new', ...ids];
+		rateLimited = true;
+		await chat.reload();
+		assert.deepEqual(offsets, [0, 2, 0, 2]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids);
+		assert.equal(chat.state.get().hasMore, true);
+		assert.equal(chat.state.get().historyListFailed, true);
+
+		rateLimited = false;
+		mock.timers.tick(29_999);
+		await chat.refresh();
+		assert.deepEqual(offsets, [0, 2, 0, 2]);
+		assert.equal(chat.state.get().conversations[0]?.id, 'new');
+		mock.timers.tick(1);
+		await chat.refresh();
+		assert.deepEqual(offsets, [0, 2, 0, 2, 0]);
+		assert.equal(chat.state.get().historyListFailed, false);
+		await chat.loadMore();
+		assert.deepEqual(offsets, [0, 2, 0, 2, 0, 2]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids);
+		assert.equal(chat.state.get().hasMore, false);
 	});
 
 	test('refresh recalibrates recent pagination when a later page changes but the head stays the same', async () => {

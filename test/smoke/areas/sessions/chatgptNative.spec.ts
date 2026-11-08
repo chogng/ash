@@ -711,7 +711,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const newButton = page.locator('[data-action-id="sessions.newSession"] button');
 			const help = page.locator('.ash-accessible-view-content');
 			await newButton.press('Alt+F1');
-			await expect(help).toHaveValue(locale === 'en' ? /New starts a conversation in the current workspace/u : /“新建”会在当前工作区开始对话/u);
+			await expect(help).toHaveValue(locale === 'en'
+				? /New opens a draft in the selected Chat or Code mode and focuses the message input/u
+				: /“新建”会在当前选中的 Chat 或 Code 模式打开草稿，并聚焦消息输入框/u);
 			await expect(help).not.toHaveValue(/ChatGPT|Codex/u);
 			await page.keyboard.press('Escape');
 			await expect(newButton).toBeFocused();
