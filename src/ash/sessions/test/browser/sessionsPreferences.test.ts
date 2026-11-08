@@ -664,8 +664,16 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('查看仅在 Agent 窗口中生效的快捷键。'));
 		await preferences.open({ section: 'memory' });
 		assert.equal(categoryButton('memory').textContent, '记忆');
-		await Promise.resolve();
-		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page .ash-memories button')].some(button => button.textContent === '新建记忆'));
+		await new Promise(resolve => setTimeout(resolve, 0));
+		const memory = window.document.querySelector('.ash-sessions-settings-page .ash-memories')!;
+		assert.equal(memory.querySelector('input[role="switch"][aria-label="使用已保存的记忆"]')?.getAttribute('aria-checked'), 'false');
+		const manage = memory.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+		assert.equal(manage.textContent, '管理');
+		assert.equal(manage.getAttribute('aria-expanded'), 'false');
+		manage.click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(manage.getAttribute('aria-expanded'), 'true');
+		assert.match(memory.querySelector('.memories-manager')?.textContent ?? '', /主题.*选择记忆范围/u);
 		await preferences.open({ section: 'customize' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
 

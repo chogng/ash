@@ -1,61 +1,136 @@
 .ash-memories {
 	display: grid;
-	gap: 12px;
+	gap: var(--ash-spacing-size160);
 	min-width: 0;
-	container-type: inline-size;
 }
 
-.ash-memories .memories-options,
-.ash-memories .memories-columns {
+.ash-memories .memories-group {
+	min-width: 0;
+	border: var(--ash-strokeThickness) solid var(--ash-settings-itemSeparator);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-settings-itemBackground);
+}
+
+.ash-memories .memories-scope {
 	display: grid;
-	gap: 12px;
-	min-width: 0;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 }
 
-.ash-memories .memories-columns > div {
-	display: grid;
-	align-content: start;
-	justify-items: start;
-	gap: 8px;
-	min-width: 0;
-}
-
-.ash-memories label {
+.ash-memories .memories-row {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-memories .memories-scope + .memories-row,
+.ash-memories .memories-row + .memories-row,
+.ash-memories .memories-manager,
+.ash-memories .memories-detail {
+	border-top: var(--ash-strokeThickness) solid
+		var(--ash-settings-itemSeparator);
+}
+
+.ash-memories .memories-row > .ash-switch {
+	flex-shrink: 0;
+}
+
+.ash-memories .memories-heading {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+	overflow-wrap: anywhere;
+}
+
+.ash-memories .memories-description,
+.ash-memories .memories-status {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.ash-memories .memories-row .memories-description {
+	margin-top: var(--ash-spacing-size40);
+}
+
+.ash-memories .memories-status:not(:empty) {
+	padding: 0 var(--ash-spacing-size160) var(--ash-spacing-size120);
+}
+
+.ash-memories .memories-manager,
+.ash-memories .memories-detail {
+	display: grid;
+	justify-items: start;
+	gap: var(--ash-spacing-size120);
+	min-width: 0;
+}
+
+.ash-memories .memories-manager {
+	padding: var(--ash-spacing-size160);
+}
+
+.ash-memories .memories-detail {
+	width: 100%;
+	padding-top: var(--ash-spacing-size120);
+}
+
+.ash-memories .memories-toolbar,
+.ash-memories .memories-actions,
+.ash-memories .memories-utilities {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-memories .memories-toolbar {
+	width: 100%;
+}
+
+.ash-memories .memories-toolbar > .memories-field {
+	flex: 1 1 180px;
+}
+
+.ash-memories .memories-utilities {
+	justify-content: space-between;
+	align-items: start;
+}
+
+.ash-memories .memories-utilities > details {
+	min-width: 0;
+	flex: 1;
+}
+
+.ash-memories .memories-utilities summary {
+	width: fit-content;
+	padding: var(--ash-spacing-size40) 0;
+	color: var(--ash-link-foreground);
+	cursor: pointer;
+}
+
+.ash-memories .memories-utilities .memories-toolbar {
+	margin-top: var(--ash-spacing-size80);
+}
+
+.ash-memories .memories-field {
+	display: grid;
+	gap: var(--ash-spacing-size40);
 	min-width: 0;
 	width: 100%;
 }
 
-.ash-memories .memories-permission {
-	flex-direction: row;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 8px;
-}
-
-.ash-memories .memories-permission input {
-	order: -1;
-}
-
-.ash-memories .memories-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.ash-memories .memories-actions > [hidden] {
-	display: none;
-}
-
-.ash-memories input:not([type="checkbox"]),
-.ash-memories select,
-.ash-memories textarea {
+.ash-memories .memories-field > input,
+.ash-memories .memories-field > select,
+.ash-memories .memories-field > textarea {
 	box-sizing: border-box;
 	min-width: 0;
-	max-width: 100%;
-	padding: 6px 8px;
+	width: 100%;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
 	font: inherit;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
@@ -68,23 +143,46 @@
 	white-space: pre-wrap;
 }
 
-.ash-memories :focus-visible {
+.ash-memories .memories-topics {
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-memories .memories-topics > li + li {
+	border-top: var(--ash-strokeThickness) solid
+		var(--ash-settings-itemSeparator);
+}
+
+.ash-memories .memories-topics button {
+	width: 100%;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+.ash-memories .memories-topics button:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-memories .memories-topics button[aria-current="true"] {
+	background: var(--ash-list-inactiveSelectionBackground);
+}
+
+.ash-memories [hidden] {
+	display: none;
+}
+
+.ash-memories .memories-field > :focus-visible,
+.ash-memories .memories-topics button:focus-visible,
+.ash-memories summary:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: 2px;
-}
-
-.ash-memories .memories-status {
-	overflow-wrap: anywhere;
-	min-height: 1.5em;
-	color: var(--ash-description-foreground);
-}
-
-@container (min-width: 540px) {
-	.ash-memories .memories-options {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.ash-memories .memories-columns {
-		grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-	}
 }

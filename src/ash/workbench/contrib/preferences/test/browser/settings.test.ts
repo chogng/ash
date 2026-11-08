@@ -4191,12 +4191,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const projectScope = { type: 'project', projectId: 'project-1' } as const;
 	let memory: Memory = { id: 'sample', scope: memoryScope, revision: 1, source: 'user', title: 'Sample', body: 'Saved body' };
 	const bodyReads: number[] = [];
+	let personalPolicy = { scope: memoryScope, revision: 1, reading: false, saving: false };
 	services.registerInstance(IMemoriesService, {
 		onDidChange: Event.None,
 		readModelMemoryEnabled: async () => false,
 		scopes: async threadId => [{
 			label: threadId ? 'Project' : 'Personal',
-			policy: { scope: threadId ? projectScope : memoryScope, revision: 1, reading: false, saving: false },
+			policy: threadId ? { scope: projectScope, revision: 1, reading: false, saving: false } : personalPolicy,
 		}],
 		list: async scope => {
 			const { body, ...summary } = memory;
@@ -4206,7 +4207,11 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		add: unusedMemoryOperation,
 		update: unusedMemoryOperation,
 		delete: unusedMemoryOperation,
-		setPolicy: unusedMemoryOperation,
+		setPolicy: async (policy, reading, saving) => {
+			assert.deepEqual(policy, personalPolicy);
+			personalPolicy = { scope: memoryScope, revision: policy.revision + 1, reading, saving };
+			return personalPolicy;
+		},
 		setModelMemoryEnabled: unusedMemoryOperation,
 		readReference: async reference => {
 			assert.equal(reference, 'memory:sample');
@@ -4221,12 +4226,32 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(host.hidden, false);
 	assert.equal(root.querySelectorAll('.ash-memories').length, 1);
 	assert.deepEqual(bodyReads, []);
-	const memoryList = memories.querySelector<HTMLSelectElement>('select[size="6"]')!;
-	memoryList.value = memory.id;
-	memoryList.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	const reading = memories.querySelector<HTMLInputElement>('input[role="switch"][aria-label="Use saved memories"]')!;
+	const saving = memories.querySelector<HTMLInputElement>('input[role="switch"][aria-label="Let the model save memories"]')!;
+	reading.click();
+	await nextTurn();
+	assert.equal(reading.getAttribute('aria-checked'), 'true');
+	assert.equal(saving.getAttribute('aria-checked'), 'false');
+	assert.equal(personalPolicy.reading, true);
+	const manage = memories.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+	const manager = ownerDocument.getElementById(manage.getAttribute('aria-controls')!)!;
+	const detail = manager.querySelector<HTMLElement>('.memories-detail')!;
+	assert.equal(manage.getAttribute('aria-expanded'), 'false');
+	assert.equal(manager.hidden, true);
+	manage.click();
+	await nextTurn();
+	assert.equal(manage.getAttribute('aria-expanded'), 'true');
+	assert.equal(manager.hidden, false);
+	assert.equal(detail.hidden, true);
+	const topic = manager.querySelector<HTMLButtonElement>('li button')!;
+	assert.equal(topic.textContent, 'Sample');
+	topic.click();
 	await nextTurn();
 	const memoryBody = memories.querySelector<HTMLTextAreaElement>('textarea')!;
 	assert.equal(memoryBody.value, 'Saved body');
+	assert.equal(topic.getAttribute('aria-current'), 'true');
+	assert.equal(detail.hidden, false);
+	assert.equal(ownerDocument.activeElement, detail.querySelector('input'));
 	const refreshMemories = [...memories.querySelectorAll('button')].find(button => button.textContent === 'Refresh')!;
 	refreshMemories.click();
 	await nextTurn();
@@ -4236,12 +4261,21 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.deepEqual(bodyReads, [1, 2]);
 	assert.equal(memoryBody.value, 'Updated body');
+	manage.click();
+	await nextTurn();
+	assert.equal(manager.hidden, true);
+	assert.equal(detail.hidden, true);
 	const reference = [...memories.querySelectorAll('label')].find(label => label.textContent === 'Memory reference')!.querySelector('input')!;
+	reference.closest('details')!.open = true;
 	reference.value = 'memory:sample';
 	[...memories.querySelectorAll('button')].find(button => button.textContent === 'Open reference')!.click();
 	await nextTurn();
 	assert.equal(memoryBody.value, 'Exact source text');
 	assert.equal(memoryBody.readOnly, true);
+	assert.equal(manager.hidden, false);
+	manage.click();
+	await nextTurn();
+	assert.equal(manager.hidden, true);
 	await memoryNavigation.open(preferences, { kind: 'reference', reference: 'memory:sample' });
 	await nextTurn();
 	assert.equal(memoryBody.value, 'Exact source text');
@@ -4253,6 +4287,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(memoryBody.value, 'Draft from a chat message');
 	assert.equal(memoryBody.readOnly, false);
+	assert.equal(detail.hidden, false);
 	assert.equal(host.hidden, false);
 	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close button')?.click();
 	await nextTurn();
