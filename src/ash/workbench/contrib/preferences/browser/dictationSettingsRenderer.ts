@@ -213,6 +213,9 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 				},
 			});
 		} else if (backend.type === 'local') {
+			if (this.localTranscription.isSupported && !this.speechProviders.hasSpeechProvider) {
+				children.push(settingNode(DictationConfiguration.modelLoadTiming));
+			}
 			children.push({
 				element: {
 					kind: 'item', id: DictationConfiguration.model,

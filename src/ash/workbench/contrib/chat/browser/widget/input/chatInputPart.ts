@@ -608,6 +608,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.dictationSession = this._register(instantiationService.createInstance(DictationInput, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation'), 'chat'));
 		this._register(this.voiceInputMode.voiceAvailable.onDidChange(() => this.renderToolbarActions()));
 		this._register(this.voiceInputMode.dictationAvailable.onDidChange(() => this.renderToolbarActions()));
+		let previousPreparationLabel: string | undefined;
+		const announceDictationPreparation = (): void => {
+			const label = this.dictationSession.preparationLabel;
+			if (label && label !== previousPreparationLabel && this.visible && this.dictationSession.showButton) announceStatus(label);
+			previousPreparationLabel = label;
+		};
 		this._register(Event.any(this.speechToText.onDidChangeState, Event.map(this.dictationSession.onDidChange, () => this.speechToText.state))(() => {
 			if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Recording && !this.measuringDictation) {
 				this.measuringDictation = true;
@@ -615,12 +621,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.dictationSample = undefined;
 			}
 			if (!this.speechToText.isBusy) this.measuringDictation = false;
+			announceDictationPreparation();
 			this.renderStatus(); this.renderToolbarActions();
 		}));
 		this._register(this.speechToText.onDidUpdateTranscript(event => {
 			if (this.dictationSession.isActive && this.measureWholeDraft && event.finalizedText) this.dictationSample = { text: event.finalizedText, backend: this.speechToText.currentBackend };
 		}));
-		this._register(this.speechToText.onDidChangePreparingModel(() => this.renderToolbarActions()));
+		const onDidChangeDictationPreparation = Event.any(this.speechToText.onDidChangePreparingModel, this.speechToText.onDidChangeDownloadingModel);
+		this._register(onDidChangeDictationPreparation(() => {
+			announceDictationPreparation();
+			this.renderStatus();
+			this.renderToolbarActions();
+		}));
 		this._register(this.dictationSession.onDidEnd(error => {
 			// The speech service can become idle before the input session releases its active state.
 			this.renderStatus();
@@ -2389,6 +2401,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (state.error) return state.error;
 		if (state.status !== undefined) return state.status;
 		if (state.inputBlocked && state.phase !== 'loading') return '';
+		const preparation = this.dictationSession.preparationLabel;
+		if (preparation) return this.dictationSession.showButton ? '' : preparation;
 		if (this.dictationSession.isStarting) return localize('chat.input.dictationStarting', 'Starting dictation…');
 		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');

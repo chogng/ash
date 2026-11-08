@@ -61,7 +61,7 @@ import { ILanguageModelsService } from '../../common/languageModels.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
-import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, LocalTranscriptionModelState, type ILocalTranscriptionModelStatus, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { Severity } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -614,6 +614,44 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	assert.deepEqual(notifications.model.getNotifications(), []);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')?.disabled, false);
+});
+
+test('Chat shows that dictation is recording during model preparation and stops without discarding it', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using modelStatus = new Emitter<ILocalTranscriptionModelStatus>();
+		const stopped = new DeferredPromise<void>();
+		using part = inputPart(sharedNotifications, undefined, 'agent', {}, undefined, {
+			_serviceBrand: undefined, isSupported: true,
+			onDidChangeModels: AshEvent.None, onDidChangeModelStatus: modelStatus.event, onDidTranscribe: AshEvent.None,
+			getModel: async model => ({ model, available: true, sizeBytes: 0 }),
+			getCacheDirectory: async () => 'C:/models',
+			getModelStatus: async () => ({ state: LocalTranscriptionModelState.Idle }),
+			listModels: async () => [],
+			prepareModel: () => assert.fail('Recording must prepare its own model'),
+			importPackage: () => assert.fail('Unexpected model import'),
+			importModel: async () => assert.fail('Unexpected model import'),
+			cancelModel: async () => { }, deleteModel: async () => { }, pushAudio: async () => { },
+			start: async () => modelStatus.fire({ state: LocalTranscriptionModelState.Downloading }),
+			stop: async () => { await stopped.complete(); return '保留录音'; },
+			cancel: async () => { },
+		});
+		const microphone = () => part.element.querySelector<HTMLButtonElement>('.ash-chat-input-mic-action')!;
+		microphone().click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(microphone().querySelector('.ash-loading-spinner + span')?.textContent, '正在录音 · 正在下载听写模型…');
+		modelStatus.fire({ state: LocalTranscriptionModelState.Loading });
+		assert.equal(microphone().querySelector('.ash-loading-spinner + span')?.textContent, '正在录音 · 正在加载听写模型…');
+		assert.equal(microphone().getAttribute('aria-label'), '正在录音 · 正在加载听写模型…按下可停止录音。');
+		microphone().click();
+		await stopped.p;
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(part.element.querySelector('textarea')?.value, '保留录音');
+		assert.equal(microphone().getAttribute('aria-label'), '听写');
+		assert.equal(microphone().querySelector('.ash-loading-spinner'), null);
+	} finally {
+		initializeTestLocalization('en');
+	}
 });
 
 test('Chat keeps model preparation in settings and reads it only when dictation is requested', async () => {
@@ -2314,6 +2352,24 @@ suite('chatInput browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text }] });
 		if (stage === 'attachments') await expect(page.getByLabel('Submission')).toContainText('first captured line');
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+	});
+
+	for (const locale of ['en', 'zh-CN']) test(`Compact Chat shows the dictation connection stage within the composer (${locale})`, async () => {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 400, height: 500 });
+		await page.goto(`/chatInput.html?inlineCode&compact&dictation&dictationConnecting&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const composer = page.locator('.ash-chat-input-container');
+		const mic = composer.locator('.ash-chat-input-mic-action');
+		const label = mic.locator('.ash-loading-spinner + span');
+		await mic.click();
+		await expect(label).toBeVisible();
+		await expect(label).toHaveText(locale === 'en' ? 'Connecting to dictation service…' : '正在连接听写服务…');
+		await expect(mic).toHaveAccessibleName(locale === 'en' ? 'Connecting to dictation service… Activate to cancel.' : '正在连接听写服务…按下可取消。');
+		expect(await composer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await mic.press('Enter');
+		await expect(label).toHaveCount(0);
+		await expect(mic).toHaveAccessibleName(locale === 'en' ? 'Dictate message' : '听写');
 	});
 
 	for (const outcome of ['success', 'empty', 'failure'] as const) test(`Rich compact input finalizes dictation before Enter submission (${outcome})`, async () => {

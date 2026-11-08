@@ -3,6 +3,7 @@ import { addDisposableListener, getWindow, h } from '../../../../../base/browser
 import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import { ActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../../base/browser/ui/contextview/contextview.js';
+import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
@@ -66,6 +67,13 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		const button = this.primaryButton!;
 		button.classList.add('ash-chat-input-action', 'ash-chat-input-mic-action');
 		button.classList.toggle('disabled', !this.action.enabled);
+		if (this.isActive.get() && this.speech.isPreparingModel) {
+			const label = h(button.ownerDocument, 'span');
+			label.textContent = this.action.label;
+			button.classList.add('ash-dictation-preparing');
+			button.setAttribute('aria-label', this.action.tooltip);
+			button.append(createLoadingSpinner(button.ownerDocument), label);
+		}
 		this._register(autorun(reader => button.setAttribute('aria-pressed', String(this.isActive.read(reader)))));
 		this._register(addMicButtonContextMenuListener(container, () =>
 			getDictationContextMenuActions(this.commands, this.configuration, this.keybindings, this.action.id), this.contextMenus));

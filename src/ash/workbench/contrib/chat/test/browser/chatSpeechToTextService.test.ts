@@ -13,7 +13,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { decodeBase64 } from '../../../../../base/common/buffer.js';
+import { decodeBase64, type VSBuffer } from '../../../../../base/common/buffer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -29,7 +29,8 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../comm
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../speech/common/speechService.js';
-import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState, DictationModelState, type IDictationModelStatus, type ILocalTranscriptionResult, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState, type ILocalTranscriptionResult, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { NullLocalTranscriptionService } from '../../../../services/localTranscription/browser/localTranscriptionService.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
@@ -40,6 +41,38 @@ import { IChatSpeechToTextService, ChatSpeechToTextService, ChatSpeechToTextStat
 
 suite('Builtin dictation ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	for (const [timing, backend, enabled, expected] of [
+		['startup', 'local', true, ['selected-model']],
+		['onDemand', 'local', true, []],
+		['startup', 'cloud', true, []],
+		['startup', 'local', false, []],
+	] as const) test(`Dictation startup warmup respects ${timing}, ${backend}, and enabled=${enabled}`, () => {
+		using services = new InstantiationService();
+		using configuration = new TestConfigurationService({
+			source: JSON.stringify({
+				'dictation.modelLoadTiming': timing, 'dictation.backend': backend, 'dictation.enabled': enabled, 'dictation.model': 'selected-model',
+			})
+		});
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ISpeechService, { hasSpeechProvider: false } as ISpeechService);
+		services.registerInstance(ILogService, new NullLoggerService());
+		const warmed: string[] = [];
+		let cancelled = 0;
+		services.registerInstance(ILocalTranscriptionModelService, {
+			isSupported: true,
+			warmModel: (model: string) => {
+				warmed.push(model);
+				return { completed: new Promise(() => { }), cancel: async () => { cancelled++; } };
+			},
+		} as ILocalTranscriptionModelService);
+		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.dictationWarmup']);
+		host.advance(WorkbenchPhase.BlockRestore);
+		assert.deepEqual(warmed, []);
+		host.advance(WorkbenchPhase.AfterRestored);
+		assert.deepEqual(warmed, expected);
+		host.dispose();
+		assert.equal(cancelled, expected.length);
+	});
 	for (const nested of [false, true]) test(`model migration preserves ${nested ? 'workspace' : 'folder'} JSONC and unrelated settings`, async () => {
 		using files = new FileService();
 		using provider = new InMemoryFileSystemProvider();
@@ -124,6 +157,7 @@ suite('Builtin dictation ownership', () => {
 		readonly onDidChangeModelStatus = this.modelStatus.event;
 		readonly starts: Parameters<ILocalTranscriptionService['start']>[0][] = [];
 		readonly reads: string[] = [];
+		readonly audio: VSBuffer[] = [];
 		cancels = 0;
 		stops = 0;
 		readonly acquired = new DeferredPromise<void>();
@@ -144,7 +178,7 @@ suite('Builtin dictation ownership', () => {
 		importPackage(): never { assert.fail('Input must not import models'); }
 		async importModel(): Promise<never> { assert.fail('Input must not import models'); }
 		async start(options: Parameters<ILocalTranscriptionService['start']>[0]) { this.starts.push(options); void this.acquired.complete(); await this.pending; }
-		async pushAudio() { }
+		async pushAudio(chunk: VSBuffer) { this.audio.push(chunk); }
 		async stop() { this.stops++; await this.stopPending; this.transcribed.fire({ text: this.finalText, isFinal: true }); this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); return this.finalText; }
 		async cancel() { this.cancels++; await this.cancelPending; this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); }
 	}
@@ -437,6 +471,38 @@ suite('Builtin dictation ownership', () => {
 		assert.deepEqual(local.starts, [{ cacheDir: 'C:/models', model: 'custom-online' }]);
 		assert.equal(await fixture.speech.stopAndTranscribe(), 'final local text');
 		assert.equal(fixture.speech.state, ChatSpeechToTextState.Idle);
+	});
+
+	for (const cancel of [false, true]) test(`First-use dictation records during model preparation and ${cancel ? 'can be discarded' : 'can be finalized after loading'}`, async () => {
+		using owner = new DisposableStore();
+		const clock = deadlineWindow();
+		const local = new LocalCapture();
+		const fixture = services(owner, async () => assert.fail('Unexpected cloud session'), { source: '{"dictation.backend":"local"}', local, window: clock.target });
+		await fixture.speech.start(clock.target);
+		local.modelStatus.fire({ state: LocalTranscriptionModelState.Downloading });
+		assert.equal(fixture.speech.isDownloadingModel, true);
+		assert.equal(fixture.speech.state, ChatSpeechToTextState.Recording);
+		assert.equal(fixture.audio.requests.length, 1);
+		fixture.audio.emit(new Float32Array(4096).fill(0.5));
+		assert.deepEqual(local.audio[0]?.buffer.slice(0, 2), Uint8Array.of(0, 64));
+		assert.deepEqual(local.reads, []);
+		if (cancel) {
+			await fixture.speech.cancel();
+			assert.equal(local.cancels, 1);
+			assert.equal(local.stops, 0);
+		} else {
+			const ready = new DeferredPromise<void>();
+			local.stopPending = ready.p;
+			const stopping = fixture.speech.stopAndTranscribe();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			assert.equal(fixture.audio.tracks[0]?.stopped, true);
+			assert.equal(clock.timers.size, 0);
+			local.modelStatus.fire({ state: LocalTranscriptionModelState.Ready });
+			assert.deepEqual([...clock.timers.values()].map(timer => timer.delay), [8000]);
+			await ready.complete();
+			assert.equal(await stopping, local.finalText);
+		}
+		assert.equal(fixture.speech.isPreparingModel, false);
 	});
 
 	test('host failure during acquisition reports once and never opens the microphone', async () => {

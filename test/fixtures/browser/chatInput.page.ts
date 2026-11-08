@@ -571,6 +571,7 @@ let dictationStops = 0;
 let emitDictation: ((text: string, final: boolean) => void) | undefined;
 let finishDictation: ((result: { text: string; error?: string; }) => void) | undefined;
 const dictationFixture = new URLSearchParams(location.search).has('dictation');
+const dictationConnecting = new URLSearchParams(location.search).has('dictationConnecting');
 if (dictationFixture) {
 	resources.add(installTestDictationAudio(window));
 	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
@@ -578,6 +579,7 @@ if (dictationFixture) {
 services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixture ? createTestDictationBackend(resources, {
 	getOptions: async () => ({ inputDevices: [], languages: ['en', 'zh'] }),
 	start: async (_options, transcript) => {
+		if (dictationConnecting) await new Promise<void>(() => { });
 		emitDictation = transcript;
 		return {
 			stop: async () => {

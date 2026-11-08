@@ -3,6 +3,36 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 #[test]
+fn warming_an_uninstalled_model_leaves_the_inventory_and_capture_untouched() {
+    let root = tempfile::tempdir().unwrap();
+    let dictation = DictationManager::default();
+    let manager = DictationModelManager::with_dictation(&dictation);
+    let (send, receive) = mpsc::channel();
+    manager
+        .start(
+            1,
+            "warmup".into(),
+            ModelRequest {
+                home: root.path().into(),
+                media_network: test_media_network(),
+                model_root: root.path().into(),
+                model_id: crate::DEFAULT_MODEL_ID.into(),
+                operation: ModelOperation::Warm,
+            },
+            move |event| send.send(event).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(
+        receive.recv_timeout(Duration::from_secs(5)).unwrap(),
+        ModelProgress::Ready
+    );
+    manager.stop(1, "warmup").unwrap();
+    assert_eq!(manager.progress(crate::DEFAULT_MODEL_ID), None);
+    assert!(!dictation.is_active());
+    assert_eq!(root.path().read_dir().unwrap().count(), 0);
+}
+
+#[test]
 fn failed_import_is_terminal_and_does_not_publish_or_keep_a_staging_directory() {
     let root = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();

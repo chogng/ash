@@ -467,7 +467,7 @@ fn a_stalled_pcm_consumer_has_a_bounded_queue() {
     manager
         .start_stream(7, "pcm".into(), request(), |_| {})
         .unwrap();
-    for _ in 0..64 {
+    for _ in 0..2048 {
         manager.push_audio(7, "pcm", vec![1]).unwrap();
     }
     assert!(manager.push_audio(7, "pcm", vec![2]).is_err());

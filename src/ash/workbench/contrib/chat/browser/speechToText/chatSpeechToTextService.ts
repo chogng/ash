@@ -169,14 +169,17 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		this._register(localTranscription.onDidChangeModelStatus(status => {
 			if (!this.recording || this.currentBackend !== 'local') return;
 			const downloading = status.state === LocalTranscriptionModelState.Downloading;
-			const preparing = downloading || status.state === LocalTranscriptionModelState.Loading;
-			if (this.isDownloadingModel !== downloading) { this.isDownloadingModel = downloading; this.downloading.fire(downloading); }
-			if (this.isPreparingModel !== preparing) { this.isPreparingModel = preparing; this.preparing.fire(preparing); }
-			this.progress.fire();
+			this.setPreparation(downloading || status.state === LocalTranscriptionModelState.Loading, downloading);
 		}));
 		const inProgress = ChatSpeechToTextInProgress.bindTo(contextKeys);
 		this._register(this.onDidChangeState(() => inProgress.set(this.isBusy)));
 		this._register(toDisposable(() => inProgress.reset()));
+	}
+
+	private setPreparation(preparing: boolean, downloading: boolean): void {
+		if (this.isDownloadingModel !== downloading) { this.isDownloadingModel = downloading; this.downloading.fire(downloading); }
+		if (this.isPreparingModel !== preparing) { this.isPreparingModel = preparing; this.preparing.fire(preparing); }
+		this.progress.fire();
 	}
 
 	public async start(window: Window & typeof globalThis, surface: ChatDictationSurface = 'chat'): Promise<void> {
@@ -231,7 +234,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 			} else {
 				const backend = recording.backend;
 				if (backend.type === 'local') {
-					// Workbench owns microphone capture; the local service owns model preparation and inference.
+					// Start admits the PCM stream. The backend can prepare the model while capture sends audio.
 					recording.lifetime.add(this.localTranscription.onDidTranscribe(result => this.receiveTranscript(recording, result.text, result.isFinal, true)));
 					recording.lifetime.add(this.localTranscription.onDidChangeModelStatus(result => {
 						if (this.recording !== recording) return;
@@ -278,9 +281,13 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 				recording.lifetime.add(toDisposable(() => {
 					this.transcription.disconnect();
 				}));
+				this.setPreparation(true, false);
+				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
 				await this.transcription.connect(recording.window, '');
 				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
 				await this.transcription.startSession({ backend, language: recording.language });
+				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
+				this.setPreparation(false, false);
 				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
 				this.transcription.sendPttStart(turnId);
 				recording.handle = {
@@ -422,9 +429,18 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 	private async finalize(recording: Recording): Promise<string | undefined> {
 		const expired = Symbol('expired');
 		const cancelled = Symbol('cancelled');
-		const deadline = recording.backend !== 'extension' && recording.backend.type === 'local' ? 8000 : 35000;
+		const local = recording.backend !== 'extension' && recording.backend.type === 'local';
 		let timer: number | undefined;
-		const timeout = new Promise<typeof expired>(resolve => { timer = recording.window.setTimeout(() => resolve(expired), deadline); });
+		let expire!: () => void;
+		const timeout = new Promise<typeof expired>(resolve => { expire = () => resolve(expired); });
+		const scheduleTimeout = (): void => {
+			if (timer !== undefined) recording.window.clearTimeout(timer);
+			// Model preparation has its own backend deadline. Give buffered audio the
+			// full finalization window once inference is ready to consume it.
+			timer = local && this.isPreparingModel ? undefined : recording.window.setTimeout(expire, local ? 8000 : 35000);
+		};
+		using preparation = local ? this.onDidChangePreparingModel(scheduleTimeout) : undefined;
+		scheduleTimeout();
 		let cancel!: () => void;
 		const cancellation = new Promise<typeof cancelled>(resolve => { cancel = () => resolve(cancelled); });
 		using listener = recording.cancellation.token.onCancellationRequested(cancel);

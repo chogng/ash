@@ -1,3 +1,18 @@
+.ash-toolbar
+	.ash-chat-input-mic
+	.ash-split-action-primary
+	> .ash-button.ash-dictation-preparing {
+	width: auto;
+	padding-inline: var(--ash-spacing-size80);
+	gap: var(--ash-spacing-size60);
+	font-size: var(--ash-fontSize-label1);
+	white-space: nowrap;
+}
+
+.ash-dictation-preparing > .ash-button-content {
+	display: none;
+}
+
 .ash-dictation-level {
 	display: flex;
 	align-items: center;

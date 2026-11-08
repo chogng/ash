@@ -2122,6 +2122,13 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'interaction');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.modelLoadTiming), 'voice-input');
+	const loadTiming = defaults.get(DictationConfiguration.modelLoadTiming);
+	assert.equal(loadTiming.configuration.defaultValue, 'onDemand');
+	assert.equal(loadTiming.valueType, 'select');
+	if (loadTiming.valueType === 'select') {
+		assert.deepEqual(loadTiming.options.map(option => option.value), ['onDemand', 'startup']);
+	}
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), undefined);
 	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
 	assert.equal(findSettingCategory(layout, 'chat.canvases.enabled'), 'agent-defaults');
@@ -2166,6 +2173,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles.ash?.['workbench.editor.restoreEditors.title'], '恢复编辑器');
 	assert.equal(chinese?.bundles.ash?.['workbench.tips.enabled.title'], '空编辑器提示');
 	assert.equal(chinese?.bundles.ash?.['settings.dictation.group'], '语音输入');
+	assert.equal(chinese?.bundles.ash?.['dictation.modelLoadTiming.title'], '本地听写模型加载时机');
 	assert.equal(chinese?.bundles.ash?.['dictation.cloudModel.title'], '转写模型');
 	assert.equal(chinese?.bundles.ash?.['dictation.subscription.title'], 'Codex 订阅听写');
 	assert.equal(chinese?.bundles.ash?.['dictation.subscription.manage'], '管理 Codex 账号');

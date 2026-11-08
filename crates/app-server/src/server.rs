@@ -1322,6 +1322,8 @@ impl AppServer {
             request_scheduler.clone(),
             request_cancellations.clone(),
         );
+        let dictation = realtime_voice::DictationManager::default();
+        let dictation_models = realtime_voice::DictationModelManager::with_dictation(&dictation);
         Self {
             trace_recorder: Arc::new(ash_rollout_trace::TraceRecorder::default()),
             task_delivery: None,
@@ -1355,8 +1357,8 @@ impl AppServer {
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             calls: Arc::new(call_runtime::Calls::default()),
             voices: voice_operations::Voices::default(),
-            dictation: realtime_voice::DictationManager::default(),
-            dictation_models: realtime_voice::DictationModelManager::default(),
+            dictation,
+            dictation_models,
             microphone_gate: Mutex::new(()),
             channels: ash_collab::channel_client::ChannelAccount::default(),
             collaboration_processor: collaboration_operations::CollaborationRequestProcessor::new(

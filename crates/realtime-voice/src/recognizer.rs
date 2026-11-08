@@ -34,6 +34,7 @@ pub enum Request {
         input: RecognitionInput,
     },
     ResetRecognizer,
+    RestartStream,
 }
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
@@ -107,6 +108,17 @@ impl Recognizer {
             Response::Done => Ok(()),
             Response::Recognition { .. } => Err("invalid media capability response".into()),
         }
+    }
+
+    pub(crate) fn restart_stream(&self) -> Result<(), String> {
+        match self.request(Request::RestartStream)? {
+            Response::Done => Ok(()),
+            Response::Recognition { .. } => Err("invalid media capability response".into()),
+        }
+    }
+
+    pub(crate) fn is_running(&self) -> bool {
+        self.0.is_running()
     }
 }
 impl Drop for Recognizer {

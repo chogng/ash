@@ -44,13 +44,33 @@ export class DictationInput extends Disposable {
 	public get showButton(): boolean { return this.configuration.getValue<boolean>('dictation.enabled') !== false && this.configuration.getValue<boolean>('dictation.showButton') !== false; }
 	public get isStarting(): boolean { return this.isActive && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
 	private get isAvailable(): boolean { return this.service.isConfigured; }
+	public get preparationLabel(): string | undefined {
+		if (!this.isActive || !this.service.isPreparingModel) return undefined;
+		const stage = this.service.isDownloadingModel
+			? localize('dictation.downloadingModel', 'Downloading dictation model…')
+			: this.service.currentBackend === 'local'
+				? localize('dictation.loadingModel', 'Loading dictation model…')
+				: localize('dictation.connectingService', 'Connecting to dictation service…');
+		return this.service.state === ChatSpeechToTextState.Recording
+			? localize('dictation.recordingWhilePreparing', 'Recording · {0}', stage)
+			: stage;
+	}
+
 	public get action(): MenuItemAction {
 		const active = this.isActive;
-		const label = active ? localize('chat.input.dictationStop', 'Stop dictation') : localize('chat.input.dictate', 'Dictate message');
+		const preparation = this.preparationLabel;
+		const label = preparation ?? (active ? localize('chat.input.dictationStop', 'Stop dictation') : localize('chat.input.dictate', 'Dictate message'));
+		const tooltip = preparation
+			? this.isStarting
+				? localize('dictation.cancelWhilePreparing', '{0} Activate to cancel.', preparation)
+				: this.service.state === ChatSpeechToTextState.Recording
+					? localize('dictation.stopWhilePreparing', '{0} Activate to stop recording.', preparation)
+					: preparation
+			: active || this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable');
 		return new DictationInputAction({
 			id: ToggleChatSpeechToTextAction.ID, title: label, icon: active ? Lxicon.stopCircle : Lxicon.mic,
-			tooltip: active || this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
-			precondition: this.isAvailable && (!this.service.isBusy || active) && !this.isStarting && this.service.state !== ChatSpeechToTextState.Transcribing ? ContextKeyExpr.true() : ContextKeyExpr.false(),
+			tooltip,
+			precondition: this.isAvailable && (!this.service.isBusy || active) && (!this.isStarting || preparation !== undefined) && this.service.state !== ChatSpeechToTextState.Transcribing ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 			toggled: active && this.service.state === ChatSpeechToTextState.Recording ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 		}, this.contextKeys, this.commands, () => this.toggle());
 	}
@@ -81,6 +101,7 @@ export class DictationInput extends Disposable {
 	}
 
 	private async toggle(): Promise<void> {
+		if (this.isStarting && this.service.isPreparingModel) { await this.cancel(); return; }
 		if (this.preparing) { return; }
 		try {
 			if (this.isActive) { await this.stop(); return; }

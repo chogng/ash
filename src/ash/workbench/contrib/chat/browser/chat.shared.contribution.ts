@@ -50,8 +50,12 @@ import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
 import { registerChatChangesActions, registerChatEditRequestAction, registerChatHistoryActions, registerChatRestoreCheckpointAction } from './chatEditing/chatEditingActions.js';
 import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
-import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
-import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL, ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { DictationConfiguration, dictationBackend, parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { toDisposable, Disposable } from '../../../../base/common/lifecycle.js';
+import { ISpeechService } from '../../speech/common/speechService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService, DICTATION_MODEL_SETTING } from './speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
 import { IVoiceInputModeService, VoiceInputModeService } from './voiceInputMode/voiceInputMode.js';
@@ -602,6 +606,44 @@ configurationRegistry.registerConfiguration<string>({
 		description: localize({ bundle: 'ash', key: 'dictation.model.description' }, 'Model package ID in the Ash dictation-models directory.'),
 		placeholder: DEFAULT_LOCAL_TRANSCRIPTION_MODEL,
 	},
+});
+
+configurationRegistry.registerConfiguration<'onDemand' | 'startup'>({
+	key: DictationConfiguration.modelLoadTiming,
+	defaultValue: 'onDemand',
+	scope: ConfigurationScope.APPLICATION,
+	parse(value: unknown) {
+		if (value === 'onDemand' || value === 'startup') return value;
+		throw new TypeError('dictation.modelLoadTiming must be onDemand or startup');
+	},
+	setting: {
+		valueType: 'select',
+		title: localize('dictation.modelLoadTiming.title', 'Load local dictation model'),
+		description: localize('dictation.modelLoadTiming.description', 'Choose when to load the local dictation model into memory. At startup, Ash only loads an installed model. Applies the next time Ash opens.'),
+		options: [
+			{ value: 'onDemand', label: localize('dictation.modelLoadTiming.onDemand', 'On first use') },
+			{ value: 'startup', label: localize('dictation.modelLoadTiming.startup', 'After startup') },
+		],
+	},
+});
+
+registerWorkbenchContribution('workbench.contrib.dictationWarmup', WorkbenchPhase.AfterRestored, accessor => {
+	const configuration = accessor.get(IConfigurationService);
+	if (configuration.getValue(DictationConfiguration.modelLoadTiming) !== 'startup'
+		|| configuration.getValue(DictationConfiguration.enabled) === false) return Disposable.None;
+	const backend = dictationBackend(configuration);
+	if (backend.type !== 'local' || accessor.get(ISpeechService).hasSpeechProvider) return Disposable.None;
+	const models = accessor.get(ILocalTranscriptionModelService);
+	if (!models.isSupported || !models.warmModel) return Disposable.None;
+	const log = accessor.get(ILogService);
+	try {
+		const operation = models.warmModel(backend.modelId);
+		void operation.completed.catch(error => log.debug('Local dictation model warmup:', error));
+		return toDisposable(() => { void operation.cancel().catch(() => undefined); });
+	} catch (error) {
+		log.debug('Local dictation model warmup:', error);
+		return Disposable.None;
+	}
 });
 
 Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMigration).registerConfigurationMigrations([{

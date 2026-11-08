@@ -131,4 +131,5 @@ export const DictationConfiguration = Object.freeze({
 	backend: 'dictation.backend',
 	cloudProvider: 'dictation.cloudProvider',
 	model: 'dictation.model',
+	modelLoadTiming: 'dictation.modelLoadTiming',
 });

@@ -169,6 +169,7 @@ pub struct DictationModelStartParams {
 pub enum DictationModelOperation {
     Prepare,
     Import { source_directory: String },
+    Warm,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

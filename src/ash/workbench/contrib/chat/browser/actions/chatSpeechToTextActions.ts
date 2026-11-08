@@ -16,7 +16,7 @@ import { SELECT_MICROPHONE_COMMAND } from '../speechToText/micButtonMenuActions.
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IDictationOnboardingService, SHOW_DICTATION_ONBOARDING_COMMAND, RESET_DICTATION_ONBOARDING_COMMAND } from '../speechToText/dictationOnboarding.js';
-import { IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechToText/chatSpeechToTextService.js';
+import { ChatSpeechToTextState, IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechToText/chatSpeechToTextService.js';
 import { DictationConfiguration } from '../../common/constants.js';
 
 // Command admission while local model discovery is pending; capture state belongs to the speech service.
@@ -61,7 +61,12 @@ async function toggle(accessor: ServicesAccessor, context?: unknown): Promise<vo
 	if (!widget) return;
 	const preparation = preparations.get(accessor.get(IChatSpeechToTextService));
 	if (preparation?.widget === widget) { preparation.cancel(); return; }
-	if (activeDictationEditor() === widget.inputEditor) { await stopDictation(); return; }
+	if (activeDictationEditor() === widget.inputEditor) {
+		const service = accessor.get(IChatSpeechToTextService);
+		if (service.isPreparingModel && service.state === ChatSpeechToTextState.Idle) cancelDictation();
+		else await stopDictation();
+		return;
+	}
 	if (isDictating()) return;
 	await record(accessor, widget);
 }

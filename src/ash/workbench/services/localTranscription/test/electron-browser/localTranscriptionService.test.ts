@@ -21,6 +21,7 @@ class Client {
 	public readonly stopped = new DeferredPromise<void>();
 	public readonly cancelled = new DeferredPromise<void>();
 	public startBarrier?: DeferredPromise<void>;
+	public readyOnStart = true;
 	public stopBarrier?: DeferredPromise<void>;
 	public cancelBarrier?: DeferredPromise<void>;
 	public audioBarrier?: DeferredPromise<void>;
@@ -48,6 +49,9 @@ class Client {
 		if (method.method === 'dictation/start' || method.method === 'dictation/model/start') {
 			await this.accepted.complete();
 			await this.startBarrier?.p;
+			if (method.method === 'dictation/start' && this.readyOnStart) {
+				this.emit({ method: 'dictation/model/progress', params: { resourceId: params.resourceId, modelId: 'selected-model', stage: { type: 'ready' } } });
+			}
 			return null;
 		}
 		this.beforeStop?.();
@@ -124,14 +128,30 @@ suite('LocalTranscriptionService', () => {
 		assert.deepEqual(await imported, { model: 'paraformer-large-online-ec6a3c64', version: 1 });
 		assert.equal(fixture.client.requests.at(-1)?.method, 'dictation/model/stop');
 	});
+	test('startup warmup uses a model resource without opening an audio session', async () => {
+		using fixture = new Fixture();
+		const warmup = fixture.service.warmModel('selected-model');
+		await fixture.client.accepted.p;
+		assert.deepEqual(fixture.client.requests, [{
+			method: 'dictation/model/start', resourceId: fixture.resourceId, modelId: 'selected-model', operation: { type: 'warm' },
+		}]);
+		fixture.modelProgress({ type: 'ready' });
+		assert.equal(await warmup.completed, DictationModelState.Ready);
+		assert.equal(fixture.client.requests.at(-1)?.method, 'dictation/model/stop');
+		assert.deepEqual(await fixture.service.getModelStatus(), { state: LocalTranscriptionModelState.Idle });
+	});
 	test('stop drains queued renderer audio before releasing the inference session', async () => {
 		using fixture = new Fixture();
+		fixture.client.readyOnStart = false;
 		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
+		fixture.modelProgress({ type: 'loading' });
 		fixture.client.audioBarrier = new DeferredPromise<void>();
 		const packet = fixture.service.pushAudio(VSBuffer.wrap(new Uint8Array([0, 1])));
 		const stopping = fixture.service.stop();
 		await fixture.client.audioBarrier.complete();
 		await packet;
+		assert.deepEqual(fixture.client.requests.map(request => request.method), ['dictation/start', 'dictation/audio']);
+		fixture.modelProgress({ type: 'ready' });
 		assert.equal(await stopping, 'final text');
 		assert.deepEqual(fixture.client.requests.map(request => request.method), ['dictation/start', 'dictation/audio', 'dictation/stop']);
 	});
@@ -208,6 +228,7 @@ suite('LocalTranscriptionService', () => {
 
 	test('capture model progress reaches only the owning session', async () => {
 		using fixture = new Fixture();
+		fixture.client.readyOnStart = false;
 		const progress: unknown[] = [];
 		using listener = fixture.service.onDidChangeModelStatus(status => progress.push(status));
 		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
@@ -215,7 +236,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.modelProgress({ type: 'loading' });
 		await fixture.service.cancel();
 		fixture.modelProgress({ type: 'ready' });
-		assert.deepEqual(progress, [{ state: LocalTranscriptionModelState.Loading }, { state: LocalTranscriptionModelState.Loading }, { state: LocalTranscriptionModelState.Idle }]);
+		assert.deepEqual(progress, [{ state: LocalTranscriptionModelState.Loading }, { state: LocalTranscriptionModelState.Idle }]);
 	});
 	test('production assembly rejects a missing backend registration', () => {
 		using services = new InstantiationService();
@@ -321,9 +342,10 @@ suite('LocalTranscriptionService', () => {
 		await assert.rejects(fixture.service.start({ cacheDir: 'C:/models', model: 'model' }));
 	});
 
-	for (const blocked of ['audio', 'stop'] as const) {
+	for (const blocked of ['model loading', 'audio', 'stop'] as const) {
 		test(`cancel bypasses stalled ${blocked} and retires its late response before a new capture`, async () => {
 			using fixture = new Fixture();
+			fixture.client.readyOnStart = blocked !== 'model loading';
 			const results: ILocalTranscriptionResult[] = [];
 			using listener = fixture.service.onDidTranscribe(result => results.push(result));
 			await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
@@ -333,18 +355,19 @@ suite('LocalTranscriptionService', () => {
 			if (blocked === 'audio') {
 				fixture.client.audioBarrier = gate;
 				packet = fixture.service.pushAudio(VSBuffer.wrap(new Uint8Array([0, 1])));
-			} else fixture.client.stopBarrier = gate;
+			} else if (blocked === 'stop') fixture.client.stopBarrier = gate;
 			const stopping = fixture.service.stop();
 			if (blocked === 'stop') await fixture.client.stopped.p;
 			await fixture.service.cancel();
 			assert.equal(await stopping, '');
 			fixture.client.audioBarrier = fixture.client.stopBarrier = undefined;
+			fixture.client.readyOnStart = true;
 			await fixture.service.start({ cacheDir: 'C:/models', model: 'replacement' });
 			fixture.transcript('late old text', true, oldResource);
 			await gate.complete();
 			await packet;
 			assert.deepEqual(results, []);
-			assert.equal((await fixture.service.getModelStatus()).state, LocalTranscriptionModelState.Loading);
+			assert.equal((await fixture.service.getModelStatus()).state, LocalTranscriptionModelState.Ready);
 			await fixture.service.cancel();
 		});
 	}

@@ -59,6 +59,10 @@ fn model_operations_reject_cache_paths_and_unknown_stages() {
     let decoded: DictationModelStartParams = serde_json::from_value(request.clone()).unwrap();
     assert_eq!(serde_json::to_value(decoded).unwrap(), request);
     assert!(serde_json::from_value::<DictationModelStartParams>(json!({"resourceId":"model-1", "modelId":"custom", "operation":{"type":"import", "sourceDirectory":"C:/models", "cacheDir":"C:/elsewhere"}})).is_err());
+    let warmup = json!({"resourceId":"warmup", "modelId":"custom", "operation":{"type":"warm"}});
+    let decoded: DictationModelStartParams = serde_json::from_value(warmup.clone()).unwrap();
+    assert_eq!(decoded.operation, super::DictationModelOperation::Warm);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), warmup);
     let progress = json!({"resourceId":"model-1", "modelId":"custom", "stage":{"type":"downloading", "file":"encoder.onnx", "downloadedBytes":1048576}});
     let decoded: DictationModelProgress = serde_json::from_value(progress.clone()).unwrap();
     assert_eq!(serde_json::to_value(decoded).unwrap(), progress);

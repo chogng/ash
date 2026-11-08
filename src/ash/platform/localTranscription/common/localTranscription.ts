@@ -46,7 +46,7 @@ export interface ILocalTranscriptionModelOperation extends IDisposable {
 	cancel(): Promise<void>;
 }
 
-export type LocalTranscriptionModelOperation = { readonly type: 'prepare'; } | { readonly type: 'import'; readonly sourceDirectory: string; };
+export type LocalTranscriptionModelOperation = { readonly type: 'prepare' | 'warm'; } | { readonly type: 'import'; readonly sourceDirectory: string; };
 
 /** Ash model inventory and preparation; inference uses the standard transcription contract below. */
 export const ILocalTranscriptionModelService = createDecorator<ILocalTranscriptionModelService>('localTranscriptionModelService');
@@ -60,6 +60,8 @@ export interface ILocalTranscriptionModelService {
 	cancelModel(model: string): Promise<void>;
 	deleteModel(model: string): Promise<void>;
 	prepareModel(model: string, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation;
+	/** Loads an installed model without opening an audio stream. Desktop only. */
+	warmModel?(model: string): ILocalTranscriptionModelOperation;
 	importPackage(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation;
 }
 export interface ILocalTranscriptionModelImportResult { readonly model: string; readonly version: number; }
