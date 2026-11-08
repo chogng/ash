@@ -208,6 +208,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	const sessionIcon = '[data-ash-icon-id="chat-session"]';
 	await expect(sidebar.locator('[data-item="chatgpt:fixture-pinned"]').locator(sessionIcon)).toBeVisible();
 	await expect(row.locator(sessionIcon)).toBeVisible();
+	await expect(row.locator('.ash-session-leading-icon button')).toHaveCSS('border-radius', '6px');
 	const conversationTreeRow = row.locator('xpath=ancestor::*[@role="treeitem"][1]');
 	const item = row.locator('.ash-chat-navigation-item');
 	const actions = row.locator('.ash-sessions-list-actions');
@@ -289,6 +290,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	});
 	expect(selected).toBe(navigationStyle.backgroundColor);
 	expect(hovered).toBe(navigationStyle.hoverBackground);
+	expect(navigationStyle.borderRadius).toBe('6px');
 	await expect(item).toHaveCSS('height', navigationStyle.height);
 	await expect(item).toHaveCSS('border-radius', navigationStyle.borderRadius);
 	await expect(item).toHaveCSS('background-color', transparent);
@@ -306,6 +308,9 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(actions).toHaveCSS('background-image', 'none');
 	await expect(actions.locator('[data-action-id]')).toHaveCount(2);
 	await expect(actions.getByRole('button').last()).toHaveAccessibleName('更多操作');
+	for (const button of await actions.getByRole('button').all()) {
+		await expect(button).toHaveCSS('border-radius', '6px');
+	}
 	await expect.poll(() => actions.evaluate(element => {
 		const centerY = (node: Element): number => {
 			const bounds = node.getBoundingClientRect();

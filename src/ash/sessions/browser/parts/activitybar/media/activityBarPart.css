@@ -33,7 +33,7 @@
 	place-items: center;
 	padding: 0;
 	border: 0;
-	border-radius: var(--ash-cornerRadius-large);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-sessions-activityBar-foreground);
 	background: transparent;
 	--ash-popup-trigger-background: var(
@@ -140,6 +140,7 @@
 
 .ash-sessions-activity-projects
 	> .ash-button.ash-sessions-activity-create-project {
+	--ash-button-border-radius: var(--ash-cornerRadius-medium);
 	position: absolute;
 	inset-block-start: var(--ash-sessions-sidebar-item-inset);
 	inset-inline-end: var(--ash-sessions-sidebar-item-inset);
