@@ -10,7 +10,7 @@ import { TerminalProcessManager } from './terminalProcessManager.js';
 import { localize } from '../../../../nls.js';
 import { ProcessPropertyType, type IProcessPropertyMap } from '../../../../platform/terminal/common/terminal.js';
 
-/** Displays an Agent-owned PTY. Disposing this view releases input without terminating the process. */
+/** Displays an Agent-owned PTY. Disposing this view detaches without terminating the process. */
 export class AgentCommandPty extends BasePty {
 	readonly ownsProcess = false;
 	private readonly inputMode = this._register(new Emitter<void>());
@@ -66,7 +66,12 @@ export class AgentCommandPty extends BasePty {
 	}
 
 	async start(): Promise<void> {
-		if (await this.read()) void this.poll();
+		try {
+			if (!this.stopped && await this.read()) void this.poll();
+		} catch (error) {
+			void this.shutdown();
+			throw error;
+		}
 	}
 
 	private async poll(): Promise<void> {
@@ -103,10 +108,11 @@ export class AgentCommandPty extends BasePty {
 	shutdown(): Promise<void> {
 		this.stopped = true;
 		return this.closing ??= this.mutations.schedule(async () => {
-			if (!this.controlsInput) return;
-			this.controlsInput = false;
-			this.inputMode.fire();
-			await this.command.releaseInput().catch(error => {
+			if (this.controlsInput) {
+				this.controlsInput = false;
+				this.inputMode.fire();
+			}
+			await this.command.detach().catch(error => {
 				if (!isCancellationError(error)) onUnexpectedError(error);
 			});
 		});

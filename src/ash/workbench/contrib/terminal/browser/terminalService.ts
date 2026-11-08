@@ -110,7 +110,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			let pty: AgentCommandPty | undefined;
 			// Attachment reuses the original command grant. The current window's
 			// workspace and shell profile only apply when starting a new process.
-			pending = command.read(0).then(() => this.createTerminalCore({
+			pending = command.attach().then(() => this.createTerminalCore({
 				dimensions: { rows: 24, cols: 80 },
 				config: {
 					name: localize('terminal.agentCommand.title', 'Agent Command'),
@@ -125,7 +125,10 @@ export class TerminalService extends Disposable implements ITerminalService {
 					if (this.commandTerminals.get(key) === pending) this.commandTerminals.delete(key);
 				});
 				return { instance, pty };
-			}).catch(error => {
+			}).catch(async error => {
+				// Terminal creation can fail before a PTY owns the attachment.
+				if (pty) await pty.shutdown();
+				else await command.detach().catch(onUnexpectedError);
 				if (this.commandTerminals.get(key) === pending) this.commandTerminals.delete(key);
 				throw error;
 			});

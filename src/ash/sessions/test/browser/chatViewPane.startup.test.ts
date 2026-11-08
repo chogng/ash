@@ -151,6 +151,7 @@ test('opens a local Chat conversation before the backend session request settles
 
 class PendingSessionService implements ISessionsManagementService {
 	readonly navigationRevision = 0;
+	readonly primaryCatalogReady = false;
 	private readonly _onDidChange = new Emitter<void>();
 	private readonly pendingInitialization = new Promise<void>(() => { });
 	private _untitledSessions: readonly IUntitledChatSession[] = [];

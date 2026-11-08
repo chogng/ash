@@ -274,9 +274,10 @@ export interface IAgentCommandTerminalTarget {
 }
 
 export interface IAgentCommandTerminal {
+	attach(): Promise<void>;
 	read(cursor: number): Promise<{ readonly bytes: Uint8Array; readonly nextCursor: number; readonly gap: boolean; readonly exited: boolean; readonly exitCode?: number; }>;
 	takeInput(): Promise<void>;
-	releaseInput(): Promise<void>;
+	detach(): Promise<void>;
 	write(bytes: Uint8Array): Promise<void>;
 	resize(rows: number, cols: number): Promise<void>;
 }

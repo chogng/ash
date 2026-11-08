@@ -377,6 +377,8 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
             .map_err(|_| invalid())?;
         use wire::TerminalCommandSessionAction as Action;
         let action = match params.action {
+            Action::Attach => CommandTerminalAction::Attach,
+            Action::Detach => CommandTerminalAction::Detach,
             Action::Read { cursor } => CommandTerminalAction::Read(cursor),
             Action::TakeInput => CommandTerminalAction::TakeInput,
             Action::ReleaseInput => CommandTerminalAction::ReleaseInput,

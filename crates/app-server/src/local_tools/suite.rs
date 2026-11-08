@@ -41,6 +41,7 @@ use ash_shell_command::CommandSessionOwner;
 use ash_shell_command::CommandSessionStart;
 use ash_shell_command::CommandSessionStatus;
 use ash_shell_command::CommandTerminalOutput;
+use ash_shell_command::CommandTerminalReader;
 use ash_shell_command::CommandTerminalSize;
 use ash_tools::{
     TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError,
@@ -142,9 +143,12 @@ struct CommandAccess {
     call_id: ToolCallId,
     terminal: bool,
     controller: Option<u64>,
+    readers: std::collections::HashMap<u64, CommandTerminalReader>,
 }
 
 pub(crate) enum CommandTerminalAction {
+    Attach,
+    Detach,
     Read(u64),
     TakeInput,
     ReleaseInput,
@@ -962,21 +966,22 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 let command_authorization = self
                     .dir_grants
                     .authorize_command(authorizations, cancellation)?;
-                // Match the executor's retirement of completed tool sessions without
-                // retaining old turn cancellation domains for the suite's lifetime.
+                // Retire completed tool sessions unless a terminal still needs their output grant.
                 self.command_authorizations
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .retain(|id, access| {
-                        self.shell
-                            .shell
-                            .read_session(
-                                &access.owner,
-                                id,
-                                CommandSessionCursor::default(),
-                                Duration::ZERO,
-                            )
-                            .is_ok_and(|update| update.status == CommandSessionStatus::Running)
+                        !access.readers.is_empty()
+                            || self
+                                .shell
+                                .shell
+                                .read_session(
+                                    &access.owner,
+                                    id,
+                                    CommandSessionCursor::default(),
+                                    Duration::ZERO,
+                                )
+                                .is_ok_and(|update| update.status == CommandSessionStatus::Running)
                     });
                 let authority = super::local_command_authority(
                     authorization,
@@ -1018,6 +1023,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                                     call_id: call.id.clone(),
                                     terminal: terminal.is_some(),
                                     controller: None,
+                                    readers: Default::default(),
                                 },
                             );
                         Ok(ToolExecutionOutput::Success(session_update_json(
@@ -1224,28 +1230,60 @@ impl<B: ash_sandboxing::SandboxBackend> CommandTerminalService for LocalToolSuit
         if is_closed() {
             return Err(CoreError::Policy("terminal connection is closed".into()));
         }
-        let access = commands
-            .get_mut(id)
-            .filter(|access| {
-                access.terminal && access.owner == owner && access.call_id == target.call
-            })
-            .ok_or_else(|| CoreError::NotFound("command terminal".into()))?;
-        if matches!(action, CommandTerminalAction::ReleaseInput) {
+        let access = commands.get_mut(id).filter(|access| {
+            access.terminal && access.owner == owner && access.call_id == target.call
+        });
+        let Some(access) = access else {
+            return if matches!(action, CommandTerminalAction::Detach) {
+                Ok(None)
+            } else {
+                Err(CoreError::NotFound("command terminal".into()))
+            };
+        };
+        if matches!(
+            action,
+            CommandTerminalAction::Detach | CommandTerminalAction::ReleaseInput
+        ) {
             if access.controller == Some(connection) {
                 access.controller = None;
+            }
+            if matches!(action, CommandTerminalAction::Detach) {
+                access.readers.remove(&connection);
             }
             return Ok(None);
         }
         let shell = &self.shell.shell;
         let execution_error = |error| CoreError::Execution(super::execution_error(error));
+        if matches!(action, CommandTerminalAction::Attach) {
+            return self
+                .dir_grants
+                .read_command_output(&access.authorization, || {
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        access.readers.entry(connection)
+                    {
+                        entry.insert(
+                            shell
+                                .command_terminal_reader(&owner, id)
+                                .map_err(execution_error)?,
+                        );
+                    }
+                    Ok(None)
+                });
+        }
         if let CommandTerminalAction::Read(cursor) = action {
             return self
                 .dir_grants
                 .read_command_output(&access.authorization, || {
-                    shell
-                        .read_command_terminal(&owner, id, cursor)
+                    let output = match access.readers.get(&connection) {
+                        Some(reader) => reader.read(cursor),
+                        None => shell
+                            .command_terminal_reader(&owner, id)
+                            .map_err(execution_error)?
+                            .read(cursor),
+                    };
+                    output
                         .map(Some)
-                        .map_err(execution_error)
+                        .map_err(|error| execution_error(error.into()))
                 });
         }
         self.dir_grants.execute_command(&access.authorization, || {
@@ -1260,8 +1298,10 @@ impl<B: ash_sandboxing::SandboxBackend> CommandTerminalService for LocalToolSuit
                         ));
                     }
                     if shell
-                        .read_command_terminal(&owner, id, 0)
+                        .command_terminal_reader(&owner, id)
                         .map_err(execution_error)?
+                        .read(0)
+                        .map_err(|error| execution_error(error.into()))?
                         .exited
                     {
                         return Err(CoreError::NotFound("running command terminal".into()));
@@ -1288,7 +1328,10 @@ impl<B: ash_sandboxing::SandboxBackend> CommandTerminalService for LocalToolSuit
                         .resize_session(&owner, id, size)
                         .map_err(execution_error)?;
                 }
-                CommandTerminalAction::Read(_) | CommandTerminalAction::ReleaseInput => {
+                CommandTerminalAction::Attach
+                | CommandTerminalAction::Detach
+                | CommandTerminalAction::Read(_)
+                | CommandTerminalAction::ReleaseInput => {
                     unreachable!()
                 }
             }
@@ -1302,6 +1345,7 @@ impl<B: ash_sandboxing::SandboxBackend> CommandTerminalService for LocalToolSuit
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         for access in commands.values_mut() {
+            access.readers.remove(&connection);
             if access.controller == Some(connection) {
                 access.controller = None;
             }

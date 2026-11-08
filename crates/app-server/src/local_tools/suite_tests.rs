@@ -171,13 +171,17 @@ fn direct_write_review_follows_sensitive_aliases_and_rejects_retargeting() {
 }
 
 fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend> {
+    local_tool_suite(path, PassThroughBackend)
+}
+
+fn local_tool_suite<B: SandboxBackend>(path: &std::path::Path, backend: B) -> LocalToolSuite<B> {
     let grant = authorization(path);
     let ripgrep =
         super::super::resolve_ripgrep(&ash_install_context::InstallContext::current()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         grant.authorize(Permission::ExecuteCommands).unwrap(),
         ripgrep.clone(),
-        PassThroughBackend,
+        backend,
         ActionPolicyRevision::new("test-policy-v1"),
         super::super::shell_sandbox(),
     )
@@ -1294,6 +1298,109 @@ fn command_terminal_output_drains_after_turn_cancellation_until_its_grant_is_rev
     );
     access.remove_dir(&session, dir.path());
     assert!(access.read_command_output(&command, || Ok(())).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn attached_command_terminals_drain_after_a_new_command_retires_the_tool_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let suite = local_tool_suite(
+        dir.path(),
+        exec_server::LocalSandbox::new(ash_install_context::InstallContext::current()).build(),
+    );
+    let session = SessionId::new("terminal-drain").unwrap();
+    let thread = ThreadId::new("terminal-drain-thread").unwrap();
+    let cwd = dir.path();
+    suite
+        .dir_grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session.clone(),
+                Dir::open_local(cwd).unwrap(),
+                GrantSource::ExplicitUser,
+                Permissions::new([Permission::ExecuteCommands]),
+            ),
+        )
+        .unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let authority = ToolAuthorization::Sandboxed(super::super::shell_sandbox());
+    let shell = |arguments| {
+        let result = suite
+            .shell_session(
+                &tool_call("shell-session", arguments),
+                &authority,
+                &turn.token(),
+                &session,
+                &thread,
+                None,
+            )
+            .unwrap();
+        let ToolExecutionOutput::Success(result) = result else {
+            panic!("expected shell-session success");
+        };
+        serde_json::from_str::<Value>(&result).unwrap()
+    };
+    let start = shell(json!({
+        "action": "start", "program": "/bin/sh",
+        "arguments": ["-c", "read line; printf 'tail:%s' \"$line\"; exit 23"],
+        "working_directory": cwd, "wait_ms": 0, "terminal_rows": 24, "terminal_cols": 80,
+    }));
+    assert_eq!(start["status"], "running");
+    let id = CommandSessionId::new(start["session_id"].as_str().unwrap()).unwrap();
+    let terminal = |connection, action| {
+        suite.command_terminal(
+            CommandTerminalTarget {
+                session: session.clone(),
+                thread: thread.clone(),
+                call: ToolCallId::new("shell-session-call").unwrap(),
+                id: id.clone(),
+            },
+            connection,
+            &|| false,
+            action,
+        )
+    };
+    for connection in [1, 2, 3] {
+        terminal(connection, CommandTerminalAction::Attach).unwrap();
+    }
+    let initial = terminal(1, CommandTerminalAction::Read(0))
+        .unwrap()
+        .unwrap();
+    assert!(!initial.exited);
+    terminal(1, CommandTerminalAction::TakeInput).unwrap();
+    terminal(1, CommandTerminalAction::Write(b"finish\n".to_vec())).unwrap();
+    let completed = shell(json!({
+        "action": "wait", "session_id": id.as_str(), "wait_ms": 5000,
+    }));
+    assert_eq!(completed["status"], "exited");
+
+    // Force the competing start to finish its cleanup before the next terminal poll.
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                shell(json!({
+                    "action": "start", "program": "/bin/sh", "arguments": ["-c", "exit 0"],
+                    "working_directory": cwd, "wait_ms": 1000,
+                }));
+            })
+            .join()
+            .unwrap();
+    });
+    assert!(terminal(4, CommandTerminalAction::Read(0)).is_err());
+    terminal(2, CommandTerminalAction::Detach).unwrap();
+    suite.release_connection(3);
+    for connection in [2, 3] {
+        assert!(terminal(connection, CommandTerminalAction::Read(0)).is_err());
+    }
+    let final_output = terminal(1, CommandTerminalAction::Read(initial.next_cursor))
+        .unwrap()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&final_output.bytes).contains("tail:finish"));
+    assert!(final_output.exited);
+    assert_eq!(final_output.exit_code, Some(23));
+    terminal(1, CommandTerminalAction::Detach).unwrap();
+    assert!(terminal(1, CommandTerminalAction::Read(0)).is_err());
 }
 
 #[test]

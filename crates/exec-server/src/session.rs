@@ -114,6 +114,32 @@ pub struct CommandTerminalOutput {
     pub exit_code: Option<i32>,
 }
 
+/// Keeps a PTY's bounded output readable after the tool session is retired.
+pub struct CommandTerminalReader(Arc<(Mutex<SessionData>, Notify)>);
+
+impl CommandTerminalReader {
+    pub fn read(&self, cursor: u64) -> Result<CommandTerminalOutput, ExecutionError> {
+        let (data, _) = &*self.0;
+        let state = data
+            .lock()
+            .map_err(|_| session_error("command session output is unavailable"))?;
+        let (bytes, next_cursor, gap) = state.stdout.read_bytes(cursor)?;
+        let exit_code = match &state.final_state {
+            Some(SessionFinal::Outcome(CommandExecutionOutcome::Completed(output))) => {
+                output.exit_code
+            }
+            _ => None,
+        };
+        Ok(CommandTerminalOutput {
+            bytes,
+            next_cursor,
+            gap,
+            exited: state.final_state.is_some(),
+            exit_code,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandSessionStart {
     Completed(CommandExecutionOutcome),
@@ -400,35 +426,16 @@ impl<B: SandboxBackend> ProcessExecutor<B> {
             .map(|(update, _)| update)
     }
 
-    pub fn read_command_terminal(
+    pub fn command_terminal_reader(
         &self,
         owner: &ProcessSessionOwner,
         id: &CommandSessionId,
-        cursor: u64,
-    ) -> Result<CommandTerminalOutput, ExecutionError> {
+    ) -> Result<CommandTerminalReader, ExecutionError> {
         let record = self.record(owner, id)?;
         if !matches!(record.io, ash_sandboxing::ProcessIo::Pty(_)) {
             return Err(session_error("command does not have a PTY"));
         }
-        let state = record
-            .data
-            .0
-            .lock()
-            .map_err(|_| session_error("command session output is unavailable"))?;
-        let (bytes, next_cursor, gap) = state.stdout.read_bytes(cursor)?;
-        let exit_code = match &state.final_state {
-            Some(SessionFinal::Outcome(CommandExecutionOutcome::Completed(output))) => {
-                output.exit_code
-            }
-            _ => None,
-        };
-        Ok(CommandTerminalOutput {
-            bytes,
-            next_cursor,
-            gap,
-            exited: state.final_state.is_some(),
-            exit_code,
-        })
+        Ok(CommandTerminalReader(Arc::clone(&record.data)))
     }
 
     /// Waits for process completion without returning for intermediate output.

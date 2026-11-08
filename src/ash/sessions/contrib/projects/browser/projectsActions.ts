@@ -90,7 +90,11 @@ CommandsRegistry.register(ARCHIVE_PROJECT_COMMAND, async (accessor, id: unknown,
 		if (current.archived) return true;
 		if (current.sessionIds.length) {
 			await sessions.refresh();
-			if (sessions.state !== 'ready') return false;
+			// Membership can change while the catalog is loading.
+			const latest = await projects.read(id, scope);
+			if (latest.archived) return true;
+			if (latest.revision !== current.revision) return false;
+			if (sessions.state !== 'ready' || !sessions.primaryCatalogReady) return false;
 			// Durable Project membership uses the primary host's raw Session IDs.
 			const members = new Set(current.sessionIds);
 			for (const session of sessions.sessions) {

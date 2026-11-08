@@ -27,6 +27,10 @@ pub struct TerminalCommandSessionParams {
     deny_unknown_fields
 )]
 pub enum TerminalCommandSessionAction {
+    /// Retains output for this connection until detach or disconnect.
+    Attach,
+    /// Releases output retention and any input control held by this connection.
+    Detach,
     Read {
         #[ts(type = "number")]
         cursor: u64,

@@ -33,7 +33,8 @@ pub use ash_tool_executor::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
     CommandSessionCursor, CommandSessionId, CommandSessionOptions, CommandSessionOwner,
     CommandSessionStart, CommandSessionStatus, CommandSessionUpdate, CommandTerminalOutput,
-    CommandTerminalSize, ExecutionError, ExecutionLimits as ShellCommandLimits,
+    CommandTerminalReader, CommandTerminalSize, ExecutionError,
+    ExecutionLimits as ShellCommandLimits,
 };
 
 /// Error raised while constructing the shell-command executor.
@@ -197,13 +198,12 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         self.executor.read_session(owner, id, cursor, wait_budget)
     }
 
-    pub fn read_command_terminal(
+    pub fn command_terminal_reader(
         &self,
         owner: &CommandSessionOwner,
         id: &CommandSessionId,
-        cursor: u64,
-    ) -> Result<CommandTerminalOutput, ExecutionError> {
-        self.executor.read_command_terminal(owner, id, cursor)
+    ) -> Result<CommandTerminalReader, ExecutionError> {
+        self.executor.command_terminal_reader(owner, id)
     }
 
     /// Observes completion of an existing command without rerunning it or returning progress.

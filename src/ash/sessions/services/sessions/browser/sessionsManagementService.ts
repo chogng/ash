@@ -25,6 +25,7 @@ import { backendSession, parseSessionIdentity, projectSession, sessionIdentity, 
 export class SessionsManagementService extends Disposable implements ISessionsManagementService {
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private _sessions: readonly ISession[] = [];
+	private _primaryCatalogReady = false;
 	private _active: IActiveSessionThread | undefined;
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
 	private _activeUntitledSessionId: string | undefined;
@@ -114,6 +115,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}));
 		if (provider.connectionStatus) listeners.add(provider.connectionStatus.onDidChange(status => {
 			if (!this.initializePromise) return;
+			if (provider.id === this.defaultProviderId && status !== 'connected') this._primaryCatalogReady = false;
 			if (status !== 'connected' && this.availableProviders().every(provider => provider.connectionStatus?.get() !== 'connected')) {
 				this._state = status === 'connecting' ? 'loading' : 'error';
 				this._error = status === 'disconnected' ? localize('sessions.connection.disconnected', 'The session host is disconnected. Reconnect to load your sessions.') : undefined;
@@ -175,6 +177,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	get sessions(): readonly ISession[] { return this._sessions; }
+	get primaryCatalogReady(): boolean { return this._primaryCatalogReady; }
 	get navigationRevision(): number { return this.selectionRevision; }
 	get active(): IActiveSessionThread | undefined { return this._active; }
 	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
@@ -740,6 +743,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	private async loadSessions(): Promise<void> {
 		const generation = ++this.catalogGeneration;
+		this._primaryCatalogReady = false;
 		// Superseded jobs can finish later, but must not own the new catalog's refresh slots.
 		this.hydrating.clear();
 		this.refreshes.clear();
@@ -747,10 +751,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		try {
 			const providers = this.availableProviders();
 			const primary = providers[0];
-			const sessions = providers.length === 1 && primary?.id === this.defaultProviderId
-				? await primary.list()
-				: providers.length ? await this.loadProviderCatalogs(providers) : [];
+			const { sessions, primaryReady } = providers.length === 1 && primary?.id === this.defaultProviderId
+				? { sessions: await primary.list(), primaryReady: true }
+				: await this.loadProviderCatalogs(providers);
 			if (this.isDisposed || generation !== this.catalogGeneration) return;
+			this._primaryCatalogReady = primaryReady && (!primary?.connectionStatus || primary.connectionStatus.get() === 'connected');
 			const hydrated = this._sessions.filter(session => session.agentTree !== undefined).map(session => session.sessionId);
 			const active = this._active;
 			this._sessions = sessions;
@@ -766,16 +771,17 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 	}
 
-	private async loadProviderCatalogs(providers: readonly ISessionsProvider[]): Promise<readonly ISession[]> {
-		let successful = 0;
+	private async loadProviderCatalogs(providers: readonly ISessionsProvider[]): Promise<{ sessions: readonly ISession[]; primaryReady: boolean; }> {
 		const results = await Promise.allSettled(providers.map(async provider => {
 			const listed = await provider.list();
-			if (!this.availableProviders().includes(provider)) throw canceled();
-			successful++;
+			this.assertCurrentProvider(provider);
 			return listed.map(session => this.project(session, provider));
 		}));
-		if (!successful) throw results.find(result => result.status === 'rejected')?.reason;
-		return results.flatMap((result, index) => result.status === 'fulfilled' ? result.value : this._sessions.filter(session => session.providerId === providers[index].id));
+		if (results.length && results.every(result => result.status === 'rejected')) throw results[0].reason;
+		return {
+			sessions: results.flatMap((result, index) => result.status === 'fulfilled' ? result.value : this._sessions.filter(session => session.providerId === providers[index].id)),
+			primaryReady: providers[0]?.id === this.defaultProviderId && results[0]?.status === 'fulfilled',
+		};
 	}
 
 	private scheduleRefresh(sessionId: SessionId): void {

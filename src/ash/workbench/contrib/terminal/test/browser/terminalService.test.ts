@@ -45,6 +45,7 @@ import { TerminalService } from '../../browser/terminalService.js';
 import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
 import { AgentHostTerminalService } from '../../browser/agentHostTerminalService.js';
+import { AgentCommandPty } from '../../browser/agentHostPty.js';
 import { BasePty } from '../../common/basePty.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../browser/terminal.js';
@@ -67,6 +68,49 @@ const DEFAULT_PROFILE = {
 	title: 'Command Prompt',
 	isDefault: true,
 } as const;
+
+test('Agent command PTY drains final output and detaches a read-only view', async () => {
+	const events: (string | number | undefined)[] = [];
+	let detaches = 0;
+	const bytes = new TextEncoder().encode('final output');
+	using pty = new AgentCommandPty(1, {
+		attach: async () => { throw new Error('The terminal service attaches before creating the PTY'); },
+		read: async cursor => {
+			assert.equal(cursor, 0);
+			return { bytes, nextCursor: bytes.length, gap: false, exited: true, exitCode: 23 };
+		},
+		takeInput: async () => { throw new Error('Unexpected input takeover'); },
+		detach: async () => {
+			assert.equal(events[0], 'final output');
+			detaches++;
+		},
+		write: async () => { throw new Error('Unexpected input'); },
+		resize: async () => { throw new Error('Unexpected resize'); },
+	}, 80, 24);
+	using data = pty.onProcessData(text => events.push(text));
+	using exit = pty.onProcessExit(code => events.push(code));
+	await pty.start();
+	await pty.shutdown();
+	assert.deepEqual(events, ['final output', 23]);
+	assert.equal(detaches, 1);
+});
+
+test('Agent command PTY detaches when its initial read fails', async () => {
+	const failure = new Error('Command output unavailable');
+	let detaches = 0;
+	using pty = new AgentCommandPty(1, {
+		attach: async () => { throw new Error('The terminal service attaches before creating the PTY'); },
+		read: async () => { throw failure; },
+		takeInput: async () => { throw new Error('Unexpected input takeover'); },
+		detach: async () => { detaches++; },
+		write: async () => { throw new Error('Unexpected input'); },
+		resize: async () => { throw new Error('Unexpected resize'); },
+	}, 80, 24);
+	await assert.rejects(pty.start(), error => error === failure);
+	assert.equal(detaches, 1);
+	await pty.shutdown();
+	assert.equal(detaches, 1);
+});
 
 for (const decision of [true, false, undefined]) {
 	test(`terminal creation waits for trust before profile discovery and respects decision ${decision}`, async () => {

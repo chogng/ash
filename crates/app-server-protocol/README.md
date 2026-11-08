@@ -270,6 +270,10 @@ signal 值依次对应 SIGINT / SIGTERM / SIGKILL / SIGHUP。
 现有分页输出与连接租约没有提供解析后 ACK、进程列表、显式 detach 或跨窗口恢复；
 这些操作不能按名称存在或有限缓存推断为已实现。服务进程退出后无法 attach 已退出的 PTY。
 
+`terminal/commandSession` 的 `attach` 为当前连接保留 Agent 命令的有界输出和退出状态，供 `read` 按游标读取。
+读完或关闭视图后，`detach` 释放输出和该连接持有的输入控制权。连接断开时也会释放。
+每次读取仍检查原目录授权。
+
 ## Turn 文件选择提交
 
 `turnChanges/prepareCommit` 按 Session / Thread 接受版本绑定的文件选择和消息，返回固定

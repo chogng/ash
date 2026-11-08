@@ -13,6 +13,8 @@ export interface ISessionsManagementService {
 	readonly navigationRevision: number;
 	readonly onDidChange: Event<void>;
 	readonly sessions: readonly ISession[];
+	/** The current catalog includes a successful enumeration of the primary host. */
+	readonly primaryCatalogReady: boolean;
 	readonly active: IActiveSessionThread | undefined;
 	readonly untitledSessions: readonly IUntitledChatSession[];
 	/** Keeps draft identity resolvable after materialization, independently of foreground selection. */

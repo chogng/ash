@@ -5,7 +5,7 @@ import { Separator, SubmenuAction, type IAction } from '../../../../../base/comm
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { COPY_PATH_COMMAND_ID } from '../../../../../workbench/contrib/files/browser/fileConstants.js';
-import { projectForFolder, projectFolders, readCodeProjects } from '../../../chat/browser/sessionWorkspaceProjects.js';
+import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE, pickProjectAppearance } from './sessionGroupAppearancePicker.js';
@@ -87,11 +87,6 @@ const attentionSection = 'attention';
 const codeFolderProjectMigrationKey = 'sessions.code.folderProjectsMigrated';
 
 type ProjectMenuRow = Pick<SessionListItem, 'domNode' | 'button' | 'getMenuTrigger' | 'setMenuVisible'>;
-
-function workspaceFolderKey(resource: URI): string {
-	const path = resource.toEncodedComponents().path.replace(/\/+$/u, '') || '/';
-	return extUriBiasedIgnorePathCase.getComparisonKey(resource.withEncodedPath(path));
-}
 
 interface SessionBucket {
 	readonly id: string;
@@ -542,6 +537,8 @@ export class SessionsList extends DomWidget {
 		}
 		this.projectsLoading = false;
 		this.render();
+		// Recovery can arrive while this load still owns the migration lock.
+		if (migrate && !this.projectsFailed && this.shouldMigrateCodeFolderProjects()) void this.loadProjects();
 	}
 
 	private notifyProjectLoadFailure(): void {
@@ -567,7 +564,7 @@ export class SessionsList extends DomWidget {
 	}
 
 	private shouldMigrateCodeFolderProjects(): boolean {
-		return this.mode === 'code' && this.sessionService.state === 'ready'
+		return this.mode === 'code' && this.sessionService.state === 'ready' && this.sessionService.primaryCatalogReady
 			&& !this.storage.getBoolean(codeFolderProjectMigrationKey, StorageScope.PROFILE, false);
 	}
 
@@ -577,10 +574,8 @@ export class SessionsList extends DomWidget {
 		const organized = new Set([...projects.flatMap(project => project.sessionIds), ...this.groups.groups.flatMap(group => group.sessionIds)]);
 		const folders = new Map<string, { readonly resource: URI; readonly sessionIds: string[]; }>();
 		for (const session of this.sessionService.sessions) {
-			if (session.kind !== 'code' || session.status !== 'active' || session.backendSessionId
-				|| !session.workspace || organized.has(session.sessionId)) continue;
-			const resource = sessionWorkspaceUri(session.workspace);
-			if (resource.scheme !== 'file' || resource.authority) continue;
+			const resource = unassignedCodeFolder(session, organized);
+			if (!resource) continue;
 			const key = workspaceFolderKey(resource);
 			let entry = folders.get(key);
 			if (!entry) folders.set(key, entry = { resource, sessionIds: [] });
@@ -609,7 +604,7 @@ export class SessionsList extends DomWidget {
 			}
 		}
 		// A removed project or membership stays removed on subsequent opens.
-		if (!this.isDisposed && this.sessionService.state === 'ready') {
+		if (!this.isDisposed && this.shouldMigrateCodeFolderProjects()) {
 			this.storage.store(codeFolderProjectMigrationKey, true, StorageScope.PROFILE, StorageTarget.MACHINE);
 		}
 	}

@@ -19,6 +19,7 @@ pub use exec_server::execution::CommandSessionStart;
 pub use exec_server::execution::CommandSessionStatus;
 pub use exec_server::execution::CommandSessionUpdate;
 pub use exec_server::execution::CommandTerminalOutput;
+pub use exec_server::execution::CommandTerminalReader;
 pub use exec_server::execution::CommandTerminalSize;
 pub use exec_server::execution::ExecutionLimits;
 use exec_server::execution::ProcessExecutor;
@@ -209,14 +210,13 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             .map_err(Into::into)
     }
 
-    pub fn read_command_terminal(
+    pub fn command_terminal_reader(
         &self,
         owner: &CommandSessionOwner,
         id: &CommandSessionId,
-        cursor: u64,
-    ) -> Result<CommandTerminalOutput, ExecutionError> {
+    ) -> Result<CommandTerminalReader, ExecutionError> {
         self.execution
-            .read_command_terminal(&owner.process_owner(), id, cursor)
+            .command_terminal_reader(&owner.process_owner(), id)
             .map_err(Into::into)
     }
     pub async fn wait_session(

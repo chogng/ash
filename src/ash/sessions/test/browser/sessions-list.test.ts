@@ -69,6 +69,74 @@ const listQuickInput = { createQuickPick: () => { throw new Error('Unexpected ap
 const listDialogs = { confirm: () => { throw new Error('Unexpected confirmation'); } } as unknown as IDialogService;
 const noAttention = { blockedSessions: constObservable([]), ignore: () => undefined };
 
+test('Code folder migration waits for the primary catalog and retries when it recovers', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'folder-migration', flushInterval: 0 });
+	using catalogChanged = new Emitter<void>();
+	const folder = URI.file('/workspace');
+	const session: ISession = {
+		sessionId: 'local', kind: 'code', title: 'Local', status: 'active', nextApprovalMode: 'manual',
+		workspace: { authorityId: 'local', root: folder.fsPath },
+		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' } }],
+	};
+	const remote = { ...session, sessionId: 'remote', backendSessionId: 'local' };
+	let primaryReady = false;
+	const management = {
+		get sessions() { return primaryReady ? [session, remote] : [remote]; },
+		get primaryCatalogReady() { return primaryReady; },
+		untitledSessions: [], state: 'ready', onDidChange: catalogChanged.event,
+	} as unknown as ISessionsManagementService;
+	let project: Project = {
+		id: 'folder', name: 'Workspace', revision: 1, archived: false, sessionCount: 0, description: '',
+		materials: [{ kind: 'folder', resource: folder, name: 'Workspace' }], sessionIds: [],
+	};
+	const firstMigrationRead = new DeferredPromise<void>();
+	const displayReadStarted = new DeferredPromise<void>();
+	const displayRead = new DeferredPromise<void>();
+	let listCalls = 0;
+	const projects = {
+		onDidChange: Event.None,
+		list: async () => {
+			listCalls++;
+			if (listCalls === 2) await firstMigrationRead.p;
+			if (listCalls === 3) {
+				void displayReadStarted.complete(undefined);
+				await displayRead.p;
+			}
+			return [project];
+		},
+		read: async () => project,
+		addSession: async (value: Project, id: string) => {
+			assert.equal(value, project);
+			return project = { ...value, revision: value.revision + 1, sessionIds: [...value.sessionIds, id], sessionCount: value.sessionCount + 1 };
+		},
+	} as unknown as IProjectService;
+	const view = { onDidChange: Event.None, activeSelection: undefined } as unknown as ISessionsService;
+	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService;
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view, github, emptyGroups, storage, projects,
+		listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage),
+		new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+	const migrated = () => storage.getBoolean('sessions.code.folderProjectsMigrated', StorageScope.PROFILE, false);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(project.sessionIds, []);
+	assert.equal(migrated(), false);
+
+	primaryReady = true;
+	catalogChanged.fire();
+	primaryReady = false;
+	await firstMigrationRead.complete(undefined);
+	await displayReadStarted.p;
+	// Recovery arrives before the interrupted migration finishes loading the sidebar.
+	primaryReady = true;
+	catalogChanged.fire();
+	await displayRead.complete(undefined);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(project.sessionIds, ['local']);
+	assert.equal(migrated(), true);
+	assert.equal(list.domNode.querySelector('[data-row-order-id="local"]')?.getAttribute('data-parent-project-id'), project.id);
+});
+
 test('Sidebar project load failures offer retry only in notifications', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());

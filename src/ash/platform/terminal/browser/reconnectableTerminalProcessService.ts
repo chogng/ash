@@ -86,13 +86,14 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			return this.supervisor.request(APP_SERVER_METHODS['terminal/commandSession'], { ...target, action });
 		};
 		return {
+			attach: async () => { await request({ type: 'attach' }); },
 			read: async cursor => {
 				const output = await request({ type: 'read', cursor });
 				if (output.type !== 'output') throw new Error('Expected command terminal output');
 				return { bytes: decodeBase64(output.dataBase64).buffer, nextCursor: output.nextCursor, gap: output.gap, exited: output.exited, exitCode: output.exitCode ?? undefined };
 			},
 			takeInput: async () => { await request({ type: 'takeInput' }); },
-			releaseInput: async () => { await request({ type: 'releaseInput' }); },
+			detach: async () => { await request({ type: 'detach' }); },
 			write: async bytes => { await request({ type: 'write', dataBase64: encodeTerminalProcessInput(bytes) }); },
 			resize: async (rows, cols) => { await request({ type: 'resize', rows, cols }); },
 		};

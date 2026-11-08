@@ -113,7 +113,7 @@
     "sessions.list.changeGroupIcon": "更改分组图标",
     "sessions.list.changeGroupColor": "更改分组颜色",
     "sessions.list.changeProjectAppearance": "更改项目外观",
-    "sessions.list.workspaceProjectHelp": "在 Code 中，右键单击最近会话中的目录分组，或在聚焦时按 Shift+F10，可复制其路径。",
+    "sessions.list.workspaceProjectHelp": "在 Code 中，右键单击最近会话中的目录分组，或在聚焦时按 Shift+F10，可复制其路径。 在命令面板中运行“将未分配的代码对话关联到文件夹项目”，可检查并选择要关联的对话。",
     "sessions.list.pinProject": "置顶",
     "sessions.list.unpinProject": "取消置顶",
     "sessions.list.changeProjectIcon": "更改图标…",

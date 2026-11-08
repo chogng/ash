@@ -849,6 +849,7 @@ test('an unavailable catalog restores local drafts and preserves unresolved conv
 class FakeSessionService implements ISessionsManagementService {
 	completeBackgroundSend(): never { throw new Error('Unexpected background send'); }
 	readonly navigationRevision = 0;
+	readonly primaryCatalogReady = true;
 	private readonly _onDidChange = new Emitter<void>();
 	private _sessions: readonly ISession[];
 	private _active: IActiveSessionThread | undefined;

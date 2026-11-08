@@ -12,6 +12,7 @@ pub use session::CommandSessionStart;
 pub use session::CommandSessionStatus;
 pub use session::CommandSessionUpdate;
 pub use session::CommandTerminalOutput;
+pub use session::CommandTerminalReader;
 pub use session::ProcessSessionOwner;
 
 use ash_async_utils::CancellationToken;
