@@ -1147,6 +1147,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "personalization",
+      "file": "personalization.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "pin",
       "file": "pin.svg",
       "rendering": "symbolic"
