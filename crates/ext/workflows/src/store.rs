@@ -11,6 +11,8 @@ use protocol::SessionId;
 use protocol::ThreadId;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use rusqlite::Transaction;
+use rusqlite::TransactionBehavior;
 use rusqlite::params;
 use std::path::Path;
 use std::sync::Mutex;
@@ -34,17 +36,7 @@ impl Store {
         )
     }
     fn initialize(mut database: Connection) -> Result<Self, CoreError> {
-        database.execute_batch("CREATE TABLE IF NOT EXISTS agent_workflows (session TEXT NOT NULL, root TEXT NOT NULL, state TEXT NOT NULL, PRIMARY KEY(session, root));
-            CREATE TABLE IF NOT EXISTS agent_workflow_commands (session TEXT NOT NULL, root TEXT NOT NULL, command TEXT NOT NULL, request TEXT NOT NULL, plan TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(session, root, command));
-            CREATE TABLE IF NOT EXISTS agent_parallel_developments (session TEXT NOT NULL, root TEXT NOT NULL, run_id TEXT NOT NULL, created_order INTEGER NOT NULL, state TEXT NOT NULL, PRIMARY KEY(session, root, run_id));
-            CREATE TABLE IF NOT EXISTS agent_parallel_commands (session TEXT NOT NULL, root TEXT NOT NULL, run_id TEXT NOT NULL, command TEXT NOT NULL, request TEXT NOT NULL, receipt TEXT NOT NULL, PRIMARY KEY(session, root, run_id, command));
-            CREATE TABLE IF NOT EXISTS agent_parallel_bindings (session TEXT NOT NULL, root TEXT NOT NULL, delegation TEXT NOT NULL, intent TEXT NOT NULL, PRIMARY KEY(session, root, delegation));").map_err(journal)?;
-        migrate_parallel_tables(&mut database)?;
-        // Run-keyed prototypes allowed the same command id on different runs; only request-matched
-        // start retries can safely identify a receipt across runs.
-        database
-            .execute("DROP INDEX IF EXISTS agent_parallel_command_identity", [])
-            .map_err(journal)?;
+        migrate(&mut database)?;
         Ok(Self {
             database: Mutex::new(database),
         })
@@ -613,14 +605,69 @@ fn validate_parallel_request(request: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+type Migration = fn(&Transaction<'_>) -> Result<(), CoreError>;
+
+const MIGRATIONS: &[Migration] = &[adopt_v1];
+
+fn migrate(database: &mut Connection) -> Result<(), CoreError> {
+    let transaction = database
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(journal)?;
+    transaction
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
+                 component TEXT PRIMARY KEY, version INTEGER NOT NULL
+             );",
+        )
+        .map_err(journal)?;
+    let version: Option<u32> = transaction
+        .query_row(
+            "SELECT version FROM ash_schema_migrations WHERE component = 'workflows'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(journal)?;
+    if let Some(version) = version
+        && !(1..=MIGRATIONS.len() as u32).contains(&version)
+    {
+        return Err(journal(format!(
+            "unsupported workflows SQLite schema version {version}"
+        )));
+    }
+    for (target, migration) in (1_u32..)
+        .zip(MIGRATIONS)
+        .skip(version.unwrap_or(0) as usize)
+    {
+        migration(&transaction)?;
+        transaction
+            .execute(
+                "INSERT INTO ash_schema_migrations (component, version) VALUES ('workflows', ?1)
+                 ON CONFLICT(component) DO UPDATE SET version = excluded.version",
+                [target],
+            )
+            .map_err(journal)?;
+    }
+    transaction.commit().map_err(journal)
+}
+
+fn adopt_v1(transaction: &Transaction<'_>) -> Result<(), CoreError> {
+    transaction
+        .execute_batch(include_str!("../migrations/0001_workflows.sql"))
+        .map_err(journal)?;
+    migrate_parallel_tables(transaction)?;
+    transaction
+        .execute_batch(include_str!("../migrations/legacy/finish_adoption.sql"))
+        .map_err(journal)
+}
+
 /// Preserve prototype records while adding stable run identity and creation order. Rowid is used
 /// only once to migrate the old table's insertion order; runtime reads use the stored sequence.
-fn migrate_parallel_tables(database: &mut Connection) -> Result<(), CoreError> {
-    let has_run_id = table_has_column(database, "agent_parallel_developments", "run_id")?;
+fn migrate_parallel_tables(transaction: &Transaction<'_>) -> Result<(), CoreError> {
+    let has_run_id = table_has_column(transaction, "agent_parallel_developments", "run_id")?;
     let has_created_order =
-        table_has_column(database, "agent_parallel_developments", "created_order")?;
+        table_has_column(transaction, "agent_parallel_developments", "created_order")?;
     if !has_run_id || !has_created_order {
-        let transaction = database.transaction().map_err(journal)?;
         let rows: Vec<(String, String, Option<String>, String)> = if has_run_id {
             let mut statement = transaction
                 .prepare(
@@ -645,17 +692,9 @@ fn migrate_parallel_tables(database: &mut Connection) -> Result<(), CoreError> {
             rows.collect::<Result<Vec<_>, _>>().map_err(journal)?
         };
         transaction
-            .execute_batch(
-                "ALTER TABLE agent_parallel_developments RENAME TO agent_parallel_developments_v1;
-                 CREATE TABLE agent_parallel_developments (
-                     session TEXT NOT NULL,
-                     root TEXT NOT NULL,
-                     run_id TEXT NOT NULL,
-                     created_order INTEGER NOT NULL,
-                     state TEXT NOT NULL,
-                     PRIMARY KEY(session, root, run_id)
-                 );",
-            )
+            .execute_batch(include_str!(
+                "../migrations/legacy/rebuild_developments.sql"
+            ))
             .map_err(journal)?;
         let mut orders = std::collections::HashMap::<(String, String), i64>::new();
         for (session, root, previous_run_id, state) in rows {
@@ -681,12 +720,10 @@ fn migrate_parallel_tables(database: &mut Connection) -> Result<(), CoreError> {
         transaction
             .execute_batch("DROP TABLE agent_parallel_developments_v1;")
             .map_err(journal)?;
-        transaction.commit().map_err(journal)?;
     }
 
-    let has_command_run_id = table_has_column(database, "agent_parallel_commands", "run_id")?;
+    let has_command_run_id = table_has_column(transaction, "agent_parallel_commands", "run_id")?;
     if !has_command_run_id {
-        let transaction = database.transaction().map_err(journal)?;
         let rows: Vec<(String, String, String, String, String)> = {
             let mut statement = transaction
                 .prepare(
@@ -707,18 +744,7 @@ fn migrate_parallel_tables(database: &mut Connection) -> Result<(), CoreError> {
             rows.collect::<Result<Vec<_>, _>>().map_err(journal)?
         };
         transaction
-            .execute_batch(
-                "ALTER TABLE agent_parallel_commands RENAME TO agent_parallel_commands_v1;
-                 CREATE TABLE agent_parallel_commands (
-                     session TEXT NOT NULL,
-                     root TEXT NOT NULL,
-                     run_id TEXT NOT NULL,
-                     command TEXT NOT NULL,
-                     request TEXT NOT NULL,
-                     receipt TEXT NOT NULL,
-                     PRIMARY KEY(session, root, run_id, command)
-                 );",
-            )
+            .execute_batch(include_str!("../migrations/legacy/rebuild_commands.sql"))
             .map_err(journal)?;
         for (session, root, command, request, receipt) in rows {
             let development = development_from_receipt(&receipt)?;
@@ -734,11 +760,9 @@ fn migrate_parallel_tables(database: &mut Connection) -> Result<(), CoreError> {
         transaction
             .execute_batch("DROP TABLE agent_parallel_commands_v1;")
             .map_err(journal)?;
-        transaction.commit().map_err(journal)?;
     } else {
         // Earlier run-keyed versions stored a serialized creation request containing the generated
         // run id. Normalize those keys so a retry using the current canonical key replays its receipt.
-        let transaction = database.transaction().map_err(journal)?;
         let rows: Vec<(String, String, String, String, String)> = {
             let mut statement = transaction
                 .prepare(
@@ -769,7 +793,6 @@ fn migrate_parallel_tables(database: &mut Connection) -> Result<(), CoreError> {
                     .map_err(journal)?;
             }
         }
-        transaction.commit().map_err(journal)?;
     }
     Ok(())
 }

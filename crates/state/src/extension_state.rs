@@ -1,5 +1,7 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::TransactionBehavior;
@@ -8,6 +10,20 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Mutex;
+
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "extension_state",
+    &[
+        Migration::sql(
+            1,
+            include_str!("../migrations/extension_state/0001_extension_state.sql"),
+        ),
+        Migration::sql(
+            2,
+            include_str!("../migrations/extension_state/0002_remove_revision.sql"),
+        ),
+    ],
+);
 
 const MAX_KEYS: usize = 256;
 const MAX_BYTES: usize = 256 * 1024;
@@ -41,25 +57,9 @@ impl SqliteExtensionStateStore {
     pub fn open(path: &Path) -> Result<Self, ExtensionStateError> {
         let mut connection = open_sqlite_database(path, SqliteDurability::Durable)
             .map_err(ExtensionStateError::Storage)?;
-        let transaction = connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(storage)?;
-        transaction.execute_batch("CREATE TABLE IF NOT EXISTS ash_schema_migrations (component TEXT PRIMARY KEY, version INTEGER NOT NULL);").map_err(storage)?;
-        let version: Option<u32> = transaction
-            .query_row(
-                "SELECT version FROM ash_schema_migrations WHERE component = 'extension_state'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(storage)?;
-        match version {
-            None => transaction.execute_batch("CREATE TABLE extension_state (namespace TEXT PRIMARY KEY, values_json TEXT NOT NULL); INSERT INTO ash_schema_migrations VALUES ('extension_state', 2);").map_err(storage)?,
-            Some(1) => transaction.execute_batch("ALTER TABLE extension_state DROP COLUMN revision; UPDATE ash_schema_migrations SET version=2 WHERE component='extension_state';").map_err(storage)?,
-            Some(2) => {}
-            Some(_) => return Err(ExtensionStateError::Storage("unsupported schema version".into())),
-        }
-        transaction.commit().map_err(storage)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(ExtensionStateError::Storage)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

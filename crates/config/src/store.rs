@@ -89,37 +89,30 @@ impl ConfigStore {
         {
             fs::create_dir_all(parent).map_err(io_error)?;
         }
-        let config_existed = config_path.exists();
-        let mut document = read_document_and_migrate(&config_path)?;
-        let initial_digest = crate::store_file::document_digest(&document)?;
-
         let mut connection =
             ash_state::open_sqlite_database(&database_path, ash_state::SqliteDurability::Durable)
                 .map_err(ConfigError)?;
-        let legacy = crate::store_schema::initialize(
+        crate::store_schema::initialize(
             &mut connection,
             CONFIG_DOCUMENT_SCHEMA_VERSION,
-            &initial_digest,
+            |legacy| {
+                let document = if !config_path.exists()
+                    && let Some(json) = legacy
+                {
+                    let document = crate::document_migration::decode_legacy_json(json)?;
+                    document.validate()?;
+                    crate::store_file::write_document(&config_path, &document)?;
+                    document
+                } else {
+                    let document = read_document_and_migrate(&config_path)?;
+                    if !config_path.exists() {
+                        crate::store_file::write_document(&config_path, &document)?;
+                    }
+                    document
+                };
+                crate::store_file::document_digest(&document)
+            },
         )?;
-        if let Some(legacy) = legacy
-            && !config_existed
-        {
-            if !(OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION..=CONFIG_DOCUMENT_SCHEMA_VERSION)
-                .contains(&legacy.schema_version)
-            {
-                return Err(ConfigError(format!(
-                    "unsupported config document schema version {}",
-                    legacy.schema_version
-                )));
-            }
-            document = crate::document_migration::decode_legacy_json(&legacy.document_json)?;
-            document.validate()?;
-            crate::store_file::write_document(&config_path, &document)?;
-            replace_content_digest(&connection, &crate::store_file::document_digest(&document)?)?;
-        } else if !config_path.exists() {
-            crate::store_file::write_document(&config_path, &document)?;
-        }
-
         let (authority, _) = synchronize_authority(&mut connection, &config_path)?;
         let subscribers = Arc::new(Mutex::new(Vec::new()));
         let (committed, _) = watch::channel(authority.snapshot());
@@ -385,16 +378,6 @@ fn write_metadata(connection: &Connection, authority: &ConfigAuthority) -> Resul
                 to_sql_integer(authority.generation.get())?,
                 authority.content_digest,
             ],
-        )
-        .map_err(sql_error)?;
-    Ok(())
-}
-
-fn replace_content_digest(connection: &Connection, digest: &str) -> Result<(), ConfigError> {
-    connection
-        .execute(
-            "UPDATE config_metadata SET content_digest = ?1 WHERE authority_id = ?2",
-            params![digest, CONFIG_AUTHORITY_ID],
         )
         .map_err(sql_error)?;
     Ok(())

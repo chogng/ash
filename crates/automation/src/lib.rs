@@ -27,6 +27,8 @@ pub enum AutomationError {
     CommandConflict,
     #[error("automation storage: {0}")]
     Storage(#[from] rusqlite::Error),
+    #[error("automation storage initialization: {0}")]
+    StorageInitialization(String),
     #[error("automation record: {0}")]
     Record(#[from] serde_json::Error),
     #[error("automation storage lock is poisoned")]

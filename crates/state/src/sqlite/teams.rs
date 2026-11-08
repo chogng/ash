@@ -1,3 +1,5 @@
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use crate::{SqliteDurability, open_sqlite_database};
 use ash_protocol::{AgentId, CommandId, SessionId, TeamId, TeamRunId, ThreadId};
 use ash_teams::{
@@ -10,8 +12,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const COMPONENT: &str = "teams";
-const SCHEMA_VERSION: u32 = 1;
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "teams",
+    &[Migration::sql(
+        1,
+        concat!(
+            include_str!("../../migrations/shared/agents.sql"),
+            include_str!("../../migrations/teams/0001_teams.sql")
+        ),
+    )],
+);
 
 pub struct SqliteTeamStore {
     path: PathBuf,
@@ -23,7 +33,7 @@ impl SqliteTeamStore {
         let path = path.into();
         let mut connection =
             open_sqlite_database(&path, SqliteDurability::Durable).map_err(TeamError::Storage)?;
-        initialize(&mut connection)?;
+        MIGRATOR.run(&mut connection).map_err(TeamError::Storage)?;
         Ok(Self {
             path,
             connection: Mutex::new(connection),
@@ -410,48 +420,6 @@ impl TeamStore for SqliteTeamStore {
             })
             .collect()
     }
-}
-
-fn initialize(connection: &mut Connection) -> Result<(), TeamError> {
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(storage)?;
-    transaction.execute_batch("CREATE TABLE IF NOT EXISTS ash_schema_migrations (component TEXT PRIMARY KEY, version INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS agents (agent_id TEXT PRIMARY KEY, created_at_unix_ms INTEGER NOT NULL);").map_err(storage)?;
-    let version = transaction
-        .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = ?1",
-            [COMPONENT],
-            |row| row.get::<_, u32>(0),
-        )
-        .optional()
-        .map_err(storage)?;
-    match version {
-        None => {
-            transaction.execute_batch("CREATE TABLE teams (team_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, record_json TEXT NOT NULL);
-                CREATE TABLE team_commands (command_id TEXT PRIMARY KEY, request_json TEXT NOT NULL, result_json TEXT NOT NULL);
-                CREATE TABLE team_runs (run_id TEXT PRIMARY KEY, team_id TEXT NOT NULL REFERENCES teams(team_id), session_id TEXT NOT NULL, record_json TEXT NOT NULL);
-                CREATE INDEX team_runs_team ON team_runs(team_id, run_id);
-                CREATE TABLE team_run_commands (command_id TEXT PRIMARY KEY, request_json TEXT NOT NULL, result_json TEXT NOT NULL);
-                CREATE TABLE team_run_threads (thread_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES team_runs(run_id), agent_id TEXT NOT NULL REFERENCES agents(agent_id));
-                CREATE INDEX team_run_threads_run ON team_run_threads(run_id, thread_id);
-                CREATE TABLE team_messages (message_id TEXT PRIMARY KEY, team_id TEXT NOT NULL REFERENCES teams(team_id), record_json TEXT NOT NULL);
-                CREATE INDEX team_messages_team ON team_messages(team_id, message_id);").map_err(storage)?;
-            transaction
-                .execute(
-                    "INSERT INTO ash_schema_migrations (component, version) VALUES (?1, ?2)",
-                    params![COMPONENT, SCHEMA_VERSION],
-                )
-                .map_err(storage)?;
-        }
-        Some(SCHEMA_VERSION) => {}
-        Some(version) => {
-            return Err(TeamError::Storage(format!(
-                "unsupported Team schema version {version}"
-            )));
-        }
-    }
-    transaction.commit().map_err(storage)
 }
 
 fn read_team(connection: &Connection, id: &TeamId) -> Result<Team, TeamError> {

@@ -169,15 +169,11 @@ pub(super) fn collect(connection: &Connection) -> Result<(), ThreadStoreError> {
 }
 
 pub(super) fn create_schema(connection: &Connection) -> Result<(), String> {
-    connection.execute_batch("CREATE TABLE IF NOT EXISTS history_records (digest TEXT PRIMARY KEY, record_json TEXT NOT NULL);
-        CREATE TABLE history_prefixes (digest TEXT PRIMARY KEY, source_thread_id TEXT NOT NULL, source_sequence INTEGER NOT NULL);
-        CREATE TABLE history_prefix_records (prefix_digest TEXT NOT NULL REFERENCES history_prefixes(digest), sequence INTEGER NOT NULL, record_digest TEXT NOT NULL REFERENCES history_records(digest), PRIMARY KEY(prefix_digest, sequence));
-        CREATE TABLE history_prefix_links (prefix_digest TEXT NOT NULL REFERENCES history_prefixes(digest), child_digest TEXT NOT NULL REFERENCES history_prefixes(digest), PRIMARY KEY(prefix_digest, child_digest));
-        CREATE TABLE thread_history_prefixes (thread_id TEXT NOT NULL REFERENCES thread_streams(thread_id), prefix_digest TEXT NOT NULL REFERENCES history_prefixes(digest), PRIMARY KEY(thread_id, prefix_digest));
-        CREATE TABLE history_workspace_refs (record_digest TEXT NOT NULL REFERENCES history_records(digest), reference TEXT NOT NULL, git_directory TEXT NOT NULL, checkpoint_json TEXT NOT NULL, PRIMARY KEY(record_digest, reference, git_directory));
-        CREATE INDEX history_workspace_references ON history_workspace_refs(reference, git_directory);
-        CREATE TABLE history_checkpoint_cleanup (cleanup_key TEXT PRIMARY KEY, checkpoint_json TEXT NOT NULL);
-        CREATE INDEX history_prefix_records_digest ON history_prefix_records(record_digest);").map_err(|error| error.to_string())
+    connection
+        .execute_batch(include_str!(
+            "../../migrations/event-store/legacy/0007_history_prefixes.sql"
+        ))
+        .map_err(|error| error.to_string())
 }
 
 /// Moves existing immutable bytes into shared record storage without rewriting their envelopes.
@@ -198,9 +194,11 @@ pub(super) fn migrate_records(connection: &Connection) -> Result<(), String> {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?
     };
-    connection.execute_batch("CREATE TABLE thread_event_refs (
-        thread_id TEXT NOT NULL REFERENCES thread_streams(thread_id), sequence INTEGER NOT NULL, event_id TEXT NOT NULL UNIQUE,
-        schema_version INTEGER NOT NULL, record_digest TEXT NOT NULL REFERENCES history_records(digest), PRIMARY KEY(thread_id, sequence));").map_err(|error| error.to_string())?;
+    connection
+        .execute_batch(include_str!(
+            "../../migrations/event-store/legacy/0007_thread_event_refs.sql"
+        ))
+        .map_err(|error| error.to_string())?;
     for (thread, sequence, event, version, json) in rows {
         let digest = write_blob(connection, &json).map_err(|error| error.to_string())?;
         connection
@@ -211,8 +209,8 @@ pub(super) fn migrate_records(connection: &Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
     }
     connection
-        .execute_batch(
-            "DROP TABLE thread_events; ALTER TABLE thread_event_refs RENAME TO thread_events;",
-        )
+        .execute_batch(include_str!(
+            "../../migrations/event-store/legacy/0007_replace_thread_events.sql"
+        ))
         .map_err(|error| error.to_string())
 }

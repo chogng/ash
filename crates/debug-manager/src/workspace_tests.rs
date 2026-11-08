@@ -17,6 +17,46 @@ fn watches(values: &[&str]) -> DebugWorkspaceState {
 }
 
 #[test]
+fn concurrent_open_adopts_legacy_debug_workspaces() {
+    let directory = tempfile::tempdir().unwrap();
+    for legacy in [false, true] {
+        let path = directory.path().join(format!("state-{legacy}.sqlite3"));
+        if legacy {
+            DebugWorkspaceStore::open(&path)
+                .unwrap()
+                .write("workspace", 0, edits(&["old"]))
+                .unwrap();
+            rusqlite::Connection::open(&path)
+                .unwrap()
+                .execute(
+                    "DELETE FROM ash_schema_migrations WHERE component = 'debug-workspaces'",
+                    [],
+                )
+                .unwrap();
+        }
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let store = DebugWorkspaceStore::open(&path).unwrap();
+                    let snapshot = store.read("workspace", None).unwrap().snapshot;
+                    assert_eq!(
+                        snapshot.state,
+                        if legacy {
+                            watches(&["old"])
+                        } else {
+                            watches(&[])
+                        }
+                    );
+                    assert_eq!(snapshot.revision, u32::from(legacy));
+                });
+            }
+        });
+    }
+}
+
+#[test]
 fn definitions_survive_reopen_and_workspace_keys_are_independent() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("state.sqlite");

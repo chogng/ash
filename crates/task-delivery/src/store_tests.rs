@@ -26,6 +26,39 @@ fn package() -> TaskPackage {
 }
 
 #[test]
+fn concurrent_open_preserves_existing_v1_packages() {
+    let directory = tempfile::tempdir().unwrap();
+    for legacy in [false, true] {
+        let path = directory.path().join(format!("state-{legacy}.sqlite3"));
+        let task = OutgoingTask {
+            host: "mac".into(),
+            root: "/work/project".into(),
+            request: "verify".into(),
+            package: package(),
+        };
+        if legacy {
+            Store::open(&path).unwrap().save_outgoing(&task).unwrap();
+        }
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let store = Store::open(&path).unwrap();
+                    let package = &task.package;
+                    let result = store.outgoing(&package.source.thread_id, &package.delivery_id);
+                    if legacy {
+                        assert_eq!(result.unwrap(), task);
+                    } else {
+                        assert!(matches!(result, Err(Error::NotFound)));
+                    }
+                });
+            }
+        });
+    }
+}
+
+#[test]
 fn outgoing_package_is_durable_immutable_and_scoped_to_its_thread() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("state.sqlite3");

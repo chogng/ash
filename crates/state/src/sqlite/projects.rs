@@ -2,6 +2,8 @@ use super::connection::from_sql_integer;
 use super::connection::to_sql_integer;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use ash_projects::Project;
 use ash_projects::ProjectCommandRequest;
 use ash_projects::ProjectCommit;
@@ -18,8 +20,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-const PROJECTS_SCHEMA_VERSION: u32 = 1;
-const PROJECTS_COMPONENT: &str = "projects";
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "projects",
+    &[Migration::sql(
+        1,
+        include_str!("../../migrations/projects/0001_projects.sql"),
+    )],
+);
 
 /// SQLite implementation of complete Project records and retry-safe command receipts.
 pub struct SqliteProjectStore {
@@ -32,7 +39,9 @@ impl SqliteProjectStore {
         let path = path.into();
         let mut connection = open_sqlite_database(&path, SqliteDurability::Durable)
             .map_err(ProjectStoreError::Storage)?;
-        initialize(&mut connection)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(ProjectStoreError::Storage)?;
         let store = Self {
             path,
             connection: Mutex::new(connection),
@@ -190,65 +199,6 @@ impl ProjectStore for SqliteProjectStore {
         transaction.commit().map_err(storage_error)?;
         Ok(ProjectStoreOutcome::Applied)
     }
-}
-
-fn initialize(connection: &mut Connection) -> Result<(), ProjectStoreError> {
-    connection
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
-                 component TEXT PRIMARY KEY,
-                 version INTEGER NOT NULL
-             );",
-        )
-        .map_err(storage_error)?;
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(storage_error)?;
-    let version = transaction
-        .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = ?1",
-            [PROJECTS_COMPONENT],
-            |row| row.get::<_, u32>(0),
-        )
-        .optional()
-        .map_err(storage_error)?;
-    match version {
-        None => {
-            transaction
-                .execute_batch(
-                    "CREATE TABLE projects (
-                         project_id TEXT PRIMARY KEY,
-                         revision INTEGER NOT NULL,
-                         record_json TEXT NOT NULL
-                     );
-                     CREATE TABLE project_commands (
-                         command_id TEXT PRIMARY KEY,
-                         project_id TEXT NOT NULL,
-                         expected_revision INTEGER NOT NULL,
-                         request_json TEXT NOT NULL,
-                         result_revision INTEGER NOT NULL,
-                         result_json TEXT NOT NULL,
-                         FOREIGN KEY (project_id) REFERENCES projects(project_id)
-                     );
-                     CREATE INDEX project_commands_project_revision
-                     ON project_commands(project_id, result_revision);",
-                )
-                .map_err(storage_error)?;
-            transaction
-                .execute(
-                    "INSERT INTO ash_schema_migrations (component, version) VALUES (?1, ?2)",
-                    params![PROJECTS_COMPONENT, PROJECTS_SCHEMA_VERSION],
-                )
-                .map_err(storage_error)?;
-        }
-        Some(PROJECTS_SCHEMA_VERSION) => {}
-        Some(version) => {
-            return Err(ProjectStoreError::Storage(format!(
-                "unsupported Project SQLite schema version {version}"
-            )));
-        }
-    }
-    transaction.commit().map_err(storage_error)
 }
 
 fn load_command(

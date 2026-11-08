@@ -21,6 +21,14 @@ use std::sync::Mutex;
 #[path = "store_tests.rs"]
 mod tests;
 
+const MIGRATOR: ash_state::SqliteMigrator<'_> = ash_state::SqliteMigrator::new(
+    "automation",
+    &[ash_state::SqliteMigration::sql(
+        1,
+        include_str!("../migrations/0001_automations.sql"),
+    )],
+);
+
 /// A version-checked plan write. Revision zero creates a plan; every write has a stable receipt.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AutomationWrite {
@@ -38,26 +46,12 @@ pub struct AutomationStore {
 
 impl AutomationStore {
     pub fn open(path: &Path) -> Result<Self, AutomationError> {
-        let connection = Connection::open(path)?;
-        connection.busy_timeout(std::time::Duration::from_secs(5))?;
-        connection.execute_batch(
-            "PRAGMA journal_mode=WAL;
-             CREATE TABLE IF NOT EXISTS automation_plans (
-               id TEXT PRIMARY KEY, record TEXT NOT NULL);
-             CREATE TABLE IF NOT EXISTS automation_runs (
-               id TEXT PRIMARY KEY, automation_id TEXT NOT NULL, created_at INTEGER NOT NULL,
-               active INTEGER NOT NULL, record TEXT NOT NULL);
-             CREATE UNIQUE INDEX IF NOT EXISTS automation_one_active_run
-               ON automation_runs(automation_id) WHERE active = 1;
-             CREATE INDEX IF NOT EXISTS automation_run_history
-               ON automation_runs(automation_id, created_at DESC, id);
-             CREATE TABLE IF NOT EXISTS automation_commands (
-               id TEXT PRIMARY KEY, request TEXT NOT NULL, result TEXT NOT NULL);
-             CREATE TABLE IF NOT EXISTS automation_deleted (id TEXT PRIMARY KEY);
-             CREATE TABLE IF NOT EXISTS automation_events (
-               subject TEXT NOT NULL, event_key TEXT NOT NULL, run_id TEXT NOT NULL,
-               PRIMARY KEY(subject, event_key));",
-        )?;
+        let mut connection =
+            ash_state::open_sqlite_database(path, ash_state::SqliteDurability::Durable)
+                .map_err(AutomationError::StorageInitialization)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(AutomationError::StorageInitialization)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -102,6 +96,14 @@ impl AutomationStore {
         }
         if previous.as_ref().map_or(0, |plan| plan.revision) != request.expected_revision {
             return Err(AutomationError::Conflict);
+        }
+        if previous.as_ref().is_some_and(|plan| {
+            (plan.definition.session == ash_protocol::AutomationSession::NewChat)
+                != (request.definition.session == ash_protocol::AutomationSession::NewChat)
+        }) {
+            return Err(AutomationError::Invalid(
+                "cannot change the session kind of an existing plan".into(),
+            ));
         }
         if previous
             .as_ref()

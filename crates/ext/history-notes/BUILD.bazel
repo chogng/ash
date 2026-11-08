@@ -1,2 +1,6 @@
 load("//:defs.bzl", "ash_rust_crate")
-ash_rust_crate(name = "history-notes", crate_name = "ash_history_notes")
+ash_rust_crate(
+    name = "history-notes",
+    crate_name = "ash_history_notes",
+    data = glob(["migrations/*.sql"]),
+)

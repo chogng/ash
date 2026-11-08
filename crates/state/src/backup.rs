@@ -1,5 +1,7 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::TransactionBehavior;
@@ -11,6 +13,14 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "backups",
+    &[Migration::sql(
+        1,
+        include_str!("../migrations/backups/0001_backups.sql"),
+    )],
+);
 
 /// Reopening information independent of a product's windows or editor objects.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -72,36 +82,9 @@ impl SqliteBackupStore {
     pub fn open(path: &Path) -> Result<Self, BackupError> {
         let mut connection =
             open_sqlite_database(path, SqliteDurability::Durable).map_err(BackupError::Storage)?;
-        let transaction = connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(storage_error)?;
-        transaction.execute_batch(
-            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (component TEXT PRIMARY KEY, version INTEGER NOT NULL);",
-        ).map_err(storage_error)?;
-        let version: Option<u32> = transaction
-            .query_row(
-                "SELECT version FROM ash_schema_migrations WHERE component = 'backups'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(storage_error)?;
-        match version {
-            None => transaction.execute_batch(
-                "CREATE TABLE backup_workspaces (
-                    client_id TEXT NOT NULL, workspace_id TEXT NOT NULL, descriptor TEXT NOT NULL,
-                    PRIMARY KEY (client_id, workspace_id));
-                CREATE TABLE backup_contents (
-                    client_id TEXT NOT NULL, workspace_id TEXT NOT NULL, resource TEXT NOT NULL,
-                    format TEXT NOT NULL, content TEXT NOT NULL, revision TEXT NOT NULL, updated_at INTEGER NOT NULL,
-                    PRIMARY KEY (client_id, workspace_id, resource),
-                    FOREIGN KEY (client_id, workspace_id) REFERENCES backup_workspaces(client_id, workspace_id) ON DELETE CASCADE);
-                INSERT INTO ash_schema_migrations VALUES ('backups', 1);",
-            ).map_err(storage_error)?,
-            Some(1) => {}
-            Some(version) => return Err(BackupError::Storage(format!("unsupported backup schema version {version}"))),
-        }
-        transaction.commit().map_err(storage_error)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(BackupError::Storage)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

@@ -74,6 +74,49 @@ fn connect(authority: &ConnectorAuthority) -> ConnectorConnectionGeneration {
 }
 
 #[test]
+fn concurrent_open_adopts_legacy_connector_events() {
+    let directory = tempfile::tempdir().unwrap();
+    for legacy in [false, true] {
+        let path = directory.path().join(format!("state-{legacy}.sqlite3"));
+        let connector = definition("plugin:acme/github:mcp:github");
+        let generation = legacy.then(|| {
+            let authority = ConnectorAuthority::open_sqlite(&path, [connector.clone()]).unwrap();
+            let generation = connect(&authority);
+            drop(authority);
+            rusqlite::Connection::open(&path)
+                .unwrap()
+                .execute(
+                    "DELETE FROM ash_schema_migrations WHERE component = 'connectors'",
+                    [],
+                )
+                .unwrap();
+            generation
+        });
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let authority =
+                        ConnectorAuthority::open_sqlite(&path, [connector.clone()]).unwrap();
+                    assert_eq!(
+                        authority.snapshot().generation().get(),
+                        if legacy { 3 } else { 1 }
+                    );
+                    if let Some(generation) = generation {
+                        assert!(authority.authorizes(
+                            connector.id(),
+                            generation,
+                            &connector.digest()
+                        ));
+                    }
+                });
+            }
+        });
+    }
+}
+
+#[test]
 fn memory_authority_replays_exact_commands_and_rejects_conflicts() {
     let authority =
         ConnectorAuthority::in_memory([definition("plugin:acme/github:mcp:github")]).unwrap();

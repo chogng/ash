@@ -7,11 +7,38 @@ use protocol::CommandId;
 use protocol::SessionId;
 use protocol::ThreadId;
 use rusqlite::Connection;
+use rusqlite::ErrorCode;
 use rusqlite::OptionalExtension;
 use rusqlite::TransactionBehavior;
 use rusqlite::params;
 use std::path::Path;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
+
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_queue.sql"),
+    include_str!("../migrations/0002_approval_modes.sql"),
+];
+
+fn enable_wal(connection: &Connection) -> rusqlite::Result<()> {
+    // The first WAL switch can report contention before SQLite invokes its busy handler.
+    let retry_until = Instant::now() + Duration::from_secs(1);
+    loop {
+        match connection.pragma_update(None, "journal_mode", "WAL") {
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if Instant::now() < retry_until
+                    && matches!(
+                        error.code,
+                        ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
+                    ) =>
+            {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            result => return result,
+        }
+    }
+}
 
 pub struct QueueStore {
     connection: Mutex<Connection>,
@@ -37,45 +64,38 @@ impl QueueStore {
 
     pub fn open(path: &Path) -> Result<Self, QueueError> {
         let mut connection = Connection::open(path)?;
-        connection.busy_timeout(std::time::Duration::from_secs(5))?;
-        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
+        connection.busy_timeout(Duration::from_secs(5))?;
+        enable_wal(&connection)?;
+        connection.pragma_update(None, "synchronous", "FULL")?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transaction.execute_batch("CREATE TABLE IF NOT EXISTS queue_metadata (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, revision INTEGER NOT NULL);
-            INSERT OR IGNORE INTO queue_metadata VALUES(1,2,0);")?;
-        let version: u32 =
-            transaction.query_row("SELECT version FROM queue_metadata WHERE id=1", [], |row| {
-                row.get(0)
-            })?;
-        if !matches!(version, 1 | 2) {
+        transaction.execute_batch(
+            "CREATE TABLE IF NOT EXISTS queue_metadata (
+                 id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL, revision INTEGER NOT NULL
+             );",
+        )?;
+        let version: Option<u32> = transaction
+            .query_row(
+                "SELECT version FROM queue_metadata WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(version) = version
+            && !(1..=MIGRATIONS.len() as u32).contains(&version)
+        {
             return Err(QueueError::Storage(format!(
                 "unsupported queue schema {version}"
             )));
         }
-        transaction.execute_batch(
-            "CREATE TABLE IF NOT EXISTS queued_messages (
-            position INTEGER PRIMARY KEY AUTOINCREMENT,
-            id TEXT UNIQUE NOT NULL,
-            session_id TEXT NOT NULL,
-            thread_id TEXT NOT NULL,
-            request TEXT NOT NULL,
-            status TEXT NOT NULL,
-            turn_id TEXT,
-            error TEXT,
-            revision INTEGER NOT NULL,
-            lease_until INTEGER NOT NULL DEFAULT 0,
-            ready_at INTEGER NOT NULL DEFAULT 0,
-            sort_key INTEGER NOT NULL DEFAULT 0
-        ); CREATE INDEX IF NOT EXISTS queue_thread ON queued_messages(thread_id,position);",
-        )?;
-        if version == 1 {
-            // Queue requests are mutable records, unlike content-addressed Thread history.
-            // Migrate only the permission field and preserve command identity and revision.
-            transaction.execute_batch(
-                "UPDATE queued_messages SET request=json_set(request,'$.approvalMode',
-                    CASE json_extract(request,'$.approvalMode')
-                        WHEN 'askPermissions' THEN 'manual' ELSE 'auto' END)
-                    WHERE json_extract(request,'$.approvalMode') IN ('askPermissions','autoReview');
-                 UPDATE queue_metadata SET version=2 WHERE id=1;",
+        for (target, sql) in (1_u32..)
+            .zip(MIGRATIONS)
+            .skip(version.unwrap_or(0) as usize)
+        {
+            transaction.execute_batch(sql)?;
+            transaction.execute(
+                "INSERT INTO queue_metadata (id, version, revision) VALUES (1, ?1, 0)
+                 ON CONFLICT(id) DO UPDATE SET version = excluded.version",
+                [target],
             )?;
         }
         transaction.commit()?;

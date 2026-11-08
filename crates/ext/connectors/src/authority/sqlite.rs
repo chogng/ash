@@ -25,6 +25,14 @@ use super::domain_error;
 use super::persistence_error;
 use crate::ConnectorAuthorityError;
 
+const MIGRATOR: ash_state::SqliteMigrator<'_> = ash_state::SqliteMigrator::new(
+    "connectors",
+    &[ash_state::SqliteMigration::sql(
+        1,
+        include_str!("../../migrations/0001_connector_authority.sql"),
+    )],
+);
+
 pub(super) struct LoadedAuthority {
     pub authority: SqliteAuthority,
     pub snapshot: ConnectorSnapshot,
@@ -41,10 +49,10 @@ impl SqliteAuthority {
         path: &Path,
         definitions: Vec<ConnectorDefinition>,
     ) -> Result<LoadedAuthority, ConnectorAuthorityError> {
-        let connection =
+        let mut connection =
             ash_state::open_sqlite_database(path, ash_state::SqliteDurability::Durable)
                 .map_err(|error| persistence_error(error.to_string()))?;
-        initialize(&connection)?;
+        MIGRATOR.run(&mut connection).map_err(persistence_error)?;
         let records = load_latest_records(&connection)?;
         let max_generation = records
             .values()
@@ -244,42 +252,6 @@ impl PersistedRecord {
         };
         ConnectorConnection::restore(generation, state, enabled).map_err(domain_error)
     }
-}
-
-fn initialize(connection: &Connection) -> Result<(), ConnectorAuthorityError> {
-    connection
-        .execute_batch(
-            "PRAGMA foreign_keys = ON;
-             CREATE TABLE IF NOT EXISTS connector_events (
-                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                snapshot_generation INTEGER NOT NULL UNIQUE,
-                connector_id TEXT NOT NULL,
-                event_kind TEXT NOT NULL,
-                connection_generation INTEGER NOT NULL,
-                account_id TEXT,
-                account_display_name TEXT,
-                credential_reference TEXT,
-                definition_digest TEXT,
-                reason TEXT
-             );
-             CREATE TABLE IF NOT EXISTS connector_command_receipts (
-                command_id TEXT PRIMARY KEY,
-                expected_generation INTEGER NOT NULL,
-                connector_id TEXT NOT NULL,
-                command_digest TEXT NOT NULL,
-                result_generation INTEGER NOT NULL
-             );
-             CREATE TABLE IF NOT EXISTS connector_authority_meta (
-                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                snapshot_generation INTEGER NOT NULL
-             );
-             CREATE TABLE IF NOT EXISTS connector_credential_cleanup (
-                connector_id TEXT PRIMARY KEY
-             );
-             INSERT OR IGNORE INTO connector_authority_meta (singleton, snapshot_generation)
-             VALUES (1, 1);",
-        )
-        .map_err(sql_error)
 }
 
 fn load_credential_cleanup(

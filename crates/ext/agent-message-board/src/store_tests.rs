@@ -55,11 +55,24 @@ fn channel(store: &Store, scope: &Scope) {
     );
 }
 
+fn open_boards_concurrently(path: &std::path::Path) {
+    let barrier = Barrier::new(4);
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| {
+                barrier.wait();
+                Store::open(path).unwrap();
+            });
+        }
+    });
+}
+
 #[test]
 fn topic_index_is_installed_on_reopen_and_pagination_excludes_replies() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("board.sqlite3");
     let scope = board_scope("session", "root");
+    open_boards_concurrently(&path);
     let store = Store::open(&path).unwrap();
     channel(&store, &scope);
     let mut ids = Vec::new();
@@ -86,8 +99,12 @@ fn topic_index_is_installed_on_reopen_and_pagination_excludes_replies() {
     drop(store);
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute("DROP INDEX agent_board_channel_topics", [])
+        .execute_batch(
+            "DROP INDEX agent_board_channel_topics;
+             DELETE FROM ash_schema_migrations WHERE component = 'agent-message-board';",
+        )
         .unwrap();
+    open_boards_concurrently(&path);
     let reopened = Store::open(&path).unwrap();
     let first = read(
         &reopened,
@@ -242,7 +259,8 @@ fn explicit_topic_unsubscribe_survives_post_and_reopen() {
     database
         .execute_batch(
             "DROP TABLE IF EXISTS agent_board_channel_opt_outs;
-             DROP TABLE IF EXISTS agent_board_topic_opt_outs;",
+             DROP TABLE IF EXISTS agent_board_topic_opt_outs;
+             DELETE FROM ash_schema_migrations WHERE component = 'agent-message-board';",
         )
         .unwrap();
     drop(database);

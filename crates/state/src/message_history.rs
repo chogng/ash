@@ -1,5 +1,7 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use message_history::MAX_PAGE_BYTES;
 use message_history::MessageHistoryEntry as Entry;
 use message_history::MessageHistoryKind as InputKind;
@@ -9,12 +11,25 @@ use message_history::MessageHistoryRetention as Retention;
 use message_history::MessageHistoryStore;
 use message_history::MessageHistorySubmission as Submission;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
 use rusqlite::TransactionBehavior;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "message-history",
+    &[
+        Migration::sql(
+            1,
+            include_str!("../migrations/message-history/0001_message_history.sql"),
+        ),
+        Migration::sql(
+            2,
+            include_str!("../migrations/message-history/0002_scope.sql"),
+        ),
+    ],
+);
 
 /// Profile-local user input storage, with no dependency on Thread lifecycle or event replay.
 pub struct SqliteMessageHistory {
@@ -29,56 +44,7 @@ impl SqliteMessageHistory {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sql_error)?;
-        transaction
-            .execute_batch(
-                "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
-                 component TEXT PRIMARY KEY, version INTEGER NOT NULL
-             );",
-            )
-            .map_err(sql_error)?;
-        let version: Option<u32> = transaction
-            .query_row(
-                "SELECT version FROM ash_schema_migrations WHERE component = 'message-history'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(sql_error)?;
-        match version {
-            None => {
-                transaction
-                    .execute_batch(
-                        "CREATE TABLE message_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        submitted_at_ms INTEGER NOT NULL,
-                        kind TEXT NOT NULL CHECK(kind IN ('agent', 'shell', 'command')),
-                        thread_id TEXT,
-                        text TEXT NOT NULL,
-                        search_text TEXT NOT NULL,
-                        text_bytes INTEGER NOT NULL CHECK(text_bytes > 0)
-                    );
-                    CREATE INDEX message_history_kind ON message_history(kind, id);
-                    INSERT INTO ash_schema_migrations(component, version)
-                    VALUES ('message-history', 1);",
-                    )
-                    .map_err(sql_error)?;
-            }
-            Some(1) | Some(2) => {}
-            Some(version) => {
-                return Err(format!(
-                    "Unsupported input history schema version {version}"
-                ));
-            }
-        }
-        if version != Some(2) {
-            transaction
-                .execute_batch(
-                    "ALTER TABLE message_history ADD COLUMN scope TEXT;
-                 CREATE INDEX message_history_scope ON message_history(scope, id);
-                 UPDATE ash_schema_migrations SET version = 2 WHERE component = 'message-history';",
-                )
-                .map_err(sql_error)?;
-        }
+        MIGRATOR.run_in_transaction(&transaction)?;
         prune(&transaction, retention)?;
         transaction.commit().map_err(sql_error)?;
         Ok(Self {

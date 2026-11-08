@@ -10,6 +10,7 @@ pub mod channels;
 mod in_memory;
 mod room;
 mod sqlite;
+mod store_schema;
 
 pub use contract::DocumentCollaborationAuditEvent;
 pub use contract::DocumentCollaborationInvite;

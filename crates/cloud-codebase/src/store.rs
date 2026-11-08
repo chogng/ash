@@ -3,6 +3,8 @@ use std::sync::Mutex;
 use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use rusqlite::Transaction;
+use rusqlite::TransactionBehavior;
 use rusqlite::params;
 use serde::Deserialize;
 use serde::Serialize;
@@ -16,9 +18,9 @@ use crate::CloudCodebaseSelection;
 use crate::CloudCodebaseState;
 use crate::CloudCodebaseStorage;
 
-const SCHEMA_VERSION: &str = "3";
-const LEGACY_MODE_SCHEMA_VERSION: &str = "1";
-const LEGACY_GRANT_SCHEMA_VERSION: &str = "2";
+const BASELINE_VERSION: u32 = 3;
+type Migration = fn(&Transaction<'_>, Option<u32>) -> Result<(), CloudCodebaseError>;
+const MIGRATIONS: &[Migration] = &[adopt_v3];
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -95,36 +97,7 @@ impl CloudStateStore {
                     .map_err(CloudCodebaseError::DatabaseRuntime)?
             }
         };
-        connection.execute_batch(
-            "CREATE TABLE IF NOT EXISTS cloud_codebase_metadata (
-                 key TEXT PRIMARY KEY,
-                 value TEXT NOT NULL
-             );",
-        )?;
-        let stored_root = metadata(&connection, "root_id")?;
-        if stored_root
-            .as_deref()
-            .is_some_and(|stored| stored != root_id)
-        {
-            return Err(CloudCodebaseError::StorageRootMismatch);
-        }
-        let stored_schema = metadata(&connection, "schema_version")?;
-        match stored_schema.as_deref() {
-            None | Some(SCHEMA_VERSION) => {}
-            Some(LEGACY_MODE_SCHEMA_VERSION) | Some(LEGACY_GRANT_SCHEMA_VERSION) => {
-                migrate_cloud_state(&mut connection, stored_schema.as_deref().unwrap())?;
-            }
-            Some(_) => return Err(CloudCodebaseError::IncompatibleStorage),
-        }
-        set_metadata(&connection, "root_id", root_id)?;
-        set_metadata(&connection, "schema_version", SCHEMA_VERSION)?;
-        if metadata(&connection, "state")?.is_none() {
-            set_metadata(
-                &connection,
-                "state",
-                &serde_json::to_string(&DurableCloudState::default())?,
-            )?;
-        }
+        initialize(&mut connection, root_id)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -144,12 +117,48 @@ impl CloudStateStore {
     }
 }
 
-fn migrate_cloud_state(
-    connection: &mut Connection,
-    schema_version: &str,
-) -> Result<(), CloudCodebaseError> {
-    let state = metadata(connection, "state")?.ok_or(CloudCodebaseError::IncompatibleStorage)?;
-    let current = if schema_version == LEGACY_MODE_SCHEMA_VERSION {
+fn initialize(connection: &mut Connection, root_id: &str) -> Result<(), CloudCodebaseError> {
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    transaction.execute_batch(include_str!("../migrations/0003_metadata.sql"))?;
+    match metadata(&transaction, "root_id")? {
+        Some(stored) if stored != root_id => return Err(CloudCodebaseError::StorageRootMismatch),
+        Some(_) => {}
+        None => set_metadata(&transaction, "root_id", root_id)?,
+    }
+    let latest = BASELINE_VERSION + MIGRATIONS.len() as u32 - 1;
+    let version = metadata(&transaction, "schema_version")?
+        .map(|stored| {
+            stored
+                .parse::<u32>()
+                .ok()
+                .filter(|version| (1..=latest).contains(version) && version.to_string() == stored)
+                .ok_or(CloudCodebaseError::IncompatibleStorage)
+        })
+        .transpose()?;
+    for (target, migration) in (BASELINE_VERSION..)
+        .zip(MIGRATIONS)
+        .filter(|(target, _)| version.is_none_or(|version| *target > version))
+    {
+        migration(&transaction, version)?;
+        set_metadata(&transaction, "schema_version", &target.to_string())?;
+    }
+    if metadata(&transaction, "state")?.is_none() {
+        set_metadata(
+            &transaction,
+            "state",
+            &serde_json::to_string(&DurableCloudState::default())?,
+        )?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
+fn adopt_v3(transaction: &Transaction<'_>, version: Option<u32>) -> Result<(), CloudCodebaseError> {
+    let Some(version) = version else {
+        return Ok(());
+    };
+    let state = metadata(transaction, "state")?.ok_or(CloudCodebaseError::IncompatibleStorage)?;
+    let current = if version == 1 {
         let legacy = serde_json::from_str::<LegacyDurableCloudState>(&state)?;
         let managed_grant = legacy
             .grant
@@ -200,10 +209,7 @@ fn migrate_cloud_state(
             remote_generation: legacy.remote_generation,
         }
     };
-    let transaction = connection.transaction()?;
-    set_metadata(&transaction, "state", &serde_json::to_string(&current)?)?;
-    set_metadata(&transaction, "schema_version", SCHEMA_VERSION)?;
-    transaction.commit()?;
+    set_metadata(transaction, "state", &serde_json::to_string(&current)?)?;
     Ok(())
 }
 

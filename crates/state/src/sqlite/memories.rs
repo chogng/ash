@@ -2,6 +2,8 @@ use super::connection::from_sql_integer;
 use super::connection::to_sql_integer;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use ash_protocol::CommandId;
 use async_utils::CancellationToken;
 use memories::Memory;
@@ -34,10 +36,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-const MEMORIES_COMPONENT: &str = "memories";
-const MEMORIES_BASELINE_VERSION: u32 = 4;
-const MEMORIES_SCHEMA_VERSION: u32 =
-    MEMORIES_BASELINE_VERSION + MEMORIES_MIGRATIONS.len() as u32 - 1;
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "memories",
+    &[Migration::sql(
+        4,
+        include_str!("../../migrations/memories/0004_baseline.sql"),
+    )],
+);
 
 /// SQLite implementation of Memory records, tombstones, catalog revisions, and command receipts.
 pub struct SqliteMemoryStore {
@@ -53,7 +58,9 @@ impl SqliteMemoryStore {
         connection
             .pragma_update(None, "secure_delete", "ON")
             .map_err(storage_error)?;
-        initialize(&mut connection)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(MemoryStoreError::Storage)?;
         Ok(Self {
             path,
             connection: Mutex::new(connection),
@@ -450,85 +457,6 @@ fn check_cancellation(cancellation: &CancellationToken) -> Result<(), MemoryStor
     cancellation
         .check()
         .map_err(|signal| MemoryStoreError::Cancelled(signal.reason().to_string()))
-}
-
-// Append schema changes in version order, starting with the standalone database baseline.
-const MEMORIES_MIGRATIONS: &[&str] = &[
-    "CREATE TABLE memory_catalog (
-         singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-         revision INTEGER NOT NULL
-     );
-     INSERT INTO memory_catalog (singleton, revision) VALUES (1, 0);
-     CREATE TABLE memories (
-         memory_id TEXT PRIMARY KEY,
-         scope_key TEXT NOT NULL,
-         record_revision INTEGER NOT NULL,
-         record_json TEXT NOT NULL,
-         normalized_search TEXT NOT NULL
-     );
-     CREATE INDEX memories_scope_id ON memories(scope_key, memory_id);
-     CREATE TABLE memory_tombstones (
-         memory_id TEXT PRIMARY KEY,
-         scope_key TEXT NOT NULL,
-         deleted_revision INTEGER NOT NULL,
-         catalog_revision INTEGER NOT NULL
-     );
-     CREATE TABLE memory_commands (
-         command_id TEXT PRIMARY KEY,
-         operation TEXT NOT NULL,
-         fingerprint TEXT NOT NULL,
-         memory_id TEXT NOT NULL,
-         scope_key TEXT NOT NULL,
-         record_revision INTEGER NOT NULL,
-         catalog_revision INTEGER NOT NULL
-     );
-     CREATE TABLE memory_policies (scope_key TEXT PRIMARY KEY, policy_json TEXT NOT NULL);
-     CREATE TABLE memory_policy_commands (command_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result_json TEXT NOT NULL);",
-];
-
-fn initialize(connection: &mut Connection) -> Result<(), MemoryStoreError> {
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(storage_error)?;
-    transaction
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
-                 component TEXT PRIMARY KEY,
-                 version INTEGER NOT NULL
-             );",
-        )
-        .map_err(storage_error)?;
-    let version = transaction
-        .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = ?1",
-            [MEMORIES_COMPONENT],
-            |row| row.get::<_, u32>(0),
-        )
-        .optional()
-        .map_err(storage_error)?;
-    if let Some(version) = version
-        && !(MEMORIES_BASELINE_VERSION..=MEMORIES_SCHEMA_VERSION).contains(&version)
-    {
-        return Err(MemoryStoreError::Storage(format!(
-            "unsupported Memories SQLite schema version {version}"
-        )));
-    }
-
-    let applied = version.unwrap_or(MEMORIES_BASELINE_VERSION - 1);
-    for (target, sql) in (MEMORIES_BASELINE_VERSION..)
-        .zip(MEMORIES_MIGRATIONS)
-        .skip_while(|(target, _)| *target <= applied)
-    {
-        transaction.execute_batch(sql).map_err(storage_error)?;
-        transaction
-            .execute(
-                "INSERT INTO ash_schema_migrations (component, version) VALUES (?1, ?2)
-                 ON CONFLICT(component) DO UPDATE SET version = excluded.version",
-                params![MEMORIES_COMPONENT, target],
-            )
-            .map_err(storage_error)?;
-    }
-    transaction.commit().map_err(storage_error)
 }
 
 fn page(

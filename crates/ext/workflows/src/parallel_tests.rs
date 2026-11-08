@@ -668,6 +668,34 @@ fn store_reopens_and_replays_exact_command_receipts_with_revision_cas() {
 }
 
 #[test]
+fn concurrent_open_installs_an_empty_workflow_store() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("workflows.sqlite3");
+    open_workflow_store_concurrently(&database);
+    let connection = rusqlite::Connection::open(database).unwrap();
+    let version: u32 = connection
+        .query_row(
+            "SELECT version FROM ash_schema_migrations WHERE component = 'workflows'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, 1);
+}
+
+fn open_workflow_store_concurrently(path: &std::path::Path) {
+    let barrier = std::sync::Barrier::new(4);
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| {
+                barrier.wait();
+                Store::open(path).unwrap();
+            });
+        }
+    });
+}
+
+#[test]
 fn legacy_single_run_tables_migrate_without_losing_state_or_receipts() {
     let directory = tempfile::tempdir().unwrap();
     let database = directory.path().join("state.db");
@@ -702,6 +730,7 @@ fn legacy_single_run_tables_migrate_without_losing_state_or_receipts() {
         )
         .unwrap();
     drop(connection);
+    open_workflow_store_concurrently(&database);
 
     let store = Store::open(&database).unwrap();
     let replayed = store
@@ -777,6 +806,7 @@ fn run_keyed_intermediate_schema_migrates_creation_order_and_start_receipts() {
         )
         .unwrap();
     drop(connection);
+    open_workflow_store_concurrently(&database);
 
     let store = Store::open(&database).unwrap();
     let mut regenerated = initial;

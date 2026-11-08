@@ -12,6 +12,14 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Mutex;
 
+const MIGRATOR: ash_state::SqliteMigrator<'_> = ash_state::SqliteMigrator::new(
+    "debug-workspaces",
+    &[ash_state::SqliteMigration::sql(
+        1,
+        include_str!("../migrations/0001_debug_workspaces.sql"),
+    )],
+);
+
 #[derive(Debug, thiserror::Error)]
 pub enum DebugWorkspaceError {
     #[error("invalid debug workspace definitions")]
@@ -29,19 +37,12 @@ pub struct DebugWorkspaceStore {
 
 impl DebugWorkspaceStore {
     pub fn open(path: &Path) -> Result<Self, DebugWorkspaceError> {
-        let connection =
+        let mut connection =
             ash_state::open_sqlite_database(path, ash_state::SqliteDurability::Durable)
                 .map_err(DebugWorkspaceError::Storage)?;
-        connection
-            .execute_batch(
-                "CREATE TABLE IF NOT EXISTS debug_workspaces (
-                workspace_id TEXT PRIMARY KEY,
-                revision INTEGER NOT NULL,
-                document TEXT NOT NULL,
-                memento_receipt TEXT
-            );",
-            )
-            .map_err(storage)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(DebugWorkspaceError::Storage)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

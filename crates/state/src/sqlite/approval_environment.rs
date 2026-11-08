@@ -1,5 +1,7 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use guardian_environment::EnvironmentEntry;
 use guardian_environment::EnvironmentError;
 use guardian_environment::EnvironmentProfile;
@@ -11,6 +13,14 @@ use rusqlite::params;
 use std::path::Path;
 use std::sync::Mutex;
 
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "approval_environment",
+    &[Migration::sql(
+        1,
+        include_str!("../../migrations/approval_environment/0001_approval_environment.sql"),
+    )],
+);
+
 pub struct SqliteEnvironmentStore {
     connection: Mutex<Connection>,
 }
@@ -19,30 +29,9 @@ impl SqliteEnvironmentStore {
     pub fn open(path: &Path) -> Result<Self, EnvironmentError> {
         let mut connection = open_sqlite_database(path, SqliteDurability::Durable)
             .map_err(EnvironmentError::Storage)?;
-        connection.execute_batch("CREATE TABLE IF NOT EXISTS ash_schema_migrations (component TEXT PRIMARY KEY, version INTEGER NOT NULL)").map_err(storage_error)?;
-        let transaction = connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(storage_error)?;
-        let version = transaction
-            .query_row(
-                "SELECT version FROM ash_schema_migrations WHERE component='approval_environment'",
-                [],
-                |row| row.get::<_, u32>(0),
-            )
-            .optional()
-            .map_err(storage_error)?;
-        match version {
-            None => {
-                transaction.execute_batch("CREATE TABLE approval_environments (project TEXT PRIMARY KEY, revision INTEGER NOT NULL, profile TEXT NOT NULL); CREATE TABLE approval_environment_commands (project TEXT NOT NULL, command_id TEXT NOT NULL, request TEXT NOT NULL, response TEXT NOT NULL, PRIMARY KEY(project, command_id)); INSERT INTO ash_schema_migrations(component,version) VALUES('approval_environment',1);").map_err(storage_error)?;
-            }
-            Some(1) => {}
-            Some(version) => {
-                return Err(EnvironmentError::Storage(format!(
-                    "unsupported approval environment schema version {version}"
-                )));
-            }
-        }
-        transaction.commit().map_err(storage_error)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(EnvironmentError::Storage)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

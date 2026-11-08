@@ -129,6 +129,54 @@ fn text_edits_and_cancel_are_revision_checked_and_preserve_frozen_input() {
 }
 
 #[test]
+fn wal_switch_stops_retrying_while_a_reader_holds_the_database() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("queue.sqlite3");
+    let mut reader = Connection::open(&path).unwrap();
+    reader
+        .execute("CREATE TABLE legacy (id INTEGER)", [])
+        .unwrap();
+    let read_transaction = reader.transaction().unwrap();
+    let _: u32 = read_transaction
+        .query_row("SELECT COUNT(*) FROM legacy", [], |row| row.get(0))
+        .unwrap();
+    let connection = Connection::open(&path).unwrap();
+    connection.busy_timeout(Duration::from_millis(50)).unwrap();
+
+    let start = std::time::Instant::now();
+    let error = enable_wal(&connection).unwrap_err();
+    assert_eq!(error.sqlite_error_code(), Some(ErrorCode::DatabaseBusy));
+    assert!(
+        start.elapsed() < Duration::from_secs(3),
+        "{:?}",
+        start.elapsed()
+    );
+}
+
+#[test]
+fn concurrent_open_installs_an_empty_queue_once() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("queue.sqlite3");
+    let barrier = std::sync::Barrier::new(4);
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| {
+                barrier.wait();
+                let store = QueueStore::open(&path).unwrap();
+                assert!(store.candidates(0).unwrap().is_empty());
+            });
+        }
+    });
+    let connection = Connection::open(&path).unwrap();
+    let metadata = connection
+        .query_row("SELECT version, revision FROM queue_metadata", [], |row| {
+            Ok((row.get::<_, u32>(0)?, row.get::<_, u32>(1)?))
+        })
+        .unwrap();
+    assert_eq!(metadata, (2, 0));
+}
+
+#[test]
 fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("state.sqlite");
@@ -155,31 +203,37 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
         UPDATE queued_messages SET request=json_set(request,'$.approvalMode','askPermissions') WHERE id='manual';
         UPDATE queued_messages SET request=json_set(request,'$.approvalMode','autoReview') WHERE id='auto';").unwrap();
     drop(connection);
-    for _ in 0..2 {
-        let store = QueueStore::open(&path).unwrap();
-        assert_eq!(
-            store
-                .list(
-                    &requests[0].request.session_id,
-                    &requests[0].request.thread_id
-                )
-                .unwrap(),
-            requests
-        );
-        assert_eq!(store.candidates(1).unwrap(), requests[..1]);
-        for expected in &requests {
-            assert_eq!(store.enqueue(&expected.request).unwrap(), *expected);
+    let barrier = std::sync::Barrier::new(2);
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            scope.spawn(|| {
+                barrier.wait();
+                let store = QueueStore::open(&path).unwrap();
+                assert_eq!(
+                    store
+                        .list(
+                            &requests[0].request.session_id,
+                            &requests[0].request.thread_id
+                        )
+                        .unwrap(),
+                    requests
+                );
+                assert_eq!(store.candidates(1).unwrap(), requests[..1]);
+                for expected in &requests {
+                    assert_eq!(store.enqueue(&expected.request).unwrap(), *expected);
+                }
+                let connection = Connection::open(&path).unwrap();
+                assert_eq!(
+                    connection
+                        .query_row("SELECT version FROM queue_metadata WHERE id=1", [], |row| {
+                            row.get::<_, u32>(0)
+                        })
+                        .unwrap(),
+                    2
+                );
+            });
         }
-        let connection = Connection::open(&path).unwrap();
-        assert_eq!(
-            connection
-                .query_row("SELECT version FROM queue_metadata WHERE id=1", [], |row| {
-                    row.get::<_, u32>(0)
-                })
-                .unwrap(),
-            2
-        );
-    }
+    });
 }
 
 fn input(id: &str) -> QueueInput {

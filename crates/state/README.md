@@ -24,6 +24,13 @@
 - 导入后的 SSH 执行绑定单独持久化，不改写原始事件。目录只能来自原历史或显式绑定命令；没有目录的历史可以读取，不能开始任务或恢复执行。相同归档重试返回原回执，不覆盖已继续写入的本地历史。
 - 原事件按内容只存一份；Thread 与嵌套前缀引用原子提交，最后一个引用删除后回收记录并排队清理 Git pin。
 
+## SQLite 迁移
+
+各存储入口维护自己的迁移清单，编号 SQL 位于 `migrations/<component>/`。共用数据库的组件在 `ash_schema_migrations` 中分别记录版本，执行器在同一 SQLite 写事务内运行待执行步骤并提交版本。
+领域 crate 在自己的 `migrations/` 下管理 SQL 和版本清单。同一执行器可用于独立的 `memories.sqlite3`、`connectors.sqlite3`，也可用于共用 `state.sqlite3` 的多个组件。
+`event-store` 以 v17 为基线，既有建库和升级脚本在 `migrations/event-store/`，数据回填由该版本的 Rust 入口调用。自 v18 起依次追加编号 SQL。已发布的步骤保持原样。
+`thread-history-index` 的旧索引从原始事件重建。旧的无版本 Issue 缓存在首次打开时登记为 v1，并保留缓存记录。
+
 ## Turn 捕获与提交记录
 
 事件存储格式 11 将旧 ChangeSet 的整轮提交状态一次性转换为独立提交记录，保留旧事务身份与冻结消息。

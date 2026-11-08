@@ -1,11 +1,21 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use github::IssuePage;
 use github::Repository;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use std::path::Path;
 use std::sync::Mutex;
+
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "issue-cache",
+    &[Migration::sql(
+        1,
+        include_str!("../migrations/issue-cache/0001_issue_pages.sql"),
+    )],
+);
 
 const RETENTION_SECONDS: u64 = 7 * 24 * 60 * 60;
 const MAX_PAGES: usize = 256;
@@ -31,17 +41,8 @@ pub struct CachedIssuePage {
 
 impl SqliteIssueCache {
     pub fn open(path: &Path) -> Result<Self, String> {
-        let connection = open_sqlite_database(path, SqliteDurability::Durable)
-            .map_err(|error| error.to_string())?;
-        connection
-            .execute_batch(
-                "CREATE TABLE IF NOT EXISTS issue_pages (
-            repository TEXT NOT NULL, state TEXT NOT NULL, query TEXT NOT NULL,
-            page INTEGER NOT NULL, fetched_at INTEGER NOT NULL, value TEXT NOT NULL,
-            PRIMARY KEY(repository, state, query, page)
-        ); CREATE INDEX IF NOT EXISTS issue_pages_age ON issue_pages(fetched_at);",
-            )
-            .map_err(|error| error.to_string())?;
+        let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
+        MIGRATOR.run(&mut connection)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

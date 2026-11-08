@@ -861,6 +861,7 @@ name = "ash-automation"
 version = "0.1.0"
 dependencies = [
  "ash-protocol",
+ "ash-state",
  "chrono",
  "chrono-tz",
  "rusqlite",
@@ -931,6 +932,7 @@ dependencies = [
  "ash-install-context",
  "ash-package-store",
  "ash-secrets",
+ "ash-state",
  "rand 0.9.5",
  "rusqlite",
  "serde",

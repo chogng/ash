@@ -2273,16 +2273,24 @@ fn sqlite_retries_legacy_chat_branch_creation_after_upgrade() {
 #[cfg(unix)]
 #[test]
 fn sqlite_authority_database_is_private_to_the_host_user() {
+    use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
 
-    let path = database_path("permissions");
-    let store = SqliteThreadStore::open(&path).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    drop(SqliteThreadStore::open(&path).unwrap());
+    assert_eq!(fs::metadata(&path).unwrap().mode() & 0o777, 0o600);
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    drop(SqliteThreadStore::open(&path).unwrap());
+    let before = fs::metadata(&path).unwrap();
+    assert_eq!(before.mode() & 0o777, 0o600);
 
-    let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o600);
-
-    drop(store);
-    fs::remove_file(path).unwrap();
+    drop(SqliteThreadStore::open(&path).unwrap());
+    let after = fs::metadata(&path).unwrap();
+    assert_eq!(
+        (after.ctime(), after.ctime_nsec()),
+        (before.ctime(), before.ctime_nsec())
+    );
 }
 
 #[test]
