@@ -1555,10 +1555,11 @@ impl AppServer {
 
     pub(crate) fn with_local_dir_services(
         self,
-        database_path: &std::path::Path,
         profile_root: &std::path::Path,
         dir_root: &std::path::Path,
+        turn_changes: Arc<ash_state::SqliteTurnChangeStore>,
         workflows: Arc<workflows::Store>,
+        issue_cache: Option<Arc<ash_state::SqliteIssueCache>>,
     ) -> Result<Self, String> {
         let config = self
             .config
@@ -1585,7 +1586,7 @@ impl AppServer {
             &self.threads,
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
-            database_path,
+            turn_changes,
             config,
             Arc::clone(&self.threads),
             Arc::clone(&self.model),
@@ -1597,76 +1598,87 @@ impl AppServer {
         server.dir_services = Some(dirs);
         server.issue_processor = Some(Arc::new(issue_operations::IssueRequestProcessor::open(
             dir_root,
-            database_path,
+            issue_cache,
         )?));
         Ok(server)
     }
 
     pub(crate) fn with_debug_workspace_store(
         mut self,
-        path: &std::path::Path,
-    ) -> Result<Self, String> {
-        self.debug_workspaces = Some(Arc::new(
-            ash_debug_manager::DebugWorkspaceStore::open(path)
-                .map_err(|error| error.to_string())?,
-        ));
-        Ok(self)
+        store: Arc<ash_debug_manager::DebugWorkspaceStore>,
+    ) -> Self {
+        self.debug_workspaces = Some(store);
+        self
     }
 
+    #[cfg(test)]
     pub(crate) fn with_local_projects(
-        mut self,
+        self,
         database_path: &std::path::Path,
     ) -> Result<Self, String> {
         let store: Arc<dyn ash_projects::ProjectStore> = Arc::new(
             ash_state::SqliteProjectStore::open(database_path)
                 .map_err(|error| error.to_string())?,
         );
-        self.projects = Some(Arc::new(ash_projects::ProjectCoordinator::new(store)));
+        self.with_projects(Arc::new(ash_projects::ProjectCoordinator::new(store)))
+    }
+
+    pub(crate) fn with_projects(
+        mut self,
+        projects: Arc<ash_projects::ProjectCoordinator>,
+    ) -> Result<Self, String> {
+        self.projects = Some(projects);
         self.with_memory_extension()
     }
 
-    pub(crate) fn with_local_teams(
-        mut self,
-        database_path: &std::path::Path,
-    ) -> Result<Self, String> {
+    #[cfg(test)]
+    pub(crate) fn with_local_teams(self, database_path: &std::path::Path) -> Result<Self, String> {
         let store: Arc<dyn ash_teams::TeamStore> = Arc::new(
             ash_state::SqliteTeamStore::open(database_path).map_err(|error| error.to_string())?,
         );
-        self.teams = Some(Arc::new(ash_teams::TeamCoordinator::new(store)));
+        self.with_teams(Arc::new(ash_teams::TeamCoordinator::new(store)))
+    }
+
+    pub(crate) fn with_teams(
+        mut self,
+        teams: Arc<ash_teams::TeamCoordinator>,
+    ) -> Result<Self, String> {
         self.team_memberships
-            .set(Arc::clone(
-                self.teams.as_ref().expect("Team coordinator was set"),
-            ))
+            .set(teams.clone())
             .map_err(|_| "Team coordinator is already initialized".to_string())?;
+        self.teams = Some(teams);
         Ok(self)
     }
 
-    pub(crate) fn with_local_assets(
-        mut self,
-        database_path: &std::path::Path,
-    ) -> Result<Self, String> {
+    #[cfg(test)]
+    pub(crate) fn with_local_assets(self, database_path: &std::path::Path) -> Result<Self, String> {
         let store = Arc::new(
             ash_state::SqliteAssetStore::open(database_path).map_err(|error| error.to_string())?,
         );
-        self.asset_processor =
-            asset_operations::AssetsRequestProcessor::new(Arc::new(assets::Assets::new(store)));
-        Ok(self)
+        Ok(self.with_asset_store(store))
     }
 
+    pub(crate) fn with_asset_store(mut self, store: Arc<ash_state::SqliteAssetStore>) -> Self {
+        self.asset_processor =
+            asset_operations::AssetsRequestProcessor::new(Arc::new(assets::Assets::new(store)));
+        self
+    }
+
+    #[cfg(test)]
     pub(crate) fn with_local_memories(
-        mut self,
+        self,
         database_path: &std::path::Path,
     ) -> Result<Self, String> {
-        let store = match ash_state::SqliteMemoryStore::open(database_path) {
-            Ok(store) => store,
-            Err(error) => {
-                eprintln!(
-                    "App Server could not open Memories database at {database_path:?}: {error}"
-                );
-                return Ok(self);
-            }
-        };
-        self.memories = Some(Arc::new(memories::Memories::new(Arc::new(store))));
+        let store =
+            ash_state::SqliteMemoryStore::open(database_path).map_err(|error| error.to_string())?;
+        self.with_memories(Some(Arc::new(memories::Memories::new(Arc::new(store)))))
+    }
+
+    pub(crate) fn with_memories(
+        mut self,
+        memories: Option<Arc<memories::Memories>>,
+    ) -> Result<Self, String> {
+        self.memories = memories;
         self.with_memory_extension()
     }
 
@@ -5338,13 +5350,21 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
 mod mcp_resource_tests;
 
 impl AppServer {
+    #[cfg(test)]
     pub(crate) fn with_local_approval_environment(
-        mut self,
+        self,
         database: &std::path::Path,
     ) -> Result<Self, String> {
         let store = std::sync::Arc::new(
             ash_state::SqliteEnvironmentStore::open(database).map_err(|error| error.to_string())?,
         );
+        Ok(self.with_approval_environment_store(store))
+    }
+
+    pub(crate) fn with_approval_environment_store(
+        mut self,
+        store: Arc<ash_state::SqliteEnvironmentStore>,
+    ) -> Self {
         let environment = std::sync::Arc::new(guardian_environment::Environment::new(store));
         let owner = self
             .local_env_host
@@ -5370,7 +5390,7 @@ impl AppServer {
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
         self.approval_environment = Some(environment);
-        Ok(self)
+        self
     }
     pub(crate) fn with_network_diagnostics(
         mut self,

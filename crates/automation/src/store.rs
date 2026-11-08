@@ -97,14 +97,6 @@ impl AutomationStore {
         if previous.as_ref().map_or(0, |plan| plan.revision) != request.expected_revision {
             return Err(AutomationError::Conflict);
         }
-        if previous.as_ref().is_some_and(|plan| {
-            (plan.definition.session == ash_protocol::AutomationSession::NewChat)
-                != (request.definition.session == ash_protocol::AutomationSession::NewChat)
-        }) {
-            return Err(AutomationError::Invalid(
-                "cannot change the session kind of an existing plan".into(),
-            ));
-        }
         if previous
             .as_ref()
             .is_some_and(|plan| plan.definition.condition.is_some())

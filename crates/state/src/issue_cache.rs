@@ -41,7 +41,7 @@ pub struct CachedIssuePage {
 
 impl SqliteIssueCache {
     pub fn open(path: &Path) -> Result<Self, String> {
-        let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
+        let mut connection = open_sqlite_database(path, SqliteDurability::Rebuildable)?;
         MIGRATOR.run(&mut connection)?;
         Ok(Self {
             connection: Mutex::new(connection),
@@ -57,12 +57,23 @@ impl SqliteIssueCache {
             .connection
             .lock()
             .map_err(|_| "Issue cache lock poisoned")?;
-        prune(&connection, now)?;
-        let stored: Option<(i64, String)> = connection.query_row(
-            "SELECT fetched_at, value FROM issue_pages WHERE repository=?1 AND state=?2 AND query=?3 AND page=?4",
-            (identity(key), key.state, key.query, key.page),
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).optional().map_err(|error| error.to_string())?;
+        let stored: Option<(i64, String)> = connection
+            .query_row(
+                "SELECT fetched_at, value FROM issue_pages
+             WHERE repository=?1 AND state=?2 AND query=?3 AND page=?4
+               AND fetched_at>?5 AND fetched_at<=?6",
+                (
+                    identity(key),
+                    key.state,
+                    key.query,
+                    key.page,
+                    timestamp(now.saturating_sub(RETENTION_SECONDS))?,
+                    timestamp(now)?,
+                ),
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?;
         stored
             .map(|(fetched_at, value)| {
                 let page = serde_json::from_str(&value)
@@ -93,17 +104,37 @@ impl SqliteIssueCache {
         let transaction = connection
             .transaction()
             .map_err(|error| error.to_string())?;
-        if key.page == 1 {
+        let repository = identity(key);
+        let fetched_at = timestamp(now)?;
+        let written = transaction
+            .execute(
+                "INSERT INTO issue_pages(repository,state,query,page,fetched_at,value)
+             SELECT ?1,?2,?3,?4,?5,?6 WHERE ?4=1 OR NOT EXISTS (
+                 SELECT 1 FROM issue_pages WHERE repository=?1 AND state=?2 AND query=?3
+                   AND page=1 AND fetched_at>?5
+             )
+             ON CONFLICT(repository,state,query,page) DO UPDATE
+             SET fetched_at=excluded.fetched_at,value=excluded.value
+             WHERE excluded.fetched_at>=issue_pages.fetched_at",
+                (
+                    &repository,
+                    key.state,
+                    key.query,
+                    key.page,
+                    fetched_at,
+                    value,
+                ),
+            )
+            .map_err(|error| error.to_string())?;
+        if written != 0 && key.page == 1 {
             transaction
                 .execute(
-                    "DELETE FROM issue_pages WHERE repository=?1 AND state=?2 AND query=?3",
-                    (identity(key), key.state, key.query),
+                    "DELETE FROM issue_pages WHERE repository=?1 AND state=?2 AND query=?3
+                     AND page>1 AND fetched_at<=?4",
+                    (&repository, key.state, key.query, fetched_at),
                 )
                 .map_err(|error| error.to_string())?;
         }
-        transaction.execute("INSERT INTO issue_pages(repository,state,query,page,fetched_at,value) VALUES(?1,?2,?3,?4,?5,?6)
-            ON CONFLICT(repository,state,query,page) DO UPDATE SET fetched_at=excluded.fetched_at,value=excluded.value",
-            (identity(key), key.state, key.query, key.page, timestamp(now)?, value)).map_err(|error| error.to_string())?;
         prune(&transaction, now)?;
         transaction.execute("DELETE FROM issue_pages WHERE rowid IN (SELECT rowid FROM issue_pages ORDER BY fetched_at DESC, rowid DESC LIMIT -1 OFFSET ?1)", [MAX_PAGES as u32]).map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())
@@ -139,11 +170,8 @@ fn identity(key: &IssueCacheKey<'_>) -> String {
 fn prune(connection: &Connection, now: u64) -> Result<(), String> {
     connection
         .execute(
-            "DELETE FROM issue_pages WHERE fetched_at <= ?1 OR fetched_at > ?2",
-            (
-                timestamp(now.saturating_sub(RETENTION_SECONDS))?,
-                timestamp(now)?,
-            ),
+            "DELETE FROM issue_pages WHERE fetched_at <= ?1",
+            [timestamp(now.saturating_sub(RETENTION_SECONDS))?],
         )
         .map_err(|error| error.to_string())?;
     Ok(())

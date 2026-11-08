@@ -163,8 +163,11 @@ pub(super) fn read(
             turn_limit,
         } => {
             let ordinal = connection.query_row("SELECT ordinal FROM thread_history_turns WHERE thread_id = ?1 AND turn_id = ?2",
-                params![thread_id.as_str(), turn_id.as_str()], |row| row.get::<_, i64>(0)).optional().map_err(error)?
-                .ok_or_else(|| ThreadStoreError::InvalidBatch("unknown history Turn".into()))?;
+                params![thread_id.as_str(), turn_id.as_str()], |row| row.get::<_, i64>(0)).optional().map_err(error)?;
+            let Some(ordinal) = ordinal else {
+                // Only the canonical history can distinguish an unknown Turn from a missing index row.
+                return Ok(None);
+            };
             (
                 usize::try_from(ordinal).map_err(error)?,
                 turn_limit.get() as usize,

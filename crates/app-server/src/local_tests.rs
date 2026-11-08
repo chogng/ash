@@ -2243,8 +2243,8 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
     };
     let first = open(first_dir.path());
     let second = open(second_dir.path());
-    let mut first_connection = first.connection();
-    let mut second_connection = second.connection();
+    let mut first_connection = first.product_host_connection();
+    let mut second_connection = second.product_host_connection();
     for (server, connection) in [
         (&first, &mut first_connection),
         (&second, &mut second_connection),
@@ -2255,6 +2255,38 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
         );
         assert!(initialized.contains("\"result\""));
     }
+
+    let saved = local_call(
+        &first,
+        &mut first_connection,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 90, "method": "memory/add",
+            "params": {"commandId":"add-shared-memory", "memoryId":"shared-memory", "scope":{"type":"profile"},
+                       "title":"Shared memory", "body":"Available from both Directory runtimes"}
+        }),
+    );
+    assert_eq!(
+        saved["result"]["memory"]["memoryId"], "shared-memory",
+        "{saved}"
+    );
+    let listed = local_call(
+        &second,
+        &mut second_connection,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 91, "method": "memory/list", "params": {"scope":{"type":"profile"}}
+        }),
+    );
+    assert_eq!(
+        listed["result"]["memories"][0]["memoryId"], "shared-memory",
+        "{listed}"
+    );
+    assert!(
+        runtime
+            .state
+            .cache_root()
+            .join("github-issues.sqlite3")
+            .is_file()
+    );
 
     // Windows canonicalize may add a verbatim prefix. Session requests accept that spelling,
     // but return the canonical path owned by the selected directory runtime.

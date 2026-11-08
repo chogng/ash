@@ -1842,6 +1842,57 @@ fn command_replay_returns_its_original_revision_without_copying_a_snapshot() {
 }
 
 #[test]
+fn config_command_reopens_after_a_failure_on_either_side_of_the_toml_replace() {
+    let path = config_path("recover-command");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
+    let original = std::fs::read(store.config_path()).unwrap();
+    let request = update_preferences(
+        "interrupted",
+        configured.revision.get(),
+        Patch::Value(model_ref("openai", "model-a")),
+    );
+    let database = rusqlite::Connection::open(&path).unwrap();
+    database
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    database
+        .execute_batch(
+            "CREATE TRIGGER reject_receipt BEFORE INSERT ON config_command_receipts
+         BEGIN SELECT RAISE(ABORT, 'receipt failed'); END;",
+        )
+        .unwrap();
+    assert!(store.apply(request.clone()).is_err());
+    assert_eq!(std::fs::read(store.config_path()).unwrap(), original);
+    database
+        .execute_batch(
+            "DROP TRIGGER reject_receipt;
+         CREATE TRIGGER reject_metadata BEFORE UPDATE ON config_metadata
+         BEGIN SELECT RAISE(ABORT, 'metadata failed'); END;",
+        )
+        .unwrap();
+    assert!(store.apply(request.clone()).is_err());
+    assert_ne!(std::fs::read(store.config_path()).unwrap(), original);
+    assert_eq!(store.committed_snapshot().revision, configured.revision);
+    drop(store);
+    database
+        .execute_batch("DROP TRIGGER reject_metadata")
+        .unwrap();
+    drop(database);
+
+    let store = ConfigStore::open(&path).unwrap();
+    let replay = store.apply(request).unwrap();
+    assert_eq!(replay.disposition, ConfigCommandDisposition::Replayed);
+    assert_eq!(replay.revision, configured.revision.next());
+    assert_eq!(
+        store.read_snapshot().unwrap().values.model,
+        Some(model_ref("openai", "model-a"))
+    );
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn no_op_command_keeps_the_resolved_snapshot_generation() {
     let path = config_path("no-op-generation");
     let store = ConfigStore::open(&path).unwrap();

@@ -2512,6 +2512,34 @@ fn history_window_repairs_missing_stale_and_damaged_indexes() {
             latest
         );
     }
+    connection
+        .pragma_update(None, "foreign_keys", "ON")
+        .unwrap();
+    connection
+        .execute(
+            "DELETE FROM thread_history_turns WHERE thread_id = ?1 AND turn_id = ?2",
+            rusqlite::params![thread_id.as_str(), expected.turns[2].turn_id.as_str()],
+        )
+        .unwrap();
+    let older = ash_thread_store::ThreadHistoryWindow::Before {
+        turn_id: expected.turns[2].turn_id.clone(),
+        turn_limit: std::num::NonZeroU32::new(2).unwrap(),
+    };
+    let cold = ThreadController::with_store(store.clone());
+    assert_eq!(
+        cold.read_thread_history(&thread_id, &older)
+            .unwrap()
+            .thread
+            .turns,
+        expected.turns[..2]
+    );
+    assert!(
+        store
+            .read_history_page(&thread_id, &older)
+            .unwrap()
+            .is_some()
+    );
+
     let first = ThreadController::with_store(store.clone())
         .read_thread_history(
             &thread_id,

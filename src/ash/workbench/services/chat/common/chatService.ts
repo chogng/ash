@@ -65,6 +65,7 @@ export type { ModelCatalogEntry } from './modelCatalog.js';
 import type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint, AgentThreadHistoryState } from '../../../../platform/agentHost/common/agent.js';
 export type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agent.js';
 export { AgentThreadHistoryConflictError as ChatHistoryConflictError } from '../../../../platform/agentHost/common/agentService.js';
+export { AgentThreadHistoryAnchorError as ChatHistoryAnchorError } from '../../../../platform/agentHost/common/agentService.js';
 
 /** Identifies the reply that produced a document edit, independently of the visible Chat. */
 export interface ChatEditSource {

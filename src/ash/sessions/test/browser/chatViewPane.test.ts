@@ -132,7 +132,7 @@ import { IWorkbenchLayoutService, Position, type WorkbenchPartId, type Workbench
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -4648,9 +4648,10 @@ function transcript(value: Thread): ThreadTranscriptSnapshot {
 /** A paged server fixture with independent snapshot and transcript cursors. */
 function pagedChatFixture(initialCount = 65) {
 	let count = initialCount;
+	let sequence = initialCount;
 	const requests: { type: 'read' | 'subscribe'; history?: import('../../../platform/agentHost/common/agent.js').ThreadSnapshotHistory; afterSequence?: number; }[] = [];
 	const full = () => ({
-		...thread(), sequence: count,
+		...thread(), sequence,
 		turns: Array.from({ length: count }, (_, index) => {
 			const turnId = `turn-${index + 1}`;
 			return { ...thread('fixture').turns[0]!, turnId, items: [{ type: 'agentMessage' as const, itemId: `answer-${index + 1}`, turnId, text: `Answer ${index + 1}` }] };
@@ -4664,7 +4665,7 @@ function pagedChatFixture(initialCount = 65) {
 		const visible = { ...value, turns: value.turns.slice(start, end) };
 		return {
 			thread: visible,
-			transcript: { sessionId: visible.sessionId, threadId: visible.threadId, durableSequence: count, revision: history?.type === 'before' ? 0 : count, entries: visible.turns.flatMap(turn => turn.items.map(item => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false }))) },
+			transcript: { sessionId: visible.sessionId, threadId: visible.threadId, durableSequence: sequence, revision: history?.type === 'before' ? 0 : sequence, entries: visible.turns.flatMap(turn => turn.items.map(item => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false }))) },
 			history: history ? { hasOlderTurns: start > 0, oldestTurnId: visible.turns[0]?.turnId } : undefined,
 		};
 	};
@@ -4678,7 +4679,7 @@ function pagedChatFixture(initialCount = 65) {
 			subscribe: async ({ history, afterSequence }) => { requests.push({ type: 'subscribe', history, afterSequence }); return { ...page(history), updates: [] }; },
 		},
 	};
-	return { active, fake, api, requests, page, setCount(value: number) { count = value; } };
+	return { active, fake, api, requests, page, setCount(value: number) { count = value; sequence = Math.max(sequence + 1, value); } };
 }
 
 test('bounded Chat pages are requested by cursor and retain every message in chronological order', async () => {
@@ -4765,6 +4766,35 @@ test('bounded Chat pagination failures retain content, allow sending and retry t
 	assert.equal(model.items.length, 40);
 	assert.equal(model.olderHistory?.error, undefined);
 });
+
+for (const retryFails of [false, true]) {
+	test(`bounded Chat refreshes a retired pagination anchor and retries only once (${retryFails ? 'second rejection' : 'success'})`, async () => {
+		const fixture = pagedChatFixture();
+		const read = fixture.api.thread.read;
+		fixture.api.thread.read = async params => {
+			if (params.history?.type === 'before' && (params.history.turnId === 'turn-46' || retryFails)) {
+				fixture.requests.push({ type: 'read', history: params.history });
+				throw new ChatHistoryAnchorError('InvalidParams');
+			}
+			return read(params);
+		};
+		using chat = createChatService(fixture.api);
+		using sessions = new SessionsManagementService(fixture.api);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+		await model.initialize();
+		fixture.setCount(44);
+		await model.loadOlderHistory();
+		assert.deepEqual(fixture.requests.slice(1).map(request => request.history), [
+			{ type: 'before', turnId: 'turn-46', turnLimit: 20 },
+			{ type: 'latest', turnLimit: 20 },
+			{ type: 'before', turnId: 'turn-25', turnLimit: 20 },
+		]);
+		assert.deepEqual(model.items.map(item => item.text), Array.from({ length: retryFails ? 20 : 40 }, (_, index) => `Answer ${index + (retryFails ? 25 : 5)}`));
+		assert.equal(model.olderHistory?.loading, false);
+		assert.equal(!!model.olderHistory?.error, retryFails);
+		assert.equal(model.inputState.inputBlocked, false);
+	});
+}
 
 test('bounded Chat discards a retired page after A-B-A navigation and disposal', async () => {
 	const fixture = pagedChatFixture();

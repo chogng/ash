@@ -3,7 +3,7 @@ use crate::{
     ConfigGeneration, ConfigRevision, ResolvedConfigSnapshot, UserConfigCommand,
     UserConfigDocument,
 };
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -113,7 +113,7 @@ impl ConfigStore {
                 crate::store_file::document_digest(&document)
             },
         )?;
-        let (authority, _) = synchronize_authority(&mut connection, &config_path)?;
+        let (authority, _) = synchronize_authority(&connection, &config_path)?;
         let subscribers = Arc::new(Mutex::new(Vec::new()));
         let (committed, _) = watch::channel(authority.snapshot());
         let committed = Arc::new(committed);
@@ -141,11 +141,11 @@ impl ConfigStore {
 
     /// Reads the current immutable snapshot, reconciling valid external TOML edits first.
     pub fn read_snapshot(&self) -> Result<ResolvedConfigSnapshot, ConfigError> {
-        let mut connection = self
+        let connection = self
             .connection
             .lock()
             .map_err(|_| ConfigError("config database lock poisoned".into()))?;
-        let (authority, _) = synchronize_authority(&mut connection, &self.config_path)?;
+        let (authority, _) = synchronize_authority(&connection, &self.config_path)?;
         drop(connection);
         let snapshot = authority.snapshot();
         self.publish_snapshot(snapshot.clone());
@@ -182,13 +182,11 @@ impl ConfigStore {
         &self,
         request: ConfigCommandRequest,
     ) -> Result<ConfigCommandResult, ConfigCommandError> {
-        let mut connection = self
+        let connection = self
             .connection
             .lock()
             .map_err(|_| ConfigError("config database lock poisoned".into()))?;
-        let transaction = connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(sql_error)?;
+        let transaction = begin_write(&connection, &self.config_path)?;
 
         if let Some(receipt) = read_receipt(&transaction, request.command_id.as_str())? {
             if receipt.expected_revision != request.expected_revision
@@ -203,11 +201,9 @@ impl ConfigStore {
             });
         }
 
-        let (mut authority, externally_changed) = read_authority(&transaction, &self.config_path)?;
+        let (mut authority, externally_changed) =
+            reconcile_authority(&transaction, &self.config_path)?;
         if externally_changed {
-            authority.revision = authority.revision.next();
-            authority.generation = authority.generation.next();
-            write_metadata(&transaction, &authority)?;
             transaction.commit().map_err(sql_error)?;
             drop(connection);
             self.publish_snapshot(authority.snapshot());
@@ -227,28 +223,48 @@ impl ConfigStore {
         crate::mutation::apply_command(&mut authority.document, &request.command)?;
         authority.document.validate()?;
         let changed = authority.document != document_before;
+        let previous_digest = authority.content_digest.clone();
         if changed {
-            crate::store_file::write_document_if_unchanged(
-                &self.config_path,
-                &authority.content_digest,
-                &authority.document,
-            )?;
             authority.content_digest = crate::store_file::document_digest(&authority.document)?;
             authority.revision = authority.revision.next();
             authority.generation = authority.generation.next();
-            write_metadata(&transaction, &authority)?;
         }
-        write_receipt(
-            &transaction,
-            request.command_id.as_str(),
-            &ConfigCommandReceipt {
-                expected_revision: request.expected_revision,
-                command: request.command,
-                result_revision: authority.revision,
-                result_generation: authority.generation,
-            },
-        )?;
+        let receipt = ConfigCommandReceipt {
+            expected_revision: request.expected_revision,
+            command: request.command,
+            result_revision: authority.revision,
+            result_generation: authority.generation,
+        };
+        let command_id = request.command_id.as_str();
+        write_receipt(&transaction, command_id, &receipt)?;
+        if changed {
+            transaction
+                .execute(
+                    "INSERT INTO config_pending_command VALUES (1, ?1, ?2, ?3)",
+                    params![command_id, previous_digest, authority.content_digest],
+                )
+                .map_err(sql_error)?;
+            crate::store_file::write_document(
+                &crate::store_file::staged_document_path(&self.config_path),
+                &authority.document,
+            )?;
+        }
         transaction.commit().map_err(sql_error)?;
+        if changed {
+            // Any writer may complete the durable intent. Recheck its receipt before
+            // reporting success in case a concurrent TOML edit superseded the staging file.
+            let transaction = begin_write(&connection, &self.config_path)?;
+            if read_receipt(&transaction, command_id)?.as_ref() != Some(&receipt) {
+                let (current, _) = reconcile_authority(&transaction, &self.config_path)?;
+                transaction.commit().map_err(sql_error)?;
+                drop(connection);
+                self.publish_snapshot(current.snapshot());
+                return Err(ConfigCommandError::RevisionConflict {
+                    expected: request.expected_revision,
+                    actual: current.revision,
+                });
+            }
+        }
         let result = ConfigCommandResult {
             revision: authority.revision,
             generation: authority.generation,
@@ -292,7 +308,7 @@ impl ConfigAuthority {
 }
 
 pub(crate) fn reconcile_external_snapshot(
-    connection: &mut Connection,
+    connection: &Connection,
     config_path: &Path,
 ) -> Result<ResolvedConfigSnapshot, ConfigError> {
     let (authority, _) = synchronize_authority(connection, config_path)?;
@@ -300,24 +316,134 @@ pub(crate) fn reconcile_external_snapshot(
 }
 
 fn synchronize_authority(
-    connection: &mut Connection,
+    connection: &Connection,
     config_path: &Path,
 ) -> Result<(ConfigAuthority, bool), ConfigError> {
-    let (authority, changed) = read_authority(connection, config_path)?;
-    if !changed {
-        return Ok((authority, false));
-    }
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
+    let has_pending: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM config_pending_command)",
+            [],
+            |row| row.get(0),
+        )
         .map_err(sql_error)?;
-    let (mut authority, changed) = read_authority(&transaction, config_path)?;
+    if !has_pending {
+        let (authority, changed) = read_authority(connection, config_path)?;
+        if !changed {
+            return Ok((authority, false));
+        }
+    }
+    let transaction = begin_write(connection, config_path)?;
+    let result = reconcile_authority(&transaction, config_path)?;
+    transaction.commit().map_err(sql_error)?;
+    Ok(result)
+}
+
+fn reconcile_authority(
+    connection: &Connection,
+    config_path: &Path,
+) -> Result<(ConfigAuthority, bool), ConfigError> {
+    let (mut authority, changed) = read_authority(connection, config_path)?;
     if changed {
         authority.revision = authority.revision.next();
         authority.generation = authority.generation.next();
-        write_metadata(&transaction, &authority)?;
+        write_metadata(connection, &authority)?;
     }
-    transaction.commit().map_err(sql_error)?;
     Ok((authority, changed))
+}
+
+enum PendingCommand {
+    Absent,
+    Published,
+    Superseded,
+}
+
+fn begin_write<'a>(
+    connection: &'a Connection,
+    config_path: &Path,
+) -> Result<Transaction<'a>, ConfigError> {
+    let mut discard_stage = false;
+    loop {
+        let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
+            .map_err(sql_error)?;
+        match finish_pending(&transaction, config_path)? {
+            PendingCommand::Absent => {
+                if discard_stage {
+                    // The cancellation is durable. Remove the stale staging file only
+                    // while no other writer owns it.
+                    let _ = fs::remove_file(crate::store_file::staged_document_path(config_path));
+                }
+                return Ok(transaction);
+            }
+            PendingCommand::Published => discard_stage = false,
+            PendingCommand::Superseded => discard_stage = true,
+        }
+        transaction.commit().map_err(sql_error)?;
+    }
+}
+
+fn finish_pending(
+    transaction: &Transaction<'_>,
+    config_path: &Path,
+) -> Result<PendingCommand, ConfigError> {
+    let pending = transaction
+        .query_row(
+            "SELECT command_id, previous_digest, result_digest, result_revision, result_generation
+         FROM config_pending_command JOIN config_command_receipts USING (command_id)
+         WHERE singleton = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(sql_error)?;
+    let Some((command_id, previous_digest, result_digest, revision, generation)) = pending else {
+        return Ok(PendingCommand::Absent);
+    };
+    let staged = crate::store_file::staged_document_path(config_path);
+    if staged.try_exists().map_err(io_error)? {
+        let observed = crate::store_file::read_document(config_path)?;
+        if crate::store_file::document_digest(&observed)? != previous_digest {
+            transaction
+                .execute("DELETE FROM config_pending_command WHERE singleton = 1", [])
+                .map_err(sql_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM config_command_receipts WHERE command_id = ?1",
+                    [&command_id],
+                )
+                .map_err(sql_error)?;
+            return Ok(PendingCommand::Superseded);
+        }
+        let prepared = crate::store_file::read_document(&staged)?;
+        if crate::store_file::document_digest(&prepared)? != result_digest {
+            return Err(ConfigError(
+                "staged config document digest does not match its command".into(),
+            ));
+        }
+        crate::store_file::publish_staged_document(config_path, &staged)?;
+    } else {
+        // The rename consumes the staging file. A rollback after rename must finish
+        // the original receipt, even if another editor has since changed the TOML.
+        crate::store_file::sync_document_directory(config_path)?;
+    }
+    transaction
+        .execute(
+            "UPDATE config_metadata SET revision = ?1, generation = ?2, content_digest = ?3
+         WHERE authority_id = ?4",
+            params![revision, generation, result_digest, CONFIG_AUTHORITY_ID],
+        )
+        .map_err(sql_error)?;
+    transaction
+        .execute("DELETE FROM config_pending_command WHERE singleton = 1", [])
+        .map_err(sql_error)?;
+    Ok(PendingCommand::Published)
 }
 
 fn read_authority(

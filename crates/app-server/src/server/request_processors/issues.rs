@@ -16,13 +16,13 @@ use ash_config::ConfigStore;
 use serde_json::Value;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::Arc;
 
 /// Directory-specific Issue adapter. Persistent cache and configuration stay with
 /// their domain stores; remote work runs on the shared request executor.
 pub(super) struct IssueRequestProcessor {
     root: PathBuf,
-    cache: Mutex<ash_state::SqliteIssueCache>,
+    cache: Option<Arc<ash_state::SqliteIssueCache>>,
 }
 
 impl IssueRequestProcessor {
@@ -51,13 +51,13 @@ impl IssueRequestProcessor {
             )
     }
 
-    pub(super) fn open(root: &Path, database: &Path) -> Result<Self, String> {
+    pub(super) fn open(
+        root: &Path,
+        cache: Option<Arc<ash_state::SqliteIssueCache>>,
+    ) -> Result<Self, String> {
         let root = dunce::canonicalize(root)
             .map_err(|error| format!("cannot resolve Issue repository root: {error}"))?;
-        Ok(Self {
-            root,
-            cache: Mutex::new(ash_state::SqliteIssueCache::open(database)?),
-        })
+        Ok(Self { root, cache })
     }
 
     pub(super) fn handles(method: ClientMethod) -> bool {
@@ -123,28 +123,24 @@ impl IssueRequestProcessor {
             query,
             page: params.page,
         };
-        let fresh = {
-            let cache = self
-                .cache
-                .lock()
-                .map_err(|_| issue_error("Issue cache operation lock poisoned".into()))?;
-            if params.mode == IssueListMode::ClearCache {
-                if params.page != 1 {
-                    return Err(issue_error("Clear cache must start at page 1".into()));
-                }
+        if params.mode == IssueListMode::ClearCache {
+            if params.page != 1 {
+                return Err(issue_error("Clear cache must start at page 1".into()));
+            }
+            if let Some(cache) = &self.cache {
                 cache.clear(&key).map_err(issue_error)?;
             }
-            let stored = if matches!(params.mode, IssueListMode::Cached | IssueListMode::Auto) {
-                cache.read(&key, now).map_err(issue_error)?
-            } else {
-                None
-            };
-            stored.filter(|entry| {
+        }
+        let fresh = self
+            .cache
+            .as_ref()
+            .filter(|_| matches!(params.mode, IssueListMode::Cached | IssueListMode::Auto))
+            .and_then(|cache| cache.read(&key, now).ok().flatten())
+            .filter(|entry| {
                 params.mode == IssueListMode::Cached
                     || interval == 0
                     || now.saturating_sub(entry.fetched_at) < u64::from(interval)
-            })
-        };
+            });
         let (page, fetched_at, cached) = if let Some(entry) = fresh {
             (entry.page, entry.fetched_at, true)
         } else {
@@ -168,11 +164,9 @@ impl IssueRequestProcessor {
             github
                 .validate_authorization()
                 .map_err(github_authentication_error)?;
-            self.cache
-                .lock()
-                .map_err(|_| issue_error("Issue cache operation lock poisoned".into()))?
-                .write(&key, &page, fetched_at)
-                .map_err(issue_error)?;
+            if let Some(cache) = &self.cache {
+                let _ = cache.write(&key, &page, fetched_at);
+            }
             (page, fetched_at, false)
         };
         github

@@ -18,6 +18,7 @@ use std::time::SystemTime;
 #[derive(PartialEq, Eq)]
 struct Observation {
     generation: u64,
+    pending: bool,
     file: Option<FileStamp>,
 }
 
@@ -57,20 +58,26 @@ fn observe(connection: &Connection, config_path: &Path) -> Option<Observation> {
     };
     // The database is shared with other domains. Check this row rather than the global data
     // version so that commits to Thread history or Queue do not trigger a TOML read.
-    let generation = connection
-        .prepare_cached("SELECT generation FROM config_metadata WHERE authority_id = 1")
+    let (generation, pending) = connection
+        .prepare_cached(
+            "SELECT generation, EXISTS(SELECT 1 FROM config_pending_command)
+                         FROM config_metadata WHERE authority_id = 1",
+        )
         .ok()?
-        .query_row([], |row| row.get::<_, i64>(0))
+        .query_row([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, bool>(1)?))
+        })
         .ok()?;
     Some(Observation {
         generation: u64::try_from(generation).ok()?,
+        pending,
         file,
     })
 }
 use tokio::sync::watch;
 
 pub(crate) fn start(
-    mut connection: Connection,
+    connection: Connection,
     config_path: PathBuf,
     shutdown: Receiver<()>,
     subscribers: Arc<Mutex<Vec<Sender<ConfigChange>>>>,
@@ -93,7 +100,7 @@ pub(crate) fn start(
                 {
                     continue;
                 }
-                match crate::store::reconcile_external_snapshot(&mut connection, &config_path) {
+                match crate::store::reconcile_external_snapshot(&connection, &config_path) {
                     Ok(snapshot) => {
                         if let Some(observed) = &mut observed {
                             observed.generation = snapshot.generation.get();

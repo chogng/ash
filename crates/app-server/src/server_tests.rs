@@ -10493,7 +10493,9 @@ fn disconnect_cancels_only_the_connections_pending_login() {
 fn debug_workspace_rpc_shares_revisions_and_preserves_migration_across_connection_close() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("state.sqlite");
-    let server = server().with_debug_workspace_store(&path).unwrap();
+    let server = server().with_debug_workspace_store(Arc::new(
+        ash_debug_manager::DebugWorkspaceStore::open(&path).unwrap(),
+    ));
     let mut first = server.connection();
     let mut second = server.connection();
     initialize(&server, &mut first);

@@ -2,7 +2,10 @@ use crate::ConfigError;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 const BASELINE_VERSION: u32 = 2;
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0002_config_metadata.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0002_config_metadata.sql"),
+    include_str!("../migrations/0003_pending_command.sql"),
+];
 
 struct LegacyDocument {
     schema_version: u32,

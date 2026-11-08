@@ -19,7 +19,7 @@ import { createAppServerResourceApi, readAppServerResource } from './appServerAp
 import { Event } from '../../../base/common/event.js';
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agent.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
-import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
+import { AgentThreadHistoryAnchorError, AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
 	ContentPart as ContentPartDto,
@@ -558,9 +558,16 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 			}
 		},
 		read: async (params) => {
-			const result = await appServerRequest(connection, 'session/thread/read', params);
-			const thread = toThread(result.thread, remoteHost);
-			return { thread, directory: toExecutionTarget(result.directory, remoteHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
+			try {
+				const result = await appServerRequest(connection, 'session/thread/read', params);
+				const thread = toThread(result.thread, remoteHost);
+				return { thread, directory: toExecutionTarget(result.directory, remoteHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
+			} catch (error) {
+				if (params.history?.type === 'before' && error instanceof AppServerRemoteError && error.errorName === 'InvalidParams') {
+					throw new AgentThreadHistoryAnchorError(error.message, { cause: error });
+				}
+				throw error;
+			}
 		},
 		configureAdvisor: async (params) => {
 			const result = await appServerRequest(

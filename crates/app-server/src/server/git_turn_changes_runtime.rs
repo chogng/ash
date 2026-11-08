@@ -36,7 +36,6 @@ use git_turn_changes::TurnChangeSet;
 use git_turn_changes::TurnChangeStore;
 use git_turn_changes::WriteLifecycleTracker;
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
 use worktree::ManagedDirBinding;
@@ -94,7 +93,7 @@ impl Drop for GitTurnChangesRuntime {
 
 impl GitTurnChangesRuntime {
     pub(super) fn open(
-        database_path: &Path,
+        store: Arc<SqliteTurnChangeStore>,
         config: Arc<ConfigStore>,
         threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
@@ -102,10 +101,7 @@ impl GitTurnChangesRuntime {
         updates: Arc<UpdateBroker>,
         workflows: Arc<workflows::Store>,
     ) -> Result<Arc<Self>, String> {
-        let store = Arc::new(
-            SqliteTurnChangeStore::open(database_path)
-                .map_err(|error| format!("cannot open Turn change ledger: {error}"))?,
-        );
+        let history_restorations = store.path().with_extension("history-restorations");
         let ledger_store: Arc<dyn TurnChangeStore> = store.clone();
         let ledger = TurnChangeLedger::start(ledger_store).map_err(|error| error.to_string())?;
         let runtime = Arc::new_cyclic(|weak| Self {
@@ -123,7 +119,7 @@ impl GitTurnChangesRuntime {
             write_lifecycles: WriteLifecycleTracker::default(),
             watchers: RwLock::new(BTreeMap::new()),
             file_watchers: RwLock::new(BTreeMap::new()),
-            history_restorations: database_path.with_extension("history-restorations"),
+            history_restorations,
         });
         let hook_observer = Arc::new(GitRuntimeHandle(Arc::downgrade(&runtime)));
         dirs.hooks.set_execution_observer(hook_observer);

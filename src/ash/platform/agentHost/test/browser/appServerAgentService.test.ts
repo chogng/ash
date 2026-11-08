@@ -10,7 +10,7 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import type { AppServerConnectionState } from '../../common/appServerApi.js';
 import { AppServerRemoteError } from '../../common/appServerError.js';
-import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
+import { AgentThreadHistoryAnchorError, AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
 import { createAppServerAgentHostInputCompletionService, createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
 
@@ -196,6 +196,14 @@ test('Thread history windows reach read and subscribe and retain detached pagina
 	assert.equal(subscription.transcript.revision, 9);
 	assert.deepEqual(read.thread.turns[0]!.items, items);
 	assert.deepEqual(subscription.thread.turns[0]!.items, items);
+});
+
+test('Thread reads translate a rejected older anchor without reclassifying a latest read', async () => {
+	const invalid = new AppServerRemoteError(-32602, 'InvalidParams', { kind: 'InvalidParams' });
+	const service = createAppServerAgentThreadService({ request: async () => { throw invalid; } } as unknown as AppServerProtocolClient);
+	const target = { sessionId: 'session', threadId: 'thread' };
+	await assert.rejects(service.read({ ...target, history: { type: 'before', turnId: 'retired', turnLimit: 20 } }), AgentThreadHistoryAnchorError);
+	await assert.rejects(service.read({ ...target, history: { type: 'latest', turnLimit: 20 } }), error => error === invalid);
 });
 
 function messageSnapshot(text: string, sequence = 1): SessionThreadReadResult {

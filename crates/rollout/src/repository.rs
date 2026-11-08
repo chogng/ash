@@ -42,7 +42,7 @@ impl LocalStateRepository {
     }
 
     /// Returns the read/write Thread history port for this repository.
-    pub fn thread_store(&self) -> Arc<dyn ThreadStore> {
+    pub fn thread_store(&self) -> Arc<SqliteThreadStore> {
         self.thread_store.clone()
     }
 

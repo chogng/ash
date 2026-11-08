@@ -1,6 +1,6 @@
 import { SessionModelSelection } from './sessionModelSelection.js';
 import { findLastIdx } from '../../base/common/arraysFind.js';
-import { ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError, RunOnceScheduler } from '../../base/common/async.js';
 import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
@@ -89,7 +89,7 @@ export class ChatWidgetModel extends Disposable {
 	private generation = 0;
 	private readPending: number | undefined;
 	private readRequest = 0;
-	private threadRead: { readonly generation: number; promise: Promise<void>; invalidated: boolean; } | undefined;
+	private threadRead: { readonly generation: number; promise: Promise<void>; invalidated: boolean; replaceHistory: boolean; } | undefined;
 	private durableSequence = 0;
 	private snapshotRequest = 0;
 	private initializePromise: Promise<void> | undefined;
@@ -281,12 +281,27 @@ export class ChatWidgetModel extends Disposable {
 		const active = this.activeSession;
 		const boundary = this.historyBoundary;
 		if (!active || !boundary?.hasOlderTurns || !boundary.oldestTurnId) return Promise.resolve();
+		const cursor = boundary.oldestTurnId;
 		const generation = this.generation;
+		const readPage = (turnId: string) => this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'before', turnId, turnLimit: historyPageTurns });
 		this.olderHistoryError = undefined;
 		const pending = Promise.resolve().then(async () => {
+			let pageBoundary = boundary;
 			try {
-				const page = await this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'before', turnId: boundary.oldestTurnId!, turnLimit: historyPageTurns });
-				if (this.isDisposed || generation !== this.generation || this.historyBoundary !== boundary) return;
+				let page: ThreadRead;
+				try {
+					page = await readPage(cursor);
+				} catch (error) {
+					if (!(error instanceof ChatHistoryAnchorError) || this.isDisposed || generation !== this.generation) throw error;
+					await this.refreshThread({ replaceHistory: true });
+					if (this.isDisposed || generation !== this.generation) return;
+					const refreshed = this.historyBoundary;
+					if (!refreshed?.hasOlderTurns || !refreshed.oldestTurnId) return;
+					pageBoundary = refreshed;
+					if (refreshed.oldestTurnId === cursor) throw error;
+					page = await readPage(refreshed.oldestTurnId);
+				}
+				if (this.isDisposed || generation !== this.generation || this.historyBoundary !== pageBoundary) return;
 				if (!this._thread || page.thread.threadId !== active.threadId || page.thread.sequence < this.durableSequence) {
 					this.scheduleRefresh();
 					throw new Error(localize('chat.history.changed', 'Chat history changed. Try loading again.'));
@@ -297,7 +312,7 @@ export class ChatWidgetModel extends Disposable {
 				this.historyBoundary = page.history;
 				if (page.thread.sequence > this._thread.sequence) this.scheduleRefresh();
 			} catch (error) {
-				if (!this.isDisposed && generation === this.generation && this.historyBoundary === boundary) {
+				if (!this.isDisposed && generation === this.generation && this.historyBoundary === pageBoundary) {
 					this.olderHistoryError = localize('chat.history.olderFailed', 'Could not load earlier messages: {0}', String(error));
 				}
 			} finally {
@@ -1413,23 +1428,26 @@ export class ChatWidgetModel extends Disposable {
 		});
 	}
 
-	private refreshThread(): Promise<void> {
+	private refreshThread({ replaceHistory = false } = {}): Promise<void> {
 		if (this.isDisposed || !this.activeSession) return Promise.resolve();
 		const generation = this.generation;
 		if (this.threadRead?.generation === generation) {
 			this.threadRead.invalidated = true;
+			this.threadRead.replaceHistory ||= replaceHistory;
 			// The pending result may still advance state, but its failure no longer
 			// describes the refresh requested after this notification or mutation.
 			this.readRequest++;
 			return this.threadRead.promise;
 		}
-		const read = { generation, promise: Promise.resolve(), invalidated: false };
+		const read = { generation, promise: Promise.resolve(), invalidated: false, replaceHistory };
 		this.threadRead = read;
 		read.promise = (async () => {
 			try {
 				do {
 					read.invalidated = false;
-					await this.readThreadSnapshot();
+					const replaceHistory = read.replaceHistory;
+					read.replaceHistory = false;
+					await this.readThreadSnapshot(replaceHistory);
 					// Retire the original read before issuing one replacement for the
 					// accumulated updates. Writes keep their own execution and result.
 				} while (!this.isDisposed && generation === this.generation && read.invalidated);
@@ -1440,7 +1458,7 @@ export class ChatWidgetModel extends Disposable {
 		return read.promise;
 	}
 
-	private async readThreadSnapshot(): Promise<void> {
+	private async readThreadSnapshot(replaceHistory: boolean): Promise<void> {
 		const active = this.activeSession;
 		if (!active) return;
 		const threadId = active.threadId;
@@ -1449,14 +1467,14 @@ export class ChatWidgetModel extends Disposable {
 		try {
 			let result = await this.chatService.readThread(active.session.sessionId, threadId, { type: 'latest', turnLimit: historyPageTurns });
 			if (this.isDisposed || generation !== this.generation) return;
-			result = await this.bridgeHistoryGap(result, generation);
+			if (!replaceHistory) result = await this.bridgeHistoryGap(result, generation);
 			if (
 				this.isDisposed ||
 				generation !== this.generation ||
 				(request !== this.readRequest && result.thread.sequence <= (this._thread?.sequence ?? 0) && result.transcript.revision <= this.transcriptRevision) ||
 				result.thread.threadId !== this.threadId
 			) return;
-			const snapshot = this.acceptThreadSnapshot(result, request, true);
+			const snapshot = this.acceptThreadSnapshot(result, request, { refresh: true, replaceHistory });
 			if (!snapshot.thread) { if (snapshot.transcript) this._onDidChange.fire(); return; }
 			void this.loadContextUsage(generation);
 			this._error = undefined;
@@ -1497,11 +1515,12 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	/** Hydration and refresh obey the same sequence floor; streaming revisions advance independently. */
-	private acceptThreadSnapshot(result: Awaited<ReturnType<IChatService['readThread']>>, request: number, refresh = false): { readonly thread: boolean; readonly transcript: boolean; } {
+	private acceptThreadSnapshot(result: ThreadRead, request: number, { refresh = false, replaceHistory = false } = {}): { readonly thread: boolean; readonly transcript: boolean; } {
 		const sequence = this._thread?.sequence ?? 0;
 		const thread = result.thread.sequence >= this.durableSequence && (result.thread.sequence > sequence || result.thread.sequence === sequence && request >= this.snapshotRequest);
 		const incoming = new Set(result.thread.turns.map(turn => turn.turnId));
-		const overlap = this._thread?.turns.findIndex(turn => incoming.has(turn.turnId)) ?? -1;
+		// A rejected anchor means the loaded prefix may have been retired by a history move.
+		const overlap = replaceHistory ? -1 : this._thread?.turns.findIndex(turn => incoming.has(turn.turnId)) ?? -1;
 		const prefix = result.history && overlap > 0 ? this._thread!.turns.slice(0, overlap) : [];
 		if (thread) {
 			this._thread = { ...result.thread, turns: [...prefix, ...result.thread.turns] };

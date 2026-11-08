@@ -55,7 +55,9 @@ fn issue_server(root: &std::path::Path, origin: &str) -> AppServer {
     server.issue_processor = Some(Arc::new(
         crate::server::issue_operations::IssueRequestProcessor::open(
             root,
-            &root.join("state.sqlite3"),
+            Some(Arc::new(
+                ash_state::SqliteIssueCache::open(&root.join("state.sqlite3")).unwrap(),
+            )),
         )
         .unwrap(),
     ));

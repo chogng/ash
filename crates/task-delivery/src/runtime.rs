@@ -94,7 +94,7 @@ pub struct RuntimeServices {
 
 pub struct Runtime {
     services: RuntimeServices,
-    store: Store,
+    store: Arc<Store>,
     git: GitClient,
     worktrees: WorktreeManager,
 }
@@ -112,7 +112,7 @@ pub struct SendTask {
 }
 
 impl Runtime {
-    pub fn open(database: &Path, services: RuntimeServices) -> Result<Self> {
+    pub fn new(store: Arc<Store>, services: RuntimeServices) -> Result<Self> {
         let settings = WorktreeSettings::from_desktop_config(
             &services.profile_root,
             &services
@@ -132,7 +132,7 @@ impl Runtime {
             .map_err(runtime)?,
         );
         Ok(Self {
-            store: Store::open(database)?,
+            store,
             services,
             git,
             worktrees: WorktreeManager::new(settings),

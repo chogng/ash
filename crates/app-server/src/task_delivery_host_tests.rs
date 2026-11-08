@@ -161,8 +161,8 @@ fn task_runtime(
 ) -> Arc<Runtime> {
     let database = profile.join("state.sqlite3");
     Arc::new(
-        Runtime::open(
-            &database,
+        Runtime::new(
+            Arc::new(task_delivery::Store::open(&database).unwrap()),
             RuntimeServices {
                 profile_root: profile.into(),
                 directory: directory.into(),
