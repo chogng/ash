@@ -15,7 +15,7 @@ import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
-import type { Project } from '../../../src/ash/platform/projects/common/projectService.js';
+import type { Project, ProjectScope } from '../../../src/ash/platform/projects/common/projectService.js';
 import type { ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
 import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from '../../../src/ash/platform/update/common/updateService.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -173,20 +173,44 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 	});
 	getSingletonServiceDescriptors().find(([id]) => id === IChatListCatalog)![1] = new SyncDescriptor(ChatListCatalog, [[remote]]);
 	const projects = new Map<string, Project>();
+	const scopes = new Map<string, ProjectScope>();
+	const codeProjectCreation = new URL(location.href).searchParams.has('codeProjectCreation');
+	let failCodeSave = codeProjectCreation;
+	if (codeProjectCreation) {
+		const { FileDialogService } = await import('../../../src/ash/workbench/services/dialogs/browser/fileDialogService.js');
+		let folder = 0;
+		const title = new URL(location.href).searchParams.get('locale') === 'zh-CN' ? '选择文件夹' : 'Choose a folder';
+		FileDialogService.prototype.showOpenDialog = async options => {
+			if (options.title !== title || options.canSelectFiles || !options.canSelectFolders || options.availableFileSystems?.join() !== 'file') {
+				throw new Error('Expected a local folder picker');
+			}
+			return [URI.file(folder++ === 0 ? '/workspace/first' : '/workspace/second')];
+		};
+	}
 	globalThis.ashWebWorkbenchHost = { api: {
 		...globalThis.ashWebWorkbenchHost.api,
 		projects: {
 			...disconnectedApi.projects,
 			onDidChange: projectChanges.event,
-			list: async () => [...projects.values()],
-			read: async id => {
+			list: async scope => [...projects.values()].filter(project => !scope || scopes.get(project.id) === scope),
+			read: async (id, scope) => {
 				const project = projects.get(id);
-				if (!project) throw new Error('Project not found');
+				if (!project || scope && scopes.get(id) !== scope) throw new Error('Project not found');
 				return project;
 			},
-			create: async (id, name, description, materials) => {
-				const project: Project = { id, name, description, materials, revision: 1, archived: false, sessionCount: 0, sessionIds: [] };
+			create: async (id, name, description, materials, scope = 'chat', appearance) => {
+				if (codeProjectCreation) {
+					if (scope !== 'code' || description || materials.length !== 1 || materials[0]?.resource.fsPath !== '/workspace/second') {
+						throw new Error('Expected only the remaining source folder in the Code project');
+					}
+					if (failCodeSave) {
+						failCodeSave = false;
+						throw new Error('Synthetic save failure');
+					}
+				}
+				const project: Project = { id, name, description, materials, ...appearance, revision: 1, archived: false, sessionCount: 0, sessionIds: [] };
 				projects.set(id, project);
+				scopes.set(id, scope);
 				projectChanges.fire();
 				return project;
 			},

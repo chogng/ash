@@ -1,6 +1,8 @@
 import './chatFixtureLocalization.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../../src/ash/sessions/contrib/projects/browser/projects.contribution.js';
+import { IProjectDialogService } from '../../../src/ash/sessions/contrib/projects/browser/projectDialogService.js';
+import { IProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
 import { Menus } from '../../../src/ash/sessions/browser/menus.js';
@@ -164,7 +166,8 @@ if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	...getSingletonServiceDescriptors().filter(([id]) =>
 		id === IChatWidgetService || id === IActionViewItemService || id === IChatSlashCommandService
-		|| id === IChatPasteTargetService || id === IChatResponseResourceFileSystemProvider),
+		|| id === IChatPasteTargetService || id === IChatResponseResourceFileSystemProvider
+		|| id === IProjectsService || id === IProjectDialogService),
 	[IAgentVoiceService, undefined],
 	[IMessageHistoryService, undefined],
 	[IVoiceModeOnboardingService, { showIfNeeded() { }, registerHost: () => toDisposable(() => { }) } as unknown as IVoiceModeOnboardingService],

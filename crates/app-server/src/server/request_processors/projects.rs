@@ -118,6 +118,8 @@ impl<'a> ProjectRequestProcessor<'a> {
                     name: params.name,
                     description: params.description,
                     scope: params.scope.map(project_scope),
+                    icon: params.icon,
+                    color: params.color,
                     materials: params
                         .materials
                         .into_iter()

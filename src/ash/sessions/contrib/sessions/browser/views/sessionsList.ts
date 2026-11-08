@@ -12,6 +12,7 @@ import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE, pickProject
 import '../media/sessionsList.css';
 import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
+import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { AnchorAxisAlignment, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
@@ -85,6 +86,7 @@ import { IBlockedSessionsIndicatorService, type IBlockedSession } from '../block
 
 const attentionSection = 'attention';
 const codeFolderProjectMigrationKey = 'sessions.code.folderProjectsMigrated';
+const createCodeProjectAction = 'sessions.list.createCodeProject';
 
 type ProjectMenuRow = Pick<SessionListItem, 'domNode' | 'button' | 'getMenuTrigger' | 'setMenuVisible'>;
 
@@ -111,6 +113,7 @@ const codeManagementIcons: typeof managementIcons = {
 };
 
 export type SessionsListPresentation = 'chat' | 'code'
+	| { readonly createProject: () => Promise<void>; }
 	| { readonly openCommand: string; readonly activeContext: string; }
 	| { readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility; };
 
@@ -289,7 +292,8 @@ export class SessionsList extends DomWidget {
 		super();
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
-		const mode = this.mode = typeof presentation === 'string' ? presentation : 'chat';
+		const code = typeof presentation !== 'string' && 'createProject' in presentation ? presentation : undefined;
+		const mode = this.mode = typeof presentation === 'string' ? presentation : code ? 'code' : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
 		const showAttention = observableFromEvent(this, listModel.onDidChange, () => !this.entry && listModel.showAttentionGroup);
 		this.attention = derived(reader => new Map(showAttention.read(reader)
@@ -400,9 +404,18 @@ export class SessionsList extends DomWidget {
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
 		const menuContext = this.menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
+		const createProjectLabel = localize('sessions.activity.createProject', 'Create project');
+		const createProject: IAction | undefined = code ? {
+			id: createCodeProjectAction,
+			label: createProjectLabel,
+			tooltip: createProjectLabel,
+			icon: Lxicon.add,
+			enabled: true,
+			run: code.createProject,
+		} : undefined;
 		this.createListToolbar = (container, disposables) => createSessionsListToolbar(
 			container, disposables, menus, contextMenus, menuContext,
-			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions),
+			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions), createProject,
 		);
 		if (contributed) {
 			const { accessibility, catalog } = contributed;
@@ -488,7 +501,7 @@ export class SessionsList extends DomWidget {
 		return { top: this.tree.scrollTop, focus: section ? `section:${section[0]}` : item?.[0] };
 	}
 
-	public closeIconPickers(): void {
+	public closePopups(): void {
 		this.catalogMenu.clear();
 		for (const [, item] of this.items) { item.leadingIcon?.closePicker(); }
 	}
@@ -1551,13 +1564,18 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 /** Shared Projects header controls for the conversation catalogs. */
 function createSessionsListToolbar(container: HTMLElement, disposables: DisposableStore, menus: IMenuService,
 	contextMenus: IContextMenuService, contextKeys: IContextKeyService | undefined,
-	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[]): MenuWorkbenchToolBar {
+	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[],
+	createProject: IAction | undefined): MenuWorkbenchToolBar {
 	const toolbar = disposables.add(new MenuWorkbenchToolBar(container, menus, contextMenus, menuId, {
 		ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
 		contextKeyService: contextKeys,
+		leadingActions: createProject && [createProject],
 		// The popup reads list state even when the submenu has no registered commands.
 		menuOptions: { preserveEmptySubmenus: true },
 		actionViewItemProvider: (action, options) => {
+			if (action === createProject) {
+				return new CreateProjectActionViewItem(action, { ...options, iconOnly: true });
+			}
 			if (!(action instanceof SubmenuItemAction) || action.item.submenu !== submenu) {
 				return undefined;
 			}
@@ -1586,6 +1604,13 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 		}
 	}));
 	return toolbar;
+}
+
+class CreateProjectActionViewItem extends ButtonActionViewItem {
+	override render(container: HTMLElement): void {
+		super.render(container);
+		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
+	}
 }
 
 function rowMoreAction(run: () => void, project: boolean): IAction {

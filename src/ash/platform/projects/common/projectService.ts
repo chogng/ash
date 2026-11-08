@@ -9,7 +9,12 @@ export interface ProjectMaterial {
 	readonly kind: 'file' | 'folder';
 }
 
-export interface ProjectSummary {
+export interface ProjectAppearance {
+	readonly icon?: string;
+	readonly color?: string;
+}
+
+export interface ProjectSummary extends ProjectAppearance {
 	readonly id: string;
 	readonly revision: number;
 	/** Unix epoch milliseconds; undefined for older projects whose time is unknown. */
@@ -18,8 +23,6 @@ export interface ProjectSummary {
 	readonly name: string;
 	readonly archived: boolean;
 	readonly sessionCount: number;
-	readonly icon?: string;
-	readonly color?: string;
 }
 
 export interface Project extends ProjectSummary {
@@ -36,7 +39,7 @@ export interface IProjectService {
 	readonly onDidChange: Event<void>;
 	list(scope?: ProjectScope): Promise<readonly ProjectSummary[]>;
 	read(id: string, scope?: ProjectScope): Promise<Project>;
-	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope): Promise<Project>;
+	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope, appearance?: ProjectAppearance): Promise<Project>;
 	/** Adds a saved Session using the current project revision. */
 	addSession(project: Project, sessionId: string): Promise<Project>;
 	/** Changes one project membership. Other memberships of the Session are independent. */

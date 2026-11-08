@@ -401,9 +401,12 @@ fn project_appearance_updates_one_field_and_preserves_project_details() {
         "project/create",
         serde_json::json!({
             "commandId": "create-review", "projectId": "review", "name": "Review", "description": "Check results",
+            "icon": "folder", "color": "terminal.ansiBlue",
         }),
     );
     assert_eq!(created["result"]["project"]["revision"], 1);
+    assert_eq!(created["result"]["project"]["icon"], "folder");
+    assert_eq!(created["result"]["project"]["color"], "terminal.ansiBlue");
     let mut update = |id, revision, field: &str, value| {
         call(
             &fixture.server,

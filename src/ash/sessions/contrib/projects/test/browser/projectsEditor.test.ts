@@ -28,9 +28,16 @@ suite('Projects toolbar', () => {
 			const create = page.locator('.ash-sessions-activity-content').getByRole('button', { name: createLabel, exact: true });
 			const dialog = page.getByRole('dialog');
 			const name = dialog.getByRole('textbox').first();
+			const appearanceLabel = chinese ? '更改项目外观' : 'Change project appearance';
+			const appearance = dialog.getByRole('button', { name: appearanceLabel });
+			const picker = page.getByRole('dialog', { name: appearanceLabel, exact: true });
+			const blue = picker.getByRole('button', { name: chinese ? '蓝色' : 'Blue', exact: true });
 			await projectsAction.hover();
 			await create.click();
-			await name.fill('Discarded project');
+			await appearance.click();
+			await blue.click();
+			await blue.press('Escape');
+			await expect(appearance).toBeFocused();
 			await dialog.getByRole('button', { name: chinese ? '取消' : 'Cancel', exact: true }).click();
 			await page.getByRole('button', { name: chinese ? '放弃更改' : 'Discard', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
@@ -40,6 +47,17 @@ suite('Projects toolbar', () => {
 
 			await create.press('Enter');
 			await name.fill('Local research');
+			await appearance.click();
+			await expect(blue).toHaveAttribute('aria-pressed', 'false');
+			const search = picker.getByRole('combobox', { name: chinese ? '搜索图标' : 'Search icons' });
+			await expect(search).toBeFocused();
+			await search.fill('clockface');
+			await picker.getByRole('option', { name: 'clockface', exact: true }).click();
+			await blue.click();
+			await expect(appearance.locator('[data-ash-icon-id="clockface"]')).toBeVisible();
+			const previewColor = await appearance.evaluate(element => getComputedStyle(element).color);
+			await picker.getByRole('button', { name: chinese ? '完成' : 'Done', exact: true }).click();
+			await expect(appearance).toBeFocused();
 			await dialog.getByRole('button', { name: chinese ? '创建' : 'Create', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
 			await expect(projects).toHaveAttribute('aria-label', 'Local research');
@@ -54,8 +72,8 @@ suite('Projects toolbar', () => {
 			await expect(projects).toHaveAttribute('aria-label', 'Renamed research');
 
 			await breadcrumb.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
-			await expect(projects.getByRole('button', { name: 'Renamed research', exact: true })).toBeVisible();
-			await expect(projects.getByRole('button', { name: 'Discarded project', exact: true })).toHaveCount(0);
+			const card = projects.getByRole('button', { name: 'Renamed research', exact: true });
+			await expect(card.locator('.ash-projects-card-mark [data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
 			await remote.click();
 			await expect(remoteTitle).toBeDisabled();
 		});

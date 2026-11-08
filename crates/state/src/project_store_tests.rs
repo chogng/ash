@@ -109,6 +109,8 @@ fn create_request() -> ProjectCommandRequest {
         project_id: ProjectId::new("project-a").unwrap(),
         expected_revision: 0,
         command: ProjectCommand::Create {
+            icon: None,
+            color: None,
             scope: Some(ProjectScope::Code),
             name: "Ash".into(),
             description: "multi-root project".into(),

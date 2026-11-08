@@ -5,7 +5,7 @@ import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/co
 import { addDisposableListener, getActiveElement, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableValue } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -18,7 +18,7 @@ import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPan
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ProjectChatInput } from './projectChatInput.js';
-import { ProjectDialog } from './projectDialog.js';
+import { IProjectDialogService } from './projectDialogService.js';
 import { ProjectMaterials } from './projectMaterials.js';
 import type { ProjectTitleBarContent } from './projectTitleBarWidget.js';
 import { ProjectsActions } from './projectsActions.js';
@@ -31,7 +31,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.projects';
 	public domNode!: HTMLElement;
 	private readonly content = this._register(new DisposableStore());
-	private projectDialog!: ProjectDialog;
 	private catalogHeading!: HTMLElement;
 	private catalogTitle!: HTMLElement;
 	private projectMaterials!: ProjectMaterials;
@@ -80,6 +79,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		@IStorageService storageService: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
+		@IProjectDialogService private readonly projectDialogs: IProjectDialogService,
 	) {
 		super('sessions.editor.projects', themeService, storageService);
 	}
@@ -97,16 +97,14 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		});
 		parent.append(this.domNode);
 		super.create(this.domNode);
-		this.projectDialog = this._register(this.instantiationService.createInstance(ProjectDialog, this.domNode, () => {
-			if (!this.isDisposed && this.isVisible()) this.focus();
-		}));
+		this._register(toDisposable(() => this.projectDialogs.close(this.domNode)));
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
 		this.catalogHeading = h(document, 'header', { className: 'ash-projects-heading' });
 		this.catalogTitle = h(document, 'h1', { properties: { tabIndex: -1 } }, localize('projects.title', 'Projects'));
 		this.catalogHeading.append(this.catalogTitle);
 		this.projectActions = this._register(this.instantiationService.createInstance(ProjectsActions, {
-			showDialog: (project?: Project, conversation?: ConversationProjectEditor) => this.projectDialog.show(project, conversation),
+			showDialog: (project?: Project, conversation?: ConversationProjectEditor) => this.showProjectDialog(project, conversation),
 			focusList: () => {
 				if (!this.projectList.focusCard()) this.projectToolbar.focusCreate();
 			},
@@ -160,6 +158,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.projectActions.createProject();
 	}
 
+	private showProjectDialog(project?: Project, conversation?: ConversationProjectEditor): void {
+		this.projectDialogs.showChatProjectDialog(this.domNode, () => {
+			if (!this.isDisposed && this.isVisible()) this.focus();
+		}, project, conversation);
+	}
+
 	public toggleArchivedProjects(): void {
 		if (this.catalogHeading.hidden) {
 			this.showArchived.set(true, undefined);
@@ -185,7 +189,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			this.projectList.stopUpdatingTimes();
 			this.projectToolbar.closeSortMenu();
 			this.projectActions.cancelPendingEdit();
-			this.projectDialog.close();
+			this.projectDialogs.close(this.domNode);
 		}
 	}
 	public override layout(dimension: IDimension): void {
@@ -299,7 +303,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			{
 				label: localize('projects.edit', 'Edit details'),
 				icon: Lxicon.edit,
-				onClick: () => this.projectDialog.show(project),
+				onClick: () => this.showProjectDialog(project),
 			},
 			'edit',
 		);

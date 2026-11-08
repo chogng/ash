@@ -21,6 +21,8 @@ pub(crate) fn apply(
                 description,
                 scope,
                 materials,
+                icon,
+                color,
             },
         ) => {
             if request.expected_revision != 0 {
@@ -40,8 +42,8 @@ pub(crate) fn apply(
                 scope: *scope,
                 name: name.clone(),
                 description: description.clone(),
-                icon: None,
-                color: None,
+                icon: icon.clone(),
+                color: color.clone(),
                 roots: BTreeMap::new(),
                 session_ids: BTreeSet::new(),
                 materials: materials.clone(),

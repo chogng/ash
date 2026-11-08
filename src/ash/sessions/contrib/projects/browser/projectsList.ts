@@ -2,7 +2,7 @@ import type { IAction } from '../../../../base/common/actions.js';
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { IntervalTimer } from '../../../../base/common/async.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Disposable, MutableDisposable, toDisposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -15,6 +15,7 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import type { ChatListEntry, ChatListGroup } from '../../chat/browser/chatListModel.js';
 import type { ProjectsActions } from './projectsActions.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
@@ -149,7 +150,8 @@ export class ProjectsList extends Disposable {
 				className: 'ash-projects-card-mark',
 				attributes: { 'aria-hidden': 'true' },
 			});
-			appendIcon(Lxicon.projects, mark);
+			appendIcon((project.icon && getRegisteredIcon(project.icon, document)) || Lxicon.projects, mark);
+			if (project.color) mark.style.color = `var(${colorCssVariable(project.color)})`;
 			const content = h(
 				document,
 				'span',

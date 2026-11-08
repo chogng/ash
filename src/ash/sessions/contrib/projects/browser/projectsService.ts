@@ -1,7 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import { IProjectService, type Project, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectAppearance, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
@@ -30,7 +30,7 @@ export interface IProjectsService {
 	openConversationProject(id: string): void;
 	showProjects(): void;
 	reload(): Promise<void>;
-	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
+	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], appearance?: ProjectAppearance): Promise<boolean>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
 	readProject(id: string): Promise<Project | undefined>;
 	archive(project: ProjectSummary): Promise<boolean>;
@@ -110,8 +110,8 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		}
 	}
 
-	public create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
-		return this.mutate(() => this.projects.create(id, name, description, materials, 'chat'), true);
+	public create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], appearance?: ProjectAppearance): Promise<boolean> {
+		return this.mutate(() => this.projects.create(id, name, description, materials, 'chat', appearance), true);
 	}
 	public update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
 		return this.mutate(() => this.projects.update(project, name, description, materials));

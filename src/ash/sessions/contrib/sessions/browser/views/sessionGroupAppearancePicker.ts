@@ -80,11 +80,10 @@ async function pickIcon(input: IQuickInputService, currentIcon: string | undefin
 	if (selected) await setIcon(selected.id || undefined);
 }
 
-async function pickColor(input: IQuickInputService, currentColor: string | undefined, title: string,
-	setColor: (id: string | undefined) => void | Promise<void>): Promise<void> {
+export function getAppearanceColors(currentColor?: string): readonly [string, string][] {
 	const blue = localize('sessions.list.groupColorBlue', 'Blue');
 	const green = localize('sessions.list.groupColorGreen', 'Green');
-	const palette = [
+	const palette: [string, string][] = [
 		[terminalAnsiBlack, localize('sessions.list.groupColorBlack', 'Black')],
 		[terminalAnsiRed, localize('sessions.list.groupColorRed', 'Red')],
 		[terminalAnsiGreen, green],
@@ -102,9 +101,14 @@ async function pickColor(input: IQuickInputService, currentColor: string | undef
 	// Keep the exact theme token selected for groups saved with the earlier palette.
 	const savedLabel = currentColor && savedColors.get(currentColor);
 	if (currentColor && savedLabel) palette.push([currentColor, savedLabel]);
+	return palette;
+}
+
+async function pickColor(input: IQuickInputService, currentColor: string | undefined, title: string,
+	setColor: (id: string | undefined) => void | Promise<void>): Promise<void> {
 	const selected = await pickSessionDestination(input, title, [
 		{ id: '', label: localize('sessions.list.groupAppearanceDefault', 'Default') },
-		...palette.map(([id, label]) => ({
+		...getAppearanceColors(currentColor).map(([id, label]) => ({
 			id, label, description: id,
 			iconClass: ThemeIcon.asClassName(Lxicon.circleFilled),
 			iconColor: themeColorFromId(id),

@@ -1,44 +1,85 @@
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
-import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { basename } from '../../../../base/common/resources.js';
+import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import type { Project, ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { IProjectService, type Project, type ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import type { ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
+import { ProjectAppearancePicker } from './projectAppearancePicker.js';
 import { IProjectsService } from './projectsService.js';
-import './media/projectDialog.css';
+import './media/projectForm.css';
 
-/** Owns the project form, its draft and conflict resolution for one open dialog. */
-export class ProjectDialog extends Disposable {
-	private readonly active = this._register(new MutableDisposable<DisposableStore>());
+function createProjectFormDialog(
+	container: HTMLElement,
+	title: string,
+	form: HTMLFormElement,
+	actions: HTMLElement,
+	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; },
+): Dialog {
+	return new Dialog(container, title, [], createWorkbenchDialogOptions({
+		extraClasses: options.code ? ['ash-projects-dialog', 'ash-code-project-dialog'] : ['ash-projects-dialog'],
+		layout: 'form',
+		modal: false,
+		closeOnBackdropClick: true,
+		disableDefaultAction: true,
+		canClose: options.canClose,
+		shouldConfirmDiscard: options.shouldConfirmDiscard,
+		renderBody: body => body.append(form),
+		renderFooter: footer => footer.append(actions),
+	}));
+}
+
+export interface IProjectDialogService {
+	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, project?: Project, conversation?: ConversationProjectEditor): void;
+	showCodeProjectDialog(owner: HTMLElement): Promise<void>;
+	close(owner: HTMLElement): void;
+}
+
+export const IProjectDialogService = createServiceIdentifier<IProjectDialogService>('projectDialogService');
+
+interface ActiveProjectDialog extends IDisposable {
+	readonly owner: HTMLElement;
+	readonly store: DisposableStore;
+}
+
+/** Owns project dialog presentation and draft lifetime for the window. */
+export class ProjectDialogService extends Disposable implements IProjectDialogService {
+	private readonly active = this._register(new MutableDisposable<ActiveProjectDialog>());
 
 	constructor(
-		private readonly container: HTMLElement,
-		private readonly restoreFocus: () => void,
-		@IProjectsService private readonly projects: IProjectsService,
+		@IProjectsService private readonly chatProjects: IProjectsService,
+		@IProjectService private readonly projects: IProjectService,
 		@IFileDialogService private readonly files: IFileDialogService,
 	) {
 		super();
 	}
 
-	close(): void {
-		this.active.clear();
+	close(owner: HTMLElement): void {
+		if (this.active.value?.owner === owner) this.active.clear();
 	}
 
-	show(project?: Project, conversation?: ConversationProjectEditor): void {
-		if (this.active.value) {
-			return;
-		}
+	private begin(owner: HTMLElement): ActiveProjectDialog | undefined {
+		if (this.active.value) return undefined;
 		const store = new DisposableStore();
-		this.active.value = store;
-		const document = this.container.ownerDocument;
+		const active = Object.assign(toDisposable(() => store.dispose()), { owner, store });
+		this.active.value = active;
+		return active;
+	}
+
+	showChatProjectDialog(container: HTMLElement, restoreFocus: () => void, project?: Project, conversation?: ConversationProjectEditor): void {
+		const active = this.begin(container);
+		if (!active) return;
+		const { store } = active;
+		const document = container.ownerDocument;
 		const previousFocus = getActiveElement(document);
 		const form = h(document, 'form', { className: 'ash-projects-form' });
 		form.id = generateUuid();
@@ -52,7 +93,20 @@ export class ProjectDialog extends Disposable {
 				placeholder: localize('projects.namePlaceholder', 'Name your project'),
 			},
 		});
-		nameLabel.append(name);
+		name.id = generateUuid();
+		nameLabel.htmlFor = name.id;
+		const nameField = h(document, 'div', { className: 'ash-project-name' });
+		const appearance = !project && !conversation
+			? store.add(new ProjectAppearancePicker(container, nameField, Lxicon.projects))
+			: undefined;
+		if (!appearance) {
+			const leadingIcon = h(document, 'span', { attributes: { 'aria-hidden': 'true' } });
+			appendIcon(Lxicon.projects, leadingIcon);
+			nameField.append(leadingIcon);
+		}
+		nameField.append(name);
+		const nameGroup = h(document, 'div', { className: 'ash-project-name-group' },
+			nameLabel, nameField);
 		const descriptionLabel = h(
 			document,
 			'label',
@@ -121,30 +175,24 @@ export class ProjectDialog extends Disposable {
 		);
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
-		form.append(nameLabel, descriptionLabel);
+		form.append(nameGroup, descriptionLabel);
 		if (!conversation) form.append(folderRow);
 		form.append(feedback, conflicts);
 		let didSave = false;
 		const dialog = store.add(
-			new Dialog(
-				this.container,
+			createProjectFormDialog(
+				container,
 				project || conversation
 					? localize('projects.edit', 'Edit details')
 					: localize('projects.createTitle', 'Create a project'),
-				[],
-				createWorkbenchDialogOptions({
-					extraClasses: ['ash-projects-dialog'],
-					layout: 'form',
-					modal: false,
-					closeOnBackdropClick: true,
-					disableDefaultAction: true,
+				form,
+				actions,
+				{
 					canClose: () => !name.disabled && !pickingFolder,
 					shouldConfirmDiscard: () => name.value !== (base?.name ?? initialName) ||
 						description.value !== (base?.description ?? initialDescription) ||
-						!!chosenFolder || unresolved.size > 0,
-					renderBody: body => body.append(form),
-					renderFooter: footer => footer.append(actions),
-				}),
+						!!chosenFolder || !!appearance?.appearance.icon || !!appearance?.appearance.color || unresolved.size > 0,
+				},
 			),
 		);
 		const reload = store.add(
@@ -183,7 +231,7 @@ export class ProjectDialog extends Disposable {
 		};
 		store.add(addDisposableListener(name, 'input', updateSubmit));
 		const offerMerge = (): boolean => {
-			const latest = this.projects.state.get().projects.find(item => item.id === base?.id);
+			const latest = this.chatProjects.state.get().projects.find(item => item.id === base?.id);
 			if (!base || !latest || latest.revision === base.revision) {
 				return false;
 			}
@@ -262,22 +310,22 @@ export class ProjectDialog extends Disposable {
 			);
 		};
 		const reloadAndMerge = async (): Promise<void> => {
-			if (!base || this.projects.state.get().busy) {
+			if (!base || this.chatProjects.state.get().busy) {
 				return;
 			}
 			reload.enabled = false;
 			name.disabled = true;
 			description.disabled = true;
 			folder.enabled = false;
-			await this.projects.reload();
+			await this.chatProjects.reload();
 			if (store.isDisposed) {
 				return;
 			}
-			const latest = await this.projects.readProject(base.id);
+			const latest = await this.chatProjects.readProject(base.id);
 			if (store.isDisposed) {
 				return;
 			}
-			const state = this.projects.state.get();
+			const state = this.chatProjects.state.get();
 			if (state.message || latest?.id !== base.id) {
 				feedback.textContent =
 					state.message ?? localize('projects.loadFailed', 'Could not load projects. Try again.');
@@ -335,7 +383,7 @@ export class ProjectDialog extends Disposable {
 				event.preventDefault();
 				if (
 					name.disabled || pickingFolder || !name.value.trim() ||
-					this.projects.state.get().busy ||
+					this.chatProjects.state.get().busy ||
 					needsMerge ||
 					unresolved.size ||
 					offerMerge()
@@ -346,14 +394,15 @@ export class ProjectDialog extends Disposable {
 				name.disabled = true;
 				description.disabled = true;
 				folder.enabled = false;
+				if (appearance) appearance.enabled = false;
 				const details = { name: name.value.trim(), description: description.value.trim() };
 				const result = conversation
 					? conversation.save(details).then(() => true, error => {
 						if (!store.isDisposed) feedback.textContent = toErrorMessage(error);
 						return false;
 					})
-					: base ? this.projects.update(base, details.name, details.description, materials)
-						: this.projects.create(id, details.name, details.description, materials);
+					: base ? this.chatProjects.update(base, details.name, details.description, materials)
+						: this.chatProjects.create(id, details.name, details.description, materials, appearance?.appearance);
 				void result.then(saved => {
 					if (store.isDisposed) {
 						return;
@@ -362,10 +411,11 @@ export class ProjectDialog extends Disposable {
 						didSave = true;
 						dialog.dispose();
 					} else {
-						if (!conversation) feedback.textContent = this.projects.state.get().message ?? '';
+						if (!conversation) feedback.textContent = this.chatProjects.state.get().message ?? '';
 						name.disabled = false;
 						description.disabled = false;
 						folder.enabled = true;
+						if (appearance) appearance.enabled = true;
 						updateSubmit();
 						if (!offerMerge() && getActiveElement(document) === document.body) name.focus();
 					}
@@ -373,14 +423,155 @@ export class ProjectDialog extends Disposable {
 			}),
 		);
 		void dialog.show().then(() => {
-			if (this.active.value === store) {
+			if (this.active.value === active) {
 				this.active.clear();
 			}
 			// Updating action availability can replace the toolbar trigger during a save attempt.
 			if (!this.isDisposed && (didSave || !previousFocus?.isConnected)) {
-				this.restoreFocus();
+				restoreFocus();
 			}
 		});
 		name.focus();
+	}
+
+	async showCodeProjectDialog(container: HTMLElement): Promise<void> {
+		const active = this.begin(container);
+		if (!active) return;
+		const { store } = active;
+		const document = container.ownerDocument;
+		const title = localize('projects.code.create', 'Create project');
+		const nameLabel = localize('projects.projectName', 'Project name');
+		const name = h(document, 'input', {
+			attributes: { 'aria-label': nameLabel },
+			properties: { type: 'text', required: true, maxLength: 200, placeholder: nameLabel },
+		});
+		const nameField = h(document, 'div', { className: 'ash-project-name' });
+		const appearance = store.add(new ProjectAppearancePicker(container, nameField, Lxicon.folder));
+		nameField.append(name);
+		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
+		const form = h(document, 'form', { className: 'ash-projects-form' }, nameField);
+		form.id = generateUuid();
+		const id = generateUuid();
+		const materials = new Map<string, ProjectMaterial>();
+		const rows = store.add(new DisposableStore());
+		const sourceLabel = localize('projects.code.sourceFolders', 'Source folders');
+		const list = h(document, 'ul', { className: 'ash-code-project-folder-list', attributes: { 'aria-label': sourceLabel } });
+		const hint = h(document, 'span', localize('projects.code.folderHint', 'Add a folder on this computer'));
+		const panel = h(document, 'div', { className: 'ash-code-project-folder-panel' }, list, hint);
+		const source = h(document, 'fieldset', { className: 'ash-code-project-source' },
+			h(document, 'legend', sourceLabel), panel);
+		form.append(source, feedback);
+		let picking = false;
+		let saving = false;
+		const add = store.add(new Button(panel, {
+			...defaultButtonStyles,
+			label: localize('projects.code.addFolder', 'Add'),
+			ariaLabel: localize('projects.code.addFolderLabel', 'Add source folder'),
+			icon: Lxicon.newFolder,
+			presentation: 'secondary',
+			size: 'small',
+			onClick: async () => {
+				if (picking || saving) return;
+				picking = true;
+				feedback.textContent = '';
+				updateSubmit();
+				try {
+					const folders = await this.files.showOpenDialog({
+						title: localize('sessions.workspace.browseTitle', 'Choose a folder'),
+						canSelectFiles: false, canSelectFolders: true, availableFileSystems: ['file'],
+					});
+					if (store.isDisposed) return;
+					for (const resource of folders ?? []) {
+						if (resource.scheme !== 'file' || resource.authority) continue;
+						materials.set(extUriBiasedIgnorePathCase.getComparisonKey(resource), {
+							kind: 'folder', resource, name: basename(resource) || resource.fsPath,
+						});
+					}
+					renderFolders();
+				} catch {
+					if (!store.isDisposed) feedback.textContent = localize('projects.code.pickFailed', 'Could not add folders. Try again.');
+				} finally {
+					picking = false;
+					if (!store.isDisposed) {
+						updateSubmit();
+						add.focus();
+					}
+				}
+			},
+		}));
+		function renderFolders(): void {
+			rows.clear();
+			list.replaceChildren();
+			list.hidden = materials.size === 0;
+			hint.hidden = !list.hidden;
+			for (const [key, material] of materials) {
+				const path = material.resource.fsPath;
+				const row = h(document, 'li', {},
+					h(document, 'span', { attributes: { title: path } }, path));
+				list.append(row);
+				const label = localize('projects.code.removeFolder', 'Remove {0}', path);
+				rows.add(new Button(row, {
+					...defaultButtonStyles,
+					label,
+					title: label,
+					icon: Lxicon.close,
+					iconOnly: true,
+					presentation: 'quiet',
+					onClick: () => {
+						materials.delete(key);
+						renderFolders();
+						add.focus();
+					},
+				}));
+			}
+		}
+		renderFolders();
+		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
+		const dialog = store.add(createProjectFormDialog(container, title, form, actions, {
+			code: true,
+			canClose: () => !picking && !saving,
+			shouldConfirmDiscard: () => !!name.value || materials.size > 0 || !!appearance.appearance.icon || !!appearance.appearance.color,
+		}));
+		store.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('projects.cancel', 'Cancel'),
+			presentation: 'secondary',
+			onClick: () => void dialog.requestClose(),
+		}));
+		const submit = store.add(new Button(actions, {
+			...defaultButtonStyles, label: title, presentation: 'primary', type: 'submit', enabled: false,
+		}));
+		submit.domNode.setAttribute('form', form.id);
+		function updateSubmit(): void {
+			submit.enabled = !!name.value.trim() && !picking && !saving;
+		}
+		store.add(addDisposableListener(name, 'input', updateSubmit));
+		store.add(addDisposableListener(form, 'submit', async event => {
+			event.preventDefault();
+			const projectName = name.value.trim();
+			if (picking || saving || !projectName) return;
+			saving = name.disabled = source.disabled = true;
+			appearance.enabled = false;
+			feedback.textContent = '';
+			updateSubmit();
+			try {
+				await this.projects.create(id, projectName, '', [...materials.values()], 'code', appearance.appearance);
+				if (!store.isDisposed) dialog.dispose();
+			} catch (error) {
+				if (store.isDisposed) return;
+				feedback.textContent = toErrorMessage(error);
+				saving = name.disabled = source.disabled = false;
+				appearance.enabled = true;
+				updateSubmit();
+				name.focus();
+			}
+		}));
+		try {
+			const closed = dialog.show();
+			name.focus();
+			await closed;
+		} finally {
+			if (this.active.value === active) this.active.clear();
+		}
 	}
 }

@@ -1235,6 +1235,7 @@ suite('sessions browser component', () => {
 		const projects = list.locator('[data-section="projects"]');
 		const heading = projects.getByRole('heading', { level: 3, name: chinese ? '项目' : 'Projects', exact: true });
 		const more = projects.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
+		const create = projects.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
 		const toolbar = projects.getByRole('toolbar');
 		const treeRow = list.getByRole('treeitem').filter({ has: page.locator('[data-section="projects"]') });
 		const newSession = page.locator('[data-action-id="sessions.newSession"] button');
@@ -1247,7 +1248,7 @@ suite('sessions browser component', () => {
 			const projectRow = list.locator('[data-project-id="search-project"]');
 			await expect(list.getByRole('heading', { level: 2 })).toHaveCount(0);
 			await expect(heading).toBeVisible();
-			await expect(toolbar.getByRole('button')).toHaveCount(1);
+			await expect(toolbar.getByRole('button')).toHaveCount(code ? 2 : 1);
 			await expect(toolbar).toHaveCSS('opacity', '0');
 			await expect(projects.locator('[data-ash-icon-id="list-filter"]')).toBeVisible();
 			await expect(more.locator('.ash-dropdown-menu-indicator')).toBeHidden();
@@ -1299,6 +1300,10 @@ suite('sessions browser component', () => {
 			await expect(treeRow).toHaveCSS('background-color', transparent);
 			await expect(toolbar).toHaveCSS('opacity', '1');
 			await page.keyboard.press('Tab');
+			if (code) {
+				await expect(create).toBeFocused();
+				await page.keyboard.press('ArrowRight');
+			}
 			await expect(more).toBeFocused();
 			await expect(more).toHaveCSS('outline-style', 'solid');
 			await page.keyboard.press('Enter');
@@ -1327,6 +1332,79 @@ suite('sessions browser component', () => {
 			await expect(more).toBeFocused();
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 		}
+	});
+
+	for (const locale of ['en', 'zh-CN']) test(`Code creates a project from local source folders (${locale})`, async function () {
+		const { page, info: testInfo } = browserTests;
+		const chinese = locale === 'zh-CN';
+		await page.goto(`/sessions.html?projectCreation&codeProjectCreation&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+		await page.locator('.ash-window-mode-control').getByRole('button').nth(1).click();
+		const list = page.locator('.ash-sessions-list[data-mode="code"]:visible');
+		const title = chinese ? '创建项目' : 'Create project';
+		const create = list.getByRole('button', { name: title, exact: true });
+		const dialog = page.getByRole('dialog', { name: title, exact: true });
+		const name = dialog.getByRole('textbox', { name: chinese ? '项目名称' : 'Project name', exact: true });
+		const add = dialog.getByRole('button', { name: chinese ? '添加源文件夹' : 'Add source folder', exact: true });
+		const source = dialog.getByRole('group', { name: chinese ? '源文件夹' : 'Source folders', exact: true });
+		const submit = dialog.getByRole('button', { name: title, exact: true });
+		await create.focus();
+		await create.press('Enter');
+		await expect(name).toBeFocused();
+		await expect(dialog.getByRole('textbox')).toHaveCount(1);
+		await expect(source).toContainText(chinese ? '添加此电脑上的文件夹' : 'Add a folder on this computer');
+		await expect(submit).toBeDisabled();
+		const nameBounds = (await name.boundingBox())!;
+		const sourceBounds = (await source.boundingBox())!;
+		const addBounds = (await add.boundingBox())!;
+		const dialogBounds = (await dialog.boundingBox())!;
+		const submitBounds = (await submit.boundingBox())!;
+		expect(sourceBounds.y).toBeGreaterThan(nameBounds.y + nameBounds.height);
+		expect(addBounds.x + addBounds.width / 2).toBeCloseTo(sourceBounds.x + sourceBounds.width / 2, 0);
+		expect(dialogBounds.y + dialogBounds.height - submitBounds.y - submitBounds.height).toBeLessThan(24);
+		await dialog.screenshot({ path: testInfo.outputPath(`code-project-${locale}.png`) });
+		await name.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await expect(create).toBeFocused();
+		await create.press('Enter');
+		await add.press('Enter');
+		await expect(add).toBeFocused();
+		const paths = source.getByRole('listitem').locator(':scope > span');
+		await expect(paths).toHaveText(['/workspace/first']);
+		await add.press('Enter');
+		await expect(paths).toHaveText(['/workspace/first', '/workspace/second']);
+		await source.getByRole('button', { name: chinese ? '移除 /workspace/first' : 'Remove /workspace/first' }).press('Enter');
+		await expect(add).toBeFocused();
+		await expect(paths).toHaveText(['/workspace/second']);
+		await name.fill('New Code project');
+		const appearanceLabel = chinese ? '更改项目外观' : 'Change project appearance';
+		const appearance = dialog.getByRole('button', { name: appearanceLabel });
+		await appearance.press('Enter');
+		const picker = page.getByRole('dialog', { name: appearanceLabel, exact: true });
+		const search = picker.getByRole('combobox', { name: chinese ? '搜索图标' : 'Search icons' });
+		await expect(search).toBeFocused();
+		await search.fill('clockface');
+		await search.press('Enter');
+		const blue = picker.getByRole('button', { name: chinese ? '蓝色' : 'Blue', exact: true });
+		await blue.press('Enter');
+		await expect(blue).toHaveAttribute('aria-pressed', 'true');
+		await expect(appearance.locator('[data-ash-icon-id="clockface"]')).toBeVisible();
+		const previewColor = await appearance.evaluate(element => getComputedStyle(element).color);
+		await search.fill('');
+		await page.screenshot({ path: testInfo.outputPath(`project-appearance-${locale}.png`) });
+		await blue.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await expect(appearance).toBeFocused();
+		await submit.click();
+		await expect(dialog.getByRole('alert')).toHaveText('Synthetic save failure');
+		await expect(name).toHaveValue('New Code project');
+		await expect(paths).toHaveText(['/workspace/second']);
+		await submit.click();
+		await expect(dialog).toHaveCount(0);
+		await expect(create).toBeFocused();
+		const created = list.getByRole('button', { name: 'New Code project', exact: true });
+		await expect(created.locator('[data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Projects navigation opens the project creation dialog (${locale})`, async function () {

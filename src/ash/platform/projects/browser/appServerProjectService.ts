@@ -7,7 +7,7 @@ import { localize } from '../../../nls.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import type { IProjectService, Project, ProjectMaterial, ProjectScope, ProjectSummary } from '../common/projectService.js';
+import type { IProjectService, Project, ProjectAppearance, ProjectMaterial, ProjectScope, ProjectSummary } from '../common/projectService.js';
 
 export class AppServerProjectService implements IProjectService {
 	public readonly onDidChange: Event<void>;
@@ -35,9 +35,12 @@ export class AppServerProjectService implements IProjectService {
 		catch (error) { throw projectError(error); }
 	}
 
-	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope): Promise<Project> {
+	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope, appearance?: ProjectAppearance): Promise<Project> {
 		try {
-			return fromDto((await appServerRequest(this.connection, 'project/create', { commandId: id, projectId: id, name, description, materials: toMaterials(materials), scope })).project);
+			return fromDto((await appServerRequest(this.connection, 'project/create', {
+				commandId: id, projectId: id, name, description, materials: toMaterials(materials), scope,
+				icon: appearance?.icon, color: appearance?.color,
+			})).project);
 		} catch (error) { throw projectError(error); }
 	}
 
