@@ -3942,6 +3942,56 @@ fn steering_preserves_frozen_context_and_tool_selection_through_replay() {
 }
 
 #[test]
+fn steering_chat_references_preserve_the_admitted_excerpt_and_check_the_source_session() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let source = create_thread(&threads, "source");
+    let destination = create_thread(&threads, "destination");
+    let first = start_turn(&threads, &source, "first-source");
+    threads
+        .complete_turn(&source, &first, "First source reply".into())
+        .unwrap();
+    let active = start_turn(&threads, &destination, "destination-turn");
+    let request = || SteerTurnRequest {
+        command_id: CommandId::new("steer-references").unwrap(),
+        expected_sequence: SequenceExpectation::Any,
+        turn_id: active.clone(),
+        input: vec![
+            UserInput::ChatReference {
+                name: "source".into(),
+                session_id: threads.read_thread(&source).unwrap().session_id,
+                thread_id: source.clone(),
+            },
+            UserInput::ChatReference {
+                name: "wrong session".into(),
+                session_id: SessionId::new("another-session").unwrap(),
+                thread_id: source.clone(),
+            },
+        ],
+    };
+    let sent = threads.steer_turn(&destination, request()).unwrap();
+    let items = threads.read_thread(&destination).unwrap().items;
+    assert!(items.iter().any(|item| matches!(item,
+        ThreadItem::UserContext { name, content, .. }
+            if name == "source" && content.contains("First source reply")
+    )));
+    assert!(items.iter().any(|item| matches!(item,
+        ThreadItem::UserContext { name, content, .. }
+            if name == "wrong session" && content.ends_with("The referenced conversation is unavailable.")
+    )));
+    let second = start_turn(&threads, &source, "second-source");
+    threads
+        .complete_turn(&source, &second, "New source reply".into())
+        .unwrap();
+    let recovered = ThreadController::with_store(store);
+    recovered.recover_thread(&destination).unwrap();
+    let replayed = recovered.steer_turn(&destination, request()).unwrap();
+    assert_eq!(replayed.disposition, SteerTurnDisposition::Replayed);
+    assert_eq!(replayed.sequence, sent.sequence);
+    assert_eq!(recovered.read_thread(&destination).unwrap().items, items);
+}
+
+#[test]
 fn thread_recap_persists_without_blocking_the_next_turn_or_overwriting_newer_history() {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(store.clone());

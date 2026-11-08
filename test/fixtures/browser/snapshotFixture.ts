@@ -20,6 +20,7 @@ import { MainThreadLocalization } from '../../../src/ash/workbench/api/browser/m
 import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { ILifecycleService, LifecyclePhase } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import type { ExtensionClientOperation } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
 
 /** Real prepared package, Worker, SDK registration and production image adapter; only the backend catalog is injected. */
@@ -30,6 +31,7 @@ export async function startSnapshotFixture(parent: InstantiationService, resourc
 	const services = resources.add(parent.createChild(new ServiceCollection(
 		[IExtensionApi, packages], [ILanguagePackService, createEmptyTestLanguagePacks()], [IAdapterManager, resources.add(new AdapterManager())],
 		[IImageEditorService, parent.get(IImageEditorService)],
+		[ILifecycleService, { phase: LifecyclePhase.Eventually } as ILifecycleService],
 	)));
 	if (!services.has(IWorkspaceTrustManagementService)) {
 		services.registerInstance(IWorkspaceTrustManagementService, resources.add(services.createInstance(TestWorkspaceTrustManagementService)));
@@ -54,7 +56,11 @@ export async function startSnapshotFixture(parent: InstantiationService, resourc
 		throw new Error(`Unexpected Snapshot client operation: ${operation.operation}`);
 	});
 	resources.add(toDisposable(() => handler.dispose()));
-	const snapshot = await host.reconcile('refresh');
+	let snapshot = await host.reconcile('refresh');
+	const installed = snapshot.extensions.find(entry => entry.id === 'ash.snapshot');
+	if (installed?.lifecycle === 'dormant') {
+		snapshot = await host.activateByEvent({ extensionId: installed.id, activationGeneration: installed.activationGeneration, event: { type: 'capability', capability: 'image.editor.v1' } });
+	}
 	const owner = snapshot.extensions.find(entry => entry.id === 'ash.snapshot');
 	if (owner?.lifecycle !== 'ready') throw new Error(`Snapshot failed to activate: ${JSON.stringify(owner?.failure ?? snapshot)}`);
 	adapter.update(snapshot);

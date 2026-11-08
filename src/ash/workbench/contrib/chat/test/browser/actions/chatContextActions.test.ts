@@ -704,12 +704,13 @@ suite('chatContextActions browser component', () => {
 		});
 
 		for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
-			test(`registered session references preserve keyboard actions, geometry and snapshots in ${locale}, ${theme}`, async () => {
+			test(`registered session references preserve keyboard actions, geometry and source identity in ${locale}, ${theme}`, async () => {
 				const { page } = browserTests;
 				await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&theme=${theme}`);
 				await page.evaluate(() => window.ashChatInputIntegration.showModels());
 				const chinese = locale === 'zh-CN';
 				await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+				await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).press('Enter');
 				await page.getByRole('dialog').getByRole('option', { name: chinese ? '会话…' : 'Sessions…', exact: true }).click();
 				await page.getByRole('dialog').getByRole('option', { name: 'Earlier design', exact: true }).click();
 				const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
@@ -718,6 +719,7 @@ suite('chatContextActions browser component', () => {
 				await expect(source).toBeVisible();
 				const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility().help);
 				assert.match(help!, chinese ? /打开所引用的会话/u : /open the referenced conversation/u);
+				assert.match(help!, chinese ? /排队消息在开始执行时读取/u : /when a queued message starts/u);
 				await message.press('Tab');
 				await expect(source).toBeFocused();
 				const geometry = await source.evaluate(button => {
@@ -752,14 +754,15 @@ suite('chatContextActions browser component', () => {
 				await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify(Array.from({ length: 2 }, () => ({ sessionId: 'previous-session', threadId: 'previous-thread' }))));
 				await expect(page.getByLabel('Submission')).toBeEmpty();
 				await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
-				const submitted = JSON.parse((await page.getByLabel('Submission').textContent())!) as { name: string; content: string; }[];
-				assert.deepEqual(submitted, [{ name: 'Earlier design', content: 'Conversation: Earlier design\nSession: previous-session\nThread: previous-thread\n\nUser: Design the attachment picker\n\nAssistant: Use one resource search owner' }]);
+				await expect(page.getByLabel('Submission')).toHaveText(JSON.stringify([
+					{ name: 'Earlier design', content: '', chatReference: { sessionId: 'previous-session', threadId: 'previous-thread' } },
+				]));
 			});
 		}
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`clipboard, screenshot and session context send snapshots in ${locale}`, async function () {
+		test(`clipboard and screenshot snapshots send with a session reference in ${locale}`, async function () {
 			const { page } = browserTests;
 
 			await page.goto(`/chatInput.html?locale=${locale}&screenshotFixture=1`);
@@ -769,6 +772,7 @@ suite('chatContextActions browser component', () => {
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
 			for (const name of chinese ? ['剪贴板中的图片', '截图…', '会话…'] : ['Image from Clipboard', 'Screenshot…', 'Sessions…']) {
 				await add.press('Enter');
+				await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).press('Enter');
 				await page.getByRole('dialog').getByRole('option', { name, exact: true }).click();
 				if (name === 'Screenshot…' || name === '截图…') {
 					const capture = page.frameLocator('iframe').getByRole('dialog', { name: chinese ? '屏幕截图' : 'Screen Capture' });
@@ -791,7 +795,7 @@ suite('chatContextActions browser component', () => {
 			expect(contexts.slice(0, 2).map(item => item.kind)).toEqual(['image', 'image']);
 			expect(contexts[0].content).toMatch(/^data:image\/png;base64,/);
 			expect(contexts[1].content).not.toBe(contexts[0].content);
-			expect(contexts[2]).toEqual({ name: 'Earlier design', content: 'Conversation: Earlier design\nSession: previous-session\nThread: previous-thread\n\nUser: Design the attachment picker\n\nAssistant: Use one resource search owner' });
+			expect(contexts[2]).toEqual({ name: 'Earlier design', content: '', chatReference: { sessionId: 'previous-session', threadId: 'previous-thread' } });
 		});
 
 		test(`GitHub context selects repositories, pages issues and snapshots a linked PR in ${locale}`, async function () {
@@ -829,6 +833,25 @@ suite('chatContextActions browser component', () => {
 			expect(reads.filter((item: { type: string; }) => item.type === 'pullRequests')).toHaveLength(0);
 		});
 	}
+
+	test('dropping a conversation adds the same removable reference as the session picker', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&conversationDrop=1');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		const dropTarget = page.locator('.ash-chat-input-editor-host .view-line').first();
+		await page.locator('#conversation-drop-source').dragTo(dropTarget);
+		const source = page.getByRole('button', { name: 'Open Earlier design', exact: true });
+		await expect(source).toBeVisible();
+		await page.getByRole('button', { name: 'Remove Earlier design', exact: true }).press('Enter');
+		await expect(source).toHaveCount(0);
+		await message.press('ControlOrMeta+z');
+		await expect(source).toBeVisible();
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toHaveText(JSON.stringify([
+			{ name: 'Earlier design', content: '', chatReference: { sessionId: 'previous-session', threadId: 'previous-thread' } },
+		]));
+	});
 
 	test('empty clipboard reports an error and cancelling screenshot restores the message', async function () {
 		const { page } = browserTests;

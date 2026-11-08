@@ -16,9 +16,8 @@ import { extractSelection } from '../../../../../platform/opener/common/opener.j
 import { DraggedEditorIdentifier } from '../../../../browser/parts/editor/editorTabDragAndDrop.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
-import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
-import { captureChatReference } from '../../common/attachments/chatVariableEntries.js';
+import { createChatReferenceVariableEntry } from '../../common/attachments/chatVariableEntries.js';
 import { IChatAttachmentResolveService, createChatFileAttachments } from '../attachments/chatAttachmentResolveService.js';
 import type { IChatInputPart } from './input/chatInputPart.js';
 import type { ChatInputState } from './input/chatInput.js';
@@ -40,7 +39,6 @@ export class ChatDragAndDrop extends Disposable {
 		@IFileService private readonly files: IFileService,
 		@IChatAttachmentResolveService private readonly resolver: IChatAttachmentResolveService,
 		@INotificationService private readonly notifications: INotificationService,
-		@IChatService private readonly chat: IChatService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 	) {
 		super();
@@ -91,7 +89,9 @@ export class ChatDragAndDrop extends Disposable {
 				if (!conversation) return;
 				event.preventDefault();
 				event.stopPropagation();
-				void this.accept(signal => captureChatReference(this.chat, conversation, signal), true);
+				void this.accept(async () => [
+					createChatReferenceVariableEntry(conversation.sessionId, conversation.threadId, conversation.title)
+				], true);
 				return;
 			}
 			const editors = getDraggedEditors(event);

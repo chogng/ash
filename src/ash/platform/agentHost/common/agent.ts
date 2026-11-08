@@ -30,6 +30,7 @@ export interface SessionMutationParams {
 export type AgentInput =
 	| { readonly type: 'text'; readonly text: string; }
 	| { readonly type: 'context'; readonly name: string; readonly content: string; readonly sourceUrl?: string; }
+	| { readonly type: 'chatReference'; readonly name: string; readonly sessionId: SessionId; readonly threadId: ThreadId; }
 	| { readonly type: 'toolSelection'; readonly disabled: string[]; }
 	| { readonly type: 'image'; readonly url: string; }
 	| { readonly type: 'imageAttachment'; readonly attachment: ChatImageAttachment; }

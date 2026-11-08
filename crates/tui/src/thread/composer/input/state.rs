@@ -51,12 +51,26 @@ pub(crate) struct UnknownSlashCommand {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputItem {
     Text(String),
-    Image { url: String },
+    Image {
+        url: String,
+    },
     Attachment(ash_protocol::ImageAttachmentRef),
-    Audio { url: String },
+    Audio {
+        url: String,
+    },
     AudioAttachment(ash_protocol::AudioAttachmentRef),
-    Context { name: String, content: String },
-    Skill { skill: SkillRef },
+    Context {
+        name: String,
+        content: String,
+    },
+    ChatReference {
+        name: String,
+        session_id: ash_protocol::SessionId,
+        thread_id: ash_protocol::ThreadId,
+    },
+    Skill {
+        skill: SkillRef,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -130,11 +144,9 @@ impl QueuedChatInput {
                 | ChatInputItem::AudioAttachment(_) => input
                     .attachments
                     .insert_item(&mut input.textarea, item.clone()),
-                ChatInputItem::Context { name, content } => {
+                ChatInputItem::Context { name, .. } | ChatInputItem::ChatReference { name, .. } => {
                     let element = input.textarea.insert_element(&format!("[Context: {name}]"));
-                    input
-                        .contexts
-                        .push((element, name.clone(), content.clone()));
+                    input.contexts.push((element, item.clone()));
                 }
                 ChatInputItem::Skill { .. } => {}
             }
@@ -168,7 +180,7 @@ pub(crate) struct ChatInputDraft {
     vim: VimState,
     slash_command_element: Option<TextElementId>,
     skill_bindings: Vec<(TextElementId, SkillRef)>,
-    contexts: Vec<(TextElementId, String, String)>,
+    contexts: Vec<(TextElementId, ChatInputItem)>,
     pending_pastes: PendingPastes,
     attachments: Attachments,
 }
@@ -198,7 +210,7 @@ pub(crate) struct ChatInput {
     vim: VimState,
     pub(super) slash_command_element: Option<TextElementId>,
     pub(super) skill_bindings: Vec<(TextElementId, SkillRef)>,
-    contexts: Vec<(TextElementId, String, String)>,
+    contexts: Vec<(TextElementId, ChatInputItem)>,
     pub(super) pending_pastes: PendingPastes,
     pub(super) attachments: Attachments,
     history: HistoryRecall,
@@ -656,14 +668,11 @@ impl ChatInput {
             text.push_str(&raw_text[cursor..range.start]);
             if let Some(replacement) = self.pending_pastes.replacement(element_id) {
                 text.push_str(replacement);
-            } else if let Some((_, name, content)) =
-                self.contexts.iter().find(|(id, _, _)| *id == element_id)
+            } else if let Some((_, context)) =
+                self.contexts.iter().find(|(id, _)| *id == element_id)
             {
                 push_text_input(&mut input, &mut text);
-                input.push(ChatInputItem::Context {
-                    name: name.clone(),
-                    content: content.clone(),
-                });
+                input.push(context.clone());
             } else if let Some(image) = self.attachments.attachment_item(element_id) {
                 push_text_input(&mut input, &mut text);
                 input.push(image.clone());

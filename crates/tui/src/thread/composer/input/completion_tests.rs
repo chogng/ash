@@ -364,6 +364,11 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
         SkillSourceId::new("user:skill-source:test").unwrap(),
         SkillName::new("commit").unwrap(),
     ));
+    let reference = ChatInputItem::ChatReference {
+        name: "prior chat".into(),
+        session_id: ash_protocol::SessionId::new("previous-session").unwrap(),
+        thread_id: ash_protocol::ThreadId::new("previous-thread").unwrap(),
+    };
     let submission = ChatSubmission {
         mode: Default::default(),
         command_id: crate::client::new_command_id("input"),
@@ -377,6 +382,7 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
                 name: "file".into(),
                 content: "file contents".into(),
             },
+            reference.clone(),
         ],
     };
     let queued = super::state::QueuedChatInput::from_submission(submission);
@@ -404,6 +410,7 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
                 content: "file contents".into()
             })
     );
+    assert!(restored.submission().input.contains(&reference));
 }
 
 #[test]

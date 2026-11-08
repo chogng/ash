@@ -3,7 +3,6 @@ import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import type { IMarkdownString } from '../../../../../base/common/htmlContent.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
-import type { IChatService } from '../../../../services/chat/common/chatService.js';
 import { LocalChatSessionUri } from '../model/chatUri.js';
 
 export type ChatContextIconPath = ThemeIcon | URI | { light: URI; dark: URI; };
@@ -33,42 +32,25 @@ export function createChatReferenceVariableEntry(
 	sessionId: string,
 	threadId: string,
 	name: string,
-	content: string,
 ): ChatContextAttachment {
 	return {
 		id: `session:${sessionId}:${threadId}`,
 		kind: 'chatReference',
 		name,
 		resource: LocalChatSessionUri.forSession(sessionId, threadId),
-		resolve: async () => ({ name, content }),
+		resolve: async () => ({ name, content: '', chatReference: { sessionId, threadId } }),
 	};
 }
 
-/** Captures the same transcript for the picker and for a dropped conversation. */
-export async function captureChatReference(
-	chat: IChatService,
-	conversation: { readonly sessionId: string; readonly threadId: string; readonly title: string; },
-	signal: AbortSignal,
-): Promise<ChatContextAttachment[]> {
-	if (signal.aborted) return [];
-	const { sessionId, threadId, title } = conversation;
-	const snapshot = await chat.readThread(sessionId, threadId);
-	if (signal.aborted) return [];
-	const messages = snapshot.transcript.entries.flatMap(entry => {
-		if (entry.type !== 'item' || entry.transient) return [];
-		const item = entry.item;
-		if (item.type === 'userMessage') return [`User: ${item.text}`];
-		if (item.type === 'agentMessage') return [`Assistant: ${item.text}`];
-		return [];
-	}).join('\n\n');
-	const content = `Conversation: ${title}\nSession: ${sessionId}\nThread: ${threadId}\n\n${messages.length > 100_000 ? `[Earlier messages omitted]\n${messages.slice(-100_000)}` : messages}`;
-	return [createChatReferenceVariableEntry(sessionId, threadId, title, content)];
-}
-
-/** Rehydrates a frozen snapshot at the draft or clipboard boundary. */
+/** Legacy conversation attachments retain their original captured content. */
 export function restoreChatVariableEntry(entry: NonNullable<IOpenAgentsWindowOptions['draft']>['contexts'][number]): ChatContextAttachment {
 	const { id, kind, name, content, reference, terminalSnapshot } = entry;
 	const resource = entry.resource ? URI.parse(entry.resource) : undefined;
+	if (entry.chatReference) {
+		const source = resource && LocalChatSessionUri.parse(resource);
+		if (!source) throw new TypeError('Invalid chat reference source');
+		return { ...createChatReferenceVariableEntry(source.sessionId, source.threadId, name), id, reference };
+	}
 	const resolvedKind = kind === 'image' || kind === 'instruction' || kind === 'toolSelection' ? kind : undefined;
 	return {
 		id, kind, name, resource, reference, terminalSnapshot,

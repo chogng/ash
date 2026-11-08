@@ -43,6 +43,7 @@ impl SkillActivationContributor for SkillRuntime {
                 | UserInput::Audio { .. }
                 | UserInput::Image { .. }
                 | UserInput::LocalImage { .. }
+                | UserInput::ChatReference { .. }
                 | UserInput::Mention { .. }
                 | UserInput::ToolSelection { .. } => None,
             })

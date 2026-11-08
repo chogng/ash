@@ -216,6 +216,79 @@ fn queue_is_shared_across_connections_and_uses_the_existing_turn_receipt() {
 }
 
 #[test]
+fn queued_chat_reference_reads_the_source_at_delivery_and_replays_the_same_turn() {
+    let root = tempfile::tempdir().unwrap();
+    let (server, queue) = queued_server(root.path());
+    let mut connection = server.connection();
+    let (session, destination) = create(&server, &mut connection);
+    let source = create_thread(&server, &mut connection, 4, "reference-source", &session, 0);
+    let source_id = source["result"]["value"]["threadId"].as_str().unwrap();
+    let enqueue = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":5,"method":"queue/enqueue","params":{
+            "commandId":"queued-reference","sessionId":session,"threadId":destination,
+            "input":[{"type":"chatReference","name":"Earlier design","sessionId":session,"threadId":source_id}]
+        }}),
+    );
+    let message: queue::QueuedMessage =
+        serde_json::from_value(enqueue["result"].clone()).expect(&enqueue.to_string());
+    let saved = queue.get(&message.request.command_id).unwrap().unwrap();
+    assert!(matches!(
+        saved.request.input.as_slice(),
+        [ash_protocol::UserInput::ChatReference { .. }]
+    ));
+
+    let send_to_source = |connection: &mut crate::ConnectionState, id, text: &str| {
+        let source_thread = ash_protocol::ThreadId::new(source_id).unwrap();
+        let sequence = server
+            .threads()
+            .read_thread(&source_thread)
+            .unwrap()
+            .sequence;
+        let response = call(
+            &server,
+            connection,
+            json!({"jsonrpc":"2.0","id":id,"method":"session/request","params":{
+                "commandId":format!("source-send-{id}"),"sessionId":session,"request":{
+                    "type":"startTurn","threadId":source_id,"expectedSequence":sequence,
+                    "mode":"agent","input":[{"type":"text","text":text}]
+                }
+            }}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        super::wait_for_latest_turn(&server, source_id, ash_protocol::TurnStatus::Completed);
+    };
+    send_to_source(&mut connection, 6, "Decision made after enqueue");
+    server.close_connection(connection);
+
+    let queue::Delivery::Started(turn) = server.deliver_queued_message(&saved).unwrap() else {
+        panic!("queue was not delivered");
+    };
+    let destination_items = || {
+        server
+            .threads()
+            .read_thread(&saved.request.thread_id)
+            .unwrap()
+            .items
+    };
+    assert!(destination_items().iter().any(|item| matches!(item,
+        ash_protocol::ThreadItem::UserContext { name, content, .. }
+            if name == "Earlier design" && content.contains("Decision made after enqueue")
+    )));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    send_to_source(&mut connection, 7, "Later decision after delivery");
+    assert!(matches!(
+        server.deliver_queued_message(&saved).unwrap(),
+        queue::Delivery::Started(replayed) if replayed == turn
+    ));
+    assert!(!destination_items().iter().any(|item| matches!(item,
+        ash_protocol::ThreadItem::UserContext { content, .. } if content.contains("Later decision after delivery")
+    )));
+}
+
+#[test]
 fn queue_dispatch_survives_connection_close() {
     let root = tempfile::tempdir().unwrap();
     let (server, store) = queued_server(root.path());

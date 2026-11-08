@@ -2162,6 +2162,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     item,
                     InputItem::Text { .. }
                         | InputItem::Context { .. }
+                        | InputItem::ChatReference { .. }
                         | InputItem::HostResource { .. }
                         | InputItem::Issue { .. }
                         | InputItem::ToolSelection { .. }
@@ -2432,6 +2433,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                         }
                     }
                     InputItem::Text { text } => UserInput::Text { text },
+                    InputItem::ChatReference {
+                        name,
+                        session_id,
+                        thread_id,
+                    } => UserInput::ChatReference {
+                        name,
+                        session_id,
+                        thread_id,
+                    },
                     InputItem::Context {
                         name,
                         content,

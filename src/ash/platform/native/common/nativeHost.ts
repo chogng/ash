@@ -147,7 +147,7 @@ export interface IOpenAgentsWindowOptions {
 		readonly mode: SessionMode;
 		readonly text: string;
 		/** Optional resource is the original source URI; content is a snapshot or an instruction catalog path. */
-		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; readonly resource?: string; readonly terminalSnapshot?: ITerminalOutputSnapshot; readonly reference?: { readonly start: number; readonly end: number; }; }[];
+		readonly contexts: readonly { readonly id: string; readonly kind: string; readonly name: string; readonly content: string; readonly resource?: string; readonly chatReference?: true; readonly terminalSnapshot?: ITerminalOutputSnapshot; readonly reference?: { readonly start: number; readonly end: number; }; }[];
 	};
 }
 
@@ -301,7 +301,11 @@ export function validateOpenAgentsWindow(value: unknown): IOpenAgentsWindowOptio
 		for (const context of fields.contexts) {
 			if (!context || typeof context !== 'object' || Array.isArray(context)) throw new TypeError('Invalid Agents Window context');
 			const attachment = context as Record<string, unknown>;
-			if (!['content', 'id', 'kind', 'name'].every(key => typeof attachment[key] === 'string') || Object.keys(attachment).some(key => !['content', 'id', 'kind', 'name', 'resource', 'terminalSnapshot', 'reference'].includes(key)) || attachment.resource !== undefined && typeof attachment.resource !== 'string') throw new TypeError('Invalid Agents Window context');
+			if (!['content', 'id', 'kind', 'name'].every(key => typeof attachment[key] === 'string') || Object.keys(attachment).some(key => !['content', 'id', 'kind', 'name', 'resource', 'chatReference', 'terminalSnapshot', 'reference'].includes(key)) || attachment.resource !== undefined && typeof attachment.resource !== 'string') throw new TypeError('Invalid Agents Window context');
+			if (attachment.chatReference !== undefined && (attachment.chatReference !== true || attachment.kind !== 'chatReference'
+				|| typeof attachment.resource !== 'string' || !attachment.resource || attachment.content !== '')) {
+				throw new TypeError('Invalid Agents Window chat reference');
+			}
 			if (attachment.terminalSnapshot !== undefined) {
 				const snapshot = attachment.terminalSnapshot;
 				if (attachment.kind !== 'terminal' || !snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) throw new TypeError('Invalid terminal snapshot');

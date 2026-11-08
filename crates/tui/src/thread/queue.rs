@@ -376,6 +376,18 @@ fn submission(
                 });
                 display.push(format!("[Context: {name}]"));
             }
+            ash_protocol::UserInput::ChatReference {
+                name,
+                session_id,
+                thread_id,
+            } => {
+                values.push(crate::thread::composer::ChatInputItem::ChatReference {
+                    name: name.clone(),
+                    session_id: session_id.clone(),
+                    thread_id: thread_id.clone(),
+                });
+                display.push(format!("[Context: {name}]"));
+            }
             ash_protocol::UserInput::Text { text } => {
                 values.push(crate::thread::composer::ChatInputItem::Text(text.clone()));
                 display.push(text.clone());

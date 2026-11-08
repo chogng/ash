@@ -100,6 +100,7 @@ mod mode;
 mod restore;
 mod steering;
 mod user_input;
+pub(crate) use user_input::chat_reference_source;
 
 pub use agent::CreateAgentThreadRequest;
 pub use mailbox::ThreadExecutionContext;
@@ -1383,7 +1384,8 @@ impl ThreadController {
             }
             activated_skills.push(activation);
         }
-        let validated_input = user_input::validate(&normalized_input, &activated_skills)?;
+        let resolved_input = user_input::resolve_chat_references(self, &normalized_input);
+        let validated_input = user_input::validate(&resolved_input, &activated_skills)?;
         let command = ThreadCommand::StartTurn {
             context_policy: request.context_policy.clone(),
             kind: request.kind,

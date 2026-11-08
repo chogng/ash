@@ -2705,6 +2705,7 @@ fn turn_skill_activations_match(
         ash_protocol::UserInput::Skill { skill } => Some(skill),
         ash_protocol::UserInput::Text { .. }
         | ash_protocol::UserInput::Context { .. }
+        | ash_protocol::UserInput::ChatReference { .. }
         | ash_protocol::UserInput::ImageAttachment { .. }
         | ash_protocol::UserInput::AudioAttachment { .. }
         | ash_protocol::UserInput::Audio { .. }
@@ -2815,6 +2816,24 @@ fn validate_steered_items(
                     ..
                 },
             ) => input_name == item_name && input_content == item_content && input_url == item_url,
+            (
+                ash_protocol::UserInput::ChatReference {
+                    name,
+                    session_id,
+                    thread_id,
+                },
+                ThreadItem::UserContext {
+                    name: item_name,
+                    content,
+                    source_url: None,
+                    ..
+                },
+            ) => {
+                name == item_name
+                    && content.starts_with(&crate::thread_controller::chat_reference_source(
+                        session_id, thread_id,
+                    ))
+            }
             (
                 ash_protocol::UserInput::AudioAttachment { attachment: input },
                 ThreadItem::UserAudioAttachment {

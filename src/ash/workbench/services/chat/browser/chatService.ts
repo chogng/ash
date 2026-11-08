@@ -520,6 +520,9 @@ export class ChatService extends Disposable implements IChatService {
 }
 
 function toContextInput(context: ResolvedChatContext): AgentInput {
+	if (context.chatReference) {
+		return { type: 'chatReference', name: context.name, ...context.chatReference };
+	}
 	if (context.kind === 'image') { return { type: 'image', url: context.content }; }
 	if (context.kind === 'instruction') { return { type: 'instruction', path: context.content }; }
 	if (context.kind === 'toolSelection') {

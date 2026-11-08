@@ -30,6 +30,12 @@ pub enum InputItem {
         #[ts(optional = nullable)]
         source_url: Option<String>,
     },
+    /// Resolves the named conversation on the receiving App Server at Turn admission.
+    ChatReference {
+        name: String,
+        session_id: ash_protocol::SessionId,
+        thread_id: ash_protocol::ThreadId,
+    },
     /// Materialized from the initiating renderer before domain input is admitted or persisted.
     HostResource {
         name: String,
