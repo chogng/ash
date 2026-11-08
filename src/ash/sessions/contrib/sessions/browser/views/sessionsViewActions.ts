@@ -8,7 +8,7 @@ import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsMenuActiveConversationContext, SessionsMenuCanChangeFolderContext, SessionsMenuCanClearFolderContext, SessionsMenuWorkspaceIdleContext, SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
+import { SessionsMenuActiveConversationContext, SessionsMenuCanSetFolderContext, SessionsMenuWorkspaceIdleContext, SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -21,7 +21,6 @@ import { ISessionGroupsService } from '../../../../services/sessions/browser/ses
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { pickSessionDestination } from '../sessionsPicker.js';
-import { URI } from '../../../../../base/common/uri.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -149,12 +148,12 @@ function resolveWorkspaceSessionId(sessions: ISessionsManagementService, argumen
 	return target && target.active.threadId === target.active.session.sessionId ? target.active.session.sessionId : undefined;
 }
 
-registerAction2(class ChangeSessionDirectoryAction extends Action2 {
+registerAction2(class SetSessionDirectoryAction extends Action2 {
 	constructor() {
 		super({
-			id: 'agentSession.changeDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…'),
+			id: 'agentSession.changeDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
 			icon: Lxicon.folder, precondition: SessionsMenuWorkspaceIdleContext.isEqualTo(true),
-			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', when: SessionsMenuCanChangeFolderContext.isEqualTo(true) },
+			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', when: SessionsMenuCanSetFolderContext.isEqualTo(true) },
 		});
 	}
 
@@ -162,42 +161,21 @@ registerAction2(class ChangeSessionDirectoryAction extends Action2 {
 		const sessions = accessor.get(ISessionsManagementService);
 		const id = resolveWorkspaceSessionId(sessions, argument);
 		if (!id || !sessions.canChangeDirectory?.(id) || !sessions.changeDirectory) return;
-		const workspace = sessions.sessions.find(session => session.sessionId === id)?.workspace;
+		const getSession = () => sessions.sessions.find(session => session.sessionId === id);
+		const session = getSession();
+		if (!session || session.workspace) return;
 		const dialogs = accessor.get(IFileDialogService);
 		const [folder] = await dialogs.showOpenDialog({
-			title: workspace
-				? localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…')
-				: localize({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
+			title: localize({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
 			canSelectFolders: true, canSelectFiles: false, canSelectMany: false, availableFileSystems: ['file'],
-			defaultUri: workspace ? URI.file(workspace.root) : undefined,
 		}) ?? [];
 		if (folder?.scheme !== 'file' || folder.authority) return;
+		// The session may have been bound while the folder picker was open.
+		const current = getSession();
+		if (!current || current.workspace) return;
 		try {
 			await sessions.changeDirectory(id, folder.fsPath);
 			status(localize({ bundle: 'ash.sessions', key: 'sessions.workspace.enabled' }, 'Workspace set to {0}.', folder.fsPath));
-		} catch (error) {
-			if (!isCancellationError(error)) throw error;
-		}
-	}
-});
-
-registerAction2(class ClearSessionDirectoryAction extends Action2 {
-	constructor() {
-		super({
-			id: 'agentSession.clearDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace'),
-			precondition: SessionsMenuWorkspaceIdleContext.isEqualTo(true),
-			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', order: 1, when: SessionsMenuCanClearFolderContext.isEqualTo(true) },
-		});
-	}
-
-	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
-		const sessions = accessor.get(ISessionsManagementService);
-		const id = resolveWorkspaceSessionId(sessions, argument);
-		if (!id || !sessions.canChangeDirectory?.(id) || !sessions.canClearDirectory?.(id) || !sessions.changeDirectory
-			|| !sessions.sessions.find(session => session.sessionId === id)?.workspace) return;
-		try {
-			await sessions.changeDirectory(id, null);
-			status(localize({ bundle: 'ash.sessions', key: 'sessions.workspace.disabled' }, 'Workspace off.'));
 		} catch (error) {
 			if (!isCancellationError(error)) throw error;
 		}

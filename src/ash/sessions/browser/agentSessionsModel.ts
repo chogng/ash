@@ -38,17 +38,13 @@ registerSidebarSessionActions(Menus.SidebarCodeSessionContext);
 
 export function getSessionWorkspaceMenuState(sessionId: string, threadId: string, sessions: ISessionsManagementService) {
 	if (threadId !== sessionId) return undefined;
+	const session = sessions.sessions.find(session => session.sessionId === sessionId);
+	if (!session || session.workspace) return undefined;
 	const enabled = sessions.canChangeDirectory?.(sessionId) === true;
 	if (!enabled && !sessions.canChangeDirectory?.(sessionId, { ignoreActivity: true })) return undefined;
-	const workspace = sessions.sessions.find(session => session.sessionId === sessionId)?.workspace;
 	return {
 		enabled,
-		changeLabel: workspace
-			? localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…')
-			: localize({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
-		clearLabel: workspace && sessions.canClearDirectory?.(sessionId)
-			? localize({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace')
-			: undefined,
+		label: localize({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
 		busyBadge: enabled ? undefined : localize({ bundle: 'ash.sessions', key: 'sessions.directory.wait' }, 'Available when idle'),
 	};
 }
@@ -56,22 +52,13 @@ export function getSessionWorkspaceMenuState(sessionId: string, threadId: string
 export function createSessionWorkspaceActions(sessionId: string, threadId: string, sessions: ISessionsManagementService, commands: ICommandService): IAction[] {
 	const workspace = getSessionWorkspaceMenuState(sessionId, threadId, sessions);
 	if (!workspace) return [];
-	const actions: IAction[] = [{
+	return [{
 		id: 'agentSession.changeDirectory',
-		label: workspace.changeLabel,
+		label: workspace.label,
 		tooltip: '', enabled: workspace.enabled, icon: Lxicon.folder,
 		badge: workspace.busyBadge,
 		run: () => commands.executeCommand('agentSession.changeDirectory', sessionId),
 	}];
-	if (workspace.clearLabel) {
-		actions.push({
-			id: 'agentSession.clearDirectory',
-			label: workspace.clearLabel,
-			tooltip: '', enabled: workspace.enabled,
-			run: () => commands.executeCommand('agentSession.clearDirectory', sessionId),
-		});
-	}
-	return actions;
 }
 
 /** Session menus share presentation and captured-target commands; opening a window is host-owned. */

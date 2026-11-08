@@ -18,8 +18,7 @@ export const ActivityBarItemContext = new RawContextKey<string>('sessions.activi
 /** Describes the row that opened a Sessions context menu. */
 export const SessionsMenuActiveConversationContext = new RawContextKey<boolean>('sessions.menu.activeConversation', false);
 export const SessionsMenuConversationPinnedContext = new RawContextKey<boolean>('sessions.menu.conversationPinned', false);
-export const SessionsMenuCanChangeFolderContext = new RawContextKey<boolean>('sessions.menu.canChangeFolder', false);
-export const SessionsMenuCanClearFolderContext = new RawContextKey<boolean>('sessions.menu.canClearFolder', false);
+export const SessionsMenuCanSetFolderContext = new RawContextKey<boolean>('sessions.menu.canSetFolder', false);
 export const SessionsMenuWorkspaceIdleContext = new RawContextKey<boolean>('sessions.menu.workspaceIdle', false);
 export const SessionsMenuCanMoveConversationContext = new RawContextKey<boolean>('sessions.menu.canMoveConversation', false);
 

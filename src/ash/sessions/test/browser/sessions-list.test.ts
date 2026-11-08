@@ -579,7 +579,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	dom.window.close();
 });
 
-test('The keyboard menu targets the saved Session workspace and the original nested Thread', async () => {
+test('The keyboard menu sets a workspace only for an unbound Session and targets the original nested Thread', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
 	using aria = setARIAContainer(dom.window.document.body);
@@ -597,7 +597,6 @@ test('The keyboard menu targets the saved Session workspace and the original nes
 		get sessions() { return [source, destination]; },
 		untitledSessions: [], state: 'ready', onDidChange: Event.None,
 		canChangeDirectory: (id: string, options?: { ignoreActivity?: true; }) => id === 'target' && (!busy || options?.ignoreActivity === true),
-		canClearDirectory: (id: string) => id === 'target',
 		changeDirectory: async (id: string, path: string | null) => { workspaceChanges.push([id, path]); },
 		getChatMoveDestinations: (id: string, threadId: string) => id === 'source' && threadId === 'original' ? [destination] : [],
 	} as unknown as ISessionsManagementService;
@@ -611,7 +610,7 @@ test('The keyboard menu targets the saved Session workspace and the original nes
 	const commands = {
 		executeCommand: async (id: string, ...args: unknown[]) => {
 			invoked.push([id, ...args]);
-			if (id === 'agentSession.changeDirectory' || id === 'agentSession.clearDirectory') {
+			if (id === 'agentSession.changeDirectory') {
 				await services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args);
 			}
 		},
@@ -632,28 +631,26 @@ test('The keyboard menu targets the saved Session workspace and the original nes
 	const target = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'target')!;
 	target.focus();
 	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
-	const change = menu?.getActions().find(action => action.id === 'agentSession.changeDirectory');
-	assert.equal(change?.label, '更换工作区…');
-	await change?.run();
-	const clear = menu?.getActions().find(action => action.id === 'agentSession.clearDirectory');
-	assert.equal(clear?.label, '解除工作区');
-	await clear?.run();
-	assert.deepEqual(workspaceChanges, [['target', URI.file('/new-workspace').fsPath], ['target', null]]);
+	assert.equal(menu?.getActions().some(action => action.id === 'agentSession.changeDirectory' || action.id === 'agentSession.clearDirectory'), false);
+	await services.invokeFunction(CommandsRegistry.getCommand('agentSession.changeDirectory')!, 'target');
+	assert.deepEqual(workspaceChanges, []);
+	destination = { ...destination, workspace: null };
 	busy = true;
 	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	const disabled = menu?.getActions().find(action => action.id === 'agentSession.changeDirectory');
 	assert.equal(disabled?.enabled, false);
 	assert.equal(disabled?.badge, '空闲时可用');
-	assert.equal(menu?.getActions().find(action => action.id === 'agentSession.clearDirectory')?.enabled, false);
 	busy = false;
-	destination = { ...destination, workspace: null };
 	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
-	assert.equal(menu?.getActions().find(action => action.id === 'agentSession.changeDirectory')?.label, '设置工作区…');
-	assert.equal(menu?.getActions().some(action => action.id === 'agentSession.clearDirectory'), false);
+	const setWorkspace = menu?.getActions().find(action => action.id === 'agentSession.changeDirectory');
+	assert.ok(setWorkspace);
+	assert.equal(setWorkspace.label, '设置工作区…');
+	assert.equal(setWorkspace.enabled, true);
+	await setWorkspace.run();
+	assert.deepEqual(workspaceChanges, [['target', URI.file('/new-workspace').fsPath]]);
 	assert.deepEqual(invoked, [
 		['sessions.list.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
 		['agentSession.changeDirectory', { sessionId: 'target', threadId: 'target' }],
-		['agentSession.clearDirectory', { sessionId: 'target', threadId: 'target' }],
 	]);
 });
 

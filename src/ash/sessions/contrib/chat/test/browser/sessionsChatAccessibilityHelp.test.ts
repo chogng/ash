@@ -33,6 +33,7 @@ suite('Sessions Chat accessibility help', () => {
 			const worktreeHelp = locale === 'en' ? /Use Enter or Space on New worktree to toggle it/ : /在“新建工作树”上按 Enter 或空格可切换开关/;
 			expect(text).toMatch(worktreeHelp);
 			expect(text).toMatch(locale === 'en' ? /With focus in the Sessions sidebar, press Control\+F or Command\+F to search/ : /焦点位于会话侧栏时，按 Control\+F 或 Command\+F 搜索/);
+			expect(text).toMatch(locale === 'en' ? /For a saved conversation without a workspace.*Choose Set Workspace/ : /对于尚未绑定工作区的已保存对话.*选择“设置工作区”/);
 			expect(text).toMatch(locale === 'en' ? /Focus Project Picker or Focus Environment Picker/ : /聚焦项目选择器.*聚焦环境选择器/);
 			expect(text.match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)).toHaveLength(1);
 			await page.keyboard.press('Escape');

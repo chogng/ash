@@ -1,5 +1,5 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { CodeConversationPageContext, SessionsMenuActiveConversationContext, SessionsMenuCanChangeFolderContext, SessionsMenuCanClearFolderContext, SessionsMenuCanMoveConversationContext, SessionsMenuConversationPinnedContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
+import { CodeConversationPageContext, SessionsMenuActiveConversationContext, SessionsMenuCanMoveConversationContext, SessionsMenuCanSetFolderContext, SessionsMenuConversationPinnedContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
@@ -984,8 +984,7 @@ export class SessionsList extends DomWidget {
 			SessionsMenuActiveConversationContext.bindTo(context).set(true);
 			SessionsMenuConversationPinnedContext.bindTo(context).set(pinned);
 			if (this.mode === 'code' && threadId) {
-				SessionsMenuCanChangeFolderContext.bindTo(context).set(!!workspace);
-				SessionsMenuCanClearFolderContext.bindTo(context).set(!!workspace?.clearLabel);
+				SessionsMenuCanSetFolderContext.bindTo(context).set(!!workspace);
 				SessionsMenuWorkspaceIdleContext.bindTo(context).set(workspace?.enabled === true);
 				SessionsMenuCanMoveConversationContext.bindTo(context).set(!!this.sessionService.getChatMoveDestinations?.(sessionId, threadId).length);
 			}
@@ -994,10 +993,7 @@ export class SessionsList extends DomWidget {
 		this.showRowMenu(item, anchor, {
 			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context)).map(action => {
 				if (action.id === 'agentSession.changeDirectory' && workspace) {
-					return { ...action, label: workspace.changeLabel, tooltip: workspace.changeLabel, badge: workspace.busyBadge, run: () => action.run() };
-				}
-				if (action.id === 'agentSession.clearDirectory' && workspace?.clearLabel) {
-					return { ...action, label: workspace.clearLabel, tooltip: workspace.clearLabel, run: () => action.run() };
+					return { ...action, label: workspace.label, tooltip: workspace.label, badge: workspace.busyBadge, run: () => action.run() };
 				}
 				if (action.id === 'agentSession.delete') return { ...action, class: 'ash-session-delete-action', run: () => action.run() };
 				if (action.id === 'sessions.list.togglePin') return {
