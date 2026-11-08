@@ -480,35 +480,33 @@ suite('Builtin dictation ownership', () => {
 		assert.equal(fixture.speech.state, ChatSpeechToTextState.Idle);
 	});
 
-	for (const cancel of [false, true]) test(`First-use dictation records during model preparation and ${cancel ? 'can be discarded' : 'can be finalized after loading'}`, async () => {
+	for (const cancel of [false, true]) test(`First-use dictation keeps the microphone closed until the model is ready (${cancel ? 'cancelled' : 'recorded'})`, async () => {
 		using owner = new DisposableStore();
-		const clock = deadlineWindow();
 		const local = new LocalCapture();
 		local.modelAvailable = false;
-		const fixture = services(owner, async () => assert.fail('Unexpected cloud session'), { source: '{"dictation.backend":"local"}', local, window: clock.target });
-		await fixture.speech.start(clock.target);
+		const fixture = services(owner, async () => assert.fail('Unexpected cloud session'), { source: '{"dictation.backend":"local"}', local });
+		const starting = fixture.speech.start(captureWindow);
+		await local.acquired.p;
 		local.modelStatus.fire({ state: LocalTranscriptionModelState.Downloading });
 		assert.equal(fixture.speech.isDownloadingModel, true);
-		assert.equal(fixture.speech.state, ChatSpeechToTextState.Recording);
-		assert.equal(fixture.audio.requests.length, 1);
-		fixture.audio.emit(new Float32Array(4096).fill(0.5));
-		assert.deepEqual(local.audio[0]?.buffer.slice(0, 2), Uint8Array.of(0, 64));
+		assert.equal(fixture.speech.state, ChatSpeechToTextState.Idle);
+		assert.equal(fixture.audio.requests.length, 0);
 		assert.deepEqual(local.starts, [{ cacheDir: 'C:/models', model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL }]);
 		if (cancel) {
+			const cancelled = assert.rejects(starting, isCancellationError);
 			await fixture.speech.cancel();
+			await cancelled;
 			assert.equal(local.cancels, 1);
 			assert.equal(local.stops, 0);
+			assert.equal(fixture.audio.requests.length, 0);
 		} else {
-			const ready = new DeferredPromise<void>();
-			local.stopPending = ready.p;
-			const stopping = fixture.speech.stopAndTranscribe();
-			await new Promise(resolve => setTimeout(resolve, 0));
-			assert.equal(fixture.audio.tracks[0]?.stopped, true);
-			assert.equal(clock.timers.size, 0);
 			local.modelStatus.fire({ state: LocalTranscriptionModelState.Ready });
-			assert.deepEqual([...clock.timers.values()].map(timer => timer.delay), [8000]);
-			await ready.complete();
-			assert.equal(await stopping, local.finalText);
+			await starting;
+			assert.equal(fixture.speech.state, ChatSpeechToTextState.Recording);
+			assert.equal(fixture.audio.requests.length, 1);
+			fixture.audio.emit(new Float32Array(4096).fill(0.5));
+			assert.deepEqual(local.audio[0]?.buffer.slice(0, 2), Uint8Array.of(0, 64));
+			assert.equal(await fixture.speech.stopAndTranscribe(), local.finalText);
 		}
 		assert.equal(fixture.speech.isPreparingModel, false);
 	});

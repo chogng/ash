@@ -74,7 +74,18 @@
 .ash-local-transcription-model-actions {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--ash-spacing-size80);
+}
+
+.ash-button.ash-local-transcription-model-install-progress:disabled {
+	min-width: 0;
+	max-width: 100%;
+	opacity: 1;
+}
+
+.ash-local-transcription-model-install-progress .ash-button-label {
+	white-space: normal;
 }
 
 .ash-local-transcription-model-status {

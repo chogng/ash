@@ -90,7 +90,7 @@ class Fixture extends Disposable {
 		this.client.emit({ method: 'dictation/transcript', params: { resourceId, text, isFinal } });
 	}
 
-	public modelProgress(stage: { type: 'checking' | 'loading' | 'ready' | 'cancelled'; } | { type: 'failed'; error: string; }, resourceId = this.resourceId): void {
+	public modelProgress(stage: Extract<Notification, { method: 'dictation/model/progress'; }>['params']['stage'], resourceId = this.resourceId): void {
 		this.client.emit({ method: 'dictation/model/progress', params: { resourceId, modelId: 'selected-model', stage } });
 	}
 }
@@ -233,10 +233,15 @@ suite('LocalTranscriptionService', () => {
 		using listener = fixture.service.onDidChangeModelStatus(status => progress.push(status));
 		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
 		fixture.modelProgress({ type: 'checking' }, 'other');
+		fixture.modelProgress({ type: 'downloading', file: 'encoder.onnx', downloadedBytes: 1024 });
 		fixture.modelProgress({ type: 'loading' });
 		await fixture.service.cancel();
 		fixture.modelProgress({ type: 'ready' });
-		assert.deepEqual(progress, [{ state: LocalTranscriptionModelState.Loading }, { state: LocalTranscriptionModelState.Idle }]);
+		assert.deepEqual(progress, [
+			{ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 },
+			{ state: LocalTranscriptionModelState.Loading },
+			{ state: LocalTranscriptionModelState.Idle },
+		]);
 	});
 	test('production assembly rejects a missing backend registration', () => {
 		using services = new InstantiationService();

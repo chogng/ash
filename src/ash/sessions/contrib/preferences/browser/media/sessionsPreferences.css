@@ -159,10 +159,26 @@
 }
 
 .ash-sessions-settings-page
+	.ash-settings-card
+	> *
+	+ .ash-local-transcription-model-controls::before {
+	content: "";
+}
+
+.ash-sessions-settings-page
 	:is(.ash-settings-card, .ash-local-transcription-model-controls)
 	> .ash-configuration-setting {
 	padding-inline: 0 var(--ash-spacing-size80);
 	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-table :is(th, td) {
+	padding-inline-start: 0;
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-table thead {
+	color: var(--ash-muted-foreground);
+	font-size: var(--ash-fontSize-label1);
 }
 
 .ash-sessions-settings-page

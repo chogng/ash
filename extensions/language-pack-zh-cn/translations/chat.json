@@ -269,7 +269,6 @@
     "chat.notice.dismiss": "关闭通知",
     "chat.notice.actionFailed": "无法完成通知操作：{0}",
     "chat.notice.chooseModel": "选择模型",
-    "chat.notice.dictationIntroduction": "显示听写入门",
     "chat.notice.focus": "聊天：在通知与输入框之间切换焦点",
     "chat.notice.unavailable": "当前没有可用的聊天通知。",
     "chat.notice.help": "聊天通知显示在消息上方。通知优先于功能介绍和提示。使用 {0} 在可见通知与消息之间切换焦点。使用 Tab 访问通知操作。Escape 可从通知返回消息，或关闭功能介绍并停止其录音。隐藏的功能介绍会停止录音，并在通知消失后恢复显示。关闭通知会隐藏当前通知。通知操作应用于此输入框。",

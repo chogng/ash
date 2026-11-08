@@ -65,7 +65,7 @@ function modelSnapshot(status: DictationModelStatus) {
 function modelStatus(stage: DictationModelStage): IDictationModelStatus {
 	switch (stage.type) {
 		case 'checking': return { state: DictationModelState.Checking };
-		case 'downloading': return { state: DictationModelState.Downloading, file: stage.file, downloadedBytes: stage.downloadedBytes };
+		case 'downloading': return { state: DictationModelState.Downloading, file: stage.file, downloadedBytes: stage.downloadedBytes, packageDownloadedBytes: stage.packageDownloadedBytes };
 		case 'loading': return { state: DictationModelState.Loading };
 		case 'ready': return { state: DictationModelState.Ready };
 		case 'cancelled': return { state: DictationModelState.Cancelled };

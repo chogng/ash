@@ -1,6 +1,7 @@
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/localTranscriptionModelControls.css';
 import { h } from '../../../../base/browser/dom.js';
+import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -18,6 +19,7 @@ interface ModelRow extends IDisposable {
 	readonly language: HTMLTableCellElement;
 	readonly size: HTMLTableCellElement;
 	readonly primary: Button;
+	readonly cancel: Button;
 	readonly uninstall: Button;
 	snapshot: ILocalTranscriptionModelSnapshot;
 }
@@ -31,7 +33,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 	private readonly table: HTMLTableElement;
 	private readonly inventory: HTMLElement;
 	private readonly rows = this._register(new DisposableMap<string, ModelRow>());
-	private readonly pending = new Set<string>();
+	private readonly pending = new Map<string, 'install' | 'uninstall'>();
 	private readonly confirmingRemoval = new Set<string>();
 	private modelStatusVersion = 0;
 	private selectedModel: string | undefined;
@@ -70,7 +72,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 		for (const label of [
 			localize('dictation.model.column.name', 'Model'),
 			localize('dictation.model.column.languages', 'Best for'),
-			localize('dictation.model.column.downloadSize', 'Download size'),
+			localize('dictation.model.column.downloadSize', 'Size'),
 			localize('dictation.model.column.actions', 'Actions'),
 		]) {
 			const column = h(document, 'th', label);
@@ -144,10 +146,14 @@ export class LocalTranscriptionModelControls extends Disposable {
 		let next = this.inventory.firstElementChild;
 		for (const snapshot of models) {
 			const row = this.rows.get(snapshot.model) ?? this.rows.set(snapshot.model, this.createRow(snapshot));
+			const wasCancelled = row.snapshot.status?.state === DictationModelState.Cancelled;
 			row.snapshot = snapshot;
 			this.updateRow(row);
 			if (row.element !== next) this.inventory.insertBefore(row.element, next);
 			next = row.element.nextElementSibling;
+			if (!wasCancelled && snapshot.status?.state === DictationModelState.Cancelled) {
+				announceStatus(modelProgressText(snapshot));
+			}
 		}
 	}
 
@@ -156,7 +162,9 @@ export class LocalTranscriptionModelControls extends Disposable {
 		const installed = models.filter(model => model.available);
 		const ids = installed.length ? installed.map(model => model.model) : [''];
 		if (this.selector.options.length !== ids.length || this.selector.options.some((option, index) => option.value !== ids[index])) {
-			this.selector.setOptions(ids.map(id => ({ value: id, label: id || localize('dictation.model.none', 'None') })));
+			this.selector.setOptions(installed.length
+				? installed.map(model => ({ value: model.model, label: model.model }))
+				: [{ value: '', label: localize('dictation.model.none', 'None') }]);
 		}
 		const selected = this.selectedModel ?? '';
 		if (this.selector.value !== selected) this.selector.value = selected;
@@ -197,13 +205,22 @@ export class LocalTranscriptionModelControls extends Disposable {
 		element.append(modelCell, language, size, actionCell);
 
 		const primary = resources.add(new Button(actions, { ...defaultButtonStyles, label: '', presentation: 'secondary' }));
+		const cancel = resources.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('dictation.model.cancel', 'Cancel'),
+			presentation: 'secondary',
+		}));
 		const uninstall = resources.add(new Button(actions, {
 			...defaultButtonStyles,
-			label: localize('dictation.model.uninstall', 'Uninstall'),
+			label: '',
 			presentation: 'danger',
 		}));
-		const row: ModelRow = Object.assign(toDisposable(() => resources.dispose()), { element, state, language, size, primary, uninstall, snapshot });
-		resources.add(primary.onDidClick(() => { void this.runPrimary(row); }));
+		const row: ModelRow = Object.assign(toDisposable(() => resources.dispose()), { element, state, language, size, primary, cancel, uninstall, snapshot });
+		resources.add(primary.onDidClick(() => {
+			const model = row.snapshot.model;
+			void this.perform(model, 'install', () => this.localTranscription.prepareModel(model, () => { }).completed);
+		}));
+		resources.add(cancel.onDidClick(() => { void this.cancelPreparation(row.snapshot.model); }));
 		resources.add(uninstall.onDidClick(() => { void this.confirmUninstall(row); }));
 		return row;
 	}
@@ -211,30 +228,32 @@ export class LocalTranscriptionModelControls extends Disposable {
 	private updateRow(row: ModelRow): void {
 		const model = row.snapshot;
 		const preparing = isModelPreparing(model.status);
-		const selected = model.model === this.selectedModel;
 		const available = this.localTranscription.isSupported;
-		const busy = this.pending.has(model.model);
-		row.state.textContent = this.modelState(model);
+		const busy = this.pending.get(model.model);
+		const installing = preparing || busy === 'install';
+		const moveFocusToCancel = installing && row.primary.hasFocus();
+		const restoreActionFocus = !installing && row.cancel.hasFocus();
+		row.state.textContent = busy === 'uninstall' || installing ? '' : this.modelState(model);
 		row.language.textContent = this.languageLabel(model.recommendedLanguage) ?? '—';
 		row.size.textContent = this.modelSize(model);
-		// Available actions already distinguish installed from uninstalled models visually.
-		row.state.classList.toggle('ash-aria-live', !(preparing || model.status?.state === DictationModelState.Error || model.available && selected));
-		row.primary.hidden = !preparing && model.available;
-		row.primary.label = preparing ? localize('dictation.model.cancel', 'Cancel')
-			: localize('dictation.model.install', 'Install');
-		row.primary.enabled = available && (preparing || !busy && model.downloadSizeBytes !== undefined);
-		row.uninstall.hidden = !model.available || preparing;
+		// The selector shows the active model and the available actions indicate installation.
+		row.state.classList.toggle('ash-aria-live', model.status?.state !== DictationModelState.Error);
+		row.primary.hidden = !installing && model.available;
+		row.primary.label = installing ? this.modelState(model) : localize('dictation.model.install', 'Install');
+		row.primary.enabled = available && !installing && !busy && model.downloadSizeBytes !== undefined;
+		row.primary.toggleClassName('ash-local-transcription-model-install-progress', installing);
+		row.cancel.hidden = !installing;
+		row.cancel.enabled = available && installing;
+		row.uninstall.hidden = !model.available || installing;
 		row.uninstall.enabled = available && !busy;
+		row.uninstall.label = busy === 'uninstall' ? localize('dictation.model.uninstalling', 'Uninstalling…') : localize('dictation.model.uninstall', 'Uninstall');
+		if (moveFocusToCancel) row.cancel.focus();
+		if (restoreActionFocus) (model.available ? row.uninstall : row.primary).focus();
 	}
 
-	private async runPrimary({ snapshot }: ModelRow): Promise<void> {
-		const model = snapshot.model;
-		if (isModelPreparing(snapshot.status)) {
-			try { await this.localTranscription.cancelModel(model); }
-			catch (error) { if (!this.isDisposed) this.status.setMessage(String(error)); }
-		} else if (!snapshot.available) {
-			await this.perform(model, () => this.localTranscription.prepareModel(model, () => { }).completed);
-		}
+	private async cancelPreparation(model: string): Promise<void> {
+		try { await this.localTranscription.cancelModel(model); }
+		catch (error) { if (!this.isDisposed) this.status.setMessage(String(error)); }
 	}
 
 	private async confirmUninstall(row: ModelRow): Promise<void> {
@@ -248,7 +267,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 				custom: true,
 			});
 			if (result.confirmed && !this.isDisposed && this.visible && this.rows.get(model)?.snapshot.available) {
-				await this.perform(model, () => this.localTranscription.deleteModel(model));
+				await this.perform(model, 'uninstall', () => this.localTranscription.deleteModel(model));
 			}
 		} catch (error) {
 			if (!this.isDisposed) this.status.setMessage(String(error));
@@ -262,25 +281,39 @@ export class LocalTranscriptionModelControls extends Disposable {
 	}
 
 	private languageLabel(language: string | undefined): string | undefined {
+		if (!language) { return undefined; }
 		if (language === 'cmn') {
 			return localize('dictation.model.language.cmn', 'Mandarin Chinese');
 		}
-		return undefined;
+		try {
+			const locale = this.domNode.ownerDocument.documentElement.lang || 'en';
+			return new Intl.DisplayNames([locale], { type: 'language' }).of(language);
+		} catch {
+			return language;
+		}
 	}
 
 	private modelState(model: ILocalTranscriptionModelSnapshot): string {
-		if (isModelPreparing(model.status) || model.status?.state === DictationModelState.Error) return modelProgressText(model.status!);
+		if (this.pending.get(model.model) === 'uninstall') return localize('dictation.model.uninstalling', 'Uninstalling…');
+		if (isModelPreparing(model.status) || model.status?.state === DictationModelState.Error) return modelProgressText(model);
+		if (this.pending.get(model.model) === 'install') return localize('dictation.model.checking', 'Checking model files…');
 		if (!model.available) return localize('dictation.model.notInstalled', 'Not installed');
 		return model.model === this.selectedModel ? localize('dictation.model.readyState', 'Ready') : localize('dictation.model.installedState', 'Installed');
 	}
 
-	private async perform(model: string, action: () => Promise<unknown>): Promise<void> {
+	private async perform(model: string, operation: 'install' | 'uninstall', action: () => Promise<unknown>): Promise<void> {
 		if (this.pending.has(model)) { return; }
-		this.pending.add(model);
+		this.pending.set(model, operation);
 		const row = this.rows.get(model);
 		if (row) this.updateRow(row);
-		try { await action(); }
-		catch (error) {
+		if (operation === 'uninstall') announceStatus(localize('dictation.model.uninstallStarted', 'Uninstalling {0}…', model));
+		try {
+			await action();
+			if (this.visible && !this.isDisposed) {
+				await this.readLocalModels();
+				if (operation === 'uninstall' && this.visible && !this.isDisposed) announceStatus(localize('dictation.model.uninstalled', '{0} was uninstalled.', model));
+			}
+		} catch (error) {
 			if (!this.isDisposed) { this.status.setMessage(String(error)); }
 			return;
 		} finally {
@@ -290,6 +323,5 @@ export class LocalTranscriptionModelControls extends Disposable {
 				if (current) this.updateRow(current);
 			}
 		}
-		if (this.visible && !this.isDisposed) { await this.readLocalModels(); }
 	}
 }

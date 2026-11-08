@@ -9,7 +9,7 @@ import { IKeybindingService } from '../../../../../platform/keybinding/common/ke
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL, ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { getDictationMicrophoneChoices, readDictationInputDevices, readDictationPreparation } from '../speechToText/dictationInput.js';
@@ -118,13 +118,14 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	// Observe release before any preparation or provider acquisition can suspend this command.
 	const release = released?.then(() => {
 		stopOnRelease = Date.now() - heldFrom >= 500;
-		if (tapToggles ? stopOnRelease && (!owned || service.isPreparingModel && service.currentBackend !== 'local') : !stopOnRelease || !owned) cancel();
+		const preparing = service.state === ChatSpeechToTextState.Idle && (service.isPreparingModel || service.currentBackend === 'local');
+		if (stopOnRelease ? !owned || preparing : !tapToggles) cancel();
 	});
 	try {
 		const model = await readDictationPreparation(configuration, local, speech);
 		if (controller.signal.aborted || !widget.visible || widget.isTranscriptProgressActive || !widgets.getAllWidgets().includes(widget) || service.isBusy || isDictating()) return;
-		if (model && (isModelPreparing(model.status) || !model.available && model.model !== DEFAULT_LOCAL_TRANSCRIPTION_MODEL)) { await preferences.openSettings({ section: 'dictation' }); return; }
-		onboarding.showIfNeeded();
+		if (model && (isModelPreparing(model.status) || !model.available && model.downloadSizeBytes === undefined)) { await preferences.openSettings({ section: 'dictation' }); return; }
+		if (model?.available !== false) onboarding.showIfNeeded();
 		if (preparations.get(service) === preparation) preparations.delete(service);
 		await startDictation(service, editor, editor.getContainerDomNode().ownerDocument.defaultView as Window & typeof globalThis, log, 'chat', controller.signal);
 		if (release) {

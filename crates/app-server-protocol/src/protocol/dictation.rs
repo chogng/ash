@@ -190,6 +190,10 @@ pub enum DictationModelStage {
         file: String,
         #[ts(type = "number")]
         downloaded_bytes: u64,
+        /// Cumulative bytes across the model's package files.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        package_downloaded_bytes: Option<u64>,
     },
     Loading,
     Ready,

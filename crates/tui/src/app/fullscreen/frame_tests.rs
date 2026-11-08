@@ -3557,6 +3557,7 @@ fn dictation_model_preparation_shows_real_download_bytes_in_chinese() {
         ash_app_server_protocol::protocol::dictation::DictationModelStage::Downloading {
             file: "encoder.onnx".into(),
             downloaded_bytes: 2 * 1024 * 1024,
+            package_downloaded_bytes: Some(2 * 1024 * 1024),
         },
     );
     assert_eq!(

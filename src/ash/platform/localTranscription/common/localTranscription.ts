@@ -26,7 +26,7 @@ export enum DictationModelState {
 
 export type IDictationModelStatus =
 	| { readonly state: DictationModelState.Checking | DictationModelState.Loading | DictationModelState.Ready | DictationModelState.Cancelled; }
-	| { readonly state: DictationModelState.Downloading; readonly file: string; readonly downloadedBytes: number; }
+	| { readonly state: DictationModelState.Downloading; readonly file: string; readonly downloadedBytes: number; readonly packageDownloadedBytes?: number; }
 	| { readonly state: DictationModelState.Error; readonly error: string; };
 
 export interface ILocalTranscriptionModelSnapshot {
@@ -79,11 +79,12 @@ export async function resolveLocalTranscriptionModel(service: ILocalTranscriptio
 }
 export interface ILocalTranscriptionModelImportResult { readonly model: string; readonly version: number; }
 export const enum LocalTranscriptionModelState {
-	Idle = 'idle', Downloading = 'downloading', Loading = 'loading', Ready = 'ready', Error = 'error',
+	Idle = 'idle', Checking = 'checking', Downloading = 'downloading', Loading = 'loading', Ready = 'ready', Error = 'error',
 }
 export interface ILocalTranscriptionModelStatus {
 	readonly state: LocalTranscriptionModelState;
-	readonly progress?: number;
+	readonly file?: string;
+	readonly downloadedBytes?: number;
 	readonly downloaded?: boolean;
 	readonly error?: string;
 	readonly errorCode?: string;

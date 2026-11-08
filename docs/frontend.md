@@ -134,6 +134,12 @@ Electron 的 `open-file`、`open-url` 和第二实例参数统一进入 `platfor
 
 不传路径时按已有窗口恢复策略启动。工作区模型由 `platform/workspace` 定义，工作区管理由 `platform/workspaces` 负责；资源身份约定见 [资源身份](resource-identity.md)。
 
+### 听写模型开发测试
+
+运行 `pnpm dev:dictation-test` 启动带隔离配置的 Ash。测试入口直接读取 `test/fixtures/dictation/dictation.json`，测试服务器监听清单声明的 `127.0.0.1:39718`。打开 **设置 → 语音 → 听写模型** 可安装、选择和卸载 5 MB 和 8 MB 两个模型。测试服务器把下载控制在约 30 秒，便于观察进度和取消。运行 `pnpm dev:dictation-test --fail-once` 可让第一次下载收到 HTTP 503。
+
+用 `pnpm scenario test/fixtures/dictation/settings-scenario.mjs` 验证清单替换、HTTP 503、取消、并行安装、模型切换和独立卸载。测试清单与正式清单使用相同格式。
+
 ## Electron 启动门禁
 
 `src/main.ts` 先执行 bootstrap，再进入 `code/electron-main/main.ts`。应用在 Electron Ready 后启动；入口模块不在顶层等待 `app.whenReady()`，避免模块加载与 Ready 互相等待。

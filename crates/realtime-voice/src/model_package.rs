@@ -11,7 +11,9 @@ use http_client::ReqwestHttpClient;
 use serde::Deserialize;
 use sha2::Digest;
 use sha2::Sha256;
+use std::collections::HashSet;
 use std::io::Write;
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,9 +25,37 @@ use tokio::io::AsyncWriteExt;
 pub const MODEL_PACKAGE_FORMAT_VERSION: u32 = 1;
 const FORMAT: &str = "sherpa-online-paraformer-v1";
 
-pub(crate) static BUILTIN_MODEL: LazyLock<BuiltinModel> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../models/paraformer.json"))
-        .expect("invalid embedded Paraformer model manifest")
+pub(crate) static BUILTIN_MODELS: LazyLock<Vec<BuiltinModel>> = LazyLock::new(|| {
+    let catalog = include_str!("../models/dictation.json");
+    #[cfg(debug_assertions)]
+    let catalog_override = std::env::var_os("ASH_DEV_RUNTIME_ROOT")
+        .and_then(|_| std::env::var_os("ASH_DEV_DICTATION_CATALOG"))
+        .map(|path| {
+            let path = Path::new(&path);
+            assert!(
+                path.is_absolute(),
+                "dictation catalog path must be absolute"
+            );
+            std::fs::read_to_string(path).expect("could not read development dictation catalog")
+        });
+    #[cfg(debug_assertions)]
+    let catalog = catalog_override.as_deref().unwrap_or(catalog);
+    let models: Vec<BuiltinModel> =
+        serde_json::from_str(catalog).expect("invalid dictation model catalog");
+    let mut ids = HashSet::new();
+    for model in &models {
+        assert!(
+            ModelPackage::validate_id(&model.id).is_ok(),
+            "invalid built-in dictation model ID: {}",
+            model.id
+        );
+        assert!(
+            ids.insert(&model.id),
+            "duplicate dictation model ID: {}",
+            model.id
+        );
+    }
+    models
 });
 
 #[derive(Deserialize)]
@@ -34,7 +64,19 @@ pub(crate) struct BuiltinModel {
     pub id: String,
     pub recommended_language: String,
     base_url: String,
+    paraformer: ParaformerMetadata,
     files: DownloadFiles,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ParaformerMetadata {
+    vocab_size: NonZeroUsize,
+    lfr_window_size: NonZeroUsize,
+    lfr_window_shift: NonZeroUsize,
+    encoder_output_size: NonZeroUsize,
+    decoder_num_blocks: NonZeroUsize,
+    decoder_kernel_size: NonZeroUsize,
 }
 
 #[derive(Deserialize)]
@@ -145,12 +187,15 @@ impl ModelPackage {
         cancellation.check().map_err(|error| error.to_string())?;
         progress(ModelProgress::Checking);
         let directory = cache_root.join(model_id);
-        if model_id == BUILTIN_MODEL.id && !directory.join("dictation-model.json").is_file() {
+        if let Some(model) = BUILTIN_MODELS.iter().find(|model| model.id == model_id)
+            && !directory.join("dictation-model.json").is_file()
+        {
             let install = Installation::new(cache_root, model_id)?;
             // Recheck after acquiring the cross-process lock: another client may have published it.
             if !directory.join("dictation-model.json").is_file() {
                 Installation::require_absent_destination(&directory)?;
-                prepare_default(
+                prepare_download(
+                    model,
                     &install.staging,
                     network,
                     cancellation,
@@ -328,7 +373,8 @@ impl Drop for Installation {
     }
 }
 
-async fn prepare_default(
+async fn prepare_download(
+    model: &'static BuiltinModel,
     directory: &Path,
     network: OutboundNetworkSnapshot,
     cancellation: &CancellationToken,
@@ -338,15 +384,19 @@ async fn prepare_default(
         .await
         .map_err(|error| format!("Could not create dictation model directory: {error}"))?;
     let client = ReqwestHttpClient::with_network(network).map_err(|error| error.to_string())?;
-    for (file, name) in BUILTIN_MODEL.downloads() {
+    let mut completed_bytes = 0;
+    for (file, name) in model.downloads() {
         download(
             &client,
+            &model.base_url,
             file,
             directory.join(name),
             cancellation,
+            completed_bytes,
             Arc::clone(&progress),
         )
         .await?;
+        completed_bytes += file.size_bytes;
     }
     let tokens: Vec<String> = serde_json::from_slice(
         &fs::read(directory.join("tokens.json"))
@@ -354,7 +404,8 @@ async fn prepare_default(
             .map_err(|error| error.to_string())?,
     )
     .map_err(|error| format!("Invalid Paraformer vocabulary: {error}"))?;
-    if tokens.len() != 8404 {
+    let metadata = &model.paraformer;
+    if tokens.len() != metadata.vocab_size.get() {
         return Err("Unexpected Paraformer vocabulary size".into());
     }
     let vocabulary = tokens
@@ -374,7 +425,12 @@ async fn prepare_default(
     let cmvn = fs::read_to_string(directory.join("am.mvn"))
         .await
         .map_err(|error| error.to_string())?;
-    let (neg_mean, inv_stddev) = parse_cmvn(&cmvn)?;
+    let cmvn_dimensions = metadata
+        .lfr_window_size
+        .get()
+        .checked_mul(80)
+        .ok_or("Invalid Paraformer CMVN dimensions")?;
+    let (neg_mean, inv_stddev) = parse_cmvn(&cmvn, cmvn_dimensions)?;
     let mut encoder = fs::OpenOptions::new()
         .append(true)
         .open(directory.join("encoder.onnx.download"))
@@ -383,12 +439,21 @@ async fn prepare_default(
     // ONNX ModelProto field 14 is repeated metadata_props. Appending valid protobuf
     // entries preserves the original graph bytes and supplies sherpa's frontend metadata.
     for (key, value) in [
-        ("vocab_size", tokens.len().to_string()),
-        ("lfr_window_size", "7".into()),
-        ("lfr_window_shift", "6".into()),
-        ("encoder_output_size", "512".into()),
-        ("decoder_num_blocks", "16".into()),
-        ("decoder_kernel_size", "11".into()),
+        ("vocab_size", metadata.vocab_size.to_string()),
+        ("lfr_window_size", metadata.lfr_window_size.to_string()),
+        ("lfr_window_shift", metadata.lfr_window_shift.to_string()),
+        (
+            "encoder_output_size",
+            metadata.encoder_output_size.to_string(),
+        ),
+        (
+            "decoder_num_blocks",
+            metadata.decoder_num_blocks.to_string(),
+        ),
+        (
+            "decoder_kernel_size",
+            metadata.decoder_kernel_size.to_string(),
+        ),
         ("neg_mean", neg_mean),
         ("inv_stddev", inv_stddev),
     ] {
@@ -427,14 +492,16 @@ async fn prepare_default(
 
 async fn download(
     client: &ReqwestHttpClient,
+    base_url: &str,
     file: &'static DownloadFile,
     path: PathBuf,
     cancellation: &CancellationToken,
+    completed_bytes: u64,
     progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
 ) -> Result<(), String> {
     let client = client.clone();
     let name = file.name.as_str();
-    let url = format!("{}/{name}", BUILTIN_MODEL.base_url);
+    let url = format!("{base_url}/{name}");
     let cancellation = cancellation.clone();
     tokio::task::spawn_blocking(move || {
         struct FileSink {
@@ -442,8 +509,18 @@ async fn download(
             digest: Sha256,
             downloaded_bytes: u64,
             reported_bytes: u64,
+            completed_bytes: u64,
             progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
             name: String,
+        }
+        impl FileSink {
+            fn report_progress(&self) {
+                (self.progress)(ModelProgress::Downloading {
+                    file: self.name.clone(),
+                    downloaded_bytes: self.downloaded_bytes,
+                    package_downloaded_bytes: self.completed_bytes + self.downloaded_bytes,
+                });
+            }
         }
         impl HttpBodySink for FileSink {
             fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError> {
@@ -454,10 +531,7 @@ async fn download(
                 self.downloaded_bytes += chunk.len() as u64;
                 if self.downloaded_bytes - self.reported_bytes >= 1024 * 1024 {
                     self.reported_bytes = self.downloaded_bytes;
-                    (self.progress)(ModelProgress::Downloading {
-                        file: self.name.clone(),
-                        downloaded_bytes: self.downloaded_bytes,
-                    });
+                    self.report_progress();
                 }
                 Ok(())
             }
@@ -478,9 +552,11 @@ async fn download(
             digest: Sha256::new(),
             downloaded_bytes: 0,
             reported_bytes: 0,
+            completed_bytes,
             progress: Arc::clone(&progress),
             name: name.into(),
         };
+        sink.report_progress();
         let response = client
             .execute_streaming_with_cancellation(&request, &cancellation, &mut sink)
             .map_err(|error| format!("Could not download dictation model {name}: {error}"))?;
@@ -491,10 +567,7 @@ async fn download(
             ));
         }
         sink.file.sync_all().map_err(|error| error.to_string())?;
-        progress(ModelProgress::Downloading {
-            file: name.into(),
-            downloaded_bytes: sink.downloaded_bytes,
-        });
+        sink.report_progress();
         progress(ModelProgress::Checking);
         if sink.downloaded_bytes != file.size_bytes {
             return Err(format!("Dictation model {name} has an unexpected size"));
@@ -510,8 +583,8 @@ async fn download(
     .map_err(|error| error.to_string())?
 }
 
-fn parse_cmvn(cmvn: &str) -> Result<(String, String), String> {
-    fn values(cmvn: &str, marker: &str) -> Result<String, String> {
+fn parse_cmvn(cmvn: &str, dimensions: usize) -> Result<(String, String), String> {
+    fn values(cmvn: &str, marker: &str, dimensions: usize) -> Result<String, String> {
         let section = cmvn
             .split_once(marker)
             .and_then(|(_, rest)| rest.split_once('['))
@@ -519,12 +592,17 @@ fn parse_cmvn(cmvn: &str) -> Result<(String, String), String> {
             .map(|(values, _)| values)
             .ok_or("Invalid Paraformer CMVN")?;
         let numbers = section.split_whitespace().collect::<Vec<_>>();
-        if numbers.len() != 560 || numbers.iter().any(|number| number.parse::<f32>().is_err()) {
+        if numbers.len() != dimensions
+            || numbers.iter().any(|number| number.parse::<f32>().is_err())
+        {
             return Err("Invalid Paraformer CMVN dimensions".into());
         }
         Ok(numbers.join(","))
     }
-    Ok((values(cmvn, "<AddShift>")?, values(cmvn, "<Rescale>")?))
+    Ok((
+        values(cmvn, "<AddShift>", dimensions)?,
+        values(cmvn, "<Rescale>", dimensions)?,
+    ))
 }
 
 fn metadata_entry(key: &str, value: &str) -> Vec<u8> {

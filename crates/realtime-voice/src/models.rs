@@ -1,7 +1,7 @@
 //! Model operations never acquire the microphone. Packages are immutable once published.
 use crate::DictationManager;
 use crate::LocalSpeechMode;
-use crate::model_package::BUILTIN_MODEL;
+use crate::model_package::BUILTIN_MODELS;
 use crate::model_package::ModelPackage;
 use async_utils::CancellationSource;
 use async_utils::CancellationToken;
@@ -15,11 +15,17 @@ use std::thread;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelProgress {
     Checking,
-    Downloading { file: String, downloaded_bytes: u64 },
+    Downloading {
+        file: String,
+        downloaded_bytes: u64,
+        package_downloaded_bytes: u64,
+    },
     Loading,
     Ready,
     Cancelled,
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
 }
 
 pub enum ModelOperation {
@@ -97,7 +103,10 @@ impl DictationModelManager {
     }
 
     pub fn list(&self, root: &std::path::Path) -> Result<Vec<String>, String> {
-        let mut models = std::collections::BTreeSet::from([BUILTIN_MODEL.id.clone()]);
+        let mut models: std::collections::BTreeSet<_> = BUILTIN_MODELS
+            .iter()
+            .map(|model| model.id.clone())
+            .collect();
         if root.exists() {
             for entry in std::fs::read_dir(root).map_err(|error| error.to_string())? {
                 let entry = entry.map_err(|error| error.to_string())?;
@@ -167,12 +176,15 @@ impl DictationModelManager {
 
     /// Returns the transfer size in bytes and recommended language of a downloadable package.
     pub fn download_info(model_id: &str) -> Option<(u64, &'static str)> {
-        (model_id == BUILTIN_MODEL.id).then(|| {
-            (
-                BUILTIN_MODEL.download_size_bytes(),
-                BUILTIN_MODEL.recommended_language.as_str(),
-            )
-        })
+        BUILTIN_MODELS
+            .iter()
+            .find(|model| model.id == model_id)
+            .map(|model| {
+                (
+                    model.download_size_bytes(),
+                    model.recommended_language.as_str(),
+                )
+            })
     }
 
     /// Availability describes an installed package, not a currently loaded recognizer.

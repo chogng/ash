@@ -179,6 +179,27 @@
 	display: none;
 }
 
+.ash-chat-model-preparation:not([hidden]) {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--ash-spacing-size80);
+	row-gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-label1);
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-model-preparation > .ash-progress-bar {
+	grid-column: 1;
+	grid-row: 2;
+}
+
+.ash-chat-model-preparation > .ash-button {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+}
+
 .ash-chat-dictation-preview {
 	overflow: hidden;
 	padding: 0 12px 4px;

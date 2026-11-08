@@ -300,9 +300,10 @@ export function registerLocalTranscriptionService(services: InstantiationService
 
 function transcriptionStatus(status: IDictationModelStatus): ILocalTranscriptionModelStatus {
 	switch (status.state) {
-		case DictationModelState.Checking: case DictationModelState.Loading: return { state: LocalTranscriptionModelState.Loading };
+		case DictationModelState.Checking: return { state: LocalTranscriptionModelState.Checking };
+		case DictationModelState.Loading: return { state: LocalTranscriptionModelState.Loading };
 		case DictationModelState.Cancelled: return { state: LocalTranscriptionModelState.Idle };
-		case DictationModelState.Downloading: return { state: LocalTranscriptionModelState.Downloading };
+		case DictationModelState.Downloading: return { state: LocalTranscriptionModelState.Downloading, file: status.file, downloadedBytes: status.downloadedBytes };
 		case DictationModelState.Ready: return { state: LocalTranscriptionModelState.Ready };
 		case DictationModelState.Error: return { state: LocalTranscriptionModelState.Error, error: status.error };
 	}
