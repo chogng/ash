@@ -7,7 +7,7 @@ import { IAutomationService } from '../../../../workbench/contrib/chat/common/au
 import { IAutomationDialogService } from '../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import { SessionsSearchDialog } from './searchDialog.js';
+import { SessionsSearchPicker } from './searchPicker.js';
 import type { SearchResult } from './searchModel.js';
 
 export interface ISessionsSearchService {
@@ -20,7 +20,7 @@ export const ISessionsSearchService = createServiceIdentifier<ISessionsSearchSer
 
 /** One independent search surface per Sessions window, disposed with that window's service scope. */
 export class SessionsSearchService extends Disposable implements ISessionsSearchService {
-	private readonly active = this._register(new MutableDisposable<SessionsSearchDialog>());
+	private readonly active = this._register(new MutableDisposable<SessionsSearchPicker>());
 	private readonly sources = observableValue<readonly IObservable<readonly SearchResult[]>[]>(this, []);
 	private readonly sourceResults = derived(reader => this.sources.read(reader).flatMap(source => source.read(reader)));
 
@@ -42,10 +42,10 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 
 	async show(): Promise<void> {
 		if (this.active.value) { this.focus(); return; }
-		const dialog = this.instantiation.createInstance(SessionsSearchDialog, this.layout.activeContainer, this.sourceResults);
-		this.active.value = dialog;
+		const picker = this.instantiation.createInstance(SessionsSearchPicker, this.layout.activeContainer, this.sourceResults);
+		this.active.value = picker;
 		let target;
-		try { target = await dialog.show(); }
+		try { target = await picker.show(); }
 		finally { this.active.clear(); }
 		// Close the modal and release its model before handing focus to a domain page.
 		switch (target?.kind) {

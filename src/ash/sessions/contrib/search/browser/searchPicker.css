@@ -1,6 +1,6 @@
 .ash-sessions-search-dialog.ash-dialog {
-	width: min(800px, calc(100vw - 48px));
-	height: calc(600px + 2 * var(--ash-strokeThickness));
+	width: min(660px, calc(100vw - 48px));
+	height: 440px;
 	max-height: calc(100vh - 64px);
 	border-radius: var(--ash-cornerRadius-xxLarge);
 	background: var(--ash-editor-background);
@@ -78,6 +78,7 @@
 
 .ash-sessions-search-heading {
 	box-sizing: border-box;
+	flex: 0 0 auto;
 	height: 32px;
 	margin: 0;
 	padding: 0 var(--ash-spacing-size120);
@@ -88,6 +89,7 @@
 }
 
 .ash-sessions-search-results {
+	--ash-list-row-radius: var(--ash-cornerRadius-large);
 	--ash-list-row-reserve-scrollbar: 1;
 	flex: 1;
 	min-height: 0;
@@ -97,7 +99,6 @@
 .ash-sessions-search-results .ash-list-row {
 	/* Mirror the trailing scrollbar reservation on the leading side. */
 	--ash-list-row-inset-start: var(--ash-list-row-scrollbar-space);
-	border-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-sessions-search-results .ash-list-row.is-active {
@@ -116,16 +117,23 @@
 
 .ash-sessions-search-action.is-active .ash-sessions-search-result-line,
 .ash-sessions-search-action .ash-sessions-search-result-line:hover {
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-list-row-radius);
 	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-sessions-search-result {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 }
 
 .ash-sessions-search-result-line {
 	display: flex;
+	flex: 1;
 	align-items: center;
 	gap: var(--ash-spacing-size120);
 	box-sizing: border-box;
-	height: 44px;
+	min-height: 0;
 	padding: 0 var(--ash-spacing-size120);
 }
 

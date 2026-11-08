@@ -827,6 +827,7 @@ export type ThreadCommittedEvent =
 		| 'contextCheckpointCommitted'
 		| 'contextOverflowRecoveryCommitted'
 		| 'turnAccepted'
+		| 'turnSkillsLoaded'
 		| 'turnStarted'
 		| 'turnPermissionPolicyChanged'
 		| 'turnSteered'

@@ -1,5 +1,5 @@
 import '../../../browser/ui/filterTabs.css';
-import './searchDialog.css';
+import './searchPicker.css';
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -32,7 +32,7 @@ import {
 import { SessionsSearchModel, type SearchCategory, type SearchResult, type SearchTarget } from './searchModel.js';
 
 /** Product search owns its DOM and presentation; shared controls supply interaction primitives. */
-export class SessionsSearchDialog extends Disposable {
+export class SessionsSearchPicker extends Disposable {
 	private readonly dialog: Dialog;
 	private readonly input: HTMLInputElement;
 	private readonly model: SessionsSearchModel;
@@ -111,7 +111,7 @@ export class SessionsSearchDialog extends Disposable {
 				domFocusable: false,
 				scrolling: 'managed',
 				getId: result => result.id,
-				getHeight: result => (result.category === 'actions' ? 76 : 44),
+				getHeight: result => (result.category === 'actions' ? 68 : 36),
 				accessibilityProvider: {
 					getAriaLabel: result => [result.title, result.description].filter(Boolean).join(', '),
 				},
