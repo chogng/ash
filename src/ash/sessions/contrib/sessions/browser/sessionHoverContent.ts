@@ -37,7 +37,7 @@ export function createSessionPreviewHover(
 		}
 		if (loadBranch) {
 			void loadBranch(token).then(branch => {
-				if (!branch || token.isCancellationRequested) return;
+				if (!branch || token.isCancellationRequested || !card.isConnected) return;
 				const detail = h(document, 'div', { className: 'ash-sessions-list-preview-branch' });
 				appendIcon(Lxicon.gitBranch, detail);
 				detail.append(h(document, 'span', branch));
@@ -137,9 +137,12 @@ async function loadSessionHoverMetadata(
 	scope.assertCurrent();
 	const current = findSession();
 	const currentChat = current?.chats.find(chat => chat.threadId === threadId);
-	const expectedWorkspace = currentChat?.workspace === undefined ? catalogWorkspace : workspace;
-	if (!current || !currentChat || current.providerId !== session.providerId
-		|| agentHostSessionWorkspaceKey(chatExecutionWorkspace(current, currentChat)) !== agentHostSessionWorkspaceKey(expectedWorkspace)) {
+	if (!current || !currentChat || current.providerId !== session.providerId) {
+		return undefined;
+	}
+	// An unopened Thread can report its checkout before the catalog hydrates its workspace.
+	const expectedWorkspace = currentChat.workspace === undefined ? catalogWorkspace : workspace;
+	if (agentHostSessionWorkspaceKey(chatExecutionWorkspace(current, currentChat)) !== agentHostSessionWorkspaceKey(expectedWorkspace)) {
 		return undefined;
 	}
 	const head = repositories.status === 'fulfilled' && repositories.value?.length === 1 ? repositories.value[0].head : undefined;

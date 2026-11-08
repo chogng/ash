@@ -50,7 +50,7 @@ import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/b
 import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
-import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
+import { getSessionSummaryHoverData, loadSessionSummaryHoverDetails } from '../../contrib/sessions/browser/sessionHoverContent.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../contrib/sessions/browser/sessionsActions.js';
@@ -675,6 +675,33 @@ test('Session hover localizes the project folder independently of the thread dir
 		assert.deepEqual(getSessionSummaryHoverData({ ...session, workspace: null }, chat), ['提供方：Provider name']);
 	} finally {
 		resetNlsResolver();
+	}
+});
+
+test('Session hover discards Git results after the session moves or disappears', async () => {
+	const session: ISession = {
+		sessionId: 'session', kind: 'code', title: 'Session', status: 'active', nextApprovalMode: 'manual',
+		workspace: { authorityId: 'local', root: '/original' },
+		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' } }],
+	};
+	for (const nextSessions of [[{ ...session, workspace: { authorityId: 'local', root: '/moved' } }], []]) {
+		let sessions: readonly ISession[] = [session];
+		const management = { get sessions() { return sessions; } } as ISessionsManagementService;
+		const git = new DeferredPromise<readonly { head: { type: string; name: string; }; }[]>();
+		const scopes = {
+			getScope: () => ({
+				assertCurrent() { },
+				backendIdentity: (id: string) => id,
+				services: {
+					chat: { readThreadChanges: async () => undefined },
+					host: { localGit: { readRepositoryContexts: () => git.p } },
+				},
+			}),
+		} as unknown as ISessionProviderScopeService;
+		const details = loadSessionSummaryHoverDetails(management, scopes, session.sessionId, 'root', CancellationToken.None);
+		sessions = nextSessions;
+		await git.complete([{ head: { type: 'branch', name: 'original' } }]);
+		assert.deepEqual(await details, []);
 	}
 });
 
