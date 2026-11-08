@@ -249,11 +249,15 @@ export class Dialog extends Disposable {
 		if (options.closeOnBackdropClick && !options.disableCloseAction) {
 			if (options.modal === false) {
 				const isOutside = (event: MouseEvent): boolean => {
-					if (!this.visible || this.closePending || event.defaultPrevented || ownerDocument.querySelector(':modal')) return false;
+					if (!this.visible || event.defaultPrevented || ownerDocument.querySelector(':modal')) return false;
 					// A menu may live in its own top-layer element, including its click shield.
 					return !event.composedPath().some(target => target === element ||
 						isHTMLElement(target) && target.matches('dialog[open], :popover-open'));
 				};
+				let lastFocusedControl: HTMLElement | undefined;
+				this._register(addDisposableListener(element, 'focusin', event => {
+					if (isHTMLElement(event.target)) lastFocusedControl = event.target;
+				}));
 				let pressedOutside = false;
 				this._register(addDisposableListener(ownerDocument, 'pointerdown', event => {
 					pressedOutside = event.isPrimary && event.button === 0 && isOutside(event);
@@ -261,10 +265,17 @@ export class Dialog extends Disposable {
 					if (pressedOutside) event.preventDefault();
 				}, true));
 				this._register(addDisposableListener(ownerDocument, 'click', event => {
-					if (!pressedOutside || event.detail === 0 || !isOutside(event)) return;
+					// Keyboard and assistive activation can click a background control without pointerdown.
+					const nonPointerActivation = event.detail === 0 && event.isTrusted;
+					const pointerActivation = pressedOutside && event.detail > 0;
+					if ((!pointerActivation && !nonPointerActivation) || !isOutside(event)) return;
 					pressedOutside = false;
 					event.preventDefault();
 					event.stopPropagation();
+					if (nonPointerActivation && !this.closePending) {
+						// The confirmation restores its opener's focus. Return to the form before opening it.
+						if (!restoreFocus(lastFocusedControl) && !focusFirst(element)) element.focus();
+					}
 					void this.requestClose();
 				}, true));
 			} else if (typeof element.closedBy === 'string') {

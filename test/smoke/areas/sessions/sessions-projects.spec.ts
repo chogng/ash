@@ -596,7 +596,7 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	await expect(projects.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
 	const breadcrumb = page.locator('.ash-sessions-titlebar').getByRole('navigation', { name: 'Project navigation' });
 	await expect(breadcrumb).toHaveCount(0);
-	await expect(page.locator('.ash-sessions-titlebar-page-content')).toHaveCSS('border-bottom-width', '0px');
+	await expect(page.locator('.ash-sessions-titlebar-page-content')).toBeHidden();
 	await expect(projects.getByRole('navigation', { name: 'Project navigation' })).toHaveCount(0);
 	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Library', exact: true })).toHaveCount(0);
@@ -622,6 +622,49 @@ test('Sessions Projects replaces material categories and supports keyboard creat
 	await expect(projects).toBeVisible();
 	await expect(breadcrumb).toHaveCount(0);
 	await expect(page.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeVisible();
+});
+
+test('Sessions Projects protects an unsaved form from keyboard page switching', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const navigation = page.locator('.ash-sessions-activity-content');
+	const nextPage = navigation.getByRole('button', { name: 'New', exact: true });
+	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+	const projects = page.locator('.ash-projects');
+	const create = projects.getByRole('button', { name: 'New project', exact: true }).first();
+	await create.click();
+	const form = page.getByRole('dialog', { name: 'Create a project' });
+	const name = form.getByRole('textbox', { name: 'What are you working on?' });
+	await expect(name).toBeFocused();
+	await name.fill('Unsaved project');
+	const confirmation = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
+	const keep = confirmation.getByRole('button', { name: 'Keep editing' });
+	const focusNewFromForm = async () => {
+		for (let i = 0; i < 30 && !await navigation.locator(':focus').count(); i++) {
+			await page.keyboard.press('Tab');
+		}
+		await expect(navigation.locator(':focus')).toHaveCount(1);
+		await page.keyboard.press('Home');
+		await expect(nextPage).toBeFocused();
+	};
+
+	await focusNewFromForm();
+	await page.keyboard.press('Enter');
+	await expect(keep).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(confirmation).toHaveCount(0);
+	await expect(form.locator(':focus')).toHaveCount(1);
+	await expect(name).toHaveValue('Unsaved project');
+	await expect(projects).toBeVisible();
+
+	await focusNewFromForm();
+	await page.keyboard.press('Space');
+	await expect(keep).toBeFocused();
+	await confirmation.getByRole('button', { name: 'Discard', exact: true }).press('Enter');
+	await expect(form).toHaveCount(0);
+	await expect(create).toBeFocused();
+	await expect(projects).toBeVisible();
+	await nextPage.press('Space');
+	await expect(projects).toBeHidden();
 });
 
 test('Sessions Projects persists creation and goals through a real backend and reopened window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
