@@ -4,6 +4,7 @@ import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../se
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
 import { AgentsVoiceSettingId } from '../../agentsVoice/common/agentsVoice.js';
+import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../memories/browser/memorySettings.js';
 
 export interface SettingsGroupDescriptor {
 	readonly id: string;
@@ -718,6 +719,13 @@ export const SettingsNavigation = [
 				label: localize({ bundle: 'ash.settings', key: 'categories.teams.label' }, 'Teams'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.teams.description' }, 'Compose reusable multi-agent teams with explicit members, roles, and coordination.'),
 				keywords: ['multi-agent', 'team mode', 'members', 'roles', 'coordination'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: MEMORY_SETTINGS_CATEGORY,
+				label: memorySettingsTitle(),
+				description: '',
 				presentation: 'general',
 				groups: [],
 			},

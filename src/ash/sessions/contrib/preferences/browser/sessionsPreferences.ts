@@ -3,6 +3,8 @@ import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
+import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../../../workbench/contrib/memories/browser/memorySettings.js';
+import { MemorySettingsRenderer } from '../../../../workbench/contrib/memories/browser/memorySettingsRenderer.js';
 import { CodeConversationDefaultsSettings } from './codeConversationDefaultsSettings.js';
 import { ChatConfiguration, ChatEditorConfiguration, ChatInputConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import './media/sessionsPreferences.css';
@@ -54,6 +56,7 @@ import type { SettingWidgetOptions } from '../../../../workbench/contrib/prefere
 import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SESSIONS_CHATGPT_DEFAULT_BACKEND, SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SessionsConfiguration } from '../../../common/configuration.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../common/chatLayout.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import '../../../common/sessionConfig.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SessionsCustomizeContent } from './sessionsCustomizeContent.js';
@@ -349,6 +352,9 @@ export class SessionsPreferences extends Disposable {
 				section.accessibleViewProviderId, section.accessibilityVerbositySettingId)),
 		}));
 		const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));
+		management.set(MEMORY_SETTINGS_CATEGORY, resources.add(contentServices.createInstance(MemorySettingsRenderer, list,
+			() => this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat' ? 'chat' : 'code',
+			async () => { dialog.dispose(); })));
 		const sessions = this.instantiationService.invokeFunction(accessor => accessor.get(ISessionsService));
 		management.set('agents', resources.add(contentServices.createInstance(SessionsAgentsContent, list,
 			contributed.filter(section => section.categoryId === 'agents').map(section => section.content),
@@ -600,6 +606,7 @@ export class SessionsPreferences extends Disposable {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
 				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: defaults.all.filter(setting => setting.id === AgentsVoiceSettingId.Model), content: management.get('agents') },
+				{ id: MEMORY_SETTINGS_CATEGORY, title: memorySettingsTitle(), icon: Lxicon.brain, settings: [], content: management.get(MEMORY_SETTINGS_CATEGORY) },
 				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },

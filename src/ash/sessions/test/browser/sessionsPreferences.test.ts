@@ -1,4 +1,6 @@
+import { IMemoriesService } from '../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../common/sessionCommands.js';
+import { IMemorySettingsNavigation, MemorySettingsNavigation, OPEN_MEMORIES_COMMAND_ID } from '../../../workbench/contrib/memories/browser/memorySettings.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -103,7 +105,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using restoreErrorHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://sessions-preferences.test/' });
 	const { window } = browser;
-	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
+	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, HTMLInputElement: window.HTMLInputElement, HTMLTextAreaElement: window.HTMLTextAreaElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
 	window.HTMLElement.prototype.scrollTo = function () { };
@@ -300,6 +302,23 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		if (pendingShortcut) await pendingShortcut;
 		if (rejectShortcut) throw new Error('shortcut editor unavailable');
 		shortcutsOpened++;
+	});
+	const memoryNavigation = new MemorySettingsNavigation();
+	services.registerInstance(IMemorySettingsNavigation, memoryNavigation);
+	using memoriesCommand = CommandsRegistry.register(OPEN_MEMORIES_COMMAND_ID, () => memoryNavigation.open(services.get(IPreferencesService)));
+	const unusedMemoryOperation = async (): Promise<never> => { throw new Error('Unexpected memory operation'); };
+	services.registerInstance(IMemoriesService, {
+		onDidChange: Event.None,
+		readModelMemoryEnabled: async () => false,
+		scopes: async () => [],
+		list: async () => ({ memories: [], cursor: undefined }),
+		read: unusedMemoryOperation,
+		add: unusedMemoryOperation,
+		update: unusedMemoryOperation,
+		delete: unusedMemoryOperation,
+		setPolicy: unusedMemoryOperation,
+		setModelMemoryEnabled: unusedMemoryOperation,
+		readReference: unusedMemoryOperation,
 	});
 	services.registerInstance(IAccountService, {
 		readRateLimits: async (provider, accountId) => ({
@@ -636,6 +655,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await preferences.open({ section: 'keyboard-shortcuts' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
 		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('查看仅在 Agent 窗口中生效的快捷键。'));
+		await preferences.open({ section: 'memory' });
+		assert.equal(categoryButton('memory').textContent, '记忆');
+		await Promise.resolve();
+		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page .ash-memories button')].some(button => button.textContent === '新建记忆'));
 		await preferences.open({ section: 'customize' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
 
@@ -663,6 +686,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await Promise.resolve();
 	};
 	const revealsBeforeShortcuts = editorReveals;
+	const memoryOpening = preferences.open({ section: 'memory' });
+	await Promise.resolve();
+	assert.ok(window.document.querySelector('dialog[open] .ash-sessions-settings-page .ash-memories'));
+	assert.equal(window.document.querySelectorAll('.ash-memories').length, 1);
+	assert.equal(editorReveals, revealsBeforeShortcuts, 'memory management preserves the current document layout');
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await memoryOpening;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
 	assert.equal(editorReveals, revealsBeforeShortcuts, 'the shortcut modal preserves the underlying entry and document working set');
 	assert.equal(shortcutsOpened, 1);

@@ -1,5 +1,6 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { BrowserPasswordSettingsRenderer } from './browserPasswordSettingsRenderer.js';
+import { MemorySettingsRenderer } from '../../memories/browser/memorySettingsRenderer.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -277,6 +278,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),
+			this._register(this.instantiationService.createInstance(MemorySettingsRenderer, settingsContent, () => 'code', async () => {
+				await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID));
+			})),
 			this._register(this.instantiationService.createInstance(NetworkSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings)),
 			...getSettingsSections().map(section => this._register(this.instantiationService.createInstance(

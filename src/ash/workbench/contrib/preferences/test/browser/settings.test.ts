@@ -23,6 +23,8 @@ import snapshotMessages from '../../../../../../../extensions/snapshot/package.n
 import snapshotManifest from '../../../../../../../extensions/snapshot/package.json' with { type: 'json' };
 import { localizeManifest } from '../../../../../platform/extensionManagement/common/extensionNls.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IMemoriesService, type Memory } from '../../../../../platform/memories/common/memoriesService.js';
+import { IMemorySettingsNavigation, MemorySettingsNavigation, OPEN_MEMORIES_COMMAND_ID } from '../../../memories/browser/memorySettings.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -122,6 +124,8 @@ Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollIntoVi
 	value() { },
 });
 const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent'], {
+	HTMLInputElement: browserEnvironment.window.HTMLInputElement,
+	HTMLTextAreaElement: browserEnvironment.window.HTMLTextAreaElement,
 	navigator: browserEnvironment.window.navigator,
 });
 suiteTeardown(() => {
@@ -2071,6 +2075,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'chat-appearance',
 			'agents',
 			'teams',
+			'memory',
 			'agent-defaults',
 			'models',
 			'rules',
@@ -3297,6 +3302,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const managementDescriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID)!;
 	disposables.add(editorPanes.registerEditorPane(managementDescriptor));
+	const memoryNavigation = new MemorySettingsNavigation();
+	services.registerInstance(IMemorySettingsNavigation, memoryNavigation);
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	editorServices.registerInstance(IEditorPart, editor);
@@ -3708,10 +3715,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
-		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks'].map(
+		['agents', 'teams', 'memory', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks'].map(
 			categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent,
 		),
-		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
+		['Agents', 'Teams', 'Memory', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="interaction"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="skills"]'), null);
@@ -4166,6 +4173,76 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(ownerDocument.activeElement, trigger);
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'After close');
 	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`), null);
+	const unusedMemoryOperation = async (): Promise<never> => { throw new Error('Unexpected memory mutation'); };
+	const memoryScope = { type: 'profile' } as const;
+	const projectScope = { type: 'project', projectId: 'project-1' } as const;
+	let memory: Memory = { id: 'sample', scope: memoryScope, revision: 1, source: 'user', title: 'Sample', body: 'Saved body' };
+	const bodyReads: number[] = [];
+	services.registerInstance(IMemoriesService, {
+		onDidChange: Event.None,
+		readModelMemoryEnabled: async () => false,
+		scopes: async threadId => [{
+			label: threadId ? 'Project' : 'Personal',
+			policy: { scope: threadId ? projectScope : memoryScope, revision: 1, reading: false, saving: false },
+		}],
+		list: async scope => {
+			const { body, ...summary } = memory;
+			return { memories: scope.type === 'profile' ? [summary] : [], cursor: undefined };
+		},
+		read: async entry => { bodyReads.push(entry.revision); return memory; },
+		add: unusedMemoryOperation,
+		update: unusedMemoryOperation,
+		delete: unusedMemoryOperation,
+		setPolicy: unusedMemoryOperation,
+		setModelMemoryEnabled: unusedMemoryOperation,
+		readReference: async reference => {
+			assert.equal(reference, 'memory:sample');
+			return { title: 'Reference', body: 'Exact source text', revision: 1 };
+		},
+	});
+	disposables.add(CommandsRegistry.register(OPEN_MEMORIES_COMMAND_ID, () => memoryNavigation.open(preferences)));
+	await preferences.openSettings({ section: 'memory' });
+	await nextTurn();
+	const memories = root.querySelector<HTMLElement>('.ash-settings-editor .ash-memories')!;
+	assert.ok(memories);
+	assert.equal(host.hidden, false);
+	assert.equal(root.querySelectorAll('.ash-memories').length, 1);
+	assert.deepEqual(bodyReads, []);
+	const memoryList = memories.querySelector<HTMLSelectElement>('select[size="6"]')!;
+	memoryList.value = memory.id;
+	memoryList.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	await nextTurn();
+	const memoryBody = memories.querySelector<HTMLTextAreaElement>('textarea')!;
+	assert.equal(memoryBody.value, 'Saved body');
+	const refreshMemories = [...memories.querySelectorAll('button')].find(button => button.textContent === 'Refresh')!;
+	refreshMemories.click();
+	await nextTurn();
+	assert.deepEqual(bodyReads, [1]);
+	memory = { ...memory, revision: 2, body: 'Updated body' };
+	refreshMemories.click();
+	await nextTurn();
+	assert.deepEqual(bodyReads, [1, 2]);
+	assert.equal(memoryBody.value, 'Updated body');
+	const reference = [...memories.querySelectorAll('label')].find(label => label.textContent === 'Memory reference')!.querySelector('input')!;
+	reference.value = 'memory:sample';
+	[...memories.querySelectorAll('button')].find(button => button.textContent === 'Open reference')!.click();
+	await nextTurn();
+	assert.equal(memoryBody.value, 'Exact source text');
+	assert.equal(memoryBody.readOnly, true);
+	await memoryNavigation.open(preferences, { kind: 'reference', reference: 'memory:sample' });
+	await nextTurn();
+	assert.equal(memoryBody.value, 'Exact source text');
+	assert.equal(memoryBody.readOnly, true);
+	await memoryNavigation.open(preferences, {
+		kind: 'draft', origin: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', itemId: 'item-1' },
+		text: 'Draft from a chat message',
+	});
+	await nextTurn();
+	assert.equal(memoryBody.value, 'Draft from a chat message');
+	assert.equal(memoryBody.readOnly, false);
+	assert.equal(host.hidden, false);
+	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close button')?.click();
+	await nextTurn();
 	const firstGroup = editor.activeGroup;
 	await commands.executeCommand('workbench.action.openSettings', {
 		groupId: firstGroup.id,

@@ -1,5 +1,7 @@
-import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -8,11 +10,13 @@ import { IMemoriesService, type Memory, type MemoryConversationSource, type Memo
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
-import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { IMemorySettingsNavigation, MEMORIES_FOCUS_CONTEXT, type MemorySettingsNavigation } from './memorySettings.js';
 import './memories.css';
 
-export class MemoriesViewPane extends ViewPane {
-	public static readonly FocusContext = 'memoriesFocus';
+export class MemoriesEditor extends Disposable {
+	public readonly element: HTMLElement;
 	private readonly context: HTMLSelectElement;
 	private readonly scope: HTMLSelectElement;
 	private readonly modelMemoryEnabled: HTMLInputElement | undefined;
@@ -24,10 +28,10 @@ export class MemoriesViewPane extends ViewPane {
 	private readonly body: HTMLTextAreaElement;
 	private readonly reference: HTMLInputElement;
 	private readonly status: HTMLDivElement;
-	private readonly next: HTMLButtonElement;
-	private readonly save: HTMLButtonElement;
-	private readonly remove: HTMLButtonElement;
-	private readonly openSource: HTMLButtonElement;
+	private readonly next: Button;
+	private readonly save: Button;
+	private readonly remove: Button;
+	private readonly openSource: Button;
 	private scopes: readonly MemoryScopeEntry[] = [];
 	private entries: readonly MemorySummary[] = [];
 	private policy: MemoryPolicy | undefined;
@@ -44,59 +48,110 @@ export class MemoriesViewPane extends ViewPane {
 	private contextId = '';
 	private mutationId = generateUuid();
 
-	constructor(private readonly namespace: MemoryNamespace, container: HTMLElement, options: IViewPaneOptions,
+	constructor(private readonly namespace: MemoryNamespace, container: HTMLElement, closeSettings: () => Promise<void>,
 		@IMemoriesService private readonly memories: IMemoriesService,
 		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 		@IDialogService private readonly dialogs: IDialogService,
-		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
-		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IAccessibleViewService accessibleView: IAccessibleViewService,
+		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IMemorySettingsNavigation navigation: MemorySettingsNavigation,
 	) {
-		super(container, options);
+		super();
 		const document = container.ownerDocument;
-		this.contentElement.classList.add('ash-memories');
-		const focus = contextKeys.createKey<boolean>(MemoriesViewPane.FocusContext, false);
-		this._register(toDisposable(() => focus.reset()));
-		this._register(addDisposableListener(this.contentElement, 'focusin', () => focus.set(true)));
-		this._register(addDisposableListener<FocusEvent>(this.contentElement, 'focusout', event => { if (!this.contentElement.contains(event.relatedTarget as Node | null)) { focus.reset(); } }));
+		this.element = h(document, 'section');
+		this.element.className = 'ash-memories';
+		container.append(this.element);
+		this._register(toDisposable(() => this.element.remove()));
+		const key = `memorySettings-${generateUuid()}`;
+		const scope = this._register(contextKeys.createScoped(this.element));
+		scope.createKey(key, true);
+		scope.createKey(MEMORIES_FOCUS_CONTEXT, true);
+		const save = async (): Promise<void> => {
+			if (this.element.contains(document.activeElement)) { await this.perform(() => this.saveMemory()); }
+		};
+		this._register(addDisposableListener(this.element, 'focusin', () => navigation.setFocusedSave(save)));
+		this._register(addDisposableListener<FocusEvent>(this.element, 'focusout', event => {
+			if (!this.element.contains(event.relatedTarget as Node | null)) { navigation.clearFocusedSave(save); }
+		}));
+		this._register(toDisposable(() => navigation.clearFocusedSave(save)));
+		const verbosity = AccessibilityVerbositySettingId.Memories;
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			this._register(AccessibleViewRegistry.register({
+				type, name: `${key}-${type}`, priority: 110, when: ContextKeyExpr.has(key),
+				getProvider: () => {
+					const focused = document.activeElement;
+					if (!(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
+					return new AccessibleContentProvider(AccessibleViewProviderId.Memories, { type },
+						() => type === AccessibleViewType.Help
+							? localize({ bundle: 'ash.settings', key: 'memory.help' }, 'Choose a conversation and memory scope. Use Tab to move between controls and arrow keys to browse saved memories. <keybinding:ash.memories.save> saves a memory. Reading and model saving are separate permissions. Escape closes this help and returns focus.')
+							: [this.status.textContent, this.titleInput.value, this.body.value].filter(Boolean).join('\n'),
+						() => { if (focused.isConnected) { focused.focus(); } }, verbosity);
+				},
+			}));
+		}
+		const updateHint = (): void => {
+			const hint = accessibleView.getOpenAriaHint(verbosity);
+			if (hint) { this.element.setAttribute('aria-description', hint); }
+			else { this.element.removeAttribute('aria-description'); }
+		};
+		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(verbosity)) { updateHint(); } }));
+		updateHint();
+		const options = h(document, 'div');
+		options.className = 'memories-options';
+		this.element.append(options);
 		this.context = h(document, 'select');
-		this.field('Conversation context', this.context);
+		this.field(options, localize({ bundle: 'ash.settings', key: 'memory.context' }, 'Conversation context'), this.context);
 		this.scope = h(document, 'select');
-		this.field(localize('memories.scope', 'Memory scope'), this.scope);
-		this.modelMemoryEnabled = namespace === 'code' ? this.input(localize('memories.modelMemoryEnabled', 'Enable Code model memory'), 'checkbox') : undefined;
-		this.reading = this.input(localize('memories.allowReading', 'Allow memory reading'), 'checkbox');
-		this.saving = this.input('Allow model saving', 'checkbox');
-		this.search = this.input('Search memories', 'search');
-		const toolbar = h(document, 'div');
-		toolbar.className = 'memories-actions';
-		toolbar.append(this.button('Search', () => this.loadList()), this.button('New memory', () => this.newMemory()), this.button('Refresh', () => this.refresh()));
-		this.next = this.button('Next page', () => this.loadList(this.cursor));
-		toolbar.append(this.next, this.button('Help', () => this.showHelp()));
-		this.contentElement.append(toolbar);
+		this.field(options, localize('memories.scope', 'Memory scope'), this.scope);
+		this.modelMemoryEnabled = namespace === 'code' ? this.input(options, localize('memories.modelMemoryEnabled', 'Enable Code model memory'), 'checkbox') : undefined;
+		this.reading = this.input(options, localize('memories.allowReading', 'Allow memory reading'), 'checkbox');
+		this.saving = this.input(options, localize({ bundle: 'ash.settings', key: 'memory.allowSaving' }, 'Allow model saving'), 'checkbox');
 		this.status = h(document, 'div');
 		this.status.setAttribute('role', 'status');
 		this.status.className = 'memories-status';
-		this.contentElement.append(this.status);
+		this.element.append(this.status);
+		const columns = h(document, 'div');
+		columns.className = 'memories-columns';
+		const records = h(document, 'div');
+		const detail = h(document, 'div');
+		columns.append(records, detail);
+		this.element.append(columns);
+
+		this.search = this.input(records, localize({ bundle: 'ash.settings', key: 'memory.search' }, 'Search memories'), 'search');
+		const toolbar = h(document, 'div');
+		toolbar.className = 'memories-actions';
+		records.append(toolbar);
+		this.button(toolbar, localize({ bundle: 'ash.settings', key: 'memory.searchAction' }, 'Search'), () => this.loadList());
+		this.button(toolbar, localize({ bundle: 'ash.settings', key: 'memory.new' }, 'New memory'), () => this.newMemory());
+		this.button(toolbar, localize({ bundle: 'ash.settings', key: 'memory.refresh' }, 'Refresh'), () => this.refresh());
 		this.list = h(document, 'select');
 		this.list.size = 6;
-		this.field('Saved memories', this.list);
-		this.titleInput = this.input(localize('memories.title', 'Memory title'));
+		this.field(records, localize({ bundle: 'ash.settings', key: 'memory.savedMemories' }, 'Saved memories'), this.list);
+		this.next = this.button(records, localize({ bundle: 'ash.settings', key: 'memory.next' }, 'Next page'), () => this.loadList(this.cursor));
+		this.titleInput = this.input(detail, localize('memories.title', 'Memory title'));
 		this.titleInput.maxLength = 256;
 		this.body = h(document, 'textarea');
 		this.body.rows = 8;
-		this.field(localize('memories.body', 'Memory content'), this.body);
+		this.field(detail, localize('memories.body', 'Memory content'), this.body);
 		const actions = h(document, 'div');
 		actions.className = 'memories-actions';
-		this.save = this.button(localize('memories.saveAction', 'Save memory'), () => this.saveMemory());
-		this.remove = this.button('Delete memory', () => this.deleteMemory());
-		this.openSource = this.button(localize('memories.openSource', 'Open source conversation'), async () => {
+		detail.append(actions);
+		this.save = this.button(actions, localize('memories.saveAction', 'Save memory'), () => this.saveMemory());
+		this.remove = this.button(actions, localize({ bundle: 'ash.settings', key: 'memory.delete' }, 'Delete memory'), () => this.deleteMemory());
+		this.openSource = this.button(actions, localize('memories.openSource', 'Open source conversation'), async () => {
 			const origin = this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin;
-			if (origin) { await this.sessions.openConversation(origin.sessionId, origin.threadId); }
+			if (!origin || !await this.discardDraft()) { return; }
+			await closeSettings();
+			await this.sessions.openConversation(origin.sessionId, origin.threadId);
 		});
-		actions.append(this.save, this.remove, this.openSource);
-		this.contentElement.append(actions);
-		this.reference = this.input('Memory reference');
-		this.contentElement.append(this.button('Open reference', () => this.openReference(this.reference.value)));
+		this.reference = this.input(detail, localize({ bundle: 'ash.settings', key: 'memory.reference' }, 'Memory reference'));
+		this.button(detail, localize({ bundle: 'ash.settings', key: 'memory.openReference' }, 'Open reference'), () => this.readReference(this.reference.value));
+		this._register(new Button(detail, {
+			...defaultButtonStyles, presentation: 'secondary',
+			label: localize({ bundle: 'ash.settings', key: 'memory.helpAction' }, 'Help'),
+			onClick: () => { accessibleView.show(AccessibleViewType.Help); },
+		}));
 		this._register(addDisposableListener(this.context, 'change', () => { void this.perform(async () => { if (!await this.discardDraft()) { this.context.value = this.contextId; return; } this.contextId = this.context.value; this.policy = undefined; await this.newMemory(); await this.refresh(); }); }));
 		this._register(addDisposableListener(this.scope, 'change', () => { void this.perform(() => this.selectScope()); }));
 		this._register(addDisposableListener(this.list, 'change', () => { void this.perform(() => this.selectMemory()); }));
@@ -118,8 +173,7 @@ export class MemoriesViewPane extends ViewPane {
 		this._register(addDisposableListener(this.saving, 'change', () => { void this.perform(() => this.changePolicy()); }));
 		this._register(addDisposableListener(this.titleInput, 'input', () => { this.dirty = true; }));
 		this._register(addDisposableListener(this.body, 'input', () => { this.dirty = true; }));
-		this._register(addDisposableListener(this.contentElement, 'keydown', event => {
-			if ((event.ctrlKey || event.metaKey) && event.key === 's') { event.preventDefault(); void this.perform(() => this.saveMemory()); }
+		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key === 'Enter' && event.target === this.search) { event.preventDefault(); void this.perform(() => this.loadList()); }
 		}));
 		this._register(memories.onDidChange(() => { if (this.working) { return; } this.status.textContent = localize('memories.changed', 'Memories changed. Refresh to load the latest version; your draft is kept.'); }));
@@ -127,22 +181,9 @@ export class MemoriesViewPane extends ViewPane {
 		this.applyEnabled();
 	}
 
-	public override setVisible(visible: boolean): void {
-		super.setVisible(visible);
-		if (visible && !this.policy) {
-			this.refreshContexts();
-			void this.perform(() => this.refresh());
-		}
-	}
-	public override focus(): void {
-		this.scope.focus();
-		if (this.configuration.getValue<boolean>('accessibility.verbosity.memories')) {
-			this.status.textContent = localize('memories.hint', 'Memories. Use Tab to navigate, Ctrl or Command+S to save, and Alt+F1 for help.');
-		}
+	public initialize(): void {
 		if (!this.policy) { void this.perform(() => this.refresh()); }
 	}
-
-	public saveDraft(): Promise<void> { return this.perform(() => this.saveMemory()); }
 
 	public async openProjectDraft(origin: MemoryTurnSource, text: string): Promise<void> {
 		while (this.operation) { await this.operation; }
@@ -171,19 +212,21 @@ export class MemoriesViewPane extends ViewPane {
 
 	public async openReference(reference: string): Promise<void> {
 		while (this.operation) { await this.operation; }
-		await this.perform(async () => {
-			if (!await this.discardDraft()) { return; }
-			const result = await this.memories.readReference(reference, this.namespace);
-			if (this.isDisposed) { return; }
-			this.selected = undefined;
-			this.draftOrigin = undefined;
-			this.referenceOrigin = result.origin;
-			this.showingReference = true;
-			this.titleInput.value = result.title;
-			this.body.value = result.body;
-			this.status.textContent = localize('memories.reference', 'Exact reference, revision {0}.', result.revision);
-			this.body.focus();
-		});
+		await this.perform(() => this.readReference(reference));
+	}
+
+	private async readReference(reference: string): Promise<void> {
+		if (!await this.discardDraft()) { return; }
+		const result = await this.memories.readReference(reference, this.namespace);
+		if (this.isDisposed) { return; }
+		this.selected = undefined;
+		this.draftOrigin = undefined;
+		this.referenceOrigin = result.origin;
+		this.showingReference = true;
+		this.titleInput.value = result.title;
+		this.body.value = result.body;
+		this.status.textContent = localize('memories.reference', 'Exact reference, revision {0}.', result.revision);
+		this.body.focus();
 	}
 
 	private refreshContexts(): void {
@@ -220,11 +263,15 @@ export class MemoriesViewPane extends ViewPane {
 			: availableScopes.filter(entry => entry.policy.scope.type !== 'chatProject');
 		const current = this.policy && JSON.stringify(this.policy.scope);
 		const index = scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === current);
-		this.setScopes(scopes, this.draftOrigin ? index : Math.max(index, 0));
+		this.setScopes(scopes, !scopes.length || this.draftOrigin ? index : Math.max(index, 0));
 		await this.loadList();
-		if (this.selected && !this.dirty) {
-			const entry = this.entries.find(entry => entry.id === this.selected?.id);
-			if (entry) { this.showMemory(await this.memories.read(entry)); }
+		const selected = this.selected;
+		if (selected && !this.dirty && this.policy && !this.isDisposed) {
+			const entry = this.entries.find(entry => entry.id === selected.id);
+			if (entry && entry.revision !== selected.revision) {
+				const memory = await this.memories.read(entry);
+				if (!this.isDisposed) { this.showMemory(memory); }
+			}
 		}
 	}
 	private setScopes(scopes: readonly MemoryScopeEntry[], index: number): void {
@@ -265,10 +312,12 @@ export class MemoriesViewPane extends ViewPane {
 		if (this.isDisposed || generation !== this.generation) { return; }
 		this.entries = page.memories;
 		this.cursor = page.cursor;
-		this.next.disabled = !page.cursor;
+		this.next.enabled = !(!page.cursor);
 		this.list.replaceChildren(...page.memories.map(entry => this.option(entry.title, entry.id)));
 		this.list.value = this.selected?.id ?? '';
-		this.status.textContent = localize('memories.count', '{0} memories on this page.', page.memories.length);
+		this.status.textContent = page.memories.length === 1
+			? localize({ bundle: 'ash.settings', key: 'memory.oneResult' }, '1 memory on this page.')
+			: localize('memories.count', '{0} memories on this page.', page.memories.length);
 	}
 	private async selectMemory(): Promise<void> {
 		const entry = this.entries.find(entry => entry.id === this.list.value);
@@ -289,8 +338,8 @@ export class MemoriesViewPane extends ViewPane {
 		this.body.readOnly = false;
 		this.titleInput.value = memory.title;
 		this.body.value = memory.body;
-		this.save.disabled = false;
-		this.remove.disabled = false;
+		this.save.enabled = true;
+		this.remove.enabled = true;
 		this.status.textContent = localize('memories.source', 'Saved by {0}, revision {1}. Editing makes this a user-owned memory.', memory.source, memory.revision);
 	}
 	private async newMemory(): Promise<void> {
@@ -305,8 +354,8 @@ export class MemoriesViewPane extends ViewPane {
 		this.body.value = '';
 		this.titleInput.readOnly = false;
 		this.body.readOnly = false;
-		this.save.disabled = !this.policy;
-		this.remove.disabled = true;
+		this.save.enabled = !(!this.policy);
+		this.remove.enabled = false;
 		this.list.value = '';
 		this.titleInput.focus();
 	}
@@ -351,65 +400,61 @@ export class MemoriesViewPane extends ViewPane {
 		const previousFocus = document.activeElement;
 		this.working = true;
 		this.applyEnabled();
-		this.contentElement.setAttribute('aria-busy', 'true');
-		const progress = this.getProgressIndicator().show(true, 150);
+		this.element.setAttribute('aria-busy', 'true');
 		try {
 			await operation();
 		} catch (error) {
 			if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); }
 		} finally {
-			progress.done();
 			this.working = false;
-			this.contentElement.removeAttribute('aria-busy');
+			this.element.removeAttribute('aria-busy');
 			if (!this.isDisposed) {
 				this.applyEnabled();
 				if (document.activeElement === document.body && previousFocus instanceof HTMLElement
-					&& this.contentElement.contains(previousFocus)) {
+					&& this.element.contains(previousFocus)) {
 					previousFocus.focus();
 				}
 			}
 		}
 	}
-	private async showHelp(): Promise<void> {
-		this.accessibleView.show(AccessibleViewType.Help);
-	}
 	private applyEnabled(): void {
-		for (const control of this.contentElement.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | HTMLSelectElement>('input, textarea, button, select')) {
+		for (const control of this.element.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | HTMLSelectElement>('input, textarea, button, select')) {
 			if (control instanceof HTMLTextAreaElement || (control instanceof HTMLInputElement && control.type !== 'checkbox')) {
 				control.disabled = false;
 				control.readOnly = this.working || (this.showingReference && (control === this.body || control === this.titleInput));
 			} else { control.disabled = this.working; }
 		}
-		this.save.disabled = this.working || !this.policy || this.showingReference;
-		this.remove.disabled = this.working || !this.selected || this.showingReference;
-		this.next.disabled = this.working || !this.cursor;
+		this.save.enabled = !(this.working || !this.policy || this.showingReference);
+		this.remove.enabled = !(this.working || !this.selected || this.showingReference);
+		this.next.enabled = !(this.working || !this.cursor);
 		this.reading.disabled = this.working || !this.policy;
 		this.saving.disabled = this.working || !this.policy;
-		this.openSource.hidden = !(this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin);
+		this.openSource.enabled = !this.working;
+		this.openSource.domNode.hidden = !(this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin);
 	}
 	private option(label: string, value: string): HTMLOptionElement {
 		const option = h(this.element.ownerDocument, 'option'); option.textContent = label; option.value = value; return option;
 	}
-	private field(text: string, control: HTMLElement): void {
+	private field(container: HTMLElement, text: string, control: HTMLElement): void {
 		const label = h(this.element.ownerDocument, 'label');
 		const caption = h(this.element.ownerDocument, 'span');
 		caption.id = `memory-field-${generateUuid()}`;
 		caption.textContent = text;
 		control.setAttribute('aria-labelledby', caption.id);
 		label.append(caption, control);
-		this.contentElement.append(label);
+		if (control instanceof HTMLInputElement && control.type === 'checkbox') { label.className = 'memories-permission'; }
+		container.append(label);
 	}
-	private input(label: string, type = 'text'): HTMLInputElement {
+	private input(container: HTMLElement, label: string, type = 'text'): HTMLInputElement {
 		const input = h(this.element.ownerDocument, 'input');
 		input.type = type;
-		this.field(label, input);
+		this.field(container, label, input);
 		return input;
 	}
-	private button(label: string, action: () => Promise<void>): HTMLButtonElement {
-		const button = h(this.element.ownerDocument, 'button');
-		button.type = 'button';
-		button.textContent = label;
-		this._register(addDisposableListener(button, 'click', () => { void this.perform(action); }));
-		return button;
+	private button(container: HTMLElement, label: string, action: () => Promise<void>): Button {
+		return this._register(new Button(container, {
+			...defaultButtonStyles, label, presentation: 'secondary',
+			onClick: () => { void this.perform(action); },
+		}));
 	}
 }

@@ -92,9 +92,8 @@ import '../workbench/contrib/tasks/browser/task.contribution.js';
 import { registerOutputView } from '../workbench/contrib/output/browser/output.contribution.js';
 import { registerCollabViews } from '../workbench/contrib/collab/browser/collab.contribution.js';
 import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
-import { registerMemoriesView } from '../workbench/contrib/memories/browser/memories.contribution.js';
+import { registerMemoryManagement } from '../workbench/contrib/memories/browser/memories.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
-import { ViewContainerLocation } from '../workbench/common/views.js';
 import { Lxicon } from '../base/common/lxicons.js';
 import { MenusRegistry } from '../platform/actions/common/actions.js';
 import { ICommandService } from '../platform/commands/common/commands.js';
@@ -126,7 +125,4 @@ registerOutputView(SessionsViewRegistry);
 
 registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);
-registerMemoriesView(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar, {
-	code: SessionsWorkspaceModeContext.isEqualTo('code'),
-	chat: SessionsWorkspaceModeContext.isEqualTo('chat'),
-});
+registerMemoryManagement(SessionsWorkspaceModeContext.isEqualTo('chat'));

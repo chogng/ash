@@ -7,7 +7,7 @@ import '../platform/uriIdentity/common/uriIdentityService.js';
 import './contrib/chat/browser/chat.shared.contribution.js';
 import './contrib/advisor/browser/advisor.contribution.js';
 import './contrib/terminal/terminal.all.js';
-import { registerMemoriesView } from './contrib/memories/browser/memories.contribution.js';
+import { registerMemoryManagement } from './contrib/memories/browser/memories.contribution.js';
 import './contrib/memory/browser/memory.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
 import './contrib/issue/browser/issue.contribution.js';
@@ -87,7 +87,7 @@ import { Disposable } from '../base/common/lifecycle.js';
 
 registerCollabViews();
 registerCallView();
-registerMemoriesView();
+registerMemoryManagement();
 
 registerWorkbenchContribution(
 	'code.contrib.appServerSyntax',
