@@ -414,7 +414,7 @@ declare global {
 			selectDirectory(value: string): void; help(): { help: string; view: string; }; rejectSave(): void;
 			remoteEdit(): Promise<void>; disconnect(): void; reopen(): Promise<unknown>; stops(): number; finish(): Promise<void>;
 			back(): void; forward(): void; openDraft(): void; selectedTitle(): string | undefined;
-			failHistory(): void; retryHistory(): Promise<void>; deferRun(): void; failRun(): Promise<void>;
+			failHistory(): void; recoverHistory(): void; deferRun(): void; failRun(): Promise<void>;
 		};
 	}
 }
@@ -438,7 +438,7 @@ window.ashAutomations = {
 	selectDirectory(value) { directory = value; },
 	rejectSave() { rejectSave = true; },
 	failHistory() { historyUnavailable = true; },
-	async retryHistory() { historyUnavailable = false; await services.get(IAutomationService).refresh(); },
+	recoverHistory() { historyUnavailable = false; },
 	deferRun() { deferNextRun = true; },
 	async failRun() { run = { ...run, status: 'failed', message: 'Could not create session' }; await services.get(IAutomationService).refresh(); },
 	back() { return sessions.openPreviousSession(); },

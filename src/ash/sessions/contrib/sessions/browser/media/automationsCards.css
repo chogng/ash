@@ -1,35 +1,31 @@
 .ash-sessions-window
-	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"] {
-	padding-block: var(--ash-spacing-size320);
-}
-.ash-sessions-window
-	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
+	.ash-custom-view-page:is(
+		[data-custom-view-id="sessions.customView.automations"],
+		[data-custom-view-id="sessions.customView.scheduled"]
+	) {
+	.ash-custom-view-body {
+		padding-block-end: var(--ash-spacing-size320);
+	}
+
 	.ash-custom-view-header {
-	flex-direction: row;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
-	margin-bottom: var(--ash-spacing-size320);
-}
-.ash-sessions-window
-	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
-	.ash-custom-view-header
-	h1 {
-	flex: 1 1 180px;
-	font-size: var(--ash-fontSize-heading2);
-}
-.ash-sessions-window
-	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
-	.ash-custom-view-header
-	> p {
-	order: 3;
-	flex-basis: 100%;
-	line-height: 1.5;
-}
-.ash-sessions-window
-	.ash-custom-view-page[data-custom-view-id="sessions.customView.automations"]
-	.ash-custom-view-actions {
-	gap: var(--ash-spacing-size80);
+		flex-direction: row;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
+		padding-block-start: var(--ash-spacing-size320);
+		margin-bottom: var(--ash-spacing-size320);
+
+		> h1 {
+			flex: 1 1 auto;
+			font-size: var(--ash-fontSize-heading2);
+		}
+
+		> p {
+			order: 3;
+			flex-basis: 100%;
+			line-height: 1.5;
+		}
+	}
 }
 .ash-sessions-window .ash-automations {
 	display: flex;
@@ -68,6 +64,10 @@
 	font-size: var(--ash-fontSize-label1);
 }
 .ash-sessions-window .ash-automation-notice {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 	color: var(--ash-description-foreground);
 	background: var(--ash-list-hoverBackground);

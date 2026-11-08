@@ -1,26 +1,33 @@
-.ash-sessions-window .ash-custom-view-grid > .ash-workbench-part-content {
+.ash-sessions-window .ash-custom-view-page {
 	display: flex;
+	flex-direction: column;
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
+	background: var(--ash-sessions-conversation-background);
 }
+
 .ash-sessions-window .ash-custom-view-scroll {
 	flex: 1;
-	min-width: 0;
-	min-height: 0;
 }
-.ash-sessions-window .ash-custom-view-page {
+
+.ash-sessions-window .ash-custom-view-header,
+.ash-sessions-window .ash-custom-view-body {
 	box-sizing: border-box;
 	margin-inline: auto;
-	padding: 24px;
+	padding-inline: var(--ash-spacing-size240);
 	width: 100%;
 }
+
 .ash-sessions-window .ash-custom-view-header {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
-	margin-bottom: 24px;
+	flex: none;
+	gap: var(--ash-spacing-size120);
+	padding-block-start: var(--ash-spacing-size240);
+	margin-bottom: var(--ash-spacing-size240);
 }
+
 .ash-sessions-window .ash-custom-view-header h1 {
 	font-size: var(--ash-fontSize-heading1);
 	font-weight: var(--ash-fontWeight-semiBold);
@@ -34,24 +41,16 @@
 .ash-sessions-window .ash-custom-view-actions {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-window .ash-custom-view-body {
+	padding-block-end: var(--ash-spacing-size240);
 }
 
 .ash-sessions-window .ash-custom-view-fill,
-.ash-sessions-window .ash-custom-view-page.fills-content {
+.ash-sessions-window .ash-custom-view-fill > .ash-custom-view-body {
 	height: 100%;
-	min-height: 0;
-}
-
-.ash-sessions-window .ash-custom-view-page.fills-content {
-	display: flex;
-	flex-direction: column;
-}
-
-.ash-sessions-window .fills-content > .ash-custom-view-body {
-	flex: 1;
-	min-height: 0;
-	min-width: 0;
 }
 
 .ash-sessions-window .ash-custom-view-header.has-toolbar {
@@ -59,7 +58,9 @@
 	grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.ash-sessions-window .has-toolbar > .ash-custom-view-actions {
+.ash-sessions-window
+	.ash-custom-view-header.has-toolbar
+	> .ash-custom-view-actions {
 	grid-column: 2;
 	grid-row: 1;
 	align-self: center;
