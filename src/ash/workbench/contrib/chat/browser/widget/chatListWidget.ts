@@ -1,3 +1,4 @@
+import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import type { ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel, type PromptTurnChanges } from '../promptTimeline/promptTimelineModel.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
@@ -59,6 +60,7 @@ interface ChatListWidgetOptions {
 	/** The host owns its transcript layout; content parts keep their shared styles. */
 	readonly classPrefix?: string;
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 	readonly onDidRequestLink?: (target: string) => void;

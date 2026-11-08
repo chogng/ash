@@ -468,6 +468,7 @@ pub struct ConnectionState {
     tcp_streams: Arc<network_proxy::TcpStreams>,
     pub(super) connection_id: u64,
     authority: ConnectionAuthority,
+    chat_project_memories: bool,
     pub(crate) ide_attachment: Arc<crate::client_host::IdeAttachment>,
     state: Arc<Mutex<ConnectionMutableState>>,
     outbound_notifications: NotificationQueue,
@@ -532,6 +533,10 @@ impl ConnectionState {
 
     fn set_directory_grants_host(&self, supported: bool) {
         connection_state(self).directory_grants_host = supported;
+    }
+
+    fn allows_chat_project_memories(&self) -> bool {
+        self.chat_project_memories && !self.code_sessions_only()
     }
 
     fn allows_product_host_capabilities(&self) -> bool {
@@ -1650,10 +1655,16 @@ impl AppServer {
         mut self,
         database_path: &std::path::Path,
     ) -> Result<Self, String> {
-        let store: Arc<dyn memories::MemoryStore> = Arc::new(
-            ash_state::SqliteMemoryStore::open(database_path).map_err(|error| error.to_string())?,
-        );
-        self.memories = Some(Arc::new(memories::Memories::new(store)));
+        let store = match ash_state::SqliteMemoryStore::open(database_path) {
+            Ok(store) => store,
+            Err(error) => {
+                eprintln!(
+                    "App Server could not open Memories database at {database_path:?}: {error}"
+                );
+                return Ok(self);
+            }
+        };
+        self.memories = Some(Arc::new(memories::Memories::new(Arc::new(store))));
         self.with_memory_extension()
     }
 
@@ -1676,15 +1687,28 @@ impl AppServer {
         self.open_connection(ConnectionAuthority::ProductHost)
     }
 
+    pub(crate) fn agents_gateway_connection(&self) -> ConnectionState {
+        self.open_connection_for_surface(ConnectionAuthority::ProductHost, true)
+    }
+
     fn browser_connection(&self) -> ConnectionState {
         self.open_connection(ConnectionAuthority::Browser)
     }
 
     fn open_connection(&self, authority: ConnectionAuthority) -> ConnectionState {
+        self.open_connection_for_surface(authority, false)
+    }
+
+    fn open_connection_for_surface(
+        &self,
+        authority: ConnectionAuthority,
+        chat_project_memories: bool,
+    ) -> ConnectionState {
         let connection = ConnectionState {
             outbound_notifications: NotificationQueue::before_initialize(),
             connection_id: self.updates.allocate_connection_id(),
             authority,
+            chat_project_memories,
             ..ConnectionState::default()
         };
         self.updates.register(
@@ -1695,6 +1719,10 @@ impl AppServer {
             ),
             &connection.outbound_notifications,
         );
+        if chat_project_memories {
+            self.updates
+                .enable_chat_memory_notifications(connection.connection_id);
+        }
         connection
     }
 

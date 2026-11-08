@@ -1,3 +1,4 @@
+import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import type { ChatResponseActions } from './chatListRenderer.js';
 import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -64,6 +65,7 @@ import { ChatViewWelcomePart } from '../viewsWelcome/chatViewWelcomeController.j
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly thread?: import('../../../../services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	/** The same notification can identify an isolated text append for the transcript. */
@@ -297,6 +299,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestLink: (target: string) => {
 				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error('Could not open Markdown link', error));
 			},
+			memoryNamespace: model.memoryNamespace,
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		});

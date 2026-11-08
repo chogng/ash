@@ -57,6 +57,7 @@ pub struct StateRuntime {
     profile_root: PathBuf,
     database_path: PathBuf,
     connectors_database_path: PathBuf,
+    memories_database_path: PathBuf,
     cloud_codebase_root: PathBuf,
     writer_leases_root: PathBuf,
     cache_root: PathBuf,
@@ -81,6 +82,7 @@ impl StateRuntime {
         Ok(Self {
             database_path: profile_root.join("state.sqlite3"),
             connectors_database_path: profile_root.join("connectors.sqlite3"),
+            memories_database_path: profile_root.join("memories.sqlite3"),
             cloud_codebase_root: profile_root.join("state").join("cloud-codebase"),
             writer_leases_root: profile_root.join("leases"),
             profile_root,
@@ -96,7 +98,7 @@ impl StateRuntime {
         &self.profile_root
     }
 
-    /// Returns the single durable profile database path.
+    /// Returns the shared profile database path.
     pub fn database_path(&self) -> &Path {
         &self.database_path
     }
@@ -104,6 +106,11 @@ impl StateRuntime {
     /// Returns the durable Connector authority database path for this profile.
     pub fn connectors_database_path(&self) -> &Path {
         &self.connectors_database_path
+    }
+
+    /// Returns the database for Memories, independent of the legacy Memories tables.
+    pub fn memories_database_path(&self) -> &Path {
+        &self.memories_database_path
     }
 
     /// Returns the root containing durable Cloud Codebase state for this profile.

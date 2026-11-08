@@ -1,3 +1,4 @@
+import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import { ChatGoalBannerWidget } from '../../../../../workbench/contrib/chat/browser/widget/input/chatGoalBannerWidget.js';
 import { ChatQueueEditor } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatRequestOriginPart } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatRequestOriginPart.js';
@@ -47,6 +48,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface ICoworkWidgetModel extends IDisposable {
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly thread?: import('../../../../../workbench/services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangePresentation?: Event<ChatStreamingResponseUpdate | void>;
@@ -142,6 +144,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			imageResourceLoader,
 			classPrefix: 'ash-cowork',
+			get memoryNamespace() { return model.memoryNamespace; },
 			mcpAppDelegate: {
 				updateModelContext: (source, text, images = []) => {
 					const id = this.appContextId(source);

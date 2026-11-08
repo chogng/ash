@@ -126,4 +126,7 @@ registerOutputView(SessionsViewRegistry);
 
 registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);
-registerMemoriesView(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar, SessionsWorkspaceModeContext.isEqualTo('code'));
+registerMemoriesView(SessionsViewRegistry, ViewContainerLocation.AuxiliaryBar, {
+	code: SessionsWorkspaceModeContext.isEqualTo('code'),
+	chat: SessionsWorkspaceModeContext.isEqualTo('chat'),
+});

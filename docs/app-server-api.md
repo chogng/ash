@@ -108,7 +108,7 @@ Session 是按 `sessionId` 聚合 Thread 的只读树视图，不保存独立状
 
 Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。一次多 Agent 工作只由同一 Session 的 Agent tree 表达。目标 Team 另存跨任务成员关系和任务引用，不建立跨 Session 的执行树；见 [Agent Team](../crates/docs/agent-teams.md)。
 
-Memory 是供 Code 使用的独立 profile 持久化领域。它不属于 Thread transcript，也不因 Session 关闭而删除；Profile、Project 和 Dir 作用域使用各自稳定身份，Dir 作用域不保存路径。
+Memory 是独立 profile 持久化领域。Code 与 Chat 项目记忆按命名空间隔离。它不属于 Thread transcript，也不因 Session 关闭而删除；Profile、Project 和 Dir 作用域使用各自稳定身份，Dir 作用域不保存路径。
 
 ## 2. 一致性模型
 
@@ -456,9 +456,9 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 
 ### Memory
 
-`initialize.capabilities.memories` 表示当前 App Server 安装了 Code Memory 后端。所有 `memory/*` 方法只接受服务端授予的产品 host 连接；协议对端不能通过 initialize 参数提升权限。Chat Session 没有可用的本地 Memory 作用域。Project Memory 只接受 Code Project。
+`initialize.capabilities.memories` 表示当前 App Server 安装了 Memory 后端。所有 `memory/*` 方法只接受服务端授予的产品 host 连接；协议对端不能通过 initialize 参数提升权限。Code 项目作用域为 `{type: "project", projectId}`，只接受 Code Project。Ash Chat 项目作用域为 `{type: "chatProject", projectId}`，管理接口和变更通知只开放给本地 Agent Window 的 profile 连接。同一个 Project 下，Code 和 Chat Session 分别只获得自己类型的项目作用域。
 
-`config/update.features.memories` 是记忆总开关，默认关闭；`config/read.features` 返回其有效值与来源。关闭后模型的自动召回、搜索、引用读取和保存不可用；用户显式管理与各范围授权保留。每次准备上下文和执行模型记忆操作都重新检查当前配置。
+`config/update.features.memories` 是 Code 模型记忆开关，默认关闭；`config/read.features` 返回其有效值与来源。关闭后 Code 模型的自动召回、搜索、引用读取和保存不可用；用户显式管理与各范围授权保留。每次准备上下文和执行 Code 模型记忆操作都重新检查当前配置。Ash Chat 只使用已授权的项目记忆，读取与模型保存策略独立，默认关闭。
 
 支持用户显式 add、update、list、read、search、delete、精确引用读取，以及独立授权的自动读取和模型保存。模型整理通过当前 Turn 的 `memories-save` 完成。add/update/delete 使用稳定 `commandId`；相同输入重放不会重复发布 `memory/changed`。删除后 live row、命令回执和 tombstone 都不保留 title/body，tombstone 只阻止 Memory ID 被重新使用。旧 add command 在删除后返回 `MemoryNotFound`，不会恢复正文。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责，当前接口不把逻辑删除描述为介质擦除。
 
@@ -466,19 +466,19 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 
 list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision、精确作用域和搜索 query；任一 Memory 变化后继续使用旧 cursor 返回 `MemoryCursorStale`。list 不返回正文，search 返回命中位置附近最多 1024 UTF-8 字节的摘录及 citation，read 返回完整的最多 16 KiB 正文。
 
-| Method                 | 输入                                                                    | 结果与行为                                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `memory/scopes`        | 可选 `threadId`                                                         | 返回 scope 标签和当前 policy；无 Thread 时返回 Code Profile，Code Thread 返回关联作用域，Chat Thread 返回空列表          |
-| `memory/update`        | `commandId`、`memoryId`、`scope`、`expectedRevision`、`title`、`body`   | 更新精确版本并推进 revision，来源转为 user；保留创建时间，旧引用失效                                                     |
-| `memory/citation/read` | `citation`                                                              | 返回相同引用、title、source、body；引用包含 `namespace: "code"`、`memoryId`、`scope`、`revision`、`startByte`、`endByte` |
-| `memory/policy/read`   | `scope`                                                                 | 返回 `scope`、`revision`、`automaticRead`、`modelWrite`；未配置时 revision 为 0，读取和模型保存均关闭                    |
-| `memory/policy/update` | `commandId`、`scope`、`expectedRevision`、`automaticRead`、`modelWrite` | 返回 disposition、catalogRevision、policy；读取为 `disabled` / `firstInvocation`，模型保存为 `disabled` / `enabled`      |
+| Method                 | 输入                                                                    | 结果与行为                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory/scopes`        | 可选 `threadId`                                                         | 返回 scope 标签和当前 policy；无 Thread 时返回 Code Profile，Code Thread 返回关联作用域，Agent Window 的 Chat Thread 返回关联的 Chat 项目作用域 |
+| `memory/update`        | `commandId`、`memoryId`、`scope`、`expectedRevision`、`title`、`body`   | 更新精确版本并推进 revision，来源转为 user；保留创建时间，旧引用失效                                                                            |
+| `memory/citation/read` | `citation`                                                              | 返回相同引用、title、source、body；引用包含 `namespace`（`code` 或 `chat`）、`memoryId`、`scope`、`revision`、`startByte`、`endByte`            |
+| `memory/policy/read`   | `scope`                                                                 | 返回 `scope`、`revision`、`automaticRead`、`modelWrite`；未配置时 revision 为 0，读取和模型保存均关闭                                           |
+| `memory/policy/update` | `commandId`、`scope`、`expectedRevision`、`automaticRead`、`modelWrite` | 返回 disposition、catalogRevision、policy；读取为 `disabled` / `firstInvocation`，模型保存为 `disabled` / `enabled`                             |
 
 引用范围是半开 UTF-8 字节区间，不能切开字符；`memory:` 引用文本是相同 citation JSON 的 URL-safe Base64 编码。引用不授予读取权限。已删除引用返回 `MemoryNotFound`，版本不符返回 `MemoryConflict`，无效范围返回 `InvalidParams`。
 
 读取与模型保存授权由 Memory 领域独立持久化。每次成功修改增加该作用域 policy revision 与 catalog revision，并发布不含正文的 `memory/changed`；并发旧版本返回 `MemoryConflict`。重放返回原命令结果且不重复应用，关闭授权后重放旧开启命令不会重新启用；客户端重连后重新读取 policy。
 
-开启 `firstInvocation` 后，每个 Turn 的首次模型调用按当前任务关联的活跃 Project、Thread 绑定目录、Session 已授权读取的目录及 Profile 检索；每个作用域都必须单独开启。Project 关联本身不授予目录权限。最多处理 32 个作用域、输入前 2048 个字符中的 16 个查询词、64 条候选；最终最多 8 条、单条正文 4 KiB、正文合计 16 KiB，并继续接受 Core 的模型预算限制。
+开启 `firstInvocation` 后，每个 Turn 的首次模型调用只在当前命名空间内检索。Chat 使用当前会话关联的活跃 Project，Code 使用关联的活跃 Code Project、当前 Team、已授权目录和个人记忆。每个作用域都必须单独开启。Project 关联本身不授予目录权限。最多处理 32 个作用域、输入前 2048 个字符中的 16 个查询词、64 条候选；最终最多 8 条、单条正文 4 KiB、正文合计 16 KiB，并继续接受 Core 的模型预算限制。
 
 自动召回在当前查询未命中 Project 记忆时，从已获读取授权的关联 Project 取最近更新的最多 3 条作为索引，每条正文至多 320 字节，并计入同一预算。显式搜索仍按查询词返回命中。
 

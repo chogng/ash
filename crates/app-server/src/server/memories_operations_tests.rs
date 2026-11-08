@@ -92,6 +92,8 @@ fn project_memory_from_message_keeps_verified_source_and_user_ownership() {
             0,
             ash_projects::ProjectCommand::Create {
                 scope: Some(ash_projects::ProjectScope::Code),
+                icon: None,
+                color: None,
                 name: "Demo".into(),
                 description: String::new(),
                 materials: Vec::new(),
@@ -143,6 +145,101 @@ fn project_memory_from_message_keeps_verified_source_and_user_ownership() {
     assert_eq!(
         edited["result"]["memory"]["source"]["userFromTurn"], origin,
         "{edited}"
+    );
+}
+
+#[test]
+fn chat_project_memory_requires_the_agents_profile_connection() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
+    )
+    .with_ephemeral_env_state()
+    .with_local_projects(&path)
+    .unwrap()
+    .with_local_memories(&path)
+    .unwrap();
+    let mut agents = server.agents_gateway_connection();
+    let mut ide = server.product_host_connection();
+    let mut id = 0;
+    let mut call = |host: &mut crate::server::ConnectionState, method, params| {
+        id += 1;
+        crate::tests::call(
+            &server,
+            host,
+            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        )
+    };
+    for host in [&mut agents, &mut ide] {
+        assert!(
+            call(
+                host,
+                "initialize",
+                json!({"clientInfo":{"name":"test","version":"1"}})
+            )
+            .get("result")
+            .is_some()
+        );
+    }
+    let project_id = "chat-project";
+    let created = call(
+        &mut agents,
+        "project/create",
+        json!({
+            "commandId":"create-project","projectId":project_id,"scope":"chat",
+            "name":"Chat project","description":"","materials":[]
+        }),
+    );
+    assert!(created.get("result").is_some(), "{created}");
+    let scope = json!({"type":"chatProject","projectId":project_id});
+    let add = json!({
+        "commandId":"remember-chat","memoryId":"chat-note","scope":scope,
+        "title":"Chat decision","body":"Use the golden sample"
+    });
+    assert_eq!(
+        call(&mut ide, "memory/add", add.clone())["error"]["message"],
+        "PermissionRequired"
+    );
+    assert_eq!(
+        call(&mut agents, "memory/add", add)["result"]["memory"]["scope"],
+        scope
+    );
+    let read = json!({"scope":scope,"memoryId":"chat-note"});
+    assert_eq!(
+        call(&mut ide, "memory/read", read.clone())["error"]["message"],
+        "PermissionRequired"
+    );
+    assert_eq!(
+        call(&mut agents, "memory/read", read)["result"]["body"],
+        "Use the golden sample"
+    );
+    let citation = call(
+        &mut agents,
+        "memory/search",
+        json!({"scope":scope,"query":"golden"}),
+    )["result"]["matches"][0]["citation"]
+        .clone();
+    assert_eq!(citation["namespace"], "chat");
+    assert_eq!(
+        call(
+            &mut ide,
+            "memory/citation/read",
+            json!({"citation":citation})
+        )["error"]["message"],
+        "PermissionRequired"
+    );
+    assert_eq!(
+        call(
+            &mut agents,
+            "memory/list",
+            json!({"scope":{"type":"project","projectId":project_id}})
+        )["error"]["message"],
+        "PermissionRequired"
     );
 }
 

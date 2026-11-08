@@ -308,7 +308,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
     let (outbound, incoming) = crate::server::message_queue::outbound_queue(256);
     thread::scope(|scope| {
         let requests = RequestDispatcher::start(scope)?;
-        let profile_connection = profile_server.product_host_connection();
+        let profile_connection = profile_server.agents_gateway_connection();
         let wire_connection = profile_connection.clone();
         let writer_telemetry = profile_server.telemetry.clone();
         let writer_handle = scope.spawn(move || {

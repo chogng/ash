@@ -1201,6 +1201,7 @@ fn kind(scope: &MemoryScope) -> Option<usize> {
     match scope {
         MemoryScope::Profile => Some(0),
         MemoryScope::Project { .. } => Some(1),
+        MemoryScope::ChatProject { .. } => None,
         MemoryScope::Team { .. } => None,
         MemoryScope::Dir { .. } => None,
     }

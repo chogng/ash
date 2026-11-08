@@ -7,8 +7,8 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { localize } from '../../../nls.js';
-import { parseCodeMemoryReference } from '../common/memoriesService.js';
-import type { IMemoriesService, Memory, MemoryConversationSource, MemoryPage, MemoryPolicy, MemoryReference, MemoryScope, MemoryScopeEntry, MemorySummary, MemoryTurnSource } from '../common/memoriesService.js';
+import { parseMemoryReference } from '../common/memoriesService.js';
+import type { IMemoriesService, Memory, MemoryConversationSource, MemoryNamespace, MemoryPage, MemoryPolicy, MemoryReference, MemoryScope, MemoryScopeEntry, MemorySummary, MemoryTurnSource } from '../common/memoriesService.js';
 
 export class AppServerMemoriesService extends Disposable implements IMemoriesService {
 	private readonly changed = this._register(new Emitter<void>());
@@ -94,9 +94,9 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 		this.markMutation(result.catalogRevision);
 		return policy(result.policy);
 	}
-	public async readReference(reference: string): Promise<MemoryReference> {
-		const citation = parseCodeMemoryReference(reference);
-		if (!citation) { throw new Error(localize('memories.codeReferenceRequired', 'Enter a complete Code memory reference.')); }
+	public async readReference(reference: string, namespace: MemoryNamespace): Promise<MemoryReference> {
+		const citation = parseMemoryReference(reference, namespace);
+		if (!citation) { throw new Error(localize('memories.scopedReferenceRequired', 'Enter a complete memory reference for this mode.')); }
 		const params = decodeAppServerRequestParams('memory/citation/read', { citation });
 		const result = await this.client.request(APP_SERVER_METHODS['memory/citation/read'], params).catch(explain);
 		return {

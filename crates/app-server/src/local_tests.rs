@@ -341,6 +341,122 @@ fn run_local_git(root: &Path, arguments: &[&str]) -> String {
 }
 
 #[test]
+fn local_composition_starts_memories_with_a_legacy_profile() {
+    let profile = tempfile::tempdir().unwrap();
+    let state = ash_state::StateRuntime::open(profile.path()).unwrap();
+    let legacy = ash_state::open_sqlite_database(
+        state.database_path(),
+        ash_state::SqliteDurability::Durable,
+    )
+    .unwrap();
+    legacy
+        .execute_batch(
+            "CREATE TABLE ash_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );
+             INSERT INTO ash_schema_migrations VALUES ('memories', 3);",
+        )
+        .unwrap();
+
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills(),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut connection = server.product_host_connection();
+    let mut call = |id, method, params| {
+        local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
+        )
+    };
+    let initialized = call(
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo": {"name": "test", "version": "1"}}),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let listed = call(
+        2,
+        "memory/list",
+        serde_json::json!({"scope": {"type": "profile"}}),
+    );
+    assert_eq!(
+        listed["result"]["memories"],
+        serde_json::json!([]),
+        "{listed}"
+    );
+    let version: u32 = legacy
+        .query_row(
+            "SELECT version FROM ash_schema_migrations WHERE component = 'memories'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, 3);
+}
+
+#[test]
+fn local_composition_starts_with_an_unsupported_memories_database() {
+    let profile = tempfile::tempdir().unwrap();
+    let state = ash_state::StateRuntime::open(profile.path()).unwrap();
+    let memories = ash_state::open_sqlite_database(
+        state.memories_database_path(),
+        ash_state::SqliteDurability::Durable,
+    )
+    .unwrap();
+    memories
+        .execute_batch(
+            "CREATE TABLE ash_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );
+             INSERT INTO ash_schema_migrations VALUES ('memories', 4294967295);",
+        )
+        .unwrap();
+
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills(),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut connection = server.product_host_connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "clientInfo":{"name":"test","version":"1"}
+        }}),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let listed = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"memory/list","params":{
+            "scope":{"type":"profile"}
+        }}),
+    );
+    assert_eq!(
+        listed["error"]["data"]["kind"], "MemoryUnavailable",
+        "{listed}"
+    );
+    let version: u32 = memories
+        .query_row(
+            "SELECT version FROM ash_schema_migrations WHERE component = 'memories'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, u32::MAX);
+}
+
+#[test]
 fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     let profile = tempfile::tempdir().unwrap();
     let server = open_app_server(
