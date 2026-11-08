@@ -282,15 +282,22 @@ impl GitClient {
         repository: &GitRepository,
         checkout_root: &Path,
     ) -> GitResult<()> {
-        if !checkout_root.is_absolute() || checkout_root == repository.worktree_root() {
+        if !checkout_root.is_absolute()
+            || (checkout_root == repository.worktree_root()
+                && repository.kind() != crate::GitRepositoryKind::LinkedWorktree)
+        {
             return Err(GitError::InvalidConfiguration {
                 field: "linked worktree removal path",
-                requirement: "must identify another absolute checkout",
+                requirement: "must identify an absolute linked checkout",
             });
         }
+        // Use the shared metadata as the working directory so the command can remove
+        // the very checkout from which the repository was opened, including on Windows.
         self.run_mutation(
-            repository.worktree_root(),
+            repository.common_dir(),
             [
+                OsString::from("--git-dir"),
+                repository.common_dir().as_os_str().to_owned(),
                 OsString::from("worktree"),
                 OsString::from("remove"),
                 checkout_root.as_os_str().to_owned(),

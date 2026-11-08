@@ -612,7 +612,7 @@ suite('changes browser component', () => {
 		await form.getByRole('button', { name: 'Create pull request' }).click();
 		await expect(form).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.created())).toEqual([{ repository: { host: 'github.com', owner: 'team', name: 'repo', accountId: 'account' }, request: { title: 'Reviewed change', body: 'Why this change is needed', head: 'feature', base: 'release', draft: true } }]);
-		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.attached())).toEqual([{ sessionId: 'session', reference: { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 8 } }]);
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.attached())).toEqual([{ sessionId: 'session', reference: { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 8, isArtifact: true } }]);
 		expect(errors).toEqual([]);
 	});
 
@@ -738,7 +738,7 @@ suite('session Code Review', () => {
 		expect(action).toBe('start');
 		expect(request.commandId).toMatch(/^ash-code-review-/);
 		expect(JSON.parse(request.contexts[0]!.content)).toMatchObject([
-			{ line: 2, code: 'Original\nReviewed\nThird', feedback: 'Explain this replacement' },
+			{ repositoryId: 'repository', path: 'src/a-long-directory-name/main.ts', line: 2, code: 'Original\nReviewed\nThird', feedback: 'Explain this replacement' },
 			{ line: 1, endLine: 3, feedback: 'Keep the order' },
 		]);
 
@@ -761,5 +761,77 @@ suite('session Code Review', () => {
 			return diff.bottom <= comments.top && diff.height > 0 && comments.height > 0;
 		});
 		expect(stacked).toBe(true);
+	});
+
+	for (const scope of ['thread', 'lastTurn'] as const) {
+		test(`keeps repository identity for identical paths in the ${scope} comparison`, async function () {
+			const { page } = browserTests;
+			await page.goto('/changes.html');
+			await page.evaluate(() => window.ashChangesIntegration.openCodeReview({ multipleRepositories: true }));
+			const review = page.locator('#code-review');
+			await review.getByRole('combobox', { name: 'Comparison' }).selectOption(scope);
+			const composer = review.getByRole('textbox', { name: 'Comment for the agent' });
+			for (const repository of ['repository', 'nested-repository']) {
+				const label = `${repository}: src/a-long-directory-name/main.ts`;
+				await review.getByRole('combobox', { name: 'Jump to file' }).selectOption({ label });
+				const file = review.locator('.stanza-multi-diff-editor-section').filter({ has: page.getByRole('button', { name: `Collapse ${label}`, exact: true }) });
+				await file.locator('.stanza-diff-editor-side.modified .line-numbers').getByText('2', { exact: true }).hover({ force: true });
+				await file.getByRole('button', { name: 'Add comment on line 2' }).click();
+				await composer.fill('Same feedback');
+				await review.getByRole('button', { name: 'Save Draft' }).click();
+			}
+			await review.getByRole('button', { name: 'Send to Agent' }).click();
+			await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.agentRequests().length)).toBe(1);
+			const [entry] = await page.evaluate(() => window.ashChangesIntegration.agentRequests()) as [{ request: { contexts: { content: string; }[]; }; }];
+			expect(JSON.parse(entry.request.contexts[0]!.content)).toMatchObject(['repository', 'nested-repository'].map(repositoryId => ({
+				repositoryId, path: 'src/a-long-directory-name/main.ts', line: 2, code: 'Original\nReviewed\nThird', feedback: 'Same feedback',
+			})));
+		});
+	}
+
+	test('retains new and edited text when a file scrolls out of the review viewport', async function () {
+		const { page } = browserTests;
+		await page.goto('/changes.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(async () => {
+			const files = Array.from({ length: 36 }, (_, index) => ({
+				path: `src/file-${index}.ts`, kind: 'modified' as const, binary: false, additions: 1, deletions: 1,
+			}));
+			window.ashChangesIntegration.checkpoint({
+				sequence: 7, revision: 'virtualized', statistics: { files: files.length, additions: files.length, deletions: files.length },
+				repositories: [{ repositoryId: 'repository', files }], warnings: [],
+			});
+			await window.ashChangesIntegration.openCodeReview();
+		});
+		const review = page.locator('#code-review');
+		const file = review.getByRole('button', { name: 'Collapse src/file-0.ts', exact: true });
+		const section = review.locator('.stanza-multi-diff-editor-section').filter({ has: page.getByRole('button', { name: 'Collapse src/file-0.ts', exact: true }) });
+		const scroll = review.locator('.stanza-multi-diff-editor');
+		const composer = review.getByRole('textbox', { name: 'Comment for the agent' });
+		const remount = async () => {
+			await scroll.evaluate(node => { node.scrollTop = node.scrollHeight; });
+			await expect(file).toHaveCount(0);
+			await expect(composer).toHaveCount(0);
+			await review.getByRole('combobox', { name: 'Jump to file' }).selectOption({ label: 'src/file-0.ts' });
+			await expect(file).toBeVisible();
+		};
+		const openNewComment = async () => {
+			await section.locator('.stanza-diff-editor-side.modified .line-numbers').getByText('2', { exact: true }).hover({ force: true });
+			await section.getByRole('button', { name: 'Add comment on line 2' }).click();
+		};
+		await openNewComment();
+		await composer.fill('First saved text');
+		await remount();
+		await openNewComment();
+		await expect(composer).toHaveValue('First saved text');
+		await composer.press('Control+Enter');
+		const savedNote = review.getByRole('button', { name: /line 2.*First saved text/ });
+		await expect(savedNote).toBeVisible();
+		await composer.fill('Unsaved replacement');
+		await remount();
+		await savedNote.click();
+		await expect(composer).toHaveValue('Unsaved replacement');
+		await review.getByRole('button', { name: 'Save Draft' }).click();
+		await expect(review.getByRole('button', { name: /line 2.*Unsaved replacement/ })).toBeVisible();
 	});
 });

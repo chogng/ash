@@ -194,6 +194,10 @@ services.registerInstance(IChatService, {
 		if (pendingLedger) { await pendingLedger; }
 		if (fail) { throw new Error('Repository unavailable'); }
 		if (checkpoint) { return checkpoint; }
+		if (reviewRepositories) {
+			return { sequence: 7, revision: 'multi-repository', statistics: { files: 2, additions: 6, deletions: 4 },
+				repositories: reviewRepositories.map(entry => ({ repositoryId: entry.summary.repositoryId, files: entry.files })), warnings: [] };
+		}
 		return { sequence: 7, revision: String(ledger[0]?.summary.revision ?? 0),
 			statistics: { files: ledger.length, additions: ledger.length * 3, deletions: ledger.length * 2 },
 			repositories: [{ repositoryId: 'repository', files: ledger.flatMap(entry => entry.files) }], warnings: [] };
@@ -210,12 +214,14 @@ services.registerInstance(IChatService, {
 	},
 	readTurnChangeFile: async () => {
 		if (pendingFileFailure) { fileReadStarted = true; return pendingFileFailure; }
+		if (reviewRepositories) return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Original\nBefore\nThird', after: reviewCode };
 		return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' };
 	},
 } as unknown as IChatService);
 let opened = 0;
 let codeReviewMode = false;
 let reviewCode = 'Original\nReviewed\nThird';
+let reviewRepositories: readonly TurnChangeDetails[] | undefined;
 const reviewPane = resources.add(new MutableDisposable<SessionCodeReviewEditor>());
 let reviewHost: HTMLElement | undefined;
 let reviewServices: InstantiationService | undefined;
@@ -314,7 +320,7 @@ declare global {
 			fileReadStarted(): boolean;
 			rejectFile(): void;
 			agentRequests(): readonly unknown[];
-			openCodeReview(): Promise<void>;
+			openCodeReview(options?: { multipleRepositories?: boolean; }): Promise<void>;
 			focusReviewLine(line: number, endLine?: number): void;
 			openReviewReply(): Promise<void>;
 			replaceReviewCode(): Promise<void>;
@@ -345,7 +351,7 @@ window.ashChangesIntegration = {
 	disposeCounter: () => counterOwner.clear(),
 	reduceMotion: value => configuration.updateValue('workbench.reduceMotion', value),
 	agentRequests: () => agentRequests,
-	openCodeReview: async () => {
+	openCodeReview: async options => {
 		codeReviewMode = true;
 		setIconResolver(document, getIconDefinition);
 		view.setVisible(false);
@@ -370,6 +376,10 @@ window.ashChangesIntegration = {
 		changes.setVisible(true);
 		changes.layout({ width: 390, height: 550 });
 		await changes.setInput(new SessionChangesEditorInput(URI.parse(`ash-session:/${sessionId}?thread=${threadId}`)), new AbortController().signal);
+		if (options?.multipleRepositories) {
+			reviewRepositories = [details, { ...details, summary: { ...details.summary, changeSetId: 'nested-change', repositoryId: 'nested-repository' } }];
+			ledger = reviewRepositories;
+		}
 		await CommandsRegistry.getCommand('sessions.openCodeReview')!(reviewServices);
 	},
 	focusReviewLine: (line, endLine) => {

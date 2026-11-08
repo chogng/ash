@@ -2,6 +2,7 @@ use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
 use super::core_error;
+use super::git_turn_changes_runtime::GitTurnChangesRuntime;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::storage::StorageOverview;
@@ -20,6 +21,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use worktree::ManagedDirOwner;
 use worktree::WorktreeManager;
+
+#[cfg(test)]
+#[path = "storage_overview_tests.rs"]
+mod tests;
 
 impl AppServer {
     pub(super) fn storage_overview(
@@ -121,21 +126,8 @@ impl AppServer {
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let session = self
-            .threads
-            .read_session_catalog(&params.session_id)
+        self.validate_archived_worktree(&params)
             .map_err(core_error)?;
-        let record = self
-            .threads
-            .thread_catalog_record(&params.thread_id)
-            .map_err(core_error)?;
-        if !session.is_some_and(|session| session.status == SessionStatus::Archived)
-            || record.session_id != params.session_id
-            || record.thread.status != ThreadStatus::Archived
-            || record.sequence != params.expected_sequence
-        {
-            return Err(core_error(core_api::CoreError::CommandConflict));
-        }
         let runtime = self
             .git_turn_changes
             .as_ref()
@@ -153,10 +145,43 @@ impl AppServer {
         {
             return Err(core_error(core_api::CoreError::Policy(reason)));
         }
-        runtime
-            .cleanup_archived_worktree(&params.thread_id, checkout)
-            .map_err(storage_error)?;
+        self.remove_authorized_worktree(runtime, &params)?;
         result(&())
+    }
+
+    fn remove_authorized_worktree(
+        &self,
+        runtime: &GitTurnChangesRuntime,
+        params: &StorageWorktreeCleanupParams,
+    ) -> Result<(), RpcError> {
+        // Hooks may take time. Recheck the catalog while holding the same permit as restore.
+        self.threads
+            .with_session_lifecycle(&params.session_id, || {
+                self.validate_archived_worktree(params)?;
+                runtime
+                    .require_session_publications_settled(&params.session_id)
+                    .map_err(core_api::CoreError::Execution)?;
+                runtime
+                    .cleanup_archived_worktree(&params.thread_id, Path::new(&params.checkout_root))
+                    .map_err(core_api::CoreError::Execution)
+            })
+            .map_err(core_error)
+    }
+
+    fn validate_archived_worktree(
+        &self,
+        params: &StorageWorktreeCleanupParams,
+    ) -> Result<(), core_api::CoreError> {
+        let session = self.threads.read_session_catalog(&params.session_id)?;
+        let record = self.threads.thread_catalog_record(&params.thread_id)?;
+        if !session.is_some_and(|session| session.status == SessionStatus::Archived)
+            || record.session_id != params.session_id
+            || record.thread.status != ThreadStatus::Archived
+            || record.sequence != params.expected_sequence
+        {
+            return Err(core_api::CoreError::CommandConflict);
+        }
+        Ok(())
     }
 }
 

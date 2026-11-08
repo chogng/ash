@@ -15,7 +15,7 @@ import type { MultiDiffEditor } from '../../../../workbench/contrib/multiDiffEdi
 import { createMultiDiffEditorInput, multiDiffEditorItemKey, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import {
-	ISessionCodeReviewService, codeReviewFilePath, codeReviewResource, type CodeReviewComment, type CodeReviewDraft, type CodeReviewTarget, type SessionCodeReviewService,
+	ISessionCodeReviewService, codeReviewFilePath, codeReviewRepositoryId, codeReviewResource, type CodeReviewComment, type CodeReviewDraft, type CodeReviewTarget, type SessionCodeReviewService,
 } from './sessionCodeReviewService.js';
 import './media/sessionCodeReview.css';
 
@@ -28,6 +28,8 @@ export interface CodeReviewComparison {
 
 export class SessionCodeReviewWidget extends Disposable {
 	private readonly mounted = this._register(new DisposableMap<DiffEditorWidget, MountedCodeReview>());
+	// Inline zones can be rebuilt or recycled while this comparison is still open.
+	private readonly edits = new Map<string, { readonly start: number; readonly text: string; }>();
 	private activeZone: ReviewZoneWidget | undefined;
 	private readonly sendButton: HTMLButtonElement;
 	private readonly notes: HTMLElement;
@@ -72,6 +74,7 @@ export class SessionCodeReviewWidget extends Disposable {
 
 	public setComparison(comparison: CodeReviewComparison | undefined): void {
 		this.closeComment();
+		this.edits.clear();
 		this.noteVersion = '';
 		this.comparison = comparison;
 		this.refresh();
@@ -90,22 +93,24 @@ export class SessionCodeReviewWidget extends Disposable {
 		return this.reviews.draft(target);
 	}
 
-	public attach(item: MultiDiffEditorInputItem, editor: DiffEditorWidget): IDisposable | undefined {
+	public attach(item: MultiDiffEditorInputItem, editor: DiffEditorWidget, turnRepositories?: ReadonlyMap<string, string>): IDisposable | undefined {
 		const comparison = this.comparison;
 		if (!comparison || item.binary) return undefined;
 		const resources = new DisposableStore();
 		const fileKey = multiDiffEditorItemKey(item);
 		const path = codeReviewFilePath(item.modified.resource);
+		const repositoryId = codeReviewRepositoryId(item.modified.resource, turnRepositories);
 		editor.updateOptions({ glyphMargin: true });
 		const createZone = (side: CodeReviewComment['side'], control: ICodeEditor, peer: ICodeEditor) => {
 			let opening: { readonly start: number; readonly end: number; readonly initial: string; } | undefined;
 			const canAdd = () => !comparison.history && comparison.isCurrent() && !!control.getModel() && item[side].initialText !== '';
 			const matches = (comment: CodeReviewComment, line: number) => comment.file === fileKey && comment.side === side && (comment.endLine ?? comment.line) === line;
 			const draftAt = (line: number) => this.snapshot(comparison)?.comments.find(comment => matches(comment, line));
+			const editKey = (line: number) => JSON.stringify([fileKey, side, line]);
 			const zone = resources.add(new ReviewZoneWidget(control, {
 				canAdd,
 				getTitle: line => {
-					const start = draftAt(line)?.line ?? opening?.start;
+					const start = this.edits.get(editKey(line))?.start ?? draftAt(line)?.line ?? opening?.start;
 					return start !== undefined && start < line
 						? localize('sessions.codeReview.rangeComments', 'Comments on lines {0}–{1}', start, line) : undefined;
 				},
@@ -120,11 +125,22 @@ export class SessionCodeReviewWidget extends Disposable {
 						const sent = this.reviews.batches(comparison.target).filter(batch => !batch.pending).flatMap(batch => batch.comments.filter(comment => matches(comment, line)));
 						for (const entry of sent) body.append(h(body.ownerDocument, 'p', { className: 'ash-session-code-review-comment' }, entry.text));
 					}
-					const start = comment?.line ?? opening?.start ?? line;
+					const key = editKey(line);
+					const edit = this.edits.get(key);
+					const start = edit?.start ?? comment?.line ?? opening?.start ?? line;
 					const endLine = start < line ? line : undefined;
-					return this.renderComment(comparison, body, listeners, comment, opening?.initial ?? '', value => {
+					const text = edit?.text ?? comment?.text ?? opening?.initial ?? '';
+					if (!edit && !comment && text) {
+						this.edits.set(key, { start, text });
+					}
+					return this.renderComment(comparison, body, listeners, comment, text, value => {
+						this.edits.set(key, { start, text: value });
+					}, () => {
+						this.edits.delete(key);
+					}, value => {
 						this.reviews.save(comparison.target, {
 							key: fileKey, path: item.id && comparison.history ? item.label : path || item.label,
+							repositoryId,
 							before: editor.originalEditor.getModel()?.getValue() ?? '',
 							after: editor.modifiedEditor.getModel()?.getValue() ?? '',
 						}, { side, line: start, endLine }, value);
@@ -262,7 +278,8 @@ export class SessionCodeReviewWidget extends Disposable {
 		}, { pinned: true });
 	}
 
-	private renderComment(comparison: CodeReviewComparison, body: HTMLElement, listeners: DisposableStore, comment: CodeReviewComment | undefined, initial: string, save: (text: string) => void): HTMLElement | undefined {
+	private renderComment(comparison: CodeReviewComparison, body: HTMLElement, listeners: DisposableStore, comment: CodeReviewComment | undefined,
+		text: string, edit: (text: string) => void, clearEdit: () => void, save: (text: string) => void): HTMLElement | undefined {
 		const document = body.ownerDocument;
 		if (comparison.history && comparison.history !== 'draft') {
 			if (comment) body.append(h(document, 'p', { className: 'ash-session-code-review-comment' }, comment.text));
@@ -270,7 +287,7 @@ export class SessionCodeReviewWidget extends Disposable {
 		}
 		const composer = h(document, 'textarea', {
 			className: 'ash-session-code-review-input',
-			properties: { value: comment?.text ?? initial, rows: 1 },
+			properties: { value: text, rows: 1 },
 			attributes: { 'aria-label': localize('sessions.codeReview.comment', 'Comment for the agent') },
 		});
 		const saveButton = button(document, localize('sessions.codeReview.save', 'Save Draft'), 'secondary');
@@ -278,10 +295,21 @@ export class SessionCodeReviewWidget extends Disposable {
 		body.append(composer, actions);
 		const update = () => { saveButton.disabled = !composer.value.trim() || !comparison.isCurrent(); };
 		update();
-		listeners.add(addDisposableListener(composer, 'input', update));
+		listeners.add(addDisposableListener(composer, 'input', () => {
+			edit(composer.value);
+			update();
+		}));
 		const submit = () => {
 			if (saveButton.disabled) return;
-			save(composer.value.trim());
+			const value = composer.value;
+			clearEdit();
+			try {
+				save(value.trim());
+			} catch (error) {
+				edit(value);
+				this.notifications.error(error instanceof Error ? error : String(error));
+				return;
+			}
 			// Saving rebuilds the inline body. Restore focus to the replacement composer.
 			body.querySelector('textarea')?.focus();
 		};
@@ -298,6 +326,7 @@ export class SessionCodeReviewWidget extends Disposable {
 			actions.append(remove);
 			listeners.add(addDisposableListener(remove, 'click', () => {
 				if (!comparison.isCurrent()) return;
+				clearEdit();
 				this.reviews.remove(comparison.target, comment.id);
 				body.querySelector('textarea')?.focus();
 			}));

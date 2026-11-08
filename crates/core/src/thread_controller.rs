@@ -3131,6 +3131,21 @@ impl ThreadController {
         Ok(deleted)
     }
 
+    /// Serializes host work with mutations of the Session's root Thread, including restore.
+    /// The operation may read Thread state while holding the permit.
+    pub fn with_session_lifecycle<R>(
+        &self,
+        session_id: &SessionId,
+        operation: impl FnOnce() -> Result<R, CoreError>,
+    ) -> Result<R, CoreError> {
+        let thread_id = ThreadId::new(session_id.as_str())
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        let slot = self.loaded_threads.slot(&thread_id)?;
+        let _permit = slot.enter_mutation()?;
+        let _lease = self.acquire_writer_lease(&thread_id)?;
+        operation()
+    }
+
     /// Restores the Session's root conversation without restarting Turns or completed agents.
     pub fn restore_session(&self, session_id: &SessionId) -> Result<ThreadSnapshot, CoreError> {
         let thread_id = ThreadId::new(session_id.as_str())

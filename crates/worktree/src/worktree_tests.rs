@@ -740,6 +740,41 @@ async fn thread_provision_freezes_dirty_source_and_recovers_the_binding() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn selected_cleanup_can_remove_a_child_after_its_source_checkout() {
+    let fixture = RepositoryFixture::new();
+    let manager = fixture.manager();
+    let mut request = ManagedDirProvisionRequest {
+        source: ManagedDirSource::CurrentDirectory {
+            source_directory: fixture.repository.clone(),
+        },
+        target: ManagedDirTarget::SourceHead,
+        repository_targets: BTreeMap::new(),
+        source_dir_id: "dir-1".into(),
+        owner: thread_owner("parent"),
+    };
+    let parent = manager.provision(&request).await.unwrap();
+    request.source = ManagedDirSource::CurrentDirectory {
+        source_directory: parent.dir().to_path_buf(),
+    };
+    request.owner = thread_owner("child");
+    let child = manager.provision(&request).await.unwrap();
+    assert_eq!(child.source_repository_root(), parent.checkout_root());
+
+    let eligibility = ManagedDirCleanupEligibility::ArchivedGitCheckoutSelectedByUser;
+    manager.cleanup(&parent, eligibility).await.unwrap();
+    assert!(!parent.checkout_root().exists());
+
+    let untracked = child.checkout_root().join("unsaved.txt");
+    fs::write(&untracked, "keep me").unwrap();
+    assert!(manager.cleanup(&child, eligibility).await.is_err());
+    assert_eq!(fs::read_to_string(&untracked).unwrap(), "keep me");
+    fs::remove_file(untracked).unwrap();
+    manager.cleanup(&child, eligibility).await.unwrap();
+    assert!(!child.checkout_root().exists());
+    assert!(run_git(&fixture.repository, &["for-each-ref", "refs/ash/threads"]).is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn confirmed_session_cleanup_resumes_after_worktree_unlock() {
     let fixture = RepositoryFixture::new();
     let manager = fixture.manager();

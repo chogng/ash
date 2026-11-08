@@ -1710,13 +1710,18 @@ impl WorktreeManager {
         let [entry] = current.repositories() else {
             bail!("manual cleanup requires a single-repository worktree");
         };
-        let source = self
-            .git
-            .open_repository(entry.source_repository_root())
-            .await?;
+        // A fork can outlive the linked checkout it was provisioned from. Resolve
+        // the shared Git repository through this checkout's verified binding.
+        let checkout = self.git.open_repository(entry.worktree_root()).await?;
+        if entry.repository_id().starts_with("git:")
+            && local_repository_id(&checkout)? != entry.repository_id()
+        {
+            bail!("managed worktree repository identity changed");
+        }
+        let baseline_ref = GitPrivateRef::new(entry.baseline_ref().to_string())?;
         let worktree = self
             .git
-            .worktrees(&source)
+            .worktrees(&checkout)
             .await?
             .into_iter()
             .find(|worktree| worktree.checkout_root() == entry.worktree_root())
@@ -1729,7 +1734,7 @@ impl WorktreeManager {
         let lock_reason = match worktree.availability() {
             WorktreeAvailability::Locked { reason } => {
                 self.git
-                    .unlock_worktree(&source, entry.worktree_root())
+                    .unlock_worktree(&checkout, entry.worktree_root())
                     .await?;
                 Some(reason.as_deref().unwrap_or("Ash managed worktree"))
             }
@@ -1738,21 +1743,18 @@ impl WorktreeManager {
         };
         if let Err(error) = self
             .git
-            .remove_clean_linked_worktree(&source, entry.worktree_root())
+            .remove_clean_linked_worktree(&checkout, entry.worktree_root())
             .await
         {
             if let Some(reason) = lock_reason {
                 self.git
-                    .lock_worktree(&source, entry.worktree_root(), reason)
+                    .lock_worktree(&checkout, entry.worktree_root(), reason)
                     .await?;
             }
             return Err(error.into());
         }
         self.git
-            .delete_private_ref(
-                &source,
-                &GitPrivateRef::new(entry.baseline_ref().to_string())?,
-            )
+            .delete_private_ref_at_git_dir(checkout.common_dir(), &baseline_ref)
             .await?;
         Ok(())
     }

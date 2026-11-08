@@ -21,6 +21,8 @@ export interface CodeReviewFile {
 	/** The comparison identity includes its source revision. */
 	readonly key: string;
 	readonly path: string;
+	/** Older saved comparisons can derive this from their source identity. */
+	readonly repositoryId?: string;
 	readonly before: string;
 	readonly after: string;
 }
@@ -57,6 +59,7 @@ function isDraft(value: unknown): value is CodeReviewDraft {
 	if (!isRecord(value) || !Array.isArray(value.files) || !Array.isArray(value.comments)) return false;
 	const { files } = value;
 	return files.every(file => isRecord(file) && typeof file.key === 'string' && typeof file.path === 'string'
+		&& (file.repositoryId === undefined || typeof file.repositoryId === 'string')
 		&& typeof file.before === 'string' && typeof file.after === 'string')
 		&& value.comments.every(comment => isRecord(comment) && typeof comment.id === 'string'
 			&& typeof comment.file === 'string' && (comment.side === 'original' || comment.side === 'modified')
@@ -87,6 +90,16 @@ export function codeReviewTarget(resource: URI): CodeReviewTarget | undefined {
 export function codeReviewFilePath(resource: URI): string {
 	const prefix = resource.scheme === 'ash-thread-change' ? 3 : resource.scheme === 'ash-turn-diff' ? 2 : 1;
 	return resource.path.split('/').slice(prefix).join('/');
+}
+
+export function codeReviewRepositoryId(resource: URI, turnRepositories?: ReadonlyMap<string, string>): string | undefined {
+	if (resource.scheme === 'ash-thread-change') {
+		return new URLSearchParams(resource.query).get('repository') ?? undefined;
+	}
+	if (resource.scheme === 'ash-turn-diff') {
+		return turnRepositories?.get(resource.path.split('/', 2)[1]);
+	}
+	return undefined;
 }
 
 export function codeReviewResource(target?: CodeReviewTarget, batch?: string): URI {
@@ -162,7 +175,13 @@ export class SessionCodeReviewService extends Disposable {
 		const previous = state.draft.comments.find(comment => comment.file === file.key && comment.side === anchor.side && (comment.endLine ?? comment.line) === (anchor.endLine ?? anchor.line));
 		const comment: CodeReviewComment = { id: previous?.id ?? generateUuid(), file: file.key, ...anchor, text };
 		const comments = previous ? state.draft.comments.map(entry => entry === previous ? comment : entry) : [...state.draft.comments, comment];
-		const files = state.draft.files.some(entry => entry.key === file.key) ? state.draft.files : [...state.draft.files, file];
+		const existingFile = state.draft.files.find(entry => entry.key === file.key);
+		let files = state.draft.files;
+		if (!existingFile) {
+			files = [...files, file];
+		} else if (!existingFile.repositoryId && file.repositoryId) {
+			files = files.map(entry => entry === existingFile ? { ...entry, repositoryId: file.repositoryId } : entry);
+		}
 		this.write(target, { ...state, draft: { files, comments } });
 	}
 
@@ -192,8 +211,18 @@ export class SessionCodeReviewService extends Disposable {
 			}
 			if (!batch) {
 				if (!state.draft.comments.length) return;
-				batch = { ...state.draft, id: codeReviewRequestPrefix + generateUuid(), pending: { expectedSequence: thread.sequence } };
-				this.write(target, { ...state, draft: emptyDraft, batches: [...state.batches, batch] });
+				let current = state;
+				let files = state.draft.files;
+				if (files.some(file => file.repositoryId === undefined)) {
+					files = await this.resolveDraftRepositories(target, files);
+					current = this.read(target);
+					if (!isCurrent() || current.batches.some(batch => batch.pending)
+						|| (current.draft !== state.draft && JSON.stringify(current.draft) !== JSON.stringify(state.draft))) {
+						return;
+					}
+				}
+				batch = { ...state.draft, files, id: codeReviewRequestPrefix + generateUuid(), pending: { expectedSequence: thread.sequence } };
+				this.write(target, { ...current, draft: emptyDraft, batches: [...current.batches, batch] });
 			} else if (batch.pending?.expectedSequence !== thread.sequence) {
 				// The old command can no longer be admitted. Keep its snapshot in history and
 				// allow subsequent reviews without retrying an unconfirmed submission.
@@ -216,6 +245,23 @@ export class SessionCodeReviewService extends Disposable {
 		}
 	}
 
+	private async resolveDraftRepositories(target: CodeReviewTarget, files: readonly CodeReviewFile[]): Promise<readonly CodeReviewFile[]> {
+		const resources = files.map(file => {
+			if (file.repositoryId) return undefined;
+			const modified = file.key.split('\0', 2)[1];
+			if (!modified) return undefined;
+			try { return URI.parse(modified); } catch { return undefined; }
+		});
+		const turnRepositories = resources.some(resource => resource?.scheme === 'ash-turn-diff')
+			? new Map((await this.chat.listTurnChanges(target.sessionId, target.threadId)).map(capture => [capture.changeSetId, capture.repositoryId]))
+			: undefined;
+		return files.map((file, index) => {
+			const resource = resources[index];
+			const repositoryId = resource && codeReviewRepositoryId(resource, turnRepositories);
+			return repositoryId ? { ...file, repositoryId } : file;
+		});
+	}
+
 	private finishSubmission(target: CodeReviewTarget, id: string): void {
 		const state = this.read(target);
 		this.write(target, { ...state, batches: state.batches.map(batch => batch.id === id ? { ...batch, pending: undefined } : batch) });
@@ -230,7 +276,7 @@ function reviewContext(batch: CodeReviewBatch): string {
 		const code = lines.slice(firstLine - 1, (comment.endLine ?? comment.line) + 2).join('\n');
 		const excerptLimit = 4_000;
 		return {
-			comment: index + 1, path: file.path, side: comment.side, line: comment.line,
+			comment: index + 1, repositoryId: file.repositoryId, path: file.path, side: comment.side, line: comment.line,
 			...(comment.endLine ? { endLine: comment.endLine } : {}), firstLine, code: code.slice(0, excerptLimit), ...(code.length > excerptLimit ? { codeTruncated: true } : {}),
 			feedback: comment.text,
 		};

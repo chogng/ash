@@ -193,6 +193,7 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 		try {
 			let comparison: MultiDiffEditorInput | undefined;
 			let statistics: { readonly additions: number; readonly deletions: number; } | undefined;
+			let turnRepositories: ReadonlyMap<string, string> | undefined;
 			if (history) {
 				const snapshot = this.review.snapshot(state);
 				if (!snapshot?.comments.length) throw new Error(localize('sessions.codeReview.missing', 'This review snapshot is unavailable.'));
@@ -202,6 +203,7 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 				const result = await this.readLastTurn(target, loadingSignal);
 				comparison = result?.input;
 				statistics = result?.statistics;
+				turnRepositories = result?.repositories;
 			} else {
 				const result = await readThreadChangesComparison(this.chat, target.sessionId, target.threadId, undefined, loadingSignal);
 				comparison = result.input;
@@ -221,7 +223,7 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 			comparison = { ...comparison, items: files };
 			const pane = this.comparison.value = this.instantiation.createInstance(MultiDiffEditor, {
 				activeEditorId: this.id,
-				attachEditor: (item: MultiDiffEditorInputItem, editor: DiffEditorWidget) => this.review.attach(item, editor),
+				attachEditor: (item: MultiDiffEditorInputItem, editor: DiffEditorWidget) => this.review.attach(item, editor, turnRepositories),
 				viewMode: this.viewMode,
 				createFileActions: history ? undefined : (container: HTMLElement, item: MultiDiffEditorInputItem) => this.createSeenCheckbox(container, target, item),
 			});
@@ -318,7 +320,8 @@ export class SessionCodeReviewEditor extends EditorPane implements IEditorPaneWi
 			additions: total.additions + capture.statistics.additions,
 			deletions: total.deletions + capture.statistics.deletions,
 		}), { additions: 0, deletions: 0 });
-		return { input, statistics };
+		const repositories = new Map(captures.map(capture => [capture.changeSetId, capture.repositoryId]));
+		return { input, statistics, repositories };
 	}
 
 	private updateFilePicker(comparison: MultiDiffEditorInput): void {
