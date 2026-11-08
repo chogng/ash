@@ -70,20 +70,34 @@ suite('ChatGPT shared service', () => {
 	const mainWindowDisposables = getWindowById(1)?.disposables;
 	suiteTeardown(() => mainWindowDisposables?.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('native recent history stays fresh on focus and window restoration for five minutes', async () => {
+	test('native recent history and sidebar groups have independent freshness after reopening', async () => {
 		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
 		using clock = toDisposable(() => mock.timers.reset());
 		const values = new Map<string, string>();
-		let reads = 0;
+		const reads = { recent: 0, projects: 0, pins: 0, history: 0 };
+		let projectTitle = 'Project';
+		let pinned = true;
 		const respond = async (path: string) => {
-			if (path.includes('/conversations?')) reads++;
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				reads.projects++;
+				return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: projectTitle } } }], cursor: null });
+			}
+			if (path.includes('/pins?')) {
+				reads.pins++;
+				return Response.json(pinned ? [{ item: { id: 'pin', title: 'Pin' } }] : []);
+			}
+			if (path.includes('/conversations?')) { reads.recent++; }
+			if (path.includes('/conversations/')) {
+				if (path.includes('/conversations/one?')) { reads.history++; }
+				return Response.json({ title: 'Conversation', current_node: 'reply', messages: [], page_info: { has_previous_page: false } });
+			}
 			return response(path);
 		};
 		{
 			using chat = fixture(respond, { values, native: true });
 			await chat.reload();
 			await chat.refresh();
-			assert.equal(reads, 1);
+			assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
 		}
 		using reopened = fixture(respond, { values, native: true });
 		const connected = new DeferredPromise<void>();
@@ -92,16 +106,35 @@ suite('ChatGPT shared service', () => {
 		});
 		reopened.initialize();
 		await connected.p;
-		assert.equal(reopened.state.get().conversations.length, 2);
-		assert.equal(reads, 1);
+		assert.equal(reopened.state.get().projects[0]?.title, 'Project');
+		assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
+		assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
 		mock.timers.tick(5 * 60_000 - 1);
 		await reopened.refresh();
-		assert.equal(reads, 1);
+		assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
 		mock.timers.tick(1);
 		await reopened.refresh();
-		assert.equal(reads, 2);
+		assert.deepEqual(reads, { recent: 2, projects: 1, pins: 1, history: 0 });
+		assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
+
+		projectTitle = 'Renamed project';
+		pinned = false;
+		mock.timers.tick(10 * 60_000 - 1);
+		await reopened.refresh();
+		assert.deepEqual(reads, { recent: 3, projects: 1, pins: 1, history: 0 });
+		mock.timers.tick(1);
+		await reopened.refresh();
+		assert.deepEqual(reads, { recent: 3, projects: 2, pins: 2, history: 0 });
+		assert.equal(reopened.state.get().projects[0]?.title, 'Renamed project');
+		assert.equal(reopened.state.get().conversations.some(item => item.pinned), false);
+
 		await reopened.reload();
-		assert.equal(reads, 3, 'A manual reload can refresh a fresh list');
+		assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: 0 }, 'Manual reload can refresh fresh lists');
+		await reopened.select('one');
+		assert.equal(reopened.state.get().conversationId, 'one');
+		const historyReads = reads.history;
+		await reopened.refresh();
+		assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: historyReads + 1 });
 	});
 
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {

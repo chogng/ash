@@ -1272,7 +1272,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 		for (const key of ['projectsFetchedAt', 'pinsFetchedAt'] as const) {
 			const timestamp = value[key];
-			if (!this.native && typeof timestamp === 'number' && Number.isSafeInteger(timestamp) && timestamp > 0 && timestamp <= now) {
+			if (typeof timestamp === 'number' && Number.isSafeInteger(timestamp) && timestamp > 0 && timestamp <= now) {
 				this[key] = timestamp;
 			}
 		}
@@ -1447,11 +1447,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				!forceReload && fetchedAt !== undefined && now >= fetchedAt && now - fetchedAt < maxAge;
 			const recoveringSend = !this.native && this.outbox?.creations().some(entry => entry.submittedAgainst);
 			const readRecent = !isFresh(this.recentFetchedAt, recoveringSend ? 60_000 : recentFreshnessMs);
-			const readProjects = this.native || !isFresh(this.projectsFetchedAt, sidebarFreshnessMs);
-			const readPins = this.native || !isFresh(this.pinsFetchedAt, sidebarFreshnessMs);
-			if (background && !readRecent && !readProjects && !readPins) { return; }
-			const fullRecent = this.native || forceReload;
+			const readProjects = !isFresh(this.projectsFetchedAt, sidebarFreshnessMs);
+			const readPins = !isFresh(this.pinsFetchedAt, sidebarFreshnessMs);
 			const stateBeforeReads = this.model.get();
+			const refreshRetainedHistory = this.native && !!(this.retainedConversation() ?? stateBeforeReads.conversationId);
+			if (background && !readRecent && !readProjects && !readPins && !refreshRetainedHistory) { return; }
+			const fullRecent = this.native || forceReload;
 			const [catalog, [projects, pins, conversations]] = await Promise.all([
 				!background && (!stateBeforeReads.connected || !stateBeforeReads.conversationId) ? this.client.models(signal) : undefined,
 				Promise.allSettled([
@@ -1467,7 +1468,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const items = new Map((recent?.items ?? this.model.get().conversations.filter(item => !item.local)).map(item => [item.id, item]));
 			const pinned = pins.status === 'fulfilled' ? pins.value : undefined;
 			if (pinned) {
-				if (!recent && (!this.native || conversations.status === 'rejected')) {
+				if (!recent) {
 					for (const item of items.values()) {
 						if (!item.local && item.pinned) { items.set(item.id, { ...item, pinned: false }); }
 					}
@@ -1532,11 +1533,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			// when the head is unchanged. Keep cached rows visible while the
 			// next scroll continues from the last page actually read.
 			if (recent) { this.resetRecentPage(recent); }
-			if (readRecent) { this.recentFetchedAt = recent ? Date.now() : undefined; }
-			if (!this.native) {
-				if (readProjects) { this.projectsFetchedAt = projects.status === 'fulfilled' ? now : undefined; }
-				if (readPins) { this.pinsFetchedAt = pins.status === 'fulfilled' ? now : undefined; }
-			}
+			const fetchedAt = Date.now();
+			if (readRecent) { this.recentFetchedAt = recent ? fetchedAt : undefined; }
+			if (readProjects) { this.projectsFetchedAt = projects.status === 'fulfilled' ? fetchedAt : undefined; }
+			if (readPins) { this.pinsFetchedAt = pins.status === 'fulfilled' ? fetchedAt : undefined; }
 			const state = this.model.get();
 			const currentProjects = (projects.status === 'fulfilled' ? projects.value : undefined) ?? state.projects;
 			if (recent) {

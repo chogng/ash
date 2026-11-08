@@ -15,7 +15,7 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -33,6 +33,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let recentHistoryRequests = 0;
 		let uploadsHeld = false;
 		let heldUploads = 0;
+		const now = Date.now;
 		const uploadedFiles: Record<string, string> = {};
 		const initializing = new Set<() => void>();
 		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
@@ -50,6 +51,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			get cancelledInitializations() { return cancelledInitializations; },
 			setOffline(value) { offline = value; },
 			setRecentHistoryRateLimited(value) { recentHistoryRateLimited = value; },
+			setClockOffset(milliseconds) { Date.now = milliseconds === 0 ? now : () => now() + milliseconds; },
 			get recentHistoryRequests() { return recentHistoryRequests; },
 			holdUploads(value) { uploadsHeld = value; },
 			get heldUploads() { return heldUploads; },
@@ -222,8 +224,9 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 		await expect(native).toContainText('Experimental earlier question');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 		await expect(native).toBeHidden();
+		await expect(savedChat).toHaveCount(0);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true }).click();
 		await expect(savedChat).toBeVisible();
-		await expect(savedChat).toHaveAttribute('aria-current', 'false');
 		await savedChat.click();
 		await expect(native).toContainText('Experimental history answer');
 		await expect(savedChat).toHaveAttribute('aria-current', 'page');
@@ -788,9 +791,17 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(staged(reopened, pending)).toContainText(locale === 'en' ? 'Ready' : '就绪');
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.uploadedFiles)).toEqual({ [ready]: 'Ready draft bytes', [pending]: 'Pending draft bytes' });
 			await application.evaluate(() => globalThis.ashNativeFixture.setRecentHistoryRateLimited(false));
-			await reopened.clock.setFixedTime(new Date(Date.now() + 65_000));
-			await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
-			await expect(historyStatus).toHaveCount(0);
+			// Both the renderer and the main-process history gate enforce the cooldown.
+			const cooldownOffset = 65_000;
+			await application.evaluate((_electron, offset) => globalThis.ashNativeFixture.setClockOffset(offset), cooldownOffset);
+			try {
+				await reopened.clock.setFixedTime(new Date(Date.now() + cooldownOffset));
+				await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
+				await expect(historyStatus).toHaveCount(0);
+				await expect.poll(recentRequests).toBe(beforeReconnect + 2);
+			} finally {
+				await application.evaluate(() => globalThis.ashNativeFixture.setClockOffset(0));
+			}
 
 			const restarted = await reloadWorkbench('quit');
 			await installService(restarted.application as ElectronApplication);

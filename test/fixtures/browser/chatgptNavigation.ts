@@ -1,8 +1,8 @@
 import './chatFixtureLocalization.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
+import '../../../src/ash/sessions/contrib/projects/browser/projects.contribution.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
-import { IProjectsService, ProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
 import { Menus } from '../../../src/ash/sessions/browser/menus.js';
 import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
 import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
@@ -117,7 +117,7 @@ import { AccessibilityService } from '../../../src/ash/platform/accessibility/br
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -291,6 +291,7 @@ window.ashChatGPTIntegration = {
 	setVisible: visible => widget.setVisible(visible),
 	setAshChatSelected: selected => ashChatSelected.set(selected),
 	notifications: () => notifications.model.getNotifications().map(({ id, message }) => ({ id, message })),
+	toggleArchivedProjects: () => commands.executeCommand('sessions.toggleArchivedProjects'),
 	retryHistory: async () => {
 		const retry = notifications.model.getNotifications().flatMap(item => item.actions?.primary ?? []).find(action => action.id === 'sessions.chatgpt.retryHistory');
 		if (!retry) { throw new Error('Missing history retry action'); }
@@ -299,7 +300,6 @@ window.ashChatGPTIntegration = {
 };
 services.registerInstance(ISessionsListModelService, new SessionsListModelService(storage));
 services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);
-services.registerInstance(IProjectsService, resources.add(services.createInstance(ProjectsService)));
 const groups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None, getOrder: (_mode, ids) => ids } as ISessionSectionOrderService);
@@ -376,7 +376,7 @@ if (parameters.has('projects')) {
 	projects.setVisible(true);
 	activePane = projects;
 }
-services.registerInstance(IEditorPart, { activeGroup: { activePane }, onDidChangeEditors: Event.None } as unknown as IEditorPart);
+services.registerInstance(IEditorPart, { activePane, activeGroup: { activePane }, onDidChangeEditors: Event.None } as unknown as IEditorPart);
 resources.add(services.createInstance(ProjectTitleBarContribution));
 const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
 resize.observe(host);

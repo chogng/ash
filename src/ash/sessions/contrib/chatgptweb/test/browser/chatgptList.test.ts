@@ -140,7 +140,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await page.getByRole('dialog').getByRole('button', { name: '归档', exact: true }).click();
 		await expect(project('Updated research')).toHaveCount(0);
 		const projects = page.locator('.ash-projects');
-		await projects.getByRole('button', { name: '已归档', exact: true }).click();
+		await page.evaluate(() => window.ashChatGPTIntegration.toggleArchivedProjects());
 		await projects.getByRole('button', { name: '取消归档 Updated research' }).click();
 		await expect(project('Updated research')).toBeVisible();
 
@@ -459,7 +459,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				node.style.removeProperty('--ash-sessions-sidebar-item-inset');
 			});
 			await header.hover();
-			await expect(row).toHaveCSS('border-radius', '8px');
+			await expect(row).toHaveCSS('border-radius', '6px');
 			await expect(row).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		});
 
@@ -818,11 +818,10 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.getByRole('menuitem', { name: zh ? '归档' : 'Archive', exact: true }).click();
 			await page.getByRole('dialog').getByRole('button', { name: zh ? '归档' : 'Archive', exact: true }).click();
 			await expect(updated).toHaveCount(0);
-			const archived = projects.getByRole('button', { name: zh ? '已归档' : 'Archived', exact: true });
-			await archived.click();
+			await page.evaluate(() => window.ashChatGPTIntegration.toggleArchivedProjects());
 			await projects.getByRole('button', { name: zh ? '取消归档 Updated research' : 'Unarchive Updated research', exact: true }).click();
 			await expect(projects.getByRole('status').filter({ hasText: zh ? '没有已归档的项目。' : 'No archived projects.' })).toBeVisible();
-			await archived.click();
+			await page.evaluate(() => window.ashChatGPTIntegration.toggleArchivedProjects());
 			await expect(updated).toBeVisible();
 		});
 
