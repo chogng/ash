@@ -1961,7 +1961,6 @@ pub fn open_app_server_with_codebase_providers(
         ash_utils_absolute_path::AbsolutePathBuf::from_absolute(state_runtime.profile_root())
             .map_err(open_error)?,
     ));
-    let state_runtime = Arc::clone(&state_runtime);
     let server_construct = StartupTrace::span("directory-server-construct");
     let server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
@@ -2024,7 +2023,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_glm_accounts(glm_accounts)
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
-    .with_state_runtime(state_runtime)
+    .with_state_runtime(Arc::clone(&state_runtime))
     .with_provider_runtime(model_provider.clone())
     .with_semantic_model_provider(model_provider)
     .with_cloud_codebase_storage_root(cloud_codebase_root)
@@ -2174,7 +2173,7 @@ pub fn open_app_server_with_codebase_providers(
         .with_local_assets(&database_path)
         .map_err(OpenAppServerError)?;
     server = server
-        .with_local_memories(&database_path)
+        .with_local_memories(state_runtime.memories_database_path())
         .map_err(OpenAppServerError)?;
     drop(local_state);
     if let Some(profile) = &profile_runtime {

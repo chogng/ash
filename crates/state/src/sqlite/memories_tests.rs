@@ -13,6 +13,27 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 
+#[test]
+fn failed_memories_migration_rolls_back_the_schema_and_version() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("memories.sqlite3");
+    let connection = crate::open_sqlite_database(&path, crate::SqliteDurability::Durable).unwrap();
+    connection
+        .execute("CREATE TABLE memories (id TEXT PRIMARY KEY)", [])
+        .unwrap();
+
+    assert!(SqliteMemoryStore::open(&path).is_err());
+
+    let tables: String = connection
+        .query_row(
+            "SELECT group_concat(name) FROM sqlite_schema WHERE type = 'table'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(tables, "memories");
+}
+
 #[derive(Clone, Copy)]
 enum Writer {
     User,

@@ -1655,10 +1655,16 @@ impl AppServer {
         mut self,
         database_path: &std::path::Path,
     ) -> Result<Self, String> {
-        let store: Arc<dyn memories::MemoryStore> = Arc::new(
-            ash_state::SqliteMemoryStore::open(database_path).map_err(|error| error.to_string())?,
-        );
-        self.memories = Some(Arc::new(memories::Memories::new(store)));
+        let store = match ash_state::SqliteMemoryStore::open(database_path) {
+            Ok(store) => store,
+            Err(error) => {
+                eprintln!(
+                    "App Server could not open Memories database at {database_path:?}: {error}"
+                );
+                return Ok(self);
+            }
+        };
+        self.memories = Some(Arc::new(memories::Memories::new(Arc::new(store))));
         self.with_memory_extension()
     }
 

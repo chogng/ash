@@ -4,6 +4,7 @@
 - Issue 浏览缓存按 GitHub 主机、仓库、账号与授权隔离。读取授权由 GitHub 领域核对；存储不选择账号、不保存 token，清理仅影响当前授权的仓库页面。
 - 提供本机输入历史的 SQLite 存储，独立迁移、原子追加与裁剪、稳定游标和文字搜索。
 - 提供 Thread、Git Turn Changes、Project 与 Memory 的 SQLite 存储；各领域使用独立 migration component，Session tree 仍由 Thread 的 `session_id` 聚合。
+- Memories 使用 profile 下的 `memories.sqlite3`，以 v4 为基线，后续迁移按顺序执行并在同一事务中更新版本。原 `state.sqlite3` 中的 Memories 表保留在原处。
 - 会话列表和单会话刷新从每个 Session 一条的记录读取；记录与 Thread 事件同事务更新，旧数据库升级时从 Thread 目录生成。
 - 事件存储格式 17 为 PR 产物分配持久身份，并记录 Agent 来源的 Thread 和 Turn。移除后重新记录会分配新身份。归档格式 6 保留身份与来源，仍可导入格式 2 至 5。
 - 事件存储格式 16 为 PR 关联保存产物标记。旧记录按引用读取，重复附加保留已有产物标记。历史归档格式 5 保留该标记，并可导入格式 2 至 4。
