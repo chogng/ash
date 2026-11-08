@@ -2604,7 +2604,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "tokio",
 ]
 
 [[package]]
@@ -3005,6 +3004,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "winapi-util",
 ]
 

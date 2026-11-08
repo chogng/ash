@@ -12,6 +12,7 @@ mod filesystem_snapshot;
 mod manager;
 mod model;
 mod process;
+mod pty;
 mod scope;
 pub use backends::SandboxBackends;
 pub use backends::SandboxDiagnostic;

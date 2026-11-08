@@ -16,7 +16,6 @@ log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 ash-utils-pty = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 dunce = { workspace = true }
 ash-install-context = { workspace = true }
 ash-sandboxing = { workspace = true }

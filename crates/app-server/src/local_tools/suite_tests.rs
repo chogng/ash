@@ -1300,6 +1300,172 @@ fn command_terminal_output_drains_after_turn_cancellation_until_its_grant_is_rev
     assert!(access.read_command_output(&command, || Ok(())).is_err());
 }
 
+#[cfg(windows)]
+#[test]
+fn command_terminal_input_is_owner_bound_and_released_on_connection_close() {
+    let dir = tempfile::tempdir().unwrap();
+    // A successful launch must use the unrestricted branch even on a host
+    // that also has a platform sandbox installed.
+    let suite = local_tool_suite(dir.path(), ash_sandboxing::SandboxBackends::new(Vec::new()));
+    let session = SessionId::new("terminal-owner").unwrap();
+    let thread = ThreadId::new("terminal-thread").unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let authority = ToolAuthorization::UnsandboxedGrant {
+        grant_id: ash_action_policy::GrantId::new("terminal-test"),
+    };
+    let (program, arguments) = (
+        PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe")
+            .display()
+            .to_string(),
+        vec![
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Write-Output ('before:{0}:{1}' -f $PID, (Get-Location).Path); \
+             $line = [Console]::ReadLine(); Write-Output ('accepted:' + $line); \
+             Write-Output ('after:{0}:{1}' -f $PID, (Get-Location).Path)",
+        ],
+    );
+    let start = tool_call(
+        "shell-session",
+        json!({
+            "action": "start", "program": program, "arguments": arguments,
+            "working_directory": ".", "wait_ms": 0, "timeout_ms": 30_000,
+            "terminal_rows": 24, "terminal_cols": 200,
+        }),
+    );
+    let outside = tempfile::tempdir().unwrap();
+    let mut outside_start = start.clone();
+    outside_start.arguments["working_directory"] = json!(outside.path());
+    assert!(
+        suite
+            .shell_session(
+                &outside_start,
+                &authority,
+                &turn.token(),
+                &session,
+                &thread,
+                None
+            )
+            .is_err(),
+        "the execution grant cannot authorize a different directory"
+    );
+    let ToolExecutionOutput::Success(result) = suite
+        .shell_session(&start, &authority, &turn.token(), &session, &thread, None)
+        .unwrap()
+    else {
+        panic!("expected shell-session success");
+    };
+    let result: Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(result["status"], "running", "{result}");
+    let id = CommandSessionId::new(result["session_id"].as_str().unwrap()).unwrap();
+    let target = || CommandTerminalTarget {
+        session: session.clone(),
+        thread: thread.clone(),
+        call: start.id.clone(),
+        id: id.clone(),
+    };
+    let terminal =
+        |connection, action| suite.command_terminal(target(), connection, &|| false, action);
+    let write = || CommandTerminalAction::Write(b"allowed\n".to_vec());
+    for foreign in [
+        CommandTerminalTarget {
+            session: SessionId::new("other-session").unwrap(),
+            ..target()
+        },
+        CommandTerminalTarget {
+            thread: ThreadId::new("other-thread").unwrap(),
+            ..target()
+        },
+        CommandTerminalTarget {
+            call: ToolCallId::new("other-call").unwrap(),
+            ..target()
+        },
+    ] {
+        assert!(matches!(
+            suite.command_terminal(foreign, 2, &|| false, CommandTerminalAction::TakeInput),
+            Err(CoreError::NotFound(_))
+        ));
+    }
+    terminal(1, CommandTerminalAction::Attach).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let original_identity = loop {
+        let output = terminal(1, CommandTerminalAction::Read(0))
+            .unwrap()
+            .unwrap();
+        let text = String::from_utf8_lossy(&output.bytes);
+        if let Some((_, tail)) = text.split_once("before:")
+            && let Some((identity, _)) = tail.split_once(['\r', '\n', '\u{1b}'])
+        {
+            break identity.to_owned();
+        }
+        assert!(
+            !output.exited && std::time::Instant::now() < deadline,
+            "{text:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let (pid, cwd) = original_identity.split_once(':').unwrap();
+    assert!(pid.parse::<u32>().is_ok_and(|pid| pid > 0));
+    assert_eq!(
+        Dir::open_local(cwd).unwrap(),
+        Dir::open_local(dir.path()).unwrap()
+    );
+    assert!(matches!(terminal(1, write()), Err(CoreError::Policy(_))));
+    terminal(1, CommandTerminalAction::TakeInput).unwrap();
+    assert!(matches!(
+        terminal(2, CommandTerminalAction::TakeInput),
+        Err(CoreError::Policy(_))
+    ));
+    terminal(1, CommandTerminalAction::Detach).unwrap();
+    terminal(2, CommandTerminalAction::Attach).unwrap();
+    terminal(2, CommandTerminalAction::TakeInput).unwrap();
+    suite.release_connection(2);
+    assert!(matches!(
+        suite.command_terminal(target(), 2, &|| true, CommandTerminalAction::TakeInput),
+        Err(CoreError::Policy(_))
+    ));
+    terminal(3, CommandTerminalAction::Attach).unwrap();
+    assert!(matches!(terminal(3, write()), Err(CoreError::Policy(_))));
+    terminal(3, CommandTerminalAction::TakeInput).unwrap();
+    terminal(
+        3,
+        CommandTerminalAction::Resize(CommandTerminalSize {
+            rows: 30,
+            cols: 200,
+        }),
+    )
+    .unwrap();
+    terminal(3, write()).unwrap();
+    let owner = command_session_owner(&session, &thread);
+    let completed = pollster::block_on(suite.shell.shell.wait_session(
+        &owner,
+        &id,
+        CommandSessionCursor::default(),
+        Duration::from_secs(10),
+        &turn.token(),
+    ))
+    .unwrap();
+    let output = terminal(3, CommandTerminalAction::Read(0))
+        .unwrap()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.bytes);
+    assert!(
+        matches!(completed.status, CommandSessionStatus::Exited(_)),
+        "{text:?}"
+    );
+    assert_eq!(output.exit_code, Some(0), "{text:?}");
+    assert!(text.contains("accepted:allowed"), "{text:?}");
+    let (_, after) = text
+        .split_once("after:")
+        .expect("missing post-handoff identity");
+    let identity = after.split(['\r', '\n', '\u{1b}']).next().unwrap();
+    assert_eq!(identity, original_identity, "{text:?}");
+    terminal(3, CommandTerminalAction::Detach).unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn attached_command_terminals_drain_after_a_new_command_retires_the_tool_session() {

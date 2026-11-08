@@ -380,6 +380,63 @@ fn explicit_unrestricted_authority_does_not_depend_on_backend_availability() {
     assert_eq!(prepared.kind(), SandboxKind::Unrestricted);
 }
 
+#[cfg(any(unix, windows))]
+#[test]
+fn unrestricted_pty_closes_while_waiting_for_input() {
+    use std::io::BufRead;
+    use std::io::BufReader;
+    use std::time::Duration;
+
+    let temp = tempfile::tempdir().unwrap();
+    let manager = SandboxManager::new(
+        Dir::open_local(temp.path()).unwrap(),
+        SandboxBackends::new(Vec::new()),
+    );
+    #[cfg(windows)]
+    let (program, args) = (
+        std::env::var_os("COMSPEC").unwrap_or_else(|| "cmd.exe".into()),
+        vec!["/d", "/c", "echo pty-ready& set /p line="],
+    );
+    #[cfg(unix)]
+    let (program, args) = (
+        std::ffi::OsString::from("/bin/sh"),
+        vec!["-c", "test -t 0 && printf 'pty-ready\n' && read -r line"],
+    );
+    let command = SandboxCommand::new(program, args, ".")
+        .with_pty(ash_utils_pty::TerminalSize { rows: 24, cols: 80 });
+    let policy = SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed);
+    let prepared = manager.prepare(&command, policy).unwrap();
+    assert_eq!(prepared.kind(), SandboxKind::Unrestricted);
+    let mut process = prepared
+        .spawn(&std::env::vars().collect::<Vec<_>>())
+        .unwrap();
+    let mut output = BufReader::new(process.take_stdout().unwrap());
+    let (ready, observed_ready) = std::sync::mpsc::sync_channel(1);
+    let (drained, observed_drain) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let mut line = Vec::new();
+        while output.read_until(b'\n', &mut line).unwrap() != 0 {
+            if String::from_utf8_lossy(&line).contains("pty-ready") {
+                ready.send(()).unwrap();
+                break;
+            }
+            line.clear();
+        }
+        drained
+            .send(io::copy(&mut output, &mut io::sink()))
+            .unwrap();
+    });
+    observed_ready
+        .recv_timeout(Duration::from_secs(10))
+        .unwrap();
+    assert_eq!(process.try_wait().unwrap(), None);
+    process.close().unwrap();
+    observed_drain
+        .recv_timeout(Duration::from_secs(10))
+        .unwrap()
+        .unwrap();
+}
+
 #[test]
 fn unmatched_snapshot_rules_do_not_require_a_backend_but_effective_restrictions_do() {
     use crate::PatternMatchTiming;
@@ -387,7 +444,8 @@ fn unmatched_snapshot_rules_do_not_require_a_backend_but_effective_restrictions_
     use crate::SandboxPathRule;
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
-    let command = SandboxCommand::new("command", Vec::<String>::new(), ".");
+    let command = SandboxCommand::new("command", Vec::<String>::new(), ".")
+        .with_pty(ash_utils_pty::TerminalSize { rows: 24, cols: 80 });
     let manager = SandboxManager::new(dir.clone(), SandboxBackends::new(Vec::new()));
     let unrestricted = SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed);
     let scope = |timing| {
@@ -420,6 +478,14 @@ fn unmatched_snapshot_rules_do_not_require_a_backend_but_effective_restrictions_
             )
             .is_err()
     );
+    let metadata = temp.path().join(".git");
+    std::fs::create_dir(&metadata).unwrap();
+    assert!(
+        manager
+            .prepare_scoped(&command, unrestricted, &snapshot)
+            .is_err()
+    );
+    std::fs::remove_dir(&metadata).unwrap();
     std::fs::write(temp.path().join(".env"), "secret").unwrap();
     assert!(
         manager
