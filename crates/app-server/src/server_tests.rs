@@ -4838,6 +4838,9 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
     );
     assert_eq!(blocked["error"]["message"], "CoreOperationFailed");
 
+    let source = create_session(&server, &mut connection, 41, "steer-reference-source");
+    let source_id = &source["result"]["session"]["sessionId"];
+    assert!(source_id.is_string(), "{source}");
     let steer_request = |id| {
         serde_json::json!({
             "jsonrpc":"2.0","id":id,"method":"session/request",
@@ -4849,7 +4852,10 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
                     "expectedSequence":start_sequence,
                     "threadId":thread_id,
                     "turnId":turn_id,
-                    "input":[{"type":"text","text":"focus on the failing test"}]
+                    "input":[
+                        {"type":"text","text":"focus on the failing test"},
+                        {"type":"chatReference","name":"Source","sessionId":source_id,"threadId":source_id}
+                    ]
                 }
             }
         })
@@ -4859,9 +4865,19 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
     assert_eq!(steered["result"]["value"]["turnId"], turn_id);
     assert_eq!(
         steered["result"]["value"]["sequence"].as_u64().unwrap(),
-        start_sequence + 3
+        start_sequence + 4
     );
 
+    let deleted = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":42,"method":"session/request","params":{
+                "commandId":"delete-steer-source","sessionId":source_id,"request":{"type":"delete"}
+            }
+        }),
+    );
+    assert_eq!(deleted["result"]["type"], "deleted", "{deleted}");
     let replayed = call(&server, &mut connection, steer_request(6));
     assert_eq!(replayed["result"], steered["result"]);
     let conflict = call(
@@ -4877,7 +4893,10 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
                     "expectedSequence":start_sequence,
                     "threadId":thread_id,
                     "turnId":turn_id,
-                    "input":[{"type":"text","text":"different payload"}]
+                    "input":[
+                        {"type":"text","text":"different payload"},
+                        {"type":"chatReference","name":"Source","sessionId":source_id,"threadId":source_id}
+                    ]
                 }
             }
         }),

@@ -672,7 +672,7 @@ suite('Builtin dictation ownership', () => {
 		assert.equal(fixture.speech.isBusy, false);
 	});
 
-	test('extension recognition stays in SpeechService and input dictation consumes its public session', async () => {
+	for (const stop of ['explicit', 'natural'] as const) test(`extension recognition delivers its final transcript on ${stop} stop`, async () => {
 		using owner = new DisposableStore();
 		const fixture = services(owner, async () => assert.fail('An extension provider must not open builtin capture'));
 		const events = owner.add(new Emitter<ISpeechToTextEvent>());
@@ -689,8 +689,16 @@ suite('Builtin dictation ownership', () => {
 		await fixture.speech.start(captureWindow);
 		events.fire({ status: SpeechToTextStatus.Started });
 		events.fire({ status: SpeechToTextStatus.Recognized, text: 'hello' });
-		assert.equal(await fixture.speech.stopAndTranscribe(), 'hello');
-		assert.deepEqual(updates, [{ text: 'hello', finalizedText: 'hello' }]);
+		if (stop === 'explicit') {
+			assert.equal(await fixture.speech.stopAndTranscribe(), 'hello');
+		} else {
+			events.fire({ status: SpeechToTextStatus.Stopped });
+		}
+		assert.deepEqual(updates, [
+			{ text: 'hello', finalizedText: 'hello' },
+			...(stop === 'natural' ? [{ text: 'hello', finalizedText: 'hello', completed: true }] : []),
+		]);
+		assert.equal(fixture.speech.isBusy, false);
 		assert.equal(speech.hasActiveSpeechToTextSession, false);
 		assert.deepEqual(fixture.cues, ['accessibility.signals.voiceRecordingStarted', 'accessibility.signals.voiceRecordingStopped']);
 	});

@@ -224,6 +224,18 @@ suite('Dictation editor binding', () => {
 		await stopDictation();
 		assert.equal(f.model.getValue(), 'corrected words');
 	});
+	test('provider completion inserts a hidden transcript before releasing the editor', async () => {
+		using f = fixture();
+		f.speech.showTranscriptWhileDictating = false;
+		await startDictation(f.speech, f.editor, f.window, f.log);
+		f.speech.transcripts.fire({ text: 'recognized interim', finalizedText: 'recognized' });
+		assert.equal(f.model.getValue(), '');
+		f.speech.transcripts.fire({ text: 'recognized', finalizedText: 'recognized', completed: true });
+		f.speech.idle();
+		assert.equal(f.model.getValue(), 'recognized');
+		assert.equal(activeDictationEditor(), undefined);
+		assert.equal(f.speech.stops, 0);
+	});
 	test('cancelling speech preserves text typed after a provisional phrase', async () => {
 		using f = fixture();
 		await startDictation(f.speech, f.editor, f.window, f.log);

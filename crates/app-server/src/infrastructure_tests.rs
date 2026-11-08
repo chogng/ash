@@ -312,6 +312,84 @@ fn code_only_clients_cannot_resolve_chat_references_through_code_turns_or_queue_
 }
 
 #[test]
+fn referenced_session_commands_replay_after_the_source_is_deleted() {
+    let server = server();
+    let mut connection = server.connection();
+    let (session, destination) = create(&server, &mut connection);
+    let source = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0","id":4,"method":"session/create","params":{
+                "commandId":"chat-source","kind":"chat","title":"Chat source","executionTarget":null
+            }
+        }),
+    );
+    let source_id = &source["result"]["session"]["sessionId"];
+    assert!(source_id.is_string(), "{source}");
+    let input = json!([{"type":"chatReference","name":"Source","sessionId":source_id,"threadId":source_id}]);
+    let mut start = json!({
+        "jsonrpc":"2.0","id":5,"method":"session/request","params":{
+            "commandId":"start-with-reference","sessionId":session,"request":{
+                "type":"startTurn","threadId":destination,"expectedSequence":1,"input":input
+            }
+        }
+    });
+    let started = call(&server, &mut connection, start.clone());
+    assert_eq!(started["result"]["type"], "turn", "{started}");
+    super::wait_for_latest_turn(&server, &destination, ash_protocol::TurnStatus::Completed);
+    let mut rewrite = json!({
+        "jsonrpc":"2.0","id":6,"method":"session/request","params":{
+            "commandId":"rewrite-with-reference","sessionId":session,"request":{
+                "type":"rewriteThread","parentThreadId":destination,
+                "beforeTurnId":started["result"]["value"]["turnId"],"title":"Rewritten","input":input
+            }
+        }
+    });
+    let rewritten = call(&server, &mut connection, rewrite.clone());
+    let branch = rewritten["result"]["value"]["threadId"]
+        .as_str()
+        .expect(&rewritten.to_string());
+    super::wait_for_latest_turn(&server, branch, ash_protocol::TurnStatus::Completed);
+
+    let deleted = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0","id":7,"method":"session/request","params":{
+                "commandId":"delete-source","sessionId":source_id,"request":{"type":"delete"}
+            }
+        }),
+    );
+    assert_eq!(deleted["result"]["type"], "deleted", "{deleted}");
+    start["id"] = json!(8);
+    rewrite["id"] = json!(9);
+    let replayed = call(&server, &mut connection, start.clone());
+    assert_eq!(replayed["result"], started["result"], "{replayed}");
+    let replayed = call(&server, &mut connection, rewrite);
+    assert_eq!(
+        replayed["result"]["value"]["threadId"], branch,
+        "{replayed}"
+    );
+    assert_eq!(
+        replayed["result"]["value"]["turn"],
+        rewritten["result"]["value"]["turn"]
+    );
+
+    start["id"] = json!(10);
+    start["params"]["request"]["input"][0]["name"] = json!("Changed reference");
+    let conflict = call(&server, &mut connection, start.clone());
+    assert_eq!(
+        conflict["error"]["message"], "CommandConflict",
+        "{conflict}"
+    );
+    start["id"] = json!(11);
+    start["params"]["commandId"] = json!("new-command");
+    let denied = call(&server, &mut connection, start);
+    assert_eq!(denied["error"]["code"], -32011, "{denied}");
+}
+
+#[test]
 fn queued_chat_reference_reads_the_source_at_delivery_and_replays_the_same_turn() {
     let root = tempfile::tempdir().unwrap();
     let (server, queue) = queued_server(root.path());

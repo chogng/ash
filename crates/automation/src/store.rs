@@ -6,6 +6,7 @@ use ash_protocol::AutomationDefinition;
 use ash_protocol::AutomationRun;
 use ash_protocol::AutomationRunStatus;
 use ash_protocol::AutomationSchedule;
+use ash_protocol::AutomationSession;
 use ash_protocol::AutomationStatus;
 use ash_protocol::UnixMillis;
 use rusqlite::Connection;
@@ -39,6 +40,30 @@ pub struct AutomationWrite {
     pub status: AutomationStatus,
 }
 
+/// Visibility of plan definitions and the immutable definitions captured by runs.
+#[derive(Clone, Copy)]
+pub enum AutomationScope {
+    Profile,
+    CodeOnly,
+}
+
+impl AutomationScope {
+    pub fn allows(self, session: &AutomationSession) -> bool {
+        match self {
+            Self::Profile => true,
+            Self::CodeOnly => *session != AutomationSession::NewChat,
+        }
+    }
+
+    fn check(self, session: &AutomationSession) -> Result<(), AutomationError> {
+        if self.allows(session) {
+            Ok(())
+        } else {
+            Err(AutomationError::NotFound)
+        }
+    }
+}
+
 /// Profile-owned plan, run and command storage. Every mutating operation is transactional.
 pub struct AutomationStore {
     connection: Mutex<Connection>,
@@ -63,6 +88,14 @@ impl AutomationStore {
             .lock()
             .map_err(|_| AutomationError::LockPoisoned)?;
         plans(&connection)
+    }
+
+    pub fn get(&self, id: &str) -> Result<Option<Automation>, AutomationError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| AutomationError::LockPoisoned)?;
+        plan(&connection, id)
     }
 
     pub fn write(
@@ -96,6 +129,14 @@ impl AutomationStore {
         }
         if previous.as_ref().map_or(0, |plan| plan.revision) != request.expected_revision {
             return Err(AutomationError::Conflict);
+        }
+        if previous.as_ref().is_some_and(|plan| {
+            (plan.definition.session == AutomationSession::NewChat)
+                != (request.definition.session == AutomationSession::NewChat)
+        }) {
+            return Err(AutomationError::Invalid(
+                "cannot change the session kind of an existing plan".into(),
+            ));
         }
         if previous
             .as_ref()
@@ -193,6 +234,16 @@ impl AutomationStore {
         command_id: &str,
         now: UnixMillis,
     ) -> Result<AutomationRun, AutomationError> {
+        self.run_now_scoped(id, command_id, now, AutomationScope::Profile)
+    }
+
+    pub fn run_now_scoped(
+        &self,
+        id: &str,
+        command_id: &str,
+        now: UnixMillis,
+        scope: AutomationScope,
+    ) -> Result<AutomationRun, AutomationError> {
         validate_id(command_id)?;
         let payload = serde_json::to_string(&("run", id))?;
         let mut connection = self
@@ -200,10 +251,16 @@ impl AutomationStore {
             .lock()
             .map_err(|_| AutomationError::LockPoisoned)?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if let Some(result) = replay(&transaction, command_id, &payload)? {
-            return decode_run(&result);
+        let plan = plan(&transaction, id)?;
+        if let Some(plan) = &plan {
+            scope.check(&plan.definition.session)?;
         }
-        let plan = plan(&transaction, id)?.ok_or(AutomationError::NotFound)?;
+        if let Some(result) = replay(&transaction, command_id, &payload)? {
+            let run = decode_run(&result)?;
+            scope.check(&run.definition.session)?;
+            return Ok(run);
+        }
+        let plan = plan.ok_or(AutomationError::NotFound)?;
         if plan.status == AutomationStatus::Paused && artifact_binding(&plan).is_some() {
             return Err(AutomationError::Invalid(
                 "artifact Autopilot is paused".into(),

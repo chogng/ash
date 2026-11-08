@@ -135,7 +135,7 @@ export class DictationInput extends Disposable {
 			this.recordingEvents.value = events;
 			events.add(this.service.onDidUpdateTranscript(event => {
 				if (!this.active || this.recordingGeneration !== owner || !this.isVisible()) return;
-				const finalized = this.editor.codeEditor || this.service.state === ChatSpeechToTextState.Transcribing;
+				const finalized = this.editor.codeEditor || event.completed || this.service.state === ChatSpeechToTextState.Transcribing;
 				const phrase = finalized ? event.finalizedText.slice(this.committedText.length) : '';
 				if (finalized) this.committedText = event.finalizedText;
 				this.preview.textContent = this.service.showTranscriptWhileDictating ? event.text.slice(this.committedText.length) : '';

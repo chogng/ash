@@ -528,6 +528,14 @@ impl ConnectionState {
         connection_state(self).code_sessions_only
     }
 
+    fn automation_scope(&self) -> ash_automation::AutomationScope {
+        if self.code_sessions_only() {
+            ash_automation::AutomationScope::CodeOnly
+        } else {
+            ash_automation::AutomationScope::Profile
+        }
+    }
+
     fn reference_read_scope(&self) -> queue::ReferenceReadScope {
         if self.code_sessions_only() {
             queue::ReferenceReadScope::CodeOnly
@@ -3978,8 +3986,12 @@ impl AppServer {
                         decode(&request.params)?;
                     params.include_chat == Some(true)
                 };
-                self.automation_processor
-                    .automation_list(include_chat && !connection.code_sessions_only())
+                let scope = if include_chat {
+                    connection.automation_scope()
+                } else {
+                    ash_automation::AutomationScope::CodeOnly
+                };
+                self.automation_processor.automation_list(scope)
             }
             Some(ClientMethod::AutomationPreview) => self
                 .automation_processor
@@ -3987,11 +3999,6 @@ impl AppServer {
             Some(ClientMethod::AutomationWrite) => {
                 let params: ash_app_server_protocol::protocol::automation::AutomationWriteParams =
                     decode(&request.params)?;
-                if connection.code_sessions_only()
-                    && params.definition.session == ash_protocol::AutomationSession::NewChat
-                {
-                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-                }
                 if params.status == ash_protocol::AutomationStatus::Enabled
                     && !self
                         .artifact_binding_is_current(&params.definition)
@@ -3999,24 +4006,28 @@ impl AppServer {
                 {
                     return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                 }
-                let response = self.automation_processor.automation_write(params)?;
+                let response = self
+                    .automation_processor
+                    .automation_write(params, connection.automation_scope())?;
                 self.advance_stopping_automations()?;
                 Ok(response)
             }
-            Some(ClientMethod::AutomationDelete) => {
-                self.automation_processor.automation_delete(&request.params)
-            }
-            Some(ClientMethod::AutomationRun) => {
-                self.automation_processor.automation_run(&request.params)
-            }
+            Some(ClientMethod::AutomationDelete) => self
+                .automation_processor
+                .automation_delete(&request.params, connection.automation_scope()),
+            Some(ClientMethod::AutomationRun) => self
+                .automation_processor
+                .automation_run(&request.params, connection.automation_scope()),
             Some(ClientMethod::AutomationRunRead) => self
                 .automation_processor
-                .automation_run_read(&request.params),
-            Some(ClientMethod::AutomationRuns) => {
-                self.automation_processor.automation_runs(&request.params)
-            }
+                .automation_run_read(&request.params, connection.automation_scope()),
+            Some(ClientMethod::AutomationRuns) => self
+                .automation_processor
+                .automation_runs(&request.params, connection.automation_scope()),
             Some(ClientMethod::AutomationStop) => {
-                let response = self.automation_processor.automation_stop(&request.params)?;
+                let response = self
+                    .automation_processor
+                    .automation_stop(&request.params, connection.automation_scope())?;
                 self.advance_stopping_automations()?;
                 Ok(response)
             }

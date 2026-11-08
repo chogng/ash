@@ -128,7 +128,7 @@ async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor
 		editor.focus();
 	}
 	lifetime.add(service.onDidUpdateTranscript(event => {
-		if (service.showTranscriptWhileDictating) applyTranscript(event.finalizedText);
+		if (event.completed || service.showTranscriptWhileDictating) applyTranscript(event.finalizedText);
 	}));
 	lifetime.add(editor.onWillChangeModel(() => cancelDictation()));
 	lifetime.add(editor.onDidDispose(() => cancelDictation()));

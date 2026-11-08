@@ -1111,6 +1111,26 @@ impl ThreadController {
         })
     }
 
+    pub(crate) fn read_rewound_thread(
+        &self,
+        request: &RewindThreadRequest,
+    ) -> Result<Option<ThreadSnapshot>, CoreError> {
+        let thread_id = command_thread_id("rewind", &request.command_id)?;
+        let thread = match self.read_thread(&thread_id) {
+            Ok(thread) => thread,
+            Err(CoreError::NotFound(_)) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let origin = ThreadOrigin::Rewind {
+            parent_thread_id: request.source_thread_id.clone(),
+            before_turn_id: request.before_turn_id.clone(),
+        };
+        if thread.origin != origin || thread.creation_title != request.title {
+            return Err(CoreError::CommandConflict);
+        }
+        Ok(Some(thread))
+    }
+
     /// Creates a child Thread containing the source's terminal Turns before one checkpoint.
     ///
     /// The source remains immutable. Repeating the request after the import event committed is

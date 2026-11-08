@@ -935,6 +935,9 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
             expected_ide,
         )
     }
+    fn workflow_store(&self) -> &workflows::Store {
+        &self.workflows
+    }
     fn terminal_service(
         &self,
     ) -> Result<std::sync::Arc<exec_server::terminal::TerminalService>, super::RpcError> {

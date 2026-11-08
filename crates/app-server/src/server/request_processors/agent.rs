@@ -214,6 +214,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
     ) -> Result<workflows::Receipt, core_api::CoreError>;
+    fn workflow_store(&self) -> &workflows::Store;
     fn terminal_service(
         &self,
     ) -> Result<std::sync::Arc<exec_server::terminal::TerminalService>, super::RpcError>;
@@ -584,10 +585,29 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             session_id,
             request,
         } = decode(params)?;
-        if let SessionRequest::StartTurn { input, .. }
-        | SessionRequest::SteerTurn { input, .. }
-        | SessionRequest::RewriteThread { input, .. } = &request
+        if let Some((thread_id, input)) = match &request {
+            SessionRequest::StartTurn {
+                thread_id, input, ..
+            }
+            | SessionRequest::SteerTurn {
+                thread_id, input, ..
+            } => Some((thread_id, input)),
+            SessionRequest::RewriteThread {
+                parent_thread_id,
+                input,
+                ..
+            } => Some((parent_thread_id, input)),
+            _ => None,
+        } && input
+            .iter()
+            .any(|item| matches!(item, InputItem::ChatReference { .. }))
         {
+            let target = self.read_session_thread_snapshot(&session_id, thread_id)?;
+            if let Some(replayed) =
+                self.replay_referenced_request(&target, &command_id, &request, input)?
+            {
+                return result(&replayed);
+            }
             super::check_chat_reference_sources(
                 &self.context.agent_runtime(),
                 connection.reference_read_scope(),
@@ -1082,6 +1102,182 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 )?,
             )),
         }
+    }
+
+    /// A successful replay returns a receipt without resolving source excerpts or admitting work.
+    fn replay_referenced_request(
+        &self,
+        target: &ThreadView,
+        command_id: &ash_protocol::CommandId,
+        request: &SessionRequest,
+        input: &[InputItem],
+    ) -> Result<Option<SessionRequestResult>, RpcError> {
+        // The journal keeps materialized input, so these original sources cannot be matched
+        // without reading them again. Do not open files, resources, or URLs on the replay path.
+        if input.iter().any(|item| {
+            matches!(
+                item,
+                InputItem::HostResource { .. }
+                    | InputItem::Instruction { .. }
+                    | InputItem::Image { .. }
+                    | InputItem::Audio { .. }
+            )
+        }) {
+            return Ok(None);
+        }
+        let runtime = self.context.agent_runtime();
+        let normalize = || self.normalize_input(None, &target.session_id, input.to_vec());
+        match request {
+            SessionRequest::StartTurn {
+                command_interpretation,
+                mode,
+                approval_mode,
+                model,
+                reasoning_effort,
+                tool_mode,
+                ..
+            } => {
+                if target.status != ThreadStatus::Active {
+                    return Ok(None);
+                }
+                let Some(turn_id) = runtime
+                    .accepted_turn(&target.thread_id, command_id)
+                    .map_err(core_error)?
+                else {
+                    return Ok(None);
+                };
+                let Some(turn) = target.turns.iter().find(|turn| turn.turn_id == turn_id) else {
+                    return Ok(None);
+                };
+                if approval_mode.is_some_and(|mode| mode != turn.approval_mode)
+                    || model
+                        .as_ref()
+                        .is_some_and(|model| Some(model) != turn.model.as_ref())
+                    || *reasoning_effort != turn.reasoning_effort
+                {
+                    return Err(core_error(core_api::CoreError::CommandConflict));
+                }
+                let mut input = normalize()?;
+                let selection = self.turn_instruction_selection(
+                    &mut input,
+                    *mode,
+                    command_interpretation.unwrap_or_default(),
+                )?;
+                let receipt = self.replay_referenced_turn(
+                    target,
+                    command_id,
+                    &input,
+                    *mode,
+                    tool_mode.unwrap_or(turn.tool_mode),
+                    turn.approval_mode,
+                    &selection,
+                )?;
+                Ok(receipt.map(SessionRequestResult::Turn))
+            }
+            SessionRequest::SteerTurn { turn_id, .. } => {
+                let receipt = runtime
+                    .replay_steer(&target.thread_id, command_id, turn_id, &normalize()?)
+                    .map_err(core_error)?;
+                Ok(receipt.map(|receipt| {
+                    SessionRequestResult::TurnSteer(TurnSteerResult {
+                        turn_id: receipt.turn_id,
+                        sequence: receipt.sequence,
+                    })
+                }))
+            }
+            SessionRequest::RewriteThread {
+                before_turn_id,
+                title,
+                tool_mode,
+                ..
+            } => {
+                let Some(branch) = runtime
+                    .read_rewound_thread(&RewindThreadRequest {
+                        command_id: rewrite_phase_command_id(command_id, RewritePhase::Rewind)?,
+                        source_thread_id: target.thread_id.clone(),
+                        before_turn_id: before_turn_id.clone(),
+                        title: title.clone(),
+                    })
+                    .map_err(core_error)?
+                else {
+                    return Ok(None);
+                };
+                if branch.session_id != target.session_id {
+                    return Err(core_error(core_api::CoreError::NotFound(
+                        branch.thread_id.to_string(),
+                    )));
+                }
+                let start_command_id = rewrite_phase_command_id(command_id, RewritePhase::Start)?;
+                let Some(turn_id) = runtime
+                    .accepted_turn(&branch.thread_id, &start_command_id)
+                    .map_err(core_error)?
+                else {
+                    return Ok(None);
+                };
+                let Some(turn) = branch.turns.iter().find(|turn| turn.turn_id == turn_id) else {
+                    return Ok(None);
+                };
+                let mut input = normalize()?;
+                let selection = self.turn_instruction_selection(
+                    &mut input,
+                    turn.mode,
+                    ash_protocol::CommandInterpretation::Product,
+                )?;
+                let Some(turn) = self.replay_referenced_turn(
+                    &branch,
+                    &start_command_id,
+                    &input,
+                    turn.mode,
+                    tool_mode.unwrap_or(turn.tool_mode),
+                    turn.approval_mode,
+                    &selection,
+                )?
+                else {
+                    return Ok(None);
+                };
+                Ok(Some(SessionRequestResult::Rewrite(SessionRewriteResult {
+                    session: self.session_view(&target.session_id)?,
+                    thread_id: branch.thread_id,
+                    turn,
+                })))
+            }
+            _ => unreachable!("only requests with Chat reference input can be replayed here"),
+        }
+    }
+
+    fn replay_referenced_turn(
+        &self,
+        target: &ThreadView,
+        command_id: &ash_protocol::CommandId,
+        input: &[UserInput],
+        mode: ash_protocol::CollaborationMode,
+        tool_mode: ash_protocol::ToolMode,
+        approval_mode: ash_protocol::ApprovalMode,
+        selection: &TurnInstructionSelection,
+    ) -> Result<Option<TurnStartResult>, RpcError> {
+        let receipt = if matches!(selection, TurnInstructionSelection::Workflow(_)) {
+            self.context.workflow_store().replay_completed(
+                &target.session_id,
+                &target.thread_id,
+                command_id,
+                input,
+                mode,
+                tool_mode,
+                approval_mode,
+            )
+        } else {
+            self.context.agent_runtime().replay_turn(
+                &target.thread_id,
+                command_id,
+                core_api::SubmittedCommand::Turn {
+                    kind: ash_protocol::TurnKind::Coding,
+                    mode,
+                    tool_mode,
+                    input,
+                },
+            )
+        };
+        Ok(receipt.map_err(core_error)?.map(turn_start_result))
     }
 
     fn create_session_thread_request(

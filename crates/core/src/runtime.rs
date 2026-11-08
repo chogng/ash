@@ -512,6 +512,32 @@ impl AgentRuntime for Runtime<'_> {
         Ok(TurnReceipt { turn_id, sequence })
     }
 
+    fn replay_steer(
+        &self,
+        thread_id: &ThreadId,
+        command_id: &CommandId,
+        turn_id: &TurnId,
+        input: &[ash_protocol::UserInput],
+    ) -> Result<Option<TurnReceipt>, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        let Some(&sequence) = snapshot.steer_deliveries.get(command_id) else {
+            return Ok(None);
+        };
+        let matches = snapshot.commands.iter().any(|entry| {
+            &entry.receipt.command_id == command_id
+                && matches!(&entry.receipt.command, ThreadCommand::SteerTurn {
+                    turn_id: original_turn, input: original_input,
+                } if original_turn == turn_id && original_input == input)
+        });
+        if !matches {
+            return Err(CoreError::CommandConflict);
+        }
+        Ok(Some(TurnReceipt {
+            turn_id: turn_id.clone(),
+            sequence,
+        }))
+    }
+
     fn interrupt_turn(
         &self,
         thread_id: &ThreadId,
@@ -882,6 +908,15 @@ impl AgentRuntime for Runtime<'_> {
         self.threads
             .rewind_thread(self.binder, request)
             .map(Into::into)
+    }
+
+    fn read_rewound_thread(
+        &self,
+        request: &RewindThreadRequest,
+    ) -> Result<Option<ThreadView>, CoreError> {
+        self.threads
+            .read_rewound_thread(request)
+            .map(|thread| thread.map(Into::into))
     }
 
     fn restore_message(&self, request: RestoreMessageRequest) -> Result<ThreadView, CoreError> {

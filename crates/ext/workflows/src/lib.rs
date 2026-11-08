@@ -102,13 +102,12 @@ impl Runtime<'_> {
         if parent.agent_context_seed.is_some() {
             return Err(invalid("Workflow commands require the root Agent"));
         }
-        let request_key = serde_json::to_string(&(
-            request.input.clone(),
+        let request_key = store::command_request_key(
+            &request.input,
             request.mode,
             request.tool_mode,
             request.approval_mode,
-        ))
-        .map_err(store::journal)?;
+        )?;
         let command_id = request.command_id.clone();
         self.store.commit(
             &parent.session_id,

@@ -38,6 +38,8 @@ export type ChatDictationSurface = 'chat' | 'editor' | 'terminal';
 export interface IChatDictationTranscript {
 	readonly text: string;
 	readonly finalizedText: string;
+	/** The provider completed without an explicit stop request. */
+	readonly completed?: true;
 }
 
 export interface IDictationAccuracyMeasurement {
@@ -231,7 +233,10 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 						this.receiveTranscript(recording, event.text ?? '', event.status === SpeechToTextStatus.Recognized);
 					} else if (event.status === SpeechToTextStatus.Error || event.status === SpeechToTextStatus.Stopped) {
 						if (event.status === SpeechToTextStatus.Error) recording.error = event.text;
-						if (!recording.stopping) this.finish(recording);
+						if (!recording.stopping) {
+							if (event.status === SpeechToTextStatus.Stopped) this.completeTranscript(recording);
+							this.finish(recording);
+						}
 					}
 				}));
 			} else {
@@ -260,7 +265,10 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 							void ready.complete();
 							return;
 						}
-						if (!recording.stopping) this.finish(recording);
+						if (!recording.stopping) {
+							if (recording.started && result.state === LocalTranscriptionModelState.Idle && !result.error) this.completeTranscript(recording);
+							this.finish(recording);
+						}
 					}));
 					const handle: RecordingHandle = {
 						stop: async () => { if (recording.capture) { await recording.capture.pcm.flush(); await this.closeCapture(recording.capture); } return this.localTranscription.stop(); },
@@ -417,6 +425,12 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		recording.liveText = visible;
 		if (isFinal) recording.finalText = recording.finalizedText = visible;
 		this.transcript.fire({ text: visible, finalizedText: recording.finalizedText });
+	}
+
+	private completeTranscript(recording: Recording): void {
+		if (recording.finalizedText) {
+			this.transcript.fire({ text: recording.finalizedText, finalizedText: recording.finalizedText, completed: true });
+		}
 	}
 
 	public stopAndTranscribe(options?: IChatSpeechToTextStopOptions): Promise<string | undefined> {

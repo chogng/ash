@@ -41,6 +41,46 @@ impl Store {
             database: Mutex::new(database),
         })
     }
+
+    /// Reads a completed workflow response without resuming an unfinished launch.
+    pub fn replay_completed(
+        &self,
+        session: &SessionId,
+        root: &ThreadId,
+        command: &CommandId,
+        input: &[protocol::UserInput],
+        mode: protocol::CollaborationMode,
+        tool_mode: protocol::ToolMode,
+        approval_mode: protocol::ApprovalMode,
+    ) -> Result<Option<core_api::TurnReceipt>, CoreError> {
+        let database = self
+            .database
+            .lock()
+            .map_err(|_| CoreError::Journal("Workflow store lock poisoned".into()))?;
+        let existing: Option<(String, String)> = database
+            .query_row(
+                "SELECT request, plan FROM agent_workflow_commands
+                 WHERE session=?1 AND root=?2 AND command=?3 AND finished=2",
+                params![session.as_str(), root.as_str(), command.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(journal)?;
+        let Some((original, plan)) = existing else {
+            return Ok(None);
+        };
+        if original != command_request_key(input, mode, tool_mode, approval_mode)? {
+            return Err(CoreError::CommandConflict);
+        }
+        let plan: Plan = serde_json::from_str(&plan).map_err(journal)?;
+        let (Some(turn_id), Some(sequence)) = (plan.turn, plan.response_sequence) else {
+            return Err(CoreError::Journal(
+                "Completed workflow receipt is missing".into(),
+            ));
+        };
+        Ok(Some(core_api::TurnReceipt { turn_id, sequence }))
+    }
+
     pub(crate) fn commit(
         &self,
         session: &SessionId,
@@ -521,6 +561,15 @@ impl Store {
             .map_err(journal)?;
         transaction.commit().map_err(journal)
     }
+}
+
+pub(crate) fn command_request_key(
+    input: &[protocol::UserInput],
+    mode: protocol::CollaborationMode,
+    tool_mode: protocol::ToolMode,
+    approval_mode: protocol::ApprovalMode,
+) -> Result<String, CoreError> {
+    serde_json::to_string(&(input, mode, tool_mode, approval_mode)).map_err(journal)
 }
 
 #[derive(Clone, Copy)]

@@ -360,6 +360,95 @@ fn chat_schedules_use_the_profile_and_keep_code_catalogues_compatible() {
 }
 
 #[test]
+fn code_only_clients_cannot_access_chat_plans_or_run_receipts() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
+    let server = server().with_automation_store(Arc::clone(&store));
+    let mut cli = server.connection();
+    let initialized = call(
+        &server,
+        &mut cli,
+        json!({
+            "jsonrpc":"2.0", "id":1, "method":"initialize",
+            "params":{"clientInfo":{"name":"ash-cli","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let now = ash_automation::now().unwrap();
+    let code = create_run(&store, dir.path(), AutomationSession::New);
+    let mut definition = code.definition.clone();
+    definition.session = AutomationSession::NewChat;
+    definition.directory.clear();
+    store
+        .write(
+            &ash_automation::AutomationWrite {
+                command_id: "chat-create".into(),
+                id: "chat".into(),
+                expected_revision: 0,
+                definition,
+                status: ash_protocol::AutomationStatus::Paused,
+            },
+            now,
+        )
+        .unwrap();
+    let chat = store.run_now("chat", "chat-manual", now).unwrap();
+
+    let mut request_id = 1;
+    let mut rpc = |method, params| {
+        request_id += 1;
+        call(
+            &server,
+            &mut cli,
+            json!({"jsonrpc":"2.0", "id":request_id, "method":method, "params":params}),
+        )
+    };
+    for (method, params) in [
+        (
+            "automation/write",
+            json!({"commandId":"convert", "id":"chat", "expectedRevision":1, "definition":code.definition, "status":"paused"}),
+        ),
+        (
+            "automation/delete",
+            json!({"id":"chat", "expectedRevision":1}),
+        ),
+        ("automation/run", json!({"id":"chat", "commandId":"start"})),
+        (
+            "automation/run",
+            json!({"id":"chat", "commandId":"chat-manual"}),
+        ),
+        ("automation/runs", json!({"id":"chat", "limit":10})),
+        ("automation/run/read", json!({"runId":chat.id})),
+        ("automation/stop", json!({"runId":chat.id})),
+    ] {
+        let denied = rpc(method, params);
+        assert_eq!(denied["error"]["message"], "AutomationNotFound", "{denied}");
+    }
+    assert_eq!(store.get_run(&chat.id).unwrap(), chat);
+    let catalogue = rpc("automation/list", json!({"includeChat":true}));
+    assert_eq!(
+        catalogue["result"]["automations"].as_array().unwrap().len(),
+        1
+    );
+    let visible = rpc("automation/run/read", json!({"runId":code.id}));
+    assert_eq!(visible["result"]["id"], code.id);
+
+    let mut completed = chat;
+    completed.status = AutomationRunStatus::Completed;
+    completed.finished_at = Some(now);
+    store.observe(&completed).unwrap();
+    store.delete("chat", 1).unwrap();
+    let history = rpc("automation/runs", json!({"id":"chat", "limit":10}));
+    assert_eq!(history["result"]["runs"], json!([]));
+    let denied = rpc("automation/run/read", json!({"runId":completed.id}));
+    assert_eq!(denied["error"]["message"], "AutomationNotFound", "{denied}");
+    let denied = rpc(
+        "automation/run",
+        json!({"id":"chat", "commandId":"chat-manual"}),
+    );
+    assert_eq!(denied["error"]["message"], "AutomationNotFound", "{denied}");
+}
+
+#[test]
 fn automation_retry_reconciles_the_same_accepted_turn() {
     let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();

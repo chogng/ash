@@ -332,12 +332,13 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
         command_id: &CommandId,
         context: &AppToolContext,
     ) -> Result<Value, CoreError> {
+        let scope = ash_automation::AutomationScope::CodeOnly;
         let result = match operation {
-            AutomationOperation::List {} => self.automation_processor.automation_list(false),
+            AutomationOperation::List {} => self.automation_processor.automation_list(scope),
             AutomationOperation::View { id } => {
                 let list = self
                     .automation_processor
-                    .automation_list(false)
+                    .automation_list(scope)
                     .map_err(rpc_error)?;
                 return list["automations"]
                     .as_array()
@@ -372,14 +373,16 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                         "PR artifact Autopilot requires explicit user authorization".into(),
                     ));
                 }
-                self.automation_processor
-                    .automation_write(AutomationWriteParams {
+                self.automation_processor.automation_write(
+                    AutomationWriteParams {
                         command_id: command_id.to_string(),
                         id,
                         expected_revision,
                         definition,
                         status,
-                    })
+                    },
+                    scope,
+                )
             }
             AutomationOperation::Delete {
                 id,
@@ -390,6 +393,7 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                     expected_revision,
                 })
                 .map_err(json_error)?,
+                scope,
             ),
             AutomationOperation::Run { id } => self.automation_processor.automation_run(
                 &serde_json::to_value(AutomationRunParams {
@@ -397,13 +401,16 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                     command_id: command_id.to_string(),
                 })
                 .map_err(json_error)?,
+                scope,
             ),
             AutomationOperation::Runs { id } => self.automation_processor.automation_runs(
                 &serde_json::to_value(AutomationRunsParams { id, limit: 20 })
                     .map_err(json_error)?,
+                scope,
             ),
             AutomationOperation::Stop { run_id } => self.automation_processor.automation_stop(
                 &serde_json::to_value(AutomationStopParams { run_id }).map_err(json_error)?,
+                scope,
             ),
         };
         result.map_err(rpc_error)

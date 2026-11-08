@@ -10,6 +10,7 @@ pub use runtime::now;
 pub use schedule::next_occurrence;
 pub use schedule::preview_occurrences;
 pub use schedule::validate_definition;
+pub use store::AutomationScope;
 pub use store::AutomationStore;
 pub use store::AutomationWrite;
 
