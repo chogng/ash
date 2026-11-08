@@ -17,16 +17,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "agent",
-      "file": "agent.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "agent-filled",
-      "file": "agent-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "align-center",
       "file": "align-center.svg",
       "rendering": "symbolic"

@@ -23,7 +23,7 @@ import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { ISessionsLayoutService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
-import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
@@ -151,7 +151,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			}
 		}));
 		const newDraftVisible = NewSessionDraftVisibleContext.bindTo(this.contextKeys);
-		this._register(toDisposable(() => newDraftVisible.reset()));
+		const entryShowsWorkspaceModeControl = SessionsEntryShowsWorkspaceModeControlContext.bindTo(this.contextKeys);
+		this._register(toDisposable(() => {
+			newDraftVisible.reset();
+			entryShowsWorkspaceModeControl.reset();
+		}));
 		let activeActivity: IContextKey<boolean> | undefined;
 		this._register(autorun(reader => {
 			const entry = this.activeEntry.read(reader);
@@ -165,6 +169,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				activeActivity = key;
 				key?.set(!covered);
 				newDraftVisible.set(showingDraft);
+				entryShowsWorkspaceModeControl.set(covered || entry?.showWorkspaceModeControl !== false);
 			});
 		}));
 	}

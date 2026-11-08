@@ -25,6 +25,8 @@ export interface ISessionsEntry {
 	readonly conversation?: 'optional';
 	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */
 	readonly sidebarContainerId?: string;
+	/** Whether this entry allows the title bar workspace mode control. Defaults to true. */
+	readonly showWorkspaceModeControl?: boolean;
 	readonly showEditorTabs?: boolean;
 	readonly detailsContainerId?: string;
 	readonly editorInput?: IResourceEditorInput;

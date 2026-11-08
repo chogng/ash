@@ -38,7 +38,7 @@ registerEditorPane({
 registerAction2(class OpenBots extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.bots', title, icon: Lxicon.agent, f1: true,
+			id: 'sessions.open.bots', title, icon: Lxicon.bot, f1: true,
 			toggled: ContextKeyExpr.has(selectedContext),
 			menu: { id: Menus.ActivityBar, group: 'navigation', order: 25, when: SessionsWorkspaceModeContext.isEqualTo('code') },
 		});
@@ -46,7 +46,7 @@ registerAction2(class OpenBots extends Action2 {
 	public override run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
 		return accessor.get(ISessionsLayoutService).openEntry({
 			id: 'bots', workspaceMode: 'code', activityContext: selectedContext,
-			content: 'editor', sidebarContainerId: botsNavigationId, showEditorTabs: false,
+			content: 'editor', sidebarContainerId: botsNavigationId, showWorkspaceModeControl: false, showEditorTabs: false,
 			restoreCommand: 'sessions.open.bots', focus: 'sidebar',
 			editorInput: { resource: botsResource, label: title.value, readOnly: true, showBreadcrumbs: false },
 		}, undefined, source === 'restore' ? { source } : undefined);

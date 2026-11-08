@@ -7,8 +7,6 @@ export const lxiconsLibrary = {
 	account: registerLxicon("account", 0xe005),
 	add: registerLxicon("add", 0xe001),
 	addSmall: registerLxicon("add-small", 0xe006),
-	agent: registerLxicon("agent", 0xe008),
-	agentFilled: registerLxicon("agent-filled", 0xe007),
 	alignCenter: registerLxicon("align-center", 0xe009),
 	alignJustified: registerLxicon("align-justified", 0xe00a),
 	alignLeft: registerLxicon("align-left", 0xe00b),

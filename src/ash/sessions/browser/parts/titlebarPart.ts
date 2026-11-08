@@ -23,7 +23,7 @@ import { Menus } from '../menus.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
+import { SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../base/common/observable.js';
 import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
@@ -106,19 +106,20 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 			code: 'sessions.open.code',
 		}));
 		const updateModeVisibility = (): void => {
-			const visible = contextKeys.getValue<boolean>(SideBarVisibleContext.key) !== false;
+			const visible = contextKeys.getValue<boolean>(SideBarVisibleContext.key) !== false
+				&& contextKeys.getValue<boolean>(SessionsEntryShowsWorkspaceModeControlContext.key) !== false;
 			if (!visible && modeHost.contains(container.ownerDocument.activeElement)) {
 				menubar.domNode.querySelector<HTMLElement>('[data-action-id="ash.sessions.toggleSidebar"] button')?.focus();
 			}
 			modeHost.hidden = !visible;
 		};
-		const sidebarKeys = new Set([SideBarVisibleContext.key]);
+		const modeVisibilityKeys = new Set([SideBarVisibleContext.key, SessionsEntryShowsWorkspaceModeControlContext.key]);
 		this._register(contextKeys.onDidChangeContext(event => {
-			if (event.affectsSome(sidebarKeys)) updateModeVisibility();
+			if (event.affectsSome(modeVisibilityKeys)) updateModeVisibility();
 		}));
 		updateModeVisibility();
 		const updateSidebarMinimumWidth = (): void => {
-			// Keep the expanded constraint while the mode control is hidden with navigation.
+			// Keep the expanded constraint while the mode control is hidden.
 			if (modeHost.hidden) return;
 			const children = Array.from(left.children).filter(child => ownerWindow.getComputedStyle(child).display !== 'none');
 			const style = ownerWindow.getComputedStyle(left);

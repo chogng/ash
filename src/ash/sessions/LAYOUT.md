@@ -144,8 +144,9 @@ the same actions and order. At the default location, SidebarPart hosts labeled
 navigation above its active view and Accounts below it. Navigation is a disposable
 component rather than a separate window Part; closing or suppressing the sidebar hides its
 navigation and Accounts together without reserving an icon rail. The titlebar
-workspace mode control follows the same sidebar visibility. The sidebar toggle
-remains available to restore navigation in the current page. ActivityBar retains
+workspace mode control appears when the sidebar is visible and the current
+entry allows it. The sidebar toggle remains available to restore navigation in
+the current page. ActivityBar retains
 action ownership as its presentation moves between the configured hosts.
 
 Both workbenches open, hide and focus view containers through

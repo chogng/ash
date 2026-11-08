@@ -1,8 +1,6 @@
 {
   "strokeWidth": 1.25,
   "outlinedFills": {
-    "agent": [0, 1],
-    "agent-filled": [0],
     "ask": [2],
     "bell": [1],
     "bell-dot": [0, 1],

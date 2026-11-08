@@ -7,7 +7,9 @@ import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storag
 
 test('Bots keeps Code navigation and search separate', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const modeControl = page.locator('.ash-window-mode-control');
+	const code = modeControl.getByRole('button', { name: 'Code', exact: true });
+	await code.click();
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Bots', exact: true }).click();
 	const sidebar = page.getByRole('region', { name: 'Bots', exact: true }).filter({ has: page.getByRole('button', { name: 'Back', exact: true }) });
@@ -17,6 +19,14 @@ test('Bots keeps Code navigation and search separate', async ({ target, workbenc
 	await expect(back).toBeVisible();
 	await expect(page.locator('.ash-bots-page').getByRole('heading', { name: 'Code Review' })).toBeVisible();
 	await expect(navigation).toBeHidden();
+	await expect(modeControl).toBeHidden();
+	await expect(page.getByRole('toolbar', { name: 'Workspace mode', exact: true })).toHaveCount(0);
+	const titlebar = page.locator('[data-part="titlebar"]');
+	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+	await expect(sidebar).toBeHidden();
+	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+	await expect(back).toBeVisible();
+	await expect(modeControl).toBeHidden();
 	await expect(bot).toHaveAttribute('aria-expanded', 'true');
 	await bot.press('Enter');
 	await expect(bot).toHaveAttribute('aria-expanded', 'false');
@@ -33,6 +43,8 @@ test('Bots keeps Code navigation and search separate', async ({ target, workbenc
 	await back.click();
 	await expect(sidebar).toBeHidden();
 	await expect(navigation.getByRole('button', { name: 'Bots', exact: true })).toBeVisible();
+	await expect(code).toBeVisible();
+	await expect(code).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('Sessions discards an unavailable saved entry and completes restoration without losing the draft', async ({ application, target, workbench }) => {

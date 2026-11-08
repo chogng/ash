@@ -6,6 +6,9 @@ export const CanGoForwardContext = new RawContextKey<boolean>('sessionsCanGoForw
 /** The product workspace owning the current page and its sidebar navigation. */
 export const SessionsWorkspaceModeContext = new RawContextKey<'chat' | 'code'>('sessions.workspaceMode', 'chat');
 
+/** Whether the visible entry allows the title bar workspace mode control. */
+export const SessionsEntryShowsWorkspaceModeControlContext = new RawContextKey<boolean>('sessions.entryShowsWorkspaceModeControl', true);
+
 /** The Code conversation page is active. Other pages can share its workspace mode. */
 export const CodeConversationPageContext = new RawContextKey<boolean>('sessions.activity.codeSelected', false);
 

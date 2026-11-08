@@ -383,7 +383,7 @@ export class CollaborationContribution extends Disposable {
 }
 
 function createAction(id: string, label: string, tooltip: string, enabled: boolean, checked: boolean, run: () => void): IAction {
-	return { id, label, tooltip, icon: Lxicon.agent, enabled, checked, run };
+	return { id, label, tooltip, icon: Lxicon.collab, enabled, checked, run };
 }
 
 const emptyCollaborationContextMenuProvider: IContextMenuProvider = {

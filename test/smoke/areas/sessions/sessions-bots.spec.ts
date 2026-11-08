@@ -109,13 +109,16 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 		});
 		await expect.poll(async () => (await read()).thread.turns.at(-1)?.status).toBe('completed');
 		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], source)).changeSets.some(change => change.captureState === 'sealed' && change.statistics.additions > 0)).toBe(true);
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const modeControl = page.locator('.ash-window-mode-control');
+		const code = modeControl.getByRole('button', { name: 'Code', exact: true });
+		await code.click();
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Code Review source' }).click();
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Bots', exact: true }).click();
 		const bots = page.locator('.ash-bots-page');
 		await bots.getByRole('button', { name: 'Review Changes', exact: true }).click();
 		const detail = bots.getByRole('region', { name: 'Comparison', exact: true });
 		await expect(detail).toContainText('const answer = 42;');
+		await expect(modeControl).toBeHidden();
 		await detail.locator('.stanza-diff-editor-side.modified .line-numbers').getByText('1', { exact: true }).hover({ force: true });
 		await detail.getByRole('button', { name: 'Add comment on line 1', exact: true }).click();
 		await detail.getByRole('textbox', { name: 'Comment for the agent' }).fill('Check the order');
@@ -124,6 +127,7 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 		await expect(detail).toBeHidden();
 		const transcript = bots.getByRole('log', { name: 'Chat transcript' });
 		await expect(transcript).toContainText('Review reply from Code Review');
+		await expect(modeControl).toBeHidden();
 		const pageBackground = await page.locator('.ash-desktop-editor-area').evaluate(element => getComputedStyle(element).backgroundColor);
 		await expect(bots.locator('.ash-chat')).toHaveCSS('background-color', pageBackground);
 		await expect(transcript).not.toContainText('Source-only prompt');
@@ -150,5 +154,10 @@ test('Code Review sends and continues a Bots thread with its saved line comparis
 		expect(assistantAvatar!.x + assistantAvatar!.width).toBeLessThan(userAvatar!.x);
 		expect((await read()).thread.turns).toHaveLength(1);
 		await testInfo.attach('bots-review', { body: await page.screenshot(), contentType: 'image/png' });
+		const sidebar = page.getByRole('region', { name: 'Bots', exact: true });
+		await sidebar.getByRole('button', { name: 'Back', exact: true }).press('Enter');
+		await expect(bots).toBeHidden();
+		await expect(code).toBeVisible();
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
 	} finally { await connection.close(); }
 });

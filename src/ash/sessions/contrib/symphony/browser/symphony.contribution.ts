@@ -47,7 +47,7 @@ async function openSymphony(accessor: ServicesAccessor, source?: 'restore'): Pro
 registerAction2(class OpenSymphony extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.agent,
+			id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.bot,
 			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'more', order: 40, when: SessionsWorkspaceModeContext.isEqualTo('code') }
 		});
 	}

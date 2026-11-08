@@ -622,7 +622,7 @@ export class SessionsPreferences extends Disposable {
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
-				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: defaults.all.filter(setting => setting.id === AgentsVoiceSettingId.Model), content: management.get('agents') },
+				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.bot, settings: defaults.all.filter(setting => setting.id === AgentsVoiceSettingId.Model), content: management.get('agents') },
 				{ id: MEMORY_SETTINGS_CATEGORY, title: memorySettingsTitle(), icon: Lxicon.brain, settings: [], content: management.get(MEMORY_SETTINGS_CATEGORY) },
 				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
