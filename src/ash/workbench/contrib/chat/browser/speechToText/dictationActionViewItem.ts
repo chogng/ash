@@ -132,6 +132,7 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		const actions: IAction[] = devices.map(({ id, label, disconnected }, index) => ({
 			id: `dictation.microphone.${index}`, label, tooltip: label, enabled: !disconnected, checked: currentDevice === id,
 			run: async () => {
+				if (disconnected) return;
 				await this.configuration.updateValue(DictationConfiguration.inputDevice, id);
 				if (this.isActive.get()) await this.speech.switchMicrophone(window, id);
 				this.onboarding.refreshMicrophones(this.speech.analyserNode);
@@ -141,7 +142,6 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 			const currentLanguage = this.configuration.getValue<string>(DictationConfiguration.language) ?? 'auto';
 			const names = new Intl.DisplayNames([window.document.documentElement.lang || 'en'], { type: 'language' });
 			const languages = [
-				if (disconnected) return;
 				{ id: 'auto', label: localize({ bundle: 'ash', key: 'dictation.autoLanguage' }, 'Automatic language detection') },
 				...options.languages.map(id => ({ id, label: names.of(id) ?? id })),
 			];
