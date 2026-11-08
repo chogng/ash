@@ -2124,10 +2124,10 @@ test(
 		await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toHaveCount(0);
-		await navigation.getByRole('button', { name: 'General' }).click();
+		await navigation.getByRole('button', { name: 'Voice' }).click();
 		await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toHaveCount(0);
-		await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
+		await expect(settings.getByRole('group', { name: 'Local dictation models' })).toBeVisible();
 		await expect(settings.locator('.ash-local-transcription-model-controls')).toBeVisible();
 		await navigation.getByRole('button', { name: 'General' }).click();
 		await expect(

@@ -1,3 +1,9 @@
+import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
@@ -149,6 +155,26 @@ const configuration = resources.add(new WorkbenchConfigurationService({ source: 
 const services = resources.add(new InstantiationService());
 services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 services.registerInstance(IFileService, resources.add(new FileService()));
+services.registerInstance(ISearchService, {
+	registerSearchResultProvider: () => { throw new Error('Dictation fixture does not register search providers'); },
+	fileSearch: async () => ({ results: [], messages: [] }),
+	textSearch: async () => { throw new Error('Dictation fixture does not search file contents'); },
+});
+services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'dictation', folders: [] })));
+services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
+services.registerInstance(IChatService, {
+	readThread: async () => { throw new Error('Dictation fixture does not read chat threads'); },
+} as unknown as IChatService);
+services.registerInstance(IChatSessionNavigationService, {
+	createNewConversation: async () => { throw new Error('Dictation fixture does not create conversations'); },
+	revision: 0,
+	getActiveConversation: () => undefined,
+	getConversations: () => [],
+	startVoiceConversation: async () => { throw new Error('Dictation fixture does not start voice conversations'); },
+	appendToActiveDraft: () => { },
+	captureActiveDraft: async () => undefined,
+	openConversation: async () => { throw new Error('Dictation fixture does not open conversations'); },
+});
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
 const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
@@ -224,8 +250,6 @@ const root = document.getElementById('models')!;
 root.style.width = '760px';
 const theme = resources.add(new TestThemeService(lightColorTheme));
 resources.add(bindTestColorTheme(theme, document.body));
-const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
-controls.setVisible(true);
 const unexpectedAttachment = async (): Promise<never> => { throw new Error('The dictation fixture must not resolve attachments'); };
 services.registerInstance(IChatAttachmentResolveService, {
 	_serviceBrand: undefined,
@@ -277,6 +301,8 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 registerCodeEditorServices(services);
+const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
+controls.setVisible(true);
 const editor = resources.add(services.createInstance(ChatInputEditor, { container: inputContainer, ariaLabel: 'Dictation draft', placeholder: '', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() }));
 services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);

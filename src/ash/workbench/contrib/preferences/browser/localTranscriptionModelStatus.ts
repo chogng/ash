@@ -1,12 +1,13 @@
 import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/localTranscriptionModelControls.css';
+import '../../../../base/browser/ui/aria/aria.css';
 import { h } from '../../../../base/browser/dom.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { isModelPreparing, DictationModelState, type ILocalTranscriptionModelSnapshot, type IDictationModelStatus } from '../../../../platform/localTranscription/common/localTranscription.js';
 
-/** The same backend snapshot is presented by settings and the composer. No view owns the task. */
+/** Shows operation feedback alongside the inventory's model state. */
 export class LocalTranscriptionModelStatus extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly text: HTMLElement;
@@ -26,11 +27,15 @@ export class LocalTranscriptionModelStatus extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
-	setMessage(message: string): void { this.text.textContent = message; this.progress.hidden = true; }
+	setMessage(message: string): void {
+		this.domNode.classList.remove('ash-aria-live');
+		this.text.textContent = message;
+		this.progress.hidden = true;
+	}
 	render(snapshot: ILocalTranscriptionModelSnapshot): void {
-		this.text.textContent = snapshot.status ? modelProgressText(snapshot.status) : snapshot.available
-			? localize('dictation.model.installedSize', 'Installed: {0} · {1} MiB', snapshot.model, (snapshot.sizeBytes / (1024 * 1024)).toFixed(1))
-			: localize('dictation.model.missing', 'Model package not installed: {0}', snapshot.model);
+		// The model row shows Ready. Keep the completion announcement for screen readers.
+		this.domNode.classList.toggle('ash-aria-live', snapshot.status?.state === DictationModelState.Ready);
+		this.text.textContent = snapshot.status ? modelProgressText(snapshot.status) : '';
 		this.progress.hidden = !isModelPreparing(snapshot.status);
 		// The transport reports bytes, not a total. An indeterminate bar never invents a percentage.
 		this.progress.removeAttribute('value');

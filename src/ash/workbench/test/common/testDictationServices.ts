@@ -112,7 +112,7 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 	replace(target.URL, 'createObjectURL', () => 'blob:dictation-test');
 	replace(target.URL, 'revokeObjectURL', () => { });
 	replace(target.navigator, 'mediaDevices', Object.assign(new (target.EventTarget ?? EventTarget)(), {
-		enumerateDevices: async () => [{ deviceId: 'mic-2', kind: 'audioinput', label: 'USB microphone' }, { deviceId: 'microphone-1', kind: 'audioinput', label: 'Test microphone' }],
+		enumerateDevices: async () => [{ deviceId: 'mic-2', kind: 'audioinput', label: 'USB microphone' }, { deviceId: 'microphone-1', kind: 'audioinput', label: 'Test microphone (Built-in)' }],
 		getUserMedia: async (constraints: MediaStreamConstraints) => {
 			requests.push(constraints);
 			const track = { stopped: false, stop() { this.stopped = true; } };

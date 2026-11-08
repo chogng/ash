@@ -172,7 +172,7 @@ suite('table browser component', () => {
 	for (const scale of [1, 1.25, 1.5, 2]) {
 		suite(`Table layout at ${scale * 100}% display scale`, () => {
 			browserTests.use({ deviceScaleFactor: scale });
-			test('table resizes without spurious overflow or resize observation errors', async function () {
+			test('model rows resize without horizontal overflow or resize observation errors', async function () {
 				const { page } = browserTests;
 
 				const errors: string[] = [];
@@ -180,34 +180,34 @@ suite('table browser component', () => {
 				await page.goto('/table.html');
 				await expect.poll(async () => ({ initialized: await page.evaluate(() => !!window.ashTableIntegration), errors })).toEqual({ initialized: true, errors: [] });
 				expect(await page.evaluate(() => devicePixelRatio)).toBe(scale);
-				const grid = page.getByRole('grid', { name: 'Local dictation models' });
-				await expect(grid.getByRole('row')).toHaveCount(3);
+				const models = page.getByRole('group', { name: 'Local dictation models' });
+				await expect(models.locator('[data-model-id]')).toHaveCount(2);
 				for (const theme of ['light', 'hcDark', 'hcLight']) {
 					await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
 					for (const width of [760, 340, 760]) {
 						await page.evaluate(width => { document.getElementById('models')!.style.width = `${width}px`; }, width);
-						const headerWidth = Math.max(590, await grid.evaluate(element => element.clientWidth));
-						await expect.poll(() => grid.evaluate(element => ({
-							overflow: element.scrollWidth > element.clientWidth,
-							headerWidth: Math.round([...element.querySelectorAll('[role="columnheader"]')].reduce((width, header) => width + header.getBoundingClientRect().width, 0)),
-						}))).toEqual({ overflow: width === 340, headerWidth });
+						await expect.poll(() => models.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(false);
 					}
 				}
 				await page.evaluate(() => window.ashTableIntegration.dispose());
-				await expect(grid).toHaveCount(0);
+				await expect(models).toHaveCount(0);
 				expect(errors).toEqual([]);
 			});
 		});
 	}
 
-	test('model table installs, preserves progress focus, cancels and selects installed models', async function () {
+	test('model rows install, preserve progress focus, cancel, select and uninstall models', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/table.html');
-		const grid = page.getByRole('grid', { name: 'Local dictation models' });
-		await expect(grid.getByRole('columnheader')).toHaveText(['Model', 'Size', 'Status', 'Actions']);
-		const missing = grid.getByRole('row').filter({ hasText: 'paraformer-large-online' });
-		const installed = grid.getByRole('row').filter({ hasText: 'imported-model' });
+		const models = page.getByRole('group', { name: 'Local dictation models' });
+		await expect(models.getByRole('heading', { name: 'Dictation models' })).toBeVisible();
+		await expect(models.getByRole('columnheader')).toHaveText(['Model', 'Best for', 'Actions']);
+		await expect(models.getByRole('textbox')).toHaveCount(0);
+		const missing = models.locator('[data-model-id]').filter({ hasText: 'Paraformer' });
+		const installed = models.locator('[data-model-id]').filter({ hasText: 'imported-model' });
+		await expect(missing.getByRole('cell', { name: 'Mandarin Chinese', exact: true })).toBeVisible();
+		await expect(installed.getByRole('cell', { name: '—', exact: true })).toBeVisible();
 		await expect(missing.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
 		await expect(installed.getByRole('button', { name: 'Use model', exact: true })).toBeEnabled();
 		await missing.getByRole('button', { name: 'Install', exact: true }).click();
@@ -218,48 +218,45 @@ suite('table browser component', () => {
 		await expect(cancel).toBeFocused();
 		await cancel.click();
 		await expect(missing.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
+		await missing.getByRole('button', { name: 'Install', exact: true }).click();
+		await page.evaluate(() => window.ashTableIntegration.finish());
+		await expect(missing.getByText('Ready', { exact: true })).toBeVisible();
+		const completion = models.locator('.ash-local-transcription-model-status');
+		await expect(completion).toHaveCSS('clip-path', 'inset(50%)');
+		await expect(completion.getByRole('status')).toHaveText('Model verified and ready to use.');
 		await installed.getByRole('button', { name: 'Use model', exact: true }).click();
-		await expect(installed.getByRole('button', { name: 'Current', exact: true })).toBeDisabled();
-		await installed.getByRole('button', { name: 'Uninstall', exact: true }).click();
-		await installed.getByRole('button', { name: 'Confirm uninstall', exact: true }).click();
+		await expect(installed.getByText('Ready', { exact: true })).toBeVisible();
+		const uninstall = installed.getByRole('button', { name: 'Uninstall', exact: true });
+		await expect(uninstall).toHaveClass(/ash-button-danger/u);
+		await uninstall.press('Enter');
+		const confirm = page.getByRole('dialog').filter({ hasText: 'Uninstall imported-model?' });
+		await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(installed.getByText('Ready', { exact: true })).toBeVisible();
+		await uninstall.click();
+		await confirm.getByRole('button', { name: 'Uninstall', exact: true }).click();
 		await expect(installed).toContainText('Not installed');
 		expect(await page.evaluate(() => window.ashTableIntegration.operations)).toEqual([
-			'install:paraformer-large-online-ec6a3c64', 'cancel:paraformer-large-online-ec6a3c64', 'uninstall:imported-model',
+			'install:paraformer-large-online-ec6a3c64', 'cancel:paraformer-large-online-ec6a3c64',
+			'install:paraformer-large-online-ec6a3c64', 'uninstall:imported-model',
 		]);
 	});
 
-	test('table columns align through resizing and remain keyboard accessible in every theme', async function () {
+	test('model actions are keyboard accessible and translated', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/table.html');
-		const grid = page.getByRole('grid');
-		const rows = grid.getByRole('row');
-		await rows.nth(1).focus();
-		await page.keyboard.press('ArrowDown');
-		await expect(rows.nth(2)).toBeFocused();
-		await page.keyboard.press('ArrowRight');
-		await expect(rows.nth(2).getByRole('gridcell').first()).toBeFocused();
+		await page.goto('/table.html?locale=zh-CN');
+		const models = page.getByRole('group', { name: '本地听写模型' });
+		const install = models.getByRole('button', { name: '安装', exact: true });
+		await models.focus();
+		await page.keyboard.press('Tab');
+		await expect(install).toBeFocused();
 		for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 			await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
-			expect(await rows.nth(2).getByRole('gridcell').first().evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+			expect(await install.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
 		}
-		const separator = grid.getByRole('separator').first();
-		await separator.focus();
-		const before = await grid.getByRole('columnheader').first().boundingBox();
-		await page.keyboard.press('ArrowRight');
-		await expect.poll(async () => (await grid.getByRole('columnheader').first().boundingBox())!.width).not.toBe(before!.width);
-		const widths = await grid.evaluate(element => {
-			const headers = [...element.querySelectorAll('[role="columnheader"]')].map(node => node.getBoundingClientRect().width);
-			const cells = [...element.querySelectorAll('.ash-table-row')][0]!.querySelectorAll('[role="gridcell"]');
-			return [headers, [...cells].map(node => node.getBoundingClientRect().width)];
-		});
-		expect(widths[1]).toEqual(widths[0]);
-		await page.evaluate(() => { document.getElementById('models')!.style.width = '340px'; });
-		await expect.poll(() => grid.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-		await page.goto('/table.html?locale=zh-CN');
-		await expect(page.getByRole('grid', { name: '本地听写模型' }).getByRole('columnheader')).toHaveText(['模型', '大小', '状态', '操作']);
-		await page.evaluate(() => window.ashTableIntegration.dispose());
-		await expect(page.getByRole('grid')).toHaveCount(0);
+		await expect(models.getByRole('heading', { name: '听写模型' })).toBeVisible();
+		await expect(models.getByRole('cell', { name: '普通话', exact: true })).toBeVisible();
+		await expect(models.getByRole('button', { name: '使用模型', exact: true })).toBeVisible();
 	});
 
 	for (const locale of ['en', 'zh-CN']) {

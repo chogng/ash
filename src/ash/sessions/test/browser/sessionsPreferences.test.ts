@@ -501,7 +501,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.ok(voiceButton);
 	voiceButton.click();
 	assert.equal(window.document.querySelector('[data-configuration-key="dictation.model"]'), null);
-	assert.ok(window.document.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(window.document.querySelector('[role="group"][aria-label="Local dictation models"]'));
 	assert.ok(window.document.querySelector('.ash-local-transcription-model-controls'));
 	assert.equal(window.document.querySelector('[data-configuration-key="dictation.cloudProvider"]'), null);
 	await configuration.updateValue('dictation.backend', 'cloud');
@@ -643,7 +643,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.equal(window.document.querySelector('[data-configuration-key="workbench.locale"] [role="combobox"]')?.getAttribute('aria-label'), '界面语言');
 		await preferences.open({ section: 'dictation' });
 		assert.equal(categoryButton('dictation').textContent, '语音');
+		assert.equal(window.document.querySelector('[data-settings-tree-group-id="dictation"]'), null);
 		assert.ok(window.document.querySelector('[data-configuration-key="dictation.backend"]'));
+		const microphone = window.document.querySelector('[data-settings-item-id="dictation.inputDevice"] [role="combobox"]');
+		assert.equal(microphone?.getAttribute('aria-label'), '麦克风');
+		assert.equal(microphone?.textContent, '跟随系统');
+		assert.equal(window.document.querySelector('[data-settings-item-id="dictation.language"]'), null);
+		assert.equal(window.document.querySelector('[data-settings-item-id="accessibility.verbosity.dictationModels"]'), null);
 		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');
 		assert.ok(translatedDesign);
 		translatedDesign.click();

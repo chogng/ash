@@ -291,7 +291,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'codeReviewModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'commitMessageModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
 			this._register(modelServices.createInstance(ModelSettingsRenderer, settingsContent)),
-			this._register(this.instantiationService.createInstance(DictationSettingsRenderer, settingsContent)),
+			this._register(this.instantiationService.createInstance(DictationSettingsRenderer, settingsContent, { showGroupHeader: true })),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, {
 				categoryId: 'hooks',
 				title: localize({ bundle: 'ash.settings', key: 'hooks.aria' }, 'Agent Hooks'),

@@ -3923,13 +3923,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const dictationSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input')!;
 	dictationSearch.value = 'dictation';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(root.querySelector('[role="group"][aria-label="Local dictation models"]'));
 	assert.ok(root.querySelector('[data-settings-category-id="voice-input"]'));
 	dictationSearch.value = '';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	await configuration.updateValue(LocalizationConfiguration.locale, 'en');
 	assert.equal(root.querySelector('[data-configuration-key="dictation.model"]'), null);
-	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(root.querySelector('[role="group"][aria-label="Local dictation models"]'));
 	await configuration.updateValue('dictation.backend', 'codex');
 	const subscription = root.querySelector('[data-settings-item-id="dictation.subscription"]');
 	assert.match(subscription?.textContent ?? '', /Codex subscription dictation/);
@@ -3946,6 +3946,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.match(root.querySelector('[data-settings-item-id="dictation.cloudModel"]')?.textContent ?? '', /grok-voice-transcribe-2\.0/);
 	assert.equal(root.querySelector('[data-configuration-key="dictation.subscription"]'), null);
 	await configuration.updateValue('dictation.backend', 'local');
+	const dictationVerbosityId = AccessibilityVerbositySettingId.DictationModels;
+	assert.equal(root.querySelector(`[data-settings-item-id="${dictationVerbosityId}"]`), null);
+	await preferences.openSettings({ section: 'accessibility' });
+	assert.ok(root.querySelector(`[data-settings-item-id="${dictationVerbosityId}"]`));
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.click();
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
@@ -4306,8 +4310,9 @@ test('Local model controls share translated snapshots and keep preparation runni
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const configuration = resources.add(new WorkspaceService());
-	await configuration.updateValue(DictationConfiguration.model, 'imported-model');
+	await configuration.updateValue(DictationConfiguration.model, 'paraformer-large-online-ec6a3c64');
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IDialogService, resources.add(new DialogService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, {
 		onDidChangeHooks: Event.None,
@@ -4324,7 +4329,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	};
 	let finish!: (state: ModelState.Cancelled) => void;
 	let cancellations = 0;
-	const imported: unknown[] = [];
+	const installed: string[] = [];
 	services.registerInstance(ILocalTranscriptionModelService, {
 		isSupported: true,
 		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, status: modelStatus }),
@@ -4335,8 +4340,8 @@ test('Local model controls share translated snapshots and keep preparation runni
 			progress({ state: DictationModelState.Cancelled });
 			finish(DictationModelState.Cancelled);
 		},
-		importPackage: (options: unknown, onProgress: typeof progress) => {
-			imported.push(options);
+		prepareModel: (model: string) => {
+			installed.push(model);
 			progress({ state: DictationModelState.Checking });
 			return {
 				completed: new Promise<ModelState.Cancelled>(resolve => {
@@ -4356,18 +4361,15 @@ test('Local model controls share translated snapshots and keep preparation runni
 	controls.setVisible(true);
 	await nextTurn();
 	const status = root.querySelector<HTMLElement>('[role="status"]')!;
-	assert.equal(status.textContent, '模型包尚未安装：imported-model');
-	const source = root.querySelector<HTMLInputElement>('input')!;
-	assert.equal(source.getAttribute('aria-label'), '已准备好的 Paraformer 模型目录');
-	assert.equal(root.querySelector('label')?.htmlFor, source.id);
-	source.value = 'C:\\prepared-model';
-	source.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.equal(status.textContent, '');
+	assert.match(controls.getAccessibleContent(), /Paraformer · — · 未安装/u);
+	assert.equal(root.querySelector('input'), null);
 	const buttons = [...root.querySelectorAll<HTMLButtonElement>('button')];
-	const importButton = buttons.find(button => button.textContent === '导入模型')!;
-	assert.equal(importButton.disabled, false);
-	importButton.click();
-	assert.deepEqual(imported, [{ model: 'imported-model', sourcePath: 'C:\\prepared-model' }]);
-	assert.equal(importButton.disabled, true);
+	const installButton = buttons.find(button => button.textContent === '安装')!;
+	assert.equal(installButton.disabled, false);
+	installButton.click();
+	assert.deepEqual(installed, ['paraformer-large-online-ec6a3c64']);
+	assert.equal(installButton.disabled, true);
 	progress({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
 	await nextTurn();
 	assert.equal(status.textContent, '正在下载 encoder.onnx：2.0 MiB');
@@ -4381,8 +4383,8 @@ test('Local model controls share translated snapshots and keep preparation runni
 	buttons.find(button => button.textContent === '取消')!.click();
 	await nextTurn();
 	assert.equal(cancellations, 1);
-	assert.equal(importButton.disabled, false);
-	assert.equal(buttons.find(button => button.textContent === '取消')?.classList.contains('hidden'), true);
+	assert.equal(installButton.disabled, false);
+	assert.equal(buttons.some(button => button.textContent === '取消'), false);
 });
 
 test('Models Settings separates its model, subscription and API cards and saves keys on blur', async () => {

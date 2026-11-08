@@ -9,7 +9,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
-import { readDictationPreparation } from '../speechToText/dictationInput.js';
+import { getDictationMicrophoneChoices, readDictationInputDevices, readDictationPreparation } from '../speechToText/dictationInput.js';
 import { activeDictationEditor, cancelDictation, isDictating, onDidChangeDictationEditor, startDictation, stopDictation } from '../speechToText/dictationSession.js';
 import { IChatWidgetService, type IChatWidget } from '../chat.js';
 import { SELECT_MICROPHONE_COMMAND } from '../speechToText/micButtonMenuActions.js';
@@ -17,6 +17,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IDictationOnboardingService, SHOW_DICTATION_ONBOARDING_COMMAND, RESET_DICTATION_ONBOARDING_COMMAND } from '../speechToText/dictationOnboarding.js';
 import { IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechToText/chatSpeechToTextService.js';
+import { DictationConfiguration } from '../../common/constants.js';
 
 // Command admission while local model discovery is pending; capture state belongs to the speech service.
 const preparations = new WeakMap<IChatSpeechToTextService, { readonly widget: IChatWidget; readonly cancel: () => void; }>();
@@ -152,13 +153,13 @@ class SelectDictationMicrophoneAction extends Action2 {
 		const service = accessor.get(IChatSpeechToTextService);
 		const onboarding = accessor.get(IDictationOnboardingService);
 		const quickInput = accessor.get(IQuickInputService);
-		const devices = await target.navigator.mediaDevices?.enumerateDevices() ?? [];
+		const devices = await readDictationInputDevices(target);
 		const lifetime = new DisposableStore();
 		const picker = lifetime.add(quickInput.createQuickPick<IQuickPickItem & { deviceId: string; }>());
 		picker.placeholder = picker.ariaLabel = localize('dictation.selectMicrophone', 'Select microphone');
-		const items = [{ label: localize('dictation.defaultMicrophone', 'System default'), deviceId: '' }, ...devices.filter(device => device.kind === 'audioinput' && device.deviceId !== 'default' && device.deviceId !== 'communications').map(device => ({ label: device.label || localize('dictation.microphone', 'Microphone'), deviceId: device.deviceId }))];
+		const items = getDictationMicrophoneChoices(devices).map(({ id, label }) => ({ label, deviceId: id }));
 		picker.items = items;
-		picker.activeItems = items.filter(item => item.deviceId === configuration.getValue('dictation.inputDevice'));
+		picker.activeItems = items.filter(item => item.deviceId === configuration.getValue(DictationConfiguration.inputDevice));
 		await new Promise<void>((resolve, reject) => {
 			let accepted = false;
 			lifetime.add(picker.onDidHide(() => { if (!accepted) resolve(); }));
@@ -168,7 +169,7 @@ class SelectDictationMicrophoneAction extends Action2 {
 				accepted = true;
 				picker.hide();
 				void (async () => {
-					await configuration.updateValue('dictation.inputDevice', selected.deviceId);
+					await configuration.updateValue(DictationConfiguration.inputDevice, selected.deviceId);
 					if (service.isBusy) await service.switchMicrophone(target, selected.deviceId);
 					onboarding.refreshMicrophones(service.analyserNode);
 				})().then(resolve, reject);

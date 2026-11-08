@@ -2,25 +2,81 @@
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
-	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	padding-top: var(--ash-spacing-size240);
 	gap: var(--ash-spacing-size80);
 	font-size: var(--ash-fontSize-label1);
 	font-weight: var(--ash-fontWeight-regular);
 	line-height: 1.5;
 }
 
-.ash-local-transcription-model-source .ash-input-box {
+.ash-settings-card > .ash-local-transcription-model-controls::before {
+	content: none;
+}
+
+.ash-local-transcription-model-heading {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-local-transcription-model-row-state {
+	display: block;
+	color: var(--ash-description-foreground);
+}
+
+.ash-local-transcription-model-controls:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-local-transcription-model-table {
 	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.ash-local-transcription-model-table :is(th, td) {
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	text-align: start;
+	font-weight: var(--ash-fontWeight-regular);
+	overflow-wrap: anywhere;
+}
+
+.ash-local-transcription-model-table thead {
+	color: var(--ash-description-foreground);
+}
+
+.ash-local-transcription-model-table thead th:first-child {
+	width: 40%;
+}
+
+.ash-local-transcription-model-table thead th:last-child {
+	width: 36%;
+}
+
+.ash-local-transcription-model-table :is(th, td):last-child {
+	text-align: end;
+}
+
+.ash-local-transcription-model-table tbody tr {
+	border-top: var(--ash-strokeThickness) solid
+		var(--ash-settings-itemSeparator);
+}
+
+.ash-local-transcription-model-table tbody tr:is(:hover, :focus-within) {
+	background: var(--ash-settings-rowHoverBackground);
 }
 
 .ash-local-transcription-model-actions {
 	display: flex;
 	flex-wrap: wrap;
+	justify-content: flex-end;
 	gap: var(--ash-spacing-size80);
 }
 
 .ash-local-transcription-model-status {
 	margin: 0;
+	padding-inline: var(--ash-spacing-size160);
 	color: var(--ash-description-foreground);
 	overflow-wrap: anywhere;
 }
@@ -37,25 +93,4 @@
 }
 .ash-local-transcription-model-status progress[hidden] {
 	display: none;
-}
-.ash-local-transcription-model-inventory {
-	min-width: 0;
-}
-.ash-local-transcription-model-cell-text {
-	min-width: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-.ash-local-transcription-model-controls details {
-	display: block;
-}
-.ash-local-transcription-model-controls summary {
-	cursor: pointer;
-	margin-bottom: var(--ash-spacing-size80);
-}
-.ash-local-transcription-model-controls
-	details
-	> .ash-local-transcription-model-actions {
-	margin-top: var(--ash-spacing-size80);
 }

@@ -5034,7 +5034,10 @@ suite('chatInput browser component', () => {
 		await microphone.press('ArrowRight');
 		await expect(settings).toBeFocused();
 		await settings.press('Enter');
-		await expect(page.getByRole('menuitemradio', { name: 'System default microphone' })).toHaveAttribute('aria-checked', 'true');
+		const defaultMicrophone = page.getByRole('menuitemradio', { name: 'System', exact: true });
+		await expect(defaultMicrophone).toHaveAttribute('aria-checked', 'true');
+		await expect(defaultMicrophone.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]')).toBeVisible();
+		await expect(page.getByRole('menuitemradio', { name: 'Test microphone', exact: true })).toBeVisible();
 		await expect(microphoneSurface).not.toHaveCSS('background-color', transparent);
 		await expect(settingsSurface).not.toHaveCSS('background-color', transparent);
 		await expect(settings).not.toHaveCSS('background-color', transparent);

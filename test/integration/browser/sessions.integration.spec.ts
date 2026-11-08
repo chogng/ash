@@ -1688,8 +1688,9 @@ test.describe('Sessions settings components', () => {
 	test('dictation settings switch between local models and API connections', async ({ page }) => {
 		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
+		await navigation.getByRole('button', { name: 'Voice', exact: true }).click();
 		await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
-		await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
+		await expect(settings.getByRole('group', { name: 'Local dictation models' })).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toHaveCount(0);
 		const dictationBackend = settings.locator('[data-configuration-key="dictation.backend"]').getByRole('combobox');
 		const originalDictationBackend = (await dictationBackend.textContent())!.trim();
@@ -1698,10 +1699,10 @@ test.describe('Sessions settings components', () => {
 		await page.getByRole('option', { name: changedDictationBackend }).click();
 		await expect(dictationBackend).toHaveText(changedDictationBackend);
 		await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toBeVisible();
-		await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toHaveCount(0);
+		await expect(settings.getByRole('group', { name: 'Local dictation models' })).toHaveCount(0);
 		await settings.getByRole('button', { name: 'Manage API connections' }).click();
 		await expect(settings.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
-		await navigation.getByRole('button', { name: 'General' }).click();
+		await navigation.getByRole('button', { name: 'Voice', exact: true }).click();
 		await dictationBackend.click();
 		await page.getByRole('option', { name: originalDictationBackend }).click();
 	});

@@ -20,7 +20,7 @@ import { IKeybindingService } from '../../../../../platform/keybinding/common/ke
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { DictationConfiguration } from '../../common/constants.js';
 import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
-import { readDictationOptions } from './dictationInput.js';
+import { getDictationMicrophoneChoices, readDictationOptions } from './dictationInput.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
 import { addMicButtonContextMenuListener, getDictationContextMenuActions, SELECT_MICROPHONE_COMMAND } from './micButtonMenuActions.js';
 
@@ -120,23 +120,20 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 
 	private inputChoices(window: Window & typeof globalThis, options: IDictationInputOptions): IAction[] {
 		const currentDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice) ?? '';
-		const devices = [{ id: '', label: localize({ bundle: 'ash', key: 'dictation.systemMicrophone' }, 'System default microphone') }, ...options.inputDevices];
-		const actions: IAction[] = devices.map(({ id, label }, index) => ({
-			id: `dictation.microphone.${index}`, label, tooltip: label, enabled: true, checked: currentDevice === id,
+		const devices = getDictationMicrophoneChoices(options.inputDevices, currentDevice);
+		const actions: IAction[] = devices.map(({ id, label, disconnected }, index) => ({
+			id: `dictation.microphone.${index}`, label, tooltip: label, enabled: !disconnected, checked: currentDevice === id,
 			run: async () => {
 				await this.configuration.updateValue(DictationConfiguration.inputDevice, id);
 				if (this.isActive.get()) await this.speech.switchMicrophone(window, id);
 				this.onboarding.refreshMicrophones(this.speech.analyserNode);
 			},
 		}));
-		if (currentDevice && !devices.some(device => device.id === currentDevice)) {
-			const label = localize({ bundle: 'ash', key: 'dictation.missingMicrophone' }, 'Selected microphone is disconnected');
-			actions.unshift({ id: 'dictation.disconnectedMicrophone', label, tooltip: label, enabled: false, checked: true, run() { } });
-		}
 		if (options.languages.length) {
 			const currentLanguage = this.configuration.getValue<string>(DictationConfiguration.language) ?? 'auto';
 			const names = new Intl.DisplayNames([window.document.documentElement.lang || 'en'], { type: 'language' });
 			const languages = [
+				if (disconnected) return;
 				{ id: 'auto', label: localize({ bundle: 'ash', key: 'dictation.autoLanguage' }, 'Automatic language detection') },
 				...options.languages.map(id => ({ id, label: names.of(id) ?? id })),
 			];
