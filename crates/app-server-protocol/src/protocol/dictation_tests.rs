@@ -86,7 +86,7 @@ fn model_list_serializes_shared_preparation_and_download_metadata() {
                 "sizeBytes": 0,
                 "downloadSizeBytes": 2097152,
                 "recommendedLanguage": "cmn",
-                "stage": {"type":"downloading","file":"encoder.onnx","downloadedBytes":1048576}
+                "stage": {"type":"downloading","file":"decoder.onnx","downloadedBytes":262144,"packageDownloadedBytes":1048576}
             },
             {
                 "modelId": "custom",

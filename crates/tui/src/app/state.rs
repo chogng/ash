@@ -4050,6 +4050,7 @@ fn model_progress_text(
         DictationModelStage::Downloading {
             file,
             downloaded_bytes,
+            ..
         } => crate::nls::Text::template(
             "Dictation · downloading {0}: {1} MiB",
             vec![

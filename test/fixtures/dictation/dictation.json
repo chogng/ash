@@ -1,0 +1,72 @@
+[
+  {
+    "id": "dictation-fixture-5mb",
+    "recommended_language": "cmn",
+    "base_url": "http://127.0.0.1:39718/dictation-fixture-5mb",
+    "paraformer": {
+      "vocab_size": 8404,
+      "lfr_window_size": 7,
+      "lfr_window_shift": 6,
+      "encoder_output_size": 512,
+      "decoder_num_blocks": 16,
+      "decoder_kernel_size": 11
+    },
+    "files": {
+      "encoder": {
+        "name": "encoder.onnx",
+        "size_bytes": 4820245,
+        "sha256": "fb69242e61c023c92f375867561628e9718207dca4cd4015a6fb1f6d40e5965a"
+      },
+      "decoder": {
+        "name": "decoder.onnx",
+        "size_bytes": 35675,
+        "sha256": "d2adf3a1106ecac5de4afd43f3190fccb9446c67244ba925b1b616f56152316d"
+      },
+      "tokens": {
+        "name": "tokens.json",
+        "size_bytes": 141759,
+        "sha256": "3fa5a183f1637af5314ddd4213caa1a61c3c19803c6885717193af061cfd524e"
+      },
+      "cmvn": {
+        "name": "am.mvn",
+        "size_bytes": 2321,
+        "sha256": "00a61d185dd506f62c1314b80ad11a3a0c4fe7ae049880478eea1b6cd2f6b6ee"
+      }
+    }
+  },
+  {
+    "id": "dictation-fixture-8mb",
+    "recommended_language": "cmn",
+    "base_url": "http://127.0.0.1:39718/dictation-fixture-8mb",
+    "paraformer": {
+      "vocab_size": 8404,
+      "lfr_window_size": 7,
+      "lfr_window_shift": 6,
+      "encoder_output_size": 512,
+      "decoder_num_blocks": 16,
+      "decoder_kernel_size": 11
+    },
+    "files": {
+      "encoder": {
+        "name": "encoder.onnx",
+        "size_bytes": 7820236,
+        "sha256": "949253c3a45c60bedf63576e7c8efa0f870a6ff9e7a056931a9899a8002a509e"
+      },
+      "decoder": {
+        "name": "decoder.onnx",
+        "size_bytes": 35675,
+        "sha256": "d2adf3a1106ecac5de4afd43f3190fccb9446c67244ba925b1b616f56152316d"
+      },
+      "tokens": {
+        "name": "tokens.json",
+        "size_bytes": 141768,
+        "sha256": "a1c3c74e5134bc125aa8f3a1fb36e90f8993e9607087d2db148418805d3afb0b"
+      },
+      "cmvn": {
+        "name": "am.mvn",
+        "size_bytes": 2321,
+        "sha256": "00a61d185dd506f62c1314b80ad11a3a0c4fe7ae049880478eea1b6cd2f6b6ee"
+      }
+    }
+  }
+]

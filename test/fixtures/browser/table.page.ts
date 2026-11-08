@@ -510,7 +510,7 @@ window.ashTableIntegration = {
 	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
 	transcript: (text, final) => { if (extensionEmit) extensionEmit(text, final); else transcript?.(text, final); },
 	get draft() { return editor.value; },
-	progress: () => publish({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 * 1024 }),
+	progress: () => publish({ state: DictationModelState.Downloading, file: 'decoder.onnx', downloadedBytes: 1024 * 1024, packageDownloadedBytes: 64 * 1024 * 1024 }),
 	finish: () => {
 		models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, available: true, sizeBytes: 2 * 1024 * 1024, status: { state: DictationModelState.Ready } } : model);
 		changed.fire();

@@ -21,7 +21,7 @@ import { IVoiceCodeTranscriptionBackendService, type IDictationInputOptions } fr
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { DictationConfiguration } from '../../common/constants.js';
-import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
+import { ChatSpeechToTextState, IChatSpeechToTextService } from './chatSpeechToTextService.js';
 import { readDictationLevel, showDictationMicFeedback } from './dictationMicFeedback.js';
 import { getDictationMicrophoneChoices, readDictationOptions } from './dictationInput.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
@@ -71,11 +71,13 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		button.classList.add('ash-chat-input-action', 'ash-chat-input-mic-action');
 		button.classList.toggle('disabled', !this.action.enabled);
 		if (this.isActive.get() && this.speech.isPreparingModel) {
-			const label = h(button.ownerDocument, 'span');
-			label.textContent = this.action.label;
-			button.classList.add('ash-dictation-preparing');
 			button.setAttribute('aria-label', this.action.tooltip);
-			button.append(createLoadingSpinner(button.ownerDocument), label);
+			if (this.speech.currentBackend !== 'local' || this.speech.state !== ChatSpeechToTextState.Idle) {
+				const label = h(button.ownerDocument, 'span');
+				label.textContent = this.action.label;
+				button.classList.add('ash-dictation-preparing');
+				button.append(createLoadingSpinner(button.ownerDocument), label);
+			}
 		}
 		this._register(autorun(reader => button.setAttribute('aria-pressed', String(this.isActive.read(reader)))));
 		this._register(showDictationMicFeedback(button, this.isActive, this.speech, this.accessibility));

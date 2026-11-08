@@ -144,16 +144,17 @@ fn onnx_metadata_uses_the_model_proto_metadata_props_field() {
 
 #[test]
 fn cmvn_requires_both_full_feature_vectors() {
-    let vector = std::iter::repeat_n("0.5", 560)
+    let dimensions = 320;
+    let vector = std::iter::repeat_n("0.5", dimensions)
         .collect::<Vec<_>>()
         .join(" ");
     let cmvn = format!(
-        "<AddShift> 560 560\n<LearnRateCoef> 0 [ {vector} ]\n<Rescale> 560 560\n<LearnRateCoef> 0 [ {vector} ]"
+        "<AddShift> {dimensions} {dimensions}\n<LearnRateCoef> 0 [ {vector} ]\n<Rescale> {dimensions} {dimensions}\n<LearnRateCoef> 0 [ {vector} ]"
     );
-    let (mean, scale) = parse_cmvn(&cmvn).unwrap();
-    assert_eq!(mean.split(',').count(), 560);
-    assert_eq!(scale.split(',').count(), 560);
-    assert!(parse_cmvn("<AddShift> [ 0.5 ] <Rescale> [ 0.5 ]").is_err());
+    let (mean, scale) = parse_cmvn(&cmvn, dimensions).unwrap();
+    assert_eq!(mean.split(',').count(), dimensions);
+    assert_eq!(scale.split(',').count(), dimensions);
+    assert!(parse_cmvn("<AddShift> [ 0.5 ] <Rescale> [ 0.5 ]", dimensions).is_err());
 }
 
 #[test]
@@ -227,7 +228,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
     for id in ["cold", "warm", "startup", "during-startup", "evicted"] {
         let overlaps_warmup = id == "during-startup";
         if matches!(id, "startup" | "during-startup" | "evicted") {
-            manager.forget_local_model(&root, &BUILTIN_MODEL.id);
+            manager.forget_local_model(&root, &BUILTIN_MODELS[0].id);
         }
         let pending_warmup = if id == "startup" || overlaps_warmup {
             let (send, receive) = std::sync::mpsc::channel();
@@ -241,7 +242,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
                         home: root.clone(),
                         media_network: test_network(),
                         model_root: root.clone(),
-                        model_id: BUILTIN_MODEL.id.clone(),
+                        model_id: BUILTIN_MODELS[0].id.clone(),
                         operation: crate::ModelOperation::Warm,
                     },
                     move |event| {
@@ -258,7 +259,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
                 ModelProgress::Loading
             );
             assert!(!manager.is_active());
-            assert_eq!(models.progress(&BUILTIN_MODEL.id), None);
+            assert_eq!(models.progress(&BUILTIN_MODELS[0].id), None);
             if overlaps_warmup {
                 Some((resume, receive))
             } else {
@@ -280,7 +281,7 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
                     home: root.clone(),
                     media_network: test_network(),
                     model_root: root.clone(),
-                    model_id: BUILTIN_MODEL.id.clone(),
+                    model_id: BUILTIN_MODELS[0].id.clone(),
                     audio_host: Default::default(),
                     network: network.clone(),
                     input_device: None,
@@ -317,10 +318,10 @@ fn streamed_dictation_publishes_and_reuses_the_local_model() {
             assert!(progress.contains(&ModelProgress::Loading));
         }
     }
-    assert!(crate::DictationModelManager::is_available(&root, &BUILTIN_MODEL.id).unwrap());
+    assert!(crate::DictationModelManager::is_available(&root, &BUILTIN_MODELS[0].id).unwrap());
     assert!(
         !root
-            .join(format!(".{}.installing", BUILTIN_MODEL.id))
+            .join(format!(".{}.installing", BUILTIN_MODELS[0].id))
             .exists()
     );
 }

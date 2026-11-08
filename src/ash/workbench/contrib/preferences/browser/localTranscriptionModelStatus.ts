@@ -5,13 +5,13 @@ import { h } from '../../../../base/browser/dom.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { isModelPreparing, DictationModelState, type ILocalTranscriptionModelSnapshot, type IDictationModelStatus } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { isModelPreparing, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../platform/localTranscription/common/localTranscription.js';
 
-/** Shows operation feedback alongside the inventory's model state. */
+/** Announces model preparation and shows errors that are not associated with a row. */
 export class LocalTranscriptionModelStatus extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly text: HTMLElement;
-	private readonly progress: HTMLProgressElement;
+	private readonly progress: ProgressBar;
 	constructor(container: HTMLElement) {
 		super();
 		const document = container.ownerDocument;
@@ -20,35 +20,51 @@ export class LocalTranscriptionModelStatus extends Disposable {
 		this.text = h(document, 'p');
 		this.text.setAttribute('role', 'status');
 		this.text.setAttribute('aria-atomic', 'true');
-		this.progress = this._register(new ProgressBar(this.domNode, defaultProgressBarStyles)).element;
-		this.progress.hidden = true;
-		this.progress.setAttribute('aria-label', localize('dictation.model.progress', 'Voice model preparation'));
-		this.domNode.append(this.text, this.progress);
+		this.progress = this._register(new ProgressBar(this.domNode, defaultProgressBarStyles));
+		this.progress.element.hidden = true;
+		this.progress.element.setAttribute('aria-label', localize('dictation.model.progress', 'Voice model preparation'));
+		this.domNode.append(this.text, this.progress.element);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 	setMessage(message: string): void {
 		this.domNode.classList.remove('ash-aria-live');
 		this.text.textContent = message;
-		this.progress.hidden = true;
+		this.progress.element.hidden = true;
 	}
 	render(snapshot: ILocalTranscriptionModelSnapshot): void {
-		// The model row shows Ready. Keep the completion announcement for screen readers.
-		this.domNode.classList.toggle('ash-aria-live', snapshot.status?.state === DictationModelState.Ready);
-		this.text.textContent = snapshot.status ? modelProgressText(snapshot.status) : '';
-		this.progress.hidden = !isModelPreparing(snapshot.status);
-		// The transport reports bytes, not a total. An indeterminate bar never invents a percentage.
-		this.progress.removeAttribute('value');
+		const preparing = isModelPreparing(snapshot.status);
+		const cancelled = snapshot.status?.state === DictationModelState.Cancelled;
+		// The row represents preparation and completion. Cancellation is announced on the row's state change.
+		this.domNode.classList.toggle('ash-aria-live', preparing || cancelled || snapshot.status?.state === DictationModelState.Ready);
+		const message = cancelled ? '' : modelProgressText(snapshot);
+		if (this.text.textContent !== message) this.text.textContent = message;
+		this.progress.element.hidden = !preparing;
+		this.progress.value = modelDownloadProgress(snapshot);
 	}
 }
 
-export function modelProgressText(status: IDictationModelStatus): string {
-	switch (status.state) {
+function modelDownloadProgress({ status, downloadSizeBytes }: ILocalTranscriptionModelSnapshot): number | undefined {
+	if (status?.state === DictationModelState.Downloading && status.packageDownloadedBytes !== undefined && downloadSizeBytes) {
+		return Math.min(1, status.packageDownloadedBytes / downloadSizeBytes);
+	}
+	return undefined;
+}
+
+export function modelProgressText(snapshot: ILocalTranscriptionModelSnapshot): string {
+	const status = snapshot.status;
+	switch (status?.state) {
 		case DictationModelState.Checking: return localize('dictation.model.checking', 'Checking model files…');
-		case DictationModelState.Downloading: return localize('dictation.model.downloading', 'Downloading {0}: {1} MiB', status.file, (status.downloadedBytes / (1024 * 1024)).toFixed(1));
+		case DictationModelState.Downloading: {
+			const progress = modelDownloadProgress(snapshot);
+			return progress === undefined
+				? localize('dictation.model.downloading', 'Downloading…')
+				: localize('dictation.model.downloadingPercent', 'Downloading {0}%', Math.floor(progress * 100));
+		}
 		case DictationModelState.Loading: return localize('dictation.model.loading', 'Loading model…');
 		case DictationModelState.Ready: return localize('dictation.model.ready', 'Model verified and ready to use.');
 		case DictationModelState.Cancelled: return localize('dictation.model.cancelled', 'Model preparation cancelled.');
 		case DictationModelState.Error: return localize('dictation.model.failed', 'Model preparation failed: {0}', status.error);
+		case undefined: return '';
 	}
 }

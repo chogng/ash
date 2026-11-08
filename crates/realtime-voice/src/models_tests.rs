@@ -16,7 +16,7 @@ fn warming_an_uninstalled_model_leaves_the_inventory_and_capture_untouched() {
                 home: root.path().into(),
                 media_network: test_media_network(),
                 model_root: root.path().into(),
-                model_id: BUILTIN_MODEL.id.clone(),
+                model_id: BUILTIN_MODELS[0].id.clone(),
                 operation: ModelOperation::Warm,
             },
             move |event| send.send(event).unwrap(),
@@ -27,7 +27,7 @@ fn warming_an_uninstalled_model_leaves_the_inventory_and_capture_untouched() {
         ModelProgress::Ready
     );
     manager.stop(1, "warmup").unwrap();
-    assert_eq!(manager.progress(&BUILTIN_MODEL.id), None);
+    assert_eq!(manager.progress(&BUILTIN_MODELS[0].id), None);
     assert!(!dictation.is_active());
     assert_eq!(root.path().read_dir().unwrap().count(), 0);
 }

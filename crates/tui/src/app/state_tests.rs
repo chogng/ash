@@ -880,6 +880,7 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
             DictationModelStage::Downloading {
                 file: "model_quant.onnx".into(),
                 downloaded_bytes: 2 * 1024 * 1024,
+                package_downloaded_bytes: Some(2 * 1024 * 1024),
             },
         );
         let name = match mode {

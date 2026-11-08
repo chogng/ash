@@ -592,9 +592,11 @@ fn model_stage(progress: realtime_voice::ModelProgress) -> DictationModelStage {
         realtime_voice::ModelProgress::Downloading {
             file,
             downloaded_bytes,
+            package_downloaded_bytes,
         } => DictationModelStage::Downloading {
             file,
             downloaded_bytes,
+            package_downloaded_bytes: Some(package_downloaded_bytes),
         },
         realtime_voice::ModelProgress::Loading => DictationModelStage::Loading,
         realtime_voice::ModelProgress::Ready => DictationModelStage::Ready,

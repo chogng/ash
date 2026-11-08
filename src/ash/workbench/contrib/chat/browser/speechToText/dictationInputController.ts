@@ -12,7 +12,7 @@ import { MenuItemAction } from '../../../../../platform/actions/common/actions.j
 import type { ICommandAction } from '../../../../../platform/action/common/action.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IDictationOnboardingService } from './dictationOnboarding.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState, isDictationActiveOnSurface, type ChatDictationSurface } from './chatSpeechToTextService.js';
 
@@ -45,6 +45,9 @@ export class DictationInput extends Disposable {
 	public get showButton(): boolean { return this.configuration.getValue<boolean>('dictation.enabled') !== false && this.configuration.getValue<boolean>('dictation.showButton') !== false; }
 	public get isStarting(): boolean { return this.isActive && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
 	private get isAvailable(): boolean { return this.service.isConfigured; }
+	public get isPreparingLocalModel(): boolean {
+		return this.isStarting && this.service.currentBackend === 'local' && this.service.isPreparingModel;
+	}
 	public get preparationLabel(): string | undefined {
 		if (!this.isActive || !this.service.isPreparingModel) return undefined;
 		const stage = this.service.isDownloadingModel
@@ -111,14 +114,14 @@ export class DictationInput extends Disposable {
 			this.preparing = true;
 			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
 			if (this.isDisposed || !this.isVisible() || this.service.isBusy) { return; }
-			if (preparation && (isModelPreparing(preparation.status) || !preparation.available && preparation.model !== DEFAULT_LOCAL_TRANSCRIPTION_MODEL)) {
+			if (preparation && (isModelPreparing(preparation.status) || !preparation.available && preparation.downloadSizeBytes === undefined)) {
 				await this.showPreparation(preparation);
 				return;
 			}
-			this.onboarding.showIfNeeded();
+			if (preparation?.available !== false) this.onboarding.showIfNeeded();
 			await this.start();
 		} catch (error) {
-			if (!this.isDisposed && !isCancellationError(error)) { this.ended.fire(String(error)); }
+			if (!this.isDisposed && !isCancellationError(error)) { this.ended.fire(error instanceof Error ? error.message : String(error)); }
 		} finally {
 			this.preparing = false;
 		}
@@ -147,6 +150,7 @@ export class DictationInput extends Disposable {
 			else await this.service.start(window, this.surface);
 		} catch (error) {
 			this.active = false;
+			this.recordingEvents.clear();
 			throw error;
 		}
 	}
@@ -162,6 +166,7 @@ export class DictationInput extends Disposable {
 	}
 
 	public async stop(): Promise<void> {
+		if (this.isStarting && this.service.currentBackend === 'local') { await this.cancel(); return; }
 		if (this.isActive) {
 			if (this.editor.codeEditor) await stopDictationForEditor(this.editor.codeEditor);
 			else {

@@ -134,6 +134,7 @@ suiteTeardown(() => {
 });
 
 const { h } = await import('../../../../../base/browser/dom.js');
+const { setARIAContainer } = await import('../../../../../base/browser/ui/aria/aria.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
 const { ConfigurationRegistry, ConfigurationScope, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
@@ -4365,6 +4366,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 		},
 	} as unknown as LocalTranscriptionService);
 	const root = h(browserEnvironment.window.document, 'div');
+	resources.add(setARIAContainer(root));
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
 	controls.setVisible(true);
@@ -4381,7 +4383,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	assert.equal(installButton.disabled, true);
 	progress({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
 	await nextTurn();
-	assert.equal(status.textContent, '正在下载 encoder.onnx：2.0 MiB');
+	assert.equal(status.textContent, '正在下载…');
 	assert.equal(status.getAttribute('aria-atomic'), 'true');
 	controls.setVisible(false);
 	await nextTurn();
@@ -4389,11 +4391,16 @@ test('Local model controls share translated snapshots and keep preparation runni
 	controls.setVisible(true);
 	await nextTurn();
 	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.hasAttribute('value'), false);
-	buttons.find(button => button.textContent === '取消')!.click();
+	progress({ state: DictationModelState.Downloading, file: 'decoder.onnx', downloadedBytes: 128 * 1024, packageDownloadedBytes: 512 * 1024 });
+	await nextTurn();
+	assert.equal(installButton.textContent, '正在下载 50%');
+	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.value, 0.5);
+	const cancelButton = buttons.find(button => button.textContent === '取消')!;
+	cancelButton.click();
 	await nextTurn();
 	assert.equal(cancellations, 1);
 	assert.equal(installButton.disabled, false);
-	assert.equal(buttons.some(button => button.textContent === '取消'), false);
+	assert.equal(cancelButton.hidden, true);
 });
 
 test('Models Settings separates its model, subscription and API cards and saves keys on blur', async () => {
