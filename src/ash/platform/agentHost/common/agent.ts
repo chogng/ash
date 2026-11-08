@@ -829,6 +829,7 @@ export type ThreadCommittedEvent =
 		| 'turnAccepted'
 		| 'turnSkillsLoaded'
 		| 'turnStarted'
+		| 'turnSkillsLoaded'
 		| 'turnPermissionPolicyChanged'
 		| 'turnSteered'
 		| 'turnSteerDelivered'
