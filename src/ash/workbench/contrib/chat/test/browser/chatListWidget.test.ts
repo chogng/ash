@@ -41,6 +41,7 @@ import { browserEnvironment } from '../../../../../editor/test/browser/testEdito
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { readFileSync } from 'node:fs';
+import { ChatCopyActionRendering } from '../../browser/actions/chatCopyActions.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -561,6 +562,7 @@ test('a saved pull request context opens the original PR above the first message
 });
 
 suite('Chat message copy ownership', () => {
+	suiteSetup(() => { getWindows(); });
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('the actual row command copies current raw text and releases feedback after removal', async () => {
 		using resources = new DisposableStore();
@@ -572,17 +574,31 @@ suite('Chat message copy ownership', () => {
 		}());
 		parent.registerInstance(IClipboardService, clipboard);
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources, parent)));
+		resources.add(services.createInstance(ChatCopyActionRendering));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
-		document.body.append(widget.element); widget.setVisible(true);
+		document.body.append(widget.element);
+		resources.add(toDisposable(() => widget.element.remove()));
+		widget.setVisible(true);
 		widget.render([{ id: 'response', type: 'agentMessage', text: '**first**', transient: true }]);
 		widget.render([{ id: 'response', type: 'agentMessage', text: '**first** and second\n\n[link](https://example.com)', transient: false }]);
-		const button = widget.element.querySelector<HTMLButtonElement>('.ash-chat-message-actions button')!;
-		button.click(); assert.equal(await entered.p, '**first** and second\n\n[link](https://example.com)');
-		button.click(); assert.equal(writes, 1);
-		widget.render([]); await completed.complete(); await Promise.resolve();
-		assert.equal(button.isConnected, false); assert.equal(widget.element.querySelectorAll('.ash-chat-message-actions').length, 0);
-		button.click(); assert.equal(writes, 1);
-		widget.element.remove();
+		const actions = widget.element.querySelector('.ash-chat-message-actions')!;
+		const button = actions.querySelector<HTMLButtonElement>('button[aria-label="Copy message"]')!;
+		const feedback = actions.querySelector('[role="status"]');
+		assert.ok(feedback);
+		try {
+			button.click();
+			assert.equal(await entered.p, '**first** and second\n\n[link](https://example.com)');
+			assert.equal(button.getAttribute('aria-busy'), 'true');
+			button.click();
+			assert.equal(writes, 1);
+		} finally {
+			widget.render([]);
+			await completed.complete();
+		}
+		assert.equal(feedback.isConnected, false);
+		assert.equal(button.isConnected, false);
+		button.click();
+		assert.equal(writes, 1);
 	});
 });
 
