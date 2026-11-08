@@ -34,7 +34,7 @@ import type { ISessionProviderScope, ISessionProviderScopeService, SessionProvid
 import { parseSessionIdentity, sessionIdentity } from '../../../../services/sessions/common/sessionIdentity.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 
-const session: ISession = { sessionId: 'session', title: 'PR work', status: 'active', workspace: { authorityId: 'local', root: '/work' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
+const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'PR work', status: 'active', workspace: { authorityId: 'local', root: '/work' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 const pullRequest: GitHubPullRequest = { number: 7, title: 'Branch work', body: '', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, mergeable: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', autoMerge: false };
 
 function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<RepositoryCommandsFixture> = {}) {
@@ -118,7 +118,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 }
 
 suite('Session GitHub associations', () => {
-	test('equal backend Session and repository IDs route through the owning host and preserve its remote workspace', async () => {
+	test('equal backend Session and repository IDs route through the owning host to the root Thread worktree', async () => {
 		const calls: string[] = [];
 		using context = fixture({ attachSessionPullRequest: async id => { calls.push(`primary:${id}`); } });
 		const changed = new Emitter<string>();
@@ -136,12 +136,15 @@ suite('Session GitHub associations', () => {
 				localGit: {
 					...context.host.localGit, readRepositoryContexts: async directory => {
 						calls.push(`remote:repos:${directory.sessionId}:${directory.path}`);
-						return [{ id: 'repo', label: 'repo', path: '', rootPath: '/work', head: { type: 'branch', name: 'feature' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }] }];
+						return [{ id: 'repo', label: 'repo', path: '', rootPath: '/worktrees/session', head: { type: 'branch', name: 'feature' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }] }];
 					}
 				},
 			};
 			const scope = context.addHost('remote', host);
-			const remote = { ...session, sessionId: scope.identity('session'), providerId: 'remote', workspace: { authorityId: 'ssh+build', root: '/work' } };
+			const remote = {
+				...session, sessionId: scope.identity('session'), providerId: 'remote', workspace: { authorityId: 'ssh+build', root: '/work' },
+				chats: session.chats.map(chat => ({ ...chat, workspace: { authorityId: 'ssh+build', root: '/worktrees/session' } })),
+			};
 			context.catalog.push(remote);
 			context.select({ kind: 'session', active: { session: remote, threadId: 'thread' } });
 			await context.nextChange();
@@ -149,7 +152,7 @@ suite('Session GitHub associations', () => {
 			await context.service.attachPullRequest(remote.sessionId, pullRequest.url);
 			await context.service.detachPullRequest(remote.sessionId, { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 });
 			assert.ok(calls.includes('remote:list:session'));
-			assert.ok(calls.includes('remote:repos:session:/work'));
+			assert.ok(calls.includes('remote:repos:session:/worktrees/session'));
 			assert.ok(calls.includes('remote:attach:session'));
 			assert.ok(calls.includes('remote:detach:session'));
 			assert.equal(calls.some(call => call.startsWith('primary:')), false);
@@ -830,29 +833,64 @@ suite('sessionGitHub browser component', () => {
 		await expect(page.locator('.ash-session-chat-input-issues')).toHaveCount(0);
 	});
 
-	test('recorded PR artifact details describe the authorized effect and cancel without merging', async () => {
-		const { page } = browserTests;
-		await page.goto('/sessionGitHub.html?artifactDetails');
-		const trigger = page.getByRole('button', { name: 'Pull request actions for team/one #7', exact: true });
-		await trigger.focus();
-		await trigger.press('Enter');
-		const panel = page.getByRole('dialog', { name: 'Merge actions for team/one #7' });
-		const merge = panel.getByRole('button', { name: 'Create a merge commit', exact: true });
-		await panel.getByText('Activities', { exact: true }).click();
-		await expect(panel.getByText('No activities yet.')).toBeVisible();
-		await panel.getByRole('button', { name: 'Enable PR Autopilot' }).click();
-		await expect(panel.getByRole('button', { name: 'Stop PR Autopilot' })).toBeVisible();
-		await expect(panel.getByRole('listitem')).toHaveText(/Completed/);
-		await expect(merge).toHaveAccessibleDescription(/Merge commit .* into main now/);
-		await page.keyboard.press('Escape');
-		await expect(panel).toHaveCount(0);
-		await expect(trigger).toBeFocused();
-		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge'))).toHaveLength(0);
+	for (const locale of ['en', 'zh-CN']) {
+		test(`recorded PR artifact details restore each artifact's cards and require explicit merge authorization (${locale})`, async () => {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			const triggerFor = (pr: string) => page.getByRole('button', { name: zh ? `${pr} 的拉取请求操作` : `Pull request actions for ${pr}`, exact: true });
+			const panelFor = (pr: string) => page.getByRole('dialog', { name: zh ? `${pr} 的合并操作` : `Merge actions for ${pr}` });
+			const autopilotLabel = zh ? '自动跟进' : 'Autopilot';
+			const activitiesLabel = zh ? '活动' : 'Activities';
+			await page.goto(`/sessionGitHub.html?artifactDetails&locale=${locale}`);
+			await page.evaluate(() => window.ashSessionGitHub.theme('highContrast'));
+			const trigger = triggerFor('team/one #7');
+			await trigger.press('Enter');
+			const panel = panelFor('team/one #7');
+			const autopilot = panel.getByRole('button', { name: autopilotLabel, exact: true });
+			const activities = panel.getByRole('button', { name: activitiesLabel, exact: true });
+			const enable = panel.getByRole('button', { name: zh ? '启用 PR 自动跟进' : 'Enable PR Autopilot', exact: true });
+			const stop = panel.getByRole('button', { name: zh ? '停止 PR 自动跟进' : 'Stop PR Autopilot', exact: true });
+			const merge = panel.getByRole('button', { name: zh ? '创建合并提交' : 'Create a merge commit', exact: true });
+			await expect(autopilot).toHaveAttribute('aria-expanded', 'false');
+			await expect(activities).toHaveAttribute('aria-expanded', 'false');
+			await expect(enable).toBeHidden();
+			await expect(panel.getByText(zh ? '暂无活动。' : 'No activities yet.')).toBeHidden();
+			await page.keyboard.press('Tab');
+			await expect(autopilot).toBeFocused();
+			await expect(autopilot).toHaveCSS('outline-style', 'solid');
+			await page.keyboard.press('Space');
+			await expect(autopilot).toHaveAttribute('aria-expanded', 'true');
+			await enable.click();
+			await expect(stop).toBeVisible();
+			expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/runs'))).toHaveLength(0);
+			await activities.press('Enter');
+			await expect(activities).toBeFocused();
+			await expect(activities).toHaveAttribute('aria-expanded', 'true');
+			await expect(panel.getByRole('listitem')).toHaveText(zh ? /已完成/ : /Completed/);
+			await expect(merge).toHaveAccessibleDescription(zh ? /立即将提交 .* 合并到 main/ : /Merge commit .* into main now/);
+			await page.keyboard.press('Escape');
+			await expect(panel).toHaveCount(0);
+			await expect(trigger).toBeFocused();
+			expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge'))).toHaveLength(0);
 
-		await trigger.press('Enter');
-		await merge.click();
-		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge').length)).toBe(1);
-	});
+			const otherPanel = panelFor('team/two #8');
+			await triggerFor('team/two #8').press('Enter');
+			await expect(otherPanel.getByRole('button', { name: autopilotLabel, exact: true })).toHaveAttribute('aria-expanded', 'false');
+			await expect(otherPanel.getByRole('button', { name: activitiesLabel, exact: true })).toHaveAttribute('aria-expanded', 'false');
+			await page.keyboard.press('Escape');
+
+			await trigger.press('Enter');
+			await expect(autopilot).toHaveAttribute('aria-expanded', 'true');
+			await expect(activities).toHaveAttribute('aria-expanded', 'true');
+			await expect(stop).toBeVisible();
+			await expect(panel.getByRole('listitem')).toBeVisible();
+			await autopilot.click();
+			await expect(autopilot).toHaveAttribute('aria-expanded', 'false');
+			await expect(stop).toBeHidden();
+			await merge.click();
+			await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge').length)).toBe(1);
+		});
+	}
 
 	for (const locale of ['en', 'zh-CN']) {
 		test(`PR follow-up persists its source, stops from the keyboard and opens history in ${locale}`, async function () {

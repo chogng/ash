@@ -1273,17 +1273,30 @@ fn legacy_sqlite_document_is_migrated_once_into_toml() {
         .unwrap();
     drop(connection);
 
-    let store = ConfigStore::open(&path).unwrap();
-    let snapshot = store.read_snapshot().unwrap();
-    assert_eq!(snapshot.revision, ConfigRevision::new(7));
-    assert_eq!(snapshot.generation, ConfigGeneration::new(9));
-    assert!(
-        snapshot
-            .values
-            .providers
-            .contains_key(&provider_id("openai"))
-    );
-    assert!(store.config_path().exists());
+    let blocked = path.with_extension("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    assert!(ConfigStore::open_with_paths(&path, blocked.join("config.toml")).is_err());
+    std::fs::remove_file(blocked).unwrap();
+
+    let barrier = std::sync::Barrier::new(2);
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            scope.spawn(|| {
+                barrier.wait();
+                let store = ConfigStore::open(&path).unwrap();
+                let snapshot = store.read_snapshot().unwrap();
+                assert_eq!(snapshot.revision, ConfigRevision::new(7));
+                assert_eq!(snapshot.generation, ConfigGeneration::new(9));
+                assert!(
+                    snapshot
+                        .values
+                        .providers
+                        .contains_key(&provider_id("openai"))
+                );
+                assert!(store.config_path().exists());
+            });
+        }
+    });
     let old_table: i64 = rusqlite::Connection::open(&path)
         .unwrap()
         .query_row(
@@ -1294,7 +1307,31 @@ fn legacy_sqlite_document_is_migrated_once_into_toml() {
         )
         .unwrap();
     assert_eq!(old_table, 0);
+    remove_config_files(&path);
+}
+
+#[test]
+fn newer_database_document_schema_does_not_create_a_missing_toml() {
+    let path = config_path("newer-database-document-schema");
+    let store = ConfigStore::open(&path).unwrap();
+    let config_path = store.config_path().to_owned();
     drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let newer_version = CONFIG_FILE_SCHEMA_VERSION + 1;
+    connection
+        .execute(
+            "UPDATE config_metadata SET document_schema_version = ?1",
+            [newer_version],
+        )
+        .unwrap();
+    std::fs::remove_file(&config_path).unwrap();
+
+    let error = ConfigStore::open(&path).err().unwrap();
+    assert!(error.0.contains(&format!(
+        "unsupported config document schema version {newer_version}"
+    )));
+    assert!(!config_path.exists());
+    drop(connection);
     remove_config_files(&path);
 }
 
@@ -1805,6 +1842,57 @@ fn command_replay_returns_its_original_revision_without_copying_a_snapshot() {
 }
 
 #[test]
+fn config_command_reopens_after_a_failure_on_either_side_of_the_toml_replace() {
+    let path = config_path("recover-command");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
+    let original = std::fs::read(store.config_path()).unwrap();
+    let request = update_preferences(
+        "interrupted",
+        configured.revision.get(),
+        Patch::Value(model_ref("openai", "model-a")),
+    );
+    let database = rusqlite::Connection::open(&path).unwrap();
+    database
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    database
+        .execute_batch(
+            "CREATE TRIGGER reject_receipt BEFORE INSERT ON config_command_receipts
+         BEGIN SELECT RAISE(ABORT, 'receipt failed'); END;",
+        )
+        .unwrap();
+    assert!(store.apply(request.clone()).is_err());
+    assert_eq!(std::fs::read(store.config_path()).unwrap(), original);
+    database
+        .execute_batch(
+            "DROP TRIGGER reject_receipt;
+         CREATE TRIGGER reject_metadata BEFORE UPDATE ON config_metadata
+         BEGIN SELECT RAISE(ABORT, 'metadata failed'); END;",
+        )
+        .unwrap();
+    assert!(store.apply(request.clone()).is_err());
+    assert_ne!(std::fs::read(store.config_path()).unwrap(), original);
+    assert_eq!(store.committed_snapshot().revision, configured.revision);
+    drop(store);
+    database
+        .execute_batch("DROP TRIGGER reject_metadata")
+        .unwrap();
+    drop(database);
+
+    let store = ConfigStore::open(&path).unwrap();
+    let replay = store.apply(request).unwrap();
+    assert_eq!(replay.disposition, ConfigCommandDisposition::Replayed);
+    assert_eq!(replay.revision, configured.revision.next());
+    assert_eq!(
+        store.read_snapshot().unwrap().values.model,
+        Some(model_ref("openai", "model-a"))
+    );
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn no_op_command_keeps_the_resolved_snapshot_generation() {
     let path = config_path("no-op-generation");
     let store = ConfigStore::open(&path).unwrap();
@@ -1910,6 +1998,16 @@ fn valid_external_toml_edits_advance_revision_and_publish() {
     assert_eq!(
         store.read_snapshot().unwrap().values.model,
         Some(model_ref("openai", "external-model"))
+    );
+    document.agent.model = Some(model_ref("openai", "external-nextx"));
+    crate::store_file::write_document(&config_path, &document).unwrap();
+    let next = changes
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+    assert_eq!(next.revision, change.revision.next());
+    assert_eq!(
+        store.committed_snapshot().values.model,
+        Some(model_ref("openai", "external-nextx"))
     );
     drop(store);
     remove_config_files(&path);

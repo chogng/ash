@@ -1,4 +1,6 @@
+import { IMemoriesService } from '../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../common/sessionCommands.js';
+import { IMemorySettingsNavigation, MemorySettingsNavigation, OPEN_MEMORIES_COMMAND_ID } from '../../../workbench/contrib/memories/browser/memorySettings.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -7,6 +9,7 @@ import { IAgentSessionService } from '../../../platform/agentHost/common/agentSe
 import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
 import { constObservable } from '../../../base/common/observable.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
@@ -103,7 +106,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using restoreErrorHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://sessions-preferences.test/' });
 	const { window } = browser;
-	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
+	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, HTMLInputElement: window.HTMLInputElement, HTMLTextAreaElement: window.HTMLTextAreaElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
 	window.HTMLElement.prototype.scrollTo = function () { };
@@ -301,6 +304,23 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		if (rejectShortcut) throw new Error('shortcut editor unavailable');
 		shortcutsOpened++;
 	});
+	const memoryNavigation = new MemorySettingsNavigation();
+	services.registerInstance(IMemorySettingsNavigation, memoryNavigation);
+	using memoriesCommand = CommandsRegistry.register(OPEN_MEMORIES_COMMAND_ID, () => memoryNavigation.open(services.get(IPreferencesService)));
+	const unusedMemoryOperation = async (): Promise<never> => { throw new Error('Unexpected memory operation'); };
+	services.registerInstance(IMemoriesService, {
+		onDidChange: Event.None,
+		readModelMemoryEnabled: async () => false,
+		scopes: async () => [],
+		list: async () => ({ memories: [], cursor: undefined }),
+		read: unusedMemoryOperation,
+		add: unusedMemoryOperation,
+		update: unusedMemoryOperation,
+		delete: unusedMemoryOperation,
+		setPolicy: unusedMemoryOperation,
+		setModelMemoryEnabled: unusedMemoryOperation,
+		readReference: unusedMemoryOperation,
+	});
 	services.registerInstance(IAccountService, {
 		readRateLimits: async (provider, accountId) => ({
 			provider, accountId, plan: 'Plus', credits: null, xai: null,
@@ -376,6 +396,25 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await preferences.open({ section: id });
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');
+	}
+	await preferences.open({ section: 'appearance' });
+	for (const [key, initialLabel, optionLabel, savedValue] of [
+		['sessions.interfaceFontFamily', 'Ash Sans', 'System font', 'system'],
+		['chat.fontFamily', 'Follow interface font', 'Ash Sans SC', 'Ash Sans SC'],
+		['chat.editor.fontFamily', 'Use editor font', 'Ash Mono SC', 'Ash Mono SC'],
+	]) {
+		const picker = window.document.querySelector<HTMLElement>(`[data-settings-item-id="${key}"] [role="combobox"]`)!;
+		assert.equal(picker.textContent, initialLabel);
+		picker.click();
+		const options = window.document.getElementById(picker.getAttribute('aria-controls')!)!;
+		const choice = [...options.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === optionLabel);
+		assert.ok(choice, optionLabel);
+		choice.click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(configuration.getValue(key), savedValue);
+		assert.equal(picker.textContent, optionLabel);
+		await configuration.updateValue(key, undefined);
+		assert.equal(picker.textContent, initialLabel);
 	}
 	await preferences.open({ section: 'dictation' });
 	assert.equal(categoryButton('dictation').getAttribute('aria-current'), 'page');
@@ -463,7 +502,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.ok(voiceButton);
 	voiceButton.click();
 	assert.equal(window.document.querySelector('[data-configuration-key="dictation.model"]'), null);
-	assert.ok(window.document.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(window.document.querySelector('[role="group"][aria-label="Local dictation models"]'));
 	assert.ok(window.document.querySelector('.ash-local-transcription-model-controls'));
 	assert.equal(window.document.querySelector('[data-configuration-key="dictation.cloudProvider"]'), null);
 	await configuration.updateValue('dictation.backend', 'cloud');
@@ -605,7 +644,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.equal(window.document.querySelector('[data-configuration-key="workbench.locale"] [role="combobox"]')?.getAttribute('aria-label'), '界面语言');
 		await preferences.open({ section: 'dictation' });
 		assert.equal(categoryButton('dictation').textContent, '语音');
+		assert.equal(window.document.querySelector('[data-settings-tree-group-id="dictation"]'), null);
 		assert.ok(window.document.querySelector('[data-configuration-key="dictation.backend"]'));
+		const microphone = window.document.querySelector('[data-settings-item-id="dictation.inputDevice"] [role="combobox"]');
+		assert.equal(microphone?.getAttribute('aria-label'), '麦克风');
+		assert.equal(microphone?.textContent, '跟随系统');
+		assert.equal(window.document.querySelector('[data-settings-item-id="dictation.language"]'), null);
+		assert.equal(window.document.querySelector('[data-settings-item-id="accessibility.verbosity.dictationModels"]'), null);
 		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');
 		assert.ok(translatedDesign);
 		translatedDesign.click();
@@ -617,6 +662,18 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await preferences.open({ section: 'keyboard-shortcuts' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
 		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('查看仅在 Agent 窗口中生效的快捷键。'));
+		await preferences.open({ section: 'memory' });
+		assert.equal(categoryButton('memory').textContent, '记忆');
+		await new Promise(resolve => setTimeout(resolve, 0));
+		const memory = window.document.querySelector('.ash-sessions-settings-page .ash-memories')!;
+		assert.equal(memory.querySelector('input[role="switch"][aria-label="使用已保存的记忆"]')?.getAttribute('aria-checked'), 'false');
+		const manage = memory.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+		assert.equal(manage.textContent, '管理');
+		assert.equal(manage.getAttribute('aria-expanded'), 'false');
+		manage.click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(manage.getAttribute('aria-expanded'), 'true');
+		assert.match(memory.querySelector('.memories-manager')?.textContent ?? '', /主题.*选择记忆范围/u);
 		await preferences.open({ section: 'customize' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
 
@@ -644,6 +701,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await Promise.resolve();
 	};
 	const revealsBeforeShortcuts = editorReveals;
+	const memoryOpening = preferences.open({ section: 'memory' });
+	await Promise.resolve();
+	assert.ok(window.document.querySelector('dialog[open] .ash-sessions-settings-page .ash-memories'));
+	assert.equal(window.document.querySelectorAll('.ash-memories').length, 1);
+	assert.equal(editorReveals, revealsBeforeShortcuts, 'memory management preserves the current document layout');
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await memoryOpening;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
 	assert.equal(editorReveals, revealsBeforeShortcuts, 'the shortcut modal preserves the underlying entry and document working set');
 	assert.equal(shortcutsOpened, 1);
@@ -710,8 +774,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(window.document.querySelector('dialog'), null);
 	assert.equal(shortcutsOpened, callsBeforeCancel, 'cancelling Settings cannot open or edit a profile resource');
 	rejectShortcut = true;
-	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
-	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
+	{
+		const reported = new DeferredPromise<string>();
+		using listener = notifications.model.onDidAdd(item => { void reported.complete(item.message); });
+		await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
+		assert.equal(await reported.p, 'Could not open preferences: Error: shortcut editor unavailable');
+	}
 	assert.equal(editorReveals, 5, 'a failed open cannot reveal an unrelated editor');
 	const notificationsBeforeShutdown = notifications.model.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;

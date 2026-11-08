@@ -58,6 +58,7 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         status,
         kind: Default::default(),
         instructions: None,
+        directory: None,
         model: None,
         reasoning_effort: None,
         tool_profile: None,
@@ -69,6 +70,7 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: (status == TurnStatus::Failed).then(StableTurnError::model_invocation_failed),
     }
 }

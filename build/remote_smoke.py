@@ -329,6 +329,7 @@ def verify(
                             {
                                 "commandId": "release-create",
                                 "title": "Release validation",
+                                "kind": "code",
                                 "executionTarget": None,
                             },
                         )

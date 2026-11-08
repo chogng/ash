@@ -4,6 +4,7 @@
 - Issue 浏览缓存按 GitHub 主机、仓库、账号与授权隔离。读取授权由 GitHub 领域核对；存储不选择账号、不保存 token，清理仅影响当前授权的仓库页面。
 - 提供本机输入历史的 SQLite 存储，独立迁移、原子追加与裁剪、稳定游标和文字搜索。
 - 提供 Thread、Git Turn Changes、Project 与 Memory 的 SQLite 存储；各领域使用独立 migration component，Session tree 仍由 Thread 的 `session_id` 聚合。
+- Memories 使用 profile 下的 `memories.sqlite3`，以 v4 为基线，后续迁移按顺序执行并在同一事务中更新版本。原 `state.sqlite3` 中的 Memories 表保留在原处。
 - 会话列表和单会话刷新从每个 Session 一条的记录读取；记录与 Thread 事件同事务更新，旧数据库升级时从 Thread 目录生成。
 - 事件存储格式 17 为 PR 产物分配持久身份，并记录 Agent 来源的 Thread 和 Turn。移除后重新记录会分配新身份。归档格式 6 保留身份与来源，仍可导入格式 2 至 5。
 - 事件存储格式 16 为 PR 关联保存产物标记。旧记录按引用读取，重复附加保留已有产物标记。历史归档格式 5 保留该标记，并可导入格式 2 至 4。
@@ -22,6 +23,13 @@
 - Agent 父子关系和前缀保留索引必须与原事件一致；重新计算归档摘要不能使被改写的索引通过校验。
 - 导入后的 SSH 执行绑定单独持久化，不改写原始事件。目录只能来自原历史或显式绑定命令；没有目录的历史可以读取，不能开始任务或恢复执行。相同归档重试返回原回执，不覆盖已继续写入的本地历史。
 - 原事件按内容只存一份；Thread 与嵌套前缀引用原子提交，最后一个引用删除后回收记录并排队清理 Git pin。
+
+## SQLite 迁移
+
+各存储入口维护自己的迁移清单，编号 SQL 位于 `migrations/<component>/`。共用数据库的组件在 `ash_schema_migrations` 中分别记录版本，执行器在同一 SQLite 写事务内运行待执行步骤并提交版本。
+领域 crate 在自己的 `migrations/` 下管理 SQL 和版本清单。同一执行器可用于独立的 `memories.sqlite3`、`connectors.sqlite3`，也可用于共用 `state.sqlite3` 的多个组件。
+`event-store` 以 v17 为基线，既有建库和升级脚本在 `migrations/event-store/`，数据回填由该版本的 Rust 入口调用。自 v18 起依次追加编号 SQL。已发布的步骤保持原样。
+`thread-history-index` 的旧索引从原始事件重建。旧的无版本 Issue 缓存在首次打开时登记为 v1，并保留缓存记录。
 
 ## Turn 捕获与提交记录
 

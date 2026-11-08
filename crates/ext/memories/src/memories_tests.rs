@@ -101,11 +101,13 @@ impl Fixture {
                     scope: scope.clone(),
                     title: "Rust decision".into(),
                     body: body.into(),
+                    origin: None,
                 },
                 &self.cancellation.token(),
             )
             .unwrap();
         MemoryCitation {
+            namespace: memories::MemoryNamespace::Code,
             memory_id: MemoryId::new(id).unwrap(),
             scope,
             revision: 1,

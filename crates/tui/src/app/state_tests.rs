@@ -375,6 +375,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             status: TurnStatus::Completed,
             kind: Default::default(),
             instructions: None,
+            directory: None,
             model: None,
             reasoning_effort: None,
             tool_profile: None,
@@ -391,6 +392,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
     };
@@ -878,6 +880,7 @@ fn interrupt_cancels_dictation_download_without_quitting_or_sending_the_draft() 
             DictationModelStage::Downloading {
                 file: "model_quant.onnx".into(),
                 downloaded_bytes: 2 * 1024 * 1024,
+                package_downloaded_bytes: Some(2 * 1024 * 1024),
             },
         );
         let name = match mode {
@@ -3593,14 +3596,16 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
             .unwrap()
     };
     let project = ProjectDto {
-        created_at_ms: None,
-        updated_at_ms: None,
+        created_at_ms: 1,
+        updated_at_ms: 1,
         materials: Vec::new(),
         project_id: ash_protocol::ProjectId::new("project").unwrap(),
         revision: 1,
         status: ProjectStatusDto::Active,
         name: "Project".into(),
         description: String::new(),
+        icon: None,
+        color: None,
         roots: vec![
             ProjectRootDto {
                 environment_id: EnvId::local(),
@@ -3669,14 +3674,16 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
             .unwrap()
     };
     let project = ProjectDto {
-        created_at_ms: None,
-        updated_at_ms: None,
+        created_at_ms: 1,
+        updated_at_ms: 1,
         materials: Vec::new(),
         project_id: ash_protocol::ProjectId::new("project").unwrap(),
         revision: 1,
         status: ProjectStatusDto::Active,
         name: "Project".into(),
         description: String::new(),
+        icon: None,
+        color: None,
         roots: vec![ProjectRootDto {
             environment_id: EnvId::local(),
             dir_id: dir_id('a'),
@@ -3927,7 +3934,7 @@ fn temporary_dir(label: &str) -> std::path::PathBuf {
 
 fn manager_state_session(id: &str) -> Session {
     Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),

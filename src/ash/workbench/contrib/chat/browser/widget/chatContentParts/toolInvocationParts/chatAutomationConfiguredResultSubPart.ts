@@ -20,11 +20,11 @@ export class ChatAutomationConfiguredResultSubPart extends BaseChatToolInvocatio
 		super(h(document, 'section'));
 		this.supported = !!navigation.openToolResult;
 		const label = h(document, 'p');
-		label.textContent = localize('chat.tool.automationConfigured', 'Automation configured: {0}', target.label);
+		label.textContent = localize('chat.tool.automationConfigured', 'Task configured: {0}', target.label);
 		this.domNode.append(label);
 		const button = this.action = this._register(new Button(this.domNode, {
 			...defaultButtonStyles,
-			label: localize('chat.tool.openAutomationResult', 'Review automation'),
+			label: localize('chat.tool.openAutomationResult', 'Review task'),
 			onClick: () => {
 				if (this.controller.signal.aborted || !this.domNode.isConnected) return;
 				button.enabled = false;

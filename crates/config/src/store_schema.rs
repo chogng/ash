@@ -1,19 +1,28 @@
 use crate::ConfigError;
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
-const CONFIG_SQLITE_SCHEMA_VERSION: u32 = 2;
+const BASELINE_VERSION: u32 = 2;
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0002_config_metadata.sql"),
+    include_str!("../migrations/0003_pending_command.sql"),
+];
 
-pub(crate) struct LegacyDocument {
-    pub schema_version: u32,
-    pub document_json: String,
+struct LegacyDocument {
+    schema_version: u32,
+    revision: i64,
+    generation: i64,
+    json: String,
 }
 
 pub(crate) fn initialize(
     connection: &mut Connection,
     document_schema_version: u32,
-    initial_digest: &str,
-) -> Result<Option<LegacyDocument>, ConfigError> {
-    connection
+    prepare_document: impl FnOnce(Option<&str>) -> Result<String, ConfigError>,
+) -> Result<(), ConfigError> {
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sql_error)?;
+    transaction
         .execute_batch(
             "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
                  component TEXT PRIMARY KEY,
@@ -21,102 +30,114 @@ pub(crate) fn initialize(
              );",
         )
         .map_err(sql_error)?;
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(sql_error)?;
-    let stored_version = transaction
+    let stored_version: Option<u32> = transaction
         .query_row(
             "SELECT version FROM ash_schema_migrations WHERE component = 'config'",
             [],
-            |row| row.get::<_, u32>(0),
+            |row| row.get(0),
         )
         .optional()
         .map_err(sql_error)?;
-    let legacy = match stored_version {
-        None => {
-            install_fresh(&transaction, document_schema_version, initial_digest)?;
-            None
-        }
-        Some(CONFIG_SQLITE_SCHEMA_VERSION) => {
-            upgrade_document_schema(&transaction, document_schema_version, initial_digest)?;
-            None
-        }
-        Some(1) => Some(migrate_v1(
-            &transaction,
-            document_schema_version,
-            initial_digest,
-        )?),
-        Some(version) => {
-            return Err(ConfigError(format!(
-                "unsupported config SQLite schema version {version}"
-            )));
-        }
+    let latest = BASELINE_VERSION + MIGRATIONS.len() as u32 - 1;
+    if let Some(version) = stored_version
+        && !(1..=latest).contains(&version)
+    {
+        return Err(ConfigError(format!(
+            "unsupported config SQLite schema version {version}"
+        )));
+    }
+    let legacy = if stored_version == Some(1) {
+        Some(read_legacy(&transaction, document_schema_version)?)
+    } else {
+        None
     };
-    transaction.commit().map_err(sql_error)?;
-    Ok(legacy)
+    let stored_document_version =
+        if stored_version.is_some_and(|version| version >= BASELINE_VERSION) {
+            let version = transaction
+                .query_row(
+                    "SELECT document_schema_version FROM config_metadata WHERE authority_id = 1",
+                    [],
+                    |row| row.get::<_, u32>(0),
+                )
+                .map_err(sql_error)?;
+            validate_document_schema_version(version, document_schema_version)?;
+            Some(version)
+        } else {
+            None
+        };
+
+    // Publish the TOML before deleting its legacy SQLite source. Other openers wait
+    // here, and a failed file write leaves the old database available for retry.
+    let digest = prepare_document(legacy.as_ref().map(|legacy| legacy.json.as_str()))?;
+    for (version, sql) in (BASELINE_VERSION..)
+        .zip(MIGRATIONS)
+        .filter(|(version, _)| stored_version.is_none_or(|stored| *version > stored))
+    {
+        transaction.execute_batch(sql).map_err(sql_error)?;
+        if version == BASELINE_VERSION {
+            install_metadata(
+                &transaction,
+                document_schema_version,
+                &digest,
+                legacy.as_ref(),
+            )?;
+        }
+        transaction
+            .execute(
+                "INSERT INTO ash_schema_migrations (component, version) VALUES ('config', ?1)
+                 ON CONFLICT(component) DO UPDATE SET version = excluded.version",
+                [version],
+            )
+            .map_err(sql_error)?;
+    }
+    if let Some(stored_version) = stored_document_version {
+        upgrade_document_schema(
+            &transaction,
+            stored_version,
+            document_schema_version,
+            &digest,
+        )?;
+    }
+    transaction.commit().map_err(sql_error)
 }
 
-fn install_fresh(
-    connection: &Connection,
+fn install_metadata(
+    transaction: &Transaction<'_>,
     document_schema_version: u32,
-    initial_digest: &str,
+    digest: &str,
+    legacy: Option<&LegacyDocument>,
 ) -> Result<(), ConfigError> {
-    connection
-        .execute_batch(
-            "CREATE TABLE config_metadata (
-                 authority_id INTEGER PRIMARY KEY CHECK (authority_id = 1),
-                 document_schema_version INTEGER NOT NULL,
-                 revision INTEGER NOT NULL,
-                 generation INTEGER NOT NULL,
-                 content_digest TEXT NOT NULL
-             );
-             CREATE TABLE config_command_receipts (
-                 command_id TEXT PRIMARY KEY,
-                 expected_revision INTEGER NOT NULL,
-                 command_json TEXT NOT NULL,
-                 result_revision INTEGER NOT NULL,
-                 result_generation INTEGER NOT NULL
-             );",
-        )
-        .map_err(sql_error)?;
-    connection
+    let (revision, generation) =
+        legacy.map_or((0, 0), |legacy| (legacy.revision, legacy.generation));
+    transaction
         .execute(
             "INSERT INTO config_metadata
              (authority_id, document_schema_version, revision, generation, content_digest)
-             VALUES (1, ?1, 0, 0, ?2)",
-            params![document_schema_version, initial_digest],
+             VALUES (1, ?1, ?2, ?3, ?4)",
+            params![document_schema_version, revision, generation, digest],
         )
         .map_err(sql_error)?;
-    connection
-        .execute(
-            "INSERT INTO ash_schema_migrations (component, version) VALUES ('config', ?1)",
-            [CONFIG_SQLITE_SCHEMA_VERSION],
-        )
-        .map_err(sql_error)?;
+    if let Some(legacy) = legacy {
+        if legacy.schema_version < 11 {
+            migrate_directory_grant_receipts(transaction)?;
+        }
+        transaction
+            .execute_batch(include_str!(
+                "../migrations/legacy/remove_config_authority.sql"
+            ))
+            .map_err(sql_error)?;
+    }
     Ok(())
 }
 
 fn upgrade_document_schema(
     connection: &Connection,
+    stored_version: u32,
     document_schema_version: u32,
     initial_digest: &str,
 ) -> Result<(), ConfigError> {
-    let stored_version = connection
-        .query_row(
-            "SELECT document_schema_version FROM config_metadata WHERE authority_id = 1",
-            [],
-            |row| row.get::<_, u32>(0),
-        )
-        .map_err(sql_error)?;
     if stored_version == document_schema_version {
         return Ok(());
-    }
-    if stored_version > document_schema_version
-        || stored_version < crate::store::OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION
-    {
-        return Err(ConfigError(format!(
-            "unsupported config document schema version {stored_version}"
-        )));
     }
     if stored_version < 11 {
         migrate_directory_grant_receipts(connection)?;
@@ -132,80 +153,46 @@ fn upgrade_document_schema(
     Ok(())
 }
 
-fn migrate_v1(
-    connection: &Connection,
+fn read_legacy(
+    transaction: &Transaction<'_>,
     document_schema_version: u32,
-    initial_digest: &str,
 ) -> Result<LegacyDocument, ConfigError> {
-    let legacy = connection
+    let legacy = transaction
         .query_row(
             "SELECT schema_version, revision, generation, document_json
              FROM config_authority WHERE authority_id = 1",
             [],
             |row| {
-                Ok((
-                    row.get::<_, u32>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, String>(3)?,
-                ))
+                Ok(LegacyDocument {
+                    schema_version: row.get(0)?,
+                    revision: row.get(1)?,
+                    generation: row.get(2)?,
+                    json: row.get(3)?,
+                })
             },
         )
         .map_err(sql_error)?;
-    if legacy.0 > document_schema_version
-        || legacy.0 < crate::store::OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION
-    {
-        return Err(ConfigError(format!(
-            "unsupported config document schema version {}",
-            legacy.0
-        )));
-    }
-    connection
-        .execute_batch(
-            "CREATE TABLE config_metadata (
-                 authority_id INTEGER PRIMARY KEY CHECK (authority_id = 1),
-                 document_schema_version INTEGER NOT NULL,
-                 revision INTEGER NOT NULL,
-                 generation INTEGER NOT NULL,
-                 content_digest TEXT NOT NULL
-             );",
-        )
-        .map_err(sql_error)?;
-    connection
-        .execute(
-            "INSERT INTO config_metadata
-             (authority_id, document_schema_version, revision, generation, content_digest)
-             VALUES (1, ?1, ?2, ?3, ?4)",
-            params![document_schema_version, legacy.1, legacy.2, initial_digest],
-        )
-        .map_err(sql_error)?;
-    connection
-        .execute_batch("DROP TABLE config_authority;")
-        .map_err(sql_error)?;
-    connection
-        .execute(
-            "UPDATE ash_schema_migrations SET version = ?1 WHERE component = 'config'",
-            [CONFIG_SQLITE_SCHEMA_VERSION],
-        )
-        .map_err(sql_error)?;
-    if legacy.0 < 11 {
-        migrate_directory_grant_receipts(connection)?;
-    }
-    Ok(LegacyDocument {
-        schema_version: legacy.0,
-        document_json: legacy.3,
-    })
+    validate_document_schema_version(legacy.schema_version, document_schema_version)?;
+    Ok(legacy)
 }
 
-// Receipts are data, not a second serializer contract. Rewrite them transactionally once,
-// preserving exact command identity and revisions while normal decoders accept only new tags.
+fn validate_document_schema_version(version: u32, current: u32) -> Result<(), ConfigError> {
+    if !(crate::store::OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION..=current).contains(&version)
+    {
+        return Err(ConfigError(format!(
+            "unsupported config document schema version {version}"
+        )));
+    }
+    Ok(())
+}
+
+// Receipts keep their exact command identity and revisions while using current tags.
 fn migrate_directory_grant_receipts(connection: &Connection) -> Result<(), ConfigError> {
-    connection.execute_batch(
-        "UPDATE config_command_receipts SET command_json = json_set(command_json, '$.type', 'setDirectoryGrant')
-         WHERE json_extract(command_json, '$.type') = 'setDirPermissions';
-         UPDATE config_command_receipts SET command_json = json_set(command_json, '$.type', 'forgetDirectoryGrant')
-         WHERE json_extract(command_json, '$.type') = 'forgetDirPermissions';"
-    ).map_err(sql_error)
+    connection
+        .execute_batch(include_str!(
+            "../migrations/legacy/directory_grant_receipts.sql"
+        ))
+        .map_err(sql_error)
 }
 
 fn sql_error(error: impl std::fmt::Display) -> ConfigError {

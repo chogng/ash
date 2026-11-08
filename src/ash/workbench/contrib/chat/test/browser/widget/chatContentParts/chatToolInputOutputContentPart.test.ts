@@ -43,6 +43,37 @@ suite('Tool activity and input/output presentation', () => {
 	suiteSetup(() => { getWindows(); });
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('built-in shell output has separate streams and exit details, including restored results', () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+		const item = toolItem({ type: 'command', program: 'git', arguments: ['status', '--short'], workingDirectory: '/workspace' });
+		const invocation = item.toolInvocation!;
+		const call = { ...invocation.call, name: 'shell-command', binding: { ...invocation.call.binding!, sourceChain: [{ type: 'product' as const, component: 'ash-app-server' }] } };
+		const resultText = (stdout: string, stderr: string, exit_code: number) => JSON.stringify({ tool: 'shell-command', result: { stdout, stderr, exit_code, stdout_truncated: false, stderr_truncated: !!stderr } });
+		const text = resultText(' M settings.ts\n', 'warning\n', 2);
+		const result = { type: 'toolResult' as const, itemId: 'result', turnId: call.turnId, toolCallId: call.toolCallId, isError: false, text };
+		const output = [{ type: 'toolOutput' as const, entryId: 'output', turnId: call.turnId, toolCallId: call.toolCallId, stream: 'stdout' as const, text }];
+		const section = (name: string) => widget.element.querySelector<HTMLDetailsElement>(`[data-tool-section="${name}"]`)!;
+		widget.render([{ ...item, toolInvocation: { ...invocation, call, output } }]);
+		assert.equal(section('stdout').querySelector('pre')!.textContent, ' M settings.ts\n');
+		assert.equal(section('stderr').querySelector('pre')!.textContent, 'warning\n');
+		widget.render([{ ...item, toolInvocation: { ...invocation, call, result } }]);
+		assert.equal(section('stdout').querySelector('pre')!.textContent, ' M settings.ts\n');
+		assert.equal(section('result').querySelector('pre')!.textContent, 'Exit code: 2\nStandard error was truncated.');
+		widget.render([{ ...item, toolInvocation: { ...invocation, call, result: { ...result, text: resultText('', '', 0) } } }]);
+		assert.equal(section('stdout').hidden, true);
+		assert.equal(section('stderr').hidden, true);
+		assert.equal(section('result').querySelector('pre')!.textContent, 'Exit code: 0\nNo output.');
+		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+		try {
+			widget.render([{ ...item, toolInvocation: { ...invocation, call, result: { ...result, text: resultText('', '', 0) } } }]);
+			assert.equal(section('result').querySelector('pre')!.textContent, '退出码：0\n无输出。');
+		} finally {
+			resetNlsResolver();
+		}
+	});
+
 	test('approval matches the exact Turn and Item and never spreads to parallel or completed calls', () => {
 		const call = { ...toolItem().toolInvocation!.call, toolCallId: 'provider-call' };
 		const entries: ThreadTranscriptEntry[] = [

@@ -51,7 +51,9 @@ suite('Menu browser behavior', () => {
 		await expect(popup).toHaveCSS('top', '200px');
 		await browser.page.keyboard.press('ArrowDown');
 		await browser.page.keyboard.press('ArrowRight');
-		await expect(browser.page.getByRole('menuitem', { name: 'Child', exact: true })).toBeFocused();
+		const child = browser.page.getByRole('menuitem', { name: 'Child', exact: true });
+		await expect(child).toBeFocused();
+		await expect(child.locator('.ash-menu-leading-slot')).toHaveCSS('display', 'none');
 		for (const view of await popup.all()) {
 			const box = await view.boundingBox();
 			assert.ok(box && box.y >= 200 && box.x >= 0 && box.x + box.width <= 1280 && box.y + box.height <= 720);
@@ -67,6 +69,8 @@ suite('Menu browser behavior', () => {
 		const primary = browser.page.locator('[data-action-id="primary"] > button');
 		await expect(primary).toBeFocused();
 		await expect(primary).toContainText('Ctrl+P');
+		const slot = primary.locator('.ash-menu-leading-slot');
+		await expect(slot).toHaveCSS('display', 'none');
 		await browser.page.keyboard.down('Alt');
 		await expect(primary).toHaveAccessibleName('Alternate');
 		await expect(primary).toContainText('Ctrl+A');
@@ -76,11 +80,84 @@ suite('Menu browser behavior', () => {
 		await browser.page.evaluate(() => window.ashMenuTest.update());
 		await expect(primary).toHaveAccessibleName('Updated');
 		await expect(primary).toHaveAttribute('aria-checked', 'true');
+		await expect(slot).toBeVisible();
+		await browser.page.keyboard.down('Alt');
+		await expect(slot).toHaveCSS('display', 'none');
+		await browser.page.keyboard.up('Alt');
 		await browser.page.keyboard.press('Tab');
 		await expect(primary).toBeFocused();
 		await browser.page.evaluate(() => window.ashMenuTest.disable());
 		await expect(browser.page.locator('[data-action-id="after"] > button')).toBeFocused();
 		assert.deepEqual(await browser.page.evaluate(() => window.ashMenuTest.state().calls), [{ id: 'alternate', context: { version: 1 } }]);
+	});
+
+	test('trailing menus align command icons, selection marks and submenu arrows after optional shortcuts', async () => {
+		await open('trailing');
+		const primary = browser.page.getByRole('menuitem', { name: 'Primary' });
+		const submenu = browser.page.getByRole('menuitem', { name: 'First' });
+		const icon = primary.locator('.ash-menu-trailing-slot [data-ash-icon-id="search"]');
+		const arrow = submenu.locator('.ash-menu-trailing-slot > .ash-icon');
+		await expect(icon).toBeVisible();
+		await expect(primary.locator('.ash-button-content [data-ash-icon-id]')).toHaveCount(0);
+		await expect(arrow).toBeVisible();
+		await expect(primary.locator('.ash-menu-leading-slot')).toHaveCount(0);
+		const after = browser.page.getByRole('menuitem', { name: 'After' });
+		expect(await after.locator('.ash-menu-trailing-slot').evaluate(slot => slot.getBoundingClientRect().width)).toBeGreaterThan(0);
+		const iconColumn = async (row: typeof primary) => {
+			const slot = (await row.locator('.ash-menu-trailing-slot').boundingBox())!;
+			const shortcut = (await row.locator('.ash-menu-keybinding').boundingBox())!;
+			assert.ok(shortcut.x + shortcut.width <= slot.x);
+			return slot.x;
+		};
+		assert.equal(await iconColumn(primary), await iconColumn(submenu));
+		await browser.page.evaluate(() => window.ashMenuTest.update());
+		await expect(icon).toBeHidden();
+		const check = browser.page.locator('[data-action-id="primary"] .ash-menu-trailing-slot > [data-ash-icon-id="check"]');
+		await expect(check).toBeVisible();
+		await browser.page.keyboard.down('Alt');
+		await expect(check).toBeHidden();
+		await browser.page.keyboard.up('Alt');
+		await expect(check).toBeVisible();
+		await submenu.focus();
+		await submenu.press('ArrowRight');
+		const choice = browser.page.getByRole('menuitemradio', { name: 'Choice', checked: true });
+		await expect(choice).toBeFocused();
+		await expect(choice.locator('.ash-menu-trailing-slot > [data-ash-icon-id="check"]')).toBeVisible();
+		await expect(choice.locator('.ash-menu-keybinding')).toHaveCount(0);
+		await choice.press('ArrowDown');
+		await browser.page.keyboard.press('ArrowRight');
+		const child = browser.page.getByRole('menuitem', { name: 'Child', exact: true });
+		await expect(child).toBeFocused();
+		await expect(child.locator('.ash-menu-trailing-slot')).toHaveCSS('display', 'none');
+		await child.press('Escape');
+		await browser.page.keyboard.press('Escape');
+		await expect(submenu).toBeFocused();
+	});
+
+	test('trailing checks preserve leading icons and align with submenu arrows', async () => {
+		await open('leading-with-trailing-check');
+		await browser.page.evaluate(() => window.ashMenuTest.update());
+		const selected = browser.page.getByRole('menuitemradio', { name: 'Updated', checked: true });
+		const icon = selected.locator('.ash-menu-leading-slot [data-ash-icon-id="search"]');
+		const check = selected.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]');
+		const submenu = browser.page.getByRole('menuitem', { name: 'First' });
+		const arrow = submenu.locator('.ash-menu-trailing-slot');
+		await expect(icon).toBeVisible();
+		await expect(check).toBeVisible();
+		await expect(check.locator('..')).toHaveAttribute('aria-hidden', 'true');
+		const label = await selected.locator('.ash-button-label').boundingBox();
+		const leading = await icon.boundingBox();
+		const trailing = await check.locator('..').boundingBox();
+		assert.ok(leading!.x + leading!.width <= label!.x);
+		assert.ok(label!.x + label!.width <= trailing!.x);
+		assert.equal(trailing!.x, (await arrow.boundingBox())!.x);
+		await submenu.press('ArrowRight');
+		const choice = browser.page.getByRole('menuitemradio', { name: 'Choice', checked: true });
+		await expect(choice).toBeFocused();
+		await expect(choice.locator('.ash-menu-leading-slot')).toBeHidden();
+		await expect(choice.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]')).toBeVisible();
+		await choice.press('Escape');
+		await expect(submenu).toBeFocused();
 	});
 
 	test('propagates providers, radio descriptions, context changes and keyboard event context through nested menus', async () => {
@@ -139,9 +216,27 @@ suite('Menu browser behavior', () => {
 		await row.click();
 		const anchor = await row.boundingBox();
 		const popup = await browser.page.locator('.ash-context-view-menu:not([hidden])').boundingBox();
-		assert.ok(anchor && popup);
+		const firstChild = await browser.page.getByRole('menuitemradio', { name: 'Choice', exact: true }).boundingBox();
+		assert.ok(anchor && popup && firstChild);
 		assert.ok(popup.x + popup.width <= anchor.x);
-		assert.ok(Math.abs(popup.y - anchor.y) < 3);
+		assert.ok(Math.abs(firstChild.y - anchor.y) < 3);
+	});
+
+	test('aligns an async submenu to its trigger before and after replacing the loading row', async () => {
+		await open('async');
+		const trigger = browser.page.getByRole('menuitem', { name: 'First', exact: true });
+		await trigger.press('ArrowRight');
+		const anchor = await trigger.boundingBox();
+		assert.ok(anchor);
+
+		const loading = browser.page.getByRole('menuitem', { name: 'Loading', exact: true });
+		await expect(loading).toBeVisible();
+		expect((await loading.boundingBox())!.y).toBeCloseTo(anchor.y, 0);
+
+		await browser.page.evaluate(() => window.ashMenuTest.resolveSubmenu());
+		const loaded = browser.page.getByRole('menuitem', { name: 'Loaded', exact: true });
+		await expect(loaded).toBeFocused();
+		expect((await loaded.boundingBox())!.y).toBeCloseTo(anchor.y, 0);
 	});
 
 	test('touch panning keeps a clamped menu open and dismisses it only after a real scroll', async () => {

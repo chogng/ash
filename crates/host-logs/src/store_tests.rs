@@ -186,6 +186,34 @@ fn source_and_cursor_validation_cannot_escape_the_log_root() {
 
 #[cfg(unix)]
 #[test]
+fn cached_appends_follow_the_live_log_after_external_rotation() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut store = open(&directory);
+    let live = store.session.join("main.log");
+    let moved = store.session.join("previous.log");
+    store.append("main", entry("before rotation")).unwrap();
+    fs::rename(&live, &moved).unwrap();
+    fs::write(&live, "").unwrap();
+    store.append("main", entry("after rotation")).unwrap();
+    assert!(
+        fs::read_to_string(&live)
+            .unwrap()
+            .contains("after rotation")
+    );
+
+    fs::remove_file(&live).unwrap();
+    std::os::unix::fs::symlink(&moved, &live).unwrap();
+    assert!(matches!(
+        store.append("main", entry("after redirection")),
+        Err(Error::Invalid(_))
+    ));
+    let old = fs::read_to_string(&moved).unwrap();
+    assert!(old.contains("before rotation"));
+    assert_eq!(old.lines().count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
 fn redirected_sessions_and_files_are_rejected() {
     use std::os::unix::fs::symlink;
     let directory = tempfile::tempdir().unwrap();

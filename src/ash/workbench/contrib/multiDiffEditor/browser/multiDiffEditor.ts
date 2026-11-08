@@ -44,7 +44,8 @@ import { extname } from '../../../../base/common/path.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { URI } from '../../../../base/common/uri.js';
-import type { IMultiDiffEditorOptionsViewState } from '../../../../editor/common/multiDiffEditor.js';
+import type { RevealOptions } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidgetImpl.js';
+import type { IMultiDiffResourceId, IMultiDiffEditorOptionsViewState } from '../../../../editor/common/multiDiffEditor.js';
 import {
 	ActiveEditorContext, ActiveEditorReadonlyContext, ResourceContext, ResourceSchemeContext,
 	ResourcePathContext, ResourceFilenameContext, ResourceDirnameContext, ResourceExtensionContext,
@@ -64,6 +65,9 @@ export const MultiDiffEditorPreview = new RawContextKey<boolean>('multiDiffEdito
 export interface MultiDiffEditorOptions {
 	/** A composed editor retains its own menu identity while reusing this comparison widget. */
 	readonly activeEditorId?: string;
+	readonly viewMode?: 'inline' | 'sideBySide';
+	readonly createFileActions?: (container: HTMLElement, item: MultiDiffEditorInputItem) => IDisposable;
+	readonly attachEditor?: (item: MultiDiffEditorInputItem, editor: DiffEditorWidget) => IDisposable | undefined;
 	readonly lineHeight?: number;
 	readonly wordWrapColumn?: number;
 	readonly fontFamily?: string;
@@ -110,10 +114,10 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super(MULTI_DIFF_EDITOR_ID, themeService, storageService);
-		this.previewEnabled = configuration.getValue(CodeEditorConfiguration.diffReviewPreview);
+		this.previewEnabled = !options.attachEditor && configuration.getValue(CodeEditorConfiguration.diffReviewPreview);
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(CodeEditorConfiguration.diffReviewPreview)) return;
-			this.previewEnabled = configuration.getValue(CodeEditorConfiguration.diffReviewPreview);
+			this.previewEnabled = !options.attachEditor && configuration.getValue(CodeEditorConfiguration.diffReviewPreview);
 			this.session.value?.editor?.setPreview(this.previewEnabled);
 			this.updateCollapseContext();
 		}));
@@ -193,7 +197,15 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 
 	public get preview(): boolean { return this.previewEnabled; }
 	public async togglePreview(): Promise<void> {
+		if (this.options.attachEditor) return;
 		await this.configuration.updateValue(CodeEditorConfiguration.diffReviewPreview, !this.previewEnabled);
+	}
+	public reveal(resource: IMultiDiffResourceId, options?: RevealOptions): void { this.session.value?.editor?.reveal(resource, options); }
+	public setViewMode(mode: 'inline' | 'sideBySide'): void {
+		this.session.value?.editor?.setViewMode(mode === 'sideBySide', false, 0);
+	}
+	public setFileCollapsed(item: MultiDiffEditorInputItem, collapsed: boolean): void {
+		this.session.value?.editor?.setItemCollapsed(multiDiffEditorItemKey(item), collapsed);
 	}
 	public getReviewLocation(): ReturnType<MultiDiffEditorWidget['getReviewLocation']> { return this.session.value?.editor?.getReviewLocation(); }
 	public getAccessibleContent(): string | undefined { return this.session.value?.editor?.getAccessibleContent(); }
@@ -334,7 +346,7 @@ class MultiDiffEditorSession extends Disposable {
 				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
 					this.editor?.setLayoutStyle(configuration.getValue(WorkbenchConfiguration.layoutStyle));
 				}
-				if (useConfiguredViewMode && (event.affectsConfiguration('diffEditor.renderSideBySide')
+				if (!options.viewMode && useConfiguredViewMode && (event.affectsConfiguration('diffEditor.renderSideBySide')
 					|| event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited')
 					|| event.affectsConfiguration('diffEditor.renderSideBySideInlineBreakpoint'))) {
 					this.editor?.setViewMode(
@@ -370,7 +382,11 @@ class MultiDiffEditorSession extends Disposable {
 			this.editor = this._register(instantiationService.createInstance(MultiDiffEditorWidget, {
 				container: this.editorDomNode,
 				model: this.model,
-				preview: configuration.getValue(CodeEditorConfiguration.diffReviewPreview),
+				preview: !options.attachEditor && configuration.getValue(CodeEditorConfiguration.diffReviewPreview),
+				attachEditor: options.attachEditor && ((item: IDocumentDiffItem, editor: DiffEditorWidget) => {
+					const input = this.inputsById.get(item.id);
+					return input && options.attachEditor!(input, editor);
+				}),
 				onOpenEditor: (item: IDocumentDiffItem, side: 'original' | 'modified', range: Range) => {
 					const input = this.inputsById.get(item.id);
 					if (!input) return;
@@ -383,7 +399,7 @@ class MultiDiffEditorSession extends Disposable {
 						.finally(() => retention?.dispose());
 				},
 				wordWrap: getDiffWordWrap(configuration),
-				...(useConfiguredViewMode ? {
+				...(options.viewMode ? { renderSideBySide: options.viewMode === 'sideBySide', useInlineViewWhenSpaceIsLimited: false } : useConfiguredViewMode ? {
 					renderSideBySide: configuration.getValue<boolean>('diffEditor.renderSideBySide'),
 					useInlineViewWhenSpaceIsLimited: configuration.getValue<boolean>('diffEditor.useInlineViewWhenSpaceIsLimited'),
 					renderSideBySideInlineBreakpoint: configuration.getValue<number>('diffEditor.renderSideBySideInlineBreakpoint'),
@@ -417,7 +433,12 @@ class MultiDiffEditorSession extends Disposable {
 					createItemActions: (container: HTMLElement, item: IDocumentDiffItem) => {
 						const input = this.inputsById.get(item.id);
 						if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
-						return this.createFileActions(container, item, input);
+						const actions = this.createFileActions(container, item, input);
+						if (!options.createFileActions) return actions;
+						const resources = new DisposableStore();
+						resources.add(actions);
+						resources.add(options.createFileActions(container, input));
+						return resources;
 					},
 				},
 			}));

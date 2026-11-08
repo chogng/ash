@@ -36,3 +36,13 @@
 .ash-sessions-chat-input > .ash-chat-input-footer > .ash-chat-input-toolbars {
 	width: auto;
 }
+
+.ash-session-workspace-status {
+	min-width: 0;
+	max-inline-size: 35%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+}

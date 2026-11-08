@@ -88,6 +88,7 @@ impl std::error::Error for InvalidMemoryId {}
 pub enum MemoryScope {
     Profile,
     Project { project_id: ProjectId },
+    ChatProject { project_id: ProjectId },
     Team { team_id: ash_protocol::TeamId },
     Dir { dir_id: DirId },
 }
@@ -97,6 +98,7 @@ impl MemoryScope {
         match self {
             Self::Profile => "profile".into(),
             Self::Project { project_id } => format!("project:{project_id}"),
+            Self::ChatProject { project_id } => format!("chat:project:{project_id}"),
             Self::Team { team_id } => format!("team:{team_id}"),
             Self::Dir { dir_id } => format!("dir:{dir_id}"),
         }
@@ -104,15 +106,31 @@ impl MemoryScope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryTurnSource {
+    pub session_id: ash_protocol::SessionId,
+    pub thread_id: ash_protocol::ThreadId,
+    pub turn_id: ash_protocol::TurnId,
+    pub item_id: ash_protocol::ItemId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[ts(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum MemorySource {
     User,
+    UserFromTurn(MemoryTurnSource),
     Model {
         session_id: ash_protocol::SessionId,
         thread_id: ash_protocol::ThreadId,
         turn_id: ash_protocol::TurnId,
     },
+}
+
+impl MemorySource {
+    pub fn is_user_owned(&self) -> bool {
+        matches!(self, Self::User | Self::UserFromTurn(_))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

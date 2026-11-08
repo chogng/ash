@@ -11,6 +11,7 @@ export const AGENTS_VOICE_PUSH_TO_TALK = new RawContextKey<boolean>('agentsVoice
 
 export const enum AgentsVoiceSettingId {
 	ShowButton = 'agents.voice.showButton',
+	Model = 'agents.voice.model',
 }
 
 export const enum AgentsVoiceStorageKeys {

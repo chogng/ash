@@ -3,13 +3,19 @@ use ash_protocol::AudioAttachmentRef;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::ImageAttachmentRef;
 use ash_protocol::ItemId;
+use ash_protocol::SessionId;
 use ash_protocol::SkillActivationReason;
 use ash_protocol::SkillVersionSelector;
+use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
+use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
+use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use super::ThreadController;
 use crate::CoreError;
 pub(super) enum ValidatedUserInput<'a> {
     Text(&'a str),
@@ -58,12 +64,112 @@ pub(super) fn normalize_attachments(
             )),
             UserInput::Text { .. }
             | UserInput::Context { .. }
+            | UserInput::ChatReference { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Skill { .. }
             | UserInput::ToolSelection { .. }
             | UserInput::Mention { .. } => Ok(input.clone()),
         })
         .collect()
+}
+
+/// The source coordinates also bind the materialized item to its steering receipt.
+pub(crate) fn chat_reference_source(session_id: &SessionId, thread_id: &ThreadId) -> String {
+    format!(
+        "Referenced conversation (session {:?}, thread {:?})\n\n",
+        session_id.as_str(),
+        thread_id.as_str()
+    )
+}
+
+/// Keep the original reference in the command receipt. Only the transcript item holds
+/// the materialized excerpt so retries and queue recovery compare stable input.
+pub(super) fn resolve_chat_references<'a>(
+    controller: &ThreadController,
+    input: &'a [UserInput],
+) -> Cow<'a, [UserInput]> {
+    if !input
+        .iter()
+        .any(|item| matches!(item, UserInput::ChatReference { .. }))
+    {
+        return Cow::Borrowed(input);
+    }
+    Cow::Owned(
+        input
+            .iter()
+            .map(|item| match item {
+                UserInput::ChatReference {
+                    name,
+                    session_id,
+                    thread_id,
+                } => {
+                    let mut content = chat_reference_source(session_id, thread_id);
+                    let excerpt = controller.with_loaded_thread(thread_id, |loaded| {
+                        let snapshot = &loaded.snapshot;
+                        Ok((&snapshot.session_id == session_id)
+                            .then(|| recent_chat_excerpt(snapshot)))
+                    });
+                    match excerpt {
+                        Ok(Some(excerpt)) if !excerpt.is_empty() => content.push_str(&excerpt),
+                        Ok(Some(_)) => content.push_str(
+                            "The referenced conversation has no completed text messages.",
+                        ),
+                        _ => content.push_str("The referenced conversation is unavailable."),
+                    }
+                    UserInput::Context {
+                        name: name.clone(),
+                        content,
+                        source_url: None,
+                    }
+                }
+                _ => item.clone(),
+            })
+            .collect(),
+    )
+}
+
+fn recent_chat_excerpt(snapshot: &crate::ThreadSnapshot) -> String {
+    // Bound model context while preserving the existing Ash allowance for long references.
+    const MAX_BYTES: usize = 100_000;
+    let finished = snapshot
+        .turns
+        .iter()
+        .filter_map(|turn| {
+            matches!(
+                turn.status,
+                TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+            )
+            .then_some(&turn.turn_id)
+        })
+        .collect::<BTreeSet<_>>();
+    let messages = snapshot.items.iter().rev().filter_map(|item| match item {
+        ThreadItem::UserMessage { turn_id, text, .. } if finished.contains(turn_id) => {
+            Some(("User", text))
+        }
+        ThreadItem::AgentMessage { turn_id, text, .. } if finished.contains(turn_id) => {
+            Some(("Assistant", text))
+        }
+        _ => None,
+    });
+    let mut recent = Vec::new();
+    let mut remaining = MAX_BYTES;
+    let mut omitted = false;
+    for (speaker, text) in messages.filter(|(_, text)| !text.trim().is_empty()) {
+        let overhead = speaker.len() + 8; // role heading and paragraph separators
+        if overhead >= remaining || (!recent.is_empty() && text.len() > remaining - overhead) {
+            omitted = true;
+            break;
+        }
+        let start = text.ceil_char_boundary(text.len().saturating_sub(remaining - overhead));
+        recent.push(format!("### {speaker}\n\n{}", &text[start..]));
+        remaining -= overhead + text.len() - start;
+        omitted |= start > 0;
+    }
+    if omitted {
+        recent.push("[Earlier text omitted]".into());
+    }
+    recent.reverse();
+    recent.join("\n\n")
 }
 
 pub(super) fn validate<'a>(
@@ -86,16 +192,26 @@ pub(super) fn validate<'a>(
             UserInput::Text { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn text input must not be empty".into(),
             ))),
-            UserInput::Context { name, content, source_url }
-                if !name.trim().is_empty() && !content.trim().is_empty() =>
-            {
-                Some(Ok(ValidatedUserInput::Context { name, content, source_url: source_url.as_deref() }))
+            UserInput::Context {
+                name,
+                content,
+                source_url,
+            } if !name.trim().is_empty() && !content.trim().is_empty() => {
+                Some(Ok(ValidatedUserInput::Context {
+                    name,
+                    content,
+                    source_url: source_url.as_deref(),
+                }))
             }
             UserInput::Context { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn context input must have a non-empty name and content".into(),
             ))),
-            UserInput::AudioAttachment { attachment } => Some(Ok(ValidatedUserInput::Audio(attachment))),
-            UserInput::Audio { .. } => Some(Err(CoreError::InvalidInput("audio input must be normalized before validation".into()))),
+            UserInput::AudioAttachment { attachment } => {
+                Some(Ok(ValidatedUserInput::Audio(attachment)))
+            }
+            UserInput::Audio { .. } => Some(Err(CoreError::InvalidInput(
+                "audio input must be normalized before validation".into(),
+            ))),
             UserInput::ImageAttachment { attachment } => {
                 Some(Ok(ValidatedUserInput::Image(attachment)))
             }
@@ -103,12 +219,12 @@ pub(super) fn validate<'a>(
                 "legacy image input must be normalized before validation".into(),
             ))),
             UserInput::Skill { .. } | UserInput::ToolSelection { .. } => None,
-            UserInput::LocalImage { .. } | UserInput::Mention { .. } => {
-                Some(Err(CoreError::InvalidInput(
-                    "this Thread controller currently accepts text, context, and validated attachments"
-                        .into(),
-                )))
-            }
+            UserInput::LocalImage { .. }
+            | UserInput::Mention { .. }
+            | UserInput::ChatReference { .. } => Some(Err(CoreError::InvalidInput(
+                "this Thread controller currently accepts text, context, and validated attachments"
+                    .into(),
+            ))),
         })
         .collect::<Result<Vec<_>, _>>()?;
     validate_skill_activations(input, activated_skills)?;
@@ -130,6 +246,7 @@ fn validate_skill_activations(
             UserInput::Skill { skill } => Some(skill),
             UserInput::Text { .. }
             | UserInput::Context { .. }
+            | UserInput::ChatReference { .. }
             | UserInput::ImageAttachment { .. }
             | UserInput::AudioAttachment { .. }
             | UserInput::Audio { .. }

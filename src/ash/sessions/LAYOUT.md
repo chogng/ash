@@ -12,7 +12,7 @@ Exact dimensions, styling, action placement, and regression behavior belong in c
 
 Desktop modes select view content in the shared `SidebarPart`; pages without a dedicated container retain the current workspace's conversation sidebar. Cold restoration and workspace changes use the registered default container; Desktop's ChatGPT contribution supplies the Chat default. Projects opens its retained EditorPane for the project list and project conversations. Each mode supplies content to the shared window Parts; a product-page name does not justify a new Part or another window grid.
 
-Chat and Code are workspace shells selected by the titlebar switcher. Entry descriptors declare their workspace; `ISessionsLayoutService` derives the active workspace from the selected entry and publishes its context for navigation. Chat and Code share the Activity Bar menu, navigation order and pins. Desktop Chat and Code select the same retained conversation sidebar, which aggregates native Sessions and contributed conversation sources. New opens a draft in the selected mode. Shared pages and overlays retain that mode. A Custom View can declare the entry command that supplies its underlying workspace; opening and restoring that view preserves the overlay while applying the declared entry. Custom Views retain the workspace sidebar's current expansion state. Navigation order is saved in the profile UI state store. The selected workspace is reconstructed from the restored entry.
+Chat and Code are workspace shells selected by the titlebar switcher. Entry descriptors declare their workspace; `ISessionsLayoutService` derives the active workspace from the selected entry and publishes its context for navigation. The Activity Bar evaluates each contributed entry in the active workspace context. Navigation order and pins use shared profile preferences. Desktop Chat and Code select separate retained conversation sidebar views in the same SidebarPart. New opens a draft in the selected mode. Shared pages and overlays retain that mode. A Custom View can declare the entry command that supplies its underlying workspace; opening and restoring that view preserves the overlay while applying the declared entry. Custom Views retain the workspace sidebar's current expansion state. Navigation order is saved in the profile UI state store. The selected workspace is reconstructed from the restored entry.
 
 | Surface                           | Shared host        | Mode-owned content                                                                       |
 | --------------------------------- | ------------------ | ---------------------------------------------------------------------------------------- |
@@ -30,7 +30,7 @@ ChatGPT contributes a conversation catalog source to the shared SidebarPart and 
 
 Layout variants arrange these shared hosts differently. Desktop-specific editor/detail docking and phone navigation may require separate layout implementations; they do not justify `ProjectsPart`, `CreatorPart` or another Part for each page. Conversation-grid ownership remains governed by the Sessions model and its own composition contract, independently of document editing.
 
-Projects and Creator contribute EditorPanes to the retained Sessions EditorPart. Their navigation and details use shared editor and view-container hosts. Projects owns its project list, breadcrumb and materials inside one editor; the window-scoped navigation service owns disposable browsing state while the Project backend owns the durable catalog and material references. SessionsPart remains the permanent conversation host. A product page may show it alongside EditorPart when its contributed composition includes Agent work; a page without conversation content hides it. Design implements this composition with an optional shared conversation.
+Projects and Creator contribute EditorPanes to the retained Sessions EditorPart. Their navigation and details use shared editor and view-container hosts. The Projects editor owns the project list and materials. The Projects contribution registers the project title as a menu action view item. The window title bar owns its placement and lifetime, and the title reads the active editor’s project presentation. The window-scoped navigation service owns browsing state and the Project backend owns the durable catalog and material references. SessionsPart remains the permanent conversation host. A product page may show it alongside EditorPart when its contributed composition includes Agent work; a page without conversation content hides it. Design implements this composition with an optional shared conversation.
 
 ### Creator entries and the project catalog
 
@@ -144,8 +144,9 @@ the same actions and order. At the default location, SidebarPart hosts labeled
 navigation above its active view and Accounts below it. Navigation is a disposable
 component rather than a separate window Part; closing or suppressing the sidebar hides its
 navigation and Accounts together without reserving an icon rail. The titlebar
-workspace mode control follows the same sidebar visibility. The sidebar toggle
-remains available to restore navigation in the current page. ActivityBar retains
+workspace mode control appears when the sidebar is visible and the current
+entry allows it. The sidebar toggle remains available to restore navigation in
+the current page. ActivityBar retains
 action ownership as its presentation moves between the configured hosts.
 
 Both workbenches open, hide and focus view containers through
@@ -251,6 +252,8 @@ Session providers register internal per-session directories as resource label ho
 visibility and explicit-open focus. The desktop Grid keeps a hidden `customview`
 leaf alongside its normal content. Custom-view visibility is transient and does
 not overwrite the underlying entry's desired visibility or saved dimensions.
+`CustomViewNode` owns the mounted page, including its header, scrolling body,
+focus and the lifetime of the contributed content.
 
 A custom view is an independent page, mutually exclusive with Sessions Part, grid Editor, Auxiliary Bar, and Panel. The title bar and window sidebar retain their normal visibility and navigation behavior. Covered content parts retain desired visibility separately from effective grid visibility so their state can be restored when the custom view closes.
 

@@ -70,7 +70,7 @@ fn archiving_more_than_the_keep_count_preserves_non_git_edits_until_explicit_che
     for index in 0..=runtime.dirs.worktrees.settings().keep_count {
         let result = call(
             "session/create",
-            serde_json::json!({"commandId":format!("create-{index}"), "title":"Plain directory", "executionTarget":{"type":"local","root":source.path()}}),
+            serde_json::json!({"commandId":format!("create-{index}"), "title":"Plain directory", "kind":"code", "executionTarget":{"type":"local","root":source.path()}}),
         );
         let session = result["session"]["sessionId"].as_str().unwrap().to_owned();
         let thread = ThreadId::new(
@@ -241,7 +241,7 @@ fn parallel_spawn_uses_the_durable_frozen_tree_after_the_parent_changes() {
     let result = call(
         2,
         "session/create",
-        serde_json::json!({"commandId":"binding-root", "title":"Frozen binding", "executionTarget":{"type":"local","root":repository.path()}}),
+        serde_json::json!({"commandId":"binding-root", "title":"Frozen binding", "kind":"code", "executionTarget":{"type":"local","root":repository.path()}}),
     );
     let session = SessionId::new(result["session"]["sessionId"].as_str().unwrap()).unwrap();
     let root = ThreadId::new(
@@ -488,7 +488,7 @@ fn comparison_forks_share_the_source_checkpoint_in_distinct_named_worktrees() {
     let source = call(
         3,
         "session/create",
-        json!({"commandId":"comparison-source","title":"Source","executionTarget":{"type":"local","root":root}}),
+        json!({"commandId":"comparison-source","title":"Source","kind":"code", "executionTarget":{"type":"local","root":root}}),
     );
     let session = source["session"]["sessionId"].as_str().unwrap();
     let thread = source["session"]["threads"][0]["threadId"]

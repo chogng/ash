@@ -8,20 +8,21 @@ import { ISessionsChatViewStateService } from './chatViewStateService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
+import { ChatWidgetModel, type ChatWidgetSelection } from '../../../browser/chatWidgetModel.js';
 import { SessionInfoRail } from '../../../browser/parts/sessionInfoRail.js';
 import type { ISessionsConversationPane } from '../../../browser/parts/sessionView.js';
-import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionContext } from '../../../services/sessions/browser/sessionContext.js';
 import { NewChatInSessionWidget } from './newChatInSessionWidget.js';
 import { NewChatWidget } from './newChatWidget.js';
+import type { ChatMessagePresentation } from '../../../../workbench/contrib/chat/browser/chat.js';
 
 interface INewChatViewOptions {
 	readonly panelId: string;
-	readonly selection: SessionsViewSelection;
+	readonly selection: ChatWidgetSelection;
 	readonly createNewSession: () => void;
 	readonly onDidChangeInfo: () => void;
+	readonly messagePresentation?: ChatMessagePresentation;
 }
 
 /** Retains one Code surface and its provider scope when a draft acquires a durable Session identity. */
@@ -57,7 +58,7 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 				const log = scope.getOptional(ILogService);
 				if (log) this._register(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
 				this.widget = this._register(scope.createInstance(model.isNestedDraft ? NewChatInSessionWidget : NewChatWidget,
-					this.element, { panelId, model, createNewSession }));
+					this.element, { panelId, model, createNewSession, messagePresentation: options.messagePresentation }));
 			} catch (error) {
 				model.dispose();
 				throw error;

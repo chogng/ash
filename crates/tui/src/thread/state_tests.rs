@@ -223,6 +223,7 @@ fn thread_snapshot() -> Thread {
             status: TurnStatus::Completed,
             kind: Default::default(),
             instructions: None,
+            directory: None,
             model: None,
             reasoning_effort: None,
             tool_profile: None,
@@ -253,6 +254,7 @@ fn thread_snapshot() -> Thread {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
     }
@@ -268,6 +270,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
             status: TurnStatus::Completed,
             kind: Default::default(),
             instructions: None,
+            directory: None,
             model: None,
             reasoning_effort: None,
             tool_profile: None,
@@ -284,6 +287,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
         ..thread_snapshot()

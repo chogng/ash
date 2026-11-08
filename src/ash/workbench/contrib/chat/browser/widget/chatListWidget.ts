@@ -1,13 +1,14 @@
-import type { IChatInputPart } from './input/chatInputPart.js';
+import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import type { ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel, type PromptTurnChanges } from '../promptTimeline/promptTimelineModel.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
 import { getImageGenerationBatch, isImageGenerationToolInvocation } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
 import { ChatImageGenerationBatchPart } from './chatContentParts/chatImageGenerationBatchPart.js';
 import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
-import { ChatListItemRenderer, type ChatRequestInputOptions, type ChatResponseActions } from './chatListRenderer.js';
+import { ChatListItemRenderer, type ChatResponseActions } from './chatListRenderer.js';
 import { cloneVisibleSelection, sanitizeChatClipboardFragment } from './chatClipboard.js';
 import { ChatLayoutTrace } from './chatLayoutTrace.js';
+import { ChatWorkingLogo } from './chatWorkingLogo.js';
 import { ILoggerService } from '../../../../../platform/log/common/log.js';
 import { autorun } from '../../../../../base/common/observable.js';
 import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
@@ -15,7 +16,7 @@ import { findLast, findLastIdx } from '../../../../../base/common/arraysFind.js'
 import { PromptTimelineStickyHeader } from '../promptTimeline/promptTimelineStickyHeader.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
-import { observeResize } from '../../../../../base/browser/observer.js';
+import { observeIntersection, observeResize } from '../../../../../base/browser/observer.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -43,11 +44,11 @@ import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatResponseAccessibleView } from '../accessibility/chatResponseAccessibleView.js';
 import { ChatFindWidget, computeRevealScrollTop, type IChatFindHost } from './chatFind/chatFindWidget.js';
-import type { ChatInputEditorOptions, IChatInputEditor } from './input/chatInputEditorRegistry.js';
 
 interface ChatListWidgetOptions {
-	readonly createRequestInput?: (options: ChatRequestInputOptions) => IChatInputPart;
-	readonly createRequestEditor?: (options: ChatInputEditorOptions) => IChatInputEditor;
+	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
+	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
+	readonly canEditRequest?: () => boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly showPromptTimeline?: boolean;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
@@ -60,6 +61,7 @@ interface ChatListWidgetOptions {
 	/** The host owns its transcript layout; content parts keep their shared styles. */
 	readonly classPrefix?: string;
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 	readonly onDidRequestLink?: (target: string) => void;
@@ -106,6 +108,9 @@ export class ChatListWidget extends DomWidget {
 	private readonly scrollToLatestButton: Button;
 	private readonly scrollToLatestHostObserver = this._register(new MutableDisposable());
 	private readonly transcript: HTMLDivElement;
+	private working = false;
+	private workingStatus: { readonly element: HTMLElement; readonly label: HTMLElement; readonly logo: ChatWorkingLogo; readonly sticky: HTMLElement; } | undefined;
+	private workingOutsideViewport = false;
 	private readonly stickyPrompt: PromptTimelineStickyHeader;
 	private promptModel = new PromptTimelineModel<IChatListItem>([], id => this.renderedItems.get(id)!.element);
 	private readonly promptTimeline: PromptTimelineWidgetContrib | undefined;
@@ -121,7 +126,9 @@ export class ChatListWidget extends DomWidget {
 	private readonly thinkingExpansion = new Map<string, boolean>();
 	private visible = true;
 	private shouldFollow = true;
-	private activeRequestEdit: (() => boolean) | undefined;
+	private pausedReplyScrollTop: number | undefined;
+	private activeRequestEdit: ((restoreFocus: boolean) => boolean) | undefined;
+	private readonly refreshAfterRequestEdit = this._register(new RunOnceScheduler(() => this.render(this.items, this.working), 0));
 	private readingPosition: ReadingAnchor | undefined;
 	private layingOut = false;
 	private readonly relayout = this._register(new RunOnceScheduler(() => { if (this.visible) this.layout(); }, 0));
@@ -228,6 +235,16 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	public reveal(item: IChatListItem): void { this.revealItem(item.id); }
+
+	public startEditing(requestId: string): void {
+		this.renderedItems.get(requestId)?.startEditing();
+	}
+
+	get isEditingRequest(): boolean { return this.activeRequestEdit !== undefined; }
+
+	public cancelEditing(): boolean {
+		return this.activeRequestEdit?.(true) ?? false;
+	}
 
 	public focusResponseItem(lastFocused = false): void {
 		if (!this.visible) { return; }
@@ -375,10 +392,12 @@ export class ChatListWidget extends DomWidget {
 						localize('chat.forkConversation.help', 'Tab to Fork conversation from this point and press Enter or Space to open a new chat with the history before that request. In the Agents window, use Alt+Enter or Alt-click to open it side by side.'),
 						localize('chat.queue.rowHelp', 'On a queued message, use Tab to reach Edit queued message, Send queued message immediately, or Remove queued message. Press Enter or Space to apply the action to that message.'),
 						localize('chat.history.redoRowHelp', 'After undoing a request, use Redo last request in the transcript to restore the request and its recorded file changes.'),
-						localize('chat.modelFeedback.rowHelp', 'Give model feedback on a completed reply opens an editable report about the model used for that reply.'),
+						localize('chat.modelFeedback.rowHelp', 'On a completed reply, open More Actions and choose Give model feedback to open an editable report about the model used for that reply.'),
+						localize('chat.response.voteHelp', 'In the Agents window, open More Actions on a completed Ash reply to mark it Good response or Bad response. The mark is saved in your Ash profile.'),
+						localize('chat.requestVersions.help', 'In Code, open the original request’s checkpoint actions and choose Run another version to run it again in a separate worktree. When both versions have finished and their Git snapshots are available, open More Actions on either reply and choose Compare results.'),
 						...(this.options.openTurnChanges ? [localize('chat.turnChanges.help', 'When a completed reply has captured file changes, use Tab to reach its file count button. Press Enter or Space to open the before-and-after comparison for that turn.')] : []),
 					].join('\n');
-					return (this.promptTimeline ? localize('chat.promptTimeline.help', 'In the Agents window, hover over the left timeline to show prompts, or focus Show prompts and press Enter. Use Up and Down Arrow, Home or End to move between prompts, and Left and Right Arrow to switch between a prompt and its change counts. Activate the prompt to jump to it or the counts to open that turn’s changes. In the ruler, activate a marker to see the same actions and expand Changed files to review an individual file. Escape closes the prompt list.') + '\n' : '') + localize('chat.stickyScroll.help', 'When a user prompt scrolls out of view, it stays at the top of the conversation. Tab to the pinned prompt and press Enter or Space to return to the original message.') + '\n' + localize('chat.requests.help', 'Click an editable request to edit its text in place. With the keyboard, Tab to its edit control and press Enter or Space. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Click outside the editor or press Escape to cancel and keep the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + forkHelp + '\n' + localize('chat.remainingActions.help', 'Chat: Configure Tools edits the focused draft’s tool selection; Escape discards changes. Chat: Approve Tool Once and Chat: Decline Tool act only on the currently displayed approval. They never save an approval rule. Chat: Submit Requested Answers submits the current question form with its entered values; required answers must be filled. Use Ctrl or Command+Enter while the question form has focus. Chat: Retry Failed Request repeats an available failed request through its original retry policy. Chat: Copy Final Response copies the latest completed assistant reply without speaker labels or streaming text. Chat: Next Code Block and Chat: Previous Code Block move focus through the current or latest response’s code blocks and wrap at the ends. Use Ctrl or Command+Alt+Page Down or Page Up in Chat. Chat: Export Conversation Transcript saves a frozen backend text snapshot, including voice transcripts, tool call summaries with inputs and errors, and partial markers. Tool output, result attachments and internal reasoning are excluded. Chat: Open Saved Transcript (Read-Only) opens a supported saved document in a read-only editor; it does not restore or execute a conversation. These commands keep the unsent draft.') + '\n' + localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker, Chat: Open Mode or Agent Picker, or Chat: Open Permission Picker in the Command Palette to configure the most recently focused composer. Model and mode pickers also open with {0} and {1}. Fixed-mode inputs keep the mode picker hidden. Cowork uses its existing permission flow. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>', '<keybinding:workbench.action.chat.openModePicker>') + '\n' + localize('chat.execution.help', 'Chat: Send Message uses the current draft, attachments and submission policy. Chat: Add Message to Queue waits for the current request to finish; Chat: Steer with Message explicitly targets it. When idle, both send normally. Explicit steering rejects a different mode, Skill or task type. Queue and steering actions do not run slash commands. Failed submissions restore the draft if it has not been edited again. Use {0} to stop the focused task while keeping unsent text. Stopping remains available for running work when AI features are disabled.', '<keybinding:workbench.action.chat.cancel>') + '\n' + localize('chat.queue.manageHelp', 'Use Chat: Edit Queued Message, Chat: Remove Queued Message or Chat: Send Queued Message Immediately in the Command Palette, then select a message in queue order. Editing pauses that message and preserves attached inputs and your unsent draft. Enter keeps the edited message’s queue or steering action; Alt+Enter uses the other action. Ctrl or Command+Enter saves; Escape restores a previously pending message at its original position. Previously paused or failed messages remain paused when editing is cancelled. A changed revision requires choosing the message again. Send Immediately moves the original message to the front and stops the current task before running it. Remove All Queued Messages removes the captured revisions and keeps messages added while the action runs.') + '\n' + localize('chat.navigation.help', 'Use {0} to focus the latest response and {1} to return to the last focused message. Use {2} and {3} to move between user prompts without wrapping. Navigation includes loaded messages; load earlier messages to reach older prompts. On macOS, the input-to-list shortcut applies only on the first visual input line. Quick Chat reverses the input-to-list shortcut direction. Use {4} to focus a pending confirmation or return to the input. Focusing never accepts or declines a request, sends a message or changes the draft.', '<keybinding:chat.action.focus>', '<keybinding:workbench.chat.action.focusLastFocused>', '<keybinding:workbench.action.chat.previousUserPrompt>', '<keybinding:workbench.action.chat.nextUserPrompt>', '<keybinding:workbench.action.chat.focusConfirmation>') + '\n' + localize('chat.find.commandsHelp', 'Use {0} to find text in this conversation. Find includes complete code blocks and continues through earlier history without sending or changing the draft. Use the result controls to navigate; Escape closes Find and restores focus.', '<keybinding:workbench.action.chat.find>') + '\n' + localize('chat.commands.help', 'Use Focus Chat Input in the Command Palette to return to the most recently focused Chat input. From a conversation, use {0} to return to its input. Chat: Copy Conversation in the Command Palette copies all text messages and voice transcripts, including earlier history. Markdown is preserved. Export Transcript in the conversation title menu saves a JSON snapshot of the conversation. Draft text is kept in the input.', '<keybinding:workbench.action.chat.focusInput>') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message preserves Markdown and copies internal resource links as code labels. Copying a selection also replaces internal links with their visible labels. Tool summaries describe the activity and its current result state. Press Enter or Space on a tool summary to inspect its source and execution target. Input, standard output, standard error and result each have a separate summary; press Enter or Space to expand or collapse them. Tab to an expanded text region and use the arrow keys to scroll long output. Tool text is displayed literally. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. When Automatically follow new replies is enabled in Chat settings, returning to the bottom resumes following. Scrolling up or editing a message pauses following. While reading earlier messages, use Scroll to Latest to jump to the bottom. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.media.copyHelp', 'For a loaded local image, use Tab to reach Copy image and press Enter or Space to copy it to the clipboard.') + '\n' + localize('chat.markdown.tableScrollHelp', 'Use Tab to focus a response table and Left or Right Arrow to scroll wide tables. Find in Chat scrolls the table to the matching cell.') + '\n' + localize('chat.thinking.help', 'Reasoning starts collapsed. Press Enter or Space on its summary to expand or collapse it. Streaming updates and completion keep your expansion and keyboard focus. Code block navigation expands the matching reasoning when needed. The accessible transcript includes reasoning even while collapsed.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.') + '\n' + localize('chat.response.feedbackHelp', 'Completed IDE Chat responses offer Helpful. Press Enter or Space to save a personal helpful mark for that response; reopening Chat retains it. Feedback stays in the current Ash profile and is not sent to the model provider or used to change the response. Choose Helpful response animation in Settings to change or disable the effect. Reduced motion also disables the animation.') + '\n' + localize('chat.typography.help', 'In Settings, open Chat, then Appearance to change the message font and text size, including Markdown and links. Message input and code blocks have separate font settings. Changes keep your draft and reading position.');
+					return (this.promptTimeline ? localize('chat.promptTimeline.help', 'In the Agents window, hover over the left timeline to show prompts, or focus Show prompts and press Enter. Use Up and Down Arrow, Home or End to move between prompts, and Left and Right Arrow to switch between a prompt and its change counts. Activate the prompt to jump to it or the counts to open that turn’s changes. In the ruler, activate a marker to see the same actions and expand Changed files to review an individual file. Escape closes the prompt list.') + '\n' : '') + localize('chat.stickyScroll.help', 'When a user prompt scrolls out of view, it stays at the top of the conversation. Tab to the pinned prompt and press Enter or Space to return to the original message.') + '\n' + localize('chat.memory.projectHelp', 'In a Code project conversation, open Message actions on a sent prompt and choose Save as project memory. Review the title, text and project in Memories, then choose Save memory. When a reply cites a memory, use Open memory reference to read the excerpt and open its source conversation.') + '\n' + localize('chat.requests.help', 'Click an editable request to edit its text in place. With the keyboard, Tab to its edit control and press Enter or Space. Enter inserts a line. Tab reaches Cancel and Send below the editor. Send or Ctrl or Command+Enter creates a new chat with the original context and attachments. Choose Cancel, click outside the editor, or press Escape to keep the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + forkHelp + '\n' + localize('chat.remainingActions.help', 'Chat: Configure Tools edits the focused draft’s tool selection; Escape discards changes. Chat: Approve Tool Once and Chat: Decline Tool act only on the currently displayed approval. They never save an approval rule. Chat: Submit Requested Answers submits the current question form with its entered values; required answers must be filled. Use Ctrl or Command+Enter while the question form has focus. Chat: Retry Failed Request repeats an available failed request through its original retry policy. Chat: Copy Final Response copies the latest completed assistant reply without speaker labels or streaming text. Chat: Next Code Block and Chat: Previous Code Block move focus through the current or latest response’s code blocks and wrap at the ends. Use Ctrl or Command+Alt+Page Down or Page Up in Chat. Chat: Export Conversation Transcript saves a frozen backend text snapshot, including voice transcripts, tool call summaries with inputs and errors, and partial markers. Tool output, result attachments and internal reasoning are excluded. Chat: Open Saved Transcript (Read-Only) opens a supported saved document in a read-only editor; it does not restore or execute a conversation. These commands keep the unsent draft.') + '\n' + localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker, Chat: Open Mode or Agent Picker, or Chat: Open Permission Picker in the Command Palette to configure the most recently focused composer. Model and mode pickers also open with {0} and {1}. Fixed-mode inputs keep the mode picker hidden. Cowork uses its existing permission flow. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>', '<keybinding:workbench.action.chat.openModePicker>') + '\n' + localize('chat.execution.help', 'Chat: Send Message uses the current draft, attachments and submission policy. Chat: Add Message to Queue waits for the current request to finish; Chat: Steer with Message explicitly targets it. When idle, both send normally. Explicit steering rejects a different mode, Skill or task type. Queue and steering actions do not run slash commands. Failed submissions restore the draft if it has not been edited again. Use {0} to stop the focused task while keeping unsent text. Stopping remains available for running work when AI features are disabled.', '<keybinding:workbench.action.chat.cancel>') + '\n' + localize('chat.queue.manageHelp', 'Use Chat: Edit Queued Message, Chat: Remove Queued Message or Chat: Send Queued Message Immediately in the Command Palette, then select a message in queue order. Editing pauses that message and preserves attached inputs and your unsent draft. Enter keeps the edited message’s queue or steering action; Alt+Enter uses the other action. Ctrl or Command+Enter saves; Escape restores a previously pending message at its original position. Previously paused or failed messages remain paused when editing is cancelled. A changed revision requires choosing the message again. Send Immediately moves the original message to the front and stops the current task before running it. Remove All Queued Messages removes the captured revisions and keeps messages added while the action runs.') + '\n' + localize('chat.navigation.help', 'Use {0} to focus the latest response and {1} to return to the last focused message. Use {2} and {3} to move between user prompts without wrapping. Navigation includes loaded messages; load earlier messages to reach older prompts. On macOS, the input-to-list shortcut applies only on the first visual input line. Quick Chat reverses the input-to-list shortcut direction. Use {4} to focus a pending confirmation or return to the input. Focusing never accepts or declines a request, sends a message or changes the draft.', '<keybinding:chat.action.focus>', '<keybinding:workbench.chat.action.focusLastFocused>', '<keybinding:workbench.action.chat.previousUserPrompt>', '<keybinding:workbench.action.chat.nextUserPrompt>', '<keybinding:workbench.action.chat.focusConfirmation>') + '\n' + localize('chat.find.commandsHelp', 'Use {0} to find text in this conversation. Find includes complete code blocks and continues through earlier history without sending or changing the draft. Use the result controls to navigate; Escape closes Find and restores focus.', '<keybinding:workbench.action.chat.find>') + '\n' + localize('chat.commands.help', 'Use Focus Chat Input in the Command Palette to return to the most recently focused Chat input. From a conversation, use {0} to return to its input. Chat: Copy Conversation in the Command Palette copies all text messages and voice transcripts, including earlier history. Markdown is preserved. Export Transcript in the conversation title menu saves a JSON snapshot of the conversation. Draft text is kept in the input.', '<keybinding:workbench.action.chat.focusInput>') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message preserves Markdown and copies internal resource links as code labels. Copying a selection also replaces internal links with their visible labels. Tool summaries describe the activity and its current result state. Press Enter or Space on a tool summary to inspect its source and execution target. Input, standard output, standard error and result each have a separate summary; press Enter or Space to expand or collapse them. Tab to an expanded text region and use the arrow keys to scroll long output. Tool text is displayed literally. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. When Automatically follow new replies is enabled in Chat settings, returning to the bottom resumes following. Scrolling up or editing a message pauses following. While reading earlier messages, use Scroll to Latest to jump to the bottom. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.media.copyHelp', 'For a loaded local image, use Tab to reach Copy image and press Enter or Space to copy it to the clipboard.') + '\n' + localize('chat.markdown.tableScrollHelp', 'Use Tab to focus a response table and Left or Right Arrow to scroll wide tables. Find in Chat scrolls the table to the matching cell.') + '\n' + localize('chat.thinking.help', 'Reasoning starts collapsed. Press Enter or Space on its summary to expand or collapse it. Streaming updates and completion keep your expansion and keyboard focus. Code block navigation expands the matching reasoning when needed. The accessible transcript includes reasoning even while collapsed.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.') + '\n' + localize('chat.response.feedbackHelp', 'Completed IDE Chat responses offer Helpful. Press Enter or Space to save a personal helpful mark for that response; reopening Chat retains it. Feedback stays in the current Ash profile and is not sent to the model provider or used to change the response. Choose Helpful response animation in Settings to change or disable the effect. Reduced motion also disables the animation.') + '\n' + localize('chat.typography.help', 'In Settings, open Chat, then Appearance to change the message font and text size, including Markdown and links. Message input and code blocks have separate font settings. Changes keep your draft and reading position.');
 				}, () => { if (active.isConnected) active.focus(); }, AccessibilityVerbositySettingId.Chat);
 				provider.onDidChangeContent = this._onDidChangeContent.event;
 				return provider;
@@ -441,8 +460,9 @@ export class ChatListWidget extends DomWidget {
 		this.element.classList.toggle('code-word-wrap', this.configurationService.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on');
 	}
 
-	render(items: readonly IChatListItem[]): void {
+	render(items: readonly IChatListItem[], working = false): void {
 		this.items = [...items];
+		this.working = working;
 		if (!this.visible) {
 			// The model continues receiving events. Hidden presentation consumes its
 			// latest projection once on show instead of parsing every intermediate one.
@@ -481,8 +501,11 @@ export class ChatListWidget extends DomWidget {
 		};
 		const active = this.element.ownerDocument.activeElement;
 		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
-		const focusedActionRowId = (focusedRow?.item.queueTarget || focusedRow?.item.historyRedoTarget || focusedRow?.item.turnChanges) && focusedRow.element.contains(active)
+		const focusedReferenceId = isHTMLElement(active) ? active.dataset.chatReferenceId : undefined;
+		const focusedActionRowId = focusedRow?.element.contains(active)
+			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
 			? focusedRow.item.id : undefined;
+		const focusedActionId = focusedActionRowId ? active?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 		const imageFocus = isHTMLElement(active) && [...this.imageBatches].some(([, entry]) => entry.part.domNode.contains(active)) ? active : undefined;
 		let changed = false;
 		const ids = new Set(items.map(item => item.id));
@@ -516,6 +539,10 @@ export class ChatListWidget extends DomWidget {
 				this.renderedItems.deleteAndDispose(item.id);
 				row = this.renderedItems.set(item.id, this.instantiationService.createInstance(ChatListItemRenderer, item, this.element.ownerDocument, {
 					...this.options,
+					onDidRequestEdit: this.options.onDidRequestEdit ?? (requestId => this.startEditing(requestId)),
+					canEditRequest: this.options.canEditRequest ?? (() => true),
+					cancelRequestEdit: () => this.cancelEditing(),
+					refreshRequestAfterEdit: () => this.refreshAfterRequestEdit.schedule(),
 					classPrefix: this.classPrefix,
 					deferCodeBlockModels: !!this.viewportObserver,
 					isVisible: () => this.visible,
@@ -523,23 +550,24 @@ export class ChatListWidget extends DomWidget {
 					contextExpansion: this.contextExpansion,
 					thinkingExpansion: this.thinkingExpansion,
 					onDidChangeHeight: () => this.relayout.schedule(),
-					beginRequestEdit: (close: () => boolean) => {
-						if (this.activeRequestEdit && !this.activeRequestEdit()) return undefined;
+					beginRequestEdit: (close: (restoreFocus: boolean) => boolean) => {
+						if (this.activeRequestEdit && !this.activeRequestEdit(false)) return undefined;
 						this.activeRequestEdit = close;
+						this.shouldFollow = false;
+						this.readingPosition = this.readingAnchor();
 						return toDisposable(() => {
 							if (this.activeRequestEdit === close) this.activeRequestEdit = undefined;
 						});
 					},
-					onWillChangeRequestEditor: (opening: boolean) => {
-						const anchor = this.readingAnchor();
+					onWillCloseRequestEditor: ({ heightChanges, sent }: { readonly heightChanges: boolean; readonly sent: boolean; }) => {
+						const anchor = heightChanges ? this.readingAnchor() : undefined;
 						return () => {
-							// Edit controls take space in the row. Keep the viewport on the
-							// same content even when it was following the end of the chat.
-							this.shouldFollow = false;
-							this.readingPosition = anchor;
-							this.layout(anchor, false);
-							const { top, maximumTop } = this.scrollable.state;
-							if (!opening) this.updateReplyFollowing(top, maximumTop);
+							if (heightChanges) this.layout(anchor, false);
+							const viewport = this.scrollable.scrollableElement;
+							const top = viewport.scrollTop;
+							this.pausedReplyScrollTop = sent ? undefined : top;
+							if (sent) this.updateReplyFollowing(top, viewport.scrollHeight - viewport.clientHeight);
+							else this.readingPosition = this.readingAnchor();
 						};
 					},
 					onDidChangeMarkdownHeight: (id: string) => {
@@ -561,6 +589,11 @@ export class ChatListWidget extends DomWidget {
 			next = row.element.nextSibling;
 		}
 		changed = this.renderImageBatches(items, beforeLayout) || changed;
+		if (this.working !== (this.workingStatus?.element.hidden === false)) {
+			beforeLayout();
+			this.renderWorkingStatus();
+			changed = true;
+		}
 		this.promptModel = new PromptTimelineModel(items.filter(item => item.type === 'userMessage'), id => this.renderedItems.get(id)!.element);
 		// Reparenting a retained gallery can blur its button. Restore only that button,
 		// and never replace focus deliberately moved elsewhere by a render listener.
@@ -569,7 +602,13 @@ export class ChatListWidget extends DomWidget {
 		}
 		if (focusedActionRowId && !active?.isConnected && this.element.ownerDocument.activeElement === this.element.ownerDocument.body) {
 			const row = this.renderedItems.get(focusedActionRowId);
-			if (row) this.focus(row.item);
+			const replacement = focusedReferenceId
+				? Array.from(row?.element.querySelectorAll<HTMLButtonElement>('[data-chat-reference-id]') ?? [])
+					.find(button => button.dataset.chatReferenceId === focusedReferenceId)
+				: focusedActionId && row && Array.from(row.element.querySelectorAll<HTMLButtonElement>('[data-action-id] > button'))
+					.find(button => button.parentElement?.dataset.actionId === focusedActionId && !button.disabled);
+			if (replacement) replacement.focus({ preventScroll: true });
+			else if (row) this.focus(row.item);
 			else this.focusReadingPosition();
 		}
 		if (this.lastFocusedItemId && !ids.has(this.lastFocusedItemId)) { this.lastFocusedItemId = undefined; }
@@ -587,6 +626,43 @@ export class ChatListWidget extends DomWidget {
 			this._onDidChangeContent.fire();
 		} else if (this.visible) {
 			this.renderPromptTimeline();
+		}
+	}
+
+	private renderWorkingStatus(): void {
+		if (!this.workingStatus) {
+			const document = this.transcript.ownerDocument;
+			const element = h(document, 'div');
+			element.className = 'ash-chat-transcript-working';
+			const label = h(document, 'span');
+			const logo = this._register(this.instantiationService.createInstance(ChatWorkingLogo, document));
+			element.append(logo.domNode, label);
+			this.transcript.append(element);
+			const sticky = h(document, 'div');
+			sticky.className = 'ash-chat-transcript-working ash-chat-transcript-working-sticky';
+			sticky.hidden = true;
+			// The inline status is already announced by the transcript live region.
+			sticky.setAttribute('aria-hidden', 'true');
+			this.element.append(sticky);
+			this.workingStatus = { element, label, logo, sticky };
+			this._register(observeIntersection(element, entry => {
+				this.workingOutsideViewport = !entry.isIntersecting && entry.boundingClientRect.height > 0 && !!entry.rootBounds?.height;
+				this.updateStickyWorkingStatus();
+			}, { root: this.scrollable.scrollableElement }));
+		}
+		const { element, label, logo, sticky } = this.workingStatus;
+		element.hidden = !this.working;
+		logo.setVisible(this.visible && this.working);
+		logo.setActive(this.working);
+		label.textContent = this.working ? localize('chat.transcript.working', 'Working on your request…') : '';
+		sticky.textContent = label.textContent;
+		if (!this.working) this.workingOutsideViewport = false;
+		this.updateStickyWorkingStatus();
+	}
+
+	private updateStickyWorkingStatus(): void {
+		if (this.workingStatus) {
+			this.workingStatus.sticky.hidden = !this.visible || !this.working || !this.workingOutsideViewport;
 		}
 	}
 
@@ -645,6 +721,8 @@ export class ChatListWidget extends DomWidget {
 			this.reconcile(items);
 		}
 		this.visible = visible;
+		this.workingStatus?.logo.setVisible(visible && this.working);
+		this.updateStickyWorkingStatus();
 		for (const [, entry] of this.imageBatches) { entry.part.setVisible(visible); }
 		if (!visible) {
 			this.findWidget.value?.hide();
@@ -753,11 +831,11 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	/** Re-renders from the model, then restores reading position after the host mounts the new root. */
-	public restoreViewState(state: ChatListViewState, items: readonly IChatListItem[]): void {
+	public restoreViewState(state: ChatListViewState, items: readonly IChatListItem[], working = false): void {
 		for (const [id, expanded] of state.contextExpansion ?? []) this.contextExpansion.set(id, expanded);
 		for (const [id, expanded] of state.advisorExpansion) this.advisorExpansion.set(id, expanded);
 		for (const [id, expanded] of state.thinkingExpansion ?? []) this.thinkingExpansion.set(id, expanded);
-		this.render(items);
+		this.render(items, working);
 		this.lastFocusedItemId = state.lastFocusedItemId && this.renderedItems.has(state.lastFocusedItemId) ? state.lastFocusedItemId : undefined;
 		for (const [id, expanded] of state.contextExpansion ?? []) {
 			const context = this.renderedItems.get(id)?.context;
@@ -776,6 +854,7 @@ export class ChatListWidget extends DomWidget {
 		}
 		// Hide the replacement before installing saved state: hiding captures its current scroll.
 		this.setVisible(state.visible);
+		this.pausedReplyScrollTop = undefined;
 		this.shouldFollow = state.shouldFollow && this.canFollowReplies();
 		// Hidden panes cannot measure their scroll range until their retained host is shown again.
 		this.pendingReadingPosition = { top: state.top, anchor: state.anchor };
@@ -795,6 +874,7 @@ export class ChatListWidget extends DomWidget {
 
 	private scrollToLatest(): void {
 		if (!this.visible) return;
+		this.pausedReplyScrollTop = undefined;
 		this.layingOut = true;
 		try {
 			this.scrollable.layout();
@@ -809,7 +889,7 @@ export class ChatListWidget extends DomWidget {
 	private updateScrollToLatestVisibility(): void {
 		const { top, maximumTop } = this.scrollable.state;
 		// Transcript padding can create a scroll range even in an empty draft.
-		const hidden = !this.visible || this.items.length === 0 || maximumTop - top <= 1;
+		const hidden = !this.visible || this.items.length === 0 && !this.working || maximumTop - top <= 1;
 		if (hidden === this.scrollToLatestButton.hidden) return;
 		this.element.classList.toggle('ash-chat-transcript-has-more-below', !hidden);
 		if (hidden && this.visible && this.element.ownerDocument.activeElement === this.scrollToLatestButton.domNode) {
@@ -821,8 +901,10 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	private updateReplyFollowing(top: number, maximumTop: number): void {
+		// A delayed scroll event at the cancel position should leave following paused.
+		if (top !== this.pausedReplyScrollTop) this.pausedReplyScrollTop = undefined;
 		// The native scroll position and rounded scroll range can differ by one pixel at the bottom.
-		this.shouldFollow = this.canFollowReplies() && maximumTop - top <= 1;
+		this.shouldFollow = this.pausedReplyScrollTop === undefined && this.canFollowReplies() && maximumTop - top <= 1;
 		this.readingPosition = this.shouldFollow ? undefined : this.readingAnchor();
 	}
 

@@ -28,6 +28,19 @@
 	position: relative;
 }
 
+.ash-sessions-chat-input
+	.ash-chat-input-toolbars
+	.ash-chat-input-send-action:enabled {
+	color: var(--ash-foreground);
+	background: transparent;
+}
+
+.ash-sessions-chat-input
+	.ash-chat-input-toolbars
+	.ash-chat-input-send-action:enabled:hover {
+	background: var(--ash-button-hoverBackground);
+}
+
 .ash-sessions-chat-input .ash-chat-drop-overlay {
 	position: absolute;
 	inset: 0;
@@ -59,8 +72,19 @@
 		.ash-sessions-environment-picker,
 		.ash-sessions-workspace-picker,
 		.ash-chat-input-permission-picker
-	).ash-button {
-	padding-inline: var(--ash-spacing-size40);
+	).ash-button:not(.icon-only) {
+	padding: 0 var(--ash-spacing-size80);
+}
+
+.ash-sessions-chat-input-footer
+	:is(
+		.ash-sessions-environment-picker,
+		.ash-sessions-workspace-picker
+	).icon-only {
+	box-sizing: border-box;
+	inline-size: var(--ash-toolbar-actionSize);
+	min-inline-size: var(--ash-toolbar-actionSize);
+	padding: 0;
 }
 
 .ash-sessions-chat-input
@@ -74,20 +98,6 @@
 		--ash-button-border-radius,
 		var(--ash-cornerRadius-small)
 	);
-}
-
-.ash-sessions-chat-input-footer
-	.ash-chat-input-toolbars.ash-toolbar
-	.ash-chat-input-mode-selector
-	.ash-chat-input-action.ash-chat-input-mode-action {
-	padding-inline: var(--ash-spacing-size40);
-}
-
-.ash-sessions-chat-input-footer
-	.ash-chat-input-toolbars
-	.ash-chat-model-picker-control
-	> .ash-chat-input-picker-button {
-	padding: 0 var(--ash-spacing-size40);
 }
 
 .ash-sessions-chat-input

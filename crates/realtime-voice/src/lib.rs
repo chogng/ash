@@ -29,7 +29,6 @@ use tokio::sync::oneshot;
 #[cfg(feature = "cloud")]
 use websocket_client::WebSocketConnector;
 
-pub use model_package::DEFAULT_MODEL_ID;
 pub use model_package::MODEL_PACKAGE_FORMAT_VERSION;
 pub use models::DictationModelManager;
 pub use models::ModelOperation;
@@ -191,14 +190,21 @@ trait Recognizer: Send + Sync {
         cancellation: async_utils::CancellationToken,
         on_event: Box<dyn Fn(DictationEvent) + Send + Sync>,
     ) -> Result<Box<dyn RecognitionSession>, String>;
+
+    fn local_cache(&self) -> Option<Arc<local::RecognizerCache>> {
+        None
+    }
 }
 
-/// The active recognition session releases capture and inference before `stop` returns.
+/// The active recognition session releases capture and finishes delivery before `stop` returns.
 trait RecognitionSession: Send {
     fn stop(&mut self);
 }
 
-struct SessionRecognizer;
+#[derive(Default)]
+struct SessionRecognizer {
+    local: Arc<local::RecognizerCache>,
+}
 
 enum CaptureMode {
     Device,
@@ -227,6 +233,7 @@ impl Recognizer for SessionRecognizer {
             CaptureMode::Device
         };
         let worker_cancellation = cancellation.clone();
+        let local = Arc::clone(&self.local);
         let on_event: Arc<dyn Fn(DictationEvent) + Send + Sync> = Arc::from(on_event);
         let worker = thread::Builder::new()
             .name("ash-dictation".into())
@@ -242,8 +249,15 @@ impl Recognizer for SessionRecognizer {
                             }
                             match request {
                                 DictationRequest::Local(request) => {
-                                    local::run(request, &mut stopped, Arc::clone(&on_event), audio)
-                                        .await
+                                    local::run(
+                                        request,
+                                        &mut stopped,
+                                        Arc::clone(&on_event),
+                                        audio,
+                                        &local,
+                                        &cancellation,
+                                    )
+                                    .await
                                 }
                                 #[cfg(feature = "cloud")]
                                 DictationRequest::Cloud(request) => {
@@ -275,6 +289,10 @@ impl Recognizer for SessionRecognizer {
             capture_mode,
             cancellation: worker_cancellation,
         }))
+    }
+
+    fn local_cache(&self) -> Option<Arc<local::RecognizerCache>> {
+        Some(Arc::clone(&self.local))
     }
 }
 
@@ -320,13 +338,24 @@ pub struct DictationManager {
 impl Default for DictationManager {
     fn default() -> Self {
         Self {
-            recognizer: Box::new(SessionRecognizer),
+            recognizer: Box::<SessionRecognizer>::default(),
             active: Mutex::new(None),
         }
     }
 }
 
 impl DictationManager {
+    fn local_cache(&self) -> Option<Arc<local::RecognizerCache>> {
+        self.recognizer.local_cache()
+    }
+
+    /// Releases an idle recognizer after its installed package is removed.
+    pub fn forget_local_model(&self, root: &std::path::Path, model_id: &str) {
+        if let Some(cache) = self.local_cache() {
+            cache.forget(&root.join(model_id));
+        }
+    }
+
     /// Synchronous RPC handlers use a device-query worker, independently of any capture session.
     pub fn input_devices(
         &self,
@@ -387,12 +416,19 @@ impl DictationManager {
         request: DictationRequest,
         on_event: impl Fn(DictationEvent) + Send + Sync + 'static,
     ) -> Result<(), String> {
+        // Local inference can be loading while the renderer is already recording. Allow
+        // over eight minutes of desktop PCM while keeping the per-session queue bounded.
+        let capacity = if matches!(&request, DictationRequest::Local(_)) {
+            2048
+        } else {
+            64
+        };
         self.start_with_audio(
             owner,
             resource_id,
             request,
             on_event,
-            Some(mpsc::channel(64)),
+            Some(mpsc::channel(capacity)),
         )
     }
 

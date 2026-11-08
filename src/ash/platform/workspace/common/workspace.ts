@@ -123,6 +123,8 @@ export interface IWorkspaceContextService {
 	readonly onDidChangeWorkbenchState: Event<WorkbenchState>;
 	readonly onDidChangeWorkspaceName: Event<void>;
 	getWorkspace(): IWorkspace;
+	/** Resolves after the host has restored its initial workspace projection. */
+	getCompleteWorkspace?(): Promise<IWorkspace>;
 	getWorkbenchState(): WorkbenchState;
 	getWorkspaceFolder(resource: URI): IWorkspaceFolder | null;
 }

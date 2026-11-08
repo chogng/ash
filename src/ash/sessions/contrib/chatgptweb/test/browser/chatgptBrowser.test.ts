@@ -85,9 +85,31 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(picker).toBeFocused();
 		expect(uploaded).toBeUndefined();
 		await picker.press('Enter');
-		await page.getByRole('menu').getByText('Research', { exact: true }).click();
+		const filter = page.getByRole('searchbox', { name: '项目或文件夹' });
+		await expect(filter).toBeFocused();
+		await filter.fill('rese');
+		const project = page.getByRole('menuitemradio', { name: 'Research' });
+		await expect(page.getByRole('menu').getByText('选择文件夹…', { exact: true })).toHaveCount(0);
+		await expect(filter).toBeFocused();
+		await filter.press('ArrowDown');
+		await expect(project).toBeFocused();
+		await project.press('Enter');
+		await expect(picker).toBeFocused();
 		await expect(picker).toHaveAccessibleName('项目或文件夹：Research · fixture-folder');
 		await picker.press('Enter');
+		const selectedProject = page.getByRole('menuitemradio', { name: 'Research', checked: true });
+		const projectIcon = selectedProject.locator('.ash-menu-leading-slot .ash-icon-projects');
+		const check = selectedProject.locator('.ash-menu-trailing-slot .ash-icon-check');
+		await expect(projectIcon).toBeVisible();
+		await expect(check).toBeVisible();
+		await expect(check.locator('..')).toHaveAttribute('aria-hidden', 'true');
+		const [iconBounds, labelBounds, checkBounds] = await Promise.all([
+			projectIcon.boundingBox(),
+			selectedProject.locator('.ash-button-label').boundingBox(),
+			check.boundingBox(),
+		]);
+		expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(labelBounds!.x);
+		expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(checkBounds!.x);
 		await page.getByText('清除项目', { exact: true }).click();
 		await expect(picker).toHaveAccessibleName('项目或文件夹：fixture-folder');
 		await picker.press('Enter');
@@ -230,25 +252,15 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		const toolbar = reply.getByRole('toolbar', { name: '回复操作', exact: true });
 		const copy = toolbar.getByRole('button', { name: '复制消息' });
 		const readAloud = toolbar.getByRole('button', { name: '朗读', exact: true });
-		const fork = toolbar.getByRole('button', { name: '在 ChatGPT 中创建分支' });
-		const shareResponse = toolbar.getByRole('button', { name: '分享回复' });
+		const more = toolbar.getByRole('button', { name: '更多操作', exact: true });
+		const fork = page.getByRole('menuitem', { name: '在 ChatGPT 中创建分支' });
+		const shareResponse = toolbar.getByRole('button', { name: '分享 ChatGPT 回复' });
 		const openOriginal = toolbar.getByRole('button', { name: '在 ChatGPT 中打开对话' });
 		await expect(toolbar.getByRole('button')).toHaveCount(5);
 		await expect(toolbar).toHaveText('', { useInnerText: true });
 		await copy.focus();
 		await page.keyboard.press('ArrowRight');
 		await expect(readAloud).toBeFocused();
-		await page.keyboard.press('Enter');
-		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'true');
-		expect(read?.get('conversation_id')).toBe('fixture-chat');
-		expect(read?.get('message_id')).toBe('previous-reply');
-		await expect(toolbar.getByRole('button', { name: '停止朗读' })).toBeFocused();
-		await page.keyboard.press('Escape');
-		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'false');
-		await page.keyboard.press('ArrowRight');
-		await expect(fork).toBeFocused();
-		await page.keyboard.press('Enter');
-		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/branch/fixture-chat/previous-reply');
 		await page.keyboard.press('ArrowRight');
 		await expect(shareResponse).toBeFocused();
 		await page.keyboard.press('ArrowRight');
@@ -256,7 +268,20 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expectVisibleFocusOutline(openOriginal);
 		await page.keyboard.press('Enter');
 		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/c/fixture-chat');
-		await page.keyboard.press('ArrowLeft');
+		await page.keyboard.press('ArrowRight');
+		await expect(more).toBeFocused();
+		await more.press('Enter');
+		await fork.click();
+		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/branch/fixture-chat/previous-reply');
+		await readAloud.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'true');
+		expect(read?.get('conversation_id')).toBe('fixture-chat');
+		expect(read?.get('message_id')).toBe('previous-reply');
+		await expect(toolbar.getByRole('button', { name: '停止朗读' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'false');
+		await expect(readAloud).toBeFocused();
+		await page.keyboard.press('ArrowRight');
 		await expect(shareResponse).toBeFocused();
 		await page.keyboard.press('Enter');
 		const dialog = page.getByRole('dialog');
@@ -330,7 +355,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		await page.goto('/chatgptNavigation.html?locale=en&screenReader');
-		const announcement = page.locator('.ash-aria-live');
+		const announcement = page.locator('.ash-aria-live:has(> .ash-aria-status)');
 		await expect(announcement).toContainText('What are we building?\nTo disable this announcement, set accessibility.verbosity.newSessionWelcome to false.');
 		await fillMessage(page, 'Draft');
 		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chat.experimental.welcomeName', 'Ash'));
@@ -510,11 +535,21 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				await expectSelection(modelTitle, presetLabel);
 			};
 			await expectSelection('GPT-6', labels[0]!);
-			await picker.press('Enter');
 			const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
 			const modelButton = dialog.locator('.ash-chat-slider-model-button');
 			const effortLabel = dialog.locator('.ash-chat-slider-effort-label');
 			const slider = dialog.getByRole('slider');
+			await picker.click();
+			await expect(dialog).toBeFocused();
+			await expect(dialog).toHaveCSS('outline-style', 'none');
+			await expect(modelButton).toHaveCSS('outline-style', 'none');
+			await page.keyboard.press('Tab');
+			await expect(modelButton).toBeFocused();
+			await expect(modelButton).toHaveCSS('outline-style', 'solid');
+			await page.keyboard.press('Escape');
+			await expect(dialog).toBeHidden();
+			await expect(picker).toBeFocused();
+			await picker.press('Enter');
 			const expectAnchored = async () => {
 				await expect(dialog).toHaveCSS('width', '250px');
 				await expect(dialog).toBeInViewport({ ratio: 1 });
@@ -546,11 +581,24 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			expect(Math.abs(modelBounds!.x + modelBounds!.width / 2 - (panelBounds!.x + panelBounds!.width / 2))).toBeLessThan(1);
 			expect(modelBounds!.y + modelBounds!.height).toBeLessThanOrEqual(effortBounds!.y);
 			expect(effortBounds!.y + effortBounds!.height).toBeLessThan(sliderBounds!.y);
+			await modelButton.click();
+			const modelMenu = dialog.getByRole('menu');
+			const selectedModel = modelMenu.getByRole('menuitemradio', { name: 'GPT-6', exact: true });
+			const alternativeModel = modelMenu.getByRole('menuitemradio', { name: '5.6 Sol', exact: true });
+			await expect(modelMenu).toHaveClass(/\bash-menu-icons-trailing\b/u);
+			await expect(modelMenu).toBeFocused();
+			await expect(selectedModel).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(alternativeModel).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(selectedModel.locator('.ash-menu-trailing-check > .ash-icon-check')).toBeVisible();
+			await expect(alternativeModel.locator('.ash-menu-trailing-check > .ash-icon-check')).toBeHidden();
+			await modelButton.click();
 			await page.keyboard.press('Enter');
 			await expect(modelButton).toHaveAttribute('aria-expanded', 'true');
 			await expect(dialog.getByRole('combobox')).toHaveCount(0);
-			await expect(dialog.getByRole('menuitemradio', { name: 'GPT-6', exact: true })).toBeFocused();
-			const alternativeModel = dialog.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true });
+			await expect(selectedModel).toBeFocused();
+			await page.keyboard.press('ArrowDown');
+			await expect(alternativeModel).toBeFocused();
+			await expect(alternativeModel).toHaveAttribute('aria-checked', 'false');
 			await expect(alternativeModel).toBeInViewport();
 			const [alternativeBounds, expandedButtonBounds] = await Promise.all([
 				alternativeModel.boundingBox(), modelButton.boundingBox(),
@@ -561,12 +609,57 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await expect(modelButton).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(slider).toBeFocused();
+			await expect(slider).toHaveCSS('outline-style', 'solid');
+			const thumb = slider.locator('.ash-chat-slider-thumb');
+			for (const endpoint of [labels.length - 1, 0]) {
+				const tick = slider.locator('.ash-chat-slider-tick').nth(endpoint);
+				await tick.click();
+				await expect(slider).toHaveAttribute('aria-valuetext', labels[endpoint]!);
+				await expect(slider).toBeFocused();
+				await expect(slider).toHaveCSS('outline-style', 'none');
+				await expect.poll(async () => {
+					const [track, handle, stop] = await Promise.all([slider.boundingBox(), thumb.boundingBox(), tick.boundingBox()]);
+					const endGap = endpoint === 0 ? handle!.x - track!.x : track!.x + track!.width - handle!.x - handle!.width;
+					const topGap = handle!.y - track!.y;
+					return Math.max(
+						Math.abs(handle!.x + handle!.width / 2 - stop!.x - stop!.width / 2),
+						Math.abs(endGap - topGap),
+					);
+				}).toBeLessThan(0.5);
+			}
 			const initialPickerBounds = (await picker.boundingBox())!;
 			const initialPanelLeft = (await dialog.boundingBox())!.x;
 			await page.keyboard.press('ArrowRight');
+			await expect(slider).toHaveCSS('outline-style', 'solid');
 			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
 			await expect(modelButton).toHaveAccessibleDescription(labels[1]!);
 			await expect(effortLabel).toHaveText(labels[1]!);
+			await expect.poll(() => dialog.evaluate(element =>
+				element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running')
+			)).toBe(false);
+			const fill = slider.locator('.ash-chat-slider-fill');
+			const start = (await thumb.boundingBox())!;
+			const rail = (await slider.boundingBox())!;
+			const targetX = rail.x + rail.width * 0.64;
+			const thumbY = start.y + start.height / 2;
+			await page.mouse.move(start.x + start.width / 2, thumbY);
+			await page.mouse.down();
+			await expect(slider).toHaveClass(/\bdragging\b/u);
+			await expect(slider).toHaveCSS('outline-style', 'none');
+			await page.mouse.move(targetX, thumbY, { steps: 4 });
+			await expect(effortLabel).toHaveText(labels[3]!);
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
+			const draggedThumb = (await thumb.boundingBox())!;
+			const draggedFill = (await fill.boundingBox())!;
+			expect(Math.abs(draggedThumb.x + draggedThumb.width / 2 - targetX)).toBeLessThan(1);
+			expect(Math.abs(draggedFill.x + draggedFill.width - targetX)).toBeLessThan(1);
+			await page.mouse.up();
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[3]!);
+			await expect(effortLabel).toHaveText(labels[3]!);
+			await page.keyboard.press('ArrowLeft');
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[2]!);
+			await page.keyboard.press('ArrowLeft');
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
 			await expect(picker).toHaveText(selectModelLabel);
 			await expectAnchored();
 			const pickerBounds = (await picker.boundingBox())!;
@@ -604,7 +697,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				if (expected[index]![1] === undefined) { expect(submitted.slice(-2).every(body => !('thinking_effort' in body))).toBe(true); }
 				await expect(picker).toBeEnabled();
 			}
-			await choose('GPT-5.6 Sol', labels[3]!);
+			await choose('5.6 Sol', labels[3]!);
 			await page.setViewportSize({ width: 1600, height: 900 });
 			const longestSelectionWidth = (await picker.boundingBox())!.width;
 			expect(initialPickerBounds.width).toBeGreaterThanOrEqual(longestSelectionWidth - 1);
@@ -634,13 +727,19 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			const picker = page.locator('.ash-chat-input-model-action');
 			await expect(picker).toBeEnabled();
 			await picker.click();
+			await expect(page.locator('.ash-chat-model-slider-dialog')).toBeFocused();
+			await page.keyboard.press('Escape');
+			await expect(picker).toBeFocused();
+			await picker.press('Enter');
 			await expect(page.getByRole('slider')).toHaveCount(0);
 			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute('aria-checked', 'true');
 			expect(await page.locator('body').getAttribute('data-native-model-providers-read')).toBeNull();
 			await expect(page.getByRole('menuitem', { name: /Add Models|More Models|添加模型|更多模型/ })).toHaveCount(0);
 			await expect(page.getByRole('combobox')).toHaveCount(0);
 			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toBeFocused();
-			await page.getByRole('menuitemradio', { name: 'Second model' }).click();
+			await page.keyboard.press('ArrowDown');
+			await expect(page.getByRole('menuitemradio', { name: 'Second model' })).toBeFocused();
+			await page.keyboard.press('Enter');
 			await expect(picker).toHaveText('Second model');
 			await expect(picker).toBeFocused();
 			await picker.click();
@@ -736,7 +835,9 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				await fillMessage(page, 'A short prompt');
 				await expectDraft(page, 'A short prompt');
 				await expect(send).toHaveAttribute('aria-label', locale === 'en' ? 'Send' : '发送');
-				await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'arrow-up');
+				await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'enter');
+				await expect(voice).toHaveCount(0);
+				expect((await send.boundingBox())!.x).toBeCloseTo(sendBounds!.x);
 				await expect(editor).toHaveCSS('height', '20px');
 				if (!theme.startsWith('hc')) {
 					await expect(composer).toHaveCSS('box-shadow', activeShadow);
@@ -803,7 +904,6 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		}));
 		await page.goto('/chatgptNavigation.html');
 		const sidebar = page.locator('.ash-chat-navigation');
-		const list = sidebar.getByRole('navigation', { name: '会话', exact: true });
 		const viewport = sidebar.locator('.ash-chat-navigation-scrollable > .ash-scrollbar-viewport');
 		const conversation = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
 		await expect(conversation).toBeEnabled();
@@ -811,6 +911,9 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(sidebar.getByRole('button', { name: '加载更多', exact: true })).toHaveCount(0);
 		await conversation.focus();
 		await conversation.press('Home');
+		const recents = sidebar.getByRole('button', { name: '最近使用', exact: true });
+		await expect(recents).toBeFocused();
+		await recents.press('ArrowDown');
 		await expect(conversation).toBeFocused();
 		await conversation.press('Enter');
 		await expect(page.locator('.ash-chat-transcript')).toContainText('Synthetic answer');

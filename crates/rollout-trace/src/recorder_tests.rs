@@ -391,6 +391,63 @@ fn reading_an_enabled_session_before_its_first_observation_is_not_a_storage_fail
 }
 
 #[test]
+fn successful_appends_leave_the_manifest_untouched() {
+    let root = temporary_root();
+    let context = context();
+    let mut writer = Writer::open(root.clone(), &context.session_id, OpenMode::Create).unwrap();
+    let manifest = fs::read(root.join("manifest.json")).unwrap();
+    for _ in 0..100 {
+        writer.append(
+            &context,
+            DiagnosticEventKind::ModelAttemptAccounted {
+                attempt_id: "attempt".into(),
+                invocation_id: ash_protocol::ModelInvocationId::new("invocation").unwrap(),
+                source_thread_sequence: 7,
+            },
+        );
+    }
+    drop(writer);
+    let writer = Writer::open(root.clone(), &context.session_id, OpenMode::Existing).unwrap();
+    assert_eq!(writer.events.len(), 100);
+    assert_eq!(
+        writer.manifest.bytes_written,
+        fs::metadata(root.join("trace.jsonl")).unwrap().len() as usize
+    );
+    let saved_manifest = fs::read(root.join("manifest.json")).unwrap();
+    fs::remove_dir_all(root).unwrap();
+    assert!(
+        saved_manifest == manifest,
+        "successful appends rewrote the manifest"
+    );
+}
+
+#[test]
+fn diagnostic_recovery_advances_past_omitted_payload_references() {
+    let root = temporary_root();
+    let context = context();
+    let mut writer = Writer::open(root.clone(), &context.session_id, OpenMode::Create).unwrap();
+    // Simulate stopping after the append and before the loss checkpoint.
+    let omitted = writer.omitted(PayloadKind::CoreRequest);
+    writer.append(
+        &context,
+        DiagnosticEventKind::ModelAttemptStarted {
+            attempt_id: "attempt".into(),
+            purpose: context.purpose.clone(),
+            model: None,
+            source_thread_sequence: context.source_thread_sequence,
+            request_payload: omitted,
+        },
+    );
+    drop(writer);
+
+    let mut writer = Writer::open(root.clone(), &context.session_id, OpenMode::Existing).unwrap();
+    let saved = writer.payload(PayloadKind::CoreRequest, &request());
+    assert_eq!(saved.status, PayloadStatus::Saved);
+    assert_eq!(saved.payload_id, "payload-2");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn exhausted_event_budget_cannot_accumulate_unreferenced_body_files() {
     let root = temporary_root();
     let recorder = TraceRecorder::new(Some(root.clone()));
@@ -428,9 +485,15 @@ fn exhausted_event_budget_cannot_accumulate_unreferenced_body_files() {
             .count(),
         files
     );
-    assert!(state.manifest.dropped_records > 0);
+    let dropped = state.manifest.dropped_records;
+    assert!(dropped > 0);
     drop(state);
+    drop(writer);
     drop(recorder);
+    let reopened = TraceRecorder::new(Some(root.clone()));
+    let page = reopened.read(&context().session_id, 0, 500).unwrap();
+    assert_eq!(page.diagnostics.dropped_records, dropped);
+    assert_eq!(page.diagnostics.events.len(), 1);
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -498,7 +561,7 @@ fn blocked_storage_cannot_block_observers_and_queue_losses_remain_visible() {
     let blocked_disk = writer.lock().unwrap();
     let (finished, completed) = std::sync::mpsc::channel();
     let producer = std::thread::spawn(move || {
-        for _ in 0..crate::worker::MAX_QUEUE_RECORDS + 8 {
+        for _ in 0..2 * crate::worker::MAX_QUEUE_RECORDS {
             attempt.prepared_request(&request());
         }
         attempt.cancel("cancel remains independent");

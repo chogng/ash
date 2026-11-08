@@ -38,6 +38,8 @@ export interface ActionBarOptions {
 	readonly ariaLabel?: string;
 	readonly ariaRole?: 'toolbar' | 'tablist' | 'menu';
 	readonly orientation?: ActionBarOrientation;
+	/** Keep each enabled action in the page Tab order while retaining arrow navigation. */
+	readonly tabNavigation?: 'roving' | 'each-action';
 	readonly actionViewItemProvider?: ActionViewItemProvider;
 	readonly actionViewItemOptions?: ActionViewItemOptions;
 	/** Enables drag lifecycle callbacks without changing ordinary toolbar behavior. */
@@ -85,6 +87,7 @@ export class ActionBar extends Disposable implements IActionRunner {
 	private pendingActions: { readonly actions: readonly IAction[]; readonly update: boolean; } | undefined;
 	private readonly actionViewItemProvider: ActionViewItemProvider | undefined;
 	private readonly actionViewItemOptions: ActionViewItemOptions;
+	private readonly tabEachAction: boolean;
 	private orientation: ActionBarOrientation;
 	private readonly dragAndDrop: ActionBarDragAndDrop | undefined;
 	private tabStop: ActionViewItem | undefined;
@@ -102,6 +105,7 @@ export class ActionBar extends Disposable implements IActionRunner {
 		element.className = 'ash-action-bar';
 		container.append(element);
 		this.orientation = options.orientation ?? 'horizontal';
+		this.tabEachAction = options.tabNavigation === 'each-action';
 		element.classList.add(this.orientation);
 		element.classList.toggle('highlight-toggled', options.highlightToggledItems === true);
 		element.setAttribute('role', options.ariaRole ?? 'toolbar');
@@ -237,7 +241,9 @@ export class ActionBar extends Disposable implements IActionRunner {
 			?? next.find(entry => entry.action.enabled);
 		// Retained slots already project their Tab state; only new or changed slots need a DOM write.
 		for (const entry of next) {
-			if (created.has(entry) || (entry.item === this.tabStop) !== (entry === tabStop)) entry.item.setTabbable(this.focusable && entry === tabStop);
+			if (created.has(entry) || !this.tabEachAction && (entry.item === this.tabStop) !== (entry === tabStop)) {
+				entry.item.setTabbable(this.isTabbable(entry.action, entry === tabStop));
+			}
 		}
 		this.tabStop = tabStop?.item;
 		if (focusedActionId && getActiveElement(this.domNode.ownerDocument) !== activeElement) {
@@ -280,7 +286,7 @@ export class ActionBar extends Disposable implements IActionRunner {
 		if (tabStop) {
 			this._setTabStop(tabStop.item);
 		} else {
-			this.tabStop?.setTabbable(false);
+			if (!this.tabEachAction) this.tabStop?.setTabbable(false);
 			this.tabStop = undefined;
 		}
 		if (hadFocus && getActiveElement(document) === document.body) {
@@ -288,7 +294,7 @@ export class ActionBar extends Disposable implements IActionRunner {
 		}
 	}
 
-	/** Selects the action that participates in page-level Tab navigation. */
+	/** Selects the preferred focus target and, in roving mode, the page Tab stop. */
 	setTabStop(actionId: string): void {
 		const entry = this.entries.find(
 			({ action }) => action.id === actionId && action.enabled,
@@ -344,7 +350,11 @@ export class ActionBar extends Disposable implements IActionRunner {
 
 	setFocusable(focusable: boolean): void {
 		this.focusable = focusable;
-		this.tabStop?.setTabbable(focusable);
+		if (this.tabEachAction) {
+			for (const entry of this.entries) entry.item.setTabbable(this.isTabbable(entry.action, false));
+		} else {
+			this.tabStop?.setTabbable(focusable);
+		}
 	}
 
 	focus(index?: number): void;
@@ -412,9 +422,15 @@ export class ActionBar extends Disposable implements IActionRunner {
 
 	private _setTabStop(item: ActionViewItem): void {
 		if (item === this.tabStop) return;
-		this.tabStop?.setTabbable(false);
+		if (!this.tabEachAction) {
+			this.tabStop?.setTabbable(false);
+			item.setTabbable(this.focusable);
+		}
 		this.tabStop = item;
-		item.setTabbable(this.focusable);
+	}
+
+	private isTabbable(action: IAction, isTabStop: boolean): boolean {
+		return this.focusable && (this.tabEachAction ? action.enabled : isTabStop);
 	}
 
 	private clearActions(): void {
@@ -709,7 +725,7 @@ export class ActionBar extends Disposable implements IActionRunner {
 		entry.item = replacement.item;
 		entry.store = replacement.store;
 		if (wasTabStop) this.tabStop = entry.item;
-		entry.item.setTabbable(this.focusable && wasTabStop);
+		entry.item.setTabbable(this.isTabbable(action, wasTabStop));
 		if (hadFocus && action.enabled) this.focusEntry(entry, focusedControl);
 	}
 

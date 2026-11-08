@@ -47,6 +47,7 @@ const { registerTestComponentServices, createTestEditorServices } = await import
 const { ElectronTitleService } = await import('../../titlebarPart.js');
 const { EnableWindowAlwaysOnTopAction, DisableWindowAlwaysOnTopAction } = await import('../../../../actions/windowActions.js');
 const { registerWindow } = await import('../../../../../../base/browser/window.js');
+const { getActiveWindow } = await import('../../../../../../base/browser/dom.js');
 
 test('Electron titlebars apply the active theme and release their subscriptions with each part', async () => {
 	const tracker = new DisposableTracker();
@@ -201,15 +202,24 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			assert.ok(action(true));
 			auxiliary.updateOptions({ compact: true });
 			assert.ok(action(true)?.closest('[role="toolbar"]'));
+			const mainWindowButton = environment.window.document.createElement('button');
+			environment.window.document.body.append(mainWindowButton);
 			try {
 				setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 				registerPinActions();
 				assert.equal(action(true)?.getAttribute('aria-label'), '窗口置顶');
-				action(true)!.focus();
+				mainWindowButton.focus();
+				assert.equal(getActiveWindow(), environment.window);
 				action(true)!.click();
 				await new Promise<void>(resolve => setImmediate(resolve));
 				assert.equal(action(false)?.getAttribute('aria-label'), '取消窗口置顶');
-			} finally { resetNlsResolver(); }
+				action(false)!.click();
+				await new Promise<void>(resolve => setImmediate(resolve));
+				assert.deepEqual(pinTargets, [popup.window.name, popup.window.name, popup.window.name]);
+			} finally {
+				mainWindowButton.remove();
+				resetNlsResolver();
+			}
 
 			const beforeThemeChange = applied.length;
 			themes.setColorTheme(lightColorTheme);

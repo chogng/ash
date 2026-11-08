@@ -1,7 +1,5 @@
 import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import './media/notificationsList.css';
 import '../../../../base/browser/ui/progressbar/progressbar.css';
-import './media/notificationsActions.css';
 import '../../../../platform/opener/browser/link.css';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';

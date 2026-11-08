@@ -81,7 +81,6 @@ pub struct ChannelStore {
 impl ChannelStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, ChannelError> {
         let connection = Connection::open(path)?;
-        connection.busy_timeout(std::time::Duration::from_secs(5))?;
         configure_resources(&connection)?;
         Ok(Self {
             connection: Mutex::new(connection),
@@ -512,14 +511,17 @@ impl ChannelResourceKind {
 /// Shared-database initialization allows notes and media to authorize inside their own
 /// SQLite transactions, rather than checking a stale membership snapshot over an RPC.
 pub fn configure_resources(connection: &Connection) -> Result<(), ChannelError> {
-    connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-        CREATE TABLE IF NOT EXISTS collaboration_spaces(id TEXT PRIMARY KEY, data TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS collaboration_channel_members(credential TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES collaboration_spaces(id), member_id TEXT NOT NULL);
-        CREATE INDEX IF NOT EXISTS collaboration_channel_members_space ON collaboration_channel_members(space_id);
-        CREATE TABLE IF NOT EXISTS collaboration_channel_resources(id TEXT PRIMARY KEY, space_id TEXT NOT NULL REFERENCES collaboration_spaces(id), channel_id TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS collaboration_resource_grants(credential TEXT PRIMARY KEY, resource_id TEXT NOT NULL REFERENCES collaboration_channel_resources(id), member_id TEXT NOT NULL);")?;
+    crate::store_schema::configure_connection(connection)?;
+    crate::store_schema::migrate(connection, "channel-resources", RESOURCE_MIGRATIONS)
+        .map_err(|_| ChannelError::Storage)?;
     Ok(())
 }
+
+const RESOURCE_MIGRATIONS: &[crate::store_schema::Migration] = &[|transaction| {
+    transaction.execute_batch(include_str!(
+        "../migrations/channel-resources/0001_resources.sql"
+    ))
+}];
 
 /// Resolves the current inherited membership for a resource. None means an independent
 /// resource; an empty list means a channel was deleted and all access has been revoked.

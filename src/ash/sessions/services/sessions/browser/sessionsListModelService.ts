@@ -32,6 +32,8 @@ export interface ISessionsListModelService {
 	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void;
 	readonly grouping: SessionGrouping;
 	setGrouping(grouping: SessionGrouping): void;
+	readonly showAttentionGroup: boolean;
+	setShowAttentionGroup(show: boolean): void;
 	readonly showComparisonGroups: boolean;
 	setShowComparisonGroups(show: boolean): void;
 	readonly automationSessionsMode: AutomationSessionsListMode;
@@ -47,7 +49,7 @@ export interface ISessionsListModelService {
 	unpinSession(session: SessionListIdentity): void;
 	getRowIcon(rowId: string): string | undefined;
 	setRowIcon(rowId: string, iconId: string | undefined): void;
-	registerTree(mode: SessionsListMode | 'shared', read: () => readonly ISessionsListTreeNode[]): IDisposable;
+	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable;
 	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined;
 }
 
@@ -60,6 +62,7 @@ const sortModeKey = 'sessions.list.sortMode';
 const sortDirectionKey = 'sessions.list.sortDirection';
 const groupingKey = 'sessions.list.grouping';
 const comparisonGroupsKey = 'sessions.list.showComparisonGroups';
+const attentionGroupKey = 'sessions.list.showAttentionGroup';
 const manualOrderPrefix = 'sessions.list.manualOrder.';
 const pinnedSessionPrefix = 'sessions.list.pinned.';
 const rowIconPrefix = 'sessions.list.rowIcon.';
@@ -67,9 +70,9 @@ const rowIconPrefix = 'sessions.list.rowIcon.';
 /** Owns profile-local list filters, pins, and manual row order. */
 export class SessionsListModelService implements ISessionsListModelService {
 	readonly onDidChange: Event<void>;
-	private readonly trees = new Map<SessionsListMode | 'shared', () => readonly ISessionsListTreeNode[]>();
+	private readonly trees = new Map<SessionsListMode, () => readonly ISessionsListTreeNode[]>();
 
-	registerTree(mode: SessionsListMode | 'shared', read: () => readonly ISessionsListTreeNode[]): IDisposable {
+	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable {
 		this.trees.set(mode, read);
 		return toDisposable(() => {
 			if (this.trees.get(mode) === read) this.trees.delete(mode);
@@ -77,7 +80,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined {
-		return (this.trees.get('shared') ?? this.trees.get(mode))?.();
+		return this.trees.get(mode)?.();
 	}
 
 	constructor(@IStorageService private readonly storage: IStorageService) {
@@ -85,6 +88,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key.startsWith(`${sortModeKey}.`)
 				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key === groupingKey || event.key === comparisonGroupsKey
+				|| event.key === attentionGroupKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
 				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix))) {
 				listener.call(thisArgs);
@@ -93,7 +97,6 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	getSort(mode: SessionsListMode): { readonly field: SessionSortMode; readonly direction: SessionSortDirection; } {
-		mode = this.trees.has('shared') ? 'code' : mode;
 		const value = this.storage.get(`${sortModeKey}.${mode}`, StorageScope.PROFILE);
 		const field = value === 'created' || value === 'name' ? value : 'updated';
 		const direction = this.storage.get(`${sortDirectionKey}.${mode}`, StorageScope.PROFILE);
@@ -104,12 +107,10 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	setSortMode(mode: SessionsListMode, field: SessionSortMode): void {
-		mode = this.trees.has('shared') ? 'code' : mode;
 		this.storage.store(`${sortModeKey}.${mode}`, field, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void {
-		mode = this.trees.has('shared') ? 'code' : mode;
 		this.storage.store(`${sortDirectionKey}.${mode}`, direction, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
@@ -154,6 +155,14 @@ export class SessionsListModelService implements ISessionsListModelService {
 
 	setGrouping(grouping: SessionGrouping): void {
 		this.storage.store(groupingKey, grouping, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	get showAttentionGroup(): boolean {
+		return this.storage.getBoolean(attentionGroupKey, StorageScope.PROFILE, false);
+	}
+
+	setShowAttentionGroup(show: boolean): void {
+		this.storage.store(attentionGroupKey, show, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	get showComparisonGroups(): boolean {

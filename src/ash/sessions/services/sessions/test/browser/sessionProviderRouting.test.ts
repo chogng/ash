@@ -144,6 +144,18 @@ test('Chat send unwraps the source address and never sends a removed remote Sess
 	await assert.rejects(chat.startTurn(options), isCancellationError);
 });
 
+test('conversation attachments stay on the destination host and unwrap the exact source branch', async () => {
+	using context = fixture();
+	const calls: unknown[] = [];
+	context.remoteChat.queueTurn = async options => { calls.push(options.contexts); };
+	using chat = new SessionsChatService(context.scopes);
+	const options = { sessionId: context.sessionId, threadId: context.threadId, expectedSequence: 1, text: '', mode: 'agent' as const };
+	const attachment = { name: 'Design', content: '', chatReference: { sessionId: context.sessionId, threadId: sessionIdentity('remote', 'source', 'primary') } };
+	await chat.queueTurn({ ...options, contexts: [attachment] });
+	await assert.rejects(chat.queueTurn({ ...options, contexts: [{ ...attachment, chatReference: { sessionId: 'same', threadId: 'source' } }] }), isCancellationError);
+	assert.deepEqual(calls, [[{ ...attachment, chatReference: { sessionId: 'same', threadId: 'source' } }]]);
+});
+
 test('the editor link opener selects the remote conversation and sends its follow-up to that host', async () => {
 	using context = fixture();
 	Object.assign(context.remoteHost.appServer, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: Event.None });
@@ -332,7 +344,7 @@ test('Session worktree mounts use raw authority metadata, share roots and releas
 			return toDisposable(() => { registration.released = true; });
 		},
 	};
-	const session: ISession = { sessionId: context.sessionId, backendSessionId: 'same', providerId: 'remote', title: 'Remote', status: 'active', nextApprovalMode: 'manual', workspace: { authorityId: 'ssh+remote', root: '/worktree' }, chats: [] };
+	const session: ISession = { sessionId: context.sessionId, kind: 'code' as const, backendSessionId: 'same', providerId: 'remote', title: 'Remote', status: 'active', nextApprovalMode: 'manual', workspace: { authorityId: 'ssh+remote', root: '/worktree' }, chats: [] };
 	Object.assign(context.management, { sessions: [session, { ...session, sessionId: sessionIdentity('remote', 'second', 'primary'), backendSessionId: 'second' }] });
 	using contribution = new SessionFileSystemContribution('primary', context.management, context.registry, context.scopes, files);
 	assert.equal(registrations.length, 1);
@@ -438,7 +450,7 @@ test('shared peer-chat creation and process-log export use the remote Session ow
 	Object.assign(context.remoteHost.session, {
 		createThread: async (params: unknown) => {
 			calls.push(params);
-			return { session: { sessionId: 'same', title: 'Remote', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'new-thread', title: 'Peer', status: 'active' }] }, threadId: 'new-thread' };
+			return { session: { sessionId: 'same', kind: 'code' as const, title: 'Remote', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'new-thread', title: 'Peer', status: 'active' }] }, threadId: 'new-thread' };
 		},
 		collectDebugLogs: async (params: unknown, signal: AbortSignal) => { calls.push({ params, signal }); return { files: [], omittedFiles: 0 }; },
 	});

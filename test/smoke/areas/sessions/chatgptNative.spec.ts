@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { mkdir, realpath } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
@@ -13,7 +15,7 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -31,6 +33,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let recentHistoryRequests = 0;
 		let uploadsHeld = false;
 		let heldUploads = 0;
+		const now = Date.now;
 		const uploadedFiles: Record<string, string> = {};
 		const initializing = new Set<() => void>();
 		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
@@ -48,6 +51,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			get cancelledInitializations() { return cancelledInitializations; },
 			setOffline(value) { offline = value; },
 			setRecentHistoryRateLimited(value) { recentHistoryRateLimited = value; },
+			setClockOffset(milliseconds) { Date.now = milliseconds === 0 ? now : () => now() + milliseconds; },
 			get recentHistoryRequests() { return recentHistoryRequests; },
 			holdUploads(value) { uploadsHeld = value; },
 			get heldUploads() { return heldUploads; },
@@ -220,8 +224,9 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 		await expect(native).toContainText('Experimental earlier question');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 		await expect(native).toBeHidden();
+		await expect(savedChat).toHaveCount(0);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true }).click();
 		await expect(savedChat).toBeVisible();
-		await expect(savedChat).toHaveAttribute('aria-current', 'false');
 		await savedChat.click();
 		await expect(native).toContainText('Experimental history answer');
 		await expect(savedChat).toHaveAttribute('aria-current', 'page');
@@ -264,6 +269,97 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
+	test('continues a workspace-bound native Chat in Code on the original Thread', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+		const application = browser as ElectronApplication;
+		await installService(application);
+		const modelRequests: string[] = [];
+		await using catalog = createAshModelServer(modelRequests);
+		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const { client, close } = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		try {
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'continue-native-chat-in-code', title: 'Native Chat handoff', kind: 'chat',
+				executionTarget: null, agent: { type: 'default' },
+			});
+			const { sessionId } = session;
+			const { threadId } = session.threads[0];
+			const readConversation = () => client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+			const readThread = async () => (await readConversation()).thread;
+			await client.request(APP_SERVER_METHODS['session/request'], {
+				commandId: 'first-native-chat-turn', sessionId, request: {
+					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence, model: ashFixtureModel,
+					mode: 'agent', approvalMode: 'manual', input: [{ type: 'text', text: 'Original Chat message' }],
+				},
+			});
+			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
+			const page = await workbench.openAgentsWindow(target.kind);
+			const row = page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`);
+			await row.press('Enter');
+			const chat = page.locator('.ash-native-chat-widget .ash-chat');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			const workspace = chat.locator('.ash-session-workspace-status');
+			await expect(workspace).toBeHidden();
+			await expect(chat.getByRole('button', { name: '使用工作区', exact: true })).toHaveCount(0);
+			const continueInCode = page.getByRole('menuitem', { name: '在 Code 中继续', exact: true });
+			const workspaceActions = page.getByRole('menuitem', { name: /^(设置工作区…|更换工作区…|解除工作区)$/ });
+			const folder = join(testWorkspace.directory, 'initial-workspace');
+			await mkdir(folder);
+			const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+			try {
+				await application.evaluate(({ dialog }, directory) => {
+					dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
+				}, folder);
+				await row.press('Shift+F10');
+				await expect(continueInCode).toHaveCount(0);
+				await page.getByRole('menuitem', { name: '设置工作区…', exact: true }).click();
+				await page.getByRole('button', { name: '信任并打开', exact: true }).click();
+				await expect(workspace).toBeVisible();
+				await expect(workspace).toHaveText(basename(folder));
+			} finally {
+				await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, originalDialog);
+				await originalDialog.dispose();
+			}
+			await row.press('Shift+F10');
+			await expect(continueInCode).toBeEnabled();
+			await expect(workspaceActions).toHaveCount(0);
+			await continueInCode.press('Enter');
+			const code = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+			await expect(code).toHaveAttribute('data-session-id', sessionId);
+			await expect(code).toHaveAttribute('data-thread-id', threadId);
+			await expect(code).toContainText('Original Chat message');
+			await expect(code).toContainText('Answer from Ash');
+			await expect(code.locator('.ash-session-workspace-status')).toHaveCount(0);
+			const composer = new Editor(code);
+			await composer.waitForEditorFocus();
+			await composer.waitForTypeInEditor('Follow up from Code');
+			await composer.input.press('Enter');
+			await expect.poll(async () => (await readThread()).turns.map(turn => turn.status)).toEqual(['completed', 'completed']);
+			await expect(code).toContainText('Follow up from Code');
+			const saved = (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session;
+			expect(saved?.kind).toBe('chat');
+			expect(saved?.executionTarget).toEqual({ type: 'local', root: await realpath(folder) });
+			expect(saved?.threads.map(thread => thread.threadId)).toEqual([threadId]);
+			expect(modelRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+			const titleMenu = page.locator('.ash-sessions-titlebar-menu');
+			await titleMenu.press('Enter');
+			await expect(page.getByRole('menuitem', { name: '重命名', exact: true })).toBeVisible();
+			await expect(workspaceActions).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await expect(titleMenu).toBeFocused();
+			const mode = page.locator('.ash-window-mode-control');
+			await mode.getByRole('button', { name: '聊天 / Agents', exact: true }).click();
+			await row.press('Enter');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			await expect(chat).toContainText('Follow up from Code');
+			await expect(workspace).toHaveText(basename(folder));
+			await mode.getByRole('button', { name: '代码', exact: true }).click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
+			const draft = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat[data-untitled-session-id]');
+			await expect(draft.locator('.ash-sessions-workspace-picker')).toBeVisible();
+			await expect(draft.locator('.ash-session-workspace-status')).toHaveCount(0);
+		} finally { await close(); }
+	});
+
 	test('opens and restores an existing native Ash conversation without sending a message', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
@@ -271,14 +367,14 @@ test.describe('Unified Chat sidebar', () => {
 		try {
 			const { client } = connection;
 			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'desktop-session-pre-upgrade-chat', title: 'Existing Ash Chat', surface: 'chat',
+				commandId: 'desktop-session-pre-upgrade-chat', title: 'Existing Ash Chat', kind: 'chat',
 				executionTarget: null, agent: { type: 'default' },
 			});
 			await client.request(APP_SERVER_METHODS['thread/goal/set'], {
 				threadId: session.threads[0]!.threadId, objective: 'Saved native Chat goal', status: 'paused',
 			});
-			const { session: legacy } = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'legacy-code-without-surface', title: 'Existing Code Session',
+			const { session: code } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'existing-code', title: 'Existing Code Session', kind: 'code',
 				executionTarget: { type: 'local', root: testWorkspace.directory }, agent: { type: 'default' },
 			});
 			const page = await workbench.openAgentsWindow(target.kind);
@@ -297,7 +393,7 @@ test.describe('Unified Chat sidebar', () => {
 			const mode = page.locator('.ash-window-mode-control');
 			await mode.getByRole('button', { name: '代码', exact: true }).click();
 			await expect(chat).toBeHidden();
-			const codeRow = page.locator(`[data-item="session:${legacy.sessionId}"] .ash-sessions-list-item`);
+			const codeRow = page.locator(`[data-item="session:${code.sessionId}"] .ash-sessions-list-item`);
 			await expect(codeRow).toBeVisible();
 			await codeRow.press('Enter');
 			await expect(codeRow).toHaveAttribute('aria-current', 'page');
@@ -609,7 +705,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const newButton = page.locator('[data-action-id="sessions.newSession"] button');
 			const help = page.locator('.ash-accessible-view-content');
 			await newButton.press('Alt+F1');
-			await expect(help).toHaveValue(locale === 'en' ? /New starts a conversation in the current workspace/u : /“新建”会在当前工作区开始对话/u);
+			await expect(help).toHaveValue(locale === 'en'
+				? /New opens a draft in the selected Chat or Code mode and focuses the message input/u
+				: /“新建”会在当前选中的 Chat 或 Code 模式打开草稿，并聚焦消息输入框/u);
 			await expect(help).not.toHaveValue(/ChatGPT|Codex/u);
 			await page.keyboard.press('Escape');
 			await expect(newButton).toBeFocused();
@@ -689,9 +787,17 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(staged(reopened, pending)).toContainText(locale === 'en' ? 'Ready' : '就绪');
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.uploadedFiles)).toEqual({ [ready]: 'Ready draft bytes', [pending]: 'Pending draft bytes' });
 			await application.evaluate(() => globalThis.ashNativeFixture.setRecentHistoryRateLimited(false));
-			await reopened.clock.setFixedTime(new Date(Date.now() + 65_000));
-			await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
-			await expect(historyStatus).toHaveCount(0);
+			// Both the renderer and the main-process history gate enforce the cooldown.
+			const cooldownOffset = 65_000;
+			await application.evaluate((_electron, offset) => globalThis.ashNativeFixture.setClockOffset(offset), cooldownOffset);
+			try {
+				await reopened.clock.setFixedTime(new Date(Date.now() + cooldownOffset));
+				await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
+				await expect(historyStatus).toHaveCount(0);
+				await expect.poll(recentRequests).toBe(beforeReconnect + 2);
+			} finally {
+				await application.evaluate(() => globalThis.ashNativeFixture.setClockOffset(0));
+			}
 
 			const restarted = await reloadWorkbench('quit');
 			await installService(restarted.application as ElectronApplication);

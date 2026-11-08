@@ -9,6 +9,7 @@ import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
 import { IAgentSessionActionsService, IAgentSessionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
+import { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
 import { ChatHistoryModel } from './chatHistoryModel.js';
 import { Menus } from './menus.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -85,6 +86,7 @@ import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/comm
 import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js';
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
+import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
 import { IConnectorService } from '../../platform/connectors/common/connectorService.js';
 import { AppServerConnectorService } from '../../workbench/services/connectors/browser/appServerConnectorService.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
@@ -152,6 +154,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
+import './media/notifications.css';
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../contrib/sessions/browser/sessionsActions.js';
 import './actions/sessionsChatActions.js';
 import { NEW_SESSION_ACTION_ID } from '../contrib/chat/common/constants.js';
@@ -161,6 +164,7 @@ import { NotificationActionRunner } from '../../workbench/browser/parts/notifica
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { addDisposableListener, h, type IDimension } from '../../base/browser/dom.js';
 import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { DeferredPromise } from '../../base/common/async.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
@@ -195,7 +199,7 @@ import { TextResourcePropertiesService } from '../../workbench/services/textreso
 import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
-import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
+import { IsNewSessionContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -338,7 +342,7 @@ import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPref
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../common/windowNavigation.js';
 import { OPEN_ASH_WINDOW_COMMAND_ID } from '../common/sessionCommands.js';
-import { SessionsConfiguration } from '../common/configuration.js';
+import { SessionsConfiguration, type SessionsActivityBarLocation } from '../common/configuration.js';
 import { SessionsManagementService } from '../services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
@@ -356,7 +360,7 @@ import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompos
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from './parts/sessionsPart.js';
-import { SidebarPart } from './parts/sidebarPart.js';
+import { ISessionsSidebarFooter, SidebarPart } from './parts/sidebarPart.js';
 import { registerSessionsNavigation } from '../contrib/sessions/browser/views/sessionsView.js';
 import { ISessionsTitlebarService, type TitlebarPart } from './parts/titlebarPart.js';
 
@@ -445,7 +449,12 @@ export abstract class Workbench extends Disposable {
 		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		services.registerInstance(IFileService, fileService);
-		const configurationService = this.configurationService = this._register(services.createInstance(ConfigurationService, { initialConfiguration: options.initialConfiguration, workspace: options.workspace() }));
+		const workspaceProjectionReady = new DeferredPromise<void>();
+		void workspaceProjectionReady.p.catch(() => undefined);
+		this._register(toDisposable(() => { void workspaceProjectionReady.complete(); }));
+		const configurationService = this.configurationService = this._register(services.createInstance(ConfigurationService, {
+			initialConfiguration: options.initialConfiguration, workspace: options.workspace(), initialWorkspaceReady: workspaceProjectionReady.p,
+		}));
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
@@ -563,7 +572,7 @@ export abstract class Workbench extends Disposable {
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
 		services.registerInstance(ISessionsManagementService, sessions);
-		services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
+		services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));
 		const view = this.sessionsView = this._register(services.createInstance(SessionsService));
 		const windowUsage = services.createInstance(SessionsWindowUsageService);
 		logger.trace('sessions.navigation', 'Sessions window started', { count: windowUsage.windowOpenCount, hadPriorWindowOpen: windowUsage.hadPriorWindowOpen });
@@ -638,6 +647,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAgentToolsApi, options.api.agentTools);
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
 		services.registerInstance(IMcpServerManagementService, options.api.mcpServerManagement);
+		if (options.api.memories) { services.registerInstance(IMemoriesService, options.api.memories); }
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(options.api.connectors, options.api.events)));
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
@@ -706,6 +716,13 @@ export abstract class Workbench extends Disposable {
 		options.container.replaceChildren();
 		this.domNode = h(ownerDocument, 'main');
 		this.domNode.className = 'ash-sessions-window ash-code-sessions-window';
+		const applyInterfaceFont = () => {
+			this.domNode.dataset.interfaceFont = configurationService.getValue<string>(SessionsConfiguration.interfaceFontFamily);
+		};
+		applyInterfaceFont();
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(SessionsConfiguration.interfaceFontFamily)) applyInterfaceFont();
+		}));
 		this._register(bindSashFeedbackPresentation(this.domNode, 'handle'));
 		this.domNode.setAttribute('aria-busy', 'true');
 		options.container.append(this.domNode);
@@ -717,7 +734,7 @@ export abstract class Workbench extends Disposable {
 		const systemOutput = this._register(new SystemOutputService(output, options.api.appServer, logger, services.get(ILoggerService).files));
 		this._register(logger.registerSink(systemOutput, true));
 		if (!services.has(IStatusbarService)) services.registerInstance(IStatusbarService, this._register(new StatusbarService()));
-		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
+		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode, { useFormForDestructiveConfirmations: true })));
 
 		let sessionsPart: SessionsPart | undefined;
 		const layout = this.layoutService = this._register(services.createInstance(layoutConstructor, this.domNode, {
@@ -830,6 +847,7 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));
 		this._register(registerSessionsNavigation());
 		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode));
+		services.registerInstance(ISessionsSidebarFooter, sidebar);
 		const recoveredDrafts = migrateNewChatDraftState(storage, chatInputStatePersistence, error => notificationService.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
 		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
 			const request = value as { readonly prompt: string; readonly content: string; };
@@ -849,13 +867,13 @@ export abstract class Workbench extends Disposable {
 		const activitybar = this._register(services.createInstance(ActivityBar, sidebar.domNode, {
 			showAccountMenu: (anchor: HTMLElement, selectFirst: boolean) => accountMenu.show(anchor, selectFirst),
 		}));
-		const activityBarLocation = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
-		const setActivityBarLocation = (location: ActivityBarPosition): void => {
+		const activityBarLocation = configurationService.getValue<SessionsActivityBarLocation>(SessionsConfiguration.activityBarLocation);
+		const setActivityBarLocation = (location: SessionsActivityBarLocation): void => {
 			const host = sidebar.setActivityBarLocation(location);
-			const integrated = location === ActivityBarPosition.DEFAULT;
-			activitybar.setLocation(location, host, integrated ? sidebar.activityBarAccountHost : undefined);
+			const accountsInTitlebar = location === ActivityBarPosition.TOP;
+			activitybar.setLocation(location, host, accountsInTitlebar ? undefined : sidebar.activityBarAccountHost);
 			titlebar.setActivityActions(
-				location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM ? [activitybar.accountAction] : [],
+				accountsInTitlebar ? [activitybar.accountAction] : [],
 				(action, options) => activitybar.createAccountActionViewItem(action, options, 'titlebar'),
 			);
 		};
@@ -873,7 +891,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. New opens a draft in the selected Chat or Code mode and focuses the message input. Desktop Chat and Code share Pinned, Projects and Recents in the sidebar. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. On Desktop, expansion is shared between Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear above the message input.') + ' ' + localize('sessions.list.menuHelp', 'Use Tab to reach the change icon button on a saved conversation. Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, project and group actions, delete and open in new window. Saved conversations can be moved to a project or removed from their current project. Dragging a pinned conversation to Recents unpins it and keeps its memberships. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.list.automationFilterHelp', 'Open More Sessions Actions to find Group By, Sort By, and Show. Use Right Arrow to enter a submenu and Left Arrow to return. Sort By offers a sort field and direction. Show controls comparison groups and automation conversations. Automations keeps its run history when automation conversations are hidden. In the Chat sidebar, choose Add folder beside the Projects heading, enter a name, and press Enter to create it. Escape cancels the prompt.') + ' ' + localize('sessions.list.groupAppearanceHelp', 'Focus a group title and press Shift+F10 to change its icon or color. Select Default in the picker to reset it.') + ' ' + localize('sessions.search.navigationHelp', 'Search in the sidebar opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. On Desktop, Chat and Code share the conversation sidebar. The workspace mode control is visible only while the sidebar is expanded. Chat and Code share navigation and its saved order. New opens a draft in the selected mode. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. The conversation sidebar groups conversations by project, workspace or connected Agent host. In a new Code conversation, use the Run on menu to choose its host before sending. Use arrow keys and Enter to choose, or Escape to close the menu. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Conversations retain their history, unsent text and attachments when you switch pages. Each session restores its editor tabs. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in its editor group. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('sessions.activity.moreHelp', 'In the sidebar, open More to find Automations, Collab and Symphony when available. Use Up or Down Arrow to browse, Enter to open an item, or Escape to return to More. Press Right Arrow and Enter to pin or unpin a focused item. It stays in More. You can also unpin it from its sidebar context menu.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('pinnedCanvas.activityHelp', 'Use Add Canvas to Sidebar from a Canvas tab menu or the Command Palette to keep a registered Canvas in navigation. Choose its sidebar item to open the full page without switching conversations. Its page header and sidebar context menu offer Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps its page in the conversation. Up to five Canvases can be pinned.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette. In Remote Environments, use Tab to reach the connection actions and Escape to close the dialog.') : ''),
+					() => localize('sessions.activity.sidebarHelp', 'The Default position shows navigation icons and names. In Chat, focus Projects in navigation and press Tab to reach Create project. Open Scheduled to manage Chat tasks and their run history. In Default and Bottom, Accounts is at the bottom of the sidebar. In Top, Accounts is in the title bar. Use the title bar sidebar toggle to collapse or expand the sidebar and its controls. New opens a draft in the selected Chat or Code mode and focuses the message input. The sidebar shows Pinned, Projects and Recent conversations for the current mode. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Fork Conversation is available in the Command Palette. Input tips appear above the message input.') + ' ' + localize('sessions.list.menuHelp', 'Use Tab to reach the change icon button on a saved conversation. Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, project and group actions, delete and open in new window. Saved conversations can be moved to a project or removed from their current project. Dragging a pinned conversation to Recents unpins it and keeps its memberships. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.list.automationFilterHelp', 'Open More Sessions Actions to find Group By, Sort By, and Show. Use Right Arrow to enter a submenu and Left Arrow to return. Sort By offers a sort field and direction. Show controls comparison groups and task run conversations. Scheduled and Routines keep their run history when these conversations are hidden.') + ' ' + localize('sessions.list.groupAppearanceHelp', 'Focus a project name or group title and press Shift+F10 to change its icon or color. Select Default in the picker to reset it. Choose Pin to move it to Pinned or Unpin to return it to Projects. On a project row, press Tab to reach More project actions. The button and the context menu offer Rename, Archive, and Delete when available. Rename opens a dialog next to the project with the current name selected. Press Enter to confirm or Escape to cancel. Archive asks for confirmation and archives the project and its active conversations. Deleting a project also requires confirmation.') + ' ' + localize('sessions.list.workspaceProjectHelp', 'In the Code sidebar, use Tab to reach Create project beside the Projects heading. Enter a name and use Add to choose source folders. Use Change project appearance next to the name to choose an icon and color. Escape closes the picker and returns focus to its button. Right-click a folder group in Recents or press Shift+F10 to copy its path. Use the Command Palette to run Link Unassigned Code Conversations to Folder Projects and review the conversations to link.') + ' ' + localize('sessions.search.navigationHelp', 'Search in the sidebar opens a categorized search panel. Type a name to filter sessions, projects and tasks. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. The conversation sidebar and Activity Bar actions follow the selected mode. The workspace mode control is hidden in Bots and when the sidebar is collapsed. In Bots, use Back in the sidebar to return to Code. New opens a draft in the selected mode. On pages with the mode control, select the current mode again to return to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. In Top and Bottom, actions that do not fit appear under More. Use Activity Bar Position in the menu to choose Default, Top, or Bottom. The conversation sidebar groups conversations by project, workspace or connected Agent host. In a new Code conversation, use the Run on menu to choose its host before sending. Use arrow keys and Enter to choose, or Escape to close the menu. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Conversations retain their history, unsent text and attachments when you switch pages. Each session restores its editor tabs. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in its editor group. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('sessions.activity.moreHelp', 'Open More for Collab in Chat, or Routines and Symphony in Code when available. Use Up or Down Arrow to browse, Enter to open an item, or Escape to return to More. Press Right Arrow and Enter to pin or unpin a focused item. It stays in More. You can also unpin it from its sidebar context menu.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Routines opens Code plans and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('pinnedCanvas.activityHelp', 'Use Add Canvas to Sidebar from a Canvas tab menu or the Command Palette to keep a registered Canvas in navigation. Choose its sidebar item to open the full page without switching conversations. Its page header and sidebar context menu offer Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps its page in the conversation. Up to five Canvases can be pinned.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette. In Remote Environments, use Tab to reach the connection actions and Escape to close the dialog.') : ''),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -910,6 +928,7 @@ export abstract class Workbench extends Disposable {
 						view.openNewSession();
 					}),
 				activateSelection: selection => view.activateSelection(selection),
+				markVisibleThreadViewed: entry => view.markVisibleThreadViewed(entry),
 				closeSelection: selection => {
 					if (view.activeSelection !== selection) view.activateSelection(selection);
 					void commandService.executeCommand('sessionsViewPane.closeSession')
@@ -987,7 +1006,7 @@ export abstract class Workbench extends Disposable {
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
 			},
-			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ providerId: session.providerId ?? provider.id, sessionId: session.backendSessionId ?? session.sessionId, threadId: session.backendSessionId ? providerScopes.getScope(session.sessionId).backendIdentity(chat.threadId) : chat.threadId, title: chat.title ?? session.title }))),
+			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ providerId: session.providerId ?? provider.id, kind: session.kind, sessionId: session.backendSessionId ?? session.sessionId, threadId: session.backendSessionId ? providerScopes.getScope(session.sessionId).backendIdentity(chat.threadId) : chat.threadId, title: chat.title ?? session.title }))),
 			getConversationsForReference: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
 				session.chats.filter(chat => chat.status === 'active').map(chat => ({
 					providerId: session.providerId ?? provider.id,
@@ -1082,8 +1101,11 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(SessionsDiffEditorCommandsService));
 		services.registerInstance(IEditorGroupsService, editors);
 		// The browser host resolves Workbench browsing, which borrows the window's editor services.
-		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
-		else { services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined); }
+		if (!services.has(IBrowserViewWorkbenchService)) {
+			services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
+		}
+		const browsers: IBrowserViewWorkbenchService | undefined = services.get(IBrowserViewWorkbenchService);
+		if (options.createBrowserHost) this._register(options.createBrowserHost(services));
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
 		services.registerInstance(IPreferencesService, {
 			openSettings: options => preferences.open(options),
@@ -1116,7 +1138,7 @@ export abstract class Workbench extends Disposable {
 			['customview', customViewPart],
 		]);
 		layout.createWorkbenchLayout(parts);
-		if (options.createBrowserHost) {
+		if (browsers) {
 			const browserVisible = contextKeys.createKey<boolean>('sessions.browserVisible', false);
 			const updateBrowserContext = (): void => browserVisible.set(editors.visibleEditors.some(input => input.resource.scheme === BrowserViewUri.scheme));
 			this._register(toDisposable(() => browserVisible.reset()));
@@ -1126,7 +1148,6 @@ export abstract class Workbench extends Disposable {
 					await commandService.executeCommand('sessions.open.code');
 				}
 				if (!await editor.toggleToolEditors(input => input.resource.scheme === BrowserViewUri.scheme)) {
-					const browsers = services.get(IBrowserViewWorkbenchService);
 					const retained = browsers.getKnownBrowserViews().values().next().value;
 					if (retained) await editors.openEditor(retained, { pinned: true });
 					else await browsers.createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' } });
@@ -1138,7 +1159,12 @@ export abstract class Workbench extends Disposable {
 					command: {
 						id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
 						icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
-					}, when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 4.5
+					},
+					when: ContextKeyExpr.and(
+						ContextKeyExpr.equals('sessions.toolsAvailable', true),
+						id === Menus.TitleBarRightLayout ? ContextKeyExpr.not(IsNewSessionContext.key) : undefined,
+					),
+					group: 'navigation', order: 4.5
 				},
 			}))));
 		}
@@ -1162,7 +1188,7 @@ export abstract class Workbench extends Disposable {
 		}));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
-				const location = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
+				const location = configurationService.getValue<SessionsActivityBarLocation>(SessionsConfiguration.activityBarLocation);
 				setActivityBarLocation(location);
 				layout.layout();
 			}
@@ -1170,13 +1196,12 @@ export abstract class Workbench extends Disposable {
 		// Browser integration resolves editor and view services; install it after the window graph is complete.
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, configurationService));
-		this._register(registerLayoutActions(layout, view, contextKeys, editor));
+		this._register(registerLayoutActions(layout, view, contextKeys, editor, workspace));
 		this._register(registerAddFileAsContextAction(this.sessionsPart));
 		this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
-		if (options.createBrowserHost) serviceContributionReady.push(services.get(IBrowserViewWorkbenchService).initialize());
 		this.layoutService.layout();
 		const entryLayout = services.get(ISessionsLayoutService);
 		// Stop layout persistence before Parts are released; the service scope otherwise outlives their editor grids.
@@ -1186,12 +1211,24 @@ export abstract class Workbench extends Disposable {
 		// Re-reading all workspace files here would turn a disconnected backend into a fatal startup error.
 		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady, options.initialWorkspaceReady]).then(async () => {
 			if (!this.isDisposed && options.initialWorkspaceReady) workspace.updateWorkspace(options.workspace());
-			await this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts);
+			await this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts, () => {
+				// Terminal editors can wait on PTY recovery during layout restore. Publish the
+				// selected execution directory first, including when the catalog is still hydrating.
+				const selection = view.activeSelection;
+				if (selection?.kind === 'session') {
+					const { session, threadId } = selection.active;
+					if (session.chats.find(chat => chat.threadId === threadId)?.workspace === undefined) {
+						workspaceProjectionReady.settleWith(sessions.prepareThread(session.sessionId, threadId));
+						return;
+					}
+				}
+				void workspaceProjectionReady.complete();
+			});
 			if (this.isDisposed) return;
 			using suppression = entryLayout.suppressEditorAutoVisibility();
 			const previousGroups = new Set(editor.groups.map(group => group.id));
 			const previousActive = editor.activeGroup;
-			const legacyBrowser = options.createBrowserHost && storage.get('sessions.browser.editorState', StorageScope.WORKSPACE);
+			const legacyBrowser = browsers && storage.get('sessions.browser.editorState', StorageScope.WORKSPACE);
 			try {
 				if (legacyBrowser && !editor.groups.some(group => group.inputs.some(input => input.resource.scheme === BrowserViewUri.scheme))) {
 					await editor.applyWorkingSet(JSON.parse(legacyBrowser) as EditorWorkingSet, { preserveFocus: true, preserveGroups: [...previousGroups] });
@@ -1210,6 +1247,7 @@ export abstract class Workbench extends Disposable {
 			}
 			if (editor.groups.includes(previousActive)) editor.activateGroup(previousActive.id);
 		});
+		void this.whenRestored.catch(error => workspaceProjectionReady.error(error));
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
@@ -1232,7 +1270,7 @@ export abstract class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
+	private async initialize(view: SessionsService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>, publishWorkspaceReady: () => void): Promise<void> {
 		if (this.isDisposed) return;
 		await view.initialize();
 		if (this.isDisposed) return;
@@ -1245,6 +1283,7 @@ export abstract class Workbench extends Disposable {
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}
 		view.activateSelection(selected, { source: 'restore' });
+		publishWorkspaceReady();
 		await entryLayout.restore();
 		if (this.isDisposed) return;
 		const revision = view.navigationRevision;

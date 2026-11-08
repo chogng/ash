@@ -315,6 +315,7 @@ function createSessionChangesPane(): SessionChangesEditor {
 		};
 		sessionServices.registerInstance(IChatService, {
 			onDidUpdateTurnChanges: sessionChanges.event,
+			onDidUpdateThread: Event.None,
 			onDidBecomeReady: Event.None,
 			listTurnChanges: async (sessionId: string, threadId: string) => {
 				if (sessionAvailability === 'failed') { throw new Error('Unavailable'); }
@@ -792,7 +793,7 @@ const harness = {
 	async openSessionChanges(): Promise<void> {
 		const pane = createSessionChangesPane();
 		pane.setVisible(true);
-		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'));
+		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'), { kind: 'id', id: 'review-change' });
 		sessionOpenController = new AbortController();
 		await pane.setInput(sessionInput, sessionOpenController.signal);
 	},
@@ -803,7 +804,7 @@ const harness = {
 		pendingSessionRead = new DeferredPromise<void>();
 		sessionReadStarted = false;
 		sessionOpenController = new AbortController();
-		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'));
+		sessionInput = new SessionChangesEditorInput(URI.parse('ash-session-changes:/review?thread=review-thread'), { kind: 'id', id: 'review-change' });
 		sessionOpenState = 'pending';
 		void pane.setInput(sessionInput, sessionOpenController.signal).then(() => { sessionOpenState = 'opened'; }, error => { sessionOpenState = error.name === 'CancellationError' ? 'cancelled' : `failed: ${String(error)}`; });
 	},
@@ -841,7 +842,17 @@ const harness = {
 			: { kind: 'id', id });
 		await sessionPane.value!.setInput(sessionInput, new AbortController().signal);
 	},
-	multipleSessionCaptures(): void { sessionMultipleCaptures = true; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
+	async multipleSessionCaptures(): Promise<void> {
+		sessionMultipleCaptures = true;
+		const resource = URI.parse('ash-session:/review?thread=review-thread');
+		const service = sessionServices!.get(ISessionChangesService);
+		const earlier = await service.resolveChangeset(resource, 'review-change');
+		const later = await service.resolveChangeset(resource, 'review-later');
+		const earlierSides = new Map(earlier.changes.get().map(change => [change.file.path, change.originalUri]));
+		const changes = later.changes.get().map(change => ({ ...change, originalUri: earlierSides.get(change.file.path) ?? change.originalUri }));
+		sessionInput = new SessionChangesEditorInput(resource, { kind: 'transient', changeset: { ...later, changes: constObservable(changes) } });
+		await sessionPane.value!.setInput(sessionInput, new AbortController().signal);
+	},
 	async reviewSessionOriginalFile(index: number): Promise<void> {
 		await sessionServices!.get(ICommandService).executeCommand(CHANGESET_REVIEW_ACTION_ID, URI.parse(`ash-turn-diff:/review-change/file-${index}.ts?session=review&thread=review-thread&revision=${sessionRevision}&side=before`));
 	},
@@ -947,7 +958,7 @@ const harness = {
 		window.sessionStorage.setItem('ash.diff.integration.sessionEditor', JSON.stringify({ input: EditorInputSerializers.serialize(sessionInput!), state: this.readSessionViewState() }));
 	},
 	async switchSessionChanges(): Promise<void> {
-		await sessionPane.value!.setInput({ resource: URI.parse('ash-session-changes:/other?thread=other-thread') }, new AbortController().signal);
+		await sessionPane.value!.setInput(new SessionChangesEditorInput(URI.parse('ash-session-changes:/other?thread=other-thread'), { kind: 'id', id: 'review-change' }), new AbortController().signal);
 	},
 	activeMultiControl(): string | undefined {
 		return multi.getActiveControl()?.modifiedEditor.getModel()?.getText();

@@ -1,9 +1,11 @@
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { buildOpenSessionLinkUri } from '../../../../platform/agentHost/common/openSessionLink.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { ILanguageModelsService } from '../../cowork/common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../../cowork/common/languageModelsConfiguration.js';
@@ -35,14 +37,16 @@ export class ProjectChatModel extends CoworkWidgetModel {
 		@ISessionsService view: ISessionsService,
 		@ICommandService commands: ICommandService,
 		@INotificationService notifications: INotificationService,
+		@IOpenerService opener: IOpenerService,
 	) {
 		super(chat, { kind: 'untitled', session: draft }, sessions, prompts, models, preferences, execution, configuration);
 		// Finish the input's successful-send bookkeeping before navigation hides its host.
 		this.reveal = this._register(
 			new RunOnceScheduler(() => {
-				void view.openSession(this.sessionId!, this.threadId!)
-					.then(() => commands.executeCommand('sessions.open.chat'))
-					.catch(error => notifications.error(error));
+				const open = draft.kind === 'chat'
+					? opener.open(buildOpenSessionLinkUri(this.sessionId!, this.threadId!, 'local'))
+					: view.openSession(this.sessionId!, this.threadId!).then(() => commands.executeCommand('sessions.open.chat'));
+				void open.catch(error => notifications.error(error));
 			}, 0),
 		);
 	}

@@ -373,6 +373,8 @@ use crate::protocol::attachments::AttachmentUploadWriteResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationDeleteParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::automation::AutomationListParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::automation::AutomationPreviewParams;
@@ -2124,6 +2126,10 @@ use crate::protocol::plugins::PluginPackageDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::plugins::PluginPermissionDto;
 use crate::protocol::plugins::PluginsChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectAppearanceFieldDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectAppearanceUpdateParams;
 use crate::protocol::projects::ProjectChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectCommandDispositionDto;
@@ -2456,6 +2462,12 @@ use crate::protocol::speech::SpeechInstructionsWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::speech::SpeechInstructionsWriteResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::storage::StorageOverview;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::storage::StorageWorktree;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::storage::StorageWorktreeCleanupParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::CodeSnapshot;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::SnapshotInfo;
@@ -2481,6 +2493,12 @@ use crate::protocol::terminal::TerminalAttachResult;
 use crate::protocol::terminal::TerminalAutoReply;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCloseParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalCommandSessionAction;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalCommandSessionParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalCommandSessionResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCommandStatus;
 #[cfg(any(test, feature = "export"))]
@@ -3023,6 +3041,8 @@ use ash_protocol::Session;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionExecutionTarget;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionKind;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionManagerActivity;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionManagerInfo;
@@ -3036,8 +3056,6 @@ use ash_protocol::SessionRuntimeResult;
 use ash_protocol::SessionSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionStatus;
-#[cfg(any(test, feature = "export"))]
-use ash_protocol::SessionSurface;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionThread;
 #[cfg(any(test, feature = "export"))]
@@ -3158,6 +3176,8 @@ use ash_protocol::TurnLoopAction;
 use ash_protocol::TurnLoopDecision;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TurnLoopReason;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::TurnSkillLoad;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TurnStatus;
 #[cfg(any(test, feature = "export"))]
@@ -3842,7 +3862,7 @@ client_methods! {
         params: EmptyParams, response: (), serialization: GlobalExclusive,
     },
     AutomationList => "automation/list" {
-        params: EmptyParams, response: AutomationListResult, serialization: None,
+        params: AutomationListParams, response: AutomationListResult, serialization: None,
     },
     AutomationPreview => "automation/preview" {
         params: AutomationPreviewParams, response: AutomationPreviewResult, serialization: None,
@@ -3952,6 +3972,8 @@ client_methods! {
     VoiceOptions => "voice/options" { params: EmptyParams, response: VoiceOptions, serialization: GlobalSharedRead, },
     SpeechInstructionsRead => "speech/instructions/read" { params: SpeechInstructionsReadParams, response: SpeechInstructionsDocument, serialization: GlobalSharedRead, },
     SpeechInstructionsWrite => "speech/instructions/write" { params: SpeechInstructionsWriteParams, response: SpeechInstructionsWriteResult, serialization: GlobalExclusive, },
+    StorageOverview => "storage/overview" { params: EmptyParams, response: StorageOverview, serialization: None, },
+    StorageWorktreeCleanup => "storage/worktree/cleanup" { params: StorageWorktreeCleanupParams, response: (), serialization: SessionExclusive, },
     VoiceStart => "voice/start" { params: VoiceStartParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), cancellation: "operationId" => PreserveOutcome, },
     VoiceStartCancel => "voice/start/cancel" { params: VoiceStartCancelParams, response: (), serialization: None, },
     VoiceRead => "voice/read" { params: VoiceResourceParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), },
@@ -4275,6 +4297,11 @@ client_methods! {
     },
     ProjectDetailsUpdate => "project/details/update" {
         params: ProjectDetailsUpdateParams,
+        response: ProjectMutationResult,
+        serialization: GlobalExclusive,
+    },
+    ProjectAppearanceUpdate => "project/appearance/update" {
+        params: ProjectAppearanceUpdateParams,
         response: ProjectMutationResult,
         serialization: GlobalExclusive,
     },
@@ -5879,6 +5906,11 @@ client_methods! {
         response: TerminalAttachResult,
         serialization: None,
     },
+    TerminalCommandSession => "terminal/commandSession" {
+        params: TerminalCommandSessionParams,
+        response: TerminalCommandSessionResult,
+        serialization: None,
+    },
     TerminalWrite => "terminal/write" {
         params: TerminalWriteParams,
         response: (),
@@ -6740,6 +6772,8 @@ typescript_bindings! {
     crate::protocol::app_tools::AppToolsCapability,
     crate::protocol::app_tools::AppHostRequestParams,
     crate::protocol::app_tools::AppHostOperation,
+    crate::protocol::app_tools::ModelComparisonWorkspaceMode,
+    crate::protocol::app_tools::ModelComparisonSelection,
     crate::protocol::app_tools::AppHostResult,
     TextDocumentsCapability,
     ExtensionClientOperation,
@@ -6789,6 +6823,9 @@ typescript_bindings! {
     SpeechInstructionsDocument,
     SpeechInstructionsWriteParams,
     SpeechInstructionsWriteResult,
+    StorageOverview,
+    StorageWorktree,
+    StorageWorktreeCleanupParams,
     VoiceStartParams,
     VoiceInputControl,
     VoiceInputMode,
@@ -7134,7 +7171,7 @@ typescript_bindings! {
     DirectoryGrantsForgetParams,
     SessionStatus,
     SessionSource,
-    SessionSurface,
+    SessionKind,
     SessionManagerStatus,
     SessionManagerActivity,
     SessionManagerInfo,
@@ -7375,6 +7412,7 @@ typescript_bindings! {
     TurnKind,
     TurnInstructions,
     Turn,
+    TurnSkillLoad,
     Thread,
     ToolExecutionAuthority,
     ToolOutputArtifact,
@@ -7556,6 +7594,8 @@ typescript_bindings! {
     memories::MemoryId,
     memories::MemoryScope,
     memories::MemorySource,
+    memories::MemoryTurnSource,
+    memories::MemoryNamespace,
     memories::Memory,
     memories::MemorySummary,
     memories::MemoryListPage,
@@ -7585,6 +7625,7 @@ typescript_bindings! {
     MessageHistoryEntry,
     MessageHistoryReadParams,
     MessageHistoryPage,
+    AutomationListParams,
     AutomationListResult,
     AutomationPreviewParams,
     AutomationPreviewResult,
@@ -7607,6 +7648,8 @@ typescript_bindings! {
     ProjectReadResult,
     ProjectCreateParams,
     ProjectDetailsUpdateParams,
+    ProjectAppearanceFieldDto,
+    ProjectAppearanceUpdateParams,
     ProjectRootAddParams,
     ProjectRootUpdateParams,
     ProjectRootRemoveParams,
@@ -8046,6 +8089,9 @@ typescript_bindings! {
     TerminalReconnectLease,
     TerminalAttachParams,
     TerminalAttachResult,
+    TerminalCommandSessionParams,
+    TerminalCommandSessionAction,
+    TerminalCommandSessionResult,
     TerminalWriteParams,
     TerminalWriteBinaryParams,
     TerminalProcessReady,

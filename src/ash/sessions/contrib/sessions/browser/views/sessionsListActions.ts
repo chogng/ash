@@ -4,10 +4,14 @@ import { localize } from '../../../../../nls.js';
 import type { IProjectService } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionsListModelService, SessionSortDirection, SessionSortMode, SessionsListMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
 
+export function getSessionsListAttentionHelp(): string {
+	return localize('sessions.list.attentionHelp', 'In More Sessions Actions, choose Show, then Needs Attention to group background sessions waiting for input or with failing checks. Press Enter on a row to open the conversation that needs attention.');
+}
+
 export interface SessionListProjectOrganization {
 	readonly current?: string;
 	readonly destinations: readonly { readonly id: string; readonly title: string; }[];
-	readonly loadDestinations?: (signal: AbortSignal) => Promise<SessionListProjectOrganization['destinations']>;
+	readonly createAndMove?: (name: string) => Promise<void>;
 	move(projectId: string | undefined): Promise<void>;
 }
 
@@ -32,20 +36,33 @@ export function sessionProjectOrganization(
 }
 
 export function sessionListProjectActions(
+	mode: SessionsListMode,
 	project: SessionListProjectOrganization,
-	destinations: SessionListProjectOrganization['destinations'],
 	run: (operation: () => Promise<void>) => Promise<void>,
+	promptName: () => Promise<string | undefined>,
 ): readonly IAction[] {
-	const targets = destinations.map(({ id, title }): IAction => ({
+	const projectIcon = mode === 'code' ? Lxicon.folder : Lxicon.projects;
+	const targets = project.destinations.filter(({ id }) => id !== project.current).map(({ id, title }): IAction => ({
 		id: `sessions.list.moveToProject.${id}`, label: title, tooltip: title,
-		checked: id === project.current, enabled: id !== project.current, run: () => run(() => project.move(id)),
+		icon: projectIcon, enabled: true, run: () => run(() => project.move(id)),
 	}));
-	const move = new SubmenuAction('sessions.list.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'),
-		targets.length ? targets : [{ id: 'sessions.list.noProjectDestination', label: localize('sessions.chatgpt.noProjects', 'No projects'), tooltip: '', enabled: false, run: () => { } }], Lxicon.folder);
-	return project.current ? [move, {
+	const createAndMove = project.createAndMove;
+	const newProject = localize('sessions.list.newProject', 'New project');
+	const create = createAndMove ? [{
+		id: 'sessions.list.createProjectAndMove', label: newProject, tooltip: newProject, icon: Lxicon.add, enabled: true,
+		run: () => run(async () => {
+			const name = await promptName();
+			if (name) await createAndMove(name);
+		}),
+	}] : [];
+	const destinations = Separator.join(create, targets);
+	const actions: IAction[] = [];
+	if (destinations.length) actions.push(new SubmenuAction('sessions.list.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), destinations, projectIcon));
+	if (project.current) actions.push({
 		id: 'sessions.list.removeFromProject', label: localize('sessions.list.removeFromProject', 'Remove from project'),
 		tooltip: '', enabled: true, run: () => run(() => project.move(undefined)),
-	}] : [move];
+	});
+	return actions;
 }
 
 export function sessionSortActions(model: ISessionsListModelService, mode: SessionsListMode): IAction[] {

@@ -494,7 +494,7 @@ export class SessionWorkspacePicker extends Disposable {
 							run: () => { if (isCurrent()) return this.selectWorkspace(draft, 'folder', selectionFromResource(folder), project.id); },
 						});
 						return {
-							id: `sessions.project.${project.id}`, label: project.name, icon: Lxicon.projects,
+							id: `sessions.project.${project.id}`, label: project.name, icon: Lxicon.folder,
 							tooltip: folders.length === 1 ? folders[0]!.fsPath : project.name, enabled: true,
 							checked: draft.projectId === project.id,
 							submenu: folders.length > 1 ? folders.map(chooseFolder) : undefined,
@@ -704,6 +704,7 @@ export class WorkspacePicker extends Disposable {
 			onError: error => this.reportError(error),
 			listOptions: {
 				className: 'ash-action-widget-accent-checks',
+				menuIconPlacement: 'leading-with-trailing-check',
 				showRowTooltips: true,
 				showFilter: true,
 				focusFilterOnOpen: true,

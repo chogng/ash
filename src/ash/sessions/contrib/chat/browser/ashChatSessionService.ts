@@ -73,7 +73,7 @@ export class AshChatSessionService extends Disposable implements IAshChatSession
 			// Retain the original command identity so pre-upgrade drafts can retry a first send.
 			commandId: `desktop-session-${draftId}`,
 			title: '',
-			surface: 'chat',
+			kind: 'chat',
 			executionTarget: null,
 			agent: { type: 'default' },
 		});
@@ -81,7 +81,7 @@ export class AshChatSessionService extends Disposable implements IAshChatSession
 		// Creation acquires a Session lease. The editor subscribes only to its selected Thread.
 		await this.host.session.unsubscribe({ sessionId: session.sessionId });
 		if (!this.isCurrent(epoch)) throw canceled();
-		if (session.surface !== 'chat') {
+		if (session.kind !== 'chat') {
 			throw new Error(localize('sessions.create.chatSurfaceUnavailable', 'This host cannot create an Ash Chat conversation.'));
 		}
 		const root = session.threads.find(thread => thread.status === 'active' && !thread.parentThreadId && !thread.forkedFromId);
@@ -91,7 +91,7 @@ export class AshChatSessionService extends Disposable implements IAshChatSession
 
 	async read(sessionId: string): Promise<AgentSession | undefined> {
 		const session = await this.readCatalogEntry(sessionId);
-		return session?.surface === 'chat' ? session : undefined;
+		return session?.kind === 'chat' ? session : undefined;
 	}
 
 	private async loadCatalog(): Promise<void> {
@@ -108,7 +108,7 @@ export class AshChatSessionService extends Disposable implements IAshChatSession
 			this.subscribed = true;
 			const conversations: AgentSession[] = [];
 			for (const session of sessions) {
-				if (session.surface === 'chat') conversations.push(session);
+				if (session.kind === 'chat') conversations.push(session);
 				else this.otherSessions.add(session.sessionId);
 			}
 			this.sessions.set(conversations);
@@ -121,7 +121,7 @@ export class AshChatSessionService extends Disposable implements IAshChatSession
 	}
 
 	private invalidate(sessionId: string): void {
-		// Creation fixes a record's surface, so Code updates need no Chat catalog read.
+		// Creation fixes a record's kind, so Code updates need no Chat catalog read.
 		if (!this.started || this.otherSessions.has(sessionId)) return;
 		this.pendingChanges.add(sessionId);
 		if (this.subscribed && !this.refreshing) this.refresh.schedule();
@@ -142,7 +142,7 @@ export class AshChatSessionService extends Disposable implements IAshChatSession
 			if (this.pendingChanges.has(id)) continue;
 			if (result.status === 'rejected') {
 				this.report(result.reason);
-			} else if (result.value?.surface === 'chat') {
+			} else if (result.value?.kind === 'chat') {
 				next.set(id, result.value);
 			} else {
 				next.delete(id);

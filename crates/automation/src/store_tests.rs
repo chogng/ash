@@ -26,6 +26,41 @@ fn request(directory: &Path) -> AutomationWrite {
 }
 
 #[test]
+fn concurrent_open_adopts_legacy_automation_plans_and_receipts() {
+    let directory = tempfile::tempdir().unwrap();
+    for legacy in [false, true] {
+        let path = directory.path().join(format!("state-{legacy}.sqlite3"));
+        let request = request(directory.path());
+        let expected = legacy.then(|| {
+            let store = AutomationStore::open(&path).unwrap();
+            let plan = store.write(&request, time(0)).unwrap();
+            drop(store);
+            rusqlite::Connection::open(&path)
+                .unwrap()
+                .execute(
+                    "DELETE FROM ash_schema_migrations WHERE component = 'automation'",
+                    [],
+                )
+                .unwrap();
+            plan
+        });
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let store = AutomationStore::open(&path).unwrap();
+                    assert_eq!(store.list().unwrap().as_slice(), expected.as_slice());
+                    if let Some(plan) = &expected {
+                        assert_eq!(&store.write(&request, time(50_000)).unwrap(), plan);
+                    }
+                });
+            }
+        });
+    }
+}
+
+#[test]
 fn writes_replay_exactly_and_reject_conflicting_commands_and_revisions() {
     let dir = tempfile::tempdir().unwrap();
     let store = AutomationStore::open(&dir.path().join("state.db")).unwrap();

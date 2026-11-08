@@ -5,11 +5,11 @@ import { strict as assert } from 'node:assert';
 import { dirname, join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { launchElectron, launchElectronApplication } from '../../../automation/playwrightElectron.js';
-import { Workbench } from '../../../automation/workbench.js';
+import { launchPackagedDesktop } from '../../../automation/packagedDesktop.js';
 import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench.js';
+import { Workbench } from '../../../automation/workbench.js';
 
-test('Desktop package omits standalone Node and retains its Electron binding after quit and a TUI restart', { tag: ['@win32', '@darwin'] }, async ({ }, testInfo) => {
+test('Desktop package disables the Main inspector, omits standalone Node and retains its Electron binding after quit and a TUI restart', { tag: ['@win32', '@darwin'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a delivered Desktop bundle.');
@@ -38,20 +38,12 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 	for (const name of ['ASH_ELECTRON_RUN_AS_NODE_PATH', 'ASH_ELECTRON_RUN_AS_NODE_SHA256', 'ASH_ELECTRON_RUNTIME_BINDING', 'ASH_ELECTRON_RUNTIME_AVAILABLE']) delete carrierEnvironment[name];
 	const lifecycle = async (operation: string) => JSON.parse((await promisify(execFile)(daemon, [operation], { env: carrierEnvironment, timeout: 20_000, windowsHide: true })).stdout);
 	// This scenario owns daemon cleanup so quitting Electron does not tear down the shared backend.
-	const desktop = await launchElectron({ packagedBundle: bundlePath, appServerMode: 'required', startupTimeout: 60_000, userDataDirectory, profileDirectory: profile, workspaceDirectory, workspacePermissions: 'development', environment });
+	let desktop: Awaited<ReturnType<typeof launchPackagedDesktop>> | undefined;
 	try {
-		const page = await desktop.application.firstWindow();
-		await new Workbench(page).waitForReady();
-		const electronVersion = await desktop.application.evaluate(() => process.versions.electron);
-		expect(metadata.javascriptRuntime.electronVersion).toBe(electronVersion);
+		desktop = await launchPackagedDesktop({ packagedBundle: bundlePath, startupTimeout: 60_000, userDataDirectory, profileDirectory: profile, workspaceDirectory, workspacePermissions: 'development', environment, extraArgs: ['--inspect-brk=127.0.0.1:0'] });
 		const before = await lifecycle('version');
 		expect(before.status).toBe('running');
-		const electronProcess = desktop.application.process();
-		const quitting = desktop.application.evaluate(({ app }) => app.quit());
-		// The background daemon can retain inherited handles after Main exits. Observe the real
-		// process exit before waiting for Playwright's pipe-close acknowledgement.
-		void quitting.catch(() => { });
-		await expect.poll(() => electronProcess.exitCode, { timeout: 15_000 }).toBe(0);
+		await desktop.quit();
 		const afterQuit = await lifecycle('version');
 		expect(afterQuit.pid).toBe(before.pid);
 		const restarted = await lifecycle('restart');
@@ -61,13 +53,13 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 		const selected = (await readdir(directory)).filter(name => /^\d{20}\.json$/u.test(name)).sort().at(-1)!;
 		const selection = JSON.parse(await readFile(join(directory, selected), 'utf8'));
 		expect(selection.formatVersion).toBe(1);
-		expect(selection.installation.electronVersion).toBe(electronVersion);
+		expect(selection.installation.electronVersion).toBe(metadata.javascriptRuntime.electronVersion);
 		const expectedExecutable = process.platform === 'darwin' ? join(bundlePath, 'Contents', 'MacOS', 'Ash') : join(bundlePath, 'Ash.exe');
 		expect(selection.installation.executable).toBe(await realpath(expectedExecutable));
 		expect(selection.installation.sha256).toMatch(/^[a-f0-9]{64}$/u);
 	} finally {
+		await desktop?.close();
 		await lifecycle('stop');
-		await desktop.close();
 		const absolute = await realpath(userDataDirectory);
 		assert.equal(dirname(absolute), await realpath(tmpdir()));
 		assert(absolute.startsWith(join(await realpath(tmpdir()), 'ash-')));
@@ -101,43 +93,27 @@ test('Desktop package saves files, renders Markdown, executes a terminal command
 	}
 });
 
-test('macOS package launches, opens a window tab, and installs its shell command', { tag: ['@darwin'] }, async ({ }, testInfo) => {
+test('macOS package launches with a Dock icon and opens a native window tab', { tag: ['@darwin'] }, async ({ }, testInfo) => {
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
 	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Ash.app directory.');
 	const bundlePath = resolve(bundle!);
 	const userDataDirectory = testInfo.outputPath('user-data');
-	const shellBin = join(userDataDirectory, '.local', 'bin');
-	await mkdir(shellBin, { recursive: true });
+	const homeDirectory = join(userDataDirectory, 'home');
 	const environment = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined));
 	delete environment.ASH_DESKTOP_UI_ONLY;
 	environment.ASH_HOME = join(userDataDirectory, 'profile');
-	environment.HOME = userDataDirectory;
-	environment.PATH = `${shellBin}:${environment.PATH ?? ''}`;
-	environment.SHELL = '/bin/sh';
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;
-	const desktop = await launchElectronApplication({ packagedBundle: bundlePath, appServerMode: 'required', userDataDirectory, environment });
-	const { application } = desktop;
+	const desktop = await launchPackagedDesktop({ packagedBundle: bundlePath, userDataDirectory, homeDirectory, environment, windowMode: 'active' });
+	const { page } = desktop;
 	try {
-		const page = await application.firstWindow();
-		await new Workbench(page).waitForReady();
-		expect(await application.evaluate(({ app }) => ({ packaged: app.isPackaged, dockVisible: app.dock!.isVisible() }))).toEqual({ packaged: true, dockVisible: true });
-		const commandPath = await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			return ipc.invoke('ash:native-host:shell-command', 'install') as Promise<string>;
-		});
-		await access(commandPath);
-		expect(await readFile(commandPath, 'utf8')).toContain(bundlePath);
-		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			await ipc.invoke('ash:native-host:shell-command', 'uninstall');
-		});
-		expect(await access(commandPath).then(() => true, () => false)).toBe(false);
-		await page.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-			await ipc.invoke('ash:window:operation', { kind: 'newTab' });
-		});
-		await expect.poll(() => application.windows().length).toBe(2);
+		const { stdout: activationPolicy } = await promisify(execFile)('/usr/bin/osascript', ['-l', 'JavaScript', '-e',
+			'ObjC.import("AppKit"); function run(argv) { return $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(argv[0])).activationPolicy; }',
+			String(desktop.process.pid),
+		]);
+		expect(activationPolicy.trim()).toBe('0'); // NSApplicationActivationPolicyRegular has a Dock icon.
+		await new Workbench(page).quickaccess.runCommand('workbench.action.newWindowTab');
+		await expect.poll(() => page.context().pages().filter(candidate => /\/workbench\/workbench\.html(?:[?#].*)?$/u.test(candidate.url())).length).toBe(2);
 	} finally {
 		await desktop.close();
 	}

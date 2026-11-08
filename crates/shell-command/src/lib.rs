@@ -5,6 +5,7 @@
 //! `ash-tool-executor`.
 
 mod ripgrep;
+pub mod shell_review;
 
 pub use ripgrep::{
     BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError,
@@ -31,8 +32,9 @@ use std::path::PathBuf;
 pub use ash_tool_executor::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
     CommandSessionCursor, CommandSessionId, CommandSessionOptions, CommandSessionOwner,
-    CommandSessionStart, CommandSessionStatus, CommandSessionUpdate, CommandTerminalSize,
-    ExecutionError, ExecutionLimits as ShellCommandLimits,
+    CommandSessionStart, CommandSessionStatus, CommandSessionUpdate, CommandTerminalOutput,
+    CommandTerminalReader, CommandTerminalSize, ExecutionError,
+    ExecutionLimits as ShellCommandLimits,
 };
 
 /// Error raised while constructing the shell-command executor.
@@ -194,6 +196,14 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         wait_budget: std::time::Duration,
     ) -> Result<CommandSessionUpdate, ExecutionError> {
         self.executor.read_session(owner, id, cursor, wait_budget)
+    }
+
+    pub fn command_terminal_reader(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+    ) -> Result<CommandTerminalReader, ExecutionError> {
+        self.executor.command_terminal_reader(owner, id)
     }
 
     /// Observes completion of an existing command without rerunning it or returning progress.
@@ -363,7 +373,11 @@ pub struct ShellCommandRequest {
 
 impl ShellCommandRequest {
     /// Attaches trusted host overrides after decoding model-supplied tool arguments.
-    pub fn with_environment(mut self, environment: ash_tool_executor::CommandEnvironment) -> Self {
+    pub fn with_environment(
+        mut self,
+        mut environment: ash_tool_executor::CommandEnvironment,
+    ) -> Self {
+        shell_review::filter_shell_startup(&self.program, &self.arguments, &mut environment);
         self.environment = environment;
         self
     }

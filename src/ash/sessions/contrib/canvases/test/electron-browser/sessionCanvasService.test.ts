@@ -10,7 +10,8 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { CanvasesEnabledSettingId } from '../../../../../platform/agentHost/common/agentService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import type { CanvasInput, ICanvasOwner } from '../../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvasOwner } from '../../../../../workbench/common/canvasReference.js';
+import type { CanvasInput } from '../../../../../workbench/contrib/canvases/common/canvas.js';
 import type { IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { SessionCanvasContextService } from '../../electron-browser/sessionCanvasService.js';

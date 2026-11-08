@@ -1,5 +1,6 @@
 """Check staged pairs enter the real Bazel graph with the matching ABI."""
 
+import json
 import tempfile
 import tarfile
 import unittest
@@ -9,7 +10,12 @@ from unittest.mock import patch
 from build.download.artifacts import sha256
 from build.lib.v8 import load_v8_lock
 from build.v8.release import checksum_name, source_lock
-from build.v8.smoke import bazel_arguments, pair_environment, prepare_musl_linker
+from build.v8.smoke import (
+    bazel_arguments,
+    build_cargo_probe,
+    pair_environment,
+    prepare_musl_linker,
+)
 
 
 class V8SmokeTests(unittest.TestCase):
@@ -102,6 +108,25 @@ class V8SmokeTests(unittest.TestCase):
         self.paths[1].write_bytes(b"corrupt")
         with self.assertRaisesRegex(ValueError, "checksum validation"):
             pair_environment(self.target, self.directory)
+
+    def test_cross_probe_copies_the_test_executable_for_the_staged_pair(self):
+        executable = self.directory / "ash_v8_poc-fixture.exe"
+        executable.write_bytes(b"linked probe")
+        output = self.directory / "probe"
+        with patch("build.v8.smoke.subprocess.run") as cargo:
+            cargo.return_value.stdout = json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "target": {"name": "ash_v8_poc", "kind": ["lib"]},
+                    "profile": {"test": True},
+                    "executable": str(executable),
+                }
+            )
+            build_cargo_probe(self.target, self.directory, output)
+        self.assertEqual((output / "v8-probe.exe").read_bytes(), b"linked probe")
+        self.assertIn("--no-run", cargo.call_args.args[0])
+        for key, value in pair_environment(self.target, self.directory).items():
+            self.assertEqual(cargo.call_args.kwargs["env"][key], value)
 
     def test_musl_linker_uses_one_crt_provider(self):
         pin, output = self.musl_toolchain_fixture()

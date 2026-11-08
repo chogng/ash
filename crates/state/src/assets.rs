@@ -1,5 +1,7 @@
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use assets::AssetError;
 use assets::AssetStore;
 use assets::AssetVersion;
@@ -13,6 +15,17 @@ use rusqlite::params;
 use std::path::Path;
 use std::sync::Mutex;
 
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "assets",
+    &[
+        Migration::sql(1, include_str!("../migrations/assets/0001_assets.sql")),
+        Migration::sql(
+            2,
+            include_str!("../migrations/assets/0002_collections_and_favorites.sql"),
+        ),
+    ],
+);
+
 /// Profile-local asset catalog and content. One transaction publishes both the immutable version
 /// and its original bytes, so recovery never exposes a version whose content was not committed.
 pub struct SqliteAssetStore {
@@ -23,51 +36,7 @@ impl SqliteAssetStore {
     pub fn open(path: &Path) -> Result<Self, AssetError> {
         let mut connection =
             open_sqlite_database(path, SqliteDurability::Durable).map_err(AssetError::Storage)?;
-        let transaction = connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(storage_error)?;
-        transaction.execute_batch("CREATE TABLE IF NOT EXISTS ash_schema_migrations (component TEXT PRIMARY KEY, version INTEGER NOT NULL);").map_err(storage_error)?;
-        let version: Option<u32> = transaction
-            .query_row(
-                "SELECT version FROM ash_schema_migrations WHERE component = 'assets'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(storage_error)?;
-        match version {
-            None => {
-                transaction.execute_batch("CREATE TABLE asset_contents (sha256 TEXT PRIMARY KEY, bytes BLOB NOT NULL);
-                    CREATE TABLE assets (asset_id TEXT PRIMARY KEY);
-                    CREATE TABLE asset_versions (
-                        version_id TEXT PRIMARY KEY, asset_id TEXT NOT NULL REFERENCES assets(asset_id),
-                        name TEXT NOT NULL, source TEXT NOT NULL, sha256 TEXT NOT NULL REFERENCES asset_contents(sha256),
-                        media_type TEXT NOT NULL, size INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL);
-                    CREATE INDEX asset_versions_asset ON asset_versions(asset_id);
-                    INSERT INTO ash_schema_migrations VALUES ('assets', 1);").map_err(storage_error)?;
-            }
-            Some(1 | 2) => {}
-            Some(version) => {
-                return Err(AssetError::Storage(format!(
-                    "unsupported asset schema version {version}"
-                )));
-            }
-        }
-        if version != Some(2) {
-            transaction
-                .execute_batch(
-                    "ALTER TABLE assets ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0;
-                ALTER TABLE asset_versions ADD COLUMN added_at INTEGER NOT NULL DEFAULT 0;
-                CREATE TABLE asset_collections (id TEXT PRIMARY KEY, name TEXT NOT NULL);
-                CREATE TABLE asset_collection_entries (
-                    asset_id TEXT NOT NULL REFERENCES assets(asset_id),
-                    collection_id TEXT NOT NULL REFERENCES asset_collections(id) ON DELETE CASCADE,
-                    PRIMARY KEY (asset_id, collection_id));
-                UPDATE ash_schema_migrations SET version = 2 WHERE component = 'assets';",
-                )
-                .map_err(storage_error)?;
-        }
-        transaction.commit().map_err(storage_error)?;
+        MIGRATOR.run(&mut connection).map_err(AssetError::Storage)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

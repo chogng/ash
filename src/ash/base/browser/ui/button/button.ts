@@ -5,10 +5,10 @@ import { Separator, type IAction, type IActionRunner } from '../../../common/act
 import { CancellationTokenSource } from '../../../common/cancellation.js';
 import { DomEmitter, type DOMEventMap } from '../../event.js';
 import { FastDomNode } from '../../fastDomNode.js';
-import { observeElementSize } from '../../observer.js';
+import { observeElementSize, observeResize } from '../../observer.js';
 import type { Icon } from '../../../common/icon.js';
 import type { Event } from '../../../common/event.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
 import { setAriaAttribute } from '../aria/aria.js';
 import type { AnchorPosition } from '../contextview/contextview.js';
 import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
@@ -40,6 +40,7 @@ export interface IButtonStyles {
 
 export interface IButtonOptions extends Partial<IButtonStyles> {
 	label: string;
+	supportShortLabel?: boolean;
 	icon?: Icon;
 	ariaLabel?: string;
 	iconOnly?: boolean;
@@ -67,11 +68,13 @@ export class Button extends Disposable {
 	readonly domNode: HTMLButtonElement;
 	private readonly root: FastDomNode<HTMLButtonElement>;
 	private readonly content = this._register(new MutableDisposable<IconLabel>());
+	private readonly shortLabelContent: MutableDisposable<IDisposable & { readonly element: HTMLElement; }> | undefined;
 	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly hoverGroupId: string | undefined;
 	private readonly hoverAnchorPosition: AnchorPosition | undefined;
 	private readonly usesLabelAsAriaLabel: boolean;
 	private currentIcon: Icon | undefined;
+	private currentPresentation: ButtonPresentation;
 	readonly onDidClick: Event<DOMEventMap['click']>;
 
 	constructor(container: HTMLElement, options: IButtonOptions) {
@@ -80,7 +83,9 @@ export class Button extends Disposable {
 		this.hoverGroupId = options.hoverGroupId;
 		this.hoverAnchorPosition = options.hoverAnchorPosition;
 		this.usesLabelAsAriaLabel = options.iconOnly === true && options.ariaLabel === undefined;
+		if (options.supportShortLabel) this.shortLabelContent = this._register(new MutableDisposable());
 		this.currentIcon = options.icon;
+		this.currentPresentation = options.presentation ?? 'quiet';
 		const domNode = h(ownerDocument, 'button', {
 			properties: {
 				type: options.type ?? 'button',
@@ -91,7 +96,7 @@ export class Button extends Disposable {
 		const root = new FastDomNode(domNode);
 		root.setClassName([
 			'ash-button',
-			`ash-button-${options.presentation ?? 'quiet'}`,
+			`ash-button-${this.currentPresentation}`,
 			`ash-button-${options.size ?? 'standard'}`,
 			options.iconOnly === true && 'icon-only',
 			options.contentAlignment === 'labelCentered' && 'label-centered',
@@ -148,18 +153,59 @@ export class Button extends Disposable {
 	hasFocus(): boolean { return this.domNode.ownerDocument.activeElement === this.domNode; }
 
 	set label(value: string) {
-		if (!value && !this.currentIcon) this.content.clear();
+		if (!value && !this.currentIcon) this.clearContent();
 		else this.getContent().setLabel(value, undefined, { icon: this.currentIcon });
 		if (this.usesLabelAsAriaLabel) setAriaAttribute(this.domNode, 'label', value);
 	}
 	get label(): string { return this.content.value?.labelElement.textContent ?? ''; }
 
+	/** Supplies a visual fallback when the full label cannot fit. */
+	set labelShort(value: string) {
+		const shortLabelContent = this.shortLabelContent;
+		if (!shortLabelContent) return;
+		if (!value) {
+			shortLabelContent.clear();
+			return;
+		}
+		if (!shortLabelContent.value) {
+			const { labelElement } = this.getContent();
+			const labels = labelElement.parentElement!;
+			const shortLabel = h(this.domNode.ownerDocument, 'span', {
+				className: 'ash-button-label-short',
+				attributes: { 'aria-hidden': 'true' },
+			});
+			labelElement.after(shortLabel);
+			labels.classList.add('ash-button-adaptive-label');
+			const observer = observeResize([labels, labelElement], () => {
+				labels.classList.toggle('short-label', labelElement.getBoundingClientRect().width > labels.getBoundingClientRect().width);
+			});
+			shortLabelContent.value = Object.assign(toDisposable(() => {
+				observer.dispose();
+				shortLabel.remove();
+				labels.classList.remove('ash-button-adaptive-label', 'short-label');
+			}), { element: shortLabel });
+		}
+		if (shortLabelContent.value.element.textContent !== value) shortLabelContent.value.element.textContent = value;
+	}
+
+	private clearContent(): void {
+		this.shortLabelContent?.clear();
+		this.content.clear();
+	}
+
 	set icon(value: Icon | undefined) {
 		this.currentIcon = value;
-		if (!value && !this.label) this.content.clear();
+		if (!value && !this.label) this.clearContent();
 		else this.getContent().setIcon(value);
 	}
 	get icon(): Icon | undefined { return this.currentIcon; }
+
+	set presentation(value: ButtonPresentation) {
+		if (this.currentPresentation === value) return;
+		this.root.toggleClassName(`ash-button-${this.currentPresentation}`, false);
+		this.root.toggleClassName(`ash-button-${value}`, true);
+		this.currentPresentation = value;
+	}
 
 	toggleClassName(className: string, shouldHaveIt?: boolean): void {
 		this.root.toggleClassName(className, shouldHaveIt);

@@ -8,7 +8,7 @@ pub(super) fn session(
     activity: Option<SessionManagerActivity>,
 ) -> Session {
     Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),

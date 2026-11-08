@@ -3,9 +3,8 @@ import './media/actions.css';
 import { Keybinding, logicalKey } from '../../../base/common/keybindings.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../base/common/platform.js';
-import { getActiveWindow, getWindow } from '../../../base/browser/dom.js';
 import { mainWindow } from '../../../base/browser/window.js';
-import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { getWindowCommandTarget } from '../../browser/actions/windowActions.js';
 
 import { Action2, MenuId } from '../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
@@ -20,13 +19,6 @@ import { IsAuxiliaryWindowContext, IsWindowAlwaysOnTopContext } from '../../comm
 
 interface WindowPickItem extends IQuickPickItem {
 	readonly windowId: number;
-}
-
-function getWindowCommandTarget(accessor: ServicesAccessor): Window {
-	const focused = getActiveWindow();
-	// Same-renderer popups can leave both documents reporting focus. The layout owner
-	// tracks input in each window and disambiguates the main-document fallback.
-	return focused === mainWindow ? getWindow(accessor.get(ILayoutService).activeContainer) : focused;
 }
 
 async function applyWindowZoom(accessor: ServicesAccessor, level: number, windowName?: string): Promise<void> {
@@ -196,9 +188,9 @@ export class EnableWindowAlwaysOnTopAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		const target = getWindowCommandTarget(accessor);
-		return accessor.get(INativeHostService).setAlwaysOnTop(true, target === mainWindow ? undefined : target.name);
+	override async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
+		const target = getWindowCommandTarget(accessor, args);
+		if (target) await accessor.get(INativeHostService).setAlwaysOnTop(true, target === mainWindow ? undefined : target.name);
 	}
 }
 
@@ -218,9 +210,9 @@ export class DisableWindowAlwaysOnTopAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): Promise<void> {
-		const target = getWindowCommandTarget(accessor);
-		return accessor.get(INativeHostService).setAlwaysOnTop(false, target === mainWindow ? undefined : target.name);
+	override async run(accessor: ServicesAccessor, ...args: unknown[]): Promise<void> {
+		const target = getWindowCommandTarget(accessor, args);
+		if (target) await accessor.get(INativeHostService).setAlwaysOnTop(false, target === mainWindow ? undefined : target.name);
 	}
 }
 

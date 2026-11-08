@@ -280,6 +280,7 @@ fn status_line_context_follows_thread_snapshots() {
             status: ash_protocol::TurnStatus::Completed,
             kind: Default::default(),
             instructions: None,
+            directory: None,
             model: Some(model),
             reasoning_effort: None,
             tool_profile: None,
@@ -294,6 +295,7 @@ fn status_line_context_follows_thread_snapshots() {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
     };

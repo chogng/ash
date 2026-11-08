@@ -26,7 +26,7 @@ test('Real Prompt catalog pins nested resources, reports diagnostics and preserv
 	const page = await workbench.openAgentsWindow(target.kind);
 	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 	try {
-		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'c-skill-session', title: 'C Prompt fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'c-skill-session', kind: 'code', title: 'C Prompt fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		await page.locator('.ash-sessions-list-item').filter({ hasText: 'C Prompt fixture' }).click();
 		const backend = createAppServerSkillOperations(connection.client);
@@ -69,7 +69,7 @@ test('Hook management preserves filter and disclosure after its owning configura
 		? await connectProfile(application, webAppServer, testWorkspace.directory, page, { directoryGrantsHost: true })
 		: await connectTraceAppServer(application, page, testWorkspace.directory);
 	try {
-		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'c-hooks-session', title: 'C Hook fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'c-hooks-session', kind: 'code', title: 'C Hook fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const threadId = created.session.threads[0]!.threadId;
 		const thread = await connection.client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });

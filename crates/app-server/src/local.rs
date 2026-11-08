@@ -108,6 +108,7 @@ pub struct AppServerOptions {
     pub profile_root: PathBuf,
     codex_home: Option<PathBuf>,
     grok_auth_path: Option<PathBuf>,
+    host_kimi_credentials: bool,
     host_zcode_credentials: bool,
     pub dir_config: Option<LocalDirConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
@@ -183,6 +184,7 @@ impl AppServerOptions {
             execution_environments: Vec::new(),
             codex_home: None,
             grok_auth_path: None,
+            host_kimi_credentials: false,
             host_zcode_credentials: false,
             dir_config: None,
             slash_commands: SlashCommandCatalog::default(),
@@ -231,6 +233,12 @@ impl AppServerOptions {
     /// Reads the backend host's Grok login when Ash has no xAI credential.
     pub fn with_host_grok_auth(mut self) -> Self {
         self.grok_auth_path = supergrok::grok_auth_path();
+        self
+    }
+
+    /// Exposes the backend host's Kimi Desktop and Kimi Code logins as model connections.
+    pub(crate) fn with_host_kimi_credentials(mut self) -> Self {
+        self.host_kimi_credentials = true;
         self
     }
 
@@ -463,6 +471,7 @@ impl fmt::Debug for AppServerOptions {
             )
             .field("profile_root", &self.profile_root)
             .field("codex_home", &self.codex_home)
+            .field("host_kimi_credentials", &self.host_kimi_credentials)
             .field("host_zcode_credentials", &self.host_zcode_credentials)
             .field("dir_config", &self.dir_config)
             .field("slash_commands", &self.slash_commands)
@@ -518,6 +527,7 @@ impl PartialEq for AppServerOptions {
             .eq(other.execution_environments.iter().map(|env| env.info()))
             && self.profile_root == other.profile_root
             && self.codex_home == other.codex_home
+            && self.host_kimi_credentials == other.host_kimi_credentials
             && self.host_zcode_credentials == other.host_zcode_credentials
             && self.dir_config == other.dir_config
             && self.slash_commands == other.slash_commands
@@ -856,6 +866,7 @@ pub struct LocalProfileRuntime {
     profile_root: PathBuf,
     pub(crate) terminal_host: Option<PathBuf>,
     state: Arc<ash_state::StateRuntime>,
+    stores: Arc<LocalProfileStores>,
     extension_state: Arc<ash_state::SqliteExtensionStateStore>,
     threads: Arc<ThreadController>,
     trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
@@ -873,6 +884,105 @@ pub struct LocalProfileRuntime {
     chatgpt_web: Mutex<Option<Arc<ash_chatgpt::ChatGptWebAuthentication>>>,
     editor_extension_policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     pub(crate) session_runtimes: Arc<crate::session_runtime_provider::SessionRuntimeProvider>,
+}
+
+struct LocalProfileStores {
+    backup: Arc<ash_state::SqliteBackupStore>,
+    debug_workspaces: Arc<ash_debug_manager::DebugWorkspaceStore>,
+    projects: Arc<ash_projects::ProjectCoordinator>,
+    teams: Arc<ash_teams::TeamCoordinator>,
+    assets: Arc<ash_state::SqliteAssetStore>,
+    memories: Option<Arc<memories::Memories>>,
+    approval_environment: Arc<ash_state::SqliteEnvironmentStore>,
+    notes: Arc<history_notes::NotesStore>,
+    workflows: Arc<workflows::Store>,
+    issue_cache: Mutex<Option<Arc<ash_state::SqliteIssueCache>>>,
+    turn_changes: Mutex<Option<Arc<ash_state::SqliteTurnChangeStore>>>,
+    message_board: Mutex<Option<Arc<agent_message_board::Store>>>,
+    task_delivery: Mutex<Option<Arc<task_delivery::Store>>>,
+}
+
+impl LocalProfileStores {
+    fn open(
+        state: &ash_state::StateRuntime,
+        mode: SessionStateMode,
+    ) -> Result<Self, OpenAppServerError> {
+        let path = state.database_path();
+        let memories_path = state.memories_database_path();
+        let memories = match ash_state::SqliteMemoryStore::open(memories_path) {
+            Ok(store) => Some(Arc::new(memories::Memories::new(Arc::new(store)))),
+            Err(error) => {
+                eprintln!(
+                    "App Server could not open Memories database at {memories_path:?}: {error}"
+                );
+                None
+            }
+        };
+        Ok(Self {
+            backup: Arc::new(ash_state::SqliteBackupStore::open(path).map_err(open_error)?),
+            debug_workspaces: Arc::new(
+                ash_debug_manager::DebugWorkspaceStore::open(path).map_err(open_error)?,
+            ),
+            projects: Arc::new(ash_projects::ProjectCoordinator::new(Arc::new(
+                ash_state::SqliteProjectStore::open(path).map_err(open_error)?,
+            ))),
+            teams: Arc::new(ash_teams::TeamCoordinator::new(Arc::new(
+                ash_state::SqliteTeamStore::open(path).map_err(open_error)?,
+            ))),
+            assets: Arc::new(ash_state::SqliteAssetStore::open(path).map_err(open_error)?),
+            memories,
+            approval_environment: Arc::new(
+                ash_state::SqliteEnvironmentStore::open(path).map_err(open_error)?,
+            ),
+            notes: Arc::new(
+                match mode {
+                    SessionStateMode::Durable => history_notes::NotesStore::open(path),
+                    SessionStateMode::Ephemeral => history_notes::NotesStore::in_memory(),
+                }
+                .map_err(open_error)?,
+            ),
+            workflows: Arc::new(
+                match mode {
+                    SessionStateMode::Durable => workflows::Store::open(path),
+                    SessionStateMode::Ephemeral => workflows::Store::in_memory(),
+                }
+                .map_err(open_error)?,
+            ),
+            issue_cache: Mutex::default(),
+            turn_changes: Mutex::default(),
+            message_board: Mutex::default(),
+            task_delivery: Mutex::default(),
+        })
+    }
+
+    fn issue_cache(
+        &self,
+        state: &ash_state::StateRuntime,
+    ) -> Option<Arc<ash_state::SqliteIssueCache>> {
+        let path = state.cache_root().join("github-issues.sqlite3");
+        match shared_store(&self.issue_cache, || {
+            ash_state::SqliteIssueCache::open(&path)
+        }) {
+            Ok(cache) => Some(cache),
+            Err(error) => {
+                eprintln!("App Server could not open the Issue cache at {path:?}: {error}");
+                None
+            }
+        }
+    }
+}
+
+fn shared_store<T, E: fmt::Display>(
+    slot: &Mutex<Option<Arc<T>>>,
+    open: impl FnOnce() -> Result<T, E>,
+) -> Result<Arc<T>, OpenAppServerError> {
+    let mut stored = slot.lock().map_err(open_error)?;
+    if let Some(store) = stored.as_ref() {
+        return Ok(store.clone());
+    }
+    let store = Arc::new(open().map_err(open_error)?);
+    *stored = Some(store.clone());
+    Ok(store)
 }
 
 struct ProfileExtensionsAuthority {
@@ -941,7 +1051,9 @@ impl LocalProfileRuntime {
         let profile_root = std::fs::canonicalize(&requested_root).map_err(open_error)?;
         let state = Arc::new(ash_state::StateRuntime::open(&profile_root).map_err(open_error)?);
         let database_path = state.database_path().to_path_buf();
-        let history = Arc::new(require_history_owner(&database_path)?);
+        let repository = LocalStateRepository::open(&state).map_err(open_error)?;
+        let history = repository.thread_store();
+        require_history_owner(&history)?;
         let config = Arc::new(
             ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
                 .map_err(|error| OpenAppServerError(error.0))?,
@@ -951,7 +1063,6 @@ impl LocalProfileRuntime {
             .map_err(|error| OpenAppServerError(error.0))?;
         let network_policy = OutboundNetworkPolicy::new(network_access(&snapshot.values.network));
         let attachments = open_attachments(state.profile_root(), network_policy.clone())?;
-        let repository = LocalStateRepository::open(&state).map_err(open_error)?;
         let trace_recorder = configured_trace_recorder(&snapshot);
         let threads = repository
             .recover_threads_with_attachments_and_diagnostics(
@@ -1019,6 +1130,7 @@ impl LocalProfileRuntime {
             ),
             symphony: Arc::new(ash_symphony::Store::open(&database_path).map_err(open_error)?),
             queue: Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
+            stores: Arc::new(LocalProfileStores::open(&state, SessionStateMode::Durable)?),
             state,
             extension_state: Arc::new(
                 ash_state::SqliteExtensionStateStore::open(&database_path).map_err(open_error)?,
@@ -1234,12 +1346,11 @@ pub fn open_app_server_with_cloud_providers(
     )
 }
 
-fn require_history_owner(path: &Path) -> Result<ash_state::SqliteThreadStore, OpenAppServerError> {
-    let store = ash_state::SqliteThreadStore::open(path).map_err(open_error)?;
+fn require_history_owner(store: &ash_state::SqliteThreadStore) -> Result<(), OpenAppServerError> {
     if store.history_receiver().map_err(open_error)?.is_some() {
         return Err(open_error("profile history belongs to another host"));
     }
-    Ok(store)
+    Ok(())
 }
 
 /// Opens an App Server with semantic model and/or remote index provider adapters.
@@ -1326,18 +1437,21 @@ pub fn open_app_server_with_codebase_providers(
         .as_ref()
         .map(|runtime| runtime.network_policy.clone())
         .unwrap_or_else(|| OutboundNetworkPolicy::new(NetworkAccess::Any));
-    let (database_path, threads, config, trace_recorder) =
+    let (database_path, threads, config, trace_recorder, history) =
         match (&profile_runtime, options.session_state_mode) {
             (Some(runtime), SessionStateMode::Durable) => (
                 runtime.state.database_path().to_path_buf(),
                 Arc::clone(&runtime.threads),
                 Arc::clone(&runtime.config),
                 Arc::clone(&runtime.trace_recorder),
+                Some(Arc::clone(&runtime.history)),
             ),
             (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
             (None, SessionStateMode::Durable) => {
                 let database_path = state_runtime.database_path().to_path_buf();
-                require_history_owner(&database_path)?;
+                let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
+                let history = repository.thread_store();
+                require_history_owner(&history)?;
                 let config = Arc::new(
                     ConfigStore::open_with_paths(
                         database_path.clone(),
@@ -1350,7 +1464,6 @@ pub fn open_app_server_with_codebase_providers(
                     .map_err(|error| OpenAppServerError(error.0))?;
                 network_policy.update(network_access(&snapshot.values.network));
                 let attachments = open_attachments(&options.profile_root, network_policy.clone())?;
-                let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
                 let trace_recorder = configured_trace_recorder(&snapshot);
                 let threads = repository
                     .recover_threads_with_attachments_and_diagnostics(
@@ -1358,7 +1471,13 @@ pub fn open_app_server_with_codebase_providers(
                         Some(trace_recorder.clone()),
                     )
                     .map_err(open_error)?;
-                (database_path, threads, config, trace_recorder)
+                (
+                    database_path,
+                    threads,
+                    config,
+                    trace_recorder,
+                    Some(history),
+                )
             }
             (None, SessionStateMode::Ephemeral) => {
                 let database_path = state_runtime.database_path().to_path_buf();
@@ -1382,9 +1501,16 @@ pub fn open_app_server_with_codebase_providers(
                     )
                     .with_diagnostics(trace_recorder.clone()),
                 );
-                (database_path, threads, config, trace_recorder)
+                (database_path, threads, config, trace_recorder, None)
             }
         };
+    let stores = match &profile_runtime {
+        Some(runtime) => runtime.stores.clone(),
+        None => Arc::new(LocalProfileStores::open(
+            &state_runtime,
+            options.session_state_mode,
+        )?),
+    };
     threads
         .migrate_model_providers(&model_provider_info::legacy_model_providers())
         .map_err(open_error)?;
@@ -1703,7 +1829,7 @@ pub fn open_app_server_with_codebase_providers(
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
-    let model_provider = match model_operation_client {
+    let mut model_provider = match model_operation_client {
         Some(client) => ModelProviderRuntime::with_client_and_secrets(
             provider_configs.clone(),
             telemetry.instrument_model(client),
@@ -1722,14 +1848,14 @@ pub fn open_app_server_with_codebase_providers(
     .with_kimi_oauth(Arc::clone(&kimi_oauth))
     .with_glm_accounts(glm_accounts.clone())
     .with_supergrok_oauth(Arc::clone(&supergrok_oauth));
-    let model_provider = match KimiDesktop::production() {
-        Some(desktop) => model_provider.with_kimi_desktop(Arc::new(desktop)),
-        None => model_provider,
-    };
-    let model_provider = match KimiCli::production() {
-        Some(cli) => model_provider.with_kimi_cli(Arc::new(cli)),
-        None => model_provider,
-    };
+    if options.host_kimi_credentials {
+        if let Some(desktop) = KimiDesktop::production() {
+            model_provider = model_provider.with_kimi_desktop(Arc::new(desktop));
+        }
+        if let Some(cli) = KimiCli::production() {
+            model_provider = model_provider.with_kimi_cli(Arc::new(cli));
+        }
+    }
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
     let catalog_runtime = Arc::new(
@@ -1951,7 +2077,6 @@ pub fn open_app_server_with_codebase_providers(
         ash_utils_absolute_path::AbsolutePathBuf::from_absolute(state_runtime.profile_root())
             .map_err(open_error)?,
     ));
-    let state_runtime = Arc::clone(&state_runtime);
     let server_construct = StartupTrace::span("directory-server-construct");
     let server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
@@ -2002,10 +2127,7 @@ pub fn open_app_server_with_codebase_providers(
         server.with_config_store(Arc::clone(&config))
     }
     .with_extension_state_store(extension_state)
-    .with_backup_store({
-        let _backup = StartupTrace::span("directory-server-backup");
-        Arc::new(ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?)
-    })
+    .with_backup_store(stores.backup.clone())
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
     .with_chatgpt_web_authentication(chatgpt_web)
@@ -2014,7 +2136,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_glm_accounts(glm_accounts)
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
-    .with_state_runtime(state_runtime)
+    .with_state_runtime(Arc::clone(&state_runtime))
     .with_provider_runtime(model_provider.clone())
     .with_semantic_model_provider(model_provider)
     .with_cloud_codebase_storage_root(cloud_codebase_root)
@@ -2065,13 +2187,16 @@ pub fn open_app_server_with_codebase_providers(
             .with_queue_store(queue.clone(), directory)
             .map_err(OpenAppServerError)?;
         if let Some(directory) = &options.dir_root {
-            let identity = ash_state::SqliteThreadStore::open(&database_path)
-                .map_err(open_error)?
+            let identity = history
+                .as_ref()
+                .expect("durable history store")
                 .history_identity()
                 .map_err(open_error)?;
             server.task_delivery = Some(Arc::new(
-                task_delivery::Runtime::open(
-                    &database_path,
+                task_delivery::Runtime::new(
+                    shared_store(&stores.task_delivery, || {
+                        task_delivery::Store::open(&database_path)
+                    })?,
                     task_delivery::RuntimeServices {
                         profile_root: options.profile_root.clone(),
                         directory: directory.clone(),
@@ -2099,13 +2224,12 @@ pub fn open_app_server_with_codebase_providers(
         .map_err(OpenAppServerError)?;
     let message_board: Arc<dyn agent_message_board::BoardBackend> =
         match &user_config.values.message_board {
-            ash_config::MessageBoardConfig::Local => Arc::new(
-                match options.session_state_mode {
+            ash_config::MessageBoardConfig::Local => {
+                shared_store(&stores.message_board, || match options.session_state_mode {
                     SessionStateMode::Durable => agent_message_board::Store::open(&database_path),
                     SessionStateMode::Ephemeral => agent_message_board::Store::in_memory(),
-                }
-                .map_err(open_error)?,
-            ),
+                })?
+            }
             ash_config::MessageBoardConfig::Remote {
                 endpoint,
                 credential_env,
@@ -2130,13 +2254,7 @@ pub fn open_app_server_with_codebase_providers(
         };
     server = server
         .with_agent_capabilities(
-            Arc::new(
-                match options.session_state_mode {
-                    SessionStateMode::Durable => history_notes::NotesStore::open(&database_path),
-                    SessionStateMode::Ephemeral => history_notes::NotesStore::in_memory(),
-                }
-                .map_err(OpenAppServerError)?,
-            ),
+            stores.notes.clone(),
             message_board,
             options.image_generation_backend.take(),
             &options.profile_root.join("generated-images"),
@@ -2149,22 +2267,18 @@ pub fn open_app_server_with_codebase_providers(
     drop(agent);
     let local_state = StartupTrace::span("directory-server-local-state");
     server = server
-        .with_debug_workspace_store(&database_path)
+        .with_debug_workspace_store(stores.debug_workspaces.clone())
+        .with_projects(stores.projects.clone())
         .map_err(OpenAppServerError)?;
-    server = server
-        .with_local_projects(&database_path)
-        .map_err(OpenAppServerError)?;
-    if options.session_state_mode == SessionStateMode::Durable {
-        server = server.with_thread_pull_requests(Arc::new(require_history_owner(&database_path)?));
+    if let Some(history) = history {
+        require_history_owner(&history)?;
+        server = server.with_thread_pull_requests(history);
     }
     server = server
-        .with_local_teams(&database_path)
-        .map_err(OpenAppServerError)?;
-    server = server
-        .with_local_assets(&database_path)
-        .map_err(OpenAppServerError)?;
-    server = server
-        .with_local_memories(&database_path)
+        .with_teams(stores.teams.clone())
+        .map_err(OpenAppServerError)?
+        .with_asset_store(stores.assets.clone())
+        .with_memories(stores.memories.clone())
         .map_err(OpenAppServerError)?;
     drop(local_state);
     if let Some(profile) = &profile_runtime {
@@ -2338,9 +2452,7 @@ pub fn open_app_server_with_codebase_providers(
     let environment = StartupTrace::span("directory-workspace-environment");
     // Install the background provider before the local host shares the environment runtime.
     // Later tool-service composition retains it in the executor's immutable dependencies.
-    server = server
-        .with_local_approval_environment(&database_path)
-        .map_err(OpenAppServerError)?;
+    server = server.with_approval_environment_store(stores.approval_environment.clone());
     server = server
         .with_env_config(&runtime_config)
         .with_local_env_host(
@@ -2357,13 +2469,7 @@ pub fn open_app_server_with_codebase_providers(
     drop(environment);
     let workspace_grant = StartupTrace::span("directory-workspace-grant");
     let local_dir_root = options.dir_root.clone();
-    let workflow_store = Arc::new(
-        match options.session_state_mode {
-            SessionStateMode::Durable => workflows::Store::open(&database_path),
-            SessionStateMode::Ephemeral => workflows::Store::in_memory(),
-        }
-        .map_err(open_error)?,
-    );
+    let workflow_store = stores.workflows.clone();
     if let Some(dir_root) = options.dir_root {
         server
             .initialize_local_dir_root(dir_root, options.initial_dir_grant_policy)
@@ -2372,12 +2478,16 @@ pub fn open_app_server_with_codebase_providers(
     drop(workspace_grant);
     let integrations = StartupTrace::span("directory-workspace-integrations");
     if let Some(dir_root) = local_dir_root {
+        let turn_changes = shared_store(&stores.turn_changes, || {
+            ash_state::SqliteTurnChangeStore::open(&database_path)
+        })?;
         server = server
             .with_local_dir_services(
-                &database_path,
                 &options.profile_root,
                 &dir_root,
+                turn_changes,
                 Arc::clone(&workflow_store),
+                stores.issue_cache(&state_runtime),
             )
             .map_err(OpenAppServerError)?;
     }

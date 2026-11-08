@@ -68,7 +68,7 @@ test('Execution trace Settings persists backend intent and shares it with Agents
 	page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-bottom button').last().click();
 	await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-	const agentsSettings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const agentsSettings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await expect(agentsSettings).toBeVisible();
 	await agentsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Execution trace', exact: true }).click();
 	await expect(agentsSettings.getByRole('switch', { name: 'Record detailed requests and responses' })).toBeChecked();
@@ -80,7 +80,7 @@ test('Execution trace Settings persists backend intent and shares it with Agents
 	page = await workbench.reopenAgentsWindow(application, page);
 	await page.locator('.ash-sessions-activity-bottom button').last().click();
 	await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-	const restored = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const restored = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await expect(restored).toBeVisible();
 	await restored.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Execution trace', exact: true }).click();
 	await expect(restored.getByRole('switch', { name: 'Record detailed requests and responses' })).toBeChecked();

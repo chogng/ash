@@ -38,17 +38,16 @@ fn workspace_retrieval_follows_the_persisted_session_owner() {
             root: std::env::temp_dir(),
         })
     };
-    for (title, surface, target, expected_calls) in [
-        ("chat", Some(SessionSurface::Chat), workspace_target(), 0),
-        ("unbound-code", Some(SessionSurface::Code), None, 0),
-        ("code", Some(SessionSurface::Code), workspace_target(), 1),
-        ("legacy", None, None, 2),
+    for (title, kind, target, expected_calls) in [
+        ("chat", SessionKind::Chat, workspace_target(), 0),
+        ("code", SessionKind::Code, workspace_target(), 1),
+        ("host-scoped-code", SessionKind::Code, None, 2),
     ] {
         let root = threads
             .start_thread(
                 &ash_core::NoThreadWorktreeBinder,
                 core_api::StartThreadRequest {
-                    surface,
+                    kind,
                     agent_id: None,
                     agent: None,
                     command_id: CommandId::new(title).unwrap(),
@@ -87,7 +86,7 @@ fn workspace_retrieval_follows_the_persisted_session_owner() {
 
 #[test]
 fn creation_and_approval_share_session_defaults() {
-    let chat = SessionExecutionRoute::new(Some(SessionSurface::Chat), None);
+    let chat = SessionExecutionRoute::new(SessionKind::Chat, None);
     assert_eq!(
         chat.approval_mode(None, || Ok(ApprovalMode::Auto)).unwrap(),
         ApprovalMode::Manual
@@ -97,16 +96,15 @@ fn creation_and_approval_share_session_defaults() {
             .unwrap(),
         ApprovalMode::Auto
     );
-    assert_eq!(chat.admit_creation(None).unwrap(), None);
-    let code = SessionExecutionRoute::new(Some(SessionSurface::Code), None);
+    assert_eq!(
+        SessionExecutionRoute::admit_creation(None, None).unwrap(),
+        None
+    );
+    let code = SessionExecutionRoute::new(SessionKind::Code, None);
     assert_eq!(
         code.approval_mode(None, || Ok(ApprovalMode::Auto)).unwrap(),
         ApprovalMode::Auto
     );
-    assert!(matches!(
-        code.admit_creation(None),
-        Err(CoreError::InvalidInput(_))
-    ));
 }
 
 #[test]
@@ -118,7 +116,7 @@ fn explicit_directory_binding_enables_and_clears_workspace_for_a_chat() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
-                surface: Some(SessionSurface::Chat),
+                kind: SessionKind::Chat,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("chat-directory-toggle").unwrap(),
@@ -153,6 +151,6 @@ fn explicit_directory_binding_enables_and_clears_workspace_for_a_chat() {
     assert!(!router.allows_workspace(&chat.session_id).unwrap());
     let saved = threads.read_thread(&chat.thread_id).unwrap();
     assert_eq!(saved.session_id, chat.session_id);
-    assert_eq!(saved.surface, Some(SessionSurface::Chat));
+    assert_eq!(saved.kind, SessionKind::Chat);
     assert_eq!(saved.title, chat.title);
 }

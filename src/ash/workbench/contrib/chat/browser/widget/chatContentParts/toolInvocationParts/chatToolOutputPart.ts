@@ -9,7 +9,7 @@ import { ChatResultListSubPart } from './chatResultListSubPart.js';
 import { ChatInputOutputMarkdownProgressPart } from './chatInputOutputMarkdownProgressPart.js';
 import { ChatSessionTargetResultPillSubPart } from './chatSessionTargetResultPillSubPart.js';
 import { ChatAutomationConfiguredResultSubPart } from './chatAutomationConfiguredResultSubPart.js';
-import { ChatCollapsibleInputOutputContentPart } from '../chatToolInputOutputContentPart.js';
+import { ChatCollapsibleInputOutputContentPart, type IToolOutputPresentation } from '../chatToolInputOutputContentPart.js';
 
 /** Owns streamed evidence and result resources. Backend coordinates remain attached to every media read. */
 export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
@@ -36,7 +36,7 @@ export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
 
 	public get codeblocks() { return this.markdown.codeblocks; }
 
-	public render(invocation: IChatToolInvocation, source: IChatListItem['attachmentSource'], options: { readonly generatedImages: boolean; }): void {
+	public render(invocation: IChatToolInvocation, source: IChatListItem['attachmentSource'], options: { readonly generatedImages: boolean; }, presentation?: IToolOutputPresentation): void {
 		const { result } = invocation;
 		const content = result?.content ?? [];
 		const target = content.flatMap(part => part.type === 'artifact' && part.artifact.source.type === 'viewMetadata' && part.artifact.presentation ? [part.artifact.presentation] : [])[0];
@@ -53,8 +53,8 @@ export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
 				this.domNode.append(part.domNode);
 			}
 		}
-		this.markdown.render(content);
-		this.inputOutput.render(invocation);
+		this.markdown.render(presentation ? [] : content);
+		this.inputOutput.render(invocation, presentation);
 		const mediaContent = options.generatedImages ? content.map(part => part.type === 'imageUrl' || part.type === 'imageAttachment' ? { type: 'text' as const, text: '' } : part) : content;
 		if (mediaContent.some(part => part.type !== 'text' && part.type !== 'artifact')) {
 			if (!this.media.value) {

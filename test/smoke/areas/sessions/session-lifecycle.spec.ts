@@ -17,6 +17,42 @@ async function chooseWorkspaceProject(page: Page, directory: string): Promise<vo
 	await expect(chooser).toHaveText(folder);
 }
 
+test('Agents reload restores the live terminal for the selected session', { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }) => {
+	const { client, close } = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
+	try {
+		const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+			commandId: 'agents-terminal-reload', kind: 'code', title: 'Terminal reload fixture', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: testWorkspace.directory },
+		});
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator(`[data-item="session:${session.sessionId}"] > .ash-sessions-list-item`).click();
+		const active = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await expect(active).toHaveAttribute('data-thread-id', session.threads[0]!.threadId);
+		const commands = new QuickAccess(page);
+		await commands.runCommand('ash.sessions.togglePanel');
+		const terminal = page.locator('.ash-terminal-editor:visible');
+		const input = terminal.locator('.xterm-helper-textarea');
+		const rows = terminal.locator('.xterm-rows');
+		await input.focus();
+		await input.pressSequentially(`node -p "'AGENTS_PTY_' + process.ppid"`);
+		await input.press('Enter');
+		await expect(rows).toContainText(/AGENTS_PTY_\d+/u);
+		const pid = (await rows.textContent())!.match(/AGENTS_PTY_(\d+)/u)![1];
+		const loaded = page.waitForEvent('domcontentloaded');
+		await commands.runCommand('workbench.action.reloadWindow');
+		await loaded;
+		await expect(active).toHaveAttribute('data-thread-id', session.threads[0]!.threadId);
+		await expect(rows).toContainText(`AGENTS_PTY_${pid}`);
+		await input.focus();
+		await input.pressSequentially(`node -p "'AFTER_RELOAD_' + process.ppid"`);
+		await input.press('Enter');
+		await expect(rows).toContainText(`AFTER_RELOAD_${pid}`);
+	} finally {
+		await close();
+	}
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Session first send uses one atomic root and restores drafts in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace }, testInfo) => {
 		test.setTimeout(240_000);

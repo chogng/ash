@@ -17,7 +17,7 @@ import type { INotificationService } from '../../../../../platform/notification/
 import { CanvasesEnabledSettingId } from '../../../../../platform/agentHost/common/agentService.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import type { IAgentHostCanvasCollection } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
-import type { ICanvas, ICanvasOwner, ICanvasReference } from '../../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvas, ICanvasOwner, ICanvasReference } from '../../../../../workbench/common/canvasReference.js';
 import type { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
@@ -128,7 +128,7 @@ suite('Pinned Canvas ownership', () => {
 
 	test('catalog loss during disconnect preserves pins and a confirmed deletion retires them', () => {
 		using f = fixture();
-		f.sessions.push({ sessionId: 'session', title: 'Conversation', status: 'active', chats: [] } as unknown as ISession);
+		f.sessions.push({ sessionId: 'session', kind: 'code' as const, title: 'Conversation', status: 'active', chats: [] } as unknown as ISession);
 		f.pins.pin(f.reference(0));
 		f.connection.set('disconnected'); f.sessions.splice(0); f.catalog.fire();
 		assert.equal(f.pins.entries.get().length, 1);
@@ -151,7 +151,7 @@ suite('Pinned Canvas ownership', () => {
 	test('archiving the owner retires its pin without changing another pin', () => {
 		using f = fixture();
 		f.pins.pin(f.reference(0));
-		f.sessions.push({ sessionId: 'session', title: 'Conversation', status: 'archived', chats: [] } as unknown as ISession);
+		f.sessions.push({ sessionId: 'session', kind: 'code' as const, title: 'Conversation', status: 'archived', chats: [] } as unknown as ISession);
 		f.catalog.fire();
 		assert.equal(f.pins.entries.get().length, 0);
 	});

@@ -11,7 +11,7 @@ import { generateUuid } from '../../../../../base/common/uuid.js';
 import { IVoiceCodeTranscriptionClient } from './voiceCodeTranscriptionClient.js';
 import { createPcmCaptureNode, type IPcmCaptureNode } from '../pcmCaptureWorklet.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState, resolveLocalTranscriptionModel } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -38,6 +38,8 @@ export type ChatDictationSurface = 'chat' | 'editor' | 'terminal';
 export interface IChatDictationTranscript {
 	readonly text: string;
 	readonly finalizedText: string;
+	/** The provider completed without an explicit stop request. */
+	readonly completed?: true;
 }
 
 export interface IDictationAccuracyMeasurement {
@@ -67,8 +69,6 @@ export interface IChatSpeechToTextService {
 	readonly isPreparingModel: boolean;
 	readonly onDidChangeDownloadingModel: Event<boolean>;
 	readonly isDownloadingModel: boolean;
-	readonly onDidChangeModelDownloadProgress: Event<void>;
-	readonly modelDownloadProgress: number | undefined;
 	start(window: Window & typeof globalThis, surface?: ChatDictationSurface): Promise<void>;
 	stopAndTranscribe(options?: IChatSpeechToTextStopOptions): Promise<string | undefined>;
 	cancel(): Promise<void>;
@@ -107,6 +107,7 @@ interface Recording {
 	finalizedText: string;
 	cancelled: boolean;
 	started: boolean;
+	waitingForLocalModel?: boolean;
 	error?: string;
 	liveText: string;
 	preserveLiveTranscript?: boolean;
@@ -125,12 +126,8 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 	public readonly onDidChangePreparingModel = this.preparing.event;
 	private readonly downloading = this._register(new Emitter<boolean>());
 	public readonly onDidChangeDownloadingModel = this.downloading.event;
-	private readonly progress = this._register(new Emitter<void>());
-	public readonly onDidChangeModelDownloadProgress = this.progress.event;
 	public isPreparingModel = false;
 	public isDownloadingModel = false;
-	/** The backend reports file bytes without an aggregate total; downloads remain indeterminate. */
-	public get modelDownloadProgress(): number | undefined { return undefined; }
 	public currentBackend = '';
 	public get showTranscriptWhileDictating(): boolean { return this.configuration.getValue<boolean>('dictation.showTranscript') ?? true; }
 	private recording: Recording | undefined;
@@ -168,15 +165,26 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		this._register(speech.onDidChangeHasSpeechProvider(() => this.stateChanged.fire(this.state)));
 		this._register(localTranscription.onDidChangeModelStatus(status => {
 			if (!this.recording || this.currentBackend !== 'local') return;
+			if (status.state === LocalTranscriptionModelState.Checking) {
+				// The backend checks each downloaded file before fetching the next one.
+				this.setPreparation(true, this.isDownloadingModel);
+				return;
+			}
 			const downloading = status.state === LocalTranscriptionModelState.Downloading;
-			const preparing = downloading || status.state === LocalTranscriptionModelState.Loading;
-			if (this.isDownloadingModel !== downloading) { this.isDownloadingModel = downloading; this.downloading.fire(downloading); }
-			if (this.isPreparingModel !== preparing) { this.isPreparingModel = preparing; this.preparing.fire(preparing); }
-			this.progress.fire();
+			this.setPreparation(downloading || status.state === LocalTranscriptionModelState.Loading, downloading);
 		}));
 		const inProgress = ChatSpeechToTextInProgress.bindTo(contextKeys);
 		this._register(this.onDidChangeState(() => inProgress.set(this.isBusy)));
 		this._register(toDisposable(() => inProgress.reset()));
+	}
+
+	private setPreparation(preparing: boolean, downloading: boolean): void {
+		const downloadingChanged = this.isDownloadingModel !== downloading;
+		const preparingChanged = this.isPreparingModel !== preparing;
+		this.isDownloadingModel = downloading;
+		this.isPreparingModel = preparing;
+		if (downloadingChanged) this.downloading.fire(downloading);
+		if (preparingChanged) this.preparing.fire(preparing);
 	}
 
 	public async start(window: Window & typeof globalThis, surface: ChatDictationSurface = 'chat'): Promise<void> {
@@ -225,29 +233,65 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 						this.receiveTranscript(recording, event.text ?? '', event.status === SpeechToTextStatus.Recognized);
 					} else if (event.status === SpeechToTextStatus.Error || event.status === SpeechToTextStatus.Stopped) {
 						if (event.status === SpeechToTextStatus.Error) recording.error = event.text;
-						if (!recording.stopping) this.finish(recording);
+						if (!recording.stopping) {
+							if (event.status === SpeechToTextStatus.Stopped) this.completeTranscript(recording);
+							this.finish(recording);
+						}
 					}
 				}));
 			} else {
 				const backend = recording.backend;
 				if (backend.type === 'local') {
-					// Workbench owns microphone capture; the local service owns model preparation and inference.
+					const [cacheDir, model] = await Promise.all([
+						this.localModels.getCacheDirectory(),
+						resolveLocalTranscriptionModel(this.localModels, backend.modelId),
+					]);
+					if (recording.cancelled || this.recording !== recording || this.isDisposed) throw canceled();
+					const firstUse = !model.available;
+					let ready = firstUse ? new DeferredPromise<void>() : undefined;
+					if (firstUse) {
+						recording.waitingForLocalModel = true;
+						this.setPreparation(true, false);
+						if (recording.cancelled || this.recording !== recording || this.isDisposed) throw canceled();
+					}
 					recording.lifetime.add(this.localTranscription.onDidTranscribe(result => this.receiveTranscript(recording, result.text, result.isFinal, true)));
 					recording.lifetime.add(this.localTranscription.onDidChangeModelStatus(result => {
-						if (this.recording !== recording) return;
+						if (this.recording !== recording || recording.cancelled) return;
+						if (result.state === LocalTranscriptionModelState.Ready) void ready?.complete();
 						if (result.state !== LocalTranscriptionModelState.Idle && result.state !== LocalTranscriptionModelState.Error) return;
 						recording.error = result.error;
-						if (!recording.stopping) this.finish(recording);
+						if (ready) {
+							recording.error ??= localize('dictation.modelEndedEarly', 'Model preparation ended before the model was ready');
+							void ready.complete();
+							return;
+						}
+						if (!recording.stopping) {
+							if (recording.started && result.state === LocalTranscriptionModelState.Idle && !result.error) this.completeTranscript(recording);
+							this.finish(recording);
+						}
 					}));
-					const cacheDir = await this.localModels.getCacheDirectory();
-					if (recording.cancelled || this.recording !== recording || this.isDisposed) throw canceled();
 					const handle: RecordingHandle = {
 						stop: async () => { if (recording.capture) { await recording.capture.pcm.flush(); await this.closeCapture(recording.capture); } return this.localTranscription.stop(); },
 						cancel: async () => { if (recording.capture) await this.closeCapture(recording.capture); await this.localTranscription.cancel(); },
 					};
 					recording.handle = handle;
 					recording.lifetime.add(toDisposable(() => { void this.cancelHandle(recording).catch(() => undefined); }));
-					await this.localTranscription.start({ cacheDir, model: backend.modelId });
+					try {
+						await this.localTranscription.start({ cacheDir, model: model.model });
+						// A first-use install can take minutes. Wait for the recognizer before opening the microphone.
+						if (ready) {
+							await raceCancellation(ready.p, recording.cancellation.token);
+							if (recording.error) throw new Error(recording.error);
+						}
+					} catch (error) {
+						if (firstUse && !isCancellationError(error) && !recording.cancelled) {
+							recording.error = undefined; // The caller presents the preparation error in the input.
+							throw new Error(localize('dictation.firstUseFailed', 'Could not prepare the local dictation model: {0}. No audio was recorded. Select the microphone to try again.', error instanceof Error ? error.message : String(error)));
+						}
+						throw error;
+					} finally {
+						ready = undefined;
+					}
 					if (this.recording !== recording || recording.cancelled || this.isDisposed) await this.cancelHandle(recording);
 					else {
 						await this.capture(recording, recording.inputDevice, samples => {
@@ -278,9 +322,13 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 				recording.lifetime.add(toDisposable(() => {
 					this.transcription.disconnect();
 				}));
+				this.setPreparation(true, false);
+				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
 				await this.transcription.connect(recording.window, '');
 				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
 				await this.transcription.startSession({ backend, language: recording.language });
+				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
+				this.setPreparation(false, false);
 				if (this.recording !== recording || recording.cancelled || this.isDisposed) throw canceled();
 				this.transcription.sendPttStart(turnId);
 				recording.handle = {
@@ -328,7 +376,15 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 
 	private async capture(recording: Recording, deviceId: string | null, onChunk: (samples: Float32Array) => void): Promise<void> {
 		const window = recording.window;
-		const stream = await window.navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+		const audio: MediaTrackConstraints = { channelCount: 1, echoCancellation: true, noiseSuppression: true };
+		let stream: MediaStream;
+		try {
+			stream = await window.navigator.mediaDevices.getUserMedia({ audio: { ...audio, deviceId: deviceId ? { exact: deviceId } : undefined } });
+		} catch (error) {
+			if (!deviceId || this.recording !== recording || recording.cancelled || this.isDisposed
+				|| !(error instanceof window.DOMException) || (error.name !== 'NotFoundError' && error.name !== 'OverconstrainedError')) throw error;
+			stream = await window.navigator.mediaDevices.getUserMedia({ audio });
+		}
 		if (this.recording !== recording || recording.cancelled || this.isDisposed) { stream.getTracks().forEach(track => track.stop()); throw canceled(); }
 		let context: AudioContext | undefined;
 		try {
@@ -371,14 +427,21 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		this.transcript.fire({ text: visible, finalizedText: recording.finalizedText });
 	}
 
+	private completeTranscript(recording: Recording): void {
+		if (recording.finalizedText) {
+			this.transcript.fire({ text: recording.finalizedText, finalizedText: recording.finalizedText, completed: true });
+		}
+	}
+
 	public stopAndTranscribe(options?: IChatSpeechToTextStopOptions): Promise<string | undefined> {
 		const recording = this.recording;
 		if (!recording) return Promise.resolve(undefined);
 		if (recording.stopping) return recording.stopping;
+		if (recording.waitingForLocalModel && !recording.started && !recording.cancelled) return this.cancel().then(() => undefined);
 		recording.preserveLiveTranscript = options?.preserveLiveTranscript;
 		// Reserve stop before notifying state listeners, which may request it again.
 		recording.stopping = Promise.resolve().then(() => this.stopRecording(recording));
-		this.setState(ChatSpeechToTextState.Transcribing);
+		if (!recording.cancelled) this.setState(ChatSpeechToTextState.Transcribing);
 		return recording.stopping;
 	}
 
@@ -422,9 +485,18 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 	private async finalize(recording: Recording): Promise<string | undefined> {
 		const expired = Symbol('expired');
 		const cancelled = Symbol('cancelled');
-		const deadline = recording.backend !== 'extension' && recording.backend.type === 'local' ? 8000 : 35000;
+		const local = recording.backend !== 'extension' && recording.backend.type === 'local';
 		let timer: number | undefined;
-		const timeout = new Promise<typeof expired>(resolve => { timer = recording.window.setTimeout(() => resolve(expired), deadline); });
+		let expire!: () => void;
+		const timeout = new Promise<typeof expired>(resolve => { expire = () => resolve(expired); });
+		const scheduleTimeout = (): void => {
+			if (timer !== undefined) recording.window.clearTimeout(timer);
+			// Model preparation has its own backend deadline. Give buffered audio the
+			// full finalization window once inference is ready to consume it.
+			timer = local && this.isPreparingModel ? undefined : recording.window.setTimeout(expire, local ? 8000 : 35000);
+		};
+		using preparation = local ? this.onDidChangePreparingModel(scheduleTimeout) : undefined;
+		scheduleTimeout();
 		let cancel!: () => void;
 		const cancellation = new Promise<typeof cancelled>(resolve => { cancel = () => resolve(cancelled); });
 		using listener = recording.cancellation.token.onCancellationRequested(cancel);
@@ -450,9 +522,10 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		this.recording = undefined;
 		recording.lifetime.dispose();
 		if (recording.error && !recording.stopping && !recording.cancelled) this.notifications.error(localize('chat.input.dictationFailed', 'Dictation failed: {0}', recording.error));
-		if (this.isPreparingModel) { this.isPreparingModel = false; this.preparing.fire(false); }
-		if (this.isDownloadingModel) { this.isDownloadingModel = false; this.downloading.fire(false); }
-		this.setState(ChatSpeechToTextState.Idle);
+		this.setPreparation(false, false);
+		// A download can end while the microphone is still idle. Publish that it no longer owns the input.
+		if (this.state !== ChatSpeechToTextState.Idle) this.setState(ChatSpeechToTextState.Idle);
+		else if (!this.isDisposed) this.stateChanged.fire(this.state);
 	}
 
 	public logDictationAccuracy(measurement: IDictationAccuracyMeasurement): void {

@@ -1,0 +1,79 @@
+.ash-sessions-inbox-button.ash-button {
+	--ash-toolbar-actionSize: var(--ash-spacing-size280);
+	position: relative;
+	flex: 0 0 auto;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	margin-inline-end: var(--ash-sessions-sidebar-item-inset);
+	padding: 0;
+	color: var(--ash-sessions-activityBar-foreground);
+}
+
+.ash-sessions-inbox-button.ash-button:is(:hover, .expanded) {
+	background: var(--ash-sessions-sidebar-hover-background);
+}
+
+.ash-sessions-inbox-dot {
+	position: absolute;
+	inset-block-start: var(--ash-spacing-size20);
+	inset-inline-end: var(--ash-spacing-size20);
+	width: var(--ash-spacing-size60);
+	height: var(--ash-spacing-size60);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-activityBarBadge-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-inbox {
+	box-sizing: border-box;
+	max-height: min(360px, 60vh);
+	padding: var(--ash-spacing-size80);
+	overflow: auto;
+	overflow-wrap: anywhere;
+	border-radius: inherit;
+}
+
+.ash-sessions-inbox > :is(h2, p) {
+	margin: 0;
+	padding: var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-sessions-inbox > h2 {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-inbox > p,
+.ash-sessions-inbox-status {
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-inbox-row {
+	display: flex;
+	width: 100%;
+	flex-direction: column;
+	gap: var(--ash-spacing-size20);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-medium);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+}
+
+.ash-sessions-inbox-row:hover {
+	background: var(--ash-sessions-sidebar-hover-background);
+}
+
+.ash-sessions-inbox:focus-visible,
+.ash-sessions-inbox-row:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-sessions-inbox-status {
+	font-size: var(--ash-fontSize-body2);
+}

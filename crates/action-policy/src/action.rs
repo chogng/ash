@@ -16,6 +16,7 @@ use ash_sandboxing::SandboxPolicy;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
+use std::path::PathBuf;
 
 pub(crate) fn capability_policy_name(value: &CapabilityKind) -> &'static str {
     match value {
@@ -160,6 +161,29 @@ pub struct ActionReviewRequest {
     action_policy_revision: ActionPolicyRevision,
     context: ReviewContext,
     phase: ActionReviewPhase,
+    file_write: Option<FileWriteReview>,
+    shell: Option<ShellReview>,
+}
+
+/// Canonical write targets materialized by the file tool under an opened directory identity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FileWriteReview {
+    pub directory_id: String,
+    pub targets: Vec<PathBuf>,
+    pub protected: bool,
+}
+
+/// Host-materialized facts for a shell invocation that requires initial approval.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShellReview {
+    /// Empty for unsupported or dynamic syntax, which cannot satisfy a prefix rule.
+    pub commands: Vec<ExecPolicyCommand>,
+    /// One vetted prefix per command, populated only when the entire invocation can reuse them.
+    pub session_prefixes: Vec<ExecPolicyCommand>,
+    pub working_directory: PathBuf,
+    pub scope: String,
+    pub allow_config_prefix: bool,
+    pub requires_confirmation: bool,
 }
 
 impl ActionReviewRequest {
@@ -176,7 +200,55 @@ impl ActionReviewRequest {
             action_policy_revision,
             context: ReviewContext::default(),
             phase: ActionReviewPhase::Initial,
+            file_write: None,
+            shell: None,
         }
+    }
+
+    pub fn with_file_write(mut self, file_write: FileWriteReview) -> Self {
+        self.file_write = Some(file_write);
+        self
+    }
+
+    pub fn file_write(&self) -> Option<&FileWriteReview> {
+        self.file_write.as_ref()
+    }
+
+    pub fn with_shell(
+        mut self,
+        shell: ShellReview,
+        redirects: Vec<ash_protocol::Capability>,
+    ) -> Self {
+        if !redirects.is_empty() {
+            // A literal path in argv may resolve to a different file after an approval wait.
+            // Bind the canonical destinations as well as the original script.
+            let mut canonical = self.action.digest.as_str().as_bytes().to_vec();
+            for target in &redirects {
+                canonical.push(0);
+                canonical.extend_from_slice(target.scope().as_bytes());
+            }
+            self.action.digest = ActionDigest::from_canonical_bytes(&canonical);
+        }
+        self.action.required_capabilities = CapabilitySet::new(
+            self.action
+                .required_capabilities
+                .iter()
+                .cloned()
+                .chain(redirects),
+        );
+        self.shell = Some(shell);
+        self
+    }
+
+    pub fn shell(&self) -> Option<&ShellReview> {
+        self.shell.as_ref()
+    }
+
+    pub fn requires_manual_confirmation(&self) -> bool {
+        self.file_write().is_some_and(|write| write.protected)
+            || self
+                .shell()
+                .is_some_and(|shell| shell.requires_confirmation)
     }
 
     /// Attaches a compact, secret-free context snapshot for the advisory reviewer.

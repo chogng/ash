@@ -10,7 +10,9 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { Menus } from '../../../browser/menus.js';
 import { sessionResource } from '../../../browser/chatHistoryModel.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { resolveSessionThreadSelection } from '../../../browser/sessionActionsService.js';
+import { SessionsMenuActiveConversationContext } from '../../../common/contextkeys.js';
 import type { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
@@ -66,16 +68,17 @@ registerAction2(class ShowConversationRecapAction extends Action2 {
 			id: 'sessions.showConversationRecap',
 			title: localize2({ bundle: 'ash.sessions', key: 'sessions.recap.command' }, 'Show Conversation Recap'),
 			f1: true,
-			menu: { id: Menus.SidebarSessionContext, group: 'conversation' },
+			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', when: SessionsMenuActiveConversationContext.isEqualTo(true) },
 			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true)),
 		});
 	}
 
-	override async run(accessor: ServicesAccessor, selection?: SessionsViewSelection): Promise<void> {
-		const target = selection ?? accessor.get(ISessionsService).activeSelection;
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		const sessions = accessor.get(ISessionsManagementService);
+		const target = argument === undefined ? accessor.get(ISessionsService).activeSelection : resolveSessionThreadSelection(sessions, argument);
 		if (target?.kind !== 'session') { return; }
 		const { session, threadId } = target.active;
-		const current = accessor.get(ISessionsManagementService).sessions.find(item => item.sessionId === session.sessionId) ?? session;
+		const current = sessions.sessions.find(item => item.sessionId === session.sessionId) ?? session;
 		const recap = current.chats.find(chat => chat.threadId === threadId)?.recap;
 		await accessor.get(IEditorService).openEditor({
 			resource: URI.from({ scheme: 'ash-session-details', path: '/recap.txt', query: generateUuid() }),

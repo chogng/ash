@@ -1,7 +1,9 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { AutomationsCustomViewContribution } from './views/automationsView.js';
 import { SessionsTitleBarWidget } from './sessionsTitleBarWidget.js';
+import { BlockedSessionsIndicatorModel, IBlockedSessionsIndicatorService } from './blockedSessionsIndicatorModel.js';
 import './sessionsActions.js';
 import './views/sessionsViewActions.js';
 import './sessionDetailsAction.js';
@@ -10,6 +12,8 @@ import { AutomationSessionsListingContribution } from './automationSessionsListi
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
+
+registerSingleton(IBlockedSessionsIndicatorService, BlockedSessionsIndicatorModel, InstantiationType.Delayed);
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: MOUSE_BACK_FORWARD_NAVIGATION_SETTING,

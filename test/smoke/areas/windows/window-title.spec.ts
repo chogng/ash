@@ -3,6 +3,9 @@ import { expect, test } from '../../../automation/test.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
+// Capturing screenshots requires a visible window, without activating it on launch.
+const screenshotTest = test.extend({ electronWindowMode: 'inactive' });
+
 test.beforeEach(async ({ workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
@@ -36,7 +39,7 @@ test('window title follows the active editor, unsaved changes, restored content 
 	await expect(page).toHaveTitle(workspaceTitle);
 });
 
-test('detached editor titles follow their own window when focus and dirty state change', async ({ application, workbench }, testInfo) => {
+screenshotTest('detached editor titles follow their own window when focus and dirty state change', async ({ application, workbench }, testInfo) => {
 	const page = workbench.page;
 	const workspaceTitle = await page.title();
 	await page.keyboard.press('ControlOrMeta+N');

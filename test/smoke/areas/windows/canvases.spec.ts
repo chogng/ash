@@ -36,7 +36,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				try {
 					await installBrowserNetworkPolicy(electron, url);
 					const create = async (title: string) => (await connection.client.request(APP_SERVER_METHODS['session/create'], {
-						commandId: title, title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
+						commandId: title, kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
 					})).session;
 					const source = await create('Canvas source fixture');
 					const other = await create('Canvas other fixture');
@@ -156,8 +156,8 @@ exports.activate = context => {
 	await writeFile(packagePath, JSON.stringify(manifest));
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 	try {
-		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-canvas', title: 'Provider Canvas session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
-		const peer = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-peer', title: 'Provider peer session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-canvas', kind: 'code', title: 'Provider Canvas session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+		const peer = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-peer', kind: 'code', title: 'Provider peer session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const install = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
@@ -283,6 +283,127 @@ exports.activate = context => {
 	}
 });
 
+test('Agents Canvas skips the pinned page and restores the editor working set', { tag: '@electron-app-server' }, async ({ application, webAppServer, workbench, testWorkspace }, testInfo) => {
+	await using origin = createServer((_request, response) => { response.end('<title>Canvas working set fixture</title>'); });
+	await new Promise<void>(resolve => origin.listen(0, '127.0.0.1', resolve));
+	const address = origin.address();
+	if (!address || typeof address === 'string') { throw new Error('Missing Canvas fixture origin'); }
+
+	const fileName = 'canvas-working-set.txt';
+	const fileText = 'Canvas working set fixture';
+	await writeFile(join(testWorkspace.directory, fileName), fileText);
+	const root = join(testWorkspace.directory, 'canvas-working-set-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(join(root, '.ash-plugin/plugin.json'), JSON.stringify({
+		schemaVersion: 1, id: 'acme/canvas-working-set', version: '1.0.0', displayName: 'Canvas working set fixture',
+		compatibility: { ash: '>=0.1.0' }, permissions: [],
+		contributions: {
+			editorExtensions: [{
+				id: 'canvas', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1,
+				activationEvents: [{ type: 'onDemand', capability: 'dataChannel' }], capabilities: ['dataChannel'],
+			}]
+		},
+	}));
+	await writeEditorExtensionFixture(root, `
+const { window } = require('@ash/sdk');
+exports.activate = context => {
+ const provider = { openCanvas: () => ({ url: 'http://127.0.0.1:${address.port}' }) };
+ context.subscriptions.push(window.registerCanvasProvider('board', provider), window.registerCanvasProvider('alternate', provider));
+};`);
+	const packagePath = join(root, 'package.json');
+	const manifest = JSON.parse(await readFile(packagePath, 'utf8'));
+	manifest.activationEvents = ['onDemand:dataChannel'];
+	manifest.contributes.canvases = [
+		{ id: 'board', displayName: 'Fixture board', description: 'Canvas working set fixture' },
+		{ id: 'alternate', displayName: 'Alternate Canvas', description: 'Available while the board is pinned' },
+	];
+	await writeFile(packagePath, JSON.stringify(manifest));
+
+	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
+	try {
+		const createSession = async (title: string) => {
+			const request = {
+				commandId: title, kind: 'code' as const, title, agent: { type: 'default' as const },
+				executionTarget: { type: 'local' as const, root: testWorkspace.directory },
+			};
+			return (await connection.client.request(APP_SERVER_METHODS['session/create'], request)).session;
+		};
+		const source = await createSession('Canvas working set A');
+		const peer = await createSession('Canvas working set B');
+		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+		const install = workbench.page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+		await install.getByRole('textbox').fill('canvas-working-set-extension');
+		await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('textbox').press('Enter'));
+		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+		await workbench.page.locator('[data-package-id="acme/canvas-working-set"]').click();
+		const details = workbench.page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/canvas-working-set' });
+		await workbench.dialogs.confirm(application, 'Canvas working set fixture', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
+		await expect(details).toHaveAttribute('aria-busy', 'false');
+		const toggle = details.getByRole('switch');
+		if (!await toggle.isChecked()) { await toggle.press('Space'); }
+		await expect(toggle).toBeChecked();
+
+		const agents = await workbench.openAgentsWindow('electron');
+		const commands = new QuickAccess(agents);
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const select = async (session: typeof source) => {
+			await agents.locator('.ash-sessions-list-item').filter({ hasText: session.title }).first().click();
+			await expect(agents.locator(`[data-thread-id="${session.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
+		};
+		await select(source);
+		const activity = agents.getByRole('button', { name: 'Canvas', exact: true });
+		await activity.click();
+		await commands.select('Fixture board');
+		const canvas = agents.locator('.ash-session-canvas:visible');
+		await expect(canvas).toBeVisible();
+		await installMainChannelTestClient(agents);
+		const views = () => agents.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
+		const native = (await views()).find(view => view.canvas?.canvasId === 'board')!;
+		const canvasTab = agents.getByRole('tab', { name: native.canvas!.title, exact: true });
+
+		await test.step('Restore the same Canvas and file after switching A → B → A', async () => {
+			const fileTab = agents.getByRole('tab', { name: fileName, exact: true });
+			await commands.open(join(testWorkspace.directory, fileName));
+			await commands.select(fileName);
+			await expect(fileTab).toBeVisible();
+			await canvasTab.click();
+			await select(peer);
+			await expect(canvasTab).toHaveCount(0);
+			await expect(fileTab).toHaveCount(0);
+			await select(source);
+			await expect(canvasTab).toHaveAttribute('aria-selected', 'true');
+			await expect(fileTab).toBeVisible();
+			await expect.poll(async () => (await views()).filter(view => view.canvas?.canvasId === 'board' && view.state.visible).map(view => view.id)).toEqual([native.id]);
+			await fileTab.click();
+			await expect(agents.getByRole('tabpanel', { name: fileName, exact: true })).toContainText(fileText);
+			await canvasTab.click();
+			await testInfo.attach('canvas-working-set-restored', { body: await agents.screenshot(), contentType: 'image/png' });
+		});
+
+		await test.step('Skip the pinned Canvas in the Activity Bar and Quick Pick', async () => {
+			await commands.runCommand('workbench.action.agentSessions.addCanvasToSidebar');
+			const pin = agents.locator('[data-action-id^="sessions.pinnedCanvas."]').filter({ hasText: native.canvas!.title });
+			await pin.click();
+			const pinnedPage = agents.locator('[data-custom-view-id="sessions.customView.canvas"]');
+			await expect(pinnedPage).toBeVisible();
+			await expect.poll(async () => (await views()).find(view => view.id === native.id)?.state.visible).toBe(true);
+			await expectPinnedCanvasBounds(application as ElectronApplication, agents, native);
+			// The sole live Canvas would take the direct-open path if it were still eligible.
+			await activity.click();
+			await expect(commands.input).toHaveAccessibleName('Open a Canvas from a visible conversation');
+			await expect(commands.items).toHaveCount(1);
+			await expect(commands.items).toContainText('Alternate Canvas');
+			await expect(pinnedPage).toBeVisible();
+			await testInfo.attach('pinned-canvas-picker', { body: await agents.screenshot(), contentType: 'image/png' });
+			await commands.close();
+			await expect.poll(async () => (await views()).filter(view => view.canvas?.canvasId === 'board' && view.state.visible).map(view => view.id)).toEqual([native.id]);
+		});
+	} finally {
+		await connection.close();
+		origin.closeAllConnections();
+	}
+});
+
 test('Agent Canvas provider URL changes retain the old page until the user opens the new source', { tag: '@electron-app-server' }, async ({ application, webAppServer, workbench, testWorkspace }, testInfo) => {
 	test.setTimeout(120_000);
 	const origin = createServer((_request, response) => { response.setHeader('Content-Type', 'text/html'); response.end('<title>Provider page</title><button>Provider button</button>'); });
@@ -308,7 +429,7 @@ exports.activate = context => {
 	await writeFile(packagePath, JSON.stringify(manifest));
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 	try {
-		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'canvas-refresh', title: 'Canvas refresh session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'canvas-refresh', kind: 'code', title: 'Canvas refresh session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const install = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
@@ -392,7 +513,7 @@ test('a secondary SSH host presents and pins its own registered Canvas and recon
 		const installed = await appServerRequest(seed.client, 'plugin/installLocal', { commandId: 'canvas-remote-install', expectedRevision: plugins.revision, path: 'remote-canvas', dirId: null });
 		const enabled = await appServerRequest(seed.client, 'plugin/enable', { commandId: 'canvas-remote-enable', expectedRevision: installed.command.revision, id: installed.id, version: installed.version, digest: installed.digest });
 		await appServerRequest(seed.client, 'plugin/grant', { commandId: 'canvas-remote-authorize', expectedRevision: enabled.revision, id: installed.id, version: installed.version, digest: installed.digest });
-		const source = (await appServerRequest(seed.client, 'session/create', { commandId: 'canvas-remote-session', title: 'SSH Canvas conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot } })).session;
+		const source = (await appServerRequest(seed.client, 'session/create', { commandId: 'canvas-remote-session', kind: 'code', title: 'SSH Canvas conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot } })).session;
 		await ide.page.evaluate(connection => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:remote:connection:save', { connection }), { name: 'canvas-ssh-host', host: ssh.host, workspace: remoteRoot });
 		const agents = await ide.openAgentsWindow('electron');
 		const commands = new QuickAccess(agents);

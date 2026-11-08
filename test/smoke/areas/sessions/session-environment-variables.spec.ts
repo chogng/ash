@@ -8,6 +8,40 @@ import { connectProfile } from './sessionProfileFixture.js';
 
 test.use({ gitRepository: true });
 
+test.describe('Environment draft navigation in Simplified Chinese', () => {
+	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+
+	test('A new environment draft is protected during keyboard workspace switching', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+		const page = await workbench.openAgentsWindow(target.kind);
+		const modes = page.locator('.ash-window-mode-control');
+		const code = modes.getByRole('button', { name: '代码', exact: true });
+		const agents = modes.getByRole('button', { name: '聊天 / Agents', exact: true });
+		await code.click();
+		const picker = page.locator('.ash-sessions-chat-slot.active:visible .ash-sessions-environment-picker');
+		await picker.click();
+		await page.getByText('新建环境', { exact: true }).click();
+		const form = page.getByRole('dialog', { name: '新建环境' });
+		const name = form.getByLabel('名称', { exact: true });
+		await name.fill('Unsaved environment');
+
+		await agents.press('Space');
+		const confirmation = page.getByRole('dialog', { name: '放弃未保存的更改？' });
+		await expect(confirmation.getByRole('button', { name: '继续编辑' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(confirmation).toHaveCount(0);
+		await expect(name).toBeFocused();
+		await expect(name).toHaveValue('Unsaved environment');
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+
+		await agents.press('Enter');
+		await confirmation.getByRole('button', { name: '放弃更改', exact: true }).press('Enter');
+		await expect(form).toHaveCount(0);
+		await expect(picker).toBeFocused();
+		await agents.press('Enter');
+		await expect(agents).toHaveAttribute('aria-pressed', 'true');
+	});
+});
+
 test('A saved environment reaches the Agent process and stays scoped to its Session', { tag: ['@electron-app-server'] }, async ({ application, webAppServer, target, testWorkspace, workbench }) => {
 	test.setTimeout(180_000);
 	const provider = 'custom-session-environment';

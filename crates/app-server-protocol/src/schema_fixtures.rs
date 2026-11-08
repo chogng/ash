@@ -340,6 +340,11 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
             name: "Git commit abc1234".into(),
             content: "diff --git a/file b/file".into(),
         },
+        InputItem::ChatReference {
+            name: "Earlier design".into(),
+            session_id: ash_protocol::SessionId::new("design-session").unwrap(),
+            thread_id: ash_protocol::ThreadId::new("design-branch").unwrap(),
+        },
         InputItem::ToolSelection {
             scope: None,
             disabled: vec![ash_protocol::ToolName::new("shell-command").unwrap()],
@@ -370,6 +375,12 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
                 "type": "context",
                 "name": "Git commit abc1234",
                 "content": "diff --git a/file b/file"
+            },
+            {
+                "type": "chatReference",
+                "name": "Earlier design",
+                "sessionId": "design-session",
+                "threadId": "design-branch"
             },
             {"type":"toolSelection", "disabled":["shell-command"]},
             {"type": "image", "url": "https://example.test/image.png"},
@@ -510,6 +521,7 @@ fn rpc_envelopes_preserve_json_rpc_2_shape() {
                 "type": "committed",
                 "event": {
                     "type": "threadCreated",
+                    "kind": "code",
                     "sessionId": "session-1",
                     "threadId": "thread-1",
                     "title": "Thread"
@@ -540,6 +552,7 @@ fn rpc_envelopes_preserve_json_rpc_2_shape() {
                     "type": "committed",
                     "event": {
                         "type": "threadCreated",
+                        "kind": "code",
                         "sessionId": "session-1",
                         "threadId": "thread-1",
                         "title": "Thread"
@@ -589,7 +602,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("approvalReviewModel: ApprovalReviewModelSelection"));
     assert!(typescript.contains("approvalReviewModel?: ApprovalReviewModelSelection | null"));
     assert!(
-        typescript.contains("export type ActionApprovalDecision = \"approveOnce\" | \"approveForSession\" | \"approveAndSaveRule\" | \"decline\"")
+        typescript.contains("export type ActionApprovalDecision = \"approveOnce\" | \"approveForSession\" | \"approveFileWriteForSession\" | \"approveCommandPrefixForSession\" | \"approveAndSaveRule\" | \"decline\"")
     );
     assert!(typescript.contains("{ \"type\": \"approval\", request: ActionApprovalRequest, }"));
     assert!(typescript.contains("{ \"type\": \"approval\", response: ActionApprovalResponse, }"));
@@ -657,7 +670,10 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
         r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string,"#
     ));
     assert!(typescript.contains(
-        r#"sourceUrl?: string | null, } | { "type": "hostResource", name: string, resource: HostResourceRef, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
+        r#"sourceUrl?: string | null, } | { "type": "chatReference", name: string, sessionId: SessionId, threadId: ThreadId, }"#
+    ));
+    assert!(typescript.contains(
+        r#"{ "type": "hostResource", name: string, resource: HostResourceRef, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
     ));
     assert!(typescript.contains("threadRecapModel?: ModelRef | null"));
     assert!(typescript.contains("recap?: string | null"));

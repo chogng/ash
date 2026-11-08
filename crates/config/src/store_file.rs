@@ -41,19 +41,10 @@ pub(crate) fn write_document(
     result
 }
 
-pub(crate) fn write_document_if_unchanged(
-    path: &Path,
-    expected_digest: &str,
-    document: &UserConfigDocument,
-) -> Result<(), ConfigError> {
-    let observed = read_document(path)?;
-    if document_digest(&observed)? != expected_digest {
-        return Err(ConfigError(
-            "user configuration changed while applying a command; read the latest revision and retry"
-                .into(),
-        ));
-    }
-    write_document(path, document)
+pub(crate) fn staged_document_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".pending");
+    path.with_file_name(name)
 }
 
 pub(crate) fn document_digest(document: &UserConfigDocument) -> Result<String, ConfigError> {
@@ -73,9 +64,17 @@ fn write_and_replace(path: &Path, temporary: &Path, contents: &[u8]) -> Result<(
     file.write_all(contents).map_err(io_error)?;
     file.sync_all().map_err(io_error)?;
     drop(file);
-    fs::rename(temporary, path).map_err(io_error)?;
+    publish_staged_document(path, temporary)
+}
+
+pub(crate) fn publish_staged_document(path: &Path, staged: &Path) -> Result<(), ConfigError> {
+    fs::rename(staged, path).map_err(io_error)?;
+    sync_document_directory(path)
+}
+
+pub(crate) fn sync_document_directory(_path: &Path) -> Result<(), ConfigError> {
     #[cfg(unix)]
-    if let Some(parent) = path.parent()
+    if let Some(parent) = _path.parent()
         && !parent.as_os_str().is_empty()
     {
         fs::File::open(parent)

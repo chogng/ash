@@ -15,6 +15,14 @@ use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
 
+const MIGRATOR: state::SqliteMigrator<'_> = state::SqliteMigrator::new(
+    "task-delivery",
+    &[state::SqliteMigration::sql(
+        1,
+        include_str!("../migrations/0001_task_packages.sql"),
+    )],
+);
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OutgoingTask {
     pub host: String,
@@ -53,45 +61,7 @@ impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         let mut db = state::open_sqlite_database(path, state::SqliteDurability::Durable)
             .map_err(Error::Storage)?;
-        let transaction = db
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(storage)?;
-        transaction
-            .execute_batch(
-                "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
-            component TEXT PRIMARY KEY, version INTEGER NOT NULL);",
-            )
-            .map_err(storage)?;
-        let version: Option<u32> = transaction
-            .query_row(
-                "SELECT version FROM ash_schema_migrations
-            WHERE component='task-delivery'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(storage)?;
-        if version.is_some_and(|version| version != 1) {
-            return Err(Error::Storage(
-                "unsupported task-delivery storage version".into(),
-            ));
-        }
-        transaction
-            .execute_batch(
-                "CREATE TABLE IF NOT EXISTS task_delivery_packages (
-            direction TEXT NOT NULL, id TEXT NOT NULL, owner TEXT NOT NULL,
-            package TEXT NOT NULL, receipt TEXT,
-            PRIMARY KEY(direction, id));",
-            )
-            .map_err(storage)?;
-        transaction
-            .execute(
-                "INSERT OR IGNORE INTO ash_schema_migrations(component,version)
-            VALUES('task-delivery',1)",
-                [],
-            )
-            .map_err(storage)?;
-        transaction.commit().map_err(storage)?;
+        MIGRATOR.run(&mut db).map_err(Error::Storage)?;
         Ok(Self(Mutex::new(db)))
     }
 

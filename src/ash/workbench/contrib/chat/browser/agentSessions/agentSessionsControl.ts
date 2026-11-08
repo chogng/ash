@@ -9,7 +9,9 @@ import { localize } from '../../../../../nls.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { WorkbenchCompressibleAsyncDataTree, type WorkbenchCompressibleAsyncDataTreeOptions } from '../../../../../platform/list/browser/listService.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
+import { AgentSessionsFilter } from './agentSessionsFilter.js';
 import { isAgentSessionSection, type IAgentSession, type IAgentSessionsModel } from './agentSessionsModel.js';
+import { prepareSessionOpen } from './agentSessionsOpener.js';
 import type { AgentSessionListItem } from './agentSessionsViewer.js';
 import { IAgentSessionsService } from './agentSessionsService.js';
 import type { IAction } from '../../../../../base/common/actions.js';
@@ -44,13 +46,13 @@ export class AgentSessionsControl extends Disposable {
 	readonly onDidRequestNewSession = this.newSessionRequested.event;
 	private readonly toggleLayoutRequested = this._register(new Emitter<void>());
 	readonly onDidRequestToggleLayout = this.toggleLayoutRequested.event;
-	private filter: 'all' | 'running' | 'drafts' | 'pinned' = 'all';
+	private readonly filter: AgentSessionsFilter;
 	private readonly header: HTMLElement;
 	private visible = true;
 	private focusRevision = 0;
 	private menuItemId: string | undefined;
 	private updatePending = false;
-	private sectionsBeforeSearch: ReadonlyMap<string, boolean> | undefined;
+	private sectionsBeforeSearch: Map<string, boolean> | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -63,6 +65,7 @@ export class AgentSessionsControl extends Disposable {
 	) {
 		super();
 		this.model = agentSessionsService.model;
+		this.filter = instantiation.createInstance(AgentSessionsFilter);
 		const document = container.ownerDocument;
 		this.element = h(document, 'div');
 		this.element.className = 'ash-agent-sessions-control';
@@ -97,10 +100,10 @@ export class AgentSessionsControl extends Disposable {
 			this.contextMenus.showContextMenu({
 				getAnchor: () => filter.domNode,
 				getActions: () => choices.map(([id, label]) => ({
-					id, label, tooltip: '', enabled: true, checked: this.filter === id,
+					id, label, tooltip: '', enabled: true, checked: this.filter.selection === id,
 					run: () => {
-						this.filter = id;
-						filter.domNode.setAttribute('aria-pressed', String(id !== 'all'));
+						this.filter.setSelection(id);
+						filter.domNode.setAttribute('aria-pressed', String(!this.filter.isDefault()));
 						void this.update().catch(onUnexpectedError);
 					},
 				})),
@@ -114,7 +117,7 @@ export class AgentSessionsControl extends Disposable {
 		});
 		filter.domNode.setAttribute('aria-haspopup', 'menu');
 		filter.domNode.setAttribute('aria-expanded', 'false');
-		filter.domNode.setAttribute('aria-pressed', 'false');
+		filter.domNode.setAttribute('aria-pressed', String(!this.filter.isDefault()));
 		button(localize('chat.sessions.toggleLayout', 'Toggle Session Layout'), Lxicon.layoutSidebarRight, () => this.toggleLayoutRequested.fire());
 		this.searchInput = h(document, 'input');
 		this.searchInput.type = 'search';
@@ -129,13 +132,9 @@ export class AgentSessionsControl extends Disposable {
 			const item = this.sessionsList.focus;
 			return item && !isAgentSessionSection(item) ? item.id : undefined;
 		}));
-		const include = (item: IAgentSession): boolean => this.filter === 'all'
-			|| this.filter === 'running' && item.inProgress === true
-			|| this.filter === 'drafts' && item.kind === 'draft'
-			|| this.filter === 'pinned' && item.isPinned();
 		const accessibilityProvider = new AgentSessionsAccessibilityProvider();
 		this.sessionsList = this._register(instantiation.createInstance(WorkbenchCompressibleAsyncDataTree<IAgentSessionsModel, AgentSessionListItem>, treeContainer,
-			new AgentSessionsDataSource(() => this.searchInput.value, include), {
+			new AgentSessionsDataSource(() => this.searchInput.value, item => !this.filter.exclude(item)), {
 				ariaLabel: accessibilityProvider.getWidgetAriaLabel(),
 				accessibilityProvider,
 				scrolling: 'managed',
@@ -180,10 +179,10 @@ export class AgentSessionsControl extends Disposable {
 			if (event.browserEvent.type === 'keydown' && !['Enter', ' '].includes((event.browserEvent as KeyboardEvent).key)) {
 				return;
 			}
-			const session = this.agentSessionsService.getSession(event.element.resource);
-			if (!session || session.isArchived()) return;
 			const preserveFocus = event.editorOptions.preserveFocus === true;
-			const opened = session.open({ preserveFocus });
+			const open = prepareSessionOpen(this.agentSessionsService, event.element.resource, { preserveFocus });
+			if (!open) return;
+			const opened = open();
 			const notify = () => { if (!this.isDisposed) this.sessionOpened.fire({ preserveFocus }); };
 			if (opened) void opened.then(notify).catch(onUnexpectedError);
 			else notify();
@@ -284,9 +283,10 @@ export class AgentSessionsControl extends Disposable {
 				this.updatePending = true;
 				return false;
 			}
-			const searching = this.searchInput.value.trim().length > 0 || this.filter !== 'all';
-			if (searching && !this.sectionsBeforeSearch && this.sessionsList.getInput()) {
-				this.sectionsBeforeSearch = new Map((this.sessionsList.getNode().children ?? []).map(node => {
+			const searching = this.searchInput.value.trim().length > 0 || !this.filter.isDefault();
+			if (searching && !this.sectionsBeforeSearch) {
+				const sections = this.sessionsList.getInput() ? this.sessionsList.getNode().children ?? [] : [];
+				this.sectionsBeforeSearch = new Map(sections.map(node => {
 					const section = node.element as AgentSessionListItem;
 					return [section.id, this.sessionsList.isCollapsed(section) === true];
 				}));
@@ -304,6 +304,10 @@ export class AgentSessionsControl extends Disposable {
 			}
 			for (const section of this.sessionsList.getNode().children ?? []) {
 				const item = section.element as AgentSessionListItem;
+				// A restored filter can reveal sections before an unfiltered tree has been shown.
+				if (searching && !this.sectionsBeforeSearch?.has(item.id)) {
+					this.sectionsBeforeSearch?.set(item.id, this.sessionsList.isCollapsed(item) === true);
+				}
 				if (searching || this.sectionsBeforeSearch?.get(item.id) === false) {
 					await this.sessionsList.expand(item);
 				}

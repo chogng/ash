@@ -252,6 +252,8 @@ where
     } else {
         client
             .create_project(ProjectCreateParams {
+                icon: None,
+                color: None,
                 materials: Vec::new(),
                 command_id: new_command_id("project-create"),
                 project_id,

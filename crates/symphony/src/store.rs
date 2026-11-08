@@ -16,6 +16,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Mutex;
 
+// The singleton row tracks both the schema and its serialized workflow state.
+const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_workflow_state.sql")];
+const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Job {
     pub id: String,
@@ -94,13 +98,32 @@ pub struct Store {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Self, Error> {
-        let connection = Connection::open(path)?;
+        let mut connection = Connection::open(path)?;
         connection.busy_timeout(std::time::Duration::from_secs(5))?;
-        connection.execute_batch("CREATE TABLE IF NOT EXISTS symphony_state (id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL, body TEXT NOT NULL);")?;
-        connection.execute(
-            "INSERT OR IGNORE INTO symphony_state VALUES (1, 1, ?1)",
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute_batch(MIGRATIONS[0])?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO symphony_state (id, version, body) VALUES (1, 1, ?1)",
             [serde_json::to_string(&State::default())?],
         )?;
+        let version: u32 = transaction.query_row(
+            "SELECT version FROM symphony_state WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        if !(1..=SCHEMA_VERSION).contains(&version) {
+            return Err(Error::Invalid(format!(
+                "unsupported workflow storage version {version}"
+            )));
+        }
+        for (target, sql) in (1_u32..).zip(MIGRATIONS).skip(version as usize) {
+            transaction.execute_batch(sql)?;
+            transaction.execute(
+                "UPDATE symphony_state SET version = ?1 WHERE id = 1",
+                [target],
+            )?;
+        }
+        transaction.commit()?;
         let store = Self {
             connection: Mutex::new(connection),
         };
@@ -115,7 +138,7 @@ impl Store {
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
-        if version != 1 {
+        if version != SCHEMA_VERSION {
             return Err(Error::Invalid(
                 "unsupported workflow storage version".into(),
             ));

@@ -139,7 +139,7 @@ export class ScmAgentReviewViewPane extends ViewPane {
 			this.message.textContent = localize('scm.review.starting', 'Starting review...');
 			const created = await this.sessionService.create({
 				commandId: createUuid(), title: localize('scm.review.sessionTitle', 'Code Review: {0}', provider.activeRepositoryName ?? provider.label),
-				executionTarget: { type: 'local', root: root.fsPath }, agent: { type: 'default' },
+				kind: 'code', executionTarget: { type: 'local', root: root.fsPath }, agent: { type: 'default' },
 			});
 			if (this.isDisposed) {
 				await this.sessionService.unsubscribe({ sessionId: created.session.sessionId });

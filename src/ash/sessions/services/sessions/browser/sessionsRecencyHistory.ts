@@ -44,8 +44,10 @@ export class SessionsRecencyHistory {
 		this.storage.store(storageKey, JSON.stringify(this.history), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
-	markViewed(entry: SessionRecencyEntry): void {
-		this.storage.store(viewedPrefix + getRecencyEntryKey(entry), Date.now(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	markViewed(entry: SessionRecencyEntry, timestamp = Date.now()): void {
+		if (Number.isFinite(timestamp) && timestamp > (this.getLastViewedAt(entry) ?? 0)) {
+			this.storage.store(viewedPrefix + getRecencyEntryKey(entry), timestamp, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		}
 	}
 
 	getLastViewedAt(entry: SessionRecencyEntry): number | undefined {

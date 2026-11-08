@@ -52,7 +52,7 @@ test('action choices preserve icons, radio states and separators when dispatchin
 		assert.deepEqual(rows.map(row => ({
 			label: row.getAttribute('aria-label'),
 			checked: row.getAttribute('aria-checked'),
-			icon: row.querySelector('.ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id'),
+			icon: row.querySelector('.ash-menu-leading-slot [data-ash-icon-id]:not([data-ash-icon-id="check"])')?.getAttribute('data-ash-icon-id'),
 		})), [
 			{ label: 'Agent', checked: 'true', icon: 'unlimited' },
 			{ label: 'Plan', checked: 'false', icon: 'plan' },
@@ -680,6 +680,51 @@ suite('actionWidget browser component', () => {
 		await widget.screenshot({ path: testInfo.outputPath('action-menu-standard-row-height.png') });
 	});
 
+	for (const presentation of ['menu', 'details'] as const) {
+		test(`action widget ${presentation} rows share one leading slot for the check and command icon`, async function () {
+			const { page } = browserTests;
+			await page.goto('/actionWidget.html');
+			await page.evaluate(presentation => window.ashActionWidgetIntegration.show(['First', 'Second'], { presentation }, 'Description'), presentation);
+			const selected = page.getByRole('menuitemradio', { name: 'First', checked: true });
+			const unselected = page.getByRole('menuitemradio', { name: 'Second', checked: false });
+			const check = selected.locator('[data-ash-icon-id="check"]');
+			const icon = unselected.locator('[data-ash-icon-id="unlimited"]');
+			await expect(check).toBeVisible();
+			await expect(icon).toBeVisible();
+			await expect(selected.locator('[data-ash-icon-id="unlimited"]')).toBeHidden();
+			await expect(unselected.locator('[data-ash-icon-id="check"]')).toBeHidden();
+			const checkBox = (await check.boundingBox())!;
+			const iconBox = (await icon.boundingBox())!;
+			const label = presentation === 'details' ? '.ash-action-widget-label' : '.ash-button-label';
+			const labelBox = (await selected.locator(label).boundingBox())!;
+			expect(checkBox.x).toBeCloseTo(iconBox.x, 0);
+			expect(checkBox.x + checkBox.width).toBeLessThanOrEqual(labelBox.x);
+			expect((await unselected.locator(label).boundingBox())!.x).toBe(labelBox.x);
+			if (presentation === 'details') {
+				expect((await selected.locator('.ash-action-widget-summary').boundingBox())!.x).toBe(labelBox.x);
+			}
+		});
+
+		test(`action widget ${presentation} rows keep their action icon when the trailing check is shown`, async function () {
+			const { page } = browserTests;
+			await page.goto('/actionWidget.html');
+			await page.evaluate(presentation => window.ashActionWidgetIntegration.show(
+				['First', 'Second'], { presentation, menuIconPlacement: 'leading-with-trailing-check' }, 'Description',
+			), presentation);
+			const row = page.getByRole('menuitemradio', { name: 'First', checked: true });
+			const icon = row.locator('[data-ash-icon-id="unlimited"]');
+			const check = row.locator('[data-ash-icon-id="check"]');
+			await expect(icon).toBeVisible();
+			await expect(check).toBeVisible();
+			const label = row.locator(presentation === 'details' ? '.ash-action-widget-label' : '.ash-button-label');
+			const [iconBounds, labelBounds, checkBounds] = await Promise.all([icon.boundingBox(), label.boundingBox(), check.boundingBox()]);
+			expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(labelBounds!.x);
+			expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(checkBounds!.x);
+			await row.press('ArrowDown');
+			await expect(page.getByRole('menuitemradio', { name: 'Second', checked: false })).toBeFocused();
+		});
+	}
+
 	test('action menu grows with content, respects width limits and truncates long labels', async function () {
 		const { page } = browserTests;
 
@@ -727,7 +772,7 @@ suite('actionWidget browser component', () => {
 		const fits = await track.evaluate(element => {
 			const trackBounds = element.getBoundingClientRect();
 			const rowBounds = element.closest('button')!.getBoundingClientRect();
-			const labelBounds = element.closest('button')!.querySelector('.ash-button-label')!.getBoundingClientRect();
+			const labelBounds = element.closest('button')!.querySelector('.ash-action-widget-label')!.getBoundingClientRect();
 			return trackBounds.left > labelBounds.right && trackBounds.right < rowBounds.right;
 		});
 		expect(fits).toBe(true);

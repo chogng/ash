@@ -21,6 +21,8 @@ use ash_protocol::ActionSource;
 use ash_protocol::Capability;
 use ash_protocol::CapabilityKind;
 use ash_protocol::CapabilitySet;
+use ash_protocol::ModelRef;
+use ash_protocol::ReasoningEffort;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCall;
@@ -82,6 +84,29 @@ pub enum AppToolOperation {
     ReadAttemptComparison {},
     CompleteAttemptComparison {
         verdict_json: String,
+    },
+    GetComparisonModels {
+        #[serde(default)]
+        workspace_mode: ModelEvaluationWorkspace,
+    },
+    CreateModelComparison {
+        #[serde(default)]
+        workspace_mode: ModelEvaluationWorkspace,
+        prompt: String,
+        attempts: Vec<ModelEvaluationSelection>,
+        judge: Option<ModelEvaluationSelection>,
+        synthesizer: Option<ModelEvaluationSelection>,
+    },
+    ListModelComparisons {
+        #[serde(default)]
+        include_archived: bool,
+        workspace: Option<String>,
+        #[serde(default)]
+        comparison_ids: Vec<String>,
+        cursor: Option<String>,
+    },
+    ReadModelComparison {
+        comparison_id: String,
     },
     TasksList {
         directory: String,
@@ -168,6 +193,23 @@ pub enum AppToolOperation {
     },
     CheckAppUpdate {},
     FireConfetti {},
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelEvaluationWorkspace {
+    #[default]
+    Worktree,
+    Folderless,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelEvaluationSelection {
+    pub source_id: String,
+    pub agent: String,
+    pub model: ModelRef,
+    pub reasoning_effort: Option<ReasoningEffort>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -322,7 +364,47 @@ impl AppToolService {
             AppToolOperation::CompleteAttemptComparison { verdict_json } => {
                 bounded(verdict_json, 16_000)?
             }
+            AppToolOperation::CreateModelComparison {
+                prompt,
+                attempts,
+                judge,
+                synthesizer,
+                ..
+            } => {
+                bounded(prompt, 16_000)?;
+                if !(2..=10).contains(&attempts.len()) || synthesizer.is_some() && judge.is_none() {
+                    return Err(CoreError::Policy(
+                        "use two to ten attempts and select a Judge before a Synthesizer".into(),
+                    ));
+                }
+                for selection in attempts.iter().chain(judge).chain(synthesizer) {
+                    bounded(&selection.source_id, 1024)?;
+                    bounded(&selection.agent, 256)?;
+                    bounded(selection.model.provider.as_str(), 256)?;
+                    bounded(selection.model.model.as_str(), 1024)?;
+                }
+            }
+            AppToolOperation::ListModelComparisons {
+                workspace,
+                comparison_ids,
+                cursor,
+                ..
+            } => {
+                if comparison_ids.len() > 100 {
+                    return Err(CoreError::Policy(
+                        "comparison filter exceeds 100 IDs".into(),
+                    ));
+                }
+                for id in comparison_ids.iter().chain(cursor) {
+                    bounded(id, 128)?;
+                }
+                if let Some(workspace) = workspace {
+                    bounded(workspace, 16_384)?;
+                }
+            }
+            AppToolOperation::ReadModelComparison { comparison_id } => bounded(comparison_id, 128)?,
             AppToolOperation::ReadAttemptComparison {}
+            | AppToolOperation::GetComparisonModels { .. }
             | AppToolOperation::ListThreads { .. }
             | AppToolOperation::ReadThread { .. }
             | AppToolOperation::SetThreadArchived { .. }
@@ -348,6 +430,10 @@ fn app_tool_capability(name: &ToolName) -> Option<(ash_protocol::ToolCategory, &
         }
         "read_attempt_comparison"
         | "complete_attempt_comparison"
+        | "get_comparison_models"
+        | "create_model_comparison"
+        | "list_model_comparisons"
+        | "read_model_comparison"
         | "list_threads"
         | "read_thread"
         | "create_thread"
@@ -389,7 +475,7 @@ impl ToolService for AppToolService {
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
-        Self::operation(call)?;
+        let operation = Self::operation(call)?;
         if call.name.as_str() == "tasks_run" {
             return Err(CoreError::Execution(
                 "task execution requires durable caller facts".into(),
@@ -398,11 +484,36 @@ impl ToolService for AppToolService {
         let canonical =
             serde_json::to_vec(&json!({ "tool": call.name, "arguments": call.arguments }))
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let summary = match operation {
+            AppToolOperation::CreateModelComparison {
+                prompt,
+                workspace_mode,
+                attempts,
+                judge,
+                synthesizer,
+            } => {
+                let models = attempts
+                    .iter()
+                    .chain(&judge)
+                    .chain(&synthesizer)
+                    .map(|selection| {
+                        format!(
+                            "{} ({}/{})",
+                            selection.agent, selection.model.provider, selection.model.model
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let prompt = prompt.chars().take(600).collect::<String>();
+                format!("Launch {workspace_mode:?} model comparison with {models}. Task: {prompt}")
+            }
+            _ => format!("Ash application operation {}", call.name),
+        };
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 ActionKind::SystemOperation,
-                format!("Ash application operation {}", call.name),
+                summary,
                 capabilities(call.name.as_str()),
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, call.name.as_str()),
@@ -501,7 +612,7 @@ impl ToolService for AppToolService {
             turn_id: identity.turn_id().clone(),
             call_id: call.id.clone(),
         };
-        if call.name.as_str() == "tasks_run"
+        if matches!(call.name.as_str(), "tasks_run" | "create_model_comparison")
             && matches!(
                 authorization,
                 ToolAuthorization::Sandboxed(_)
@@ -509,9 +620,12 @@ impl ToolService for AppToolService {
                     | ToolAuthorization::ExecPolicyGranted(_)
             )
         {
-            return Err(CoreError::Policy(
-                "workspace tasks require reviewed execution authority".into(),
-            ));
+            let message = if call.name.as_str() == "tasks_run" {
+                "workspace tasks require reviewed execution authority"
+            } else {
+                "model comparisons require reviewed execution authority"
+            };
+            return Err(CoreError::Policy(message.into()));
         }
         let result = self
             .host
@@ -566,7 +680,7 @@ impl ActionPolicyService for AppToolPolicy {
                 "application action does not match its registered authority".into(),
             ));
         }
-        if name == "tasks_run" {
+        if matches!(name, "tasks_run" | "create_model_comparison") {
             return Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
                 request.action().digest().clone(),
                 capabilities(name),
@@ -609,6 +723,16 @@ fn bounded(value: &str, limit: usize) -> Result<(), CoreError> {
 
 fn definitions() -> Vec<ToolDefinition> {
     let string = json!({"type":"string", "minLength":1});
+    let comparison_workspace =
+        json!({"type":"string", "enum":["worktree", "folderless"], "default":"worktree"});
+    let comparison_selection = json!({
+        "type":"object", "additionalProperties":false, "required":["source_id", "agent", "model"],
+        "properties": {
+            "source_id":string, "agent":string,
+            "model":{"type":"object", "properties":{"provider":string,"model":string}, "required":["provider","model"], "additionalProperties":false},
+            "reasoning_effort":{"type":"string", "enum":["none","minimal","low","medium","high","extraHigh","max"]}
+        }
+    });
     let session = json!({"session_id":string,"thread_id":string});
     let open_target = json!({"anyOf":[
         {"type":"object","properties":{"type":{"const":"file"},"path":string,"line":{"type":["integer","null"],"minimum":1}},"required":["type","path"],"additionalProperties":false},
@@ -628,6 +752,30 @@ fn definitions() -> Vec<ToolDefinition> {
             "Submit the verdict for the current comparison Judge turn. Use verdict_json with winner (completed attempt number) and non-empty comparison, validation, quality and solution strings. Optionally include decisions with topic, recommended and options (attempt and assessment). Read the comparison first and submit once.",
             json!({"verdict_json":{"type":"string","maxLength":16000}}),
             &["verdict_json"],
+        ),
+        definition(
+            "get_comparison_models",
+            "Read exact agent, model, and reasoning effort choices for comparisons on the current Ash host. Use before creating a model comparison.",
+            json!({"workspace_mode":comparison_workspace}),
+            &[],
+        ),
+        definition(
+            "create_model_comparison",
+            "Request approval to run the same scenario with two to ten model configurations. Worktree mode uses isolated checkouts from the calling thread; folderless mode creates independent Ask chats. Inherits the caller's approval mode. An optional Judge evaluates completed attempts; synthesis remains user-initiated. Returns launch outcomes. After a cancellation or uncertain result, list existing comparisons before retrying.",
+            json!({"workspace_mode":comparison_workspace, "prompt":{"type":"string","minLength":1,"maxLength":16000}, "attempts":{"type":"array","minItems":2,"maxItems":10,"items":comparison_selection}, "judge":comparison_selection, "synthesizer":comparison_selection}),
+            &["prompt", "attempts"],
+        ),
+        definition(
+            "list_model_comparisons",
+            "List saved Ash model comparisons, including those created interactively. Follow the next cursor with the same filters. Use read_model_comparison for results. Do not poll continuously.",
+            json!({"include_archived":{"type":"boolean"}, "workspace":string, "comparison_ids":{"type":"array","items":string,"maxItems":100}, "cursor":string}),
+            &[],
+        ),
+        definition(
+            "read_model_comparison",
+            "Read one saved Ash comparison, including attempt status, model configuration, usage, bounded evidence, and the Judge's recommendation when available.",
+            json!({"comparison_id":string}),
+            &["comparison_id"],
         ),
         definition(
             "tasks_list",

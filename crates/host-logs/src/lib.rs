@@ -4,7 +4,12 @@ pub mod contract;
 
 use contract::*;
 use std::collections::BTreeSet;
+#[cfg(unix)]
+use std::collections::VecDeque;
 use std::fs;
+#[cfg(unix)]
+use std::fs::File;
+use std::fs::Metadata;
 use std::fs::OpenOptions;
 use std::io;
 use std::io::BufRead;
@@ -18,6 +23,8 @@ use std::time::UNIX_EPOCH;
 
 const MAX_FRAME_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_READ_BYTES: u64 = 1024 * 1024;
+#[cfg(unix)]
+const MAX_OPEN_LOGS: usize = 32;
 
 #[derive(Debug)]
 enum Error {
@@ -52,9 +59,18 @@ struct Store {
     retained_sessions: usize,
     process_id: u32,
     sources: BTreeSet<String>,
+    #[cfg(unix)]
+    appenders: VecDeque<LogAppender>,
     app_server_log: Option<PathBuf>,
     write_failure: Option<String>,
     closed: bool,
+}
+
+#[cfg(unix)]
+struct LogAppender {
+    source: String,
+    file: File,
+    metadata: Metadata,
 }
 
 impl Store {
@@ -94,6 +110,8 @@ impl Store {
             retained_sessions: retained_sessions as usize,
             process_id,
             sources: BTreeSet::new(),
+            #[cfg(unix)]
+            appenders: VecDeque::new(),
             app_server_log: None,
             write_failure: None,
             closed: false,
@@ -135,13 +153,24 @@ impl Store {
             return Err(Error::Invalid("Invalid log source".into()));
         }
         let path = self.session.join(format!("{source}.log"));
-        let size = match fs::symlink_metadata(&path) {
-            Ok(metadata) if metadata.is_file() => metadata.len(),
+        #[cfg(unix)]
+        let cached = self
+            .appenders
+            .iter()
+            .position(|appender| appender.source == source)
+            .and_then(|index| self.appenders.remove(index));
+        // The owned handle can stay open, while the pathname check keeps external rotation,
+        // truncation, deletion and redirection visible to the next append.
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_file() => Some(metadata),
             Ok(_) => return Err(Error::Invalid("Log source must be a regular file".into())),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
             Err(error) => return Err(error.into()),
         };
+        let size = metadata.as_ref().map_or(0, Metadata::len);
         if size > 0 && size + bytes.len() as u64 > self.max_file_bytes {
+            #[cfg(unix)]
+            drop(cached);
             remove_if_exists(&path.with_extension("log.2"))?;
             match fs::rename(path.with_extension("log.1"), path.with_extension("log.2")) {
                 Ok(()) => {}
@@ -149,15 +178,40 @@ impl Store {
                 Err(error) => return Err(error.into()),
             }
             fs::rename(&path, path.with_extension("log.1"))?;
+        } else {
+            #[cfg(unix)]
+            if let Some(mut appender) = cached
+                && metadata.as_ref().is_some_and(|metadata| {
+                    use std::os::unix::fs::MetadataExt;
+                    metadata.dev() == appender.metadata.dev()
+                        && metadata.ino() == appender.metadata.ino()
+                })
+            {
+                appender.file.write_all(bytes)?;
+                self.appenders.push_back(appender);
+                return Ok(());
+            }
         }
         let mut options = OpenOptions::new();
         options.create(true).append(true);
         no_follow(&mut options);
         let mut file = options.open(&path)?;
-        if !file.metadata()?.is_file() {
+        let metadata = file.metadata()?;
+        if !metadata.is_file() {
             return Err(Error::Invalid("Log source must be a regular file".into()));
         }
         file.write_all(bytes)?;
+        #[cfg(unix)]
+        {
+            if self.appenders.len() == MAX_OPEN_LOGS {
+                self.appenders.pop_front();
+            }
+            self.appenders.push_back(LogAppender {
+                source: source.into(),
+                file,
+                metadata,
+            });
+        }
         self.sources.insert(source.into());
         Ok(())
     }

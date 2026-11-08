@@ -36,7 +36,7 @@ class Authentication extends Disposable implements IChatGPTAuthentication {
 	public recovered: Headers | undefined;
 	public recoveries = 0;
 	public readonly grants = new Map<string, AbortController>();
-	constructor() {
+	constructor(public cacheScope?: string) {
 		super();
 		this._register(toDisposable(() => { for (const controller of this.grants.values()) { controller.abort(); } this.grants.clear(); }));
 	}
@@ -48,7 +48,7 @@ class Authentication extends Disposable implements IChatGPTAuthentication {
 		this.grants.set(id, controller);
 		const release = toDisposable(() => { this.grants.delete(id); controller.abort(); });
 		return {
-			headers: new Headers(this.headers), signal: AbortSignal.any([signal, controller.signal]),
+			headers: new Headers(this.headers), signal: AbortSignal.any([signal, controller.signal]), cacheScope: this.cacheScope,
 			recoverUnauthorized: async () => { this.recoveries++; return this.recovered; },
 			dispose: () => release.dispose(), [Symbol.dispose]: () => release.dispose()
 		};
@@ -82,51 +82,76 @@ function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRunt
 
 suite('ChatGPT transport', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('native recent history shares the original 429 deadline across windows and desktop restarts', async () => {
-		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
-		const directory = await mkdtemp(join(tmpdir(), 'ash-chatgpt-cooldown-'));
-		try {
-			const statePath = join(directory, 'workbench-state.json');
-			const account = 'a'.repeat(64);
-			const signal = new AbortController().signal;
-			let upstreamCalls = 0;
-			const fetch = async () => {
-				upstreamCalls++;
-				return Response.json({});
-			};
-			{
-				using storage = new StorageMainService(statePath);
-				await storage.initialize();
-				using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
-				const upstream = new DeferredPromise<Response>();
-				const first = gate.request(account, signal, async () => { upstreamCalls++; return upstream.p; });
-				const fromAnotherWindow = gate.request(account, signal, fetch);
-				await upstream.complete(new Response(null, { status: 429, headers: { 'Retry-After': '120' } }));
-				assert.equal((await first).headers.get('Retry-After'), '120');
-				assert.equal((await fromAnotherWindow).status, 429);
-				assert.equal(upstreamCalls, 1);
-				await storage.close();
+	for (const native of [false, true]) {
+		test(`${native ? 'Native' : 'Web'} recent history shares the original 429 deadline across windows and desktop restarts`, async () => {
+			mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+			const directory = await mkdtemp(join(tmpdir(), 'ash-chatgpt-cooldown-'));
+			try {
+				const statePath = join(directory, 'workbench-state.json');
+				const account = 'a'.repeat(64);
+				const retryAfter = native ? 120 : 30;
+				let upstreamCalls = 0;
+				let upstream: DeferredPromise<Response> | undefined;
+				const requested = new DeferredPromise<void>();
+				const fetch = async () => {
+					upstreamCalls++;
+					if (upstream) { void requested.complete(); return upstream.p; }
+					return Response.json({ items: [] });
+				};
+				const openWindow = (resources: DisposableStore, gate: ChatGPTRecentHistoryGate, scope = account, channel = native) => {
+					const auth = resources.add(new Authentication(scope));
+					const transport = resources.add(new ChatGPTTransport({
+						native: channel ? true : undefined, recentHistoryGate: gate, authentication: auth,
+						readVerificationScript: async () => '', createRuntime: () => runtime(fetch),
+					}, new NullLoggerService()));
+					const request = createChatGPTFetch(adapt(transport, auth));
+					return () => request('/service/backend-api/conversations?offset=0');
+				};
+				{
+					using storage = new StorageMainService(statePath);
+					await storage.initialize();
+					using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
+					using windows = new DisposableStore();
+					const firstWindow = openWindow(windows, gate);
+					const secondWindow = openWindow(windows, gate);
+					upstream = new DeferredPromise<Response>();
+					const first = firstWindow();
+					await requested.p;
+					const fromAnotherWindow = secondWindow();
+					await upstream.complete(new Response(null, { status: 429, headers: { 'Retry-After': String(retryAfter) } }));
+					assert.equal((await first).headers.get('Retry-After'), String(retryAfter));
+					const blocked = await fromAnotherWindow;
+					assert.equal(blocked.status, 429);
+					assert.equal(blocked.headers.get('Retry-After'), String(retryAfter));
+					assert.equal(upstreamCalls, 1);
+					upstream = undefined;
+					await storage.close();
+				}
+				{
+					using storage = new StorageMainService(statePath);
+					await storage.initialize();
+					using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
+					using windows = new DisposableStore();
+					const reopened = openWindow(windows, gate);
+					mock.timers.tick((retryAfter - 5) * 1000);
+					const blocked = await reopened();
+					assert.equal(blocked.status, 429);
+					assert.equal(blocked.headers.get('Retry-After'), '5');
+					assert.equal(upstreamCalls, 1);
+					await (await openWindow(windows, gate, 'b'.repeat(64))()).json();
+					await (await openWindow(windows, gate, account, !native)()).json();
+					assert.equal(upstreamCalls, 3);
+					mock.timers.tick(5000);
+					assert.deepEqual(await (await reopened()).json(), { items: [] });
+					assert.equal(upstreamCalls, 4);
+					await storage.close();
+				}
+			} finally {
+				mock.timers.reset();
+				await rm(directory, { recursive: true, force: true });
 			}
-			{
-				using storage = new StorageMainService(statePath);
-				await storage.initialize();
-				using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
-				mock.timers.tick(61_000);
-				const blocked = await gate.request(account, signal, fetch);
-				assert.equal(blocked.status, 429);
-				assert.equal(blocked.headers.get('Retry-After'), '59');
-				assert.equal(upstreamCalls, 1);
-				assert.equal((await gate.request('b'.repeat(64), signal, fetch)).status, 200);
-				mock.timers.tick(59_000);
-				assert.equal((await gate.request(account, signal, fetch)).status, 200);
-				assert.equal(upstreamCalls, 3);
-				await storage.close();
-			}
-		} finally {
-			mock.timers.reset();
-			await rm(directory, { recursive: true, force: true });
-		}
-	});
+		});
+	}
 
 	test('admits native history only on the experimental channel', async () => fixture(async auth => {
 		const path = '/service/backend-api/conversations/thread/messages?num_turns=20&include_has_versions=true&before=cursor';
@@ -394,10 +419,12 @@ suite('ChatGPT transport', () => {
 		for (const [method, path, body] of [
 			['GET', '/pins?item_type=conversation', undefined],
 			['GET', '/gizmos/g-p-project/conversations?limit=20&owned_only=false&cursor=next%2Bpage', undefined],
+			['POST', '/projects', { name: 'Project', instructions: '', emoji: null, theme: null }],
 			['POST', '/conversation/id/chat/rename', { title: 'Renamed' }],
 			['PATCH', '/conversation/chat', { is_starred: true }],
 			['PATCH', '/conversation/chat', { is_archived: true }],
 			['PATCH', '/conversation/chat', { gizmo_id: 'g-p-project' }],
+			['PATCH', '/conversation/chat', { gizmo_id: null }],
 			['DELETE', '/conversation/id/chat', undefined],
 			['DELETE', '/gizmos/g-p-project', undefined],
 			['POST', '/share/v2/create', { conversation_id: 'chat', current_node_id: 'reply', is_anonymous: true }],
@@ -407,10 +434,14 @@ suite('ChatGPT transport', () => {
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers: {}, ...(body ? { body: JSON.stringify(body) } : {}) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST']);
-		assert.deepEqual(calls[7], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
+		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'POST', 'PATCH', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST']);
+		assert.deepEqual(calls[2], { method: 'POST', path: '/backend-api/projects' });
+		assert.deepEqual(calls[9], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
 		for (const [method, path, body] of [
 			['POST', '/pins', '{}'],
+			['POST', '/projects', '{"name":" ","instructions":"","emoji":null,"theme":null}'],
+			['POST', '/projects', '{"name":"Project","instructions":"","emoji":null,"theme":null,"owner":"other"}'],
+			['POST', '/projects?unexpected=true', '{"name":"Project","instructions":"","emoji":null,"theme":null}'],
 			['POST', '/gizmos/g-p-project/conversations', '{}'],
 			['GET', '/gizmos/g-custom/conversations?limit=20&owned_only=false', undefined],
 			['GET', '/gizmos/g-p-project/conversations?limit=20&owned_only=false&cursor=one&cursor=two', undefined],
@@ -425,7 +456,7 @@ suite('ChatGPT transport', () => {
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 10);
+		assert.equal(calls.length, 12);
 	}));
 
 	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {

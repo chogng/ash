@@ -23,6 +23,7 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { localize, localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsCategories } from '../../../common/categories.js';
+import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
@@ -295,7 +296,10 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							icon: Lxicon.folder,
 							toggled: filesVisibleContext.isEqualTo(true),
 						},
-						when: codeWhen,
+						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.or(
+							IsNewSessionContext.isEqualTo(false),
+							NewSessionHasUsableWorkspaceContext.isEqualTo(true),
+						)),
 						group: 'navigation',
 						order: 5,
 					},
@@ -309,7 +313,8 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							icon: Lxicon.diffChanges,
 							toggled: changesVisibleContext.isEqualTo(true),
 						},
-						when: codeWhen, group: 'navigation', order: 4,
+						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.not(IsNewSessionContext.key)),
+						group: 'navigation', order: 4,
 					},
 				},
 				{

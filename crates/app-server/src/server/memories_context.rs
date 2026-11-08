@@ -3,7 +3,9 @@ use super::session_execution_router::SessionExecutionRouter;
 use crate::dir_grants::DirGrants;
 use ash_file_access::Permission;
 use ash_projects::ProjectCoordinator;
+use ash_projects::ProjectScope;
 use ash_protocol::SessionId;
+use ash_protocol::SessionKind;
 use ash_protocol::ThreadId;
 use ash_teams::TeamCoordinator;
 use memories::MemoryError;
@@ -21,6 +23,52 @@ struct MemoryScopes {
 }
 
 impl AppServer {
+    pub(super) fn validate_memory_origin(
+        &self,
+        origin: &memories::MemoryTurnSource,
+        scope: &MemoryScope,
+    ) -> Result<(), super::RpcError> {
+        use ash_app_server_protocol::protocol::error::AppServerErrorName;
+        use ash_protocol::ThreadItem;
+
+        let invalid = || super::RpcError::new(-32602, AppServerErrorName::InvalidParams);
+        let (project_id, kind) = match scope {
+            MemoryScope::Project { project_id } => (project_id, SessionKind::Code),
+            MemoryScope::ChatProject { project_id } => (project_id, SessionKind::Chat),
+            _ => return Err(invalid()),
+        };
+        let project = self
+            .projects
+            .as_ref()
+            .ok_or_else(invalid)?
+            .read(project_id)
+            .map_err(|_| invalid())?;
+        if (kind == SessionKind::Code && project.scope() != ProjectScope::Code)
+            || !project.is_active()
+            || !project.session_ids.contains(&origin.session_id)
+            || self
+                .threads
+                .read_session_catalog(&origin.session_id)
+                .map_err(|_| invalid())?
+                .is_none_or(|session| session.kind != kind)
+        {
+            return Err(invalid());
+        }
+        let thread = self
+            .threads
+            .read_thread(&origin.thread_id)
+            .map_err(|_| invalid())?;
+        if thread.session_id != origin.session_id
+            || !thread.items.iter().any(|item| {
+                matches!(item, ThreadItem::UserMessage { item_id, turn_id, .. }
+                if *item_id == origin.item_id && *turn_id == origin.turn_id)
+            })
+        {
+            return Err(invalid());
+        }
+        Ok(())
+    }
+
     pub(super) fn memory_scope_labels(
         &self,
         thread_id: Option<&ThreadId>,
@@ -32,6 +80,12 @@ impl AppServer {
             .threads
             .read_thread(thread_id)
             .map_err(|error| error.to_string())?;
+        let kind = self
+            .threads
+            .read_session_catalog(&thread.session_id)
+            .map_err(|error| error.to_string())?
+            .ok_or("Session unavailable")?
+            .kind;
         let dirs = self
             .env_runtime
             .read()
@@ -45,7 +99,7 @@ impl AppServer {
             teams: self.teams.clone(),
             dirs: dirs.clone(),
         }
-        .available_scopes(&thread.session_id, thread_id)
+        .available_scopes(kind, &thread.session_id, thread_id)
         .map_err(|error| error.to_string())?;
         let mut directory_labels = std::collections::BTreeMap::new();
         if let Some(scope) = dirs
@@ -68,7 +122,8 @@ impl AppServer {
             .map(|scope| {
                 let label = match &scope {
                     MemoryScope::Profile => "Personal memories".into(),
-                    MemoryScope::Project { project_id } => format!(
+                    MemoryScope::Project { project_id }
+                    | MemoryScope::ChatProject { project_id } => format!(
                         "Project: {}",
                         self.projects
                             .as_ref()
@@ -138,10 +193,11 @@ impl MemoryScopeProvider for MemoryScopes {
         session_id: &SessionId,
         thread_id: &ThreadId,
     ) -> Result<Vec<MemoryScope>, MemoryError> {
-        if !self.enabled()? {
+        let kind = self.route(session_id)?.kind();
+        if kind == SessionKind::Code && !self.code_memory_enabled()? {
             return Ok(Vec::new());
         }
-        self.available_scopes(session_id, thread_id)
+        self.available_scopes(kind, session_id, thread_id)
     }
 
     fn automatic_scopes(
@@ -149,15 +205,12 @@ impl MemoryScopeProvider for MemoryScopes {
         session_id: &SessionId,
         thread_id: &ThreadId,
     ) -> Result<Vec<MemoryScope>, MemoryError> {
-        if !self.enabled()? {
+        let route = self.route(session_id)?;
+        if route.kind() == SessionKind::Code && !self.code_memory_enabled()? {
             return Ok(Vec::new());
         }
-        if self
-            .context_router
-            .allows_workspace(session_id)
-            .map_err(|error| MemoryError::Storage(error.to_string()))?
-        {
-            self.available_scopes(session_id, thread_id)
+        if route.kind() == SessionKind::Chat || route.allows_workspace() {
+            self.available_scopes(route.kind(), session_id, thread_id)
         } else {
             Ok(vec![MemoryScope::Profile])
         }
@@ -165,7 +218,16 @@ impl MemoryScopeProvider for MemoryScopes {
 }
 
 impl MemoryScopes {
-    fn enabled(&self) -> Result<bool, MemoryError> {
+    fn route(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<super::session_execution_router::SessionExecutionRoute, MemoryError> {
+        self.context_router
+            .resolve(session_id)
+            .map_err(|error| MemoryError::Storage(error.to_string()))
+    }
+
+    fn code_memory_enabled(&self) -> Result<bool, MemoryError> {
         self.config
             .as_ref()
             .map(|config| {
@@ -180,21 +242,37 @@ impl MemoryScopes {
 
     fn available_scopes(
         &self,
+        kind: SessionKind,
         session_id: &SessionId,
         thread_id: &ThreadId,
     ) -> Result<Vec<MemoryScope>, MemoryError> {
-        let mut scopes = vec![MemoryScope::Profile];
+        let mut scopes = Vec::new();
+        if kind == SessionKind::Code {
+            scopes.push(MemoryScope::Profile);
+        }
         if let Some(projects) = &self.projects {
             for project in projects
                 .list()
                 .map_err(|error| MemoryError::Storage(error.to_string()))?
             {
-                if project.is_active() && project.session_ids.contains(session_id) {
-                    scopes.push(MemoryScope::Project {
+                if !project.is_active() || !project.session_ids.contains(session_id) {
+                    continue;
+                }
+                match kind {
+                    SessionKind::Chat => scopes.push(MemoryScope::ChatProject {
                         project_id: project.project_id,
-                    });
+                    }),
+                    SessionKind::Code if project.scope() == ProjectScope::Code => {
+                        scopes.push(MemoryScope::Project {
+                            project_id: project.project_id,
+                        });
+                    }
+                    SessionKind::Code => {}
                 }
             }
+        }
+        if kind == SessionKind::Chat {
+            return Ok(scopes);
         }
         if let Some(teams) = &self.teams {
             if let Some(team_id) = teams

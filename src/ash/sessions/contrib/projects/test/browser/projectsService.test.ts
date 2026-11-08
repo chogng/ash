@@ -30,12 +30,13 @@ class ProjectsFixture extends Disposable {
 		this.services.registerInstance(IProjectService, {
 			addSession: async () => { throw new Error('Unexpected project membership change'); },
 			moveSession: async () => { throw new Error('Unexpected project membership transfer'); },
+			setAppearance: async () => { throw new Error('Unexpected project appearance update'); },
 			onDidChange: this.changed.event,
 			list: async () => this.pending ? this.pending.p : [...this.projects],
 			read: async id => this.projects.find(project => project.id === id)!,
 			create: async (id, name, description, materials) => {
 				if (this.failure) { throw this.failure; }
-				const project: Project = { id, name, description, materials, revision: 1, archived: false, sessionCount: 0, sessionIds: [] };
+				const project: Project = { id, name, description, materials, revision: 1, archived: false, createdAtMs: 1, updatedAtMs: 1, sessionCount: 0, sessionIds: [] };
 				this.projects.push(project); this.changed.fire(); return project;
 			},
 			update: async (project, name, description, materials) => {
@@ -152,19 +153,19 @@ suite('Projects browsing', () => {
 		await fixture.projectsView.create('z', 'Zebra', '', []);
 		await fixture.projectsView.create('a', 'Alpha', '', []);
 		await fixture.projectsView.create('m', 'Middle', '', []);
-		await fixture.projectsView.create('legacy', 'Legacy', '', []);
-		const times = { z: { createdAtMs: 100, updatedAtMs: 500 }, a: { createdAtMs: 200, updatedAtMs: 400 }, m: { createdAtMs: 300, updatedAtMs: 300 } };
+		await fixture.projectsView.create('early', 'Early', '', []);
+		const times = { z: { createdAtMs: 100, updatedAtMs: 500 }, a: { createdAtMs: 200, updatedAtMs: 400 }, m: { createdAtMs: 300, updatedAtMs: 300 }, early: { createdAtMs: 50, updatedAtMs: 50 } };
 		fixture.projects = fixture.projects.map(project => ({ ...project, ...times[project.id as keyof typeof times] }));
 		await fixture.projectsView.reload();
-		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Zebra', 'Alpha', 'Middle', 'Legacy']);
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Zebra', 'Alpha', 'Middle', 'Early']);
 		fixture.projectsView.setSortOrder('created');
-		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Middle', 'Alpha', 'Zebra', 'Legacy']);
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Middle', 'Alpha', 'Zebra', 'Early']);
 		fixture.projectsView.setSortOrder('name');
-		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Alpha', 'Legacy', 'Middle', 'Zebra']);
-		fixture.projectsView.togglePinned('legacy');
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Alpha', 'Early', 'Middle', 'Zebra']);
+		fixture.projectsView.togglePinned('early');
 		for (const order of ['updated', 'created', 'name'] as const) {
 			fixture.projectsView.setSortOrder(order);
-			assert.equal(fixture.projectsView.getProjects()[0].id, 'legacy');
+			assert.equal(fixture.projectsView.getProjects()[0].id, 'early');
 		}
 		fixture.projectsView.setQuery(' ALP ');
 		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Alpha']);

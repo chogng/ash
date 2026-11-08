@@ -419,6 +419,7 @@ fn memory_client_checks_citations_and_policy_mutation_identity() {
     use ash_app_server_protocol::protocol::memory::MemoryCitationReadParams;
     use ash_app_server_protocol::protocol::memory::MemoryPolicyUpdateParams;
     let citation = ::memories::MemoryCitation {
+        namespace: ::memories::MemoryNamespace::Code,
         memory_id: ::memories::MemoryId::new("memory-1").unwrap(),
         scope: ::memories::MemoryScope::Profile,
         revision: 1,

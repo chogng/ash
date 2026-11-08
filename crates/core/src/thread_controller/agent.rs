@@ -112,9 +112,10 @@ impl ThreadController {
             });
             prefixes.push(prefix);
         }
+        let parent = self.read_thread(&request.context_seed.parent_thread_id)?;
         let mut events = vec![
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: parent.kind,
                 agent_id: Some(agent_id),
                 origin: ThreadOrigin::AgentSpawn {
                     parent_thread_id: request.context_seed.parent_thread_id.clone(),
@@ -125,9 +126,7 @@ impl ThreadController {
                 session_id: request.session_id,
                 thread_id: thread_id.clone(),
                 title: request.title,
-                execution_target: self
-                    .read_thread(&request.context_seed.parent_thread_id)?
-                    .execution_target,
+                execution_target: parent.execution_target,
             },
             ThreadEvent::AgentContextSeedCommitted {
                 thread_id: thread_id.clone(),

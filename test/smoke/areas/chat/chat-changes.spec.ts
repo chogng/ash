@@ -20,7 +20,7 @@ test('Chat changes follow the selected conversation, history cursor and workspac
 		if (!await sidebar.isVisible()) await page.locator('[data-action-id="agentSessions.toggleAgentSessionsSidebar"] button').click();
 	};
 	const create = async (title: string): Promise<Conversation> => {
-		const created = await client.request(methods['session/create'], { commandId: title, title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(methods['session/create'], { commandId: title, kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		return { sessionId: created.session.sessionId, threadId: created.session.threads[0].threadId, title };
 	};
 	const open = async (conversation: Conversation) => {

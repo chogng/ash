@@ -4,6 +4,7 @@ use super::read_only_sandbox;
 use crate::dir_grants::CommandAuthorization;
 use crate::dir_grants::DirGrants;
 use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::FileWriteReview;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
@@ -13,6 +14,7 @@ use ash_core::ToolOutputSink;
 use ash_core::ToolService;
 use ash_file_access::Authorization;
 use ash_file_access::Dir;
+use ash_file_access::PathAccessPolicy;
 use ash_file_access::Permission as DirPermission;
 use ash_file_system::FileTextDocuments;
 use ash_file_system::TextFileFormat;
@@ -27,6 +29,7 @@ use ash_protocol::ProcessInvocationKind;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCall;
+use ash_protocol::ToolCallId;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
@@ -37,6 +40,8 @@ use ash_shell_command::CommandSessionId;
 use ash_shell_command::CommandSessionOwner;
 use ash_shell_command::CommandSessionStart;
 use ash_shell_command::CommandSessionStatus;
+use ash_shell_command::CommandTerminalOutput;
+use ash_shell_command::CommandTerminalReader;
 use ash_shell_command::CommandTerminalSize;
 use ash_tools::{
     TextDocumentChange, TextDocumentEditor, TextDocumentEditorProvider, TextDocumentError,
@@ -47,6 +52,7 @@ use serde_json::Value;
 use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -131,6 +137,45 @@ const SHELL_SESSION_SCHEMA: &str = r#"{"type":"object","properties":{"action":{"
 const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
 
+struct CommandAccess {
+    owner: CommandSessionOwner,
+    authorization: Arc<CommandAuthorization>,
+    call_id: ToolCallId,
+    terminal: bool,
+    controller: Option<u64>,
+    readers: std::collections::HashMap<u64, CommandTerminalReader>,
+}
+
+pub(crate) enum CommandTerminalAction {
+    Attach,
+    Detach,
+    Read(u64),
+    TakeInput,
+    ReleaseInput,
+    Write(Vec<u8>),
+    Resize(CommandTerminalSize),
+}
+
+pub(crate) struct CommandTerminalTarget {
+    pub(crate) session: SessionId,
+    pub(crate) thread: ThreadId,
+    pub(crate) call: ToolCallId,
+    pub(crate) id: CommandSessionId,
+}
+
+/// Presents an existing Agent PTY without creating or owning another process.
+pub(crate) trait CommandTerminalService: Send + Sync {
+    fn command_terminal(
+        &self,
+        target: CommandTerminalTarget,
+        connection: u64,
+        is_closed: &dyn Fn() -> bool,
+        action: CommandTerminalAction,
+    ) -> Result<Option<CommandTerminalOutput>, CoreError>;
+
+    fn release_connection(&self, connection: u64);
+}
+
 /// The fixed local coding-tool suite and its path-scoped execution state.
 pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
@@ -140,12 +185,7 @@ pub(crate) struct LocalToolSuite<B> {
     authorization: Authorization,
     grant: ash_file_access::Grant,
     dir_grants: Arc<DirGrants>,
-    command_authorizations: Mutex<
-        std::collections::HashMap<
-            CommandSessionId,
-            (CommandSessionOwner, Arc<CommandAuthorization>),
-        >,
-    >,
+    command_authorizations: Mutex<std::collections::HashMap<CommandSessionId, CommandAccess>>,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
     permission_requests: Option<super::permission_requests::PermissionRequests>,
@@ -238,6 +278,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         session: Option<&SessionId>,
         thread: Option<&ThreadId>,
         editor: Option<Arc<dyn TextDocumentEditor>>,
+        reviewed: Option<&FileWriteReview>,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
@@ -245,7 +286,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let path = string_arg(&call.arguments, "path")?;
         let reading = call.name.as_str() == "read_file";
-        let resolved = self
+        let mut resolved = self
             .resolve(
                 &path,
                 false,
@@ -258,6 +299,23 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 },
             )
             .map_err(CoreError::Execution)?;
+        if !reading {
+            let relative = resolved
+                .absolute
+                .strip_prefix(resolved.root.canonical_path())
+                .map_err(|error| CoreError::Policy(error.to_string()))?;
+            if reviewed.is_some_and(|review| {
+                review.directory_id != resolved.root.id().to_string()
+                    || review.targets.as_slice() != std::slice::from_ref(&resolved.absolute)
+            }) {
+                return Err(CoreError::Policy(
+                    "file write target changed after approval".into(),
+                ));
+            }
+            let scope =
+                PathAccessPolicy::for_exact_writes([relative]).map_err(CoreError::Policy)?;
+            resolved.authorization = resolved.authorization.constrained_by(&scope);
+        }
         let editor: Arc<dyn TextDocumentEditor> = match editor {
             Some(editor) => editor,
             None => Arc::new(FileTextDocuments::new(resolved.root.clone())),
@@ -687,7 +745,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             ));
         }
         let capabilities = CapabilitySet::new(capabilities);
-        Ok(ActionReviewRequest::new(
+        let review = ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 if write {
@@ -707,7 +765,20 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 SandboxCompatibility::Supported(read_only_sandbox())
             },
             self.shell.action_policy_revision.clone(),
-        ))
+        );
+        Ok(if write {
+            let protected = super::is_protected_write_path(
+                &resolved.root.requested_path().join(&resolved.relative),
+            ) || super::is_protected_write_path(Path::new(path))
+                || super::is_protected_write_path(&resolved.absolute);
+            review.with_file_write(FileWriteReview {
+                directory_id: resolved.root.id().to_string(),
+                targets: vec![resolved.absolute],
+                protected,
+            })
+        } else {
+            review
+        })
     }
 
     fn grep(
@@ -846,24 +917,12 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let action = string_arg(&call.arguments, "action")?;
         let owner = command_session_owner(session_id, thread_id);
-        let command_authorization = if matches!(
+        let controlled_command = if matches!(
             action.as_str(),
             "write" | "close_input" | "interrupt" | "resize"
         ) {
             let id = command_session_id(&call.arguments)?;
-            let commands = self
-                .command_authorizations
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let (expected_owner, authorization) = commands.get(&id).ok_or_else(|| {
-                CoreError::Policy("command session authorization was not found".into())
-            })?;
-            if expected_owner != &owner {
-                return Err(CoreError::Policy(
-                    "command session belongs to another caller".into(),
-                ));
-            }
-            Some(Arc::clone(authorization))
+            Some(id)
         } else {
             None
         };
@@ -907,27 +966,29 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 let command_authorization = self
                     .dir_grants
                     .authorize_command(authorizations, cancellation)?;
-                // Match the executor's retirement of completed tool sessions without
-                // retaining old turn cancellation domains for the suite's lifetime.
+                // Retire completed tool sessions unless a terminal still needs their output grant.
                 self.command_authorizations
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .retain(|id, (owner, _)| {
-                        self.shell
-                            .shell
-                            .read_session(
-                                owner,
-                                id,
-                                CommandSessionCursor::default(),
-                                Duration::ZERO,
-                            )
-                            .is_ok_and(|update| update.status == CommandSessionStatus::Running)
+                    .retain(|id, access| {
+                        !access.readers.is_empty()
+                            || self
+                                .shell
+                                .shell
+                                .read_session(
+                                    &access.owner,
+                                    id,
+                                    CommandSessionCursor::default(),
+                                    Duration::ZERO,
+                                )
+                                .is_ok_and(|update| update.status == CommandSessionStatus::Running)
                     });
                 let authority = super::local_command_authority(
                     authorization,
                     self.shell.shell_policy,
                     Some(&scope),
                 )?;
+                let terminal = terminal_size(&call.arguments)?;
                 let started = self
                     .shell
                     .shell
@@ -942,7 +1003,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                         ash_shell_command::CommandSessionOptions {
                             execution_timeout: Duration::from_millis(execution_timeout_ms),
                             wait_budget: wait,
-                            terminal: terminal_size(&call.arguments)?,
+                            terminal,
                         },
                     )
                     .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
@@ -954,8 +1015,21 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                         self.command_authorizations
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .insert(update.session_id.clone(), (owner, command_authorization));
-                        Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
+                            .insert(
+                                update.session_id.clone(),
+                                CommandAccess {
+                                    owner: owner.clone(),
+                                    authorization: command_authorization,
+                                    call_id: call.id.clone(),
+                                    terminal: terminal.is_some(),
+                                    controller: None,
+                                    readers: Default::default(),
+                                },
+                            );
+                        Ok(ToolExecutionOutput::Success(session_update_json(
+                            &update,
+                            terminal.is_some(),
+                        )?))
                     }
                 }
             }
@@ -974,7 +1048,9 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                         duration_arg(&call.arguments, "wait_ms")?,
                     )
                     .map_err(|error| CoreError::Execution(super::execution_error(error)))?;
-                Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
+                Ok(ToolExecutionOutput::Success(session_update_json(
+                    &update, false,
+                )?))
             }
             "wait" => {
                 let id = command_session_id(&call.arguments)?;
@@ -1000,7 +1076,9 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     }
                     error => CoreError::Execution(super::execution_error(error)),
                 })?;
-                Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
+                Ok(ToolExecutionOutput::Success(session_update_json(
+                    &update, false,
+                )?))
             }
             "write" => {
                 let id = command_session_id(&call.arguments)?;
@@ -1050,9 +1128,27 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "unsupported shell-session action: {action}"
             ))),
         };
-        match command_authorization {
-            Some(command) => self.dir_grants.execute_command(&command, execute),
-            None => execute(),
+        if let Some(id) = controlled_command {
+            // Keep ownership fixed until the operation reaches the existing grant gate.
+            let commands = self
+                .command_authorizations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let access = commands
+                .get(&id)
+                .filter(|access| access.owner == owner)
+                .ok_or_else(|| {
+                    CoreError::Policy("command session authorization was not found".into())
+                })?;
+            if access.controller.is_some() {
+                return Err(CoreError::Policy(
+                    "the user controls this command's terminal input".into(),
+                ));
+            }
+            self.dir_grants
+                .execute_command(&access.authorization, execute)
+        } else {
+            execute()
         }
     }
 
@@ -1117,6 +1213,146 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
     }
 }
 
+impl<B: ash_sandboxing::SandboxBackend> CommandTerminalService for LocalToolSuite<B> {
+    fn command_terminal(
+        &self,
+        target: CommandTerminalTarget,
+        connection: u64,
+        is_closed: &dyn Fn() -> bool,
+        action: CommandTerminalAction,
+    ) -> Result<Option<CommandTerminalOutput>, CoreError> {
+        let owner = command_session_owner(&target.session, &target.thread);
+        let id = &target.id;
+        let mut commands = self
+            .command_authorizations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if is_closed() {
+            return Err(CoreError::Policy("terminal connection is closed".into()));
+        }
+        let access = commands.get_mut(id).filter(|access| {
+            access.terminal && access.owner == owner && access.call_id == target.call
+        });
+        let Some(access) = access else {
+            return if matches!(action, CommandTerminalAction::Detach) {
+                Ok(None)
+            } else {
+                Err(CoreError::NotFound("command terminal".into()))
+            };
+        };
+        if matches!(
+            action,
+            CommandTerminalAction::Detach | CommandTerminalAction::ReleaseInput
+        ) {
+            if access.controller == Some(connection) {
+                access.controller = None;
+            }
+            if matches!(action, CommandTerminalAction::Detach) {
+                access.readers.remove(&connection);
+            }
+            return Ok(None);
+        }
+        let shell = &self.shell.shell;
+        let execution_error = |error| CoreError::Execution(super::execution_error(error));
+        if matches!(action, CommandTerminalAction::Attach) {
+            return self
+                .dir_grants
+                .read_command_output(&access.authorization, || {
+                    if let std::collections::hash_map::Entry::Vacant(entry) =
+                        access.readers.entry(connection)
+                    {
+                        entry.insert(
+                            shell
+                                .command_terminal_reader(&owner, id)
+                                .map_err(execution_error)?,
+                        );
+                    }
+                    Ok(None)
+                });
+        }
+        if let CommandTerminalAction::Read(cursor) = action {
+            return self
+                .dir_grants
+                .read_command_output(&access.authorization, || {
+                    let output = match access.readers.get(&connection) {
+                        Some(reader) => reader.read(cursor),
+                        None => shell
+                            .command_terminal_reader(&owner, id)
+                            .map_err(execution_error)?
+                            .read(cursor),
+                    };
+                    output
+                        .map(Some)
+                        .map_err(|error| execution_error(error.into()))
+                });
+        }
+        self.dir_grants.execute_command(&access.authorization, || {
+            match action {
+                CommandTerminalAction::TakeInput => {
+                    if access
+                        .controller
+                        .is_some_and(|controller| controller != connection)
+                    {
+                        return Err(CoreError::Policy(
+                            "another window controls terminal input".into(),
+                        ));
+                    }
+                    if shell
+                        .command_terminal_reader(&owner, id)
+                        .map_err(execution_error)?
+                        .read(0)
+                        .map_err(|error| execution_error(error.into()))?
+                        .exited
+                    {
+                        return Err(CoreError::NotFound("running command terminal".into()));
+                    }
+                    access.controller = Some(connection);
+                }
+                CommandTerminalAction::Write(bytes) => {
+                    if access.controller != Some(connection) {
+                        return Err(CoreError::Policy(
+                            "this window does not control terminal input".into(),
+                        ));
+                    }
+                    shell
+                        .write_session(&owner, id, bytes)
+                        .map_err(execution_error)?;
+                }
+                CommandTerminalAction::Resize(size) => {
+                    if access.controller != Some(connection) {
+                        return Err(CoreError::Policy(
+                            "this window does not control terminal input".into(),
+                        ));
+                    }
+                    shell
+                        .resize_session(&owner, id, size)
+                        .map_err(execution_error)?;
+                }
+                CommandTerminalAction::Attach
+                | CommandTerminalAction::Detach
+                | CommandTerminalAction::Read(_)
+                | CommandTerminalAction::ReleaseInput => {
+                    unreachable!()
+                }
+            }
+            Ok(None)
+        })
+    }
+
+    fn release_connection(&self, connection: u64) {
+        let mut commands = self
+            .command_authorizations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for access in commands.values_mut() {
+            access.readers.remove(&connection);
+            if access.controller == Some(connection) {
+                access.controller = None;
+            }
+        }
+    }
+}
+
 impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
     fn tool_set(&self, name: &ToolName) -> Option<&'static str> {
         match name.as_str() {
@@ -1175,6 +1411,17 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
                 path: string_arg(&call.arguments, "path").ok()?,
             }),
             "shell-command" => self.shell.activity(call),
+            "shell-session" if call.arguments.get("action")?.as_str()? == "start" => {
+                Some(ToolActivity::Command {
+                    program: required_nullable_string(&call.arguments, "program").ok()?,
+                    arguments: required_nullable_strings(&call.arguments, "arguments").ok()?,
+                    working_directory: required_nullable_string(
+                        &call.arguments,
+                        "working_directory",
+                    )
+                    .ok()?,
+                })
+            }
             "shell-session" => Some(ToolActivity::Run),
             _ => None,
         }
@@ -1316,35 +1563,42 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
             call.name.as_str(),
             "read_file" | "write_file" | "edit" | "grep"
         ) {
-            if let Some(provider) = &self.documents {
-                let editor = provider
-                    .for_turn(identity.thread_id(), identity.turn_id())
-                    .map_err(|error| CoreError::Execution(error.to_string()))?;
-                if let Some(editor) = editor {
-                    let output = if call.name.as_str() == "grep" {
-                        self.grep(
-                            call,
-                            cancellation,
-                            Some(session_id),
-                            Some(identity.thread_id()),
-                            Some(editor.as_ref()),
-                        )?
-                    } else {
-                        self.execute_document_tool(
-                            call,
-                            &scope,
-                            Some(session_id),
-                            Some(identity.thread_id()),
-                            Some(editor),
-                            cancellation,
-                        )?
-                    };
-                    if let ToolExecutionOutput::Success(text) = &output {
-                        sink.emit(ToolOutputStream::Stdout, text.clone())?;
-                    }
-                    return Ok(output);
+            let editor = self
+                .documents
+                .as_ref()
+                .map(|provider| provider.for_turn(identity.thread_id(), identity.turn_id()))
+                .transpose()
+                .map_err(|error| CoreError::Execution(error.to_string()))?
+                .flatten();
+            let output = if call.name.as_str() == "grep" {
+                self.grep(
+                    call,
+                    cancellation,
+                    Some(session_id),
+                    Some(identity.thread_id()),
+                    editor.as_deref(),
+                )?
+            } else {
+                let reviewed = facts.reviewed_action().and_then(|(_, write)| write);
+                if call.name.as_str() != "read_file" && reviewed.is_none() {
+                    return Err(CoreError::Policy(
+                        "file write requires a reviewed target".into(),
+                    ));
                 }
+                self.execute_document_tool(
+                    call,
+                    &scope,
+                    Some(session_id),
+                    Some(identity.thread_id()),
+                    editor,
+                    reviewed,
+                    cancellation,
+                )?
+            };
+            if let ToolExecutionOutput::Success(text) = &output {
+                sink.emit(ToolOutputStream::Stdout, text.clone())?;
             }
+            return Ok(output);
         }
         let output = self.execute_scoped(
             call,
@@ -1506,9 +1760,15 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match call.name.as_str() {
-            "read_file" | "write_file" | "edit" => {
-                self.execute_document_tool(call, scope, session_id, thread_id, None, cancellation)
-            }
+            "read_file" | "write_file" | "edit" => self.execute_document_tool(
+                call,
+                scope,
+                session_id,
+                thread_id,
+                None,
+                None,
+                cancellation,
+            ),
             "grep" => self.grep(call, cancellation, session_id, thread_id, None),
             "glob" => self.glob(call, cancellation, session_id, thread_id),
             _ => Ok(ToolExecutionOutput::Failure(format!(
@@ -1592,6 +1852,7 @@ fn required_nullable_strings(arguments: &Value, name: &str) -> Result<Vec<String
 
 fn session_update_json(
     update: &ash_shell_command::CommandSessionUpdate,
+    terminal: bool,
 ) -> Result<String, CoreError> {
     let (status, exit) = match &update.status {
         CommandSessionStatus::Running => ("running", None),
@@ -1602,7 +1863,7 @@ fn session_update_json(
         CommandSessionStatus::Terminated => ("terminated", None),
         CommandSessionStatus::Failed(_) => ("failed", None),
     };
-    serde_json::to_string_pretty(&json!({
+    let mut result = json!({
         "session_id": update.session_id.as_str(),
         "status": status,
         "exit_status": exit,
@@ -1620,8 +1881,11 @@ fn session_update_json(
             "next_cursor": update.stderr.next_cursor,
             "gap": update.stderr.gap,
         },
-    }))
-    .map_err(|error| CoreError::Execution(error.to_string()))
+    });
+    if terminal {
+        result["terminal"] = true.into();
+    }
+    serde_json::to_string_pretty(&result).map_err(|error| CoreError::Execution(error.to_string()))
 }
 
 fn session_outcome_json(

@@ -2,6 +2,7 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import type { IChatService, SessionId, ThreadId, ThreadRead, Thread, ThreadGoal } from '../../../workbench/services/chat/common/chatService.js';
+import type { ResolvedChatContext } from '../../../workbench/services/chat/common/chatContextService.js';
 import type { AgentInteractionOffer } from '../../../platform/agentHost/common/agent.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from './sessionProviderScopeService.js';
 
@@ -353,9 +354,19 @@ function thread(value: Thread, scope: ISessionProviderScope): Thread {
 function threadRead<T extends ThreadRead>(value: T, scope: ISessionProviderScope): T {
 	return { ...value, thread: thread(value.thread, scope), transcript: pair(value.transcript, scope) };
 }
-function backendOptions<T extends { readonly sessionId: string; readonly threadId: string; readonly source?: { readonly sessionId: string; readonly threadId: string; }; }>(value: T, scope: ISessionProviderScope): T {
+function backendOptions<T extends {
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly source?: { readonly sessionId: string; readonly threadId: string; };
+	readonly contexts?: readonly ResolvedChatContext[];
+}>(value: T, scope: ISessionProviderScope): T {
+	const contexts = value.contexts?.map(context => {
+		const source = context.chatReference;
+		return source ? { ...context, chatReference: { sessionId: scope.backendIdentity(source.sessionId), threadId: scope.backendIdentity(source.threadId) } } : context;
+	});
 	return {
 		...value, sessionId: scope.backendIdentity(value.sessionId), threadId: scope.backendIdentity(value.threadId),
 		...('source' in value ? { source: value.source && { sessionId: scope.backendIdentity(value.source.sessionId), threadId: scope.backendIdentity(value.source.threadId) } } : {}),
+		...(contexts ? { contexts } : {}),
 	};
 }

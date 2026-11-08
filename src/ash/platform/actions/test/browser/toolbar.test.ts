@@ -8,6 +8,7 @@ import { Event } from '../../../../base/common/event.js';
 import { ActionRunner } from '../../../../base/common/actions.js';
 import type { INotificationService } from '../../../notification/common/notification.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { DropdownWithPrimaryActionViewItem } from '../../browser/dropdownWithPrimaryActionViewItem.js';
 
 suite('Toolbar open menu refreshes', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -15,13 +16,12 @@ suite('Toolbar open menu refreshes', () => {
 	test('split dropdowns retain their menu and keyboard focus through a toolbar refresh', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
-			const { DropdownWithPrimaryActionViewItem } = await import('../../browser/dropdownWithPrimaryActionViewItem.js');
 			const { ToolBar } = await import('../../../../base/browser/ui/toolbar/toolbar.js');
 			let menu: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
 			const provider = { showContextMenu(options: NonNullable<typeof menu>) { menu = options; } };
 			using toolbar = new ToolBar(dom.window.document.body, {
 				contextMenuProvider: provider,
-				actionViewItemProvider: item => new DropdownWithPrimaryActionViewItem(item, testAction('profiles'), [testAction('shell')], provider),
+				actionViewItemProvider: item => new DropdownWithPrimaryActionViewItem({ ...item, enabled: item.label !== 'Settings only' }, testAction('profiles'), [testAction('shell')], provider),
 			});
 			toolbar.setActions([testAction('new')]);
 			const selector = '.ash-dropdown-with-primary-dropdown button';
@@ -37,6 +37,11 @@ suite('Toolbar open menu refreshes', () => {
 			assert.notEqual(updated, trigger);
 			assert.equal(dom.window.document.activeElement, updated);
 			assert.equal(toolbar.element.querySelector('.ash-dropdown-with-primary-primary button')?.textContent, 'Updated new');
+			toolbar.setActions([{ ...testAction('new'), label: 'Settings only' }]);
+			const settings = toolbar.element.querySelector<HTMLButtonElement>(selector)!;
+			assert.equal(toolbar.element.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-primary button')?.disabled, true);
+			assert.equal(settings.tabIndex, 0);
+			assert.equal(dom.window.document.activeElement, settings);
 		} finally {
 			dom.window.close();
 		}

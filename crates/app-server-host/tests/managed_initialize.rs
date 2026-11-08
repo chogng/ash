@@ -291,12 +291,12 @@ fn agents_connection_keeps_sessions_in_two_local_directories() {
         (
             2,
             "session/create",
-            json!({"commandId":"agents-first","title":"First","executionTarget":{"type":"local","root":first}}),
+            json!({"commandId":"agents-first","title":"First","kind":"code", "executionTarget":{"type":"local","root":first}}),
         ),
         (
             3,
             "session/create",
-            json!({"commandId":"agents-second","title":"Second","executionTarget":{"type":"local","root":second}}),
+            json!({"commandId":"agents-second","title":"Second","kind":"code", "executionTarget":{"type":"local","root":second}}),
         ),
         (4, "session/list", json!({})),
     ] {
@@ -437,7 +437,7 @@ fn agents_connection_routes_ssh_sessions_and_merges_the_catalog() {
     let created = call(
         2,
         "session/create",
-        json!({"commandId":"remote-task","title":"Remote task","executionTarget":{"type":"ssh","host":"test-host","root":remote_root}}),
+        json!({"commandId":"remote-task","title":"Remote task","kind":"code", "executionTarget":{"type":"ssh","host":"test-host","root":remote_root}}),
     );
     assert!(created.get("error").is_none(), "{created}");
     assert_eq!(

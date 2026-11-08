@@ -1,21 +1,25 @@
 .ash-sessions-settings-dialog.ash-dialog {
-	width: min(920px, calc(100vw - var(--ash-spacing-size320)));
+	width: min(960px, calc(100vw - var(--ash-spacing-size320)));
+	height: min(640px, calc(100dvh - min(90px, 20dvh)));
 	border-radius: var(--ash-cornerRadius-xLarge);
-	overflow: hidden;
 	container-type: inline-size;
 }
 
+.ash-sessions-settings-dialog.ash-dialog[open] {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+}
+
 .ash-sessions-settings-dialog > .ash-dialog-header {
-	display: none;
+	padding: var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-sessions-settings-dialog > .ash-dialog-body {
 	display: grid;
-	width: 100%;
-	height: min(560px, calc(100vh - 160px));
 	min-width: 0;
 	min-height: 0;
-	grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+	grid-template-columns: clamp(184px, 22.5%, 232px) minmax(0, 1fr);
 	grid-template-rows: minmax(0, 1fr);
 	padding: 0;
 }
@@ -33,9 +37,8 @@
 	box-sizing: border-box;
 	overflow: hidden;
 	flex-direction: column;
-	padding: var(--ash-spacing-size160) 0;
+	padding: var(--ash-spacing-size160) 0 0;
 	border-right: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	background: var(--ash-sideBar-background);
 }
 
 .ash-sessions-settings-search {
@@ -44,7 +47,7 @@
 	flex: 0 0 auto;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
-	margin: 0 var(--ash-spacing-size120);
+	margin: 0 var(--ash-spacing-size160);
 }
 
 .ash-sessions-settings-search > .ash-icon {
@@ -65,17 +68,11 @@
 	border-radius: var(--ash-cornerRadius-large);
 }
 
-.ash-sessions-settings-navigation-label {
-	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
 .ash-sessions-settings-navigation {
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
-	margin-top: var(--ash-spacing-size200);
+	margin-top: var(--ash-spacing-size120);
 }
 
 .ash-sessions-settings-navigation-scrollable,
@@ -87,20 +84,35 @@
 .ash-sessions-settings-navigation-content {
 	display: flex;
 	flex-direction: column;
-	padding: 0 var(--ash-spacing-size120);
-	gap: var(--ash-spacing-size160);
+	padding: 0 var(--ash-spacing-size160) var(--ash-spacing-size160);
 }
 
 .ash-sessions-settings-navigation-group {
 	display: flex;
 	flex-direction: column;
-	gap: var(--ash-spacing-size40);
+	gap: var(--ash-spacing-size20);
+}
+
+.ash-sessions-settings-navigation-group
+	+ .ash-sessions-settings-navigation-group {
+	margin-top: var(--ash-spacing-size120);
+	padding-top: var(--ash-spacing-size120);
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-sessions-settings-navigation .ash-sessions-settings-navigation-item {
 	width: 100%;
+	min-height: var(--ash-spacing-size320);
 	justify-content: flex-start;
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-foreground);
 	text-align: left;
+}
+
+.ash-sessions-settings-navigation
+	.ash-sessions-settings-navigation-item
+	> .ash-button-content {
+	gap: var(--ash-spacing-size120);
 }
 
 .ash-sessions-settings-navigation-item:hover {
@@ -108,6 +120,7 @@
 }
 
 .ash-sessions-settings-navigation-item.is-current {
+	border-color: var(--ash-contrastBorder, transparent);
 	background: var(--ash-sessions-selectionBackground);
 }
 
@@ -118,18 +131,220 @@
 	min-height: 0;
 	box-sizing: border-box;
 	overflow: hidden;
-	background: var(--ash-editor-background);
+	container: sessions-settings-page / inline-size;
 }
 
 .ash-sessions-settings-page-content {
-	padding: var(--ash-spacing-size240) var(--ash-spacing-size280);
+	padding: var(--ash-spacing-size200) var(--ash-spacing-size320);
 }
 
 .ash-sessions-settings-page-title {
-	margin: 0 0 var(--ash-spacing-size240);
+	margin: 0 0 var(--ash-spacing-size120);
 	color: var(--ash-foreground);
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-settings-page .ash-configuration-settings {
+	max-width: none;
+}
+
+.ash-sessions-settings-page .ash-settings-card {
+	border-radius: 0;
+	background: transparent;
+}
+
+.ash-sessions-settings-page .ash-settings-card > * + *::before {
+	inset-inline: 0;
+}
+
+.ash-sessions-settings-page
+	.ash-settings-card
+	> *
+	+ .ash-local-transcription-model-controls::before {
+	content: "";
+}
+
+.ash-sessions-settings-page
+	:is(.ash-settings-card, .ash-local-transcription-model-controls)
+	> .ash-configuration-setting {
+	padding-inline: 0 var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-table :is(th, td) {
+	padding-inline-start: 0;
+}
+
+.ash-sessions-settings-page
+	.ash-local-transcription-model-table
+	:is(th, td):last-child {
+	/* Align the action buttons with the model selector above. */
+	padding-inline: var(--ash-spacing-size160) var(--ash-spacing-size80);
+	text-align: end;
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-actions-label {
+	display: none;
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-actions {
+	justify-content: flex-end;
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-table thead {
+	color: var(--ash-muted-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-language-tags {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-sessions-settings-page .ash-button-secondary:not(:where(.icon-only)) {
+	--ash-button-secondaryBackground: var(--ash-button-hoverBackground);
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-settings-page
+	.ash-local-transcription-model-action.ash-button-danger {
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-settings-page
+	.ash-local-transcription-model-action.ash-button-danger:enabled:hover:not(
+		:active
+	):where(:not(.ash-high-contrast *)) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-error-foreground) 16%,
+		transparent
+	);
+}
+
+.ash-sessions-settings-page
+	.ash-button-secondary:hover:not(:active, :disabled, :where(.icon-only)) {
+	background: color-mix(
+		in srgb,
+		var(--ash-button-hoverBackground),
+		var(--ash-button-activeBackground)
+	);
+}
+
+.ash-sessions-settings-page
+	.ash-configuration-setting:is(:hover, :focus-within) {
+	background: transparent;
+}
+
+.ash-sessions-settings-page .ash-settings-configured-marker {
+	display: none;
+}
+
+.ash-sessions-settings-page
+	.ash-setting-item-actions-trigger:not(:focus-visible) {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-sessions-settings-page .ash-settings-field-row {
+	padding-inline: 0 var(--ash-spacing-size80);
+}
+
+.ash-sessions-settings-page .ash-configuration-setting-copy {
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-settings-page .ash-configuration-setting-title {
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-sessions-settings-page
+	:is(
+		.ash-configuration-setting-description,
+		.ash-settings-field-description
+	) {
+	color: var(--ash-muted-foreground);
+}
+
+.ash-sessions-settings-page .ash-configuration-setting > .ash-select-box {
+	max-width: 100%;
+}
+
+.ash-sessions-settings-page
+	:is(
+		.ash-input-box-field,
+		input.ash-general-setting-control,
+		.ash-editor-setting-text
+	) {
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-sessions-settings-page
+	:is(
+		.ash-input-box-compact,
+		input.ash-general-setting-control,
+		.ash-editor-setting-text
+	) {
+	min-height: var(--ash-spacing-size280);
+}
+
+.ash-sessions-settings-page .ash-input-box-field.ash-input-box-compact > input {
+	min-height: calc(
+		var(--ash-spacing-size280) - 2 * var(--ash-strokeThickness)
+	);
+}
+
+.ash-sessions-settings-page
+	:is(.ash-configuration-setting, .ash-setting-font-controls)
+	> .ash-select-box-field
+	> .ash-select-box-button {
+	--ash-select-style-select-border: var(--ash-contrastBorder, transparent);
+	--ash-select-style-select-background: transparent;
+	--ash-select-style-select-foreground: var(--ash-foreground);
+	min-height: var(--ash-spacing-size280);
+}
+
+.ash-sessions-settings-page
+	:is(.ash-configuration-setting, .ash-setting-font-controls)
+	> .ash-select-box-field
+	> .ash-select-box-button:hover,
+.ash-sessions-settings-page
+	:is(.ash-configuration-setting, .ash-setting-font-controls)
+	> .ash-select-box-field.ash-dropdown-open
+	> .ash-select-box-button {
+	--ash-select-style-select-background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-sessions-settings-dialog
+	.ash-context-view-default:has(> .ash-select-box-list) {
+	color: var(--ash-menu-foreground);
+	background: var(--ash-menu-background);
+	border-color: var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-xxLarge);
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-settings-dialog
+	.ash-context-view-default:has(> .ash-select-box-list) {
+	box-shadow: none;
+}
+
+.ash-sessions-settings-dialog .ash-select-box-list.ash-list {
+	--ash-list-rowHeight: var(--ash-spacing-size280);
+	--ash-list-hoverBackground: var(--ash-menu-hoverBackground);
+	padding: var(--ash-spacing-size60);
+	color: inherit;
+	background: inherit;
+}
+
+.ash-sessions-settings-dialog .ash-select-box-option {
+	padding-inline: var(
+		--ash-menu-item-padding-inline,
+		var(--ash-spacing-size120)
+	);
+	border-radius: var(--ash-cornerRadius-large);
 }
 
 .ash-sessions-settings-section-title {
@@ -160,7 +375,7 @@
 	.ash-sessions-settings-sidebar {
 		grid-column: 1;
 		grid-row: 1;
-		max-height: 180px;
+		max-height: min(180px, 35vh);
 		border-right: 0;
 		border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	}
@@ -168,6 +383,43 @@
 	.ash-sessions-settings-page {
 		grid-column: 1;
 		grid-row: 2;
+	}
+}
+
+@container sessions-settings-page (min-width: 520px) {
+	.ash-sessions-settings-page .ash-local-transcription-model-table {
+		table-layout: auto;
+	}
+
+	.ash-sessions-settings-page
+		.ash-local-transcription-model-table
+		thead
+		th:first-child {
+		width: auto;
+	}
+
+	.ash-sessions-settings-page
+		.ash-local-transcription-model-table
+		th:is(:nth-child(2), :nth-child(3)) {
+		/* Keep these columns at their content width and give spare space to Model. */
+		width: 1%;
+	}
+
+	.ash-sessions-settings-page
+		.ash-local-transcription-model-table
+		:is(th, td):nth-child(3) {
+		white-space: nowrap;
+	}
+
+	.ash-sessions-settings-page .ash-local-transcription-model-language-tags {
+		max-inline-size: 30cqi;
+	}
+}
+
+@container sessions-settings-page (max-width: 420px) {
+	.ash-sessions-settings-page .ash-configuration-setting {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--ash-spacing-size80);
 	}
 }
 

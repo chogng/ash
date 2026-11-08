@@ -202,7 +202,7 @@ for (const scenario of [
 				model: defaultModel,
 			});
 			const created = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'models-session',
+				commandId: 'models-session', kind: 'code',
 				title: 'Persisted model choices',
 				agent: { type: 'default' },
 				executionTarget: { type: 'local', root: testWorkspace.directory },
@@ -262,7 +262,7 @@ for (const scenario of [
 			).toEqual(childModel);
 
 			const empty = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'models-empty',
+				commandId: 'models-empty', kind: 'code',
 				title: 'No persisted model',
 				agent: { type: 'default' },
 				executionTarget: { type: 'local', root: testWorkspace.directory },

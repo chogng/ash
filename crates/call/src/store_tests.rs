@@ -326,6 +326,7 @@ fn existing_stored_calls_open_with_no_shared_documents() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("calls.sqlite");
     let owner = MemberCredential::generate();
+    open_calls_concurrently(&path);
     let store = CallStore::open(&path).unwrap();
     let call = store.create(&owner, "create").unwrap();
     let mut old = serde_json::to_value(&call).unwrap();
@@ -338,6 +339,15 @@ fn existing_stored_calls_open_with_no_shared_documents() {
         )
         .unwrap();
     drop(store);
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "DELETE FROM ash_schema_migrations WHERE component = 'calls'",
+            [],
+        )
+        .unwrap();
+    open_calls_concurrently(&path);
+
     assert!(
         CallStore::open(&path)
             .unwrap()
@@ -346,4 +356,16 @@ fn existing_stored_calls_open_with_no_shared_documents() {
             .documents
             .is_empty()
     );
+}
+
+fn open_calls_concurrently(path: &Path) {
+    let barrier = std::sync::Barrier::new(4);
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| {
+                barrier.wait();
+                CallStore::open(path).unwrap();
+            });
+        }
+    });
 }

@@ -30,6 +30,7 @@ import { EditorPanes, registerEditorPane } from '../../../../workbench/browser/e
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { DocumentEditorPane } from '../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import { ActiveEditorContext } from '../../../../workbench/common/contextkeys.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: input => input.resource.scheme === 'ash-creator' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ArtifactsEditorPane) });
 
@@ -183,7 +184,7 @@ CommandsRegistry.register('sessions.restore.creatorDocs', (accessor, source) => 
 
 registerAction2(class OpenCreator extends Action2 {
 	constructor() {
-		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Artifacts'), icon: Lxicon.artifacts, toggled: ContextKeyExpr.has('sessions.activity.creatorSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50 } });
+		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Artifacts'), icon: Lxicon.artifacts, toggled: ContextKeyExpr.has('sessions.activity.creatorSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') } });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand('sessions.show.creator'); }
 });

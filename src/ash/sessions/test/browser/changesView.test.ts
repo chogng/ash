@@ -89,6 +89,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		const sessions: ISessionsService = {
 			navigationRevision: 0,
 			getLastViewedAt: () => undefined,
+			markVisibleThreadViewed() { },
 			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
 			canNavigateBack: false, canNavigateForward: false, recentSessions: [],
 			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },
@@ -247,7 +248,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 });
 
 function selected(id: string): SessionsViewSelection {
-	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] } } };
+	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, kind: 'code' as const, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] } } };
 }
 
 function registerChecksServices(services: InstantiationService, document: Document): void {

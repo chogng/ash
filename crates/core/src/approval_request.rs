@@ -93,7 +93,20 @@ pub fn durable_approval_request(
             ash_protocol::ActionApprovalDecision::Decline,
         ],
         sandbox_denial: None,
+        session_command_prefix: None,
         risk_assessment,
+    })
+}
+
+pub(crate) fn session_command_prefix(
+    reviewed: &ActionReviewRequest,
+) -> Option<ash_protocol::ActionApprovalCommand> {
+    let [prefix] = reviewed.shell()?.session_prefixes.as_slice() else {
+        return None;
+    };
+    Some(ash_protocol::ActionApprovalCommand {
+        program: prefix.program().to_owned(),
+        arguments: prefix.arguments().to_vec(),
     })
 }
 
@@ -119,6 +132,10 @@ pub(crate) fn approval_matches_review(
 ) -> bool {
     approval.action_digest == reviewed.action().digest().as_str()
         && approval.policy_revision == reviewed.action_policy_revision().as_str()
+        && approval
+            .session_command_prefix
+            .as_ref()
+            .is_none_or(|prefix| session_command_prefix(reviewed).as_ref() == Some(prefix))
         && approval.capabilities
             == reviewed
                 .action()

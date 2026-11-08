@@ -4,7 +4,8 @@ import type { Button } from '../../../../../base/browser/ui/button/button.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Event } from '../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { autorun, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
+import { autorun, constObservable, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
+import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -12,6 +13,7 @@ import { IContextMenuService } from '../../../../../platform/contextview/browser
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID } from '../../../agentsVoice/common/agentsVoice.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../speechToText/chatSpeechToTextService.js';
+import { showDictationMicFeedback } from '../speechToText/dictationMicFeedback.js';
 import { addMicButtonContextMenuListener, getDictationContextMenuActions } from '../speechToText/micButtonMenuActions.js';
 import { IVoiceInputModeService, type VoiceInputMode } from './voiceInputMode.js';
 import { localize } from '../../../../../nls.js';
@@ -39,6 +41,7 @@ export class VoiceInputModeActionViewItem extends ActionViewItem {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IKeybindingService private readonly keybindings: IKeybindingService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 	) {
 		super(action);
 	}
@@ -56,12 +59,14 @@ export class VoiceInputModeActionViewItem extends ActionViewItem {
 		this.buttons.push(dictation, power, mute);
 		const capture = observableFromEvent(this, this.dictation.onDidChangeState, () => this.dictation.state);
 		const connection = observableFromEvent(this, this.voice?.onDidChange ?? Event.None, () => this.voice?.state);
+		const ownsDictationInput = this.options?.isDictationActive ?? this.options?.isActive ?? constObservable(true);
+		this._register(showDictationMicFeedback(dictation.domNode, ownsDictationInput, this.dictation, this.accessibility));
 		this._register(autorun(reader => {
 			const selected = this.modes.selectedMode.read(reader);
 			const state = connection.read(reader);
 			const ownsInput = this.options?.isActive?.read(reader) ?? true;
 			const ownsVoice = this.options?.isVoiceActive?.read(reader) ?? ownsInput;
-			const ownsDictation = this.options?.isDictationActive?.read(reader) ?? ownsInput;
+			const ownsDictation = ownsDictationInput.read(reader);
 			const voiceActive = ownsVoice && (state?.state === 'connecting' || state?.state === 'connected');
 			const captureState = capture.read(reader);
 			const dictationActive = ownsDictation && this.dictation.isBusy;

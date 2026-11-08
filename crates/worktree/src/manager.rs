@@ -323,6 +323,7 @@ impl ManagedRepositoryBinding {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ManagedDirCleanupEligibility {
     AllChangeSetsSettled,
+    ArchivedGitCheckoutSelectedByUser,
     SessionDeletedByUser,
     WorkflowTerminal,
 }
@@ -495,6 +496,21 @@ impl WorktreeManager {
 
     pub fn settings(&self) -> &WorktreeSettings {
         &self.settings
+    }
+
+    /// Finds a deterministic Git checkout for display. Cleanup still verifies its Git binding.
+    pub fn existing_git_checkout(&self, owner: &ManagedDirOwner) -> Option<PathBuf> {
+        let digest = self.managed_dir_id(owner);
+        let root = dunce::canonicalize(&self.settings.root).ok()?;
+        let checkout = root.join(&digest[..4]).join(&digest);
+        if dunce::canonicalize(&checkout).ok()? != checkout
+            || !std::fs::symlink_metadata(checkout.join(".git"))
+                .ok()?
+                .is_file()
+        {
+            return None;
+        }
+        Some(checkout)
     }
 
     /// Creates a user-owned checkout without binding it to a Thread.
@@ -1649,8 +1665,11 @@ impl WorktreeManager {
     pub async fn cleanup(
         &self,
         binding: &ManagedDirBinding,
-        _eligibility: ManagedDirCleanupEligibility,
+        eligibility: ManagedDirCleanupEligibility,
     ) -> Result<()> {
+        if eligibility == ManagedDirCleanupEligibility::ArchivedGitCheckoutSelectedByUser {
+            return self.cleanup_selected_git_checkout(binding).await;
+        }
         if binding.kind == ManagedDirKind::Directory {
             let checkout_root = dunce::canonicalize(&binding.checkout_root)?;
             let valid = if let Some(root) = &binding.prepared_root {
@@ -1678,6 +1697,65 @@ impl WorktreeManager {
                 .context("managed Git directory omitted its source repository")?,
         )
         .await?;
+        Ok(())
+    }
+
+    async fn cleanup_selected_git_checkout(&self, binding: &ManagedDirBinding) -> Result<()> {
+        let current = self
+            .recover(binding.checkout_root(), binding.owner())
+            .await?;
+        if &current != binding || current.kind() != ManagedDirKind::Git {
+            bail!("managed worktree ownership changed");
+        }
+        let [entry] = current.repositories() else {
+            bail!("manual cleanup requires a single-repository worktree");
+        };
+        // A fork can outlive the linked checkout it was provisioned from. Resolve
+        // the shared Git repository through this checkout's verified binding.
+        let checkout = self.git.open_repository(entry.worktree_root()).await?;
+        if entry.repository_id().starts_with("git:")
+            && local_repository_id(&checkout)? != entry.repository_id()
+        {
+            bail!("managed worktree repository identity changed");
+        }
+        let baseline_ref = GitPrivateRef::new(entry.baseline_ref().to_string())?;
+        let worktree = self
+            .git
+            .worktrees(&checkout)
+            .await?
+            .into_iter()
+            .find(|worktree| worktree.checkout_root() == entry.worktree_root())
+            .context("managed worktree is no longer registered")?;
+        // Removing a detached checkout drops its HEAD reference. Preserve new commits
+        // until the user gives them a branch or returns the checkout to its starting point.
+        if worktree.branch().is_none() && worktree.head() != entry.target_head() {
+            bail!("managed worktree has moved from its original detached HEAD");
+        }
+        let lock_reason = match worktree.availability() {
+            WorktreeAvailability::Locked { reason } => {
+                self.git
+                    .unlock_worktree(&checkout, entry.worktree_root())
+                    .await?;
+                Some(reason.as_deref().unwrap_or("Ash managed worktree"))
+            }
+            WorktreeAvailability::Ready => None,
+            WorktreeAvailability::Prunable { .. } => bail!("managed worktree is missing"),
+        };
+        if let Err(error) = self
+            .git
+            .remove_clean_linked_worktree(&checkout, entry.worktree_root())
+            .await
+        {
+            if let Some(reason) = lock_reason {
+                self.git
+                    .lock_worktree(&checkout, entry.worktree_root(), reason)
+                    .await?;
+            }
+            return Err(error.into());
+        }
+        self.git
+            .delete_private_ref_at_git_dir(checkout.common_dir(), &baseline_ref)
+            .await?;
         Ok(())
     }
 

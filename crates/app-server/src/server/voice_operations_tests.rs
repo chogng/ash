@@ -114,7 +114,7 @@ fn voice_rpc_validates_wire_identities_and_original_thread_source_before_startin
     let created = crate::tests::call(
         &server,
         &mut host,
-        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"session","title":"Voice","executionTarget":null}}),
+        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"session","title":"Voice","kind":"code", "executionTarget":null}}),
     );
     let mut params = spec();
     params.thread_id = ThreadId::new(
@@ -285,7 +285,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     let created = crate::tests::call(
         core,
         &mut core_owner,
-        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"session","title":"Voice","executionTarget":null}}),
+        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"session","title":"Voice","kind":"code", "executionTarget":null}}),
     );
     let mut params = spec();
     params.session_id =

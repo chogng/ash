@@ -1,9 +1,6 @@
 {
   "strokeWidth": 1.25,
   "outlinedFills": {
-    "add": [0],
-    "agent": [0, 1],
-    "agent-filled": [0],
     "ask": [2],
     "bell": [1],
     "bell-dot": [0, 1],
@@ -45,6 +42,7 @@
     "h4": [0],
     "h5": [0],
     "history": [1],
+    "inbox": [0],
     "letter-b": [0],
     "letter-h": [0],
     "lock": [1],

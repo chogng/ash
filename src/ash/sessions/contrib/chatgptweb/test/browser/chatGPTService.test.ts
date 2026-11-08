@@ -70,38 +70,115 @@ suite('ChatGPT shared service', () => {
 	const mainWindowDisposables = getWindowById(1)?.disposables;
 	suiteTeardown(() => mainWindowDisposables?.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('native recent history stays fresh on focus and window restoration for five minutes', async () => {
-		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
-		using clock = toDisposable(() => mock.timers.reset());
-		const values = new Map<string, string>();
-		let reads = 0;
-		const respond = async (path: string) => {
-			if (path.includes('/conversations?')) reads++;
+	for (const native of [undefined, true] as const) {
+		test(`${native ? 'Native' : 'Web'} recent history and sidebar groups have independent freshness after reopening`, async () => {
+			mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+			using clock = toDisposable(() => mock.timers.reset());
+			const values = new Map<string, string>();
+			const reads = { recent: 0, projects: 0, pins: 0, history: 0 };
+			let projectTitle = 'Project';
+			const createdAt = new Date(100_000);
+			const updatedAt = new Date(200_000);
+			let pinned = true;
+			let ids = ['one', 'two'];
+			const respond = async (path: string) => {
+				if (path.includes('/gizmos/snorlax/sidebar?')) {
+					reads.projects++;
+					return Response.json({
+						items: [{ gizmo: { id: 'g-p-project', display: { name: projectTitle }, created_at: createdAt.toISOString(), updated_at: updatedAt.toISOString() } }],
+						cursor: null,
+					});
+				}
+				if (path.includes('/pins?')) {
+					reads.pins++;
+					return Response.json(pinned ? [{ item: { id: 'pin', title: 'Pin' } }] : []);
+				}
+				if (path.includes('/conversations?')) {
+					reads.recent++;
+					return Response.json({ items: ids.map(id => ({ id, title: id })) });
+				}
+				if (native && path.includes('/conversations/')) {
+					if (path.includes('/conversations/one?')) { reads.history++; }
+					return Response.json({ title: 'Conversation', current_node: 'reply', messages: [], page_info: { has_previous_page: false } });
+				}
+				if (path.endsWith('/conversation/one')) { reads.history++; }
+				return response(path);
+			};
+			{
+				using chat = fixture(respond, { values, native });
+				await chat.reload();
+				await chat.refresh();
+				assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
+			}
+			using reopened = fixture(respond, { values, native });
+			const connected = new DeferredPromise<void>();
+			using ready = autorun(reader => {
+				if (reopened.state.read(reader).connected) void connected.complete();
+			});
+			reopened.initialize();
+			await connected.p;
+			assert.deepEqual(reopened.state.get().projects, [{
+				id: 'g-p-project', title: 'Project', createdAt: createdAt.getTime(), updatedAt: updatedAt.getTime(),
+			}]);
+			assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
+			assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
+			ids = ['new', ...ids];
+			mock.timers.tick(5 * 60_000 - 1);
+			await reopened.refresh();
+			assert.equal(reopened.state.get().conversations.some(item => item.id === 'new'), false);
+			assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
+			mock.timers.tick(1);
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 2, projects: 1, pins: 1, history: 0 });
+			assert.equal(reopened.state.get().conversations[0]?.id, 'new');
+			assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
+
+			projectTitle = 'Renamed project';
+			pinned = false;
+			mock.timers.tick(10 * 60_000 - 1);
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 3, projects: 1, pins: 1, history: 0 });
+			mock.timers.tick(1);
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 3, projects: 2, pins: 2, history: 0 });
+			assert.equal(reopened.state.get().projects[0]?.title, 'Renamed project');
+			assert.equal(reopened.state.get().conversations.some(item => item.pinned), false);
+
+			await reopened.reload();
+			assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: 0 }, 'Manual reload can refresh fresh lists');
+			await reopened.select('one');
+			assert.equal(reopened.state.get().conversationId, 'one');
+			const historyReads = reads.history;
+			await reopened.refresh();
+			assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: historyReads + Number(!!native) });
+		});
+	}
+
+	test('refreshes the project list when a fresh legacy catalog lacks project timestamps', async () => {
+		const now = Date.now();
+		const updatedAt = new Date(now - 60_000);
+		const values = new Map([[`sessions.chatgpt.catalog.v1:${'a'.repeat(64)}`, JSON.stringify({
+			projects: [{ id: 'g-p-project', title: 'Project' }],
+			projectsFetchedAt: now,
+			pinsFetchedAt: now,
+		})]]);
+		let projectReads = 0;
+		using chat = fixture(async path => {
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				projectReads++;
+				return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: 'Project' }, updated_at: updatedAt.toISOString() } }], cursor: null });
+			}
+			assert.ok(!path.includes('/pins?'), 'Legacy pins still have a fresh cache');
 			return response(path);
-		};
-		{
-			using chat = fixture(respond, { values, native: true });
-			await chat.reload();
-			await chat.refresh();
-			assert.equal(reads, 1);
-		}
-		using reopened = fixture(respond, { values, native: true });
+		}, { values });
 		const connected = new DeferredPromise<void>();
 		using ready = autorun(reader => {
-			if (reopened.state.read(reader).connected) void connected.complete();
+			if (chat.state.read(reader).connected) void connected.complete();
 		});
-		reopened.initialize();
+		chat.initialize();
 		await connected.p;
-		assert.equal(reopened.state.get().conversations.length, 2);
-		assert.equal(reads, 1);
-		mock.timers.tick(5 * 60_000 - 1);
-		await reopened.refresh();
-		assert.equal(reads, 1);
-		mock.timers.tick(1);
-		await reopened.refresh();
-		assert.equal(reads, 2);
-		await reopened.reload();
-		assert.equal(reads, 3, 'A manual reload can refresh a fresh list');
+		assert.equal(projectReads, 1);
+		assert.equal(chat.state.get().projects[0]?.updatedAt, updatedAt.getTime());
 	});
 
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
@@ -122,12 +199,19 @@ suite('ChatGPT shared service', () => {
 		}
 		{
 			const loaded = new DeferredPromise<void>();
+			const paths: string[] = [];
 			using fresh = fixture(async path => {
-				if (path.includes('/conversations?')) { void loaded.complete(); }
+				paths.push(path);
 				return response(path);
 			}, { values });
+			using ready = autorun(reader => {
+				if (fresh.state.read(reader).connected) { void loaded.complete(); }
+			});
 			fresh.newChat({ clearDraft: true });
 			await loaded.p;
+			assert.equal(paths.length, 1);
+			assert.ok(paths[0]?.includes('/models?'));
+			assert.deepEqual(fresh.state.get().conversations.map(item => item.id), ['one', 'two']);
 			assert.equal(fresh.state.get().draft, '');
 			assert.equal(selectedChatConversationId(fresh.state.get()), undefined);
 			fresh.setDraft('New draft to restore');
@@ -629,14 +713,20 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().uncertain, false);
 	});
 
-	test('refresh synchronizes cloud additions, edits and confirmed deletions across loaded pages and disk', async () => {
+	test('refresh reads only the recent head and keeps cached pages and the active chat usable', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
 		const values = new Map<string, string>();
+		const offsets: number[] = [];
+		let sidebarReads = 0;
 		let ids = ['one', 'two', 'older'];
 		let unavailable = false;
 		let revised = false;
 		const respond = async (path: string): Promise<Response> => {
+			if (path.includes('/pins?') || path.includes('/gizmos/snorlax/sidebar?')) { sidebarReads++; }
 			if (path.includes('/conversations?')) {
 				const offset = Number(new URL(path, 'https://fixture.invalid').searchParams.get('offset'));
+				offsets.push(offset);
 				return Response.json({ items: ids.slice(offset, offset + 2).map(id => ({ id, title: id })), total: ids.length });
 			}
 			if (path.endsWith('/conversation/two')) {
@@ -657,19 +747,30 @@ suite('ChatGPT shared service', () => {
 		await chat.loadMore();
 		await chat.select('two');
 		chat.setDraft('Unsent text');
-		revised = true;
 		await chat.refresh();
+		assert.deepEqual(offsets, [0, 2]);
+		revised = true;
+		mock.timers.tick(5 * 60_000);
+		await Promise.all([chat.refresh(), chat.refresh()]);
+		assert.deepEqual(offsets, [0, 2, 0]);
+		assert.equal(sidebarReads, 2);
 		assert.equal(chat.state.get().messages[0]?.text, 'Updated remotely');
 		assert.equal(chat.state.get().draft, 'Unsent text');
 
 		ids = ['new', 'one', 'older'];
 		unavailable = true;
+		mock.timers.tick(5 * 60_000);
 		await chat.refresh();
-		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['new', 'one', 'older', 'two']);
+		assert.deepEqual(offsets, [0, 2, 0, 0]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['new', 'one', 'two', 'older']);
+		await chat.loadMore();
+		assert.deepEqual(offsets, [0, 2, 0, 0, 2]);
 		assert.equal(chat.state.get().conversationId, 'two');
 		assert.equal(chat.state.get().messages[0]?.text, 'Updated remotely');
 		unavailable = false;
+		mock.timers.tick(5 * 60_000);
 		await chat.refresh();
+		assert.equal(sidebarReads, 4);
 		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids);
 		assert.equal(chat.state.get().conversationId, undefined);
 		assert.equal(chat.state.get().draft, 'Unsent text');
@@ -681,7 +782,74 @@ suite('ChatGPT shared service', () => {
 		assert.deepEqual(offline.state.get().messages, []);
 	});
 
+	test('manual reload shows the latest Web chats when an older page is rate-limited', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
+		const offsets: number[] = [];
+		let ids = ['one', 'two', 'older'];
+		let rateLimited = false;
+		using chat = fixture(async path => {
+			if (!path.includes('/conversations?')) return response(path);
+			const offset = Number(new URL(path, 'https://fixture.invalid').searchParams.get('offset'));
+			offsets.push(offset);
+			if (offset && rateLimited) return new Response(null, { status: 429, headers: { 'Retry-After': '30' } });
+			return Response.json({ items: ids.slice(offset, offset + 2).map(id => ({ id, title: id })), total: ids.length });
+		});
+		await chat.reload();
+		await chat.loadMore();
+		ids = ['new', ...ids];
+		rateLimited = true;
+		await chat.reload();
+		assert.deepEqual(offsets, [0, 2, 0, 2]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids);
+		assert.equal(chat.state.get().hasMore, true);
+		assert.equal(chat.state.get().historyListFailed, true);
+
+		rateLimited = false;
+		mock.timers.tick(29_999);
+		await chat.refresh();
+		assert.deepEqual(offsets, [0, 2, 0, 2]);
+		assert.equal(chat.state.get().conversations[0]?.id, 'new');
+		mock.timers.tick(1);
+		await chat.refresh();
+		assert.deepEqual(offsets, [0, 2, 0, 2, 0]);
+		assert.equal(chat.state.get().historyListFailed, false);
+		await chat.loadMore();
+		assert.deepEqual(offsets, [0, 2, 0, 2, 0, 2]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids);
+		assert.equal(chat.state.get().hasMore, false);
+	});
+
+	test('refresh recalibrates recent pagination when a later page changes but the head stays the same', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
+		const offsets: number[] = [];
+		let ids = ['one', 'two', 'three', 'four', 'five', 'six', 'seven'];
+		using chat = fixture(async path => {
+			if (!path.includes('/conversations?')) { return response(path); }
+			const offset = Number(new URL(path, 'https://fixture.invalid').searchParams.get('offset'));
+			offsets.push(offset);
+			return Response.json({ items: ids.slice(offset, offset + 2).map(id => ({ id, title: id })), total: ids.length });
+		});
+		await chat.reload();
+		await chat.loadMore();
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids.slice(0, 4));
+
+		ids = ids.filter(id => id !== 'three');
+		mock.timers.tick(5 * 60_000);
+		await chat.refresh();
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['one', 'two', 'three', 'four']);
+		await chat.loadMore();
+		await chat.loadMore();
+
+		assert.deepEqual(offsets, [0, 2, 0, 2, 4]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id).slice(0, ids.length), ids);
+		assert.equal(chat.state.get().hasMore, false);
+	});
+
 	test('a remote snapshot in flight cannot undo an acknowledged local delete', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
 		const entered = new DeferredPromise<void>();
 		const released = new DeferredPromise<void>();
 		let held = false;
@@ -701,6 +869,7 @@ suite('ChatGPT shared service', () => {
 		});
 		await chat.reload();
 		held = true;
+		mock.timers.tick(5 * 60_000);
 		const stale = chat.refresh();
 		await entered.p;
 		await chat.deleteConversation('two');
@@ -900,7 +1069,7 @@ suite('ChatGPT shared service', () => {
 				assert.equal(deletes, 0);
 			}
 			indexed = true;
-			await reopened.refresh();
+			await reopened.reload();
 			assert.equal(posts, 1);
 			assert.equal(deletes, cancelled ? 1 : 0);
 			assert.equal(reopened.state.get().conversationId, cancelled ? undefined : 'cloud-created');
@@ -955,6 +1124,30 @@ suite('ChatGPT shared service', () => {
 		assert.ok(writes.at(-1)!.path.endsWith('/conversation/id/two'));
 	});
 
+	test('a failed move keeps the newly created project available for retry', async () => {
+		let creates = 0;
+		let rejectMove = true;
+		using chat = fixture(async (path, _signal, request) => {
+			if (request.method === 'POST' && path.endsWith('/projects')) {
+				creates++;
+				return Response.json({ gizmo: { id: 'g-p-new' } });
+			}
+			if (request.method === 'PATCH' && path.endsWith('/conversation/one')) {
+				return rejectMove ? new Response(null, { status: 500 }) : Response.json({ success: true });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		const originalProject = chat.state.get().conversations.find(item => item.id === 'one')?.projectId;
+		await assert.rejects(chat.createProjectAndMove('one', 'New project'), /Created New project/);
+		assert.ok(chat.state.get().projects.some(project => project.id === 'g-p-new'));
+		assert.equal(chat.state.get().conversations.find(item => item.id === 'one')?.projectId, originalProject);
+		rejectMove = false;
+		await chat.moveToProject('one', 'g-p-new');
+		assert.equal(chat.state.get().conversations.find(item => item.id === 'one')?.projectId, 'g-p-new');
+		assert.equal(creates, 1);
+	});
+
 	test('pending management fences duplicate writes and navigation without aborting the accepted request', async () => {
 		let finish!: () => void;
 		let entered!: () => void;
@@ -979,7 +1172,7 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().conversations[0]!.pinned, true);
 	});
 
-	test('project menus read every server page and share links reject a foreign origin', async () => {
+	test('catalog reload reads every project page and share links reject a foreign origin', async () => {
 		using chat = fixture(async (path, _signal, request) => {
 			if (path.includes('/gizmos/snorlax/sidebar?')) {
 				const next = new URL(path, 'https://test.invalid').searchParams.get('cursor');
@@ -988,8 +1181,8 @@ suite('ChatGPT shared service', () => {
 			if (request.method === 'POST' && path.endsWith('/share/v2/create')) { return Response.json({ share_url: 'https://other.test/share/one' }); }
 			return response(path);
 		});
-		assert.deepEqual(await chat.listProjects(new AbortController().signal), [{ id: 'g-p-one', title: 'One' }, { id: 'g-p-two', title: 'Two' }]);
 		await chat.reload();
+		assert.deepEqual(chat.state.get().projects, [{ id: 'g-p-one', title: 'One' }, { id: 'g-p-two', title: 'Two' }]);
 		assert.equal(await chat.share('one'), undefined);
 		assert.match(chat.state.get().error, /unsupported/);
 	});

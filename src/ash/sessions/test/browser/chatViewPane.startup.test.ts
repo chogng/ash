@@ -151,6 +151,7 @@ test('opens a local Chat conversation before the backend session request settles
 
 class PendingSessionService implements ISessionsManagementService {
 	readonly navigationRevision = 0;
+	readonly primaryCatalogReady = false;
 	private readonly _onDidChange = new Emitter<void>();
 	private readonly pendingInitialization = new Promise<void>(() => { });
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
@@ -200,6 +201,7 @@ class PendingSessionService implements ISessionsManagementService {
 	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void { }
+	completeBackgroundSend(): never { throw new Error('Unexpected background send'); }
 	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }

@@ -5,8 +5,14 @@ on:
     tags: ["rusty-v8-v*.*.*"]
   # Manual runs validate the source build without creating a release.
   workflow_dispatch:
+    inputs:
+      staged_run_id:
+        description: Reuse the staged pairs from a completed run on this branch
+        required: false
+        type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -29,6 +35,7 @@ jobs:
       source_revision: ${{ steps.metadata.outputs.source_revision }}
       release_tag: ${{ steps.metadata.outputs.release_tag }}
       matrix: ${{ steps.metadata.outputs.matrix }}
+      cross_smoke_matrix: ${{ steps.metadata.outputs.cross_smoke_matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -36,6 +43,23 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: "3.12"
+      - name: Verify the source of resumed artifacts
+        if: inputs.staged_run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGED_RUN_ID: ${{ inputs.staged_run_id }}
+        run: |
+          [[ "$STAGED_RUN_ID" =~ ^[0-9]+$ ]]
+          source_sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGED_RUN_ID" |
+            jq -er --arg repo "$GITHUB_REPOSITORY" --arg branch "$GITHUB_REF_NAME" '
+              select(.path == ".github/workflows/rusty-v8-release.yml"
+                and .event == "workflow_dispatch" and .status == "completed"
+                and .head_repository.full_name == $repo and .head_branch == $branch)
+              | .head_sha | select(test("^[0-9a-f]{40}$"))')"
+          gh api "repos/$GITHUB_REPOSITORY/compare/$source_sha...$GITHUB_SHA" |
+            jq -e '(.status == "ahead" or .status == "identical") and
+              (.files | type == "array" and all(.[];
+                .filename == ".github/workflows/rusty-v8-release.yml" and .status == "modified"))'
       - name: Resolve and validate the exact V8 pin
         id: metadata
         env:
@@ -50,7 +74,7 @@ jobs:
     name: Sandbox / ${{ matrix.target }}
     needs: metadata
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.metadata.outputs.matrix) }}
@@ -63,10 +87,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Enable upstream Windows symlinks
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.staged_run_id == ''
         run: git config --global core.symlinks true
       - name: Check out matching rusty_v8 source
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.staged_run_id == ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: denoland/rusty_v8
@@ -79,24 +103,24 @@ jobs:
           python-version: "3.12"
       - uses: ./.github/actions/setup-just
       - name: Set up compiler cache
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.staged_run_id == ''
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
         with:
           version: v0.16.0
       - name: Apply pinned V8 source backport
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.staged_run_id == ''
         run: |
           patch="$GITHUB_WORKSPACE/third_party/v8/patches/v8_array_sort_elements_kind.patch"
           git -C upstream-rusty-v8/v8 apply --check -p3 "$patch"
           git -C upstream-rusty-v8/v8 apply -p3 "$patch"
       - name: Resolve upstream build toolchain
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.staged_run_id == ''
         id: upstream
         run: |
           python -B build/v8/release.py windows-tools --upstream upstream-rusty-v8
           python -B build/v8/release.py upstream-toolchain --upstream upstream-rusty-v8 --github-output "$GITHUB_OUTPUT"
       - name: Install upstream toolchain and target
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.staged_run_id == ''
         env:
           UPSTREAM_TOOLCHAIN: ${{ steps.upstream.outputs.toolchain }}
         run: |
@@ -112,7 +136,7 @@ jobs:
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
           fi
       - name: Build Windows sandbox archive and binding from source
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.staged_run_id == ''
         working-directory: upstream-rusty-v8
         env:
           UPSTREAM_TOOLCHAIN: ${{ steps.upstream.outputs.toolchain }}
@@ -132,13 +156,21 @@ jobs:
           disk-cache: v8-source-${{ matrix.target }}
           repository-cache: true
       - name: Build and stage archive, binding and checksums
-        id: stage
+        if: inputs.staged_run_id == ''
         run: |
           if [ "$RUNNER_OS" = Windows ]; then
-            python -B build/v8/release.py stage --upstream upstream-rusty-v8 --target "$TARGET" --output "dist/$TARGET" --github-output "$GITHUB_OUTPUT"
+            python -B build/v8/release.py stage --upstream upstream-rusty-v8 --target "$TARGET" --output "dist/$TARGET"
           else
-            python -B build/v8/release.py bazel-stage --target "$TARGET" --output "dist/$TARGET" --github-output "$GITHUB_OUTPUT"
+            python -B build/v8/release.py bazel-stage --target "$TARGET" --output "dist/$TARGET"
           fi
+      - name: Download the staged pair from the previous run
+        if: inputs.staged_run_id != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: rusty-v8-${{ needs.metadata.outputs.version }}-${{ matrix.target }}
+          path: dist/${{ matrix.target }}
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.staged_run_id }}
       # Preserve the exact source inputs even when a consumer fails. Release
       # aggregation still requires this job's later consumer checks to pass.
       - name: Upload staged target inputs
@@ -155,20 +187,25 @@ jobs:
       - name: Prepare checksum-pinned musl linker
         if: endsWith(matrix.target, '-linux-musl')
         run: python -B build/v8/smoke.py musl-linker --target "$TARGET" --output "$RUNNER_TEMP/v8-musl-linker" --github-env "$GITHUB_ENV"
+      - name: Select the verified Cargo inputs
+        if: matrix.smoke == 'run'
+        run: python -B build/v8/smoke.py pair --target "$TARGET" --artifacts "dist/$TARGET" --github-env "$GITHUB_ENV"
       - name: Test staged pair with Ash
-        env:
-          SMOKE: ${{ matrix.smoke }}
-          RUSTY_V8_ARCHIVE: ${{ steps.stage.outputs.archive }}
-          RUSTY_V8_SRC_BINDING_PATH: ${{ steps.stage.outputs.binding }}
+        if: matrix.smoke == 'run'
         run: |
-          args=(ash-v8-poc --locked --target "$TARGET" --features sandbox)
-          if [ "$SMOKE" = link ]; then
-            args+=(--no-run)
-          else
-            # Concurrent first isolates can race V8's process-wide sandbox pool setup.
-            args+=(-- --test-threads=1)
-          fi
-          just test "${args[@]}"
+          # Concurrent first isolates can race V8's process-wide sandbox pool setup.
+          just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1
+      - name: Cross-link the staged pair with Ash
+        if: matrix.smoke == 'link'
+        run: python -B build/v8/smoke.py cargo-probe --target "$TARGET" --artifacts "dist/$TARGET" --output "probes/$TARGET"
+      - name: Upload cross-linked probe
+        if: matrix.smoke == 'link'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v8-probe-${{ matrix.target }}
+          path: probes/${{ matrix.target }}/*
+          if-no-files-found: error
+          overwrite: true
       - name: Verify staged pair through the Bazel consumer
         if: runner.os != 'Windows'
         env:
@@ -178,40 +215,54 @@ jobs:
           if [ "$SMOKE" = link ]; then args+=(--link-only); fi
           python -B build/v8/smoke.py "${args[@]}"
 
-  test-arm-gnu:
-    name: Execute sandbox / aarch64-unknown-linux-gnu
-    # Chromium ships x64 Linux build tools. Execute the cross-built pair on ARM64.
+  test-arm:
+    name: Execute sandbox / ${{ matrix.target }}
     needs: [metadata, build]
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.metadata.outputs.cross_smoke_matrix) }}
     env:
-      TARGET: aarch64-unknown-linux-gnu
+      TARGET: ${{ matrix.target }}
     steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: v8-probe-${{ matrix.target }}
+          path: probe
+      - name: Execute the cross-linked Ash probe on ARM64
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            probe/v8-probe.exe --test-threads=1
+          else
+            chmod +x probe/v8-probe
+            probe/v8-probe --test-threads=1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
           python-version: "3.12"
-      - uses: ./.github/actions/setup-just
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
-          name: rusty-v8-${{ needs.metadata.outputs.version }}-aarch64-unknown-linux-gnu
-          path: dist/aarch64-unknown-linux-gnu
-      - name: Validate downloaded pair and select Cargo inputs
-        run: python -B build/v8/smoke.py pair --target "$TARGET" --artifacts "dist/$TARGET" --github-env "$GITHUB_ENV"
-      - name: Execute staged pair with Ash on ARM64
-        run: just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1
+          name: rusty-v8-${{ needs.metadata.outputs.version }}-${{ matrix.target }}
+          path: dist/${{ matrix.target }}
       - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
           bazelisk-cache: true
           disk-cache: v8-consumer-aarch64-gnu-execution
           repository-cache: true
       - name: Execute staged pair through Bazel on ARM64
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: python -B build/v8/smoke.py bazel --target "$TARGET" --artifacts "dist/$TARGET" --output "$RUNNER_TEMP/v8-bazel-inputs"
 
   verify:
-    needs: [metadata, build, test-arm-gnu]
+    needs: [metadata, build, test-arm]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

@@ -1,30 +1,34 @@
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
 import { registerTestTitlebarServices } from '../../../workbench/test/common/testTitlebarServices.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
 import { createTestEditorServices, createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import '../../../editor/test/browser/testEditorDom.js';
-import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { sessionsPartIds, type SessionsPartId } from '../../common/layoutConstants.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Dimension } from '../../../base/browser/dom.js';
+import { ButtonActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { IMenuService, MenusRegistry } from '../../../platform/actions/common/actions.js';
+import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
 import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { Part } from '../../../workbench/browser/part.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
 import { registerSessionsTerminalContribution } from '../../contrib/terminal/browser/sessionsTerminalContribution.js';
@@ -37,6 +41,7 @@ import type { ISession } from '../../services/sessions/common/session.js';
 import type { IGitHubService } from '../../contrib/github/browser/githubService.js';
 import type { IResolvedSessionPullRequest } from '../../contrib/github/common/types.js';
 import { BlockedSessionsIndicatorModel } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
+import { showBlockedSessionsList } from '../../contrib/sessions/browser/blockedSessionsList.js';
 import { BlockedSessionsCIFixModel } from '../../contrib/sessions/browser/blockedSessionsCIFixModel.js';
 import type { IBlockedSession } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
 import { ChecksOperationService } from '../../contrib/changes/browser/checksOperationService.js';
@@ -44,6 +49,9 @@ import type { IChatService } from '../../../workbench/services/chat/common/chatS
 import type { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { URI } from '../../../base/common/uri.js';
 import { autorun } from '../../../base/common/observable.js';
+import { QuickInputHideReason, type IQuickInputButton, type IQuickInputHideEvent, type IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPickItemButton } from '../../../platform/quickinput/common/quickInput.js';
+import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 
 class TestPart extends Part {
 	public getTabsHeight(): number { return 35; }
@@ -70,7 +78,7 @@ test('Batch CI repair submits once per current conversation using its own connec
 		},
 	} as unknown as IChatSessionNavigationService, operations);
 	const item = (sessionId: string): IBlockedSession => ({
-		session: { sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [] },
+		session: { sessionId, kind: 'code' as const, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [] },
 		threadId: 'root', occurrence: 'ci-head', reason: 'ci',
 		checks: [{ uri: URI.parse('https://github.com/owner/repo/pull/1'), headCommit: 'abcd' } as IResolvedSessionPullRequest],
 	});
@@ -86,7 +94,7 @@ test('Sessions titlebar tracks CI status only for open PRs on the active host', 
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'blocked', flushInterval: 0 });
 	using checksChanged = new Emitter<void>();
 	const createSession = (sessionId: string, providerId: string): ISession => ({
-		sessionId, providerId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		sessionId, kind: 'code' as const, providerId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
 		chats: [{ threadId: sessionId, origin: { type: 'root' }, status: 'active' }],
 	});
 	const active = createSession('active', 'host');
@@ -113,13 +121,112 @@ test('Sessions titlebar tracks CI status only for open PRs on the active host', 
 	});
 	checkState = 'open';
 	checksChanged.fire();
-	model.ignore(model.blockedSessions.get());
+	const undoFirst = model.ignore(model.blockedSessions.get());
+	assert.ok(undoFirst);
 	assert.deepEqual(model.blockedSessions.get(), []);
 	headCommit = 'second';
 	checksChanged.fire();
 	checkState = 'merged';
 	checksChanged.fire();
 	assert.deepEqual(snapshots, [[], ['background:ci'], [], ['background:ci'], []]);
+
+	checkState = 'open';
+	checksChanged.fire();
+	const undoSecond = model.ignore(model.blockedSessions.get());
+	assert.ok(undoSecond);
+	undoFirst();
+	assert.deepEqual(model.blockedSessions.get(), []);
+	undoSecond();
+	assert.deepEqual(model.blockedSessions.get().map(item => item.checks?.[0]?.headCommit), ['second']);
+});
+
+test('Sessions titlebar restores only the alerts ignored by each notification action in Chinese', async () => {
+	const browser = new JSDOM('<!doctype html><body><button></button></body>', { url: 'https://ash.test' });
+	using windowLifetime = toDisposable(() => browser.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'blocked-undo', flushInterval: 0 });
+	using notifications = new TestNotificationService();
+	using catalogChanged = new Emitter<void>();
+	using itemButton = new Emitter<{ item: IQuickPickItem & IBlockedSession; button: IQuickPickItemButton; }>();
+	using headerButton = new Emitter<IQuickInputButton>();
+	using hidden = new Emitter<IQuickInputHideEvent>();
+	const picker: Pick<IQuickPick<IQuickPickItem & IBlockedSession>, 'items' | 'buttons' | 'onDidTriggerItemButton' | 'onDidTriggerButton' | 'onDidHide' | 'onDidAccept' | 'hide' | 'show' | 'dispose' | typeof Symbol.dispose> = {
+		items: [], buttons: [],
+		onDidTriggerItemButton: itemButton.event,
+		onDidTriggerButton: headerButton.event,
+		onDidHide: hidden.event,
+		onDidAccept: Event.None,
+		hide: (reason = QuickInputHideReason.Other) => hidden.fire({ reason }),
+		show: () => { },
+		dispose: () => { },
+		[Symbol.dispose]: () => { },
+	};
+	const quickInput = { createQuickPick: () => picker } as unknown as IQuickInputService;
+	const createSession = (sessionId: string, waitingSince?: number): ISession => ({
+		sessionId, kind: 'code', title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		chats: [{
+			threadId: sessionId, origin: { type: 'root' }, status: 'active',
+			management: waitingSince === undefined ? undefined : { status: 'needsInput', statusChangedAtUnixMs: waitingSince },
+		}],
+	});
+	let sessions = [createSession('first', 1)];
+	const pullRequest = URI.parse('https://github.com/owner/repo/pull/1');
+	let headCommit = 'first-head';
+	const legacyIgnore = JSON.stringify(['ci', [JSON.stringify([pullRequest.toString(), headCommit])]]);
+	storage.store('sessions.blockedIndicator.ignoredOccurrences', JSON.stringify([['first', legacyIgnore]]), StorageScope.PROFILE, StorageTarget.MACHINE);
+	const createIndicator = (): BlockedSessionsIndicatorModel => new BlockedSessionsIndicatorModel(
+		{ get sessions() { return sessions; }, onDidChange: catalogChanged.event } as unknown as ISessionsManagementService,
+		{ getSelection: () => ({ visibleSelections: [] }) } as unknown as ISessionsService,
+		{
+			onDidChange: Event.None,
+			getSessionPullRequests: (id: string) => id === 'first' ? [{
+				uri: pullRequest, headCommit, state: 'open', status: { hasFailingChecks: true },
+			}] as IResolvedSessionPullRequest[] : [],
+		} as unknown as IGitHubService,
+		storage,
+	);
+	const indicator = createIndicator();
+	const openList = () => showBlockedSessionsList(quickInput, {} as IChatSessionNavigationService, indicator,
+		{} as BlockedSessionsCIFixModel, notifications, browser.window.document.querySelector('button')!);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using single = openList();
+		const item = picker.items[0];
+		assert.ok('occurrence' in item && item.buttons?.[0]);
+		itemButton.fire({ item, button: item.buttons[0] });
+		const singleNotice = notifications.model.getNotifications().at(-1);
+		assert.equal(singleNotice?.message, '已忽略 1 条会话提醒。');
+		assert.deepEqual(indicator.blockedSessions.get(), []);
+		sessions = [createSession('first')];
+		catalogChanged.fire();
+		// Resolving the input leaves the legacy CI dismissal in effect, including in a fresh model.
+		assert.deepEqual(createIndicator().blockedSessions.get(), []);
+
+		sessions = [createSession('first', 1)];
+		catalogChanged.fire();
+		const undoSingle = singleNotice?.actions?.primary?.[0];
+		assert.equal(undoSingle?.label, '撤销');
+		await undoSingle?.run();
+		assert.deepEqual(indicator.blockedSessions.get().map(alert => alert.reason), ['input']);
+
+		sessions = [createSession('first'), createSession('second', 2)];
+		headCommit = 'second-head';
+		catalogChanged.fire();
+		using batch = openList();
+		assert.deepEqual(indicator.blockedSessions.get().map(alert => alert.reason), ['ci', 'input']);
+		headerButton.fire(picker.buttons[0]);
+		assert.deepEqual(indicator.blockedSessions.get(), []);
+		const batchNotice = notifications.model.getNotifications().at(-1);
+		assert.equal(batchNotice?.message, '已忽略 2 条会话提醒。');
+		await batchNotice?.actions?.primary?.[0]?.run();
+		assert.deepEqual(indicator.blockedSessions.get().map(alert => alert.reason), ['ci', 'input']);
+
+		headCommit = 'first-head';
+		catalogChanged.fire();
+		assert.deepEqual(indicator.blockedSessions.get().map(alert => alert.reason), ['input']);
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 test('Sessions titlebar initializes localized actions and closes the application menu before refreshing or disposal', () => {
@@ -145,6 +252,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
+		markVisibleThreadViewed() { },
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: changed.event,
@@ -181,23 +289,33 @@ test('Sessions titlebar initializes localized actions and closes the application
 	const hosts = resources.add(createDesktopEditorTestServices(editorServices, {}, browser.window.document));
 	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
-	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
+	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService));
 	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
 	const openMenus = (): number => browser.window.document.querySelectorAll('.ash-context-view [role="menu"]').length;
 	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
 	const chatMode = modeHost.querySelector<HTMLButtonElement>('button')!;
 	try {
-		const firstPage = browser.window.document.createElement('nav');
-		const nextPage = browser.window.document.createElement('nav');
-		const firstMount = titlebar.setPageContent(firstPage);
-		assert.equal(titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.firstElementChild, firstPage);
-		const nextMount = titlebar.setPageContent(nextPage);
-		assert.equal(firstPage.isConnected, false, 'Replacing a page detaches its retained titlebar content');
-		firstMount.dispose();
-		assert.equal(nextPage.isConnected, true, 'Releasing an old page must preserve the visible page titlebar');
-		nextMount.dispose();
-		assert.equal(titlebar.domNode.querySelector('.ash-sessions-titlebar-page-content')!.childElementCount, 0);
+		const pageSlot = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-titlebar-page-content')!;
+		assert.equal(pageSlot.hidden, true);
+		{
+			const command = { id: 'test.sessions.titlebarPage', title: 'Test page' };
+			class PageViewItem extends ButtonActionViewItem {
+				override render(container: HTMLElement): void {
+					super.render(container);
+					this.button.domNode.dataset.pageTitle = 'true';
+				}
+			}
+			using presentation = services.get(IActionViewItemService).register(Menus.TitleBarPageContent, command.id,
+				(action, options) => new PageViewItem(action, options));
+			using entry = MenusRegistry.appendMenuItem(Menus.TitleBarPageContent, { command, when: ContextKeyExpr.has('test.pageVisible') });
+			contextKeys.setContext('test.pageVisible', true);
+			assert.equal(pageSlot.hidden, false);
+			assert.equal(pageSlot.querySelector('button[data-page-title]')?.textContent, 'Test page');
+			contextKeys.removeContext('test.pageVisible');
+			assert.equal(pageSlot.hidden, true);
+			assert.equal(pageSlot.querySelector('button'), null);
+		}
 		assert.equal(modeHost.hidden, false);
 		menuButton().click();
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'true');

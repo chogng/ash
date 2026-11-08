@@ -123,6 +123,7 @@ struct Subscriber {
     scope_id: u64,
     agent_interactions: Option<AgentInteractionCapability>,
     product_host: bool,
+    chat_project_memories: bool,
     collaboration_rooms: BTreeSet<String>,
     catalog: bool,
     sessions: BTreeSet<SessionId>,
@@ -345,12 +346,21 @@ impl UpdateBroker {
                     scope_id: self.scope_id,
                     agent_interactions: None,
                     product_host,
+                    chat_project_memories: false,
                     collaboration_rooms: BTreeSet::new(),
                     catalog: false,
                     sessions: BTreeSet::new(),
                     threads: BTreeMap::new(),
                 },
             );
+        }
+    }
+
+    pub(super) fn enable_chat_memory_notifications(&self, connection_id: u64) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.chat_project_memories = true;
         }
     }
 
@@ -763,6 +773,31 @@ impl UpdateBroker {
             SubscriptionDelivery::Active => {
                 if subscription.session_owners.contains(&pending.session_id) {
                     subscription.sequence = subscription.sequence.max(sequence);
+                    if scope == ThreadSubscriptionScope::Thread {
+                        // A Session subscription can receive an offer before a Chat opens.
+                        // Replay it to its current owner when the Chat subscribes directly.
+                        let now = unix_time_millis();
+                        for (id, request) in &state.pending_interactions {
+                            if request.session_id == pending.session_id
+                                && request.thread_id == registration.thread_id
+                                && state.interaction_assignments.get(id)
+                                    == Some(&registration.connection_id)
+                                && !matches!(
+                                    request.interaction.request,
+                                    ash_protocol::AgentRequest::DynamicTool { .. }
+                                )
+                                && request
+                                    .interaction
+                                    .deadline
+                                    .is_none_or(|deadline| deadline.expires_at_unix_ms > now)
+                            {
+                                queue.push(notification(
+                                    ServerNotificationMethod::AgentRequest,
+                                    request,
+                                ));
+                            }
+                        }
+                    }
                 }
             }
             SubscriptionDelivery::Buffered(buffer) => {
@@ -1394,7 +1429,10 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.product_host {
+            if subscriber.product_host
+                && (changed.scope.namespace() == memories::MemoryNamespace::Code
+                    || subscriber.chat_project_memories)
+            {
                 queue.push(notification(
                     ServerNotificationMethod::MemoryChanged,
                     &changed,

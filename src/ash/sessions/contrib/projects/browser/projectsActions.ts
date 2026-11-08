@@ -1,13 +1,131 @@
 import type { IAction } from '../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import type { Project, ProjectSummary } from '../../../../platform/projects/common/projectService.js';
-import type { ChatListGroup, ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
+import { IProjectService, type Project, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { groupChatList, IChatListCatalog, type ChatListGroup, type ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
+import type { SessionsCatalogProjectOperations } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { IProjectsService, type ProjectSortOrder } from './projectsService.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { type MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { Menus } from '../../../browser/menus.js';
+
+export const ARCHIVE_PROJECT_COMMAND = 'projects.archive';
+
+const sidebarProjectActions = [
+	{ key: 'pin', group: '1_edit', order: 0, icon: Lxicon.pin, title: localize('sessions.list.pinProject', 'Pin') },
+	{ key: 'unpin', group: '1_edit', order: 0, icon: Lxicon.pinFilled, title: localize('sessions.list.unpinProject', 'Unpin') },
+	{ key: 'rename', group: '1_edit', order: 1, icon: Lxicon.edit, title: localize('sessions.list.rename', 'Rename') },
+	{ key: 'icon', group: '2_appearance', order: 1, title: localize('sessions.list.changeProjectIcon', 'Change Icon...') },
+	{ key: 'color', group: '2_appearance', order: 2, title: localize('sessions.list.changeProjectColor', 'Change Color...') },
+	{ key: 'archive', group: '3_remove', order: 1, icon: Lxicon.archive, title: localize('projects.archive', 'Archive') },
+	{ key: 'remove', group: '3_remove', order: 2, icon: Lxicon.trash, title: localize('projects.delete', 'Delete'), destructive: true },
+] as const;
+
+type SidebarProjectAction = typeof sidebarProjectActions[number]['key'];
+
+interface SidebarProjectMenuTarget {
+	readonly projectId: string;
+	readonly actions: Partial<Record<SidebarProjectAction, () => void | Promise<void>>>;
+}
+
+CommandsRegistry.registerMany(sidebarProjectActions.map(({ key }) => ({
+	id: `sessions.sidebarProject.${key}`,
+	handler: (_accessor, target) => {
+		const run = (target as SidebarProjectMenuTarget | undefined)?.actions?.[key];
+		if (typeof run === 'function') return run();
+	},
+})));
+
+function registerSidebarProjectActions(menuId: MenuId): void {
+	MenusRegistry.appendMenuItems(sidebarProjectActions.map(({ key, group, order, title, ...appearance }) => ({
+		id: menuId,
+		item: { command: { id: `sessions.sidebarProject.${key}`, title, ...appearance }, group, order, when: ContextKeyExpr.has(`sidebarProject.${key}`) },
+	})));
+}
+
+registerSidebarProjectActions(Menus.SidebarChatProjectContext);
+registerSidebarProjectActions(Menus.SidebarCodeProjectContext);
+
+export function showSidebarProjectMenu(contextMenus: IContextMenuService, context: IContextKeyService,
+	mode: 'chat' | 'code', target: SidebarProjectMenuTarget, presentation: Pick<IContextMenuMenuDelegate, 'getAnchor' | 'onHide'>): void {
+	context.bufferChangeEvents(() => {
+		for (const { key } of sidebarProjectActions) context.setContext(`sidebarProject.${key}`, !!target.actions[key]);
+	});
+	contextMenus.showContextMenu({
+		menuId: mode === 'code' ? Menus.SidebarCodeProjectContext : Menus.SidebarChatProjectContext,
+		contextKeyService: context,
+		menuActionOptions: { arg: target },
+		...presentation,
+		autoSelectFirstItem: true,
+	});
+}
+
+CommandsRegistry.register(ARCHIVE_PROJECT_COMMAND, async (accessor, id: unknown, scope: unknown): Promise<boolean> => {
+	if (typeof id !== 'string' || !id || scope !== 'chat' && scope !== 'code' && scope !== 'catalog') {
+		throw new TypeError(localize({ bundle: 'ash', key: 'projects.invalidId' }, 'Choose a valid project.'));
+	}
+	const dialogs = accessor.get(IDialogService);
+	if (scope === 'catalog') {
+		const catalog = accessor.get(IChatListCatalog);
+		const project = groupChatList(catalog.sources.map(source => source.snapshot.get()), 'projects').find(group => group.key === id)?.project;
+		if (!project?.archive || !await confirmProjectArchive(dialogs, project.title)) return false;
+		return finishProjectArchive(project.title, project.archive);
+	}
+	const projects = accessor.get(IProjectService);
+	const view = scope === 'chat' ? accessor.get(IProjectsService) : undefined;
+	const sessions = accessor.get(ISessionsManagementService);
+	const project = await projects.read(id, scope);
+	if (project.archived || !await confirmProjectArchive(dialogs, project.name)) return false;
+	return finishProjectArchive(project.name, async () => {
+		const current = await projects.read(id, scope);
+		if (current.archived) return true;
+		if (current.sessionIds.length) {
+			await sessions.refresh();
+			// Membership can change while the catalog is loading.
+			const latest = await projects.read(id, scope);
+			if (latest.archived) return true;
+			if (latest.revision !== current.revision) return false;
+			if (sessions.state !== 'ready' || !sessions.primaryCatalogReady) return false;
+			// Durable Project membership uses the primary host's raw Session IDs.
+			const members = new Set(current.sessionIds);
+			for (const session of sessions.sessions) {
+				if (!session.backendSessionId && session.status === 'active' && members.has(session.sessionId)) {
+					await sessions.archiveSession(session.sessionId);
+				}
+			}
+		}
+		if (view) return view.archive(current);
+		await projects.archive(current);
+		return true;
+	});
+});
+
+async function confirmProjectArchive(dialogs: IDialogService, title: string): Promise<boolean> {
+	const result = await dialogs.confirm({
+		message: localize('projects.archiveConfirm', 'Archive project "{0}" and its conversations?', title),
+		detail: localize('projects.archiveDetail', 'This archives every active conversation in the project. Restoring the project leaves those conversations archived.'),
+		primaryButton: localize('projects.archive', 'Archive'),
+	});
+	return result.confirmed;
+}
+
+async function finishProjectArchive(title: string, archive: () => Promise<boolean>): Promise<boolean> {
+	try {
+		if (await archive()) return true;
+	} catch (error) {
+		throw new Error(localize('projects.archiveIncomplete', 'Could not finish archiving "{0}". Try again to continue.', title), { cause: error });
+	}
+	throw new Error(localize('projects.archiveIncomplete', 'Could not finish archiving "{0}". Try again to continue.', title));
+}
 
 interface ProjectsActionOptions {
 	readonly showDialog: (project?: Project, conversation?: ConversationProjectEditor) => void;
@@ -24,6 +142,7 @@ export class ProjectsActions extends Disposable {
 		@IProjectsService private readonly projects: IProjectsService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@INotificationService private readonly notifications: INotificationService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
 	}
@@ -61,9 +180,9 @@ export class ProjectsActions extends Disposable {
 			enabled: true,
 			run: () => this.editConversationProject(editor),
 		}] : [];
-		const archive = project.project?.archive;
+		const archive = project.project?.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog'));
 		const remove = project.project?.remove;
-		return [...editActions, ...this.projectRemovalActions(project.title, archive, remove)];
+		return [...editActions, ...getProjectRemovalActions(this.dialogs, project.title, { archive, remove }, operation => this.runRemoval(operation), !this.projects.state.get().busy)];
 	}
 
 	restoreProject(restore: () => void | Promise<void | boolean>): void {
@@ -105,51 +224,20 @@ export class ProjectsActions extends Disposable {
 					this.options.showDialog(current);
 				}
 			}),
-			...this.projectRemovalActions(project.name, async () => { await this.projects.archive(project); }, {
-				removesContents: false,
-				run: async () => { await this.projects.remove(project); },
-			}),
+			...getProjectRemovalActions(this.dialogs, project.name, {
+				archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, 'chat'),
+				remove: { removesContents: false, run: async () => { await this.projects.remove(project); } },
+			}, operation => this.runRemoval(operation), !this.projects.state.get().busy),
 		];
 	}
 
-	private projectRemovalActions(
-		title: string,
-		archive: (() => void | Promise<void>) | undefined,
-		remove: { readonly removesContents: boolean; run(): Promise<void>; } | undefined,
-	): IAction[] {
-		const run = async (operation: () => void | Promise<void>): Promise<void> => {
-			try {
-				await operation();
-				if (!this.isDisposed && this.options.isVisible()) this.options.focusList();
-			} catch (error) {
-				this.notifications.error(toErrorMessage(error));
-			}
-		};
-		const actions: IAction[] = [];
-		if (archive) {
-			const label = localize('projects.archive', 'Archive');
-			actions.push({
-				id: 'projects.archive', label, tooltip: label, icon: Lxicon.archive,
-				enabled: !this.projects.state.get().busy, run: () => run(archive)
-			});
+	private async runRemoval(operation: () => Promise<boolean | void>): Promise<void> {
+		try {
+			const completed = await operation();
+			if (completed !== false && !this.isDisposed && this.options.isVisible()) this.options.focusList();
+		} catch (error) {
+			this.notifications.error(toErrorMessage(error));
 		}
-		if (remove) {
-			const label = localize('projects.delete', 'Delete');
-			actions.push({
-				id: 'projects.delete', label, tooltip: label, icon: Lxicon.trash,
-				enabled: !this.projects.state.get().busy, run: async () => {
-					const result = await this.dialogs.confirm({
-						message: localize('projects.deleteConfirm', 'Delete project "{0}"?', title),
-						detail: remove.removesContents
-							? localize('projects.deleteContentsDetail', 'This permanently deletes the project, its conversations and instructions, and files stored only in the project.')
-							: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
-						primaryButton: label,
-					});
-					if (result.confirmed) await run(remove.run);
-				}
-			});
-		}
-		return actions;
 	}
 
 	private async editConversationProject(read: (signal: AbortSignal) => Promise<ConversationProjectEditor>): Promise<void> {
@@ -159,7 +247,45 @@ export class ProjectsActions extends Disposable {
 			const editor = await read(controller.signal);
 			if (!controller.signal.aborted && this.options.isVisible()) this.options.showDialog(undefined, editor);
 		} catch (error) {
-			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
+			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
 		}
 	}
+}
+
+export function getProjectRemovalActions(
+	dialogs: IDialogService,
+	title: string,
+	{ archive, remove }: Pick<SessionsCatalogProjectOperations, 'archive' | 'remove'>,
+	run: (operation: () => Promise<boolean | void>) => Promise<void>,
+	enabled = true,
+): IAction[] {
+	const actions: IAction[] = [];
+	if (archive) {
+		const label = localize('projects.archive', 'Archive');
+		actions.push({
+			id: ARCHIVE_PROJECT_COMMAND, label, tooltip: label, icon: Lxicon.archive,
+			enabled, run: () => run(archive)
+		});
+	}
+	if (remove) {
+		const label = localize('projects.delete', 'Delete');
+		actions.push({
+			id: 'projects.delete', label, tooltip: label, icon: Lxicon.trash, destructive: true,
+			enabled, run: async () => {
+				if (await confirmProjectDelete(dialogs, title, remove.removesContents)) await run(remove.run);
+			}
+		});
+	}
+	return actions;
+}
+
+export async function confirmProjectDelete(dialogs: IDialogService, title: string, removesContents: boolean): Promise<boolean> {
+	const result = await dialogs.confirm({
+		message: localize('projects.deleteConfirm', 'Delete project "{0}"?', title),
+		detail: removesContents
+			? localize('projects.deleteContentsDetail', 'This permanently deletes the project, its conversations and instructions, and files stored only in the project.')
+			: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
+		primaryButton: localize('projects.delete', 'Delete'),
+	});
+	return result.confirmed;
 }

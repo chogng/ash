@@ -23,14 +23,17 @@ suite('Sessions Chat accessibility help', () => {
 			const text = await content.inputValue();
 			expect(text).toMatch(locale === 'en' ? /Chat: Configure Tools/ : /聊天：配置工具/);
 			expect(text).toMatch(locale === 'en' ? /run Compare Agents from the Command Palette/ : /从命令面板运行“比较 Agent”/);
+			expect(text).toMatch(locale === 'en' ? /Enable model evaluation tools in Settings/ : /在设置中启用模型评测工具/);
 			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Pull Request/ : /打开添加上下文（\+），选择拉取请求/);
 			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Issue/ : /打开添加上下文（\+），选择 Issue/);
 			expect(text).toMatch(locale === 'en' ? /type #session to find conversations on the same host/ : /输入 #session 可查找同一主机上的对话/);
 			expect(text).toMatch(locale === 'en' ? /reach Browsers above the input/ : /聚焦输入框上方的浏览器页签按钮/);
+			expect(text).toMatch(locale === 'en' ? /Press Enter or Space on Autopilot or Activities/ : /在“自动跟进”或“活动”上按 Enter 或空格/);
 			expect(text).toMatch(locale === 'en' ? /Run New Session in Folder from the Command Palette/ : /从命令面板运行“在文件夹中创建会话”/);
 			const worktreeHelp = locale === 'en' ? /Use Enter or Space on New worktree to toggle it/ : /在“新建工作树”上按 Enter 或空格可切换开关/;
 			expect(text).toMatch(worktreeHelp);
 			expect(text).toMatch(locale === 'en' ? /With focus in the Sessions sidebar, press Control\+F or Command\+F to search/ : /焦点位于会话侧栏时，按 Control\+F 或 Command\+F 搜索/);
+			expect(text).toMatch(locale === 'en' ? /For a saved conversation without a workspace.*Choose Set Workspace/ : /对于尚未绑定工作区的已保存对话.*选择“设置工作区”/);
 			expect(text).toMatch(locale === 'en' ? /Focus Project Picker or Focus Environment Picker/ : /聚焦项目选择器.*聚焦环境选择器/);
 			expect(text.match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)).toHaveLength(1);
 			await page.keyboard.press('Escape');

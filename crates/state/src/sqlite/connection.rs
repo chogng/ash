@@ -1,159 +1,54 @@
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
 use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadStoreError;
 use rusqlite::Connection;
-use rusqlite::OptionalExtension;
-use rusqlite::TransactionBehavior;
+use rusqlite::Transaction;
 use rusqlite::params;
 use std::path::Path;
 
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 17;
+// Keep the released v17 baseline. Append immutable numbered SQL from v18 onward.
+const BASELINE: Migration = Migration::legacy_baseline(17, upgrade_to_v17);
+const MIGRATOR: Migrator<'_> = Migrator::new("event-store", &[BASELINE]);
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
-    let has_migrations = connection
-        .query_row(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ash_schema_migrations'",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(sql_error)?
-        .is_some();
-    let version = if has_migrations {
-        connection
-            .query_row(
-                "SELECT version FROM ash_schema_migrations WHERE component = 'event-store'",
-                [],
-                |row| row.get::<_, u32>(0),
-            )
-            .optional()
-            .map_err(sql_error)?
-    } else {
-        None
-    };
-    if let Some(version) = version
-        && version > STORAGE_SQLITE_SCHEMA_VERSION
-    {
-        return Err(format!(
-            "unsupported event-store SQLite schema version {version}"
-        ));
-    }
-    if version == Some(STORAGE_SQLITE_SCHEMA_VERSION) {
-        return Ok(connection);
-    }
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(sql_error)?;
-    transaction
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
-                 component TEXT PRIMARY KEY,
-                 version INTEGER NOT NULL
-             );",
-        )
-        .map_err(sql_error)?;
-    let locked_version = transaction
-        .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = 'event-store'",
-            [],
-            |row| row.get::<_, u32>(0),
-        )
-        .optional()
-        .map_err(sql_error)?;
+    MIGRATOR.run(&mut connection)?;
+    Ok(connection)
+}
+
+// Preserve the released upgrade paths, including the Rust backfills for historical data.
+fn upgrade_to_v17(
+    transaction: &Transaction<'_>,
+    locked_version: Option<u32>,
+) -> Result<(), String> {
     match locked_version {
         None => transaction
-            .execute_batch(
-                "CREATE TABLE history_records (digest TEXT PRIMARY KEY, record_json TEXT NOT NULL);
-                 CREATE TABLE thread_streams (
-                 thread_id TEXT PRIMARY KEY,
-                 current_sequence INTEGER NOT NULL
-             );
-             CREATE TABLE thread_batches (
-                 thread_id TEXT NOT NULL,
-                 batch_id TEXT NOT NULL,
-                 expected_sequence INTEGER NOT NULL,
-                 event_count INTEGER NOT NULL,
-                 PRIMARY KEY (thread_id, batch_id),
-                 FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
-             );
-             CREATE TABLE thread_events (
-                 thread_id TEXT NOT NULL,
-                 sequence INTEGER NOT NULL,
-                 event_id TEXT NOT NULL UNIQUE,
-                 schema_version INTEGER NOT NULL,
-                 record_digest TEXT NOT NULL REFERENCES history_records(digest),
-                 PRIMARY KEY (thread_id, sequence),
-                 FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
-             );
-             CREATE TABLE turn_change_sets (
-                 change_set_id TEXT PRIMARY KEY,
-                 thread_id TEXT NOT NULL,
-                 revision INTEGER NOT NULL,
-                 record_json TEXT NOT NULL
-             );
-             CREATE TABLE turn_change_commands (
-                 command_id TEXT PRIMARY KEY,
-                 fingerprint TEXT NOT NULL,
-                 response_json TEXT NOT NULL
-             );",
-            )
+            .execute_batch(include_str!(
+                "../../migrations/event-store/legacy/initial_tables.sql"
+            ))
             .map_err(sql_error)?,
         Some(1) => transaction
-            .execute_batch(
-                "CREATE TABLE turn_change_sets (
-                     change_set_id TEXT PRIMARY KEY,
-                     thread_id TEXT NOT NULL,
-                     revision INTEGER NOT NULL,
-                     record_json TEXT NOT NULL
-                 );
-                 CREATE TABLE turn_change_commands (
-                     command_id TEXT PRIMARY KEY,
-                     fingerprint TEXT NOT NULL,
-                     response_json TEXT NOT NULL
-                 );
-                 DROP TABLE IF EXISTS session_events;
-                 DROP TABLE IF EXISTS session_batches;
-                 DROP TABLE IF EXISTS session_streams;",
-            )
+            .execute_batch(include_str!(
+                "../../migrations/event-store/legacy/from_v1_turn_changes.sql"
+            ))
             .map_err(sql_error)?,
         Some(2) => transaction
-            .execute_batch(
-                "CREATE TABLE turn_change_commands (
-                     command_id TEXT PRIMARY KEY,
-                     fingerprint TEXT NOT NULL,
-                     response_json TEXT NOT NULL
-                 );
-                 DROP TABLE IF EXISTS session_events;
-                 DROP TABLE IF EXISTS session_batches;
-                 DROP TABLE IF EXISTS session_streams;",
-            )
+            .execute_batch(include_str!(
+                "../../migrations/event-store/legacy/from_v2_turn_change_commands.sql"
+            ))
             .map_err(sql_error)?,
         Some(3) => transaction
-            .execute_batch(
-                "DROP TABLE IF EXISTS session_events;
-                 DROP TABLE IF EXISTS session_batches;
-                 DROP TABLE IF EXISTS session_streams;",
-            )
+            .execute_batch(include_str!(
+                "../../migrations/event-store/legacy/from_v3_remove_session_streams.sql"
+            ))
             .map_err(sql_error)?,
-        Some(4)
-        | Some(5)
-        | Some(6)
-        | Some(7)
-        | Some(8)
-        | Some(9)
-        | Some(10)
-        | Some(11)
-        | Some(12)
-        | Some(13)
-        | Some(14)
-        | Some(15)
-        | Some(16)
-        | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(4..=16) => {}
         Some(version) => {
             return Err(format!(
                 "unsupported event-store SQLite schema version {version}"
@@ -161,72 +56,32 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         }
     }
     transaction
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS thread_catalog (
-                 thread_id TEXT PRIMARY KEY,
-                 session_id TEXT NOT NULL,
-                 requires_startup_recovery INTEGER NOT NULL,
-                 record_json TEXT NOT NULL,
-                 record_version INTEGER NOT NULL,
-                 record_digest TEXT NOT NULL,
-                 FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
-             );
-             CREATE INDEX IF NOT EXISTS thread_catalog_session
-             ON thread_catalog(session_id, thread_id);
-             CREATE INDEX IF NOT EXISTS thread_catalog_startup_recovery
-             ON thread_catalog(requires_startup_recovery, session_id, thread_id);
-             CREATE INDEX IF NOT EXISTS turn_change_sets_thread_revision
-             ON turn_change_sets(thread_id, revision);",
-        )
+        .execute_batch(include_str!(
+            "../../migrations/event-store/legacy/thread_catalog.sql"
+        ))
         .map_err(sql_error)?;
-    if locked_version.is_none() {
-        transaction
-            .execute(
-                "INSERT INTO ash_schema_migrations (component, version)
-                 VALUES ('event-store', ?1)",
-                [STORAGE_SQLITE_SCHEMA_VERSION],
-            )
-            .map_err(sql_error)?;
-    } else if locked_version != Some(STORAGE_SQLITE_SCHEMA_VERSION) {
-        transaction
-            .execute(
-                "UPDATE ash_schema_migrations SET version = ?1
-                 WHERE component = 'event-store'",
-                [STORAGE_SQLITE_SCHEMA_VERSION],
-            )
-            .map_err(sql_error)?;
-    }
-    transaction.execute_batch(
-        "CREATE TABLE IF NOT EXISTS agents (
-             agent_id TEXT PRIMARY KEY,
-             created_at_unix_ms INTEGER NOT NULL
-         );
-         CREATE TABLE IF NOT EXISTS agent_threads (
-             thread_id TEXT PRIMARY KEY REFERENCES thread_streams(thread_id),
-             agent_id TEXT NOT NULL REFERENCES agents(agent_id),
-             session_id TEXT NOT NULL,
-             spawn_parent_id TEXT,
-             replacement_source_id TEXT UNIQUE,
-             binding_json TEXT NOT NULL
-         );
-         CREATE INDEX IF NOT EXISTS agent_threads_agent ON agent_threads(agent_id, thread_id);
-         CREATE INDEX IF NOT EXISTS agent_threads_parent ON agent_threads(spawn_parent_id, thread_id);"
-    ).map_err(sql_error)?;
+    transaction
+        .execute_batch(concat!(
+            include_str!("../../migrations/shared/agents.sql"),
+            include_str!("../../migrations/event-store/legacy/agent_graph.sql")
+        ))
+        .map_err(sql_error)?;
     if locked_version.is_some_and(|version| version < 6) {
-        super::graph::migrate_bindings(&transaction).map_err(sql_error)?;
+        super::graph::migrate_bindings(transaction).map_err(sql_error)?;
     }
     if locked_version.is_none_or(|version| version < 7) {
-        super::history::create_schema(&transaction)?;
+        super::history::create_schema(transaction)?;
         if locked_version.is_some() {
-            super::history::migrate_records(&transaction)?;
+            super::history::migrate_records(transaction)?;
         }
     }
     if locked_version.is_some_and(|version| version < 15) {
         // A Thread history cursor retains both its destination and its Redo source.
-        transaction.execute_batch("ALTER TABLE thread_history_prefixes RENAME TO old_thread_history_prefixes;
-            CREATE TABLE thread_history_prefixes (thread_id TEXT NOT NULL REFERENCES thread_streams(thread_id), prefix_digest TEXT NOT NULL REFERENCES history_prefixes(digest), PRIMARY KEY(thread_id, prefix_digest));
-            INSERT INTO thread_history_prefixes SELECT thread_id, prefix_digest FROM old_thread_history_prefixes;
-            DROP TABLE old_thread_history_prefixes;").map_err(sql_error)?;
+        transaction
+            .execute_batch(include_str!(
+                "../../migrations/event-store/legacy/0015_keep_history_prefix_sources.sql"
+            ))
+            .map_err(sql_error)?;
     }
     if locked_version.is_some_and(|version| version < 8) {
         let has_record_version = {
@@ -243,10 +98,9 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         };
         if !has_record_version {
             transaction
-                .execute_batch(
-                    "ALTER TABLE thread_catalog ADD COLUMN record_version INTEGER NOT NULL DEFAULT 0;
-                     ALTER TABLE thread_catalog ADD COLUMN record_digest TEXT NOT NULL DEFAULT '';",
-                )
+                .execute_batch(include_str!(
+                    "../../migrations/event-store/legacy/0008_catalog_digests.sql"
+                ))
                 .map_err(sql_error)?;
         }
         let mut statement = transaction
@@ -294,34 +148,18 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
     }
     if locked_version.is_none_or(|version| version < 9) {
         transaction
-            .execute_batch(
-                "CREATE TABLE IF NOT EXISTS session_catalog (
-                     session_id TEXT PRIMARY KEY,
-                     record_json TEXT NOT NULL,
-                     record_version INTEGER NOT NULL,
-                     record_digest TEXT NOT NULL
-                 );",
-            )
+            .execute_batch(include_str!(
+                "../../migrations/event-store/legacy/0009_session_catalog.sql"
+            ))
             .map_err(sql_error)?;
     }
     if locked_version.is_none_or(|version| version < 11) {
-        super::git_turn_commits::create_schema(&transaction)?;
+        super::git_turn_commits::create_schema(transaction)?;
     }
     transaction
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS thread_pull_requests (
-             thread_id TEXT NOT NULL REFERENCES thread_streams(thread_id) ON DELETE CASCADE,
-             host TEXT NOT NULL, owner TEXT NOT NULL, repository TEXT NOT NULL,
-             number INTEGER NOT NULL CHECK(number > 0),
-             PRIMARY KEY(thread_id, host, owner, repository, number)
-         );
-         CREATE TABLE IF NOT EXISTS thread_issues (
-             thread_id TEXT NOT NULL REFERENCES thread_streams(thread_id) ON DELETE CASCADE,
-             host TEXT NOT NULL, owner TEXT NOT NULL, repository TEXT NOT NULL,
-             number INTEGER NOT NULL CHECK(number > 0),
-             PRIMARY KEY(thread_id, host, owner, repository, number)
-         );",
-        )
+        .execute_batch(include_str!(
+            "../../migrations/event-store/legacy/thread_links.sql"
+        ))
         .map_err(sql_error)?;
     if locked_version.is_none_or(|version| version < 16)
         && !transaction.query_row(
@@ -331,11 +169,11 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         ).map_err(sql_error)?
     {
         transaction
-            .execute_batch("ALTER TABLE thread_pull_requests ADD COLUMN is_artifact INTEGER NOT NULL DEFAULT 0 CHECK(is_artifact IN (0, 1));")
+            .execute_batch(include_str!("../../migrations/event-store/legacy/0016_mark_pr_artifacts.sql"))
             .map_err(sql_error)?;
     }
     if locked_version.is_none_or(|version| version < 14) {
-        super::handoff::create_schema(&transaction)?;
+        super::handoff::create_schema(transaction)?;
     }
     if locked_version.is_none_or(|version| version < 17)
         && !transaction.query_row(
@@ -344,15 +182,11 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
             |row| row.get::<_, bool>(0),
         ).map_err(sql_error)?
     {
-        // Frozen profiles reject writes to this table. Install identities only on writable
-        // histories; an old frozen history receives identities when imported instead.
-        transaction.execute_batch(
-            "ALTER TABLE thread_pull_requests ADD COLUMN artifact_id TEXT;
-             ALTER TABLE thread_pull_requests ADD COLUMN artifact_source_thread TEXT;
-             ALTER TABLE thread_pull_requests ADD COLUMN artifact_source_turn TEXT;
-             UPDATE thread_pull_requests SET artifact_id = lower(hex(randomblob(16)))
-             WHERE is_artifact = 1 AND NOT EXISTS (SELECT 1 FROM history_ownership WHERE receiver IS NOT NULL);"
-        ).map_err(sql_error)?;
+        transaction
+            .execute_batch(include_str!(
+                "../../migrations/event-store/0017_pull_request_artifact_identity.sql"
+            ))
+            .map_err(sql_error)?;
     }
     if locked_version.is_some_and(|version| version < 13) {
         // Session cache format 3 adds branch management from verified catalog rows.
@@ -369,15 +203,18 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         };
         for session_id in session_ids {
             let session_id = SessionId::new(session_id).map_err(sql_error)?;
-            match super::thread::write_session_catalog(&transaction, &session_id) {
+            match super::thread::write_session_catalog(transaction, &session_id) {
                 Ok(()) | Err(ThreadStoreError::CatalogDamaged(_)) => {}
                 Err(error) => return Err(error.to_string()),
             }
         }
     }
-    transaction.commit().map_err(sql_error)?;
-    Ok(connection)
+    Ok(())
 }
+
+#[cfg(test)]
+#[path = "connection_migrations_tests.rs"]
+mod migration_tests;
 
 pub(super) fn to_sql_integer(value: u64) -> Result<i64, String> {
     i64::try_from(value).map_err(|_| "event sequence exceeds SQLite integer range".into())

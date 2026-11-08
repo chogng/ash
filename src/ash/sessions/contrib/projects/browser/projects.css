@@ -66,11 +66,6 @@
 	flex-shrink: 0;
 }
 
-.ash-projects-sort-menu .ash-menu-leading-check {
-	order: 1;
-	margin-left: auto;
-}
-
 .ash-projects-feedback {
 	margin-bottom: var(--ash-spacing-size200);
 	color: var(--ash-description-foreground);
@@ -193,12 +188,36 @@
 	top: 50%;
 	inset-inline-end: var(--ash-spacing-size120);
 	transform: translateY(-50%);
+	pointer-events: none;
 }
 
-.ash-projects-card-actions .ash-toolbar-more-actions {
+.ash-projects-card-actions .ash-action-view-item {
+	pointer-events: auto;
+}
+
+.ash-projects-card-actions
+	.ash-action-view-item:not(:has(> button[aria-pressed="true"])) {
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity var(--ash-animation-durationFast) ease-out;
+
+	.ash-projects-row:is(:hover, :focus-within, .menu-visible) & {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	.ash-projects-row:focus-within & {
+		transition: none;
+	}
+
+	@media (hover: none) {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		transition: none;
+	}
 }
 
 .ash-projects-card-actions::before {
@@ -229,22 +248,8 @@
 }
 
 .ash-projects-row:is(:hover, :focus-within, .menu-visible)
-	.ash-toolbar-more-actions {
-	opacity: 1;
-	pointer-events: auto;
-}
-
-.ash-projects-row:is(:hover, :focus-within, .menu-visible)
 	.ash-projects-card-actions::before {
 	opacity: 1;
-}
-
-.ash-projects-row:focus-within .ash-toolbar-more-actions {
-	transition: none;
-}
-
-.ash-projects-menu .ash-projects-destructive-action {
-	color: var(--ash-error-foreground);
 }
 
 .ash-projects-row:dir(rtl) .ash-projects-card-actions::before {
@@ -256,17 +261,6 @@
 		padding-inline-end: calc(
 			var(--ash-spacing-size120) + 2 * var(--ash-spacing-size280)
 		);
-	}
-
-	.ash-projects-card-actions .ash-toolbar-more-actions {
-		opacity: 1;
-		pointer-events: auto;
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.ash-projects-card-actions .ash-toolbar-more-actions {
-		transition: none;
 	}
 }
 
@@ -474,6 +468,12 @@
 }
 .ash-projects.narrow .ash-projects-heading {
 	gap: var(--ash-spacing-size80);
+}
+.ash-projects.narrow .ash-projects-heading > h1 {
+	flex-shrink: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .ash-projects.narrow .ash-projects-detail {
 	grid-template-columns: minmax(0, 1fr);

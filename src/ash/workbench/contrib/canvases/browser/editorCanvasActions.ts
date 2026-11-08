@@ -4,9 +4,9 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { localize, localize2 } from '../../../../nls.js';
+import { canvasOwnerKey, isCanvasOwner } from '../../../common/canvasReference.js';
 import {
-	ICanvasContextService, ICanvasService, CanvasInput, canvasOwnerKey,
-	getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels, isCanvasOwner,
+	ICanvasContextService, ICanvasService, CanvasInput, getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels,
 } from '../common/canvas.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { showCanvasContextPicker } from './canvasContextPicker.js';

@@ -13,6 +13,8 @@ export interface IIconSelectBoxOptions {
 	readonly inputBoxStyles?: IInputBoxStyles;
 	readonly icons: readonly ThemeIcon[];
 	readonly showIconInfo?: boolean;
+	readonly selectedIconId?: string;
+	readonly controls?: HTMLElement;
 }
 
 interface RenderedIcon {
@@ -41,6 +43,7 @@ export class IconSelectBox extends Disposable {
 	constructor(options: IIconSelectBoxOptions, ownerDocument: Document = document) {
 		super();
 		this.icons = options.icons;
+		this.selectedIconId = options.selectedIconId;
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'ash-icon-select-box';
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -64,6 +67,7 @@ export class IconSelectBox extends Disposable {
 		help.textContent = localize('iconSelect.help', 'Use arrow keys to browse icons and Enter to select.');
 		inputContainer.append(help);
 		setAriaAttribute(this.inputBox.inputElement, 'describedby', help.id);
+		if (options.controls) this.domNode.append(options.controls);
 
 		this.scrollable = this._register(new ScrollableElement(this.domNode, { direction: 'vertical', tabIndex: -1 }));
 		this.scrollable.element.classList.add('ash-icon-select-scroll');
@@ -149,7 +153,7 @@ export class IconSelectBox extends Disposable {
 			fragment.append(message);
 		}
 		this.grid.replaceChildren(fragment);
-		const index = icons.findIndex(icon => icon.id === previousId);
+		const index = icons.findIndex(icon => icon.id === (previousId ?? this.selectedIconId));
 		this.focusIcon(index >= 0 ? index : icons.length > 0 ? 0 : -1);
 		this.scrollable.layout();
 	}

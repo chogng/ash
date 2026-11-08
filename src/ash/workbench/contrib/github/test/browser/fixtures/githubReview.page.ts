@@ -21,6 +21,7 @@ import { getIconDefinition } from '../../../../../../platform/theme/common/iconR
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { setNlsMessages } from '../../../../../../nls.js';
 import messages from '../../../../../../../../extensions/language-pack-zh-cn/translations/github.json' with { type: 'json' };
+import workbenchMessages from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { IWebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -55,10 +56,11 @@ import { CommandService } from '../../../../../services/commands/common/commandS
 import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { ITextModelResourceService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
 
-if (new URL(location.href).searchParams.has('zh')) { setNlsMessages('zh-CN', messages); }
+if (new URL(location.href).searchParams.has('zh')) { setNlsMessages('zh-CN', { ash: { ...workbenchMessages.ash, ...messages.ash } }); }
 interface Request { id: number; method: string; params: Record<string, unknown>; }
 const head = 'a'.repeat(40); const base = 'b'.repeat(40);
 const file = { filename: 'new.rs', previousFilename: 'old.rs', status: 'renamed', additions: 1, deletions: 1, changes: 2, patch: '@@ -1 +1 @@\n-old\n+new' };
+const secondFile = { ...file, filename: 'second.rs', previousFilename: null, status: 'modified' };
 const comment = { id: 'comment-1', author: 'Alice', body: 'Please explain', url: 'https://github.com/team/repo/pull/7#discussion', canUpdate: true, canDelete: true };
 class ReviewTransport implements AppServerTransport {
 	public managedFailure: string | undefined;
@@ -119,12 +121,22 @@ class ReviewTransport implements AppServerTransport {
 			case 'github/pullRequest/read': this.respond(request, this.pr(Number(request.params.number))); break;
 			case 'github/pullRequest/create': this.respond(request, { ...this.pr(10), title: request.params.title, body: request.params.body }); break;
 			case 'github/pullRequest/update': this.respond(request, { ...this.pr(), title: request.params.title ?? this.pr().title, body: request.params.body ?? this.pr().body, state: request.params.state ?? 'open' }); break;
-			case 'github/pullRequest/diff': this.respond(request, { baseCommit: base, files: { files: request.params.page === 1 ? [file] : [{ ...file, filename: 'binary.bin', previousFilename: null, status: 'added', patch: null }], nextPage: request.params.page === 1 ? 2 : null, limitReached: false } }); break;
+			case 'github/pullRequest/diff': this.respond(request, { baseCommit: base, files: { files: request.params.page === 1 ? [file] : [secondFile, { ...file, filename: 'binary.bin', previousFilename: null, status: 'added', patch: null }], nextPage: request.params.page === 1 ? 2 : null, limitReached: false } }); break;
 			case 'github/file/read': this.respond(request, request.params.path === 'binary.bin' ? { kind: 'binary' } : { kind: 'text', text: request.params.commit === base ? 'old\n' : 'new\n' }); break;
 			case 'github/checks': this.respond(request, { state: 'success', statuses: [], checks: [{ id: Number(request.params.page), name: request.params.page === 1 ? 'unit tests' : 'integration tests', status: 'completed', conclusion: 'success', detailsUrl: null }], nextPage: request.params.page === 1 ? 2 : null }); break;
 			case 'github/pullRequest/reviews': this.respond(request, { reviews: [], nextPage: null }); break;
 			case 'github/pullRequest/review': this.respond(request, { id: 1, body: request.params.body, state: 'COMMENTED', url: 'https://github.com/team/repo/pull/7#review', commit: request.params.commit, submittedAt: 'now' }); break;
-			case 'github/pullRequest/threads': this.respond(request, { threads: request.params.cursor ? [] : [{ id: 'thread-1', path: 'new.rs', line: 1, side: 'RIGHT', resolved: this.resolved, outdated: false, canResolve: true, comments: { comments: [{ ...comment, body: this.commentBody }], nextCursor: 'comment-cursor' } }], nextCursor: request.params.cursor ? null : 'thread-cursor' }); break;
+			case 'github/pullRequest/threads': {
+				const thread = { id: 'thread-1', path: 'new.rs', line: 1, side: 'RIGHT', resolved: this.resolved, outdated: false, canResolve: true, comments: { comments: [{ ...comment, body: this.commentBody }], nextCursor: 'comment-cursor' } };
+				const threads = request.params.cursor
+					? [
+						{ ...thread, id: 'thread-2', path: secondFile.filename, comments: { comments: [{ ...comment, id: 'second-comment', body: 'Discussion on second file' }], nextCursor: null } },
+						{ ...thread, id: 'thread-3', path: secondFile.filename, outdated: true, comments: { comments: [{ ...comment, id: 'outdated-comment', body: 'Discussion on an earlier revision' }], nextCursor: null } },
+					]
+					: [thread];
+				this.respond(request, { threads, nextCursor: request.params.cursor ? null : 'thread-cursor' });
+				break;
+			}
 			case 'github/pullRequest/thread/read': this.respond(request, { comments: [{ ...comment, id: 'comment-2', body: 'More discussion' }], nextCursor: null }); break;
 			case 'github/pullRequest/thread/reply': this.respond(request, { ...comment, id: 'reply', body: request.params.body }); break;
 			case 'github/pullRequest/thread/resolve': this.resolved = request.params.state === 'resolved'; this.respond(request, null); break;

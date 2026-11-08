@@ -98,7 +98,7 @@ test('Agent Output and Trace commands preserve reviewed Session and locate exact
 	const client = connection.client;
 	try {
 		const create = async (title: string, suffix: string): Promise<{ sessionId: string; threadId: string; turnId: string; }> => {
-			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'trace-navigation-session-' + suffix, title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'trace-navigation-session-' + suffix, kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const thread = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'trace-navigation-thread-' + suffix, sessionId, request: { type: 'createThread', title: 'Navigation ' + suffix } });
 			if (thread.type !== 'thread') { throw new Error('Expected navigation fixture Thread'); }

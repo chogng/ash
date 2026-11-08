@@ -942,7 +942,7 @@ fn modal_mouse_activation_uses_the_session_identity_and_close_requires_matching_
     let mut app = crate::app::App::new();
     let choices = crate::sessions::session_choices(
         &[ash_protocol::Session {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             source: None,
             model: None,
             session_id: ash_protocol::SessionId::new("session-1").unwrap(),
@@ -1044,7 +1044,7 @@ fn modal_backdrop_click_closes_modal_and_drag_cancels() {
     let mut app = crate::app::App::new();
     let choices = crate::sessions::session_choices(
         &[ash_protocol::Session {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             source: None,
             model: None,
             session_id: ash_protocol::SessionId::new("session-1").unwrap(),

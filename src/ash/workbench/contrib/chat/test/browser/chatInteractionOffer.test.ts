@@ -28,7 +28,14 @@ function fixture() {
 	const service = lifetime.add(new ChatService({} as IAgentModelsService, sessions, threads, {} as IAgentTurnService, {} as ITurnChangesApi, api, { subscribe: () => ({ dispose() { } }) } as IServerEventApi, lifetime.add(new TestConfigurationService())));
 	return { lifetime, service, offers, updates, setState(value: AppServerConnectionState, next = generation) { state = value; generation = next; states.fire(value); }, setPending(value: Promise<ThreadSubscription>) { pending = value; }, count: () => ({ subscriptions, unsubscriptions }) };
 }
-function snapshot(): ThreadSubscription { return { thread: { sessionId: 'session', threadId: 'thread', sequence: 2, turns: [{ turnId: 'turn', status: 'waitingForApproval' }] }, transcript: { entries: [], revision: 0 }, updates: [] } as unknown as ThreadSubscription; }
+function snapshot(requestId?: string): ThreadSubscription {
+	const pendingInteraction = requestId === undefined ? undefined : { requestId, kind: 'approval' };
+	return {
+		thread: { sessionId: 'session', threadId: 'thread', sequence: 2, turns: [{ turnId: 'turn', status: 'waitingForApproval', pendingInteraction }] },
+		transcript: { entries: [], revision: 0 },
+		updates: [],
+	} as unknown as ThreadSubscription;
+}
 
 // The backend can deliver agent/request synchronously before the subscribe response resumes.
 test('an owned pending interaction survives subscribe response ordering and a window reopen', async () => {
@@ -101,13 +108,16 @@ test('an already expired offer cannot create actionable authority', async () => 
 
 test('a pre-response owner offer is not retired by the earlier subscribe snapshot', async () => {
 	const f = fixture(); using cleanup = f.lifetime;
-	const pending = new DeferredPromise<ThreadSubscription>(); f.setPending(pending.p);
-	const subscribing = f.service.subscribeThread('session', 'thread', 0, {});
+	const owner = {};
+	await f.service.subscribeThread('session', 'thread', 0, owner);
 	f.offers.fire(offer);
-	const earlier = snapshot();
-	await pending.complete({ ...earlier, thread: { ...earlier.thread, turns: [] } });
+	const pending = new DeferredPromise<ThreadSubscription>(); f.setPending(pending.p);
+	const subscribing = f.service.subscribeThread('session', 'thread', 0, owner);
+	const next = { ...offer, interaction: { ...offer.interaction, requestId: 'next' } };
+	f.offers.fire(next);
+	await pending.complete(snapshot(offer.interaction.requestId));
 	await subscribing;
-	assert.deepEqual(f.service.getInteractionOffer('session', 'thread'), offer);
+	assert.equal(f.service.getInteractionOffer('session', 'thread'), next);
 });
 
 test('same-connection reacquisition retains the still-open delivery lease without a duplicate server offer', async () => {
@@ -133,4 +143,27 @@ test('a fresh terminal snapshot retires an offer that predates the refresh', asy
 	f.setPending(Promise.resolve({ ...before, thread: { ...before.thread, turns: [] } }));
 	await f.service.subscribeThread('session', 'thread', 0, owner);
 	assert.equal(f.service.getInteractionOffer('session', 'thread'), undefined);
+});
+
+test('a refreshed turn waiting on a different request retires the old approval without granting the new one', async () => {
+	const f = fixture(); using cleanup = f.lifetime;
+	const owner = {};
+	await f.service.subscribeThread('session', 'thread', 0, owner);
+	f.offers.fire(offer);
+	const refresh = async (requestId: string): Promise<void> => {
+		f.setPending(Promise.resolve(snapshot(requestId)));
+		await f.service.subscribeThread('session', 'thread', 0, owner);
+	};
+	await refresh(offer.interaction.requestId);
+	assert.equal(f.service.getInteractionOffer('session', 'thread'), offer);
+
+	const changes: (AgentInteractionOffer | undefined)[] = [];
+	cleanup.add(f.service.onDidChangeInteractionOffer(change => changes.push(change.offer)));
+	const next = { ...offer, interaction: { ...offer.interaction, requestId: 'next' } };
+	await refresh(next.interaction.requestId);
+	assert.equal(f.service.getInteractionOffer('session', 'thread'), undefined);
+	assert.deepEqual(changes, [undefined]);
+
+	f.offers.fire(next);
+	assert.equal(f.service.getInteractionOffer('session', 'thread'), next);
 });

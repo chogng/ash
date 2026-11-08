@@ -8,7 +8,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IPlaywrightService } from '../../../../platform/browserView/common/playwrightService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IAgentHostCanvasCollection } from '../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
-import type { ICanvasOwner } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvasOwner } from '../../../../workbench/common/canvasReference.js';
 import { MainThreadCanvases } from '../../../../workbench/api/browser/mainThreadCanvases.js';
 import { IBrowserViewWorkbenchService } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { parseSessionIdentity, sessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';

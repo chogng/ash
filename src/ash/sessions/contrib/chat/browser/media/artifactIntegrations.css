@@ -1,6 +1,11 @@
-.ash-session-artifact-details {
+.ash-session-artifact-details,
+.ash-session-artifact-details-actions,
+.ash-session-artifact-details-actions > .ash-session-artifact-button {
 	display: grid;
 	gap: var(--ash-spacing-size80);
+}
+
+.ash-session-artifact-details {
 	inline-size: min(360px, calc(100vw - 32px));
 	max-block-size: min(480px, 70vh);
 	overflow: auto;

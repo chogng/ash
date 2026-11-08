@@ -21,6 +21,34 @@
 .ash-button > .ash-button-content {
 	gap: 6px;
 }
+.ash-button .ash-button-adaptive-label {
+	position: relative;
+	display: inline-grid;
+	grid-template-columns: minmax(0, 1fr);
+	justify-items: center;
+}
+.ash-button .ash-button-adaptive-label > .ash-button-label {
+	inline-size: max-content;
+	max-inline-size: none;
+	white-space: nowrap;
+}
+.ash-button .ash-button-label-short {
+	display: none;
+	position: absolute;
+	inset: 0;
+	align-content: center;
+	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.ash-button .ash-button-adaptive-label.short-label > .ash-button-label {
+	/* Keep the full name available to assistive technology and keep its layout contribution. */
+	opacity: 0;
+}
+.ash-button .ash-button-adaptive-label.short-label > .ash-button-label-short {
+	display: block;
+}
 .ash-button.icon-only > .ash-button-content > .ash-icon-label-container {
 	display: none;
 }

@@ -443,6 +443,19 @@ test('caller-styled menus render in the browser even when system menus are confi
 	assert.deepEqual(fixture.events, ['show', 'hide']);
 });
 
+for (const iconPlacement of ['trailing', 'leading-with-trailing-check'] as const) test(`Menu layout ${iconPlacement} selects browser rendering when system menus are configured`, () => {
+	using fixture = new SystemMenuFixture();
+	const anchor = fixture.document.querySelector<HTMLButtonElement>('#origin')!;
+	fixture.menus.showContextMenu({
+		getAnchor: () => anchor,
+		getActions: () => [{ ...menuAction('Current'), checked: true }],
+		iconPlacement,
+	});
+	assert.equal(fixture.popups.length, 0);
+	const row = fixture.document.querySelector('.ash-menu [aria-checked="true"]');
+	assert.ok(row?.querySelector('.ash-menu-trailing-check > [data-ash-icon-id="check"]'));
+});
+
 test('already canceled system requests do not display or disturb the current popup', async () => {
 	using fixture = new SystemMenuFixture();
 	const existing = fixture.show('Existing');

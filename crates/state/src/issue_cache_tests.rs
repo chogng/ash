@@ -25,6 +25,84 @@ fn page(number: u64) -> IssuePage {
 }
 
 #[test]
+fn adopts_an_unversioned_cache_without_losing_pages() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let repository = repository("repo");
+    let authorization = github::GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "first".into(),
+    };
+    let key = IssueCacheKey {
+        authorization: &authorization,
+        repository: &repository,
+        state: "open",
+        query: "",
+        page: 1,
+    };
+    let now = RETENTION_SECONDS + 1;
+    {
+        let store = SqliteIssueCache::open(&path).unwrap();
+        store.write(&key, &page(42), now).unwrap();
+    }
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch("DROP TABLE ash_schema_migrations;")
+        .unwrap();
+    let store = SqliteIssueCache::open(&path).unwrap();
+    assert_eq!(
+        store.read(&key, now).unwrap().unwrap().page.issues[0].number,
+        42
+    );
+    assert_eq!(MIGRATOR.version(&connection).unwrap(), Some(1));
+}
+
+#[test]
+fn issue_cache_reads_under_a_writer_and_preserves_pages_from_newer_requests() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let store = SqliteIssueCache::open(&path).unwrap();
+    store
+        .connection
+        .lock()
+        .unwrap()
+        .busy_timeout(std::time::Duration::ZERO)
+        .unwrap();
+    let repository = repository("repo");
+    let authorization = github::GitHubAuthorization {
+        host: "github.com".into(),
+        account_id: "42".into(),
+        grant_id: "first".into(),
+    };
+    let key = IssueCacheKey {
+        authorization: &authorization,
+        repository: &repository,
+        state: "open",
+        query: "",
+        page: 1,
+    };
+    let now = RETENTION_SECONDS + 1;
+    store.write(&key, &page(1), now + 1).unwrap();
+    let writer = Connection::open(&path).unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+    assert!(store.read(&key, now).unwrap().is_none());
+    assert!(store.read(&key, now + 1).unwrap().is_some());
+    writer.execute_batch("ROLLBACK").unwrap();
+
+    let second_page = IssueCacheKey { page: 2, ..key };
+    store.write(&second_page, &page(2), now).unwrap();
+    assert!(store.read(&second_page, now + 1).unwrap().is_none());
+    store.write(&second_page, &page(2), now + 1).unwrap();
+    store.write(&key, &page(3), now).unwrap();
+    assert_eq!(
+        store.read(&key, now + 1).unwrap().unwrap().page.issues[0].number,
+        1
+    );
+    assert!(store.read(&second_page, now + 1).unwrap().is_some());
+}
+
+#[test]
 fn private_issue_cache_isolates_accounts_and_grants_and_clears_only_the_selected_grant() {
     let directory = tempfile::tempdir().unwrap();
     let store = SqliteIssueCache::open(&directory.path().join("state.db")).unwrap();

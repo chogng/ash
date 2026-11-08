@@ -77,10 +77,13 @@ import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotificatio
 import type { ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { AccessibleViewType, IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
+import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.contribution.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/base/browser/markdownRenderer.css';
+import '../../../src/ash/sessions/contrib/chat/browser/media/chatInput.css';
 import '../../../src/ash/editor/browser/coreCommands.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { Lexer } from '../../../src/ash/base/common/marked/marked.js';
@@ -104,12 +107,15 @@ import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/co
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
-import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/contextkeys.js';
+import { SessionsWorkspaceModeContext } from '../../../src/ash/sessions/common/contextkeys.js';
+import '../../../src/ash/sessions/contrib/chat/browser/chatRunAnotherVersionActions.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
-import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { IChatWidgetService, type IChatWidget, unwrapChatResponseActionContext } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { ChatCopyActionRendering } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
@@ -172,6 +178,10 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
+	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService),
+})));
+resources.add(services.createInstance(ChatCopyActionRendering));
 services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
 services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
@@ -441,6 +451,7 @@ let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let hasConversationChanges = false;
+let responseWorking = false;
 let appChat: ChatWidget | CoworkWidget | undefined;
 let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
@@ -481,7 +492,13 @@ let chosenVoice: AgentVoiceSelection | undefined;
 const voiceControls: string[] = [];
 const voiceFixture: IAgentVoiceService = {
 	isAvailable: true, get state() { return voiceSession; }, onDidChange: voiceChanges.event, onDidRequestTask: voiceTasks.event,
-	getOptions: async () => [{ connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'speech', models: [{ modelId: 'speech', defaultVoice: 'cedar', voices: ['cedar', 'marin'] }] }],
+	getOptions: async () => [{
+		connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'other-speech',
+		models: [
+			{ modelId: 'other-speech', defaultVoice: 'other-voice', voices: ['other-voice'] },
+			{ modelId: 'gpt-live-1', defaultVoice: 'cedar', voices: ['cedar', 'marin'] },
+		],
+	}],
 	start: async (source, selection) => { chosenVoice = { ...selection }; voiceControls.push('start'); voiceSession = { ...source, resourceId: 'voice-media', mediaEpoch: (voiceSession?.mediaEpoch ?? 0) + 1, sequence: 1, state: 'connected', inputMode: 'openMic' as const, muted: false, listening: true, inputSequence: 0, usageMilliseconds: 0 }; voiceChanges.fire(); return voiceSession; },
 	stop: async () => { voiceControls.push('stop'); if (voiceSession) voiceSession = { ...voiceSession, state: 'ended' }; voiceChanges.fire(); },
 	setMuted: async muted => { voiceControls.push('mute:' + muted); if (voiceSession) voiceSession = { ...voiceSession, muted, listening: !muted && voiceSession.inputMode === 'openMic' }; voiceChanges.fire(); },
@@ -673,10 +690,13 @@ declare global {
 			setUpvoteAnimation(value: string): Promise<void>;
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
-			prepareRequestEditing(cowork: boolean, text?: string, unanswered?: boolean): void;
+			prepareRequestEditing(cowork: boolean, text?: string, unanswered?: boolean, hasCheckpoint?: boolean): void;
+			updateRequestCheckpoint(): void;
+			runChatCommand(id: string): Promise<unknown>;
 			setAutoFollowReplies(enabled: boolean): Promise<void>;
 			appendChatItem(item: IChatListItem): void;
 			setConversationChanges(visible: boolean): void;
+			setResponseWorking(working: boolean): void;
 			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[];
 			finishRequestEdit(failure?: boolean): void;
 			prepareMessageFork(): void;
@@ -880,11 +900,15 @@ window.ashChatTranscriptIntegration = {
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },
 	setUpvoteAnimation: value => services.get(IConfigurationService).updateValue('chat.upvoteAnimation', value),
-	prepareRequestEditing: (cowork, text, unanswered) => {
+	prepareRequestEditing: (cowork, text, unanswered, hasCheckpoint) => {
 		requestEditMode = true;
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
 		requestEdits.length = 0;
-		const request: IChatListItem = { id: 'presentation-entry', type: 'userMessage', text: text ?? 'Original request', transient: false, requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' } };
+		const request: IChatListItem = {
+			id: 'presentation-entry', type: 'userMessage', text: text ?? 'Original request', transient: false,
+			requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' },
+			canForkBeforeRequest: hasCheckpoint, canRunAnotherVersion: hasCheckpoint,
+		};
 		appItems = text === undefined ? [request] : [
 			{ id: 'preceding-answer', type: 'agentMessage', text: 'Earlier response\n\n'.repeat(15), transient: false },
 			request,
@@ -892,9 +916,15 @@ window.ashChatTranscriptIntegration = {
 		];
 		chatChanges.fire();
 	},
+	updateRequestCheckpoint: () => {
+		appItems = appItems.map(item => item.id === 'presentation-entry' ? { ...item, canRunAnotherVersion: true } : item);
+		chatChanges.fire();
+	},
+	runChatCommand: id => composerServices!.get(ICommandService).executeCommand(id),
 	setAutoFollowReplies: enabled => services.get(IConfigurationService).updateValue('chat.autoFollowReplies', enabled),
 	appendChatItem: item => { appItems = [...appItems, item]; chatChanges.fire(); },
 	setConversationChanges: visible => { hasConversationChanges = visible; chatChanges.fire(); },
+	setResponseWorking: working => { responseWorking = working; chatChanges.fire(); },
 	requestEdits: () => requestEdits,
 	finishRequestEdit: failure => completeRequestEdit?.(failure),
 	prepareMessageFork: () => {
@@ -948,10 +978,11 @@ window.ashChatTranscriptIntegration = {
 		appServices.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
 			async executeCommand<T>(id: string, ...args: readonly unknown[]): Promise<T> {
-				messageRowCommands.push({ id, args });
+				messageRowCommands.push({ id, args: args.map(unwrapChatResponseActionContext) });
 				return undefined as T;
 			},
 		});
+		appServices.registerSingleton(IMenuService, () => appServices.createInstance(MenuService));
 		window.ashChatTranscriptIntegration.setMessageForkEnabled(true);
 	},
 	messageRowCommands: () => messageRowCommands,
@@ -1224,6 +1255,7 @@ window.ashChatTranscriptIntegration = {
 		const chatServices = resources.add(services.createChild());
 		if (new URLSearchParams(location.search).has('sessions')) {
 			IsSessionsWindowContext.bindTo(chatServices.get(IContextKeyService)).set(true);
+			SessionsWorkspaceModeContext.bindTo(chatServices.get(IContextKeyService)).set('code');
 		}
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
@@ -1235,8 +1267,8 @@ window.ashChatTranscriptIntegration = {
 		} as unknown as IChatSessionNavigationService);
 		chatServices.registerInstance(IChatService, {
 			rewriteRequest: async options => {
-				if (!requestEditMode) { throw new Error('Unexpected request edit'); }
-				requestEdits.push(options);
+				if (!requestEditMode || options.text === undefined) { throw new Error('Unexpected request edit'); }
+				requestEdits.push({ ...options, text: options.text });
 				await new Promise<void>((resolve, reject) => { completeRequestEdit = failure => failure ? reject(new Error('Synthetic edit failure')) : resolve(); });
 				return { sessionId: options.sessionId, threadId: 'edited-thread' };
 			}
@@ -1259,10 +1291,15 @@ window.ashChatTranscriptIntegration = {
 			resources.add(ChatInputEditors.register({ id: 'integration', create: options => chatServices.createInstance(ChatInputEditor, options) }));
 		}
 		chatServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
-		const contextMenus: IContextMenuService = { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None };
+		const contextMenus: IContextMenuService = {
+			contextMenuStyle: 'custom', hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+			showContextMenu(delegate) {
+				if ('getActions' in delegate) document.body.dataset.chatContextActions = delegate.getActions?.().map(action => action.id).join(' ');
+			},
+		};
+		chatServices.registerInstance(IContextMenuService, contextMenus);
 		if (cowork) {
 			chatServices.registerSingleton(ITerminalConfigurationService, () => chatServices.createInstance(TerminalConfigurationService));
-			chatServices.registerInstance(IContextMenuService, contextMenus);
 			chatServices.registerSingleton(IChatTipService, () => chatServices.createInstance(ChatTipService));
 			chatServices.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 		}
@@ -1286,7 +1323,7 @@ window.ashChatTranscriptIntegration = {
 			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
-				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
+				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
@@ -1396,7 +1433,7 @@ window.ashChatTranscriptIntegration = {
 		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
 		lifecycleServices.registerInstance(IAgentConnection, disconnected);
-		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
+		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', kind: 'code' as const, title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
 		const read = () => ({ session: catalog[0]!, agentTree: { roots: [] } });
 		lifecycleServices.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });
 		lifecycleServices.registerInstance(IServerEventApi, { subscribe: () => Disposable.None });

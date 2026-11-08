@@ -30,7 +30,7 @@ fn attachment_resource_open_reads_only_selected_thread_media_and_keeps_connectio
         &mut owner,
         json!({
             "jsonrpc":"2.0","id":2,"method":"session/create",
-            "params":{"commandId":"media-session","title":"Media","executionTarget":null}
+            "params":{"commandId":"media-session","title":"Media","kind":"code", "executionTarget":null}
         }),
     );
     let session_id =

@@ -17,6 +17,51 @@ use std::fs;
 
 struct PassThroughBackend;
 
+#[cfg(unix)]
+#[test]
+fn shell_review_binds_literal_redirects_and_denies_escaping_or_protected_targets() {
+    let directory = tempfile::tempdir().unwrap();
+    let suite = text_edit_suite(directory.path());
+    let command = suite.grant.authorize(Permission::ExecuteCommands).unwrap();
+    let scope = suite.sandbox_scope_for(&command, None, None).unwrap();
+    let prepare = |script: &str| {
+        let call = tool_call(
+            "shell-command",
+            json!({"program":"sh","arguments":["-c",script],"working_directory":"."}),
+        );
+        suite
+            .shell
+            .prepare_at(&call, &command, PathBuf::from("."), &scope)
+    };
+    let review = prepare("git status > result.txt").unwrap();
+    let shell = review.shell().unwrap();
+    assert!(shell.requires_confirmation);
+    assert!(shell.session_prefixes.is_empty());
+    assert!(
+        review
+            .action()
+            .required_capabilities()
+            .iter()
+            .any(|capability| {
+                capability.kind() == &CapabilityKind::FileWrite
+                    && capability.scope().ends_with("/result.txt")
+            })
+    );
+
+    let outside = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(outside.path(), directory.path().join("escape")).unwrap();
+    for script in [
+        "git status > ../escape.txt",
+        "git status > escape/marker",
+        "git status > .env",
+    ] {
+        assert!(prepare(script).is_err(), "{script}");
+    }
+    let pending = prepare("git status > \"$TARGET\"").unwrap();
+    assert!(pending.shell().unwrap().commands.is_empty());
+    assert!(pending.requires_manual_confirmation());
+}
+
 #[test]
 fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
     let directory = tempfile::tempdir().unwrap();
@@ -30,7 +75,7 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
         source.display(),
         target.display()
     );
-    let (_, rewritten, targets) = super::super::materialize_patch_targets(
+    let (_, rewritten, write) = super::super::materialize_patch_targets(
         std::slice::from_ref(&authorized),
         authorized.dir(),
         &patch,
@@ -39,9 +84,9 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
     .unwrap();
     assert!(rewritten.contains("*** Update File: old.txt"));
     assert!(rewritten.contains("*** Move to: new.txt"));
-    assert_eq!(targets.len(), 2);
-    assert!(targets.iter().any(|path| path.ends_with("old.txt")));
-    assert!(targets.iter().any(|path| path.ends_with("new.txt")));
+    assert_eq!(write.targets.len(), 2);
+    assert!(write.targets.iter().any(|path| path.ends_with("old.txt")));
+    assert!(write.targets.iter().any(|path| path.ends_with("new.txt")));
     let outside = tempfile::tempdir().unwrap();
     let escaping = patch.replace(
         &target.display().to_string(),
@@ -60,14 +105,83 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
     assert!(!target.exists());
 }
 
+#[test]
+fn patch_review_protects_new_sensitive_targets_and_freezes_every_write_path() {
+    let directory = tempfile::tempdir().unwrap();
+    let grant = authorization(directory.path());
+    let authorized = grant.authorize(Permission::WriteFiles).unwrap();
+    let patch = "*** Begin Patch\n*** Add File: normal.txt\n+normal\n*** Add File: .vscode/tasks.json\n+{}\n*** End Patch";
+    let (prepared, _, write) = super::super::materialize_patch_targets(
+        std::slice::from_ref(&authorized),
+        authorized.dir(),
+        patch,
+        &[],
+    )
+    .unwrap();
+    assert!(write.protected);
+    assert_eq!(write.targets.len(), 2);
+    for path in ["normal.txt", ".vscode/tasks.json"] {
+        assert!(
+            prepared
+                .path_policy()
+                .allows(Path::new(path), ash_file_access::PathOperation::Write)
+        );
+    }
+    assert!(!prepared.path_policy().allows(
+        Path::new("other.txt"),
+        ash_file_access::PathOperation::Write
+    ));
+    assert!(prepared.path_policy().allows(
+        Path::new(".editorconfig"),
+        ash_file_access::PathOperation::Read
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn direct_write_review_follows_sensitive_aliases_and_rejects_retargeting() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::create_dir(root.join(".vscode")).unwrap();
+    fs::write(root.join(".vscode/tasks.json"), "{}").unwrap();
+    fs::write(root.join("other.json"), "{}").unwrap();
+    let alias = root.join("alias.json");
+    std::os::unix::fs::symlink(".vscode/tasks.json", &alias).unwrap();
+    let suite = text_edit_suite(root);
+    let call = tool_call(
+        "write_file",
+        json!({"path": "alias.json", "content": "new content"}),
+    );
+    let review = suite.prepare(&call).unwrap();
+    let reviewed = review.file_write().unwrap();
+    assert!(reviewed.protected);
+    assert!(reviewed.targets[0].ends_with(".vscode/tasks.json"));
+
+    fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink("other.json", &alias).unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new().token();
+    assert!(matches!(
+        suite.execute_document_tool(&call, "direct", None, None, None, Some(reviewed), &cancellation),
+        Err(CoreError::Policy(message)) if message.contains("target changed")
+    ));
+    assert_eq!(fs::read_to_string(root.join("other.json")).unwrap(), "{}");
+    fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink("missing.json", &alias).unwrap();
+    assert!(suite.prepare(&call).is_err());
+}
+
 fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend> {
+    local_tool_suite(path, PassThroughBackend)
+}
+
+fn local_tool_suite<B: SandboxBackend>(path: &std::path::Path, backend: B) -> LocalToolSuite<B> {
     let grant = authorization(path);
     let ripgrep =
         super::super::resolve_ripgrep(&ash_install_context::InstallContext::current()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         grant.authorize(Permission::ExecuteCommands).unwrap(),
         ripgrep.clone(),
-        PassThroughBackend,
+        backend,
         ActionPolicyRevision::new("test-policy-v1"),
         super::super::shell_sandbox(),
     )
@@ -364,6 +478,7 @@ fn document_writes_reacquire_snapshots_when_the_write_grant_selects_a_different_
                     Some(&session),
                     None,
                     None,
+                    None,
                     &token,
                 )
                 .unwrap(),
@@ -390,6 +505,7 @@ fn document_writes_reacquire_snapshots_when_the_write_grant_selects_a_different_
                 &tool_call("write_file", json!({"path":path,"content":"new"})),
                 "document-roots",
                 Some(&session),
+                None,
                 None,
                 None,
                 &token,
@@ -631,6 +747,7 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             Some(&session_id),
             None,
             None,
+            None,
             &ash_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
@@ -647,6 +764,7 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             ),
             "thread",
             Some(&session_id),
+            None,
             None,
             None,
             &ash_async_utils::CancellationSource::new().token(),
@@ -752,6 +870,7 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
             None,
             None,
             None,
+            None,
             &ash_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
@@ -762,6 +881,7 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
             serde_json::json!({"path": private, "offset": null, "limit": null}),
         ),
         "thread",
+        None,
         None,
         None,
         None,
@@ -1152,6 +1272,304 @@ fn command_registration_and_revocation_cover_both_launch_orderings() {
 }
 
 #[test]
+fn command_terminal_output_drains_after_turn_cancellation_until_its_grant_is_revoked() {
+    let dir = tempfile::tempdir().unwrap();
+    let access = DirGrants::default();
+    let session = SessionId::new("terminal-output-grant").unwrap();
+    let grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands]),
+    );
+    access.add_dir(session.clone(), grant.clone()).unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let command = access
+        .authorize_command(
+            vec![grant.authorize(Permission::ExecuteCommands).unwrap()],
+            &turn.token(),
+        )
+        .unwrap();
+    turn.cancel();
+    assert!(access.execute_command(&command, || Ok(())).is_err());
+    assert_eq!(
+        access.read_command_output(&command, || Ok("tail")).unwrap(),
+        "tail"
+    );
+    access.remove_dir(&session, dir.path());
+    assert!(access.read_command_output(&command, || Ok(())).is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn command_terminal_input_is_owner_bound_and_released_on_connection_close() {
+    let dir = tempfile::tempdir().unwrap();
+    // A successful launch must use the unrestricted branch even on a host
+    // that also has a platform sandbox installed.
+    let suite = local_tool_suite(dir.path(), ash_sandboxing::SandboxBackends::new(Vec::new()));
+    let session = SessionId::new("terminal-owner").unwrap();
+    let thread = ThreadId::new("terminal-thread").unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let authority = ToolAuthorization::UnsandboxedGrant {
+        grant_id: ash_action_policy::GrantId::new("terminal-test"),
+    };
+    let (program, arguments) = (
+        PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe")
+            .display()
+            .to_string(),
+        vec![
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Write-Output ('before:{0}:{1}' -f $PID, (Get-Location).Path); \
+             $line = [Console]::ReadLine(); Write-Output ('accepted:' + $line); \
+             Write-Output ('after:{0}:{1}' -f $PID, (Get-Location).Path)",
+        ],
+    );
+    let start = tool_call(
+        "shell-session",
+        json!({
+            "action": "start", "program": program, "arguments": arguments,
+            "working_directory": ".", "wait_ms": 0, "timeout_ms": 30_000,
+            "terminal_rows": 24, "terminal_cols": 200,
+        }),
+    );
+    let outside = tempfile::tempdir().unwrap();
+    let mut outside_start = start.clone();
+    outside_start.arguments["working_directory"] = json!(outside.path());
+    assert!(
+        suite
+            .shell_session(
+                &outside_start,
+                &authority,
+                &turn.token(),
+                &session,
+                &thread,
+                None
+            )
+            .is_err(),
+        "the execution grant cannot authorize a different directory"
+    );
+    let ToolExecutionOutput::Success(result) = suite
+        .shell_session(&start, &authority, &turn.token(), &session, &thread, None)
+        .unwrap()
+    else {
+        panic!("expected shell-session success");
+    };
+    let result: Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(result["status"], "running", "{result}");
+    let id = CommandSessionId::new(result["session_id"].as_str().unwrap()).unwrap();
+    let target = || CommandTerminalTarget {
+        session: session.clone(),
+        thread: thread.clone(),
+        call: start.id.clone(),
+        id: id.clone(),
+    };
+    let terminal =
+        |connection, action| suite.command_terminal(target(), connection, &|| false, action);
+    let write = || CommandTerminalAction::Write(b"allowed\n".to_vec());
+    for foreign in [
+        CommandTerminalTarget {
+            session: SessionId::new("other-session").unwrap(),
+            ..target()
+        },
+        CommandTerminalTarget {
+            thread: ThreadId::new("other-thread").unwrap(),
+            ..target()
+        },
+        CommandTerminalTarget {
+            call: ToolCallId::new("other-call").unwrap(),
+            ..target()
+        },
+    ] {
+        assert!(matches!(
+            suite.command_terminal(foreign, 2, &|| false, CommandTerminalAction::TakeInput),
+            Err(CoreError::NotFound(_))
+        ));
+    }
+    terminal(1, CommandTerminalAction::Attach).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let original_identity = loop {
+        let output = terminal(1, CommandTerminalAction::Read(0))
+            .unwrap()
+            .unwrap();
+        let text = String::from_utf8_lossy(&output.bytes);
+        if let Some((_, tail)) = text.split_once("before:")
+            && let Some((identity, _)) = tail.split_once(['\r', '\n', '\u{1b}'])
+        {
+            break identity.to_owned();
+        }
+        assert!(
+            !output.exited && std::time::Instant::now() < deadline,
+            "{text:?}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let (pid, cwd) = original_identity.split_once(':').unwrap();
+    assert!(pid.parse::<u32>().is_ok_and(|pid| pid > 0));
+    assert_eq!(
+        Dir::open_local(cwd).unwrap(),
+        Dir::open_local(dir.path()).unwrap()
+    );
+    assert!(matches!(terminal(1, write()), Err(CoreError::Policy(_))));
+    terminal(1, CommandTerminalAction::TakeInput).unwrap();
+    assert!(matches!(
+        terminal(2, CommandTerminalAction::TakeInput),
+        Err(CoreError::Policy(_))
+    ));
+    terminal(1, CommandTerminalAction::Detach).unwrap();
+    terminal(2, CommandTerminalAction::Attach).unwrap();
+    terminal(2, CommandTerminalAction::TakeInput).unwrap();
+    suite.release_connection(2);
+    assert!(matches!(
+        suite.command_terminal(target(), 2, &|| true, CommandTerminalAction::TakeInput),
+        Err(CoreError::Policy(_))
+    ));
+    terminal(3, CommandTerminalAction::Attach).unwrap();
+    assert!(matches!(terminal(3, write()), Err(CoreError::Policy(_))));
+    terminal(3, CommandTerminalAction::TakeInput).unwrap();
+    terminal(
+        3,
+        CommandTerminalAction::Resize(CommandTerminalSize {
+            rows: 30,
+            cols: 200,
+        }),
+    )
+    .unwrap();
+    terminal(3, write()).unwrap();
+    let owner = command_session_owner(&session, &thread);
+    let completed = pollster::block_on(suite.shell.shell.wait_session(
+        &owner,
+        &id,
+        CommandSessionCursor::default(),
+        Duration::from_secs(10),
+        &turn.token(),
+    ))
+    .unwrap();
+    let output = terminal(3, CommandTerminalAction::Read(0))
+        .unwrap()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.bytes);
+    assert!(
+        matches!(completed.status, CommandSessionStatus::Exited(_)),
+        "{text:?}"
+    );
+    assert_eq!(output.exit_code, Some(0), "{text:?}");
+    assert!(text.contains("accepted:allowed"), "{text:?}");
+    let (_, after) = text
+        .split_once("after:")
+        .expect("missing post-handoff identity");
+    let identity = after.split(['\r', '\n', '\u{1b}']).next().unwrap();
+    assert_eq!(identity, original_identity, "{text:?}");
+    terminal(3, CommandTerminalAction::Detach).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn attached_command_terminals_drain_after_a_new_command_retires_the_tool_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let suite = local_tool_suite(
+        dir.path(),
+        exec_server::LocalSandbox::new(ash_install_context::InstallContext::current()).build(),
+    );
+    let session = SessionId::new("terminal-drain").unwrap();
+    let thread = ThreadId::new("terminal-drain-thread").unwrap();
+    let cwd = dir.path();
+    suite
+        .dir_grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session.clone(),
+                Dir::open_local(cwd).unwrap(),
+                GrantSource::ExplicitUser,
+                Permissions::new([Permission::ExecuteCommands]),
+            ),
+        )
+        .unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let authority = ToolAuthorization::Sandboxed(super::super::shell_sandbox());
+    let shell = |arguments| {
+        let result = suite
+            .shell_session(
+                &tool_call("shell-session", arguments),
+                &authority,
+                &turn.token(),
+                &session,
+                &thread,
+                None,
+            )
+            .unwrap();
+        let ToolExecutionOutput::Success(result) = result else {
+            panic!("expected shell-session success");
+        };
+        serde_json::from_str::<Value>(&result).unwrap()
+    };
+    let start = shell(json!({
+        "action": "start", "program": "/bin/sh",
+        "arguments": ["-c", "read line; printf 'tail:%s' \"$line\"; exit 23"],
+        "working_directory": cwd, "wait_ms": 0, "terminal_rows": 24, "terminal_cols": 80,
+    }));
+    assert_eq!(start["status"], "running");
+    let id = CommandSessionId::new(start["session_id"].as_str().unwrap()).unwrap();
+    let terminal = |connection, action| {
+        suite.command_terminal(
+            CommandTerminalTarget {
+                session: session.clone(),
+                thread: thread.clone(),
+                call: ToolCallId::new("shell-session-call").unwrap(),
+                id: id.clone(),
+            },
+            connection,
+            &|| false,
+            action,
+        )
+    };
+    for connection in [1, 2, 3] {
+        terminal(connection, CommandTerminalAction::Attach).unwrap();
+    }
+    let initial = terminal(1, CommandTerminalAction::Read(0))
+        .unwrap()
+        .unwrap();
+    assert!(!initial.exited);
+    terminal(1, CommandTerminalAction::TakeInput).unwrap();
+    terminal(1, CommandTerminalAction::Write(b"finish\n".to_vec())).unwrap();
+    let completed = shell(json!({
+        "action": "wait", "session_id": id.as_str(), "wait_ms": 5000,
+    }));
+    assert_eq!(completed["status"], "exited");
+
+    // Force the competing start to finish its cleanup before the next terminal poll.
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                shell(json!({
+                    "action": "start", "program": "/bin/sh", "arguments": ["-c", "exit 0"],
+                    "working_directory": cwd, "wait_ms": 1000,
+                }));
+            })
+            .join()
+            .unwrap();
+    });
+    assert!(terminal(4, CommandTerminalAction::Read(0)).is_err());
+    terminal(2, CommandTerminalAction::Detach).unwrap();
+    suite.release_connection(3);
+    for connection in [2, 3] {
+        assert!(terminal(connection, CommandTerminalAction::Read(0)).is_err());
+    }
+    let final_output = terminal(1, CommandTerminalAction::Read(initial.next_cursor))
+        .unwrap()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&final_output.bytes).contains("tail:finish"));
+    assert!(final_output.exited);
+    assert_eq!(final_output.exit_code, Some(23));
+    terminal(1, CommandTerminalAction::Detach).unwrap();
+    assert!(terminal(1, CommandTerminalAction::Read(0)).is_err());
+}
+
+#[test]
 fn command_input_and_directory_revocation_share_an_admission_gate() {
     let dir = tempfile::tempdir().unwrap();
     let access = Arc::new(DirGrants::default());
@@ -1425,7 +1843,7 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
     let created = call(
         &mut origin,
         "session/create",
-        json!({"commandId":"documents-session","title":"Edit document","executionTarget":null,"agent":{"type":"default"}}),
+        json!({"commandId":"documents-session","title":"Edit document","kind":"code", "executionTarget":null,"agent":{"type":"default"}}),
     );
     let session = created["session"]["sessionId"].as_str().unwrap();
     call(

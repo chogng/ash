@@ -5,8 +5,12 @@ import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat
 import type { IView } from '../../../common/views.js';
 import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { h } from '../../../../base/browser/dom.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { localize } from '../../../../nls.js';
 import type { Event } from '../../../../base/common/event.js';
+import type { Icon } from '../../../../base/common/icon.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
@@ -20,10 +24,96 @@ import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
 
+/** Binds a toolbar action to its rendered message and row lifetime. */
+export class ChatMessageActionContext extends Disposable {
+	constructor(
+		private currentItem: IChatListItem,
+		readonly actions: HTMLElement,
+		private readonly isVisible: () => boolean,
+	) { super(); }
+
+	get visible(): boolean { return !this.isDisposed && this.isVisible(); }
+	get item(): IChatListItem { return this.currentItem; }
+
+	update(item: IChatListItem): void {
+		this.currentItem = item;
+	}
+}
+
+export class ChatRequestActionContext extends ChatMessageActionContext {
+	constructor(item: IChatListItem, actions: HTMLElement, isVisible: () => boolean, readonly startEditing: (requestId: string) => void | Promise<void>) {
+		super(item, actions, isVisible);
+	}
+}
+
+/** Limits reply playback to the row's lifetime. */
+export class ChatResponseActionContext extends ChatMessageActionContext {
+	private playback: AbortController | undefined;
+	private status: HTMLElement | undefined;
+
+	constructor(
+		item: IChatListItem,
+		actions: HTMLElement,
+		readonly window: Window & typeof globalThis,
+		isVisible: () => boolean,
+		private readonly setReading: (reading: boolean) => void,
+	) { super(item, actions, isVisible); }
+
+	get isReading(): boolean { return !!this.playback; }
+
+	override update(item: IChatListItem): void {
+		const previous = this.item;
+		super.update(item);
+		if (previous.text !== item.text || previous.attachmentSource?.sessionId !== item.attachmentSource?.sessionId
+			|| previous.attachmentSource?.threadId !== item.attachmentSource?.threadId) this.stop();
+	}
+
+	async read(run: (signal: AbortSignal) => Promise<void>): Promise<void> {
+		if (!this.visible || this.playback || this.item.transient || !this.item.text) return;
+		const controller = this.playback = new AbortController();
+		if (!this.status) {
+			this.status = h(this.actions.ownerDocument, 'span', { className: 'ash-chat-message-read-status', attributes: { role: 'status' } });
+			this.actions.append(this.status);
+		}
+		this.status.textContent = '';
+		this.setReading(true);
+		try {
+			await run(controller.signal);
+		} catch (error) {
+			if (this.playback === controller && !isCancellationError(error)) {
+				this.status.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
+			}
+		} finally {
+			if (this.playback === controller) this.stop();
+		}
+	}
+
+	stop(): boolean {
+		const controller = this.playback;
+		if (!controller) return false;
+		this.playback = undefined;
+		controller.abort();
+		if (!this.isDisposed) this.setReading(false);
+		return true;
+	}
+
+	protected override disposeCore(): void {
+		this.stop();
+		this.status?.remove();
+		this.status = undefined;
+		super.disposeCore();
+	}
+}
+
+export function unwrapChatResponseActionContext(context: unknown): unknown {
+	return context instanceof ChatResponseActionContext ? context.item : context;
+}
+
 /** Retained transcript presentation independent of the host's visibility and DOM focus. */
 export type IChatWidgetViewState = Omit<ReturnType<ChatListWidget['getViewState']>, 'visible' | 'focus'>;
 
 export interface IChatAcceptInputOptions {
+	readonly background?: boolean;
 	readonly queue?: ChatRequestQueueKind;
 	readonly cancelCurrentRequest?: boolean;
 	readonly sideChat?: boolean;
@@ -64,8 +154,19 @@ export interface IChatWidgetViewOptions {
 	readonly showPromptTimeline?: boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
+	readonly messagePresentation?: ChatMessagePresentation;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
+}
+
+export interface ChatMessagePresentation {
+	readonly user: { readonly name: string; readonly icon?: Icon; };
+	readonly assistant: { readonly name: string; readonly icon?: Icon; };
+	readonly getReferences?: (item: IChatListItem) => readonly {
+		readonly id: string;
+		readonly label: string;
+		readonly open: (trigger: HTMLElement) => void;
+	}[];
 }
 
 export type ChatTurnChangesOpener = (source: NonNullable<IChatListItem['feedbackSource']>, signal: AbortSignal) => Promise<void>;
@@ -86,8 +187,9 @@ export interface IChatWidget {
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
 	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
-	/** Edits a queued request without replacing the unsent composer draft. */
-	startEditing(request: QueuedMessage): void | Promise<void>;
+	/** Opens a sent request by row ID, or edits a queued request. */
+	startEditing(request: string | QueuedMessage): void | Promise<void>;
+	cancelEditing?(): boolean;
 	cancelTranscriptProgress?(): boolean;
 	retryFailedTurn(turnId?: string): Promise<void>;
 	getFindController(): IChatFindController | undefined;

@@ -17,6 +17,7 @@ pub use model::MemorySearchMatch;
 pub use model::MemorySearchPage;
 pub use model::MemorySource;
 pub use model::MemorySummary;
+pub use model::MemoryTurnSource;
 pub use policy::MemoryWriteMode;
 pub use service::AddMemoryRequest;
 pub use service::DeleteMemoryRequest;
@@ -42,7 +43,9 @@ pub use policy::MemoryReadMode;
 pub use policy::UpdateMemoryPolicyRequest;
 pub use read::MemoryCitation;
 pub use read::MemoryCitationResult;
+pub use read::MemoryNamespace;
 pub use store::MemoryPolicyCommit;
+pub use store::MemoryStoreContext;
 pub use store::MemoryStoreContextRequest;
 
 #[cfg(test)]

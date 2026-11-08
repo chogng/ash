@@ -45,7 +45,7 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	services.registerInstance(IProjectService, {
 		onDidChange: Event.None, list: async () => projects, read: async (id: string) => projects.find(project => project.id === id)!,
 		async create(id: string, name: string, description: string, materials: Project['materials']) {
-			const project: Project = { id, name, description, materials, revision: 1, archived: false, sessionIds: [], sessionCount: 0 };
+			const project: Project = { id, name, description, materials, revision: 1, archived: false, sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0 };
 			projects.push(project);
 			return project;
 		},
@@ -148,7 +148,7 @@ test('Code setup shows recent projects in open order and selects a project for t
 	const grants: string[] = [];
 	using f = fixture(undefined, [], [saved, URI.file('/older'), URI.file('/oldest')].map(folderUri => ({ folderUri })),
 		undefined, undefined, undefined, async root => { grants.push(root); return true; }, undefined, {
-		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], sessionCount: 0,
+		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
 		materials: [{ kind: 'folder', name: 'source', resource: saved }],
 	});
 	const document = f.button.ownerDocument;
@@ -176,7 +176,7 @@ test('Choose project authorizes its folder and binds only the current Code draft
 		grants.push(root);
 		return true;
 	}, undefined, {
-		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], sessionCount: 0,
+		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
 		materials: [{ kind: 'folder', name: 'source', resource }],
 	});
 	assert.match(f.button.textContent ?? '', /Choose project/);
@@ -326,7 +326,7 @@ test('Recents fold a verified checkout under a different visible repository', as
 
 test('Workspace includes recent active Session folders from the draft host after explicit recents', async () => {
 	const session = (id: string, lastActivity: number, providerId = LOCAL_AGENT_HOST_PROVIDER_ID, status: ISession['status'] = 'active'): ISession => ({
-		sessionId: id, title: id, status, providerId, nextApprovalMode: 'manual',
+		sessionId: id, kind: 'code' as const, title: id, status, providerId, nextApprovalMode: 'manual',
 		workspace: { authorityId: 'local', root: URI.file(`/${id}`).fsPath },
 		chats: [{ threadId: id, status: 'active', origin: { type: 'root' }, updatedAt: new Date(lastActivity) }],
 	});

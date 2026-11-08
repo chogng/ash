@@ -14,6 +14,8 @@ import { IsSessionsWindowContext } from '../../../../workbench/common/contextkey
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { groupSessionsForPicker, pickSessionDestination, type ISessionPickItem } from './sessionsPicker.js';
 import { runSessionsListMove } from './views/sessionsListChatMove.js';
+import { Menus } from '../../../browser/menus.js';
+import { SessionsMenuCanMoveConversationContext } from '../../../common/contextkeys.js';
 
 export const SHOW_SESSIONS_PICKER_COMMAND_ID = 'sessions.showSessionsPicker';
 
@@ -85,7 +87,12 @@ registerAction2(class ReopenLastClosedItemAction extends Action2 {
 export const MOVE_CHAT_TO_SESSION_ACTION_ID = 'sessions.list.moveChatToSession';
 
 registerAction2(class MoveChatToSessionAction extends Action2 {
-	constructor() { super({ id: MOVE_CHAT_TO_SESSION_ACTION_ID, title: localize2({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…') }); }
+	constructor() {
+		super({
+			id: MOVE_CHAT_TO_SESSION_ACTION_ID, title: localize2({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
+			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', when: SessionsMenuCanMoveConversationContext.isEqualTo(true) },
+		});
+	}
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
 		if (!isRecord(argument) || typeof argument.sessionId !== 'string' || typeof argument.threadId !== 'string') return;

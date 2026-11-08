@@ -157,7 +157,7 @@ test('Agent identity and replacement origins survive the generated RPC boundary'
 		},
 	};
 	assert.deepEqual(decodeAppServerResponse('agent/read', response), response);
-	assert.deepEqual(decodeAppServerRequestParams('session/create', { commandId: 'create', title: 'Task', agentId: 'agent-1' }), { commandId: 'create', title: 'Task', agentId: 'agent-1' });
+	assert.deepEqual(decodeAppServerRequestParams('session/create', { commandId: 'create', kind: 'code', title: 'Task', agentId: 'agent-1' }), { commandId: 'create', kind: 'code', title: 'Task', agentId: 'agent-1' });
 	assert.throws(() => decodeAppServerRequestParams('agent/read', { agentId: '' }), AppServerProtocolDecodeError);
 });
 

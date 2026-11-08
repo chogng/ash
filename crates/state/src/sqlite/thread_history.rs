@@ -1,6 +1,8 @@
 use super::connection::from_sql_integer;
 use super::connection::sql_error;
 use super::connection::to_sql_integer;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use ash_protocol::ContentDigest;
 use ash_protocol::ThreadId;
 use ash_thread_store::ThreadHistoryIndexMode;
@@ -10,7 +12,7 @@ use ash_thread_store::ThreadHistoryWindow;
 use ash_thread_store::ThreadStoreError;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
-use rusqlite::TransactionBehavior;
+use rusqlite::Transaction;
 use rusqlite::params;
 use serde::Deserialize;
 use serde::Serialize;
@@ -26,62 +28,28 @@ fn error(value: impl std::fmt::Display) -> ThreadStoreError {
     ThreadStoreError::Storage(sql_error(value))
 }
 
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "thread-history-index",
+    &[Migration::legacy_baseline(2, upgrade_to_v2)],
+);
+
 pub(super) fn create_schema(connection: &mut Connection) -> Result<(), ThreadStoreError> {
-    let version = connection
-        .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = 'thread-history-index'",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(error)?;
-    if version == Some(2) {
-        return Ok(());
+    MIGRATOR.run(connection).map_err(ThreadStoreError::Storage)
+}
+
+fn upgrade_to_v2(transaction: &Transaction<'_>, version: Option<u32>) -> Result<(), String> {
+    if version == Some(1) {
+        transaction
+            .execute_batch(include_str!(
+                "../../migrations/thread-history-index/0002_reset_whole_turn_cache.sql"
+            ))
+            .map_err(sql_error)?;
     }
-    if version.is_some_and(|version| version != 1) {
-        return Err(error("unsupported Thread history index version"));
-    }
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(error)?;
-    let locked = transaction
-        .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = 'thread-history-index'",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(error)?;
-    if locked == Some(2) {
-        return transaction.commit().map_err(error);
-    }
-    if locked.is_some_and(|version| version != 1) {
-        return Err(error("unsupported Thread history index version"));
-    }
-    if locked == Some(1) {
-        // This cache is rebuilt from canonical events; the old whole-Turn encoding is disposable.
-        transaction.execute_batch("DROP TABLE IF EXISTS thread_history_items; DROP TABLE thread_history_turns; DELETE FROM thread_history_index;").map_err(error)?;
-    }
-    transaction.execute_batch(
-        "CREATE TABLE IF NOT EXISTS thread_history_index (
-            thread_id TEXT PRIMARY KEY REFERENCES thread_streams(thread_id) ON DELETE CASCADE,
-            sequence INTEGER NOT NULL, header_json TEXT NOT NULL, header_digest TEXT NOT NULL
-         );
-         CREATE TABLE IF NOT EXISTS thread_history_turns (
-            thread_id TEXT NOT NULL REFERENCES thread_history_index(thread_id) ON DELETE CASCADE,
-            turn_id TEXT NOT NULL, ordinal INTEGER NOT NULL, turn_json TEXT NOT NULL, turn_digest TEXT NOT NULL, item_count INTEGER NOT NULL,
-            PRIMARY KEY(thread_id, turn_id), UNIQUE(thread_id, ordinal)
-         );
-         CREATE TABLE IF NOT EXISTS thread_history_items (
-            thread_id TEXT NOT NULL, turn_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
-            item_json TEXT NOT NULL, item_digest TEXT NOT NULL,
-            PRIMARY KEY(thread_id, turn_id, ordinal),
-            FOREIGN KEY(thread_id, turn_id) REFERENCES thread_history_turns(thread_id, turn_id) ON DELETE CASCADE
-         );
-         INSERT INTO ash_schema_migrations(component, version) VALUES ('thread-history-index', 2)
-         ON CONFLICT(component) DO UPDATE SET version = excluded.version;"
-    ).map_err(error)?;
-    transaction.commit().map_err(error)
+    transaction
+        .execute_batch(include_str!(
+            "../../migrations/thread-history-index/0002_item_index.sql"
+        ))
+        .map_err(sql_error)
 }
 
 pub(super) fn sequence(
@@ -195,8 +163,11 @@ pub(super) fn read(
             turn_limit,
         } => {
             let ordinal = connection.query_row("SELECT ordinal FROM thread_history_turns WHERE thread_id = ?1 AND turn_id = ?2",
-                params![thread_id.as_str(), turn_id.as_str()], |row| row.get::<_, i64>(0)).optional().map_err(error)?
-                .ok_or_else(|| ThreadStoreError::InvalidBatch("unknown history Turn".into()))?;
+                params![thread_id.as_str(), turn_id.as_str()], |row| row.get::<_, i64>(0)).optional().map_err(error)?;
+            let Some(ordinal) = ordinal else {
+                // Only the canonical history can distinguish an unknown Turn from a missing index row.
+                return Ok(None);
+            };
             (
                 usize::try_from(ordinal).map_err(error)?,
                 turn_limit.get() as usize,
@@ -288,6 +259,7 @@ fn turn_metadata(turn: &ash_protocol::Turn) -> ash_protocol::Turn {
         kind: turn.kind,
         mode: turn.mode,
         instructions: turn.instructions.clone(),
+        directory: turn.directory.clone(),
         model: turn.model.clone(),
         reasoning_effort: turn.reasoning_effort,
         advisor: turn.advisor.clone(),
@@ -300,6 +272,7 @@ fn turn_metadata(turn: &ash_protocol::Turn) -> ash_protocol::Turn {
         plan: turn.plan.clone(),
         pending_interaction: turn.pending_interaction.clone(),
         started_tool_call_ids: turn.started_tool_call_ids.clone(),
+        skill_loads: turn.skill_loads.clone(),
         error: turn.error.clone(),
     }
 }

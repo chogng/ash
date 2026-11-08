@@ -16,7 +16,6 @@ pub fn validate_definition(definition: &AutomationDefinition) -> Result<(), Auto
     for (label, value, max) in [
         ("title", definition.title.as_str(), 200),
         ("prompt", definition.prompt.as_str(), 100_000),
-        ("directory", definition.directory.as_str(), 4_096),
     ] {
         if value.trim().is_empty() || value.len() > max || value.contains('\0') {
             return Err(AutomationError::Invalid(format!(
@@ -24,7 +23,16 @@ pub fn validate_definition(definition: &AutomationDefinition) -> Result<(), Auto
             )));
         }
     }
-    if !std::path::Path::new(&definition.directory).is_absolute() {
+    if definition.session == ash_protocol::AutomationSession::NewChat {
+        if !definition.directory.is_empty() {
+            return Err(AutomationError::Invalid(
+                "Chat schedules do not accept an execution directory".into(),
+            ));
+        }
+    } else if definition.directory.len() > 4_096
+        || definition.directory.contains('\0')
+        || !std::path::Path::new(&definition.directory).is_absolute()
+    {
         return Err(AutomationError::Invalid(
             "directory must be absolute".into(),
         ));

@@ -154,7 +154,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		const page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		const commands = new QuickAccess(page);
 		await commands.runCommand('workbench.action.chat.manage');
-		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Settings', exact: true });
 		const catalog = settings.locator('.ash-chat-models-catalog');
 		const modelCard = settings.locator('[data-settings-tree-group-id="models.catalog"]');
 		const subscriptions = settings.locator('[data-settings-tree-group-id="models.subscriptions"]');
@@ -511,7 +511,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		let page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await (host === 'Workbench' ? page.getByRole('button', { name: 'Manage', exact: true }) : page.locator('.ash-sessions-activity-bottom button').last()).focus();
 		await page.keyboard.press('Control+Alt+Y');
-		let settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+		let settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Settings', exact: true });
 		await expect(settings).toBeVisible();
 		let catalog = settings.locator('.ash-chat-models-catalog');
 		let search = catalog.getByRole('combobox', { name: 'Search models', exact: true });
@@ -546,7 +546,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await (host === 'Workbench' ? page.getByRole('button', { name: 'Manage', exact: true }) : page.locator('.ash-sessions-activity-bottom button').last()).focus();
 		await page.keyboard.press('Control+Alt+Y');
-		settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+		settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Settings', exact: true });
 		catalog = settings.locator('.ash-chat-models-catalog');
 		search = catalog.getByRole('combobox', { name: 'Search models', exact: true });
 		await expect(search).toHaveValue('@provider:openai @capability:vision');
@@ -578,7 +578,7 @@ for (const host of ['Workbench', 'Sessions']) {
 	test(`${host} Models management keeps rows concise and exposes full source and pricing details`, { tag: ['@electron-app-server'] }, async ({ workbench, target }) => {
 		const page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.chat.manage');
-		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Settings', exact: true });
 		const catalog = settings.locator('.ash-chat-models-catalog');
 		await expect(catalog.locator('.ash-models-settings-model-row').first()).toBeVisible();
 		await expect(catalog.locator('.ash-models-settings-model-row').filter({ hasText: /Tools|Image input|Agent mode/ })).toHaveCount(0);
@@ -629,7 +629,7 @@ for (const host of ['Workbench', 'Sessions']) {
 	test(`${host} Models management configures supported options and keeps keyboard controls and filters`, { tag: ['@electron-app-server'] }, async ({ workbench, target }) => {
 		const page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.chat.manage');
-		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Settings', exact: true });
 		const catalog = settings.locator('.ash-chat-models-catalog');
 		const search = catalog.getByRole('combobox', { name: 'Search models', exact: true });
 		await search.fill('kimi/kimi-k3');
@@ -715,7 +715,7 @@ for (const host of ['Workbench', 'Sessions']) {
 			if (!address || typeof address === 'string') { throw new Error('Fixture has no port'); }
 			const page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 			await new QuickAccess(page).runCommand('workbench.action.chat.manage');
-			const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+			const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Settings', exact: true });
 			await settings.getByRole('button', { name: 'New provider', exact: true }).click();
 			const card = settings.locator('.ash-chat-models-widget').first();
 			await card.getByRole('textbox', { name: 'Provider name', exact: true }).fill('Managed fixture');
@@ -773,7 +773,7 @@ for (const host of ['Workbench', 'Sessions']) {
 			await expect(composer()).not.toHaveAttribute('data-untitled-session-id', previous!);
 		};
 		await new QuickAccess(page).runCommand('workbench.action.chat.manage');
-		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Settings', exact: true });
 		await expect(settings.locator('.ash-chat-models-catalog')).toBeVisible();
 		await expect(settings.getByRole('textbox', { name: 'Default chat model', exact: true })).toHaveCount(0);
 		await expect(settings.locator('[data-settings-item-id="chat.defaultModel"]')).toHaveCount(0);

@@ -28,7 +28,10 @@ export class ModePickerActionItem extends ChatSessionPickerActionItem {
 			getOptions: () => typeof modeAction.actions === 'function' ? modeAction.actions() : modeAction.actions,
 			captureContext,
 			onDidSelect,
-		}, { className: 'ash-chat-input-mode-menu ash-action-widget-accent-checks' }, instantiationService);
+		}, {
+			className: 'ash-chat-input-mode-menu ash-action-widget-accent-checks',
+			menuIconPlacement: 'leading-with-trailing-check',
+		}, instantiationService);
 	}
 
 	protected override setupHover(target: HTMLElement, content: string): IManagedHover {
@@ -54,6 +57,10 @@ export class ModePickerActionItem extends ChatSessionPickerActionItem {
 		super.render(container);
 		container.classList.add('ash-chat-input-selector', 'ash-chat-input-mode-selector', 'ash-dropdown-menu-action-view-item', `mode-${this.mode}`);
 		container.classList.toggle('disabled', !this.action.enabled);
+	}
+
+	public setCompact(compact: boolean): void {
+		this.element.classList.toggle('icon-only', compact);
 	}
 
 	protected override renderLabel(element: HTMLElement): IDisposable | null {

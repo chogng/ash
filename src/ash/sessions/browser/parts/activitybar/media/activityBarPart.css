@@ -19,6 +19,11 @@
 	padding: 0 var(--ash-spacing-size80);
 }
 
+.ash-sessions-activity-content.horizontal > .ash-sessions-navigation {
+	width: 100%;
+	min-width: 0;
+}
+
 .ash-sessions-activity-item {
 	/* Sessions uses 32px-high rows in default vertical navigation.
 	 * Its hover, selection background and radius remain independent of Workbench. */
@@ -28,7 +33,7 @@
 	place-items: center;
 	padding: 0;
 	border: 0;
-	border-radius: var(--ash-cornerRadius-large);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-sessions-activityBar-foreground);
 	background: transparent;
 	--ash-popup-trigger-background: var(
@@ -89,10 +94,6 @@
 	gap: var(--ash-spacing-size20);
 }
 
-.ash-sessions-activity-bottom.labeled {
-	padding: var(--ash-spacing-size80) var(--ash-sessions-sidebar-row-inset);
-}
-
 .ash-sessions-activity-content.labeled .ash-sessions-activity-item,
 .ash-sessions-activity-bottom.labeled .ash-sessions-activity-item {
 	display: flex;
@@ -115,26 +116,49 @@
 	height: var(--ash-toolbar-actionSize);
 }
 
-.ash-menu .ash-sessions-navigation-menu-row {
+.ash-sessions-activity-projects {
+	position: relative;
+}
+
+.ash-sessions-activity-content.labeled
+	.ash-sessions-activity-projects
+	> .ash-sessions-activity-item {
+	padding-inline-end: calc(
+		var(--ash-toolbar-actionSize) + 2 *
+			var(--ash-sessions-sidebar-item-inset)
+	);
+}
+
+.ash-sessions-activity-projects:hover
+	> .ash-sessions-activity-item:not(.selected) {
+	background: var(--ash-sessions-sidebar-hover-background);
+}
+
+.ash-sessions-activity-projects
+	> .ash-button.ash-sessions-activity-create-project {
+	--ash-button-border-radius: var(--ash-cornerRadius-medium);
+	position: absolute;
+	inset-block-start: var(--ash-sessions-sidebar-item-inset);
+	inset-inline-end: var(--ash-sessions-sidebar-item-inset);
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	padding: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-sessions-activity-projects:is(:hover, :focus-within)
+	> .ash-button.ash-sessions-activity-create-project {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* Keep the two-button layout when the shared menu stylesheet loads later. */
+.ash-menu.ash-sessions-navigation-menu > .ash-sessions-navigation-menu-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
-}
-
-/* Keep destination icons visible when the menu marks the current page. */
-.ash-menu
-	.ash-sessions-navigation-menu-row
-	> .ash-button.checked
-	> .ash-menu-leading-check
-	> .ash-icon {
-	display: none;
-}
-
-.ash-menu
-	.ash-sessions-navigation-menu-row
-	> .ash-button.checked
-	> .ash-menu-leading-check
-	> .ash-icon-label-icon {
-	display: inline-flex;
 }
 
 .ash-menu

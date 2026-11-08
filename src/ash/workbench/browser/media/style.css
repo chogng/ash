@@ -1,5 +1,72 @@
+@font-face {
+	font-family: "Ash Sans";
+	src: url("../../../../../resources/fonts/runtime/AshSans-Regular.ttf")
+		format("truetype");
+	font-weight: 400;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Ash Sans";
+	src: url("../../../../../resources/fonts/runtime/AshSans-SemiBold.ttf")
+		format("truetype");
+	font-weight: 600;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Ash Sans SC";
+	src: url("../../../../../resources/fonts/runtime/AshSansSC-Regular.ttf")
+		format("truetype");
+	font-weight: 400;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Ash Serif";
+	src: url("../../../../../resources/fonts/reference/AshSerif-Regular.ttf")
+		format("truetype");
+	font-weight: 400;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Ash Serif SC";
+	src: url("../../../../../resources/fonts/reference/AshSerifSC-Regular.ttf")
+		format("truetype");
+	font-weight: 400;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Ash Mono";
+	src: url("../../../../../resources/fonts/reference/AshMono-Regular.ttf")
+		format("truetype");
+	font-weight: 400;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: "Ash Mono SC";
+	src: url("../../../../../resources/fonts/reference/AshMonoSC-Regular.ttf")
+		format("truetype");
+	font-weight: 400;
+	font-display: swap;
+}
+
+:root,
+.ash-workbench {
+	--ash-font-family: "Ash Sans", var(--ash-system-font-family);
+}
+
+/* Use the Simplified Chinese glyph forms in Simplified Chinese interfaces. */
+:root:lang(zh-Hans, zh-CN, zh-SG),
+.ash-workbench:lang(zh-Hans, zh-CN, zh-SG) {
+	--ash-font-family: "Ash Sans", "Ash Sans SC", var(--ash-system-font-family);
+}
+
 :root {
-	--ash-font-family:
+	--ash-system-font-family:
 		-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Ubuntu",
 		"Droid Sans", sans-serif;
 	--ash-font-family-monospace:
@@ -45,84 +112,85 @@ textarea {
 }
 
 .ash-workbench[data-os="mac"] {
-	--ash-font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+	--ash-system-font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 	--ash-font-family-monospace: "SF Mono", Monaco, Menlo, Courier, monospace;
 }
 
-.ash-workbench[data-os="mac"]:lang(zh-Hans) {
-	--ash-font-family:
+.ash-workbench[data-os="mac"]:lang(zh-Hans, zh-CN, zh-SG) {
+	--ash-system-font-family:
 		-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
 		sans-serif;
 }
 
-.ash-workbench[data-os="mac"]:lang(zh-Hant) {
-	--ash-font-family:
+.ash-workbench[data-os="mac"]:lang(zh-Hant, zh-TW, zh-HK, zh-MO) {
+	--ash-system-font-family:
 		-apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif;
 }
 
 .ash-workbench[data-os="mac"]:lang(ja) {
-	--ash-font-family:
+	--ash-system-font-family:
 		-apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic Pro",
 		sans-serif;
 }
 
 .ash-workbench[data-os="mac"]:lang(ko) {
-	--ash-font-family:
+	--ash-system-font-family:
 		-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
 		"Nanum Gothic", AppleGothic, sans-serif;
 }
 
 .ash-workbench[data-os="windows"] {
-	--ash-font-family: "Segoe WPC", "Segoe UI", sans-serif;
+	--ash-system-font-family: "Segoe WPC", "Segoe UI", sans-serif;
 	--ash-font-family-monospace: Consolas, "Courier New", monospace;
 }
 
-.ash-workbench[data-os="windows"]:lang(zh-Hans) {
-	--ash-font-family: "Segoe WPC", "Segoe UI", "Microsoft YaHei", sans-serif;
+.ash-workbench[data-os="windows"]:lang(zh-Hans, zh-CN, zh-SG) {
+	--ash-system-font-family:
+		"Segoe WPC", "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
-.ash-workbench[data-os="windows"]:lang(zh-Hant) {
-	--ash-font-family:
+.ash-workbench[data-os="windows"]:lang(zh-Hant, zh-TW, zh-HK, zh-MO) {
+	--ash-system-font-family:
 		"Segoe WPC", "Segoe UI", "Microsoft Jhenghei", sans-serif;
 }
 
 .ash-workbench[data-os="windows"]:lang(ja) {
-	--ash-font-family:
+	--ash-system-font-family:
 		"Segoe WPC", "Segoe UI", "Yu Gothic UI", "Meiryo UI", sans-serif;
 }
 
 .ash-workbench[data-os="windows"]:lang(ko) {
-	--ash-font-family:
+	--ash-system-font-family:
 		"Segoe WPC", "Segoe UI", "Malgun Gothic", Dotom, sans-serif;
 }
 
 .ash-workbench[data-os="linux"] {
-	--ash-font-family: system-ui, "Ubuntu", "Droid Sans", sans-serif;
+	--ash-system-font-family: system-ui, "Ubuntu", "Droid Sans", sans-serif;
 	--ash-font-family-monospace:
 		"Ubuntu Mono", "Liberation Mono", "DejaVu Sans Mono", "Courier New",
 		monospace;
 }
 
-.ash-workbench[data-os="linux"]:lang(zh-Hans) {
-	--ash-font-family:
+.ash-workbench[data-os="linux"]:lang(zh-Hans, zh-CN, zh-SG) {
+	--ash-system-font-family:
 		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans SC",
 		"Source Han Sans CN", "Source Han Sans", sans-serif;
 }
 
-.ash-workbench[data-os="linux"]:lang(zh-Hant) {
-	--ash-font-family:
+.ash-workbench[data-os="linux"]:lang(zh-Hant, zh-TW, zh-HK, zh-MO) {
+	--ash-system-font-family:
 		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans TC",
 		"Source Han Sans TW", "Source Han Sans", sans-serif;
 }
 
 .ash-workbench[data-os="linux"]:lang(ja) {
-	--ash-font-family:
+	--ash-system-font-family:
 		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans J",
 		"Source Han Sans JP", "Source Han Sans", sans-serif;
 }
 
 .ash-workbench[data-os="linux"]:lang(ko) {
-	--ash-font-family:
+	--ash-system-font-family:
 		system-ui, "Ubuntu", "Droid Sans", "Source Han Sans K",
 		"Source Han Sans KR", "Source Han Sans", UnDotum, "FBaekmuk Gulim",
 		sans-serif;
@@ -165,7 +233,8 @@ textarea {
 	background: var(--ash-selection-background);
 }
 
-/* Split actions layer the hovered trigger over their shared group background. */
+/* The hovered split trigger sits over the group background.
+   Separated triggers paint that background on both parts and leave the gap clear. */
 .ash-workbench
 	:where(
 		.ash-action-bar:not(.vertical)
@@ -181,16 +250,21 @@ textarea {
 .ash-workbench
 	:where(
 		.ash-action-bar:not(.vertical)
-			> .ash-split-action
+			> .ash-split-action:not(.separated)
 			> :is(.ash-split-action-primary, .ash-split-action-dropdown)
 			> .ash-button-quiet:not(:disabled):hover
 	),
 .ash-workbench
 	:where(
-		.ash-action-bar:not(.vertical) > .ash-split-action:not(.disabled):hover
-	),
-.ash-workbench
-	:where(.ash-action-bar:not(.vertical) > .ash-split-action.active) {
+		.ash-action-bar:not(.vertical)
+			> .ash-split-action:not(.separated):is(
+				:not(.disabled):hover,
+				.active
+			),
+		.ash-action-bar:not(.vertical)
+			> .ash-split-action.separated:is(:not(.disabled):hover, .active)
+			> :is(.ash-split-action-primary, .ash-split-action-dropdown)
+	) {
 	background: var(--ash-toolbar-hoverBackground);
 }
 
@@ -205,17 +279,4 @@ textarea {
 
 .ash-workbench.ash-underline-links a {
 	text-decoration-line: underline;
-}
-
-.ash-feedback-host {
-	position: absolute;
-	z-index: 1000;
-	inset-block-end: calc(var(--ash-feedback-statusbar-height) + 8px);
-	inset-inline-end: 12px;
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	width: min(420px, calc(100% - 24px));
-	max-height: calc(100% - var(--ash-feedback-statusbar-height) - 16px);
-	pointer-events: none;
 }

@@ -656,7 +656,7 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         voice_transcripts: Vec::new(),
         execution_target: None,
         directory_configured: false,
@@ -691,6 +691,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
+            directory: None,
             turn_id,
             status: TurnStatus::Running,
             status_changed_at_unix_ms: 0,
@@ -702,6 +703,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             approval_mode: ash_protocol::ApprovalMode::Manual,
             tool_mode: ash_protocol::ToolMode::Direct,
             activated_skills: Vec::new(),
+            skill_loads: Vec::new(),
             failure: None,
             pending_interaction: None,
             execution_backend_attempt: None,

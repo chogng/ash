@@ -21,6 +21,61 @@
 	background: var(--ash-dialog-backdropBackground);
 }
 
+.ash-dialog-nonmodal {
+	position: fixed;
+	inset: 0;
+	margin: auto;
+}
+
+.ash-dialog-nonmodal::backdrop {
+	background: var(--ash-dialog-nonmodal-backdrop, transparent);
+	pointer-events: none;
+}
+
+.ash-dialog-nonmodal.ash-dialog-confirming-close::backdrop {
+	background: transparent;
+}
+
+.ash-dialog.ash-dialog-form {
+	padding: var(--ash-dialog-form-padding, var(--ash-spacing-size160));
+	max-inline-size: calc(
+		100vw - 2 *
+			var(--ash-dialog-form-viewport-margin, var(--ash-spacing-size160))
+	);
+	max-block-size: calc(
+		100dvh - 2 *
+			var(--ash-dialog-form-viewport-margin, var(--ash-spacing-size160))
+	);
+	border-radius: var(
+		--ash-dialog-form-radius,
+		var(--ash-cornerRadius-medium)
+	);
+	overflow: auto;
+}
+
+.ash-dialog-form > .ash-dialog-header {
+	block-size: var(
+		--ash-dialog-form-header-height,
+		var(--ash-spacing-size280)
+	);
+	margin-block-end: var(--ash-spacing-size160);
+	padding: 0;
+}
+
+.ash-dialog-form .ash-dialog-title {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-dialog-form > .ash-dialog-body {
+	padding: 0;
+}
+
+.ash-dialog-form .ash-dialog-footer {
+	margin-block-start: var(--ash-spacing-size160);
+}
+
 .ash-dialog-header {
 	display: flex;
 	align-items: center;

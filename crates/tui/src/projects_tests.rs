@@ -22,14 +22,16 @@ fn project_root_picker_preselects_the_current_workspace() {
     std::fs::create_dir(&a).unwrap();
     std::fs::create_dir(&b).unwrap();
     let project = ProjectDto {
-        created_at_ms: None,
-        updated_at_ms: None,
+        created_at_ms: 1,
+        updated_at_ms: 1,
         materials: Vec::new(),
         project_id: ProjectId::new("project").unwrap(),
         revision: 1,
         status: ProjectStatusDto::Active,
         name: "Ash".into(),
         description: String::new(),
+        icon: None,
+        color: None,
         roots: vec![root("a", &a), root("b", &b)],
         session_ids: Vec::new(),
     };

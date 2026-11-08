@@ -730,11 +730,19 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         if !params.session_directory.path.is_absolute() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let authorization = self.context.session_dir_authorization(
-            &params.session_directory.session_id,
-            &params.session_directory.path,
-            Permission::InspectRepository,
-        )?;
+        let authorization = self
+            .context
+            .session_dir_authorization(
+                &params.session_directory.session_id,
+                &params.session_directory.path,
+                Permission::InspectRepository,
+            )
+            .map_err(|error| match error.message {
+                AppServerErrorName::TerminalOperationFailed => {
+                    RpcError::new(-32043, AppServerErrorName::PermissionRequired)
+                }
+                _ => error,
+            })?;
         let repositories = super::git_runtime::repository_contexts(&authorization, cancellation)
             .map_err(git_error)?;
         // Do not publish a context whose Session grant retired during the Git I/O.

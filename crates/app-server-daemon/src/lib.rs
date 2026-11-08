@@ -7,6 +7,7 @@ mod installation;
 mod lifecycle_error;
 mod managed;
 mod process;
+mod profiling;
 mod runtime;
 pub mod startup_trace;
 mod update;
@@ -180,6 +181,8 @@ pub enum LifecycleCommand {
     EnsureSelected,
     /// Stops a managed daemon and starts a new process generation.
     Restart,
+    /// Restarts using the executable selected by the current Desktop build.
+    RestartSelected,
     /// Gracefully stops the managed daemon.
     Stop,
     /// Probes the running daemon and its App Server initialize contract.

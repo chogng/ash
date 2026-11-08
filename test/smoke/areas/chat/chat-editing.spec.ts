@@ -150,7 +150,7 @@ const documentTest = test.extend<{
 			await source.locator('.ash-modal-editor-close').click();
 			const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'editor-review-default', expectedRevision: configured.revision, model });
-			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'editor-review-session', title: 'Editor document fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'editor-review-session', kind: 'code', title: 'Editor document fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const root = created.session.threads[0];
 			if (!root) throw new Error('The Session has no root Thread');
 			const identity = { sessionId: created.session.sessionId, threadId: root.threadId };
@@ -353,7 +353,7 @@ test('Agent file edits preserve user text and a failed review save remains retry
 		await source.locator('.ash-modal-editor-close').click();
 		const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'k-review-default', expectedRevision: configured.revision, model });
-		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'k-review-session', title: 'K file review fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'k-review-session', kind: 'code', title: 'K file review fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const root = created.session.threads[0];
 		if (!root) { throw new Error('The session has no root Thread'); }
 		const identity = { sessionId: created.session.sessionId, threadId: root.threadId };

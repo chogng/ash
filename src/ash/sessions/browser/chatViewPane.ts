@@ -23,7 +23,7 @@ import { ICommandService } from '../../platform/commands/common/commands.js';
 import type { IViewPaneOptions } from '../../workbench/browser/parts/views/viewPane.js';
 import { IWorkbenchLayoutService } from '../../workbench/services/layout/browser/layoutService.js';
 import { IChatService } from '../../workbench/services/chat/common/chatService.js';
-import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from '../services/sessions/common/session.js';
+import { canOpenThreadInCode, type IActiveSessionThread, type IChat, type ISession, type IUntitledChatSession, type ThreadId } from '../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ChatWidget, resolveMarkdownWorkspaceResource } from '../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { h } from '../../base/browser/dom.js';
@@ -33,7 +33,7 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import { createSessionItemActions } from './agentSessionsModel.js';
+import { createSessionItemActions, createSessionWorkspaceActions } from './agentSessionsModel.js';
 import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
@@ -110,7 +110,10 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			const captured: SessionsViewSelection = 'untitledSessionId' in selection
 				? { kind: 'untitled', session: selection }
 				: { kind: 'session', active: { session: selection, threadId: 'threadId' in target ? target.threadId! : selection.chats[0]!.threadId } };
-			return createSessionItemActions(captured, commandService, this.listModel, notifications, () => this.openInNewWindow(captured));
+			const workspaceActions = captured.kind === 'session'
+				? createSessionWorkspaceActions(captured.active.session.sessionId, captured.active.threadId, sessionService, commandService)
+				: [];
+			return [...workspaceActions, ...createSessionItemActions(captured, commandService, this.listModel, notifications, () => this.openInNewWindow(captured))];
 		}, preserveFocus => {
 			const focusChat = !this.sessionsSideBySide || !preserveFocus;
 			this.hideSessionsAfterSelection();
@@ -510,23 +513,26 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				},
 			},
 			...actions.filter(action => action !== rename),
+			...(selection.kind === 'session'
+				? createSessionWorkspaceActions(selection.active.session.sessionId, selection.active.threadId, this.sessionService, this.commandService)
+				: []),
 		];
 	}
 
 	private selectionForSession(session: ISession): IActiveSessionThread | undefined {
-		if (session.surface === 'chat') return undefined;
 		const active = this.sessionService.activeUntitledSession ? undefined : this.sessionService.active;
+		const canOpen = (chat: IChat) => canOpenThreadInCode(session, chat);
 		if (
 			active?.session.sessionId === session.sessionId &&
-			isActiveThread(session, active.threadId)
+			session.chats.some(chat => chat.threadId === active.threadId && canOpen(chat))
 		) {
 			return { session, threadId: active.threadId };
 		}
 		const retainedThreadId = this.panes.get(sessionPaneId(session))?.threadId ?? this.restoredThreadIds.get(sessionPaneId(session));
-		if (retainedThreadId && isActiveThread(session, retainedThreadId)) {
+		if (retainedThreadId && session.chats.some(chat => chat.threadId === retainedThreadId && canOpen(chat))) {
 			return { session, threadId: retainedThreadId };
 		}
-		const thread = rootThread(session) ?? session.chats.find((candidate) => candidate.status === 'active');
+		const thread = session.chats.find(chat => chat.origin.type === 'root' && canOpen(chat)) ?? session.chats.find(canOpen);
 		return thread ? { session, threadId: thread.threadId } : undefined;
 	}
 
@@ -602,10 +608,6 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 
 function isActiveThread(session: ISession, threadId: ThreadId): boolean {
 	return session.chats.some((thread) => thread.threadId === threadId && thread.status === 'active');
-}
-
-function rootThread(session: ISession): IChat | undefined {
-	return session.chats.find((thread) => thread.status === 'active' && thread.origin.type === 'root');
 }
 
 function untitledSessionPaneId(session: IUntitledChatSession): string {

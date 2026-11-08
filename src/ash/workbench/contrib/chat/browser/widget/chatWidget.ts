@@ -1,4 +1,5 @@
-import type { ChatRequestInputOptions, ChatResponseActions } from './chatListRenderer.js';
+import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
+import type { ChatResponseActions } from './chatListRenderer.js';
 import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
@@ -43,7 +44,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import type { ChatContextAttachment, ChatImageCapture } from '../../../../services/chat/common/chatContextService.js';
-import type { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { extractSelection, type IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
@@ -52,7 +53,7 @@ import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatQueueEditor } from './input/chatInputPart.js';
-import { ChatInputEditors, type ChatInputEditorOptions } from './input/chatInputEditorRegistry.js';
+import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
 import { ChatRequestOriginPart } from './chatContentParts/chatRequestOriginPart.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
@@ -64,6 +65,7 @@ import { ChatViewWelcomePart } from '../viewsWelcome/chatViewWelcomeController.j
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly thread?: import('../../../../services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	/** The same notification can identify an isolated text append for the transcript. */
@@ -187,6 +189,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const activeRequest = ChatContextKeys.hasActiveRequest.bindTo(context);
 		activeRequest.set(model.inputState.canInterrupt);
 		this._register(model.onDidChange(() => activeRequest.set(model.inputState.canInterrupt)));
+		const transcriptProgress = ChatContextKeys.transcriptProgressActive.bindTo(context);
+		transcriptProgress.set(this.isTranscriptProgressActive);
+		this._register(model.onDidChange(() => transcriptProgress.set(this.isTranscriptProgressActive)));
 		ChatContextKeys.findSupported.bindTo(context).set(true);
 		const findVisible = ChatContextKeys.findWidgetVisible.bindTo(context);
 		// Detached Markdown fragments still inherit this conversation's command scope.
@@ -254,31 +259,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			await openChangesForTurn(source, AbortSignal.any([signal, controller.signal]));
 		});
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
-			createRequestInput: ({ container, descriptionId, initialHeight, submit, reportError }: ChatRequestInputOptions) => {
-				const delegate: ChatInputDelegate = {
-					...inputDelegate,
-					voiceConversation: undefined,
-					executeServerCommand: undefined,
-					openChanges: undefined,
-					readWorkspaceChanges: undefined,
-					send: async (text, _mode, _skills, contexts, signal) => {
-						const resolved = await Promise.all((contexts ?? []).map(resolveChatContextAttachment));
-						if (signal?.aborted) throw canceled();
-						await submit(text, resolved);
-					},
-				};
-				const part = scopedInstantiation.createInstance(ChatInputPart, container, delegate, contextMenuService, contextViewService, accessibleViewService, notifications, { create: (options: ChatInputEditorOptions) => this.input.createEditor(options) }, [], {
-					layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
-					renderSecondaryToolbar: false, draftStorage: 'host', inlineEdit: { descriptionId, initialHeight, reportError },
-				});
-				const state = this.model.inputState;
-				part.render({
-					...state, phase: 'ready', canInterrupt: false, queuedMessages: 0, draftIdentity: undefined,
-					interaction: undefined, pendingUserInputRequestId: undefined, toolInvocation: undefined, toolInvocations: undefined,
-				});
-				return part;
-			},
+			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
+			canEditRequest: () => !this.isTranscriptProgressActive,
 			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
+			messagePresentation: this.viewOptions?.messagePresentation,
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
 			readResponseResource: model.readResponseResource?.bind(model),
 			getResponseLinkOpener: model.getResponseLinkOpener?.bind(model),
@@ -316,11 +300,13 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestLink: (target: string) => {
 				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error('Could not open Markdown link', error));
 			},
+			memoryNamespace: model.memoryNamespace,
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		});
 		this.listWidget = listWidgets.get();
 		const inputDelegate: ChatInputDelegate = {
+			responseProgressInTranscript: true,
 			draft: model.draft,
 			voiceConversation: modelVoice ? {
 				get isAvailable() { return modelVoice.isAvailable && !model.inputState.aiDisabled; },
@@ -407,7 +393,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			previous.element.replaceWith(widget.element);
 			this.listWidget = widget;
 			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm);
-			widget.restoreViewState(state, this.model.items);
+			widget.restoreViewState(state, this.model.items, this.responseWorking);
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
 		this._register((this.model.onDidChangePresentation ?? this.model.onDidChange)(update => {
@@ -481,7 +467,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	public restoreViewState(state: IChatWidgetViewState): void {
-		this.listWidget.restoreViewState({ ...state, visible: this.visible, focus: undefined }, this.model.items);
+		this.listWidget.restoreViewState({ ...state, visible: this.visible, focus: undefined }, this.model.items, this.responseWorking);
 	}
 
 	public focus(item?: IChatListItem): void {
@@ -526,16 +512,25 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
+		// Sent edits branch through the inline form. Global send commands must not submit the main draft.
+		if (this.listWidget.isEditingRequest) return Promise.resolve();
 		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	public async startEditing(request: QueuedMessage): Promise<void> {
-		if (this.queueEditor.value || !this.visible) return;
+	public async startEditing(request: string | QueuedMessage): Promise<void> {
+		if (!this.visible || this.queueEditor.value) return;
+		if (typeof request === 'string') {
+			if (!this.isTranscriptProgressActive) this.listWidget.startEditing(request);
+			return;
+		}
+		if (this.listWidget.isEditingRequest) return;
 		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, request);
 		this.queueEditor.value = editor;
 		try { await editor.show(); }
 		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
 	}
+
+	public cancelEditing(): boolean { return this.listWidget.cancelEditing(); }
 
 	private async runVoice(operation: () => Promise<void>): Promise<void> {
 		try { await operation(); }
@@ -654,13 +649,20 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.renderHistoryStatus();
 		this.renderOlderHistory();
 		const items = this.model.items;
-		this.updateConversationState(items.length > 0);
+		const working = this.responseWorking;
+		this.updateConversationState(items.length > 0 || working);
 		if (this.model.draft) {
 			const { phase } = this.model.inputState;
 			this.listWidget.setBusy(phase === 'loading' || phase === 'submitting');
 		}
-		this.listWidget.render(items);
+		this.listWidget.render(items, working);
 		this.input.render({ ...this.model.inputState, toolInvocations: this.model.items.flatMap(item => item.toolInvocation ? [item.toolInvocation] : []), toolInvocation: this.model.items.find(item => item.toolInvocation?.call.itemId === this.model.inputState.interaction?.itemId)?.toolInvocation, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
+	}
+
+	private get responseWorking(): boolean {
+		const { phase, canInterrupt, aiDisabled, inputBlocked, error, status } = this.model.inputState;
+		return !aiDisabled && !inputBlocked && !error && status === undefined
+			&& (phase === 'submitting' || phase === 'ready' && canInterrupt);
 	}
 
 	private renderHistoryStatus(): void {
@@ -728,7 +730,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		}
 	}
 
-	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
+	private updateConversationState(hasTranscript = this.model.items.length > 0 || this.responseWorking): void {
 		const hasConversation = this.submittedMessage || hasTranscript;
 		this.element.classList.toggle('empty', !hasConversation);
 		this.element.classList.toggle('has-conversation', hasConversation);
@@ -790,8 +792,13 @@ export async function openChatMarkdownLink(
 		return;
 	}
 	if (isEditorResourceScheme(resource.scheme)) {
-		const workspaceResource = resolveMarkdownWorkspaceResource(resource);
-		if (workspaceResource && editorService) await editorService.openEditor({ resource: workspaceResource });
+		const { uri, selection } = extractSelection(resource);
+		const workspaceResource = resolveMarkdownWorkspaceResource(uri);
+		if (workspaceResource && editorService) {
+			const range = selection && new Range(selection.startLineNumber, selection.startColumn,
+				selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn);
+			await editorService.openEditor({ resource: workspaceResource }, range ? { selection: range } : undefined);
+		}
 		return;
 	}
 	if (openerService) await openerService.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });

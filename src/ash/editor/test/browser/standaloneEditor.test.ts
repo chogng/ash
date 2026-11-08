@@ -7835,6 +7835,20 @@ suite('standalone browser component', () => {
 			await editor.input.press('ControlOrMeta+Home');
 		}
 
+		const sliderBounds = (await slider.boundingBox())!;
+		const x = sliderBounds.x + sliderBounds.width / 2;
+		const y = sliderBounds.y + sliderBounds.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(sliderBounds.x - 20, y + 30);
+			await expect(minimap).toHaveClass(/\bstanza-editor-minimap-dragging\b/u);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getControl().getScrollTop())).toBeGreaterThan(0);
+		} finally {
+			await page.mouse.up();
+		}
+		await expect(minimap).not.toHaveClass(/\bstanza-editor-minimap-dragging\b/u);
+
 		const colors = await slider.evaluate(element => {
 			const minimap = element.parentElement!;
 			const initial = getComputedStyle(element).backgroundColor;

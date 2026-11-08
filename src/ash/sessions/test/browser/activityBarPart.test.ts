@@ -141,7 +141,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		showAccountMenu: async (anchor: HTMLElement) => { accountAnchor = anchor; },
 	});
 	try {
-		const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
+		const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button.ash-sessions-activity-item')];
 		assert.deepEqual(buttons.map(button => ({
 			icon: button.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'),
 			disabled: button.disabled,
@@ -155,7 +155,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 			{ icon: 'account', disabled: false },
 		]);
 		assert.deepEqual([...bar.domNode.querySelectorAll(':scope > [role="toolbar"]')].map(group =>
-			[...group.querySelectorAll('button')].map(button => button.textContent),
+			[...group.querySelectorAll('button.ash-sessions-activity-item')].map(button => button.textContent),
 		), [['New', 'Search', 'Projects', 'Artifacts', 'Customize', 'More'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 5);
@@ -185,14 +185,13 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		assert.equal(accountAnchor, buttons[6]);
 		using titlebar = registerTestTitlebarServices(registerTestComponentServices(services)).createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
 		const renderTitlebarAccount = (visible: boolean): void => titlebar.setActivityActions(visible ? [bar.accountAction] : [], (action, options) => bar.createAccountActionViewItem(action, options, 'titlebar'));
-		for (const position of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
-			bar.setLocation(position, ownerDocument.body);
-			renderTitlebarAccount(true);
-			const account = titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.activity.accounts"] button')!;
-			assert.deepEqual({ railAccounts: bar.domNode.querySelectorAll('[data-action-id="sessions.activity.accounts"]').length, titlebarAccounts: titlebar.domNode.querySelectorAll('[data-action-id="sessions.activity.accounts"]').length, menu: account.getAttribute('aria-haspopup') }, { railAccounts: 0, titlebarAccounts: 1, menu: 'menu' });
-			account.click();
-			assert.equal(accountAnchor, account);
-		}
+		bar.setLocation(ActivityBarPosition.TOP, ownerDocument.body);
+		renderTitlebarAccount(true);
+		const titlebarAccount = titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.activity.accounts"] button')!;
+		assert.equal(bar.accountContainer.isConnected, false);
+		assert.equal(titlebarAccount.getAttribute('aria-haspopup'), 'menu');
+		titlebarAccount.click();
+		assert.equal(accountAnchor, titlebarAccount);
 		const navigationHost = ownerDocument.body.appendChild(ownerDocument.createElement('div'));
 		const accountHost = ownerDocument.body.appendChild(ownerDocument.createElement('div'));
 		bar.domNode.querySelector<HTMLButtonElement>('button')!.focus();
@@ -203,14 +202,15 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		assert.equal(navigationHost.querySelector('button')!.classList.contains('icon-only'), false);
 		assert.equal(ownerDocument.activeElement, navigationHost.querySelector('button'), 'Changing placement retains navigation focus');
 		assert.equal(navigationHost.querySelector('button')!.getAttribute('aria-current'), 'page');
-		accountHost.querySelector<HTMLButtonElement>('button')!.click();
-		assert.equal(accountAnchor, accountHost.querySelector('button'));
-		bar.setLocation(ActivityBarPosition.HIDDEN, undefined);
-		assert.equal(bar.domNode.isConnected, false);
-		assert.equal(navigationHost.childElementCount, 0);
-		assert.equal(accountHost.childElementCount, 0);
+		const sidebarAccount = accountHost.querySelector<HTMLButtonElement>('button')!;
+		sidebarAccount.focus();
+		bar.setLocation(ActivityBarPosition.BOTTOM, accountHost, accountHost);
+		assert.deepEqual([...accountHost.children], [bar.domNode, bar.accountContainer]);
+		assert.equal(ownerDocument.activeElement, sidebarAccount, 'Bottom placement retains the focused Accounts button');
+		sidebarAccount.click();
+		assert.equal(accountAnchor, sidebarAccount);
 		bar.setLocation(ActivityBarPosition.DEFAULT, navigationHost, accountHost);
-		bar.domNode.querySelectorAll<HTMLButtonElement>('button')[1]!.focus();
+		bar.domNode.querySelectorAll<HTMLButtonElement>('button.ash-sessions-activity-item')[1]!.focus();
 		const outside = ownerDocument.body.appendChild(ownerDocument.createElement('button'));
 		outside.focus();
 		bar.setLocation(ActivityBarPosition.TOP, navigationHost);
@@ -257,7 +257,7 @@ test('Sessions Activity Bar context menu changes its own position with a fixed s
 		assert.deepEqual(shownActions.map(action => action.label), ['Activity Bar Position']);
 		const position = shownActions[0] as import('../../../base/common/actions.js').SubmenuAction;
 		assert.deepEqual(position.actions.map(action => [action.label, action.checked]), [
-			['Default', true], ['Top', false], ['Bottom', false], ['Hidden', false],
+			['Default', true], ['Top', false], ['Bottom', false],
 		]);
 		await position.actions[1]!.run();
 		assert.equal(configuration.getValue(SessionsConfiguration.activityBarLocation), ActivityBarPosition.TOP);
@@ -312,15 +312,15 @@ test('navigation order survives a new window and includes new menu contributions
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(['sessions.newSession', 'sessions.search', 'sessions.open.projects', 'sessions.open.creator']));
 	setARIAContainer(document.body);
-	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button')];
+	const buttons = [...bar.domNode.querySelectorAll<HTMLButtonElement>('button.ash-sessions-activity-item')];
 	buttons[3]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	await shownActions[0]!.run();
-	assert.equal(bar.domNode.querySelectorAll('button')[2], buttons[3]);
+	assert.equal(bar.domNode.querySelectorAll('button.ash-sessions-activity-item')[2], buttons[3]);
 	await storage.flush();
 	using restored = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button.ash-sessions-activity-item')].slice(0, 5).map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
-	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize', 'Test action', 'More', 'Accounts']);
+	assert.deepEqual([...restored.domNode.querySelectorAll('button.ash-sessions-activity-item')].map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize', 'Test action', 'More', 'Accounts']);
 	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
@@ -345,7 +345,7 @@ test('navigation and ordering labels use the Chinese language catalog', async ()
 		services.registerInstance(IStorageService, storage);
 		using menuServices = registerMenus(services);
 		using bar = registerTestComponentServices(services).createInstance(ActivityBar, ownerDocument.body, { showAccountMenu() { } });
-		const buttons = [...bar.domNode.querySelectorAll('button')];
+		const buttons = [...bar.domNode.querySelectorAll('button.ash-sessions-activity-item')];
 		buttons[1]!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 		assert.deepEqual({ navigation: bar.domNode.querySelector('.ash-sessions-navigation')!.getAttribute('aria-label'), moves: actions.slice(0, 2).map(action => action.label) }, {
 			navigation: '导航', moves: ['向前移动', '向后移动'],
@@ -357,7 +357,7 @@ test('navigation and ordering labels use the Chinese language catalog', async ()
 	}
 });
 
-test('Chat and Code share New, navigation order, and More pins', async () => {
+test('Chat and Code show their own actions and retain shared navigation preferences', async () => {
 	const document = browser.window.document;
 	document.body.replaceChildren();
 	using configuration = new WorkbenchConfigurationService();
@@ -375,39 +375,67 @@ test('Chat and Code share New, navigation order, and More pins', async () => {
 	using menus = registerMenus(services);
 	const contexts = services.get(IContextKeyService);
 	contexts.setContext('sessions.automationsAvailable', true);
+	contexts.setContext('sessions.scheduledAvailable', true);
+	contexts.setContext('sessions.workspaceMode', 'chat');
 	const chatOrder = ['sessions.open.creator', 'sessions.newSession', 'sessions.search', 'sessions.open.projects'];
 	const codeOrder = ['sessions.newSession', 'sessions.open.customize', 'sessions.open.symphony', 'sessions.open.collaboration'];
 	storage.store('sessions.activityBar.actionOrder', JSON.stringify(chatOrder), StorageScope.PROFILE, StorageTarget.USER);
 	storage.store('sessions.activityBar.codeActionOrder', JSON.stringify(codeOrder), StorageScope.PROFILE, StorageTarget.USER);
 	storage.store('sessions.activityBar.pinnedCodeActions', JSON.stringify(['sessions.open.symphony']), StorageScope.PROFILE, StorageTarget.USER);
 	using bar = registerTestComponentServices(services).createInstance(ActivityBar, document.body, { showAccountMenu() { } });
-	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation button')].map(button => button.textContent);
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize', 'Symphony', 'More']);
+	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation .ash-sessions-activity-item')].map(button => button.textContent);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize', 'Scheduled', 'More']);
 	assert.equal(storage.get('sessions.activityBar.codeActionOrder', StorageScope.PROFILE), undefined);
 	assert.deepEqual(JSON.parse(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE)!), [...chatOrder, ...codeOrder.slice(1)]);
 	const newButton = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.newSession"] button')!;
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize', 'Symphony', 'More']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Customize', 'Symphony', 'More']);
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.newSession"] button'), newButton);
 	const more = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.activity.more"] button')!;
 	assert.equal(more.getAttribute('aria-haspopup'), 'menu');
 	assert.equal(more.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'ellipsis');
 	more.click();
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
-	assert.deepEqual(shown.map(action => action.label), ['Symphony', 'Collab', 'Automations']);
+	assert.deepEqual(shown.map(action => action.label), ['Symphony', 'Routines']);
 	hideMenu?.();
 	assert.equal(more.getAttribute('aria-expanded'), 'false');
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
 	setARIAContainer(document.body);
 	bar.domNode.querySelector('[data-action-id="sessions.open.customize"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown[0]!.run();
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Customize', 'Projects', 'Symphony', 'More']);
+	assert.deepEqual(labels(), ['New', 'Customize', 'Search', 'Symphony', 'More']);
 	contexts.setContext('sessions.workspaceMode', 'chat');
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Customize', 'Projects', 'Symphony', 'More']);
+	assert.deepEqual(labels(), ['Artifacts', 'New', 'Customize', 'Projects', 'Search', 'Scheduled', 'More']);
+	more.click();
+	assert.deepEqual(shown.map(action => action.label), ['Collab']);
+	hideMenu?.();
+	contexts.setContext('sessions.workspaceMode', 'code');
 	bar.domNode.querySelector('[data-action-id="sessions.open.symphony"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown.find(action => action.id === 'sessions.activity.unpin')!.run();
-	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Customize', 'Projects', 'More']);
+	assert.deepEqual(labels(), ['New', 'Customize', 'Search', 'More']);
 	assert.equal(document.activeElement, more);
+
+	const navigation = bar.domNode.querySelector<HTMLElement>('.ash-sessions-navigation')!;
+	navigation.style.setProperty('--ash-spacing-size240', '24px');
+	navigation.style.columnGap = '8px';
+	let width = 300;
+	navigation.getBoundingClientRect = () => new browser.window.DOMRect(0, 0, width, 24);
+	bar.setLocation(ActivityBarPosition.TOP, document.body);
+	const buttons = () => [...navigation.querySelectorAll<HTMLButtonElement>('button')];
+	const actionIds = () => buttons().map(button => button.closest<HTMLElement>('[data-action-id]')!.dataset.actionId);
+	const wideIds = actionIds();
+	assert.equal(wideIds.length, 5);
+	buttons().at(-1)!.focus();
+	width = 88;
+	bar.setLocation(ActivityBarPosition.BOTTOM, document.body, document.body);
+	assert.deepEqual(actionIds(), [...wideIds.slice(0, 2), 'sessions.activity.more']);
+	assert.equal(document.activeElement, buttons().at(-1));
+	buttons().at(-1)!.click();
+	assert.deepEqual(shown.map(action => action.id), wideIds.slice(2));
+	hideMenu?.();
+	width = 300;
+	bar.setLocation(ActivityBarPosition.BOTTOM, document.body, document.body);
+	assert.deepEqual(actionIds(), wideIds);
 });
 
 test('workspace mode controls switch retained pages and follow their owner selection', async () => {

@@ -1,3 +1,25 @@
+import { Range } from '../../../../../../editor/common/core/range.js';
+import { setIconResolver } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../../platform/theme/common/iconRegistry.js';
+import '../../../../../../editor/browser/widget/diffEditor/registrations.contribution.js';
+import '../../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
+import '../../../../codeReview/browser/codeReview.contribution.js';
+import '../../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
+import { SessionChangesEditor } from '../../../browser/sessionChangesEditor.js';
+import { codeReviewScheme } from '../../../../codeReview/browser/sessionCodeReviewService.js';
+import { SessionCodeReviewEditor } from '../../../../codeReview/browser/sessionCodeReviewEditor.js';
+import { EditorPanes } from '../../../../../../workbench/browser/editor.js';
+import { IDiffService } from '../../../../../../workbench/services/diff/common/diffService.js';
+import { DiffService } from '../../../../../../workbench/services/diff/browser/diffService.js';
+import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
+import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { createTestEditorServices } from '../../../../../../workbench/test/common/testEditorServices.js';
+import { ChatResponseActionContext } from '../../../../../../workbench/contrib/chat/browser/chat.js';
+import { chatTranscriptListItems } from '../../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import type { StartTurnOptions, ThreadTranscriptEntry, Turn } from '../../../../../../workbench/services/chat/common/chatService.js';
+import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
+import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
+import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { BrowserContextMenuService } from '../../../../../../platform/contextview/browser/contextMenuService.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 import { IMenuService } from '../../../../../../platform/actions/common/actions.js';
@@ -70,6 +92,11 @@ services.registerSingleton(IChangesViewService, () => resources.add(services.cre
 services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
 services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 services.registerInstance(ISessionsManagementService, {
+	get onDidChange() { return changed.event; },
+	get active() {
+		const selection = services.get(ISessionsService).activeSelection;
+		return selection?.kind === 'session' ? selection.active : undefined;
+	},
 	get sessions() {
 		const selection = services.get(ISessionsService).activeSelection;
 		return selection?.kind === 'session' ? [selection.active.session] : [];
@@ -145,13 +172,37 @@ let failFile: ((error: Error) => void) | undefined;
 let fileReadStarted = false;
 let holdNextLedger: { key: string; missingSecond: boolean; } | undefined;
 const heldLedgers = new Map<string, { resolve(): void; reject(error: Error): void; }>();
+const reviewForks: Parameters<IAgentThreadService['fork']>[0][] = [];
+const reviewThreadId = 'review-thread';
+let loseReviewAcknowledgement = false;
+let acceptedReview: StartTurnOptions | undefined;
+services.registerInstance(IAgentThreadService, {
+	fork: async (request: Parameters<IAgentThreadService['fork']>[0]) => {
+		reviewForks.push(request);
+		return { sessionId: request.sessionId, threadId: reviewThreadId };
+	},
+} as IAgentThreadService);
 services.registerInstance(ISessionsService, {
 	onDidChange: changed.event,
-	get activeSelection() { return { kind: 'session', active: { session: { sessionId, status: 'active', title: 'Test changes', chats: [{ threadId, status: 'active', origin: { type: 'root' } }], workspace: { authorityId: 'local', root: '/workspace' } }, threadId } }; },
+	get activeSelection() { return { kind: 'session', active: { session: { sessionId, kind: 'code' as const, status: 'active', title: 'Test changes', chats: [{ threadId, status: 'active', origin: { type: 'root' } }], workspace: { authorityId: 'local', root: '/workspace' } }, threadId } }; },
 } as unknown as ISessionsService);
 services.registerInstance(IChatService, {
-	readThread: async () => ({ thread: { sessionId, threadId: 'thread', status: 'active', sequence: 7, turns: activeTurn ? [{ status: 'running' }] : [] } }),
-	startTurn: async (request: unknown) => { agentRequests.push({ action: 'start', request }); },
+	readThread: async (_sessionId: string, id: string) => {
+		const accepted = acceptedReview?.threadId === id ? acceptedReview : undefined;
+		const turns = activeTurn ? [{ status: 'running' }] : codeReviewMode ? [{
+			turnId: details.summary.turnId, status: 'completed',
+			items: accepted ? [{ type: 'userMessage', clientId: accepted.commandId }] : [],
+		}] : [];
+		return { thread: { sessionId, threadId: id, status: 'active', sequence: accepted ? 8 : 7, turns } };
+	},
+	startTurn: async (request: StartTurnOptions) => {
+		agentRequests.push({ action: 'start', request });
+		if (loseReviewAcknowledgement) {
+			loseReviewAcknowledgement = false;
+			acceptedReview = request;
+			throw new Error('Review acknowledgement lost');
+		}
+	},
 	queueTurn: async (request: unknown) => { agentRequests.push({ action: 'queue', request }); },
 	onDidUpdateThread: threadUpdates.event, onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None,
 	listTurnChanges: async (sessionId: string, threadId: string) => {
@@ -168,6 +219,10 @@ services.registerInstance(IChatService, {
 		if (pendingLedger) { await pendingLedger; }
 		if (fail) { throw new Error('Repository unavailable'); }
 		if (checkpoint) { return checkpoint; }
+		if (reviewRepositories) {
+			return { sequence: 7, revision: 'multi-repository', statistics: { files: 2, additions: 6, deletions: 4 },
+				repositories: reviewRepositories.map(entry => ({ repositoryId: entry.summary.repositoryId, files: entry.files })), warnings: [] };
+		}
 		return { sequence: 7, revision: String(ledger[0]?.summary.revision ?? 0),
 			statistics: { files: ledger.length, additions: ledger.length * 3, deletions: ledger.length * 2 },
 			repositories: [{ repositoryId: 'repository', files: ledger.flatMap(entry => entry.files) }], warnings: [] };
@@ -175,6 +230,7 @@ services.registerInstance(IChatService, {
 	readThreadChangeFile: async (sessionId: string, threadId: string, revision: string, repositoryId: string, path: string) => {
 		summaryReads.push({ sessionId, threadId, revision, repositoryId, path });
 		if (pendingFileFailure) { fileReadStarted = true; return pendingFileFailure; }
+		if (codeReviewMode) return { path, binary: false, truncated: false, before: 'Original\nBefore\nThird', after: reviewCode };
 		return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' };
 	},
 	readTurnChange: async (sessionId: string, threadId: string, id: string) => {
@@ -183,14 +239,35 @@ services.registerInstance(IChatService, {
 	},
 	readTurnChangeFile: async () => {
 		if (pendingFileFailure) { fileReadStarted = true; return pendingFileFailure; }
+		if (reviewRepositories) return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Original\nBefore\nThird', after: reviewCode };
 		return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' };
 	},
 } as unknown as IChatService);
 let opened = 0;
+let codeReviewMode = false;
+let reviewCode = 'Original\nReviewed\nThird';
+let reviewRepositories: readonly TurnChangeDetails[] | undefined;
+const reviewPane = resources.add(new MutableDisposable<SessionCodeReviewEditor>());
+let reviewHost: HTMLElement | undefined;
+let reviewServices: InstantiationService | undefined;
+
+async function openCodeReviewInput(input: IResourceEditorInput): Promise<void> {
+	if (!reviewServices || !reviewHost) return;
+	reviewPane.clear();
+	const pane = await EditorPanes.getEditorPane(input)!.create({ instantiationService: reviewServices });
+	if (!(pane instanceof SessionCodeReviewEditor)) throw new Error('Expected the independent Code Review editor');
+	reviewPane.value = pane;
+	pane.create(reviewHost);
+	pane.setVisible(false);
+	await pane.setInput(input, new AbortController().signal);
+	pane.layout({ width: 830, height: 550 });
+	pane.setVisible(true);
+}
 const reviews: { resource: string; changesetId?: string; }[] = [];
 services.registerInstance(IEditorService, {
 	...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput) => {
 		opened++;
+		if (codeReviewMode && input.resource.scheme === codeReviewScheme) await openCodeReviewInput(input);
 		if (input instanceof SessionChangesEditorInput) {
 			reviews.push({ resource: input.resource.toString(), changesetId: input.changesetSelection?.kind === 'id' ? input.changesetSelection.id : undefined });
 		}
@@ -268,6 +345,12 @@ declare global {
 			fileReadStarted(): boolean;
 			rejectFile(): void;
 			agentRequests(): readonly unknown[];
+			openCodeReview(options?: { multipleRepositories?: boolean; }): Promise<void>;
+			reviewForks(): readonly unknown[];
+			loseReviewAcknowledgement(): void;
+			focusReviewLine(line: number, endLine?: number): void;
+			openReviewReply(): Promise<void>;
+			replaceReviewCode(): Promise<void>;
 			activeTurn(value: boolean): void;
 			setLocale(): void;
 			opened(): number;
@@ -295,6 +378,62 @@ window.ashChangesIntegration = {
 	disposeCounter: () => counterOwner.clear(),
 	reduceMotion: value => configuration.updateValue('workbench.reduceMotion', value),
 	agentRequests: () => agentRequests,
+	reviewForks: () => reviewForks,
+	loseReviewAcknowledgement: () => { loseReviewAcknowledgement = true; },
+	openCodeReview: async options => {
+		codeReviewMode = true;
+		setIconResolver(document, getIconDefinition);
+		view.setVisible(false);
+		container.hidden = true;
+		const panes = document.createElement('div');
+		panes.style.display = 'flex';
+		const changesHost = document.createElement('div');
+		changesHost.id = 'existing-changes-editor';
+		changesHost.style.cssText = 'width:390px;height:550px';
+		reviewHost = document.createElement('div');
+		reviewHost.id = 'code-review';
+		reviewHost.style.cssText = 'width:830px;height:550px';
+		panes.append(changesHost, reviewHost);
+		document.body.append(panes);
+		reviewServices = resources.add(createTestEditorServices(configuration, services));
+		registerCodeEditorServices(reviewServices);
+		reviewServices.registerSingleton(IDiffService, () => reviewServices!.createInstance(DiffService));
+		reviewServices.registerInstance(IDialogService, { error: async (message: string) => { throw new Error(message); } } as unknown as IDialogService);
+		reviewServices.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: reviewServices })));
+		const changes = resources.add(reviewServices.createInstance(SessionChangesEditor, { instantiationService: reviewServices }));
+		changes.create(changesHost);
+		changes.setVisible(true);
+		changes.layout({ width: 390, height: 550 });
+		await changes.setInput(new SessionChangesEditorInput(URI.parse(`ash-session:/${sessionId}?thread=${threadId}`)), new AbortController().signal);
+		if (options?.multipleRepositories) {
+			reviewRepositories = [details, { ...details, summary: { ...details.summary, changeSetId: 'nested-change', repositoryId: 'nested-repository' } }];
+			ledger = reviewRepositories;
+		}
+		await CommandsRegistry.getCommand('sessions.openCodeReview')!(reviewServices);
+	},
+	focusReviewLine: (line, endLine) => {
+		const editor = reviewServices!.get(ICodeEditorService).listCodeEditors().find(editor => editor.getContainerDomNode().closest('#code-review') && editor.getModel()?.getValue() === reviewCode)!;
+		if (endLine) editor.setSelection(new Range(line, 1, endLine, 2));
+		else editor.setPosition({ lineNumber: line, column: 1 });
+		editor.focus();
+	},
+	replaceReviewCode: async () => {
+		reviewCode = 'Current content';
+		ledger = ledger.map(entry => ({ ...entry, summary: { ...entry.summary, revision: entry.summary.revision + 1 } }));
+		await CommandsRegistry.getCommand('sessions.openCodeReview')!(reviewServices!);
+	},
+	openReviewReply: async () => {
+		const { request } = agentRequests.at(-1)! as { request: StartTurnOptions };
+		const items = [
+			{ type: 'userMessage', itemId: 'prompt', turnId: 'review-turn', text: request.text, clientId: request.commandId },
+			{ type: 'agentMessage', itemId: 'reply', turnId: 'review-turn', text: 'I addressed the comments.' },
+		] as const;
+		const entries = items.map(item => ({ type: 'item', entryId: item.itemId, turnId: item.turnId, transient: false, item })) as readonly ThreadTranscriptEntry[];
+		const reply = chatTranscriptListItems(entries, 'review-turn', [{ turnId: 'review-turn', status: 'completed', items } as unknown as Turn],
+			{ sessionId, threadId: request.threadId }).find(item => item.type === 'agentMessage');
+		using context = new ChatResponseActionContext(reply!, reviewHost!, window, () => true, () => { });
+		await CommandsRegistry.getCommand('sessions.openResponseCodeReview')!(reviewServices!, context);
+	},
 	activeTurn: value => { activeTurn = value; },
 	checkpoint: value => { checkpoint = value; threadUpdates.fire({ sessionId, threadId, durableSequence: value.sequence, update: { type: 'committed', event: { type: 'threadHistoryMoved' } } }); },
 	summaryReads: () => summaryReads,

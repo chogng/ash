@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
@@ -25,17 +26,30 @@ pub(crate) struct DirGrants {
     requested: RwLock<Vec<RequestedGrant>>,
     // One gate orders grant changes against input admission; weak entries do not own turns.
     commands: Mutex<Vec<Weak<CommandAuthorization>>>,
-    approvals: RwLock<
-        BTreeMap<
-            SessionId,
-            Vec<(
-                ash_protocol::ActionProvenance,
-                ash_protocol::ActionApprovalRequest,
-            )>,
-        >,
-    >,
+    approvals: RwLock<BTreeMap<SessionId, Vec<SessionApproval>>>,
     session_trees: RwLock<BTreeMap<SessionId, Access>>,
     threads: RwLock<BTreeMap<ThreadId, ThreadDirs>>,
+}
+
+#[derive(Eq, PartialEq)]
+pub(crate) enum SessionApproval {
+    ExactAction {
+        provenance: ash_protocol::ActionProvenance,
+        digest: ash_protocol::ActionDigest,
+        capabilities: ash_protocol::CapabilitySet,
+        policy_revision: String,
+    },
+    FileWrite {
+        directory_id: String,
+        path: PathBuf,
+        policy_revision: String,
+    },
+    CommandPrefix {
+        prefix: ash_execpolicy::ExecPolicyCommand,
+        working_directory: PathBuf,
+        scope: String,
+        policy_revision: String,
+    },
 }
 
 /// Leases used to launch a command, retained for its full interactive lifetime.
@@ -47,16 +61,21 @@ pub(crate) struct CommandAuthorization {
 
 impl CommandAuthorization {
     pub(crate) fn ensure_active(&self) -> Result<(), core_api::CoreError> {
+        self.ensure_grants_active()?;
+        self.cancellation
+            .token()
+            .check()
+            .map_err(|signal| core_api::CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(())
+    }
+
+    fn ensure_grants_active(&self) -> Result<(), core_api::CoreError> {
         for authorization in &self.authorizations {
             if let Err(error) = authorization.ensure_active() {
                 self.cancellation.cancel();
                 return Err(core_api::CoreError::Policy(error.to_string()));
             }
         }
-        self.cancellation
-            .token()
-            .check()
-            .map_err(|signal| core_api::CoreError::Cancelled(signal.reason().to_string()))?;
         Ok(())
     }
 
@@ -159,6 +178,21 @@ impl DirGrants {
         operation()
     }
 
+    /// An attached view can drain buffered output after the Turn closes. A revoked
+    /// directory grant still ends its access immediately.
+    pub(crate) fn read_command_output<T>(
+        &self,
+        command: &CommandAuthorization,
+        read: impl FnOnce() -> Result<T, core_api::CoreError>,
+    ) -> Result<T, core_api::CoreError> {
+        let _commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        command.ensure_grants_active()?;
+        read()
+    }
+
     fn cancel_revoked_commands(commands: &mut Vec<Weak<CommandAuthorization>>) {
         commands.retain(|command| {
             let Some(command) = command.upgrade() else {
@@ -171,47 +205,29 @@ impl DirGrants {
     pub(crate) fn remember_approval(
         &self,
         session: SessionId,
-        provenance: ash_protocol::ActionProvenance,
-        request: ash_protocol::ActionApprovalRequest,
+        approval: SessionApproval,
     ) -> Result<(), String> {
         let mut approvals = self
             .approvals
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let entries = approvals.entry(session).or_default();
-        if entries.iter().any(|(source, entry)| {
-            source == &provenance
-                && entry.action_digest == request.action_digest
-                && entry.policy_revision == request.policy_revision
-                && entry.capabilities == request.capabilities
-        }) {
+        if entries.contains(&approval) {
             return Ok(());
         }
         if entries.len() >= 512 {
             return Err("too many reusable action approvals".into());
         }
-        entries.push((provenance, request));
+        entries.push(approval);
         Ok(())
     }
 
-    pub(crate) fn has_approval(
-        &self,
-        session: &SessionId,
-        provenance: &ash_protocol::ActionProvenance,
-        request: &ash_protocol::ActionApprovalRequest,
-    ) -> bool {
+    pub(crate) fn has_approval(&self, session: &SessionId, approval: &SessionApproval) -> bool {
         self.approvals
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(session)
-            .is_some_and(|entries| {
-                entries.iter().any(|(source, entry)| {
-                    source == provenance
-                        && entry.action_digest == request.action_digest
-                        && entry.policy_revision == request.policy_revision
-                        && entry.capabilities == request.capabilities
-                })
-            })
+            .is_some_and(|entries| entries.contains(approval))
     }
 
     pub(crate) fn grant_requested(

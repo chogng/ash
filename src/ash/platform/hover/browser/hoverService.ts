@@ -26,6 +26,7 @@ import { ILayoutService } from '../../layout/browser/layoutService.js';
 
 /** Caller-owned description of one target and its managed Hover content. */
 export interface HoverSetupOptions extends HoverDelegateSetupOptions {
+	readonly anchor?: HTMLElement;
 	readonly delay?: HoverDelayMode;
 	readonly setupKeyboardEvents?: boolean;
 }
@@ -176,6 +177,7 @@ export class HoverService extends Disposable implements IHoverService {
 			viewLifetime,
 			hover: new Hover({
 				target: options.target,
+				anchor: options.anchor,
 				content: options.content,
 				getHoverOptions,
 				delayMs: () => this.resolveDelay(options.delay, options.groupId),

@@ -989,7 +989,7 @@ fn query_catalog(
             {
                 return Err(ThreadStoreError::CatalogDamaged(catalog_thread_id));
             }
-            let mut record = serde_json::from_str::<ThreadCatalogRecord>(&record_json)
+            let mut record = decode_thread_catalog(&record_json)
                 .map_err(|_| ThreadStoreError::CatalogDamaged(catalog_thread_id.clone()))?;
             let current_sequence =
                 from_sql_integer(current_sequence).map_err(ThreadStoreError::Storage)?;
@@ -1006,6 +1006,24 @@ fn query_catalog(
             Ok(record)
         })
         .collect()
+}
+
+fn decode_thread_catalog(json: &str) -> Result<ThreadCatalogRecord, serde_json::Error> {
+    serde_json::from_str(json).or_else(|error| {
+        // Recovery can write a new event while sibling catalog rows still use the old shape.
+        let mut value: serde_json::Value = serde_json::from_str(json)?;
+        let Some(fields) = value
+            .as_object_mut()
+            .filter(|fields| !fields.contains_key("kind"))
+        else {
+            return Err(error);
+        };
+        let kind = fields
+            .remove("surface")
+            .unwrap_or_else(|| serde_json::Value::String("code".into()));
+        fields.insert("kind".into(), kind);
+        serde_json::from_value(value)
+    })
 }
 
 fn write_catalog(

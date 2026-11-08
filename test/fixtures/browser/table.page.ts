@@ -1,3 +1,9 @@
+import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
@@ -100,7 +106,7 @@ declare global {
 			setCredentialStorageMode(mode: SecretStorageMode): void;
 			setCredentialStorageType(type: SecretStorageState['storageType']): void;
 			readonly credentialOperations: readonly string[];
-			progress(): void;
+			progress(percent: number): void;
 			finish(): void;
 			theme(name: string): void;
 			dispose(): void;
@@ -141,6 +147,7 @@ declare global {
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
+	document.documentElement.lang = catalog.locale;
 }
 
 const resources = new DisposableStore();
@@ -149,6 +156,26 @@ const configuration = resources.add(new WorkbenchConfigurationService({ source: 
 const services = resources.add(new InstantiationService());
 services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 services.registerInstance(IFileService, resources.add(new FileService()));
+services.registerInstance(ISearchService, {
+	registerSearchResultProvider: () => { throw new Error('Dictation fixture does not register search providers'); },
+	fileSearch: async () => ({ results: [], messages: [] }),
+	textSearch: async () => { throw new Error('Dictation fixture does not search file contents'); },
+});
+services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'dictation', folders: [] })));
+services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
+services.registerInstance(IChatService, {
+	readThread: async () => { throw new Error('Dictation fixture does not read chat threads'); },
+} as unknown as IChatService);
+services.registerInstance(IChatSessionNavigationService, {
+	createNewConversation: async () => { throw new Error('Dictation fixture does not create conversations'); },
+	revision: 0,
+	getActiveConversation: () => undefined,
+	getConversations: () => [],
+	startVoiceConversation: async () => { throw new Error('Dictation fixture does not start voice conversations'); },
+	appendToActiveDraft: () => { },
+	captureActiveDraft: async () => undefined,
+	openConversation: async () => { throw new Error('Dictation fixture does not open conversations'); },
+});
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
 const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
@@ -185,10 +212,11 @@ services.registerInstance(ILanguageModelsService, {
 	setModelProviderApiKey: async () => { }, removeModelProviderApiKey: async () => { }, discoverProviderModels: async () => [],
 });
 const changed = resources.add(new Emitter<void>());
+const modelDownloadSizeBytes = 238_322_681;
 let models: ILocalTranscriptionModelSnapshot[] = [
-	{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, available: false, sizeBytes: 0 },
+	{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, available: false, sizeBytes: 0, downloadSizeBytes: modelDownloadSizeBytes, recommendedLanguages: ['cmn', 'en', 'zh'] },
 	{ model: 'imported-model', available: true, sizeBytes: 1024 * 1024 },
-];
+].filter(model => !new URLSearchParams(location.search).has('noInstalledModels') || !model.available);
 const operations: string[] = [];
 let finish: ((state: DictationModelState.Ready | DictationModelState.Cancelled) => void) | undefined;
 function publish(status: IDictationModelStatus): void {
@@ -224,8 +252,6 @@ const root = document.getElementById('models')!;
 root.style.width = '760px';
 const theme = resources.add(new TestThemeService(lightColorTheme));
 resources.add(bindTestColorTheme(theme, document.body));
-const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
-controls.setVisible(true);
 const unexpectedAttachment = async (): Promise<never> => { throw new Error('The dictation fixture must not resolve attachments'); };
 services.registerInstance(IChatAttachmentResolveService, {
 	_serviceBrand: undefined,
@@ -277,6 +303,8 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 registerCodeEditorServices(services);
+const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
+controls.setVisible(true);
 const editor = resources.add(services.createInstance(ChatInputEditor, { container: inputContainer, ariaLabel: 'Dictation draft', placeholder: '', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() }));
 services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -484,7 +512,10 @@ window.ashTableIntegration = {
 	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
 	transcript: (text, final) => { if (extensionEmit) extensionEmit(text, final); else transcript?.(text, final); },
 	get draft() { return editor.value; },
-	progress: () => publish({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 1024 * 1024 }),
+	progress: percent => {
+		const downloadedBytes = Math.ceil(modelDownloadSizeBytes * percent / 100);
+		publish({ state: DictationModelState.Downloading, file: 'decoder.onnx', downloadedBytes, packageDownloadedBytes: downloadedBytes });
+	},
 	finish: () => {
 		models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, available: true, sizeBytes: 2 * 1024 * 1024, status: { state: DictationModelState.Ready } } : model);
 		changed.fire();

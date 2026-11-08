@@ -17,16 +17,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "agent",
-      "file": "agent.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "agent-filled",
-      "file": "agent-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "align-center",
       "file": "align-center.svg",
       "rendering": "symbolic"
@@ -134,6 +124,11 @@
     {
       "id": "books",
       "file": "books.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "bot",
+      "file": "bot.svg",
       "rendering": "symbolic"
     },
     {
@@ -822,6 +817,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "inbox",
+      "file": "inbox.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "info",
       "file": "info.svg",
       "rendering": "symbolic"
@@ -1142,6 +1142,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "personalization",
+      "file": "personalization.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "pin",
       "file": "pin.svg",
       "rendering": "symbolic"
@@ -1184,6 +1189,11 @@
     {
       "id": "primitive-square",
       "file": "primitive-square.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "primitive-square-filled",
+      "file": "primitive-square-filled.svg",
       "rendering": "symbolic"
     },
     {

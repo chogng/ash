@@ -1,6 +1,7 @@
 //! Model operations never acquire the microphone. Packages are immutable once published.
 use crate::DictationManager;
 use crate::LocalSpeechMode;
+use crate::model_package::BUILTIN_MODELS;
 use crate::model_package::ModelPackage;
 use async_utils::CancellationSource;
 use async_utils::CancellationToken;
@@ -14,16 +15,23 @@ use std::thread;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelProgress {
     Checking,
-    Downloading { file: String, downloaded_bytes: u64 },
+    Downloading {
+        file: String,
+        downloaded_bytes: u64,
+        package_downloaded_bytes: u64,
+    },
     Loading,
     Ready,
     Cancelled,
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
 }
 
 pub enum ModelOperation {
     Prepare { network: OutboundNetworkSnapshot },
     Import { source: PathBuf },
+    Warm,
 }
 
 pub struct ModelRequest {
@@ -36,6 +44,7 @@ pub struct ModelRequest {
 
 struct Operation {
     model_id: String,
+    inventory: bool,
     cancellation: Arc<CancellationSource>,
     worker: thread::JoinHandle<()>,
 }
@@ -54,9 +63,17 @@ impl Operation {
 pub struct DictationModelManager {
     operations: Mutex<HashMap<(u64, String), Operation>>,
     progress: Arc<Mutex<HashMap<String, ModelProgress>>>,
+    local_cache: Option<Arc<crate::local::RecognizerCache>>,
 }
 
 impl DictationModelManager {
+    /// Shares the idle inference cache with the recording manager.
+    pub fn with_dictation(dictation: &DictationManager) -> Self {
+        let mut models = Self::default();
+        models.local_cache = dictation.local_cache();
+        models
+    }
+
     pub fn progress(&self, model_id: &str) -> Option<ModelProgress> {
         self.progress
             .lock()
@@ -86,8 +103,10 @@ impl DictationModelManager {
     }
 
     pub fn list(&self, root: &std::path::Path) -> Result<Vec<String>, String> {
-        let mut models =
-            std::collections::BTreeSet::from([crate::model_package::DEFAULT_MODEL_ID.to_owned()]);
+        let mut models: std::collections::BTreeSet<_> = BUILTIN_MODELS
+            .iter()
+            .map(|model| model.id.clone())
+            .collect();
         if root.exists() {
             for entry in std::fs::read_dir(root).map_err(|error| error.to_string())? {
                 let entry = entry.map_err(|error| error.to_string())?;
@@ -114,15 +133,18 @@ impl DictationModelManager {
     }
 
     pub fn remove(&self, root: &std::path::Path, model_id: &str) -> Result<(), String> {
-        let operations = self
+        let mut operations = self
             .operations
             .lock()
             .map_err(|_| "Dictation model state unavailable")?;
-        if operations
-            .values()
-            .any(|operation| operation.model_id == model_id && !operation.worker.is_finished())
-        {
-            return Err("Stop model preparation before deleting the model".into());
+        if let Some((key, operation)) = operations.iter().find(|(_, operation)| {
+            operation.model_id == model_id && !operation.worker.is_finished()
+        }) {
+            if operation.inventory {
+                return Err("Stop model preparation before deleting the model".into());
+            }
+            let key = key.clone();
+            operations.remove(&key).expect("selected warmup").stop()?;
         }
         ModelPackage::remove(root, model_id)?;
         self.progress
@@ -151,6 +173,20 @@ impl DictationModelManager {
                 .map_err(|error| error.to_string())
         })
     }
+
+    /// Returns the transfer size in bytes and recommended languages of a downloadable package.
+    pub fn download_info(model_id: &str) -> Option<(u64, &'static [String])> {
+        BUILTIN_MODELS
+            .iter()
+            .find(|model| model.id == model_id)
+            .map(|model| {
+                (
+                    model.download_size_bytes,
+                    model.recommended_languages.as_slice(),
+                )
+            })
+    }
+
     /// Availability describes an installed package, not a currently loaded recognizer.
     pub fn is_available(root: &std::path::Path, model_id: &str) -> Result<bool, String> {
         ModelPackage::validate_id(model_id)?;
@@ -200,17 +236,23 @@ impl DictationModelManager {
         let model_id = request.model_id.clone();
         let progress_model = model_id.clone();
         let snapshots = Arc::clone(&self.progress);
-        snapshots
-            .lock()
-            .expect("dictation model progress")
-            .insert(model_id.clone(), ModelProgress::Checking);
-        let cancellation = Arc::new(CancellationSource::new());
-        let token = cancellation.token();
-        let on_progress: Arc<dyn Fn(ModelProgress) + Send + Sync> = Arc::new(move |progress| {
+        let visible = !matches!(request.operation, ModelOperation::Warm);
+        if visible {
             snapshots
                 .lock()
                 .expect("dictation model progress")
-                .insert(progress_model.clone(), progress.clone());
+                .insert(model_id.clone(), ModelProgress::Checking);
+        }
+        let cache = self.local_cache.clone();
+        let cancellation = Arc::new(CancellationSource::new());
+        let token = cancellation.token();
+        let on_progress: Arc<dyn Fn(ModelProgress) + Send + Sync> = Arc::new(move |progress| {
+            if visible {
+                snapshots
+                    .lock()
+                    .expect("dictation model progress")
+                    .insert(progress_model.clone(), progress.clone());
+            }
             on_progress(progress);
         });
         let worker = thread::Builder::new()
@@ -221,7 +263,12 @@ impl DictationModelManager {
                     .build()
                     .map_err(|error| error.to_string())
                     .and_then(|runtime| {
-                        runtime.block_on(run(request, &token, Arc::clone(&on_progress)))
+                        runtime.block_on(run(
+                            request,
+                            &token,
+                            Arc::clone(&on_progress),
+                            cache.as_deref(),
+                        ))
                     });
                 // Exactly one terminal event; stop joins this worker before acknowledging release.
                 on_progress(match result {
@@ -235,6 +282,7 @@ impl DictationModelManager {
             key,
             Operation {
                 model_id,
+                inventory: visible,
                 cancellation,
                 worker,
             },
@@ -273,6 +321,7 @@ async fn run(
     request: ModelRequest,
     token: &CancellationToken,
     progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
+    cache: Option<&crate::local::RecognizerCache>,
 ) -> Result<(), String> {
     let package = match request.operation {
         ModelOperation::Prepare { network } => {
@@ -298,6 +347,10 @@ async fn run(
                 progress.as_ref(),
             )
             .await;
+        }
+        ModelOperation::Warm => {
+            let cache = cache.ok_or("Local dictation warmup is unavailable")?;
+            return cache.warm(&request, token, progress.as_ref()).await;
         }
     };
     token.check().map_err(|error| error.to_string())?;

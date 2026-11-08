@@ -24,7 +24,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workb
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { AshChatNavigationSource } from '../browser/ashChatNavigationSource.js';
-import { SessionWorkspaceButton, sessionWorkspaceButtonHelp } from '../browser/sessionWorkspaceButton.js';
+import { SessionWorkspaceStatus } from '../browser/sessionWorkspaceStatus.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
 import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, type ChatListSource } from '../browser/chatListModel.js';
 import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
@@ -42,7 +42,7 @@ const ashChatEditor = {
 	persistentDraftScope: 'ash-chat',
 	advanceWelcomePhrase: false,
 	useWorkbenchModelManagement: true,
-	createDraftPicker: (instantiation, footer, _visible, model) => instantiation.createInstance(SessionWorkspaceButton, footer, model),
+	createDraftPicker: (instantiation, footer, _visible, model) => instantiation.createInstance(SessionWorkspaceStatus, footer, model),
 	accessibility: {
 		focusContext: 'ashNativeChatFocused',
 		verbositySetting: AccessibilityVerbositySettingId.Chat,
@@ -118,9 +118,9 @@ export class ChatWorkspaceContribution extends Disposable {
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
 		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, (_accessor, source) => showAshChat(source)));
-		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, accessor => {
+		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, (accessor, source) => {
 			const command = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'ash' ? SHOW_ASH_CHAT_COMMAND : openWebChatCommand;
-			return accessor.get(ICommandService).executeCommand(command);
+			return accessor.get(ICommandService).executeCommand(command, source);
 		}));
 		// The desktop contribution registers after the shared opener, which handles Code and other hosts.
 		this._register(opener.registerOpener({
@@ -160,7 +160,7 @@ function registerAshChatAccessibility(): void {
 				const model = widget.model;
 				return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type },
 					() => type === AccessibleViewType.Help
-						? localize('sessions.chat.ashAccessibilityHelp', 'Ash Chat has its own conversation history and drafts. Use Tab to reach the model picker and Enter to open it. In an unsent draft, selecting a ChatGPT model opens the ChatGPT draft. Enter sends a message, Shift+Enter inserts a line break, and Stop interrupts a reply. Open Accessible View to read the transcript. The Chat sidebar opens saved conversations. New starts a new draft.') + '\n\n' + sessionWorkspaceButtonHelp()
+						? localize('sessions.chat.ashAccessibilityHelp', 'Ash Chat has its own conversation history and drafts. Use Tab to reach the model picker and Enter to open it. In an unsent draft, selecting a ChatGPT model opens the ChatGPT draft. Enter sends a message, Shift+Enter inserts a line break, and Stop interrupts a reply. Open Accessible View to read the transcript. The Chat sidebar opens saved conversations. New starts a new draft.') + '\n\n' + localize({ bundle: 'ash.sessions', key: 'sessions.workspace.chatMenuHelp' }, 'For a saved conversation without a workspace, focus it in the sidebar and press Shift+F10, then choose Set Workspace. The input footer shows the bound folder. Once a folder is set, choose Continue in Code from the same menu to open the conversation and its history in Code.')
 						: model.items.filter(item => !item.transient).map(item => item.text).filter(Boolean).join('\n\n'),
 					() => focused.isConnected ? focused.focus() : widget.focusInput(), AccessibilityVerbositySettingId.Chat);
 			},

@@ -21,16 +21,15 @@ _source_config = transition(
     ],
 )
 
-def _archive_impl(ctx):
-    # An attribute transition yields configured targets even for a single
-    # branch. Forward the archive file; the crate build script consumes data.
-    archive = ctx.attr.src[0][DefaultInfo].files
-    if len(archive.to_list()) != 1:
-        fail("V8 source build must produce exactly one static archive")
-    return [DefaultInfo(files = archive)]
+def _source_file_impl(ctx):
+    # The archive and bindgen must see the same V8 and libc++ configuration.
+    files = ctx.attr.src[0][DefaultInfo].files
+    if len(files.to_list()) != 1:
+        fail("Expected exactly one V8 source build output")
+    return [DefaultInfo(files = files)]
 
-v8_source_archive = rule(
-    implementation = _archive_impl,
+v8_source_file = rule(
+    implementation = _source_file_impl,
     attrs = {
         "src": attr.label(mandatory = True, cfg = _source_config),
         "_allowlist_function_transition": attr.label(

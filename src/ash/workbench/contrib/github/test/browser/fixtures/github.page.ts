@@ -1,4 +1,5 @@
 import '../../../../chat/browser/chat.shared.contribution.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../../../chat/browser/agentSessions/sessionSummaryHoverService.js';
 import '../../../../../../platform/theme/common/sizes/baseSizes.js';
 import { setNlsMessages } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
@@ -94,6 +95,7 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 const services = resources.add(new InstantiationService());
+services.registerSingleton(ISessionSummaryHoverService, () => services.createInstance(SessionSummaryHoverService));
 services.registerInstance(ILoggerService, resources.add(new NullLoggerService()));
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-fixture', flushInterval: 0 })));
 const theme = resources.add(new TestThemeService(darkColorTheme));

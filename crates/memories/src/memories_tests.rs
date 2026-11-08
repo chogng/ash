@@ -19,8 +19,11 @@ impl MemoryStore for RecordingStore {
     ) -> Result<MemoryPolicyMutationResult, MemoryStoreError> {
         Err(MemoryStoreError::NotFound)
     }
-    fn context(&self, _: &MemoryStoreContextRequest) -> Result<Vec<Memory>, MemoryStoreError> {
-        Ok(Vec::new())
+    fn context(
+        &self,
+        _: &MemoryStoreContextRequest,
+    ) -> Result<MemoryStoreContext, MemoryStoreError> {
+        Ok(MemoryStoreContext::default())
     }
 
     fn add(
@@ -100,6 +103,7 @@ fn user_addition_normalizes_search_and_rejects_unbounded_content() {
                 scope: MemoryScope::Profile,
                 title: "Preferred Editor".into(),
                 body: "Use Ash for Rust work.".into(),
+                origin: None,
             },
             &async_utils::CancellationSource::new().token(),
         )
@@ -125,6 +129,7 @@ fn user_addition_normalizes_search_and_rejects_unbounded_content() {
                     scope: MemoryScope::Profile,
                     title: "title".into(),
                     body: "x".repeat(16 * 1024 + 1),
+                    origin: None,
                 },
                 &async_utils::CancellationSource::new().token()
             )
@@ -151,6 +156,7 @@ fn identifiers_and_page_limits_are_strict() {
 #[test]
 fn citation_round_trip_rejects_malformed_references() {
     let citation = MemoryCitation {
+        namespace: MemoryNamespace::Code,
         memory_id: MemoryId::new("memory-1").unwrap(),
         scope: MemoryScope::Profile,
         revision: 3,
@@ -193,6 +199,7 @@ fn cancellation_during_citation_read_discards_the_loaded_body() {
                 scope: MemoryScope::Profile,
                 title: "Decision".into(),
                 body: "Rust memory".into(),
+                origin: None,
             },
             &async_utils::CancellationSource::new().token(),
         )
@@ -203,6 +210,7 @@ fn cancellation_during_citation_read_discards_the_loaded_body() {
         service.read_context_citation(
             &[MemoryScope::Profile],
             MemoryCitation {
+                namespace: MemoryNamespace::Code,
                 memory_id: MemoryId::new("memory").unwrap(),
                 scope: MemoryScope::Profile,
                 revision: 1,

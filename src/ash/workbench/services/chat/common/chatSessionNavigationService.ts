@@ -6,6 +6,7 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { OpenSessionLink } from '../../../../platform/agentHost/common/openSessionLink.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ToolResultPresentation } from '../../../../platform/agentHost/common/agent.js';
+import type { SessionKind } from '../../../../platform/agentHost/common/agent.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 
 /** A borrowed backend incarnation. Any state transition or Session-owner retirement invalidates it. */
@@ -30,7 +31,7 @@ export interface IChatSessionNavigationService {
 	createNewConversation(options?: { readonly focus?: boolean; readonly providerId?: string; readonly agent?: ChatAgent; }): boolean | void | Promise<boolean | void>;
 	/** Hosts with their own conversation presentation also own its history picker. */
 	showConversationHistory?(): void | Promise<void>;
-	getConversations(): readonly { readonly providerId?: string; readonly providerLabel?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
+	getConversations(): readonly { readonly providerId?: string; readonly providerLabel?: string; readonly kind?: SessionKind; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Uses the renderer identities that the composer and transcript service share. */
 	getConversationsForReference?(): readonly { readonly providerId: string; readonly providerLabel?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */

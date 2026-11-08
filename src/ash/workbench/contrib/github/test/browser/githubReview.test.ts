@@ -29,6 +29,7 @@ suite('githubReview browser component', () => {
 		expect(await title.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		const original = page.getByRole('textbox', { name: 'Original file', exact: true });
 		await original.focus(); await original.press('ControlOrMeta+Home');
+		await page.getByRole('button', { name: 'Write comment on selected line', exact: true }).click();
 		await page.getByRole('textbox', { name: 'Comment on selected line', exact: true }).fill('Keep this deletion explained');
 		await page.getByRole('button', { name: 'Add line comment to review', exact: true }).click();
 		await page.getByRole('textbox', { name: 'Review summary', exact: true }).fill('Reviewed the exact commit');
@@ -50,7 +51,7 @@ suite('githubReview browser component', () => {
 		await page.getByRole('button', { name: 'Load more files', exact: true }).click();
 		await page.getByRole('combobox', { name: 'Changed files', exact: true }).click(); await page.getByRole('option', { name: /binary.bin/ }).click();
 		await expect(page.locator('.github-review')).toContainText('Binary file. View it on GitHub.');
-		await expect(page.getByRole('button', { name: 'Add line comment to review', exact: true })).toBeDisabled();
+		await expect(page.getByRole('button', { name: 'Write comment on selected line', exact: true })).toBeDisabled();
 		await page.getByRole('button', { name: 'Merge pull request', exact: true }).click();
 		const dialog = page.getByRole('dialog'); await expect(dialog).toContainText('a'.repeat(40)); await dialog.getByRole('button', { name: 'Merge pull request', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Merge pull request', exact: true })).toBeDisabled();
@@ -67,6 +68,57 @@ suite('githubReview browser component', () => {
 		await dialog.getByRole('button', { name: 'Merge pull request', exact: true }).click();
 		await expect(page.locator('.github-status')).toContainText('Refresh the PR');
 		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/pullRequest/merge'))).toEqual([]);
+	});
+
+	test('writes drafts in the gutter and opens, replies to and resolves a discussion from the diff', async () => {
+		const { page, info } = browserTests;
+		await openReview(page);
+		const original = page.getByRole('region', { name: 'Original file', exact: true });
+		const modified = page.getByRole('region', { name: 'Modified file', exact: true });
+		await expect(modified.getByRole('button', { name: 'Open comments on line 1' })).toBeVisible();
+		await original.locator('.line-numbers').getByText('1', { exact: true }).hover({ force: true });
+		await original.getByRole('button', { name: 'Add comment on line 1' }).click();
+		const left = original.getByRole('region', { name: 'Comments on line 1' });
+		const composer = left.getByRole('textbox', { name: 'Comment on selected line' });
+		await expect(composer).toBeFocused();
+		await expect.poll(async () => {
+			const [before, after] = await Promise.all([original, modified].map(editor => editor.locator('.line-numbers').getByText('2', { exact: true }).boundingBox()));
+			return before && after ? Math.abs(before.y - after.y) : undefined;
+		}).toBe(0);
+		await composer.fill('Draft on the original side');
+		await composer.press('Escape');
+		await expect(left).toHaveCount(0);
+		await expect(original.getByRole('textbox', { name: 'Original file' })).toBeFocused();
+		await page.getByRole('button', { name: 'Write comment on selected line' }).click();
+		await expect(composer).toHaveValue('Draft on the original side');
+		await left.getByRole('button', { name: 'Add line comment to review' }).click();
+		await expect(left).toContainText('Draft on the original side');
+		await expect(page.locator('.github-draft-comments')).toContainText('Draft on the original side');
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.some(request => request.method === 'github/pullRequest/review'))).toBe(false);
+
+		await page.getByRole('button', { name: 'Show discussion in diff' }).click();
+		const right = modified.getByRole('region', { name: 'Comments on line 1' });
+		await expect(right).toBeFocused();
+		await expect(right).toContainText('Please explain');
+		await expect(left).toHaveCount(0);
+		await right.getByRole('textbox', { name: 'Reply to discussion' }).fill('Explained inline');
+		await right.getByRole('button', { name: 'Send reply' }).click();
+		await expect(right).toContainText('Explained inline');
+		await expect(page.locator('.github-discussions')).toContainText('Explained inline');
+		await right.getByRole('button', { name: 'Resolve discussion' }).click();
+		await expect(right.getByRole('button', { name: 'Reopen discussion' })).toBeVisible();
+
+		await page.getByRole('button', { name: 'Load more discussions' }).click();
+		const discussions = page.locator('.github-discussions');
+		const earlier = discussions.locator('.github-thread').filter({ hasText: 'Discussion on an earlier revision' });
+		await expect(earlier).toContainText('Outdated');
+		await expect(earlier.getByRole('button', { name: 'Show discussion in diff' })).toHaveCount(0);
+		await discussions.locator('.github-thread').filter({ hasText: 'Discussion on second file' })
+			.getByRole('button', { name: 'Show discussion in diff' }).click();
+		await expect(page.getByRole('combobox', { name: 'Changed files' })).toContainText('second.rs');
+		await expect(right).toContainText('Discussion on second file');
+		await expect(right).not.toContainText('Discussion on an earlier revision');
+		await page.locator('.github-diff').screenshot({ path: info.outputPath('github-inline-review.png') });
 	});
 
 	test('a changed head preserves the draft and an uncertain review cannot be repeated', async function () {
@@ -148,6 +200,7 @@ suite('githubReview browser component', () => {
 		await page.goto('/githubReview.html?zh'); await page.getByRole('textbox', { name: '所有者', exact: true }).fill('team'); await page.getByRole('textbox', { name: '仓库', exact: true }).fill('repo'); await page.getByRole('button', { name: '加载仓库', exact: true }).click();
 		await page.getByRole('button', { name: '#7 <img src=x onerror=alert(1)> Review change', exact: true }).click();
 		const summary = page.getByRole('textbox', { name: '评审摘要', exact: true }); await expect(summary).toBeEnabled(); await summary.focus();
+		await expect(page.getByRole('button', { name: '打开第 1 行的评论', exact: true })).toBeVisible();
 		await page.evaluate(() => window.ashGitHubReview.theme('highContrast')); await expect(summary).toBeFocused(); expect(await summary.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe('none');
 		expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('view' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain('Please explain');
 		expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain('草稿仍保留');
@@ -308,7 +361,7 @@ suite('githubReview browser component', () => {
 		await page.getByRole('button', { name: '加载仓库', exact: true }).click();
 		await expect(page.getByRole('button', { name: '未读 · team/repo · Review requested', exact: true })).toBeVisible();
 		await expect(page.locator('.github-status')).toContainText('经典令牌');
-		await page.getByRole('toolbar', { name: '仓库操作', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(); await expect(page.getByRole('menuitem', { name: '登录 GitHub Enterprise', exact: true })).toBeVisible();
+		await page.getByRole('toolbar', { name: '仓库操作', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click(); await expect(page.getByRole('menuitem', { name: '登录 GitHub Enterprise', exact: true })).toBeVisible();
 	});
 
 	test('Codex review requests and resulting PR comments use the GitHub protocol', async function () {

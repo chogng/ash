@@ -40,6 +40,7 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 		'typecheck:renderer': 'renderer',
 		build: 'desktop-build',
 		'build:prepared': 'desktop-build',
+		'prepare:desktop': 'desktop-prepare',
 		'prepare:desktop-addons': 'electron-dependencies',
 		'prepare:electron': 'electron-runtime',
 		'prepare:backend': 'backend',
@@ -63,6 +64,8 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
     if (process.argv[2] === process.env.FAIL_OPERATION) process.exitCode = 1;
   `);
 	await writeFile(join(directory, 'recordProtocol.ts'), `process.argv[2] = process.argv.includes('--no-build') ? 'protocol' : 'protocol-export'; await import('./record.ts');`);
+	await mkdir(join(directory, 'test/fixtures/dictation'), { recursive: true });
+	await writeFile(join(directory, 'test/fixtures/dictation/launch.ts'), `process.argv[2] = 'dictation-launch'; await import('../../../record.ts');`);
 	await mkdir(join(directory, 'build/builtin'), { recursive: true });
 	await writeFile(join(directory, 'build/prepare.ts'), `
 		import { spawnSync } from 'node:child_process';
@@ -157,6 +160,8 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 		['typecheck:protocol', ['protocol', 'protocol-check'], ''],
 		['localization:check', ['protocol', 'localization-check'], ''],
 		['typecheck:common', ['protocol', 'localization', 'common'], ''],
+		['dev:dictation-test', ['protocol-export', 'desktop-prepare', 'dictation-launch'], ''],
+		['dev:dictation-test', ['protocol-export'], 'protocol-export'],
 		['test:browser:integration', ['protocol', 'localization'], 'localization'],
 		['test:main', ['styles', 'tools', 'output', 'protocol', 'localization', 'common'], 'common'],
 		['prepare:generated', ['protocol', 'localization', 'common', 'extensions'], 'extensions'],

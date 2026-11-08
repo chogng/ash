@@ -16,6 +16,14 @@ suite('model picker browser component', () => {
 		const fast = picker.getByRole('button', { name: '快速模式', exact: true });
 		const ultra = picker.getByRole('button', { name: 'Ultra 模式', exact: true });
 		const slider = picker.getByRole('slider');
+		const expectThumbAt = async (name: string) => {
+			const thumb = slider.locator('.ash-chat-slider-thumb');
+			const tick = slider.getByRole('button', { name, exact: true });
+			await expect.poll(async () => {
+				const [handle, stop] = await Promise.all([thumb.boundingBox(), tick.boundingBox()]);
+				return Math.abs(handle!.x + handle!.width / 2 - stop!.x - stop!.width / 2);
+			}).toBeLessThan(0.5);
+		};
 		const [fastBounds, modelBounds, ultraBounds] = await Promise.all([fast.boundingBox(), modelButton.boundingBox(), ultra.boundingBox()]);
 		expect(fastBounds!.x + fastBounds!.width).toBeLessThan(modelBounds!.x);
 		expect(ultraBounds!.x).toBeGreaterThan(modelBounds!.x + modelBounds!.width);
@@ -31,13 +39,14 @@ suite('model picker browser component', () => {
 		await expect(slider).toHaveAttribute('aria-valuetext', '低');
 		await slider.press('ArrowRight');
 		await expect(slider).toHaveAttribute('aria-valuetext', '高');
+		await expect(slider).toHaveCSS('outline-style', 'solid');
 		const ticks = await slider.getByRole('button').count();
 		await ultra.click();
 		await expect(ultra).toHaveAttribute('aria-pressed', 'true');
 		await expect(ultra.locator('.ash-icon-brain')).toBeVisible();
 		await expect(fast).toHaveAttribute('aria-pressed', 'true');
 		await expect(slider).toHaveAttribute('aria-valuetext', '极高');
-		await expect(slider.locator('.ash-chat-slider-thumb')).toHaveAttribute('style', 'left: 94%;');
+		await expectThumbAt('极高');
 		await expect(slider).toHaveAccessibleDescription('Ultra 使用极高档。调整推理档位会关闭 Ultra。');
 		await expect(modelButton).toHaveAccessibleName('Test Model');
 		await expect(modelButton).toHaveAccessibleDescription('极高');
@@ -49,10 +58,11 @@ suite('model picker browser component', () => {
 		await expect(ultra).toBeFocused();
 		await slider.getByRole('button', { name: '极高' }).click();
 		await expect(ultra).toHaveAttribute('aria-pressed', 'true');
+		await expect(slider).toHaveCSS('outline-style', 'none');
 		await ultra.press('Space');
 		await expect(ultra).toHaveAttribute('aria-pressed', 'false');
 		await expect(slider).toHaveAttribute('aria-valuetext', '高');
-		await expect(slider.locator('.ash-chat-slider-thumb')).toHaveAttribute('style', 'left: 50%;');
+		await expectThumbAt('高');
 		await expect(effortLabel).toHaveText('高');
 		await slider.press('ArrowLeft');
 		await expect(slider).toHaveAttribute('aria-valuetext', '低');

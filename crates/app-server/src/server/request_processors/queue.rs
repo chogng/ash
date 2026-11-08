@@ -1,3 +1,4 @@
+use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::operations::ThreadMutation;
@@ -6,6 +7,8 @@ use super::operations::TurnToolModeSelection;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::queue::QueueCancelParams;
+use ash_app_server_protocol::protocol::queue::QueueEditAction;
+use ash_app_server_protocol::protocol::queue::QueueEditParams;
 use ash_app_server_protocol::protocol::queue::QueueEnqueueParams;
 use ash_app_server_protocol::protocol::queue::QueueListParams;
 use ash_app_server_protocol::protocol::queue::QueueListResult;
@@ -14,6 +17,7 @@ use core_api::AgentRuntime;
 use queue::Delivery;
 use queue::QueueError;
 use queue::QueuedMessage;
+use queue::ReferenceReadScope;
 use serde_json::Value;
 
 /// Coordinates the existing owners needed by the queue adapter.
@@ -116,38 +120,63 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             || !snapshot.turns.iter().any(|turn| active(turn.status)))
     }
 
-    pub(super) fn queue_edit(&self, owner: u64, value: &Value) -> Result<Value, RpcError> {
-        let params: ash_app_server_protocol::protocol::queue::QueueEditParams = decode(value)?;
-        self.context
-            .read_session_thread(&params.session_id, &params.thread_id)?;
-        let action = match params.action {
-            ash_app_server_protocol::protocol::queue::QueueEditAction::Pause => {
-                queue::QueueEdit::Pause
+    pub(super) fn queue_edit(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let QueueEditParams {
+            session_id,
+            thread_id,
+            command_id,
+            expected_revision,
+            action,
+        } = decode(value)?;
+        self.context.read_session_thread(&session_id, &thread_id)?;
+        let scope = connection.reference_read_scope();
+        let message_for_edit = || {
+            let message = self
+                .queue_store()?
+                .get(&command_id)
+                .map_err(error)?
+                .filter(|message| {
+                    message.request.session_id == session_id
+                        && message.request.thread_id == thread_id
+                })
+                .ok_or_else(|| error(QueueError::NotFound))?;
+            if message.revision != expected_revision {
+                return Err(error(QueueError::Conflict));
             }
-            ash_app_server_protocol::protocol::queue::QueueEditAction::Resume => {
-                queue::QueueEdit::Resume
-            }
-            ash_app_server_protocol::protocol::queue::QueueEditAction::ReplaceText { text } => {
-                queue::QueueEdit::ReplaceText { text }
-            }
-            ash_app_server_protocol::protocol::queue::QueueEditAction::ReplaceTextWithDelivery { text, delivery } => {
+            Ok(message)
+        };
+        if matches!(scope, ReferenceReadScope::CodeOnly)
+            && matches!(
+                &action,
+                QueueEditAction::Resume
+                    | QueueEditAction::Send { .. }
+                    | QueueEditAction::ReplaceText { .. }
+                    | QueueEditAction::ReplaceTextWithDelivery { .. }
+            )
+        {
+            self.check_reference_sources(scope, &message_for_edit()?.request.input)?;
+        }
+        let action = match action {
+            QueueEditAction::Pause => queue::QueueEdit::Pause,
+            QueueEditAction::Resume => queue::QueueEdit::Resume,
+            QueueEditAction::ReplaceText { text } => queue::QueueEdit::ReplaceText { text },
+            QueueEditAction::ReplaceTextWithDelivery { text, delivery } => {
                 queue::QueueEdit::ReplaceTextWithDelivery { text, delivery }
             }
-            ash_app_server_protocol::protocol::queue::QueueEditAction::Move { direction } => {
-                queue::QueueEdit::Move { direction }
-            }
-            ash_app_server_protocol::protocol::queue::QueueEditAction::Send { turn_id } => {
-                queue::QueueEdit::Send { turn_id }
-            }
-            ash_app_server_protocol::protocol::queue::QueueEditAction::Replace { input } => {
-                let existing = self
-                    .queue_store()?
-                    .get(&params.command_id)
-                    .map_err(error)?
-                    .ok_or_else(|| error(QueueError::NotFound))?;
-                let mut input =
-                    self.context
-                        .normalize_input(Some(owner), &params.session_id, input)?;
+            QueueEditAction::Move { direction } => queue::QueueEdit::Move { direction },
+            QueueEditAction::Send { turn_id } => queue::QueueEdit::Send { turn_id },
+            QueueEditAction::Replace { input } => {
+                let existing = message_for_edit()?;
+                let mut input = self.context.normalize_input(
+                    Some(connection.connection_id),
+                    &session_id,
+                    input,
+                )?;
+                self.check_reference_sources(scope, &input)?;
                 self.context.turn_instruction_selection(
                     &mut input,
                     existing.request.mode,
@@ -158,16 +187,29 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         };
         let message = self
             .queue_store()?
-            .edit(
-                &params.session_id,
-                &params.thread_id,
-                &params.command_id,
-                params.expected_revision,
+            .edit_scoped(
+                &session_id,
+                &thread_id,
+                &command_id,
+                expected_revision,
                 &action,
+                scope,
             )
             .map_err(error)?;
         self.updates.publish_queue_changed();
         result(&message)
+    }
+
+    fn check_reference_sources(
+        &self,
+        scope: ReferenceReadScope,
+        input: &[ash_protocol::UserInput],
+    ) -> Result<(), RpcError> {
+        super::check_chat_reference_sources(
+            &self.context.agent_runtime(),
+            scope,
+            input.iter().filter_map(chat_reference_source),
+        )
     }
 
     pub(super) fn extension_items(&self, value: &Value) -> Result<Value, RpcError> {
@@ -203,7 +245,11 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         Ok(pending || active)
     }
 
-    pub(super) fn queue_enqueue(&self, owner: u64, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn queue_enqueue(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
         let params: QueueEnqueueParams = decode(value)?;
         let snapshot = self
             .context
@@ -234,9 +280,13 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let mut input =
-            self.context
-                .normalize_input(Some(owner), &params.session_id, params.input)?;
+        let mut input = self.context.normalize_input(
+            Some(connection.connection_id),
+            &params.session_id,
+            params.input,
+        )?;
+        let scope = connection.reference_read_scope();
+        self.check_reference_sources(scope, &input)?;
         self.context.turn_instruction_selection(
             &mut input,
             params.mode,
@@ -264,20 +314,23 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         };
         self.context.refresh_analytics()?;
         let queued = store
-            .enqueue(&queue::QueueInput {
-                command_id: params.command_id,
-                session_id: params.session_id,
-                thread_id: params.thread_id,
-                directory: self.queue_directory.clone(),
-                input,
-                mode: params.mode,
-                command_interpretation: params.command_interpretation.unwrap_or_default(),
-                model: params.model,
-                reasoning_effort: params.reasoning_effort,
-                tool_mode,
-                approval_mode,
-                steer_turn: None,
-            })
+            .enqueue_scoped(
+                &queue::QueueInput {
+                    command_id: params.command_id,
+                    session_id: params.session_id,
+                    thread_id: params.thread_id,
+                    directory: self.queue_directory.clone(),
+                    input,
+                    mode: params.mode,
+                    command_interpretation: params.command_interpretation.unwrap_or_default(),
+                    model: params.model,
+                    reasoning_effort: params.reasoning_effort,
+                    tool_mode,
+                    approval_mode,
+                    steer_turn: None,
+                },
+                scope,
+            )
             .map_err(error)?;
         if existing.is_none() {
             self.analytics.record(analytics::UsageEvent::MessageQueued);
@@ -351,6 +404,23 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             }
             Err(error) => return Err(error.to_string()),
             Ok(None) => {}
+        }
+        if request
+            .input
+            .iter()
+            .any(|item| chat_reference_source(item).is_some())
+        {
+            let scope = self
+                .queue_store()
+                .map_err(|error| format!("{:?}", error.message))?
+                .reference_read_scope(message)
+                .map_err(|error| error.to_string())?;
+            let Some(scope) = scope else {
+                return Ok(Delivery::Waiting);
+            };
+            if self.check_reference_sources(scope, &request.input).is_err() {
+                return Ok(Delivery::Rejected("referenceUnavailable".into()));
+            }
         }
         if snapshot.status != ash_protocol::ThreadStatus::Active {
             return Ok(Delivery::Rejected("threadInactive".into()));
@@ -442,6 +512,21 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             Err(error) => Ok(Delivery::Rejected(format!("{:?}", error.message))),
             Ok(_) => Err("queue command acceptance is not observable".into()),
         }
+    }
+}
+
+fn chat_reference_source(
+    input: &ash_protocol::UserInput,
+) -> Option<(&ash_protocol::SessionId, &ash_protocol::ThreadId)> {
+    if let ash_protocol::UserInput::ChatReference {
+        session_id,
+        thread_id,
+        ..
+    } = input
+    {
+        Some((session_id, thread_id))
+    } else {
+        None
     }
 }
 

@@ -12,7 +12,13 @@ import { SessionsProvidersService } from '../../browser/sessionsProvidersService
 import { sessionIdentity, parseSessionIdentity } from '../../common/sessionIdentity.js';
 import type { ISession, IActiveSessionThread, SessionWorkspaceSelection } from '../../common/session.js';
 import type { ISessionsProvider } from '../../common/sessionsProvider.js';
-import type { IProjectService, Project } from '../../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import { ARCHIVE_PROJECT_COMMAND } from '../../../../contrib/projects/browser/projectsActions.js';
+import { ISessionsManagementService } from '../../common/sessionsManagement.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 class Provider extends Disposable implements ISessionsProvider {
@@ -22,11 +28,15 @@ class Provider extends Disposable implements ISessionsProvider {
 	readonly onDidChangeCatalog = this.catalog.event;
 	readonly sessionChanges = this._register(new Emitter<{ readonly sessionId: string; readonly detailChanged: boolean; }>());
 	readonly onDidChangeSession = this.sessionChanges.event;
-	items: ISession[] = [{ sessionId: 'same', title: 'Same ID', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }], agentTree: [] }];
+	items: ISession[] = [{ sessionId: 'same', kind: 'code' as const, title: 'Same ID', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }], agentTree: [] }];
 	readonly calls: string[] = [];
 	pending: DeferredPromise<readonly ISession[]> | undefined;
+	listError: Error | undefined;
 	constructor(readonly id: string) { super(); this.label = id; }
-	async list(): Promise<readonly ISession[]> { return this.pending?.p ?? this.items; }
+	async list(): Promise<readonly ISession[]> {
+		if (this.listError) throw this.listError;
+		return this.pending?.p ?? this.items;
+	}
 	async listAgents() { return []; }
 	async readCatalog(id: string) { this.calls.push(`read:${id}`); return this.items.find(session => session.sessionId === id); }
 	async subscribe(session: ISession) { this.calls.push(`subscribe:${session.sessionId}`); return session; }
@@ -45,11 +55,65 @@ class Provider extends Disposable implements ISessionsProvider {
 	async interrupt(session: ISession, threadId: string) { this.calls.push(`interrupt:${session.sessionId}:${threadId}`); }
 }
 
+test('project archive retries after a partial catalog and only requires the primary host', async () => {
+	using registry = new SessionsProvidersService();
+	using primary = new Provider('primary');
+	using remote = new Provider('remote');
+	using primaryRegistration = registry.registerProvider(primary);
+	using remoteRegistration = registry.registerProvider(remote);
+	using management = new SessionsManagementService(primary.id, registry);
+	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: ['same'], createdAtMs: 1, updatedAtMs: 1, sessionCount: 1 };
+	const projects = {
+		read: async () => project,
+		archive: async () => {
+			assert.equal(management.sessions.find(session => session.sessionId === 'same')?.status, 'archived');
+			return project = { ...project, archived: true };
+		},
+	} as unknown as IProjectService;
+	using services = new InstantiationService(new ServiceCollection(
+		[IProjectService, projects],
+		[ISessionsManagementService, management],
+		[IDialogService, { confirm: async () => ({ confirmed: true }) }],
+	));
+	const archive = async () => services.invokeFunction(CommandsRegistry.getCommand(ARCHIVE_PROJECT_COMMAND)!, project.id, 'code');
+
+	primary.listError = new Error('Primary host unavailable');
+	await assert.rejects(archive(), /Could not finish archiving/);
+	assert.equal(management.state, 'ready');
+	assert.equal(management.primaryCatalogReady, false);
+	assert.deepEqual(management.sessions.map(session => session.providerId), [remote.id]);
+	assert.equal(project.archived, false);
+	assert.equal(primary.calls.length, 0);
+
+	primary.listError = undefined;
+	remote.listError = new Error('Remote host unavailable');
+	const listStarted = new DeferredPromise<void>();
+	const pending = new DeferredPromise<readonly ISession[]>();
+	const list = primary.list.bind(primary);
+	primary.list = async () => {
+		void listStarted.complete(undefined);
+		return pending.p;
+	};
+	const staleArchive = archive();
+	await listStarted.p;
+	project = { ...project, revision: project.revision + 1 };
+	await pending.complete(primary.items);
+	await assert.rejects(staleArchive, /Could not finish archiving/);
+	assert.equal(project.archived, false);
+	assert.ok(!primary.calls.some(call => call.startsWith('archive:')));
+	primary.list = list;
+	assert.equal(await archive(), true);
+	assert.equal(management.primaryCatalogReady, true);
+	assert.equal(project.archived, true);
+	assert.deepEqual(primary.calls.filter(call => call.startsWith('archive:')), ['archive:same']);
+	assert.ok(!remote.calls.some(call => call.startsWith('archive:')));
+});
+
 test('materializing a Project draft links the durable session before resolving, even after a concurrent project update', async () => {
 	using registry = new SessionsProvidersService();
 	using primary = new Provider('primary');
 	using registration = registry.registerProvider(primary);
-	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: [], sessionCount: 0 };
+	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0 };
 	const linked: [number, string][] = [];
 	const projects = {
 		onDidChange: Event.None,

@@ -18,7 +18,7 @@ import { CanvasService } from '../../electron-browser/canvasService.js';
 import { CanvasInput, ICanvasContextService } from '../../common/canvas.js';
 import { readFile } from 'node:fs/promises';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { constObservable, observableValue, type IObservable } from '../../../../../base/common/observable.js';
+import { autorun, constObservable, observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ICanvasContext, ICanvasOpenRequest, ICanvasWorkingSets, ICanvasWorkingSetState } from '../../common/canvas.js';
@@ -26,6 +26,21 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 
 suite('Conversation Canvas presentation', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('observed presentability follows live membership even without a context update', async () => {
+		using f = fixture();
+		await settle();
+		const reference = {
+			providerId: 'local-agent-host', session: URI.parse('ash-session:/session-one'),
+			chat: URI.parse('ash-thread:/thread-one'), canvas: URI.parse('agent-host-canvas:/one'),
+		};
+		const states: boolean[] = [];
+		using observer = autorun(reader => { states.push(f.canvases.isOwnerPresentable(reference, reader)); });
+		f.events.fire({ type: 'created', info: info('one', 'thread-one') });
+		f.events.fire({ type: 'closed', targetId: 'one' });
+		await settle();
+		assert.deepEqual(states, [false, true, false]);
+	});
 
 	test('Canvas presentation descriptions use the non-default client language', async () => {
 		const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));

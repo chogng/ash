@@ -15,6 +15,10 @@ pub enum ProjectCommand {
         name: String,
         description: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        icon: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        color: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         scope: Option<ProjectScope>,
         #[serde(default)]
         materials: Vec<ProjectMaterial>,
@@ -24,6 +28,12 @@ pub enum ProjectCommand {
         description: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         materials: Option<Vec<ProjectMaterial>>,
+    },
+    SetIcon {
+        icon: Option<String>,
+    },
+    SetColor {
+        color: Option<String>,
     },
     AddRoot {
         root: ProjectRoot,

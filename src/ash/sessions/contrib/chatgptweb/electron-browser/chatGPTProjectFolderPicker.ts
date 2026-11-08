@@ -60,9 +60,10 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 			tabLeavesPopup: true,
 			listOptions: {
 				ariaLabel: label,
+				menuIconPlacement: 'leading-with-trailing-check',
 				showFilter: true,
 				focusFilterOnOpen: true,
-				filterPlaceholder: localize('sessions.chatgpt.searchProjectOrFolder', 'Search projects or folder actions'),
+				filterPlaceholder: localize('sessions.chatgpt.searchProjectOrFolder', 'Search'),
 			},
 		}, instantiation);
 		const host = h(footer.ownerDocument, 'div', { className: 'ash-chat-input-workspace-slot' });

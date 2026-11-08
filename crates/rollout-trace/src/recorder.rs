@@ -105,6 +105,7 @@ struct Manifest {
 struct Writer {
     directory: PathBuf,
     manifest: Manifest,
+    checkpointed_losses: u64,
     events: Vec<DiagnosticEvent>,
     event_bytes: usize,
     profile_remaining: usize,
@@ -601,7 +602,11 @@ impl RecorderStorage {
             })
             .as_ref()
     }
-    pub(super) fn process(&self, record: &Record) {
+    pub(super) fn process_batch(&self, capture: &Capture, records: &[Record]) {
+        if capture.retired.load(Ordering::Acquire) {
+            return;
+        }
+        let mut rejected = records.len();
         let result = (|| -> Result<(), String> {
             let runtime = self.inventory().map_err(Clone::clone)?;
             let remaining =
@@ -610,171 +615,48 @@ impl RecorderStorage {
                 return Err("diagnostic profile capacity exhausted".into());
             }
             let writer = self
-                .writer(&record.capture.session_id, OpenMode::Create)
+                .writer(&capture.session_id, OpenMode::Create)
                 .map_err(|error| error.to_string())?
                 .ok_or("diagnostic recording disabled")?;
             let mut writer = writer
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             writer.profile_remaining = remaining;
-            writer.observed_at = record.observed_at;
-            writer.observe_losses(&record.capture, runtime);
             let before = writer.manifest.bytes_written;
-            match &record.observation {
-                Observation::Started {
-                    context,
-                    attempt_id,
-                    request,
-                } => {
-                    let payload = match request {
-                        Some(value) => writer.payload(PayloadKind::CoreRequest, value),
-                        None => writer.omitted(PayloadKind::CoreRequest),
-                    };
-                    writer.append(
-                        context,
-                        DiagnosticEventKind::ModelAttemptStarted {
-                            attempt_id: attempt_id.clone(),
-                            purpose: context.purpose.clone(),
-                            model: context.model.clone(),
-                            source_thread_sequence: context.source_thread_sequence,
-                            request_payload: payload,
-                        },
-                    );
+            for record in records {
+                if capture.retired.load(Ordering::Acquire) || writer.profile_remaining == 0 {
+                    break;
                 }
-                Observation::Prepared {
-                    context,
-                    attempt_id,
-                    request,
-                } => {
-                    let payload = match request {
-                        Some(value) => writer.payload(PayloadKind::MaterializedRequest, value),
-                        None => writer.omitted(PayloadKind::MaterializedRequest),
-                    };
-                    writer.append(
-                        context,
-                        DiagnosticEventKind::ModelRequestPrepared {
-                            attempt_id: attempt_id.clone(),
-                            request_payload: payload,
-                        },
-                    );
-                }
-                Observation::Completed {
-                    context,
-                    attempt_id,
-                    response,
-                } => {
-                    let payload = match response {
-                        Some(value) => writer.payload(PayloadKind::ModelResponse, value),
-                        None => writer.omitted(PayloadKind::ModelResponse),
-                    };
-                    writer.append(
-                        context,
-                        DiagnosticEventKind::ModelAttemptCompleted {
-                            attempt_id: attempt_id.clone(),
-                            response_payload: payload,
-                        },
-                    );
-                }
-                Observation::Terminated {
-                    context,
-                    attempt_id,
-                    termination,
-                    partial,
-                } => {
-                    let payload = partial
-                        .as_ref()
-                        .map(|partial| writer.payload(PayloadKind::PartialOutput, partial));
-                    let event = match termination {
-                        Termination::Failed(error) => DiagnosticEventKind::ModelAttemptFailed {
-                            attempt_id: attempt_id.clone(),
-                            error: error.clone(),
-                            partial_output: payload,
-                        },
-                        Termination::Cancelled(reason) => {
-                            DiagnosticEventKind::ModelAttemptCancelled {
-                                attempt_id: attempt_id.clone(),
-                                reason: reason.clone(),
-                                partial_output: payload,
-                            }
-                        }
-                        Termination::Abandoned => DiagnosticEventKind::ModelAttemptAbandoned {
-                            attempt_id: attempt_id.clone(),
-                            partial_output: payload,
-                        },
-                    };
-                    writer.append(context, event);
-                }
-                Observation::Hook {
-                    thread_id,
-                    turn_id,
-                    run_id,
-                    evidence,
-                } => {
-                    let payload = match evidence {
-                        Some(value) => writer.payload(PayloadKind::HookExecution, value),
-                        None => writer.omitted(PayloadKind::HookExecution),
-                    };
-                    writer.append_event(
-                        thread_id,
-                        turn_id.as_ref(),
-                        DiagnosticEventKind::HookRunRecorded {
-                            run_id: run_id.clone(),
-                            execution_payload: payload,
-                        },
-                    );
-                }
-                Observation::HookProcess {
-                    thread_id,
-                    turn_id,
-                    run_id,
-                    evidence,
-                } => {
-                    let payload = match evidence {
-                        Some(evidence) => writer.payload(PayloadKind::HookExecution, &serde_json::json!({
-                            "program": evidence.program, "arguments": evidence.arguments, "directory": evidence.directory,
-                            "input": evidence.input, "stdout": evidence.stdout, "stderr": evidence.stderr,
-                            "exitCode": evidence.exit_code, "stdoutTruncated": evidence.stdout_truncated,
-                            "stderrTruncated": evidence.stderr_truncated,
-                        })),
-                        None => writer.omitted(PayloadKind::HookExecution),
-                    };
-                    writer.append_event(
-                        thread_id,
-                        turn_id.as_ref(),
-                        DiagnosticEventKind::HookRunRecorded {
-                            run_id: run_id.clone(),
-                            execution_payload: payload,
-                        },
-                    );
-                }
-                Observation::Accounted {
-                    context,
-                    attempt_id,
-                    receipt,
-                } => writer.append(
-                    context,
-                    DiagnosticEventKind::ModelAttemptAccounted {
-                        attempt_id: attempt_id.clone(),
-                        invocation_id: receipt.invocation_id.clone(),
-                        source_thread_sequence: receipt.sequence,
-                    },
-                ),
+                writer.record(record);
+                rejected -= 1;
             }
             self.stored_bytes.fetch_add(
                 writer.manifest.bytes_written.saturating_sub(before),
                 Ordering::Relaxed,
             );
+            if capture.retired.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            capture
+                .dropped
+                .fetch_add(rejected as u64, Ordering::Relaxed);
+            let exhausted = std::mem::take(&mut rejected) > 0;
+            writer.checkpoint_losses(capture, runtime)?;
+            if exhausted {
+                return Err("diagnostic profile capacity exhausted".into());
+            }
             Ok(())
         })();
-        let mut error = record
-            .capture
+        let mut error = capture
             .error
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         match result {
             Ok(()) => *error = None,
             Err(message) => {
-                WorkerHandle::lost(&record.capture);
+                capture
+                    .dropped
+                    .fetch_add(rejected as u64, Ordering::Relaxed);
                 *error = Some(message);
             }
         }
@@ -827,10 +709,10 @@ impl RecorderStorage {
             && let Ok(runtime) = self.inventory()
             && let Ok(Some(writer)) = self.writer(&capture.session_id, OpenMode::Create)
         {
-            writer
+            let _ = writer
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .observe_losses(capture, runtime);
+                .checkpoint_losses(capture, runtime);
         }
     }
 }
@@ -864,6 +746,148 @@ fn directory_bytes(directory: &Path, depth: usize) -> Result<usize, String> {
 }
 
 impl Writer {
+    fn record(&mut self, record: &Record) {
+        self.observed_at = record.observed_at;
+        match &record.observation {
+            Observation::Started {
+                context,
+                attempt_id,
+                request,
+            } => {
+                let payload = match request {
+                    Some(value) => self.payload(PayloadKind::CoreRequest, value),
+                    None => self.omitted(PayloadKind::CoreRequest),
+                };
+                self.append(
+                    context,
+                    DiagnosticEventKind::ModelAttemptStarted {
+                        attempt_id: attempt_id.clone(),
+                        purpose: context.purpose.clone(),
+                        model: context.model.clone(),
+                        source_thread_sequence: context.source_thread_sequence,
+                        request_payload: payload,
+                    },
+                );
+            }
+            Observation::Prepared {
+                context,
+                attempt_id,
+                request,
+            } => {
+                let payload = match request {
+                    Some(value) => self.payload(PayloadKind::MaterializedRequest, value),
+                    None => self.omitted(PayloadKind::MaterializedRequest),
+                };
+                self.append(
+                    context,
+                    DiagnosticEventKind::ModelRequestPrepared {
+                        attempt_id: attempt_id.clone(),
+                        request_payload: payload,
+                    },
+                );
+            }
+            Observation::Completed {
+                context,
+                attempt_id,
+                response,
+            } => {
+                let payload = match response {
+                    Some(value) => self.payload(PayloadKind::ModelResponse, value),
+                    None => self.omitted(PayloadKind::ModelResponse),
+                };
+                self.append(
+                    context,
+                    DiagnosticEventKind::ModelAttemptCompleted {
+                        attempt_id: attempt_id.clone(),
+                        response_payload: payload,
+                    },
+                );
+            }
+            Observation::Terminated {
+                context,
+                attempt_id,
+                termination,
+                partial,
+            } => {
+                let payload = partial
+                    .as_ref()
+                    .map(|partial| self.payload(PayloadKind::PartialOutput, partial));
+                let event = match termination {
+                    Termination::Failed(error) => DiagnosticEventKind::ModelAttemptFailed {
+                        attempt_id: attempt_id.clone(),
+                        error: error.clone(),
+                        partial_output: payload,
+                    },
+                    Termination::Cancelled(reason) => DiagnosticEventKind::ModelAttemptCancelled {
+                        attempt_id: attempt_id.clone(),
+                        reason: reason.clone(),
+                        partial_output: payload,
+                    },
+                    Termination::Abandoned => DiagnosticEventKind::ModelAttemptAbandoned {
+                        attempt_id: attempt_id.clone(),
+                        partial_output: payload,
+                    },
+                };
+                self.append(context, event);
+            }
+            Observation::Hook {
+                thread_id,
+                turn_id,
+                run_id,
+                evidence,
+            } => {
+                let payload = match evidence {
+                    Some(value) => self.payload(PayloadKind::HookExecution, value),
+                    None => self.omitted(PayloadKind::HookExecution),
+                };
+                self.append_event(
+                    thread_id,
+                    turn_id.as_ref(),
+                    DiagnosticEventKind::HookRunRecorded {
+                        run_id: run_id.clone(),
+                        execution_payload: payload,
+                    },
+                );
+            }
+            Observation::HookProcess {
+                thread_id,
+                turn_id,
+                run_id,
+                evidence,
+            } => {
+                let payload = match evidence {
+                Some(evidence) => self.payload(PayloadKind::HookExecution, &serde_json::json!({
+                    "program": evidence.program, "arguments": evidence.arguments, "directory": evidence.directory,
+                    "input": evidence.input, "stdout": evidence.stdout, "stderr": evidence.stderr,
+                    "exitCode": evidence.exit_code, "stdoutTruncated": evidence.stdout_truncated,
+                    "stderrTruncated": evidence.stderr_truncated,
+                })),
+                None => self.omitted(PayloadKind::HookExecution),
+            };
+                self.append_event(
+                    thread_id,
+                    turn_id.as_ref(),
+                    DiagnosticEventKind::HookRunRecorded {
+                        run_id: run_id.clone(),
+                        execution_payload: payload,
+                    },
+                );
+            }
+            Observation::Accounted {
+                context,
+                attempt_id,
+                receipt,
+            } => self.append(
+                context,
+                DiagnosticEventKind::ModelAttemptAccounted {
+                    attempt_id: attempt_id.clone(),
+                    invocation_id: receipt.invocation_id.clone(),
+                    source_thread_sequence: receipt.sequence,
+                },
+            ),
+        }
+    }
+
     fn open(directory: PathBuf, session_id: &SessionId, mode: OpenMode) -> Result<Self, String> {
         if directory.exists()
             && !fs::symlink_metadata(&directory)
@@ -893,7 +917,7 @@ impl Writer {
                     return Err("invalid diagnostic event order".into());
                 }
                 if let Some(reference) = event.event.payload() {
-                    validate_payload_id(&reference.payload_id)?;
+                    advance_payload_id(&mut manifest, &reference.payload_id)?;
                 }
                 events.push(event);
             }
@@ -909,19 +933,12 @@ impl Writer {
                     .to_str()
                     .and_then(|name| name.strip_suffix(".json"))
                     .ok_or("invalid payload filename")?;
-                validate_payload_id(id)?;
-                let ordinal: u64 = id
-                    .trim_start_matches("payload-")
-                    .parse()
-                    .map_err(|_| "invalid payload identity")?;
+                advance_payload_id(&mut manifest, id)?;
                 let metadata = require_file(&entry.path())?;
                 if metadata.len() > MAX_PAYLOAD_BYTES as u64 {
                     return Err("payload exceeds recording limit".into());
                 }
                 bytes_written = bytes_written.saturating_add(metadata.len() as usize);
-                manifest.next_payload = manifest
-                    .next_payload
-                    .max(ordinal.checked_add(1).ok_or("payload identity exhausted")?);
             }
             manifest.bytes_written = bytes_written;
             if bytes_written > MAX_CAPTURE_BYTES {
@@ -929,6 +946,7 @@ impl Writer {
             }
             return Ok(Self {
                 directory,
+                checkpointed_losses: manifest.dropped_records,
                 manifest,
                 events,
                 event_bytes: bytes.len(),
@@ -964,6 +982,7 @@ impl Writer {
                 runtime_id: None,
                 observed_drops: 0,
             },
+            checkpointed_losses: 0,
             events: Vec::new(),
             event_bytes: 0,
             profile_remaining: MAX_PROFILE_BYTES,
@@ -974,7 +993,7 @@ impl Writer {
         Ok(state)
     }
 
-    fn observe_losses(&mut self, capture: &Capture, runtime: &str) {
+    fn checkpoint_losses(&mut self, capture: &Capture, runtime: &str) -> Result<(), String> {
         if self.manifest.runtime_id.as_deref() != Some(runtime) {
             self.manifest.runtime_id = Some(runtime.into());
             self.manifest.observed_drops = 0;
@@ -983,10 +1002,15 @@ impl Writer {
         if dropped > self.manifest.observed_drops {
             self.manifest.dropped_records += dropped - self.manifest.observed_drops;
             self.manifest.observed_drops = dropped;
-            if self.save_manifest().is_ok() {
-                capture.persisted_drops.store(dropped, Ordering::Relaxed);
-            }
         }
+        // Event bytes and payload identities are recovered from the capture itself.
+        // Only losses require a manifest checkpoint after initialization.
+        if self.manifest.dropped_records != self.checkpointed_losses {
+            self.save_manifest()?;
+            self.checkpointed_losses = self.manifest.dropped_records;
+        }
+        capture.persisted_drops.store(dropped, Ordering::Relaxed);
+        Ok(())
     }
     fn omitted(&mut self, kind: PayloadKind) -> PayloadRef {
         let payload_id = format!("payload-{}", self.manifest.next_payload);
@@ -1063,7 +1087,6 @@ impl Writer {
     ) {
         if self.events.len() >= MAX_CAPTURE_EVENTS {
             self.manifest.dropped_records += 1;
-            let _ = self.save_manifest();
             return;
         }
         let Ok(event_id) = diagnostic_id() else {
@@ -1079,7 +1102,7 @@ impl Writer {
             event,
         };
         let recorded = (|| -> Result<(), String> {
-            let bytes = to_json_string_bounded(&event, MAX_EVENT_METADATA_BYTES)
+            let mut bytes = to_json_string_bounded(&event, MAX_EVENT_METADATA_BYTES)
                 .map_err(|error| error.to_string())?
                 .into_bytes();
             if self.manifest.bytes_written + bytes.len() + 1 > MAX_CAPTURE_BYTES
@@ -1096,21 +1119,16 @@ impl Writer {
                 .append(true)
                 .open(path)
                 .map_err(|error| error.to_string())?;
-            file.write_all(&bytes)
-                .and_then(|()| file.write_all(b"\n"))
-                .and_then(|()| file.flush())
-                .map_err(|error| error.to_string())?;
-            self.manifest.bytes_written += bytes.len() + 1;
-            self.event_bytes += bytes.len() + 1;
-            self.profile_remaining = self.profile_remaining.saturating_sub(bytes.len() + 1);
+            bytes.push(b'\n');
+            file.write_all(&bytes).map_err(|error| error.to_string())?;
+            self.manifest.bytes_written += bytes.len();
+            self.event_bytes += bytes.len();
+            self.profile_remaining = self.profile_remaining.saturating_sub(bytes.len());
             Ok(())
         })();
         if recorded.is_ok() {
             self.events.push(event);
         } else {
-            self.manifest.dropped_records += 1;
-        }
-        if self.save_manifest().is_err() {
             self.manifest.dropped_records += 1;
         }
     }
@@ -1434,7 +1452,7 @@ impl core_api::ModelAttemptObserver for ModelAttemptTrace {
         ModelAttemptTrace::accounted(self, receipt);
     }
 }
-fn validate_payload_id(id: &str) -> Result<(), String> {
+fn advance_payload_id(manifest: &mut Manifest, id: &str) -> Result<(), String> {
     let ordinal = id
         .strip_prefix("payload-")
         .and_then(|value| value.parse::<u64>().ok())
@@ -1443,6 +1461,9 @@ fn validate_payload_id(id: &str) -> Result<(), String> {
     if id != format!("payload-{ordinal}") {
         return Err("invalid diagnostic payload identity".into());
     }
+    manifest.next_payload = manifest
+        .next_payload
+        .max(ordinal.checked_add(1).ok_or("payload identity exhausted")?);
     Ok(())
 }
 fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {

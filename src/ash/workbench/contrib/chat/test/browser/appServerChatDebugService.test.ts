@@ -26,7 +26,7 @@ suite('App Server Chat Debug service', () => {
 		assert.equal(reads, 0);
 		const older = service.refreshAvailableSessions();
 		await service.refreshAvailableSessions();
-		await first.complete({ sessions: [{ sessionId: 'old', title: 'Stale title', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [] }] } as SessionListResult);
+		await first.complete({ sessions: [{ sessionId: 'old', kind: 'code' as const, title: 'Stale title', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [] }] } as SessionListResult);
 		await older;
 		assert.deepEqual(service.getAvailableSessionResources().map(uri => uri.toString()), ['ash-agent-trace:/new']);
 		assert.equal(service.getHistoricalSessionTitle(URI.parse('ash-agent-trace:/new')), 'Current title');

@@ -23,6 +23,8 @@ import snapshotMessages from '../../../../../../../extensions/snapshot/package.n
 import snapshotManifest from '../../../../../../../extensions/snapshot/package.json' with { type: 'json' };
 import { localizeManifest } from '../../../../../platform/extensionManagement/common/extensionNls.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IMemoriesService, type Memory } from '../../../../../platform/memories/common/memoriesService.js';
+import { IMemorySettingsNavigation, MemorySettingsNavigation, OPEN_MEMORIES_COMMAND_ID } from '../../../memories/browser/memorySettings.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -122,6 +124,8 @@ Object.defineProperty(browserEnvironment.window.Element.prototype, 'scrollIntoVi
 	value() { },
 });
 const installedGlobals = installEditorTestDom(browserEnvironment, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent'], {
+	HTMLInputElement: browserEnvironment.window.HTMLInputElement,
+	HTMLTextAreaElement: browserEnvironment.window.HTMLTextAreaElement,
 	navigator: browserEnvironment.window.navigator,
 });
 suiteTeardown(() => {
@@ -130,6 +134,7 @@ suiteTeardown(() => {
 });
 
 const { h } = await import('../../../../../base/browser/dom.js');
+const { setARIAContainer } = await import('../../../../../base/browser/ui/aria/aria.js');
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
 const { ConfigurationRegistry, ConfigurationScope, Extensions: ConfigurationExtensions } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
@@ -2071,6 +2076,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'chat-appearance',
 			'agents',
 			'teams',
+			'memory',
 			'agent-defaults',
 			'models',
 			'rules',
@@ -2117,6 +2123,13 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'interaction');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
+	assert.equal(findSettingCategory(layout, DictationConfiguration.modelLoadTiming), 'voice-input');
+	const loadTiming = defaults.get(DictationConfiguration.modelLoadTiming);
+	assert.equal(loadTiming.configuration.defaultValue, 'onDemand');
+	assert.equal(loadTiming.valueType, 'select');
+	if (loadTiming.valueType === 'select') {
+		assert.deepEqual(loadTiming.options.map(option => option.value), ['onDemand', 'startup']);
+	}
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), undefined);
 	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
 	assert.equal(findSettingCategory(layout, 'chat.canvases.enabled'), 'agent-defaults');
@@ -2154,13 +2167,14 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
 	assert.equal(chinese?.bundles.ash?.['window.startupWindow.title'], '启动时打开');
-	assert.equal(chinese?.bundles.ash?.['window.startupWindow.default'], '沿用上次（默认）');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.default'], '默认');
 	assert.equal(chinese?.bundles.ash?.['window.startupWindow.agents'], 'Agent 窗口');
 	assert.equal(chinese?.bundles.ash?.['window.newWindowDimensions.title'], '新窗口尺寸');
 	assert.equal(chinese?.bundles.ash?.['window.restoreFullscreen.title'], '恢复全屏');
 	assert.equal(chinese?.bundles.ash?.['workbench.editor.restoreEditors.title'], '恢复编辑器');
 	assert.equal(chinese?.bundles.ash?.['workbench.tips.enabled.title'], '空编辑器提示');
 	assert.equal(chinese?.bundles.ash?.['settings.dictation.group'], '语音输入');
+	assert.equal(chinese?.bundles.ash?.['dictation.modelLoadTiming.title'], '本地听写模型加载时机');
 	assert.equal(chinese?.bundles.ash?.['dictation.cloudModel.title'], '转写模型');
 	assert.equal(chinese?.bundles.ash?.['dictation.subscription.title'], 'Codex 订阅听写');
 	assert.equal(chinese?.bundles.ash?.['dictation.subscription.manage'], '管理 Codex 账号');
@@ -3297,6 +3311,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	disposables.add(editorPanes.registerEditorPane(descriptor));
 	const managementDescriptor = EditorPanes.getEditorPanes().find(candidate => candidate.id === AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID)!;
 	disposables.add(editorPanes.registerEditorPane(managementDescriptor));
+	const memoryNavigation = new MemorySettingsNavigation();
+	services.registerInstance(IMemorySettingsNavigation, memoryNavigation);
 	const editorServices = disposables.add(createTestEditorServices(undefined, services));
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	editorServices.registerInstance(IEditorPart, editor);
@@ -3708,10 +3724,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
-		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks'].map(
+		['agents', 'teams', 'memory', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks'].map(
 			categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent,
 		),
-		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
+		['Agents', 'Teams', 'Memory', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="interaction"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="skills"]'), null);
@@ -3916,13 +3932,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const dictationSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input')!;
 	dictationSearch.value = 'dictation';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(root.querySelector('[role="group"][aria-label="Local dictation models"]'));
 	assert.ok(root.querySelector('[data-settings-category-id="voice-input"]'));
 	dictationSearch.value = '';
 	dictationSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	await configuration.updateValue(LocalizationConfiguration.locale, 'en');
 	assert.equal(root.querySelector('[data-configuration-key="dictation.model"]'), null);
-	assert.ok(root.querySelector('[role="grid"][aria-label="Local dictation models"]'));
+	assert.ok(root.querySelector('[role="group"][aria-label="Local dictation models"]'));
 	await configuration.updateValue('dictation.backend', 'codex');
 	const subscription = root.querySelector('[data-settings-item-id="dictation.subscription"]');
 	assert.match(subscription?.textContent ?? '', /Codex subscription dictation/);
@@ -3939,6 +3955,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.match(root.querySelector('[data-settings-item-id="dictation.cloudModel"]')?.textContent ?? '', /grok-voice-transcribe-2\.0/);
 	assert.equal(root.querySelector('[data-configuration-key="dictation.subscription"]'), null);
 	await configuration.updateValue('dictation.backend', 'local');
+	const dictationVerbosityId = AccessibilityVerbositySettingId.DictationModels;
+	assert.equal(root.querySelector(`[data-settings-item-id="${dictationVerbosityId}"]`), null);
+	await preferences.openSettings({ section: 'accessibility' });
+	assert.ok(root.querySelector(`[data-settings-item-id="${dictationVerbosityId}"]`));
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.click();
 	root.querySelector<HTMLElement>('[data-settings-category-id="models"]')?.click();
 	await nextTurn();
@@ -4166,6 +4186,111 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(ownerDocument.activeElement, trigger);
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'After close');
 	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`), null);
+	const unusedMemoryOperation = async (): Promise<never> => { throw new Error('Unexpected memory mutation'); };
+	const memoryScope = { type: 'profile' } as const;
+	const projectScope = { type: 'project', projectId: 'project-1' } as const;
+	let memory: Memory = { id: 'sample', scope: memoryScope, revision: 1, source: 'user', title: 'Sample', body: 'Saved body' };
+	const bodyReads: number[] = [];
+	let personalPolicy = { scope: memoryScope, revision: 1, reading: false, saving: false };
+	services.registerInstance(IMemoriesService, {
+		onDidChange: Event.None,
+		readModelMemoryEnabled: async () => false,
+		scopes: async threadId => [{
+			label: threadId ? 'Project' : 'Personal',
+			policy: threadId ? { scope: projectScope, revision: 1, reading: false, saving: false } : personalPolicy,
+		}],
+		list: async scope => {
+			const { body, ...summary } = memory;
+			return { memories: scope.type === 'profile' ? [summary] : [], cursor: undefined };
+		},
+		read: async entry => { bodyReads.push(entry.revision); return memory; },
+		add: unusedMemoryOperation,
+		update: unusedMemoryOperation,
+		delete: unusedMemoryOperation,
+		setPolicy: async (policy, reading, saving) => {
+			assert.deepEqual(policy, personalPolicy);
+			personalPolicy = { scope: memoryScope, revision: policy.revision + 1, reading, saving };
+			return personalPolicy;
+		},
+		setModelMemoryEnabled: unusedMemoryOperation,
+		readReference: async reference => {
+			assert.equal(reference, 'memory:sample');
+			return { title: 'Reference', body: 'Exact source text', revision: 1 };
+		},
+	});
+	disposables.add(CommandsRegistry.register(OPEN_MEMORIES_COMMAND_ID, () => memoryNavigation.open(preferences)));
+	await preferences.openSettings({ section: 'memory' });
+	await nextTurn();
+	const memories = root.querySelector<HTMLElement>('.ash-settings-editor .ash-memories')!;
+	assert.ok(memories);
+	assert.equal(host.hidden, false);
+	assert.equal(root.querySelectorAll('.ash-memories').length, 1);
+	assert.deepEqual(bodyReads, []);
+	const reading = memories.querySelector<HTMLInputElement>('input[role="switch"][aria-label="Use saved memories"]')!;
+	const saving = memories.querySelector<HTMLInputElement>('input[role="switch"][aria-label="Let the model save memories"]')!;
+	reading.click();
+	await nextTurn();
+	assert.equal(reading.getAttribute('aria-checked'), 'true');
+	assert.equal(saving.getAttribute('aria-checked'), 'false');
+	assert.equal(personalPolicy.reading, true);
+	const manage = memories.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+	const manager = ownerDocument.getElementById(manage.getAttribute('aria-controls')!)!;
+	const detail = manager.querySelector<HTMLElement>('.memories-detail')!;
+	assert.equal(manage.getAttribute('aria-expanded'), 'false');
+	assert.equal(manager.hidden, true);
+	manage.click();
+	await nextTurn();
+	assert.equal(manage.getAttribute('aria-expanded'), 'true');
+	assert.equal(manager.hidden, false);
+	assert.equal(detail.hidden, true);
+	const topic = manager.querySelector<HTMLButtonElement>('li button')!;
+	assert.equal(topic.textContent, 'Sample');
+	topic.click();
+	await nextTurn();
+	const memoryBody = memories.querySelector<HTMLTextAreaElement>('textarea')!;
+	assert.equal(memoryBody.value, 'Saved body');
+	assert.equal(topic.getAttribute('aria-current'), 'true');
+	assert.equal(detail.hidden, false);
+	assert.equal(ownerDocument.activeElement, detail.querySelector('input'));
+	const refreshMemories = [...memories.querySelectorAll('button')].find(button => button.textContent === 'Refresh')!;
+	refreshMemories.click();
+	await nextTurn();
+	assert.deepEqual(bodyReads, [1]);
+	memory = { ...memory, revision: 2, body: 'Updated body' };
+	refreshMemories.click();
+	await nextTurn();
+	assert.deepEqual(bodyReads, [1, 2]);
+	assert.equal(memoryBody.value, 'Updated body');
+	manage.click();
+	await nextTurn();
+	assert.equal(manager.hidden, true);
+	assert.equal(detail.hidden, true);
+	const reference = [...memories.querySelectorAll('label')].find(label => label.textContent === 'Memory reference')!.querySelector('input')!;
+	reference.closest('details')!.open = true;
+	reference.value = 'memory:sample';
+	[...memories.querySelectorAll('button')].find(button => button.textContent === 'Open reference')!.click();
+	await nextTurn();
+	assert.equal(memoryBody.value, 'Exact source text');
+	assert.equal(memoryBody.readOnly, true);
+	assert.equal(manager.hidden, false);
+	manage.click();
+	await nextTurn();
+	assert.equal(manager.hidden, true);
+	await memoryNavigation.open(preferences, { kind: 'reference', reference: 'memory:sample' });
+	await nextTurn();
+	assert.equal(memoryBody.value, 'Exact source text');
+	assert.equal(memoryBody.readOnly, true);
+	await memoryNavigation.open(preferences, {
+		kind: 'draft', origin: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', itemId: 'item-1' },
+		text: 'Draft from a chat message',
+	});
+	await nextTurn();
+	assert.equal(memoryBody.value, 'Draft from a chat message');
+	assert.equal(memoryBody.readOnly, false);
+	assert.equal(detail.hidden, false);
+	assert.equal(host.hidden, false);
+	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close button')?.click();
+	await nextTurn();
 	const firstGroup = editor.activeGroup;
 	await commands.executeCommand('workbench.action.openSettings', {
 		groupId: firstGroup.id,
@@ -4229,8 +4354,9 @@ test('Local model controls share translated snapshots and keep preparation runni
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	resources.add(toDisposable(resetNlsResolver));
 	const configuration = resources.add(new WorkspaceService());
-	await configuration.updateValue(DictationConfiguration.model, 'imported-model');
+	await configuration.updateValue(DictationConfiguration.model, 'paraformer-large-online-ec6a3c64');
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IDialogService, resources.add(new DialogService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, {
 		onDidChangeHooks: Event.None,
@@ -4247,10 +4373,10 @@ test('Local model controls share translated snapshots and keep preparation runni
 	};
 	let finish!: (state: ModelState.Cancelled) => void;
 	let cancellations = 0;
-	const imported: unknown[] = [];
+	const installed: string[] = [];
 	services.registerInstance(ILocalTranscriptionModelService, {
 		isSupported: true,
-		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, status: modelStatus }),
+		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, downloadSizeBytes: 1024 * 1024, recommendedLanguages: ['cmn'], status: modelStatus }),
 		listModels: async () => [],
 		onDidChangeModels: changed.event,
 		cancelModel: async () => {
@@ -4258,8 +4384,8 @@ test('Local model controls share translated snapshots and keep preparation runni
 			progress({ state: DictationModelState.Cancelled });
 			finish(DictationModelState.Cancelled);
 		},
-		importPackage: (options: unknown, onProgress: typeof progress) => {
-			imported.push(options);
+		prepareModel: (model: string) => {
+			installed.push(model);
 			progress({ state: DictationModelState.Checking });
 			return {
 				completed: new Promise<ModelState.Cancelled>(resolve => {
@@ -4275,25 +4401,24 @@ test('Local model controls share translated snapshots and keep preparation runni
 		},
 	} as unknown as LocalTranscriptionService);
 	const root = h(browserEnvironment.window.document, 'div');
+	resources.add(setARIAContainer(root));
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
 	controls.setVisible(true);
 	await nextTurn();
 	const status = root.querySelector<HTMLElement>('[role="status"]')!;
-	assert.equal(status.textContent, '模型包尚未安装：imported-model');
-	const source = root.querySelector<HTMLInputElement>('input')!;
-	assert.equal(source.getAttribute('aria-label'), '已准备好的 Paraformer 模型目录');
-	assert.equal(root.querySelector('label')?.htmlFor, source.id);
-	source.value = 'C:\\prepared-model';
-	source.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.equal(status.textContent, '');
+	assert.match(controls.getAccessibleContent(), /paraformer-large-online-ec6a3c64 · 1.0 MiB · 未安装 · 普通话/u);
+	assert.equal(root.querySelector('input'), null);
 	const buttons = [...root.querySelectorAll<HTMLButtonElement>('button')];
-	const importButton = buttons.find(button => button.textContent === '导入模型')!;
-	assert.equal(importButton.disabled, false);
-	importButton.click();
-	assert.deepEqual(imported, [{ model: 'imported-model', sourcePath: 'C:\\prepared-model' }]);
-	assert.equal(importButton.disabled, true);
+	const installButton = buttons.find(button => button.textContent === '安装')!;
+	assert.equal(installButton.disabled, false);
+	installButton.click();
+	assert.deepEqual(installed, ['paraformer-large-online-ec6a3c64']);
+	assert.equal(installButton.disabled, true);
 	progress({ state: DictationModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 2 * 1024 * 1024 });
 	await nextTurn();
-	assert.equal(status.textContent, '正在下载 encoder.onnx：2.0 MiB');
+	assert.equal(status.textContent, '正在下载…');
 	assert.equal(status.getAttribute('aria-atomic'), 'true');
 	controls.setVisible(false);
 	await nextTurn();
@@ -4301,11 +4426,16 @@ test('Local model controls share translated snapshots and keep preparation runni
 	controls.setVisible(true);
 	await nextTurn();
 	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.hasAttribute('value'), false);
-	buttons.find(button => button.textContent === '取消')!.click();
+	progress({ state: DictationModelState.Downloading, file: 'decoder.onnx', downloadedBytes: 128 * 1024, packageDownloadedBytes: 512 * 1024 });
+	await nextTurn();
+	assert.equal(installButton.textContent, '正在下载 50%');
+	assert.equal(root.querySelector<HTMLProgressElement>('progress')?.value, 0.5);
+	const cancelButton = buttons.find(button => button.textContent === '取消')!;
+	cancelButton.click();
 	await nextTurn();
 	assert.equal(cancellations, 1);
-	assert.equal(importButton.disabled, false);
-	assert.equal(buttons.find(button => button.textContent === '取消')?.classList.contains('hidden'), true);
+	assert.equal(installButton.disabled, false);
+	assert.equal(cancelButton.hidden, true);
 });
 
 test('Models Settings separates its model, subscription and API cards and saves keys on blur', async () => {

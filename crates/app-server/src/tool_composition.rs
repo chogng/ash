@@ -285,6 +285,7 @@ pub(crate) struct ToolPort {
     contributions: Vec<ToolContribution>,
     catalog_only: Vec<AgentToolCapabilityDto>,
     policy: Arc<dyn ActionPolicyService>,
+    pub(crate) command_terminals: Option<Arc<dyn crate::local_tools::CommandTerminalService>>,
 }
 
 impl ToolPort {
@@ -334,6 +335,7 @@ impl ToolPort {
             contributions: Vec::new(),
             catalog_only: Vec::new(),
             policy,
+            command_terminals: None,
         };
         for executor in executors {
             port = port.with_executor(executor, environment_id.clone(), Arc::clone(&reviewer))?;
@@ -418,6 +420,7 @@ impl ToolPort {
             contributions,
             catalog_only: Vec::new(),
             policy,
+            command_terminals: None,
         }
     }
 

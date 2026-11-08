@@ -15,6 +15,8 @@ import { Mimes } from '../../../../../../../base/common/mime.js';
 import { localize } from '../../../../../../../nls.js';
 import { IChatPasteTargetService, type IChatPasteTarget } from '../../../chat.js';
 import { restoreChatVariableEntry } from '../../../../common/attachments/chatVariableEntries.js';
+import { LocalChatSessionUri } from '../../../../common/model/chatUri.js';
+import { captureChatDraft } from '../../../../../../services/chat/common/chatContextService.js';
 import type { IChatInputEditor } from '../chatInputEditorRegistry.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../../../../../../platform/native/common/nativeHost.js';
@@ -137,16 +139,10 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 		const copied = target.getCopiedInlinePrompt(ranges, textValue);
 		if (!copied || copied.references.length === 0 || copied.references.length > 1000) return undefined;
 		try {
-			const contexts = await Promise.all(copied.references.map(async ({ attachment, reference }) => ({
-				id: attachment.id,
-				kind: attachment.kind,
-				name: attachment.name,
-				reference,
-				...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
-				...(attachment.terminalSnapshot ? { terminalSnapshot: { ...attachment.terminalSnapshot } } : {}),
-				content: (await attachment.resolve()).content,
+			const draft = await captureChatDraft(copied.text, 'agent', copied.references.map(({ attachment, reference }) => ({
+				...attachment, reference,
 			})));
-			const raw = JSON.stringify({ version: 1, draft: { mode: 'agent', text: copied.text, contexts } });
+			const raw = JSON.stringify({ version: 1, draft });
 			if (token.isCancellationRequested || raw.length > maxClipboardLength) return undefined;
 			const result = new VSDataTransfer();
 			result.append(CHAT_ATTACHMENT_MIME_TYPE, createStringDataTransferItem(raw));
@@ -424,7 +420,8 @@ function parseCopiedPrompt(raw: string | undefined, clipboardText: string | unde
 			if (context.kind === 'toolSelection') return undefined;
 			if (!context.reference || context.reference.start < end) return undefined;
 			end = context.reference.end;
-			if (context.resource) URI.parse(context.resource);
+			const resource = context.resource ? URI.parse(context.resource) : undefined;
+			if (context.chatReference && (!resource || !LocalChatSessionUri.parse(resource))) return undefined;
 			if (context.kind === 'image' && !/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]*={0,2}$/u.test(context.content)) return undefined;
 		}
 		return draft;

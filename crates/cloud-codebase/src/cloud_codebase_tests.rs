@@ -239,6 +239,55 @@ fn cloud_query_rejects_a_chunk_not_published_by_the_dir() {
 }
 
 #[test]
+fn concurrent_open_preserves_empty_and_legacy_cloud_state() {
+    let source = dir();
+    let index = index(&source);
+    let root = index.root_id().as_str();
+    let state = tempfile::tempdir().unwrap();
+    for (version, expected_generation) in [
+        (0, None),
+        (1, Some("legacy-remote-1")),
+        (2, Some("schema-two-remote")),
+    ] {
+        let database = state.path().join(format!("cloud-{version}.sqlite3"));
+        match version {
+            1 => write_legacy_state(&database, &index, "Projection"),
+            2 => write_schema_two_state(&database, &index),
+            _ => {}
+        }
+        let storage = CloudCodebaseStorage::Persistent(database.clone());
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let store = crate::store::CloudStateStore::open(&storage, root).unwrap();
+                    let state = store.load().unwrap();
+                    assert_eq!(state.remote_generation.as_deref(), expected_generation);
+                    assert_eq!(
+                        state.grant.as_ref().map(|grant| grant.codebase_id.as_str()),
+                        match version {
+                            1 => Some("codebase"),
+                            2 => Some("existing-cloud-codebase"),
+                            _ => None,
+                        },
+                    );
+                });
+            }
+        });
+        let connection = rusqlite::Connection::open(database).unwrap();
+        let version: String = connection
+            .query_row(
+                "SELECT value FROM cloud_codebase_metadata WHERE key = 'schema_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, "3");
+    }
+}
+
+#[test]
 fn legacy_managed_grant_is_migrated_to_deletion_only_state() {
     let dir = dir();
     std::fs::write(dir.path().join("lib.rs"), "pub fn legacy() {}\n").expect("source");

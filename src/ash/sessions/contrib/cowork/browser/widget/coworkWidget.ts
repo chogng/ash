@@ -1,3 +1,4 @@
+import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import { ChatGoalBannerWidget } from '../../../../../workbench/contrib/chat/browser/widget/input/chatGoalBannerWidget.js';
 import { ChatQueueEditor } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatRequestOriginPart } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatRequestOriginPart.js';
@@ -27,7 +28,6 @@ import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, Model
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatInputEditorOptions } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatStreamingResponseUpdate, ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatListWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
 import type { ChatInputState } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -48,6 +48,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface ICoworkWidgetModel extends IDisposable {
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly thread?: import('../../../../../workbench/services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangePresentation?: Event<ChatStreamingResponseUpdate | void>;
@@ -120,6 +121,9 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		const activeRequest = ChatContextKeys.hasActiveRequest.bindTo(context);
 		activeRequest.set(model.inputState.canInterrupt);
 		this._register(model.onDidChange(() => activeRequest.set(model.inputState.canInterrupt)));
+		const transcriptProgress = ChatContextKeys.transcriptProgressActive.bindTo(context);
+		transcriptProgress.set(model.inputState.inputBlocked === true || model.inputState.aiDisabled === true);
+		this._register(model.onDidChange(() => transcriptProgress.set(this.isTranscriptProgressActive)));
 		ChatContextKeys.findSupported.bindTo(context).set(true);
 		const findVisible = ChatContextKeys.findWidgetVisible.bindTo(context);
 		// Detached Markdown fragments still inherit this conversation's command scope.
@@ -135,10 +139,12 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		} : undefined));
 		this.goalBanner = new ChatGoalBannerWidget(ownerDocument);
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
-			createRequestEditor: (options: ChatInputEditorOptions) => this.input.createEditor(options),
+			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
+			canEditRequest: () => !this.isTranscriptProgressActive,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			imageResourceLoader,
 			classPrefix: 'ash-cowork',
+			get memoryNamespace() { return model.memoryNamespace; },
 			mcpAppDelegate: {
 				updateModelContext: (source, text, images = []) => {
 					const id = this.appContextId(source);
@@ -304,16 +310,24 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
+		if (this.listWidget.isEditingRequest) return Promise.resolve();
 		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	public async startEditing(request: QueuedMessage): Promise<void> {
-		if (this.queueEditor.value || !this.visible) return;
+	public async startEditing(request: string | QueuedMessage): Promise<void> {
+		if (!this.visible || this.queueEditor.value) return;
+		if (typeof request === 'string') {
+			if (!this.isTranscriptProgressActive) this.listWidget.startEditing(request);
+			return;
+		}
+		if (this.listWidget.isEditingRequest) return;
 		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, request);
 		this.queueEditor.value = editor;
 		try { await editor.show(); }
 		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
 	}
+
+	public cancelEditing(): boolean { return this.listWidget.cancelEditing(); }
 
 	startVoiceConversation(): Promise<void> {
 		if (this.model.inputState.aiDisabled) return Promise.reject(new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.')));

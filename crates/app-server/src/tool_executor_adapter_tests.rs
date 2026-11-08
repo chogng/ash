@@ -21,6 +21,9 @@ use ash_protocol::ActionPolicyRevision;
 use ash_protocol::ActionProvenance;
 use ash_protocol::ActionSource;
 use ash_protocol::CapabilitySet;
+use ash_protocol::ProcessExecutionOutput;
+use ash_protocol::ProcessExitStatus;
+use ash_protocol::SandboxDenialOutput;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolExecutionOutput;
@@ -99,8 +102,15 @@ pub(crate) fn assert_managed_sandbox_execution(
                     .all(|grant| grant.access() == ash_sandboxing::SandboxDirAccess::ReadOnly)
             );
             self.1.store(true, Ordering::SeqCst);
-            Box::pin(future::ready(ToolExecutionOutcome::Returned(
-                ToolOutput::success(vec![]),
+            Box::pin(future::ready(ToolExecutionOutcome::SandboxDenied(
+                SandboxDenialOutput::safe_to_retry(
+                    "fixture sandbox unavailable",
+                    ProcessExecutionOutput::from_captured_streams(
+                        ProcessExitStatus::Terminated,
+                        "",
+                        "",
+                    ),
+                ),
             )))
         }
     }
@@ -136,7 +146,7 @@ pub(crate) fn assert_managed_sandbox_execution(
             arguments: serde_json::json!({"program":std::env::current_exe().unwrap(), "arguments":[], "working_directory":"."}),
         };
         runtime.prepare(&call).unwrap();
-        runtime
+        let output = runtime
             .execute_for_turn(
                 &binding,
                 &call,
@@ -146,10 +156,20 @@ pub(crate) fn assert_managed_sandbox_execution(
                 &ash_protocol::ThreadId::new("managed-thread").unwrap(),
                 &TurnId::new("managed-turn").unwrap(),
                 None,
+                None,
                 &mut RecordingSink::default(),
             )
             .unwrap();
         assert!(observed.load(Ordering::SeqCst));
+        if matches!(authorization, ToolAuthorization::Sandboxed(_)) {
+            assert!(matches!(output, ToolExecutionOutput::SandboxDenied(_)));
+            assert!(runtime.prepared.lock().unwrap().contains_key(&call.id));
+        } else {
+            assert!(
+                matches!(output, ToolExecutionOutput::Failure(reason) if reason == "fixture sandbox unavailable")
+            );
+            assert!(!runtime.prepared.lock().unwrap().contains_key(&call.id));
+        }
     }
 }
 
@@ -290,6 +310,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
             &ash_protocol::ThreadId::new("thread-7").unwrap(),
             &TurnId::new("turn-7").unwrap(),
             None,
+            None,
             &mut sink,
         )
         .unwrap();
@@ -362,6 +383,7 @@ fn executor_runtime_rechecks_and_retires_a_revoked_dir_authorization() {
         &ash_protocol::ThreadId::new("thread-9").unwrap(),
         &TurnId::new("turn-9").unwrap(),
         None,
+        None,
         &mut RecordingSink::default(),
     );
 
@@ -424,6 +446,7 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
             &ash_protocol::SessionId::new("session-8").unwrap(),
             &ash_protocol::ThreadId::new("thread-8").unwrap(),
             &TurnId::new("turn-8").unwrap(),
+            None,
             None,
             &mut RecordingSink::default(),
         )

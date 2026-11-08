@@ -434,7 +434,7 @@ test('Sessions sidebar clamps at its minimum, snaps closed and restores from the
 		drag(-100);
 		assert.equal(layout.isPartVisible('sidebar'), false);
 		assert.equal(layout.state.sidebar.visible, false);
-		assert.equal(parts.get('titlebar')!.domNode.style.getPropertyValue('--ash-sessions-titlebar-sidebar-width'), '0px');
+		assert.equal(layout.mainContainer.style.getPropertyValue('--ash-sessions-sidebar-width'), '0px');
 		assert.equal(layout.isPartVisible('sidebar'), false, 'Rebuilding the Grid retains the snapped state');
 		drag(110);
 		assert.equal(layout.isPartVisible('sidebar'), true);
@@ -608,6 +608,39 @@ test('Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	layout.dispose();
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
+});
+
+test('Sessions layout temporarily hides the sidebar when the conversation needs the width', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	const wide = new Dimension(1_000, 700);
+	const narrow = new Dimension(470, 700);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: wide });
+		layout.hidePart('editor');
+		layout.hidePart('auxiliarybar');
+		layout.resizePart('sidebar', new Dimension(310, 700));
+		const sidebarWidth = layout.getPartSize('sidebar').width;
+
+		layout.layout(narrow);
+		assert.equal(layout.isPartVisible('sidebar'), false);
+		assert.equal(layout.isPartRequested('sidebar'), true);
+		assert.equal(layout.state.sidebar.width, sidebarWidth);
+		assert.equal(layout.getPartSize('sessions').width, narrow.width);
+
+		layout.layout(wide);
+		assert.equal(layout.isPartVisible('sidebar'), true);
+		assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
+
+		layout.layout(narrow);
+		layout.hidePart('sidebar');
+		layout.layout(wide);
+		assert.equal(layout.isPartVisible('sidebar'), false);
+		assert.equal(layout.isPartRequested('sidebar'), false);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });
 
 test('Sessions compound composition changes lay out Parts once at the completed width', () => {

@@ -22,14 +22,25 @@ On Desktop, the ChatGPT Web source owns its conversation records. Native Ash Cha
 creates its root Threads, reads its catalog and validates saved selections and
 links through the local App Server domain service. The shared connection retains
 its catalog subscription while either consumer needs it. Native Chat preserves
-its existing selection, draft and conversation identities. Sessions without a
-recorded surface remain accessible through Code.
+its existing selection, draft and conversation identities. The domain exposes the
+creation category as `kind`. Sessions without a recorded kind remain accessible
+through Code.
 
 A saved local root conversation can bind or clear its execution directory while
 idle. The directory command preserves its Session and Thread identities and
 history, and uses the existing directory admission and grant checks. Clearing
 retires the directory runtime and sends subsequent turns to the profile host.
 The backend continues to own execution policy and approval defaults.
+An active native Chat Thread with a bound workspace can also be opened in Code.
+Code uses the original Session and Thread, including their history and execution
+policy. Opening the Thread does not change its kind or its default Chat link destination.
+
+Each new Code Review submission forks the source Thread in its Session. App Server
+owns the fork's execution directory and transcript, and Bots shows the conversation
+starting at the first review request. Code Review stores the source identity and
+the reviewed comparison together with the request identity so references can
+reopen that exact comparison. Earlier submissions continue to resolve against
+their original Thread.
 
 ## Architecture
 
@@ -264,7 +275,7 @@ Providers may expose an `ISessionConfigurationSnapshot` of resolved draft config
 
 ### Existing session
 
-Requests route through `ISessionsManagementService` to the provider identified by the session. Providers update chat and session observables. Foreground sends may update view state through lifecycle notifications; background sends do not implicitly steal focus.
+Requests route through `ISessionsManagementService` to the provider identified by the session. Providers update chat and session observables. Foreground sends may update view state through lifecycle notifications; background sends do not implicitly steal focus. After an explicit background first send is accepted, management publishes the durable session and gives the retained untitled composer a fresh, persisted backend creation identity. The composer keeps its own draft identity, and the confirmation captures the sent Session and Thread for explicit navigation.
 
 ### Multiple chats
 

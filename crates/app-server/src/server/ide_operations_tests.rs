@@ -150,7 +150,7 @@ fn ide_context_omits_denied_buffers_and_does_not_block_messages_outside_the_work
     let session = crate::tests::call(
         &server,
         &mut tui,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"context-permission-test","title":"Context","executionTarget":null}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"context-permission-test","title":"Context","kind":"code", "executionTarget":null}}),
     );
     assert!(session.get("error").is_none(), "{session}");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();

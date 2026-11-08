@@ -40,6 +40,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
         _ => None,
     };
     StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId(format!("event_{sequence}")),
@@ -64,7 +65,7 @@ fn reducer_preserves_the_thread_creation_timestamp() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -89,7 +90,7 @@ fn reducer_preserves_when_and_why_a_thread_was_archived() {
             1,
             100,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -131,6 +132,7 @@ fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start()
         turn_id,
         kind: ash_protocol::TurnKind::Coding,
         instructions: None,
+        directory: None,
         policy_revision: "test-policy-v1".into(),
         approval_mode: ash_protocol::ApprovalMode::Manual,
         tool_mode: ash_protocol::ToolMode::Direct,
@@ -144,7 +146,7 @@ fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start()
             1,
             100,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -223,7 +225,7 @@ fn reducer_keeps_legacy_external_execution_attempts_readable() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -245,6 +247,7 @@ fn reducer_keeps_legacy_external_execution_attempts_readable() {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 policy_revision: "test-policy-v1".into(),
@@ -295,7 +298,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -317,6 +320,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
@@ -374,6 +378,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
+            directory: None,
             thread_id: ThreadId::new("thread_1").unwrap(),
             turn_id: TurnId::new("turn_1").unwrap(),
             policy_revision: "test-policy-v1".into(),
@@ -409,7 +414,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
         envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -489,7 +494,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -506,6 +511,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),
@@ -605,7 +611,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
 #[test]
 fn reducer_rejects_history_older_than_minimum_supported_schema() {
     let event = ThreadEvent::ThreadCreated {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         execution_target: None,
         agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
         origin: Default::default(),
@@ -630,7 +636,7 @@ fn reducer_requires_an_ordered_fork_import_to_complete_before_other_facts() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -704,7 +710,7 @@ fn reducer_rejects_a_fork_import_with_an_incomplete_tool_exchange() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -770,7 +776,7 @@ fn empty_fork_completion_preserves_the_source_thread_identity() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -807,6 +813,7 @@ fn imported_turn(turn_id: &str, items: Vec<ThreadItem>) -> Turn {
         advisor: None,
         kind: ash_protocol::TurnKind::Coding,
         instructions: None,
+        directory: None,
         turn_id: TurnId::new(turn_id).unwrap(),
         status: TurnStatus::Interrupted,
         model: None,
@@ -820,6 +827,7 @@ fn imported_turn(turn_id: &str, items: Vec<ThreadItem>) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     }
 }
@@ -830,7 +838,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -847,6 +855,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),
@@ -980,7 +989,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -1003,6 +1012,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                     advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: None,
+                    directory: None,
                     thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                     turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                     policy_revision: "test-policy-v1".into(),
@@ -1027,6 +1037,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
@@ -1064,6 +1075,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
+            directory: None,
             thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
             turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
             policy_revision: "test-policy-v1".into(),
@@ -1099,7 +1111,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -1216,7 +1228,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
         &envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -1238,6 +1250,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
@@ -1343,7 +1356,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
         envelope(
             1,
             ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
@@ -1360,6 +1373,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),

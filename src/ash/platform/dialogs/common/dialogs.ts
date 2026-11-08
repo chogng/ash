@@ -54,6 +54,7 @@ export interface IMessageDialogOptions extends IDialogOptions {
 export interface IConfirmationDialogOptions extends IDialogOptions {
 	readonly primaryButton?: string;
 	readonly cancelButton?: string;
+	readonly destructive?: boolean;
 }
 
 /** Options for a modal decision with save, discard, and cancel-style outcomes. */

@@ -1,0 +1,40 @@
+.ash-toolbar
+	.ash-chat-input-mic
+	.ash-split-action-primary
+	> .ash-button.ash-dictation-preparing {
+	width: auto;
+	padding-inline: var(--ash-spacing-size80);
+	gap: var(--ash-spacing-size60);
+	font-size: var(--ash-fontSize-label1);
+	white-space: nowrap;
+}
+
+.ash-dictation-preparing > .ash-button-content {
+	display: none;
+}
+
+.ash-dictation-level {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+}
+
+.ash-dictation-level > meter {
+	appearance: none;
+	flex: 1;
+	inline-size: 100%;
+	min-inline-size: 0;
+	block-size: var(--ash-spacing-size40);
+}
+
+.ash-dictation-level > meter::-webkit-meter-bar {
+	background: var(--ash-button-hoverBackground);
+	border: none;
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-dictation-level > meter::-webkit-meter-optimum-value {
+	background: var(--ash-description-foreground);
+}

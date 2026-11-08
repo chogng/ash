@@ -385,7 +385,7 @@ fn gateway_resolves_managed_files_across_conversations_without_granting_other_pa
             "session/create",
             json!({
                 "commandId": name, "title": name,
-                "executionTarget": { "type": "local", "root": source_root },
+                "kind":"code", "executionTarget": { "type": "local", "root": source_root },
             }),
         );
         assert!(created.get("error").is_none(), "{created}");
@@ -477,7 +477,7 @@ fn gateway_directory_startup_leaves_profile_and_other_routes_available() {
         2,
         "session/create",
         serde_json::json!({
-            "commandId":"create-first","title":"First", "executionTarget":{"type":"local","root":first.path()}
+            "commandId":"create-first","title":"First", "kind":"code", "executionTarget":{"type":"local","root":first.path()}
         }),
     );
     gateway.client.send(3, "model/list", serde_json::json!({}));
@@ -490,7 +490,7 @@ fn gateway_directory_startup_leaves_profile_and_other_routes_available() {
         5,
         "session/create",
         serde_json::json!({
-            "commandId":"create-second","title":"Second", "executionTarget":{"type":"local","root":second.path()}
+            "commandId":"create-second","title":"Second", "kind":"code", "executionTarget":{"type":"local","root":second.path()}
         }),
     );
     let mut responses = Vec::new();
@@ -541,7 +541,7 @@ fn gateway_bounds_cold_directory_requests_and_drops_them_on_disconnect() {
             id,
             "session/create",
             serde_json::json!({
-                "commandId":format!("create-{id}"),"title":"Queued", "executionTarget":{"type":"local","root":directory.path()}
+                "commandId":format!("create-{id}"),"title":"Queued", "kind":"code", "executionTarget":{"type":"local","root":directory.path()}
             }),
         );
     }
@@ -598,7 +598,7 @@ fn gateway_directory_startup_failure_completes_requests_and_preserves_the_connec
         "session/create",
         serde_json::json!({
             "commandId":"missing-directory","title":"Missing",
-            "executionTarget":{"type":"local","root":profile.path().join("missing")}
+            "kind":"code", "executionTarget":{"type":"local","root":profile.path().join("missing")}
         }),
     );
     gateway.client.send(3, "model/list", serde_json::json!({}));
@@ -909,7 +909,7 @@ fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
     let session = crate::tests::call(
         &tui_server,
         &mut tui,
-        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"session/create","params":{"commandId":"ide-context-session","title":"IDE context","executionTarget":{"type":"local","root":second.path()}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"session/create","params":{"commandId":"ide-context-session","title":"IDE context","kind":"code", "executionTarget":{"type":"local","root":second.path()}}}),
     );
     assert!(session.get("error").is_none(), "{session}");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();

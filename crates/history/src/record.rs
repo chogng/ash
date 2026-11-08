@@ -10,6 +10,8 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
+/// Version 34 records the actual Turn execution directory at acceptance.
+/// Version 33 records the Session classification as kind.
 /// Version 32 supports clearing a directory and treats directory changes as explicit workspace selection.
 /// Version 31 records saved conversation recaps.
 /// Version 30 records durable execution directory changes.
@@ -18,7 +20,8 @@ use serde::ser::SerializeStruct;
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 32;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 34;
+const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.
@@ -103,6 +106,15 @@ pub struct ThreadCommandReceipt {
     pub command: ThreadCommand,
 }
 
+/// Original classification field in a creation record whose bytes may be hashed by a fork.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ThreadCreatedKindEncoding {
+    #[default]
+    Kind,
+    Surface,
+    Omitted,
+}
+
 /// Canonical persisted envelope for one durable Thread fact.
 ///
 /// Only durable [`ThreadEvent`] values can enter this envelope. Core constructs the record when a
@@ -119,6 +131,7 @@ pub struct StoredEvent {
     pub recorded_at: Timestamp,
     pub command: Option<ThreadCommandReceipt>,
     pub event: ThreadEvent,
+    pub thread_created_kind_encoding: ThreadCreatedKindEncoding,
 }
 
 impl Serialize for StoredEvent {
@@ -163,6 +176,7 @@ impl Serialize for StoredThreadEvent<'_> {
                     kind,
                     mode,
                     instructions,
+                    directory: _,
                     policy_revision,
                     approval_mode,
                     tool_mode,
@@ -251,7 +265,10 @@ impl Serialize for StoredThreadEvent<'_> {
                 _ => {}
             }
         }
-        if self.0.schema_version >= 21 {
+        let encoding = self.0.thread_created_kind_encoding;
+        if self.0.schema_version >= SESSION_KIND_SCHEMA_VERSION
+            || (self.0.schema_version >= 21 && encoding == ThreadCreatedKindEncoding::Kind)
+        {
             return self.0.event.serialize(serializer);
         }
         let ThreadEvent::ThreadCreated {
@@ -261,13 +278,14 @@ impl Serialize for StoredThreadEvent<'_> {
             session_id,
             thread_id,
             title,
+            kind,
             execution_target,
             ..
         } = &self.0.event
         else {
             return self.0.event.serialize(serializer);
         };
-        let mut event = serializer.serialize_struct("ThreadCreated", 8)?;
+        let mut event = serializer.serialize_struct("ThreadCreated", 9)?;
         event.serialize_field("type", "threadCreated")?;
         if let Some(agent_id) = agent_id {
             event.serialize_field("agentId", agent_id)?;
@@ -281,8 +299,18 @@ impl Serialize for StoredThreadEvent<'_> {
         event.serialize_field("sessionId", session_id)?;
         event.serialize_field("threadId", thread_id)?;
         event.serialize_field("title", title)?;
+        match encoding {
+            ThreadCreatedKindEncoding::Kind => event.serialize_field("kind", kind)?,
+            ThreadCreatedKindEncoding::Surface => event.serialize_field("surface", kind)?,
+            ThreadCreatedKindEncoding::Omitted => {}
+        }
         if let Some(target) = execution_target {
-            event.serialize_field("workspace", target)?;
+            let field = if self.0.schema_version < 21 {
+                "workspace"
+            } else {
+                "executionTarget"
+            };
+            event.serialize_field(field, target)?;
         }
         event.end()
     }
@@ -502,19 +530,33 @@ impl<'de> Deserialize<'de> for StoredEvent {
                 migrate_approval_field(command);
             }
         }
-        if record.schema_version < 21
+        let mut thread_created_kind_encoding = ThreadCreatedKindEncoding::Kind;
+        if record.schema_version < SESSION_KIND_SCHEMA_VERSION
             && record.event.get("type").and_then(serde_json::Value::as_str) == Some("threadCreated")
         {
             let fields = record
                 .event
                 .as_object_mut()
                 .ok_or_else(|| D::Error::custom("Thread creation event must be an object"))?;
-            if let Some(target) = fields.remove("workspace") {
+            if record.schema_version < 21
+                && let Some(target) = fields.remove("workspace")
+            {
                 if fields.insert("executionTarget".into(), target).is_some() {
                     return Err(D::Error::custom(
                         "Thread creation has two execution targets",
                     ));
                 }
+            }
+            if let Some(surface) = fields.remove("surface") {
+                if fields.insert("kind".into(), surface).is_some() {
+                    return Err(D::Error::custom(
+                        "Thread creation has two Session classifications",
+                    ));
+                }
+                thread_created_kind_encoding = ThreadCreatedKindEncoding::Surface;
+            } else if !fields.contains_key("kind") {
+                fields.insert("kind".into(), serde_json::Value::String("code".into()));
+                thread_created_kind_encoding = ThreadCreatedKindEncoding::Omitted;
             }
         }
         Ok(Self {
@@ -530,6 +572,7 @@ impl<'de> Deserialize<'de> for StoredEvent {
                 .transpose()
                 .map_err(D::Error::custom)?,
             event: serde_json::from_value(record.event).map_err(D::Error::custom)?,
+            thread_created_kind_encoding,
         })
     }
 }

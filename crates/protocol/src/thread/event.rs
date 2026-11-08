@@ -20,6 +20,7 @@ use crate::ModelUsage;
 use crate::PlanUpdate;
 use crate::RequestId;
 use crate::SandboxDenialOutput;
+use crate::SessionExecutionTarget;
 use crate::SessionId;
 use crate::StableTurnError;
 use crate::ThreadArchiveReason;
@@ -111,9 +112,7 @@ pub enum ThreadEvent {
         session_id: SessionId,
         thread_id: ThreadId,
         title: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        surface: Option<crate::SessionSurface>,
+        kind: crate::SessionKind,
         /// The root Thread records the Session execution authority. Descendants inherit it.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
@@ -248,6 +247,10 @@ pub enum ThreadEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         instructions: Option<TurnInstructions>,
+        /// Actual execution directory at acceptance, including a managed checkout.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        directory: Option<SessionExecutionTarget>,
         #[serde(default = "legacy_turn_action_policy_revision")]
         policy_revision: String,
         #[serde(default)]
@@ -268,6 +271,11 @@ pub enum ThreadEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_profile: Option<ToolProfileSnapshot>,
+    },
+    TurnSkillsLoaded {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        loads: Vec<crate::TurnSkillLoad>,
     },
     TurnStarted {
         thread_id: ThreadId,
@@ -479,6 +487,7 @@ impl ThreadEvent {
             Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
+            Self::TurnSkillsLoaded { .. } => "turn.skills_loaded",
             Self::TurnModeChanged { .. } => "turn.mode_changed",
             Self::TurnSteered { .. } => "turn.steered",
             Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
@@ -542,6 +551,7 @@ impl ThreadEvent {
             | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
+            | Self::TurnSkillsLoaded { thread_id, .. }
             | Self::TurnModeChanged { thread_id, .. }
             | Self::TurnSteered { thread_id, .. }
             | Self::TurnSteerDelivered { thread_id, .. }

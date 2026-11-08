@@ -14,6 +14,7 @@ import { localize } from '../../../../nls.js';
 interface ActiveTranscription {
 	readonly resourceId: string;
 	readonly started: Promise<void>;
+	readonly modelReady: DeferredPromise<void>;
 	audio: Promise<void>;
 	text: string;
 	finalDelivered: boolean;
@@ -41,9 +42,11 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 	constructor(@ILocalTranscriptionBackendService private readonly backend: ILocalTranscriptionBackendService) {
 		super();
 		this._register(backend.onDidChangeModelStatus(result => {
-			if (result.resourceId === this.active?.resourceId && !this.active.discard && !this.active.hasEnded) {
-				const stage = result.status;
-				this.setStatus(transcriptionStatus(stage));
+			const active = this.active;
+			if (result.resourceId === active?.resourceId && !active.discard && !active.hasEnded) {
+				const status = transcriptionStatus(result.status);
+				if (status.state === LocalTranscriptionModelState.Ready) void active.modelReady.complete();
+				this.setStatus(status);
 			}
 		}));
 		this._register(backend.onDidTranscribe(result => {
@@ -59,12 +62,14 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 			if (!active || result.resourceId !== active.resourceId) { return; }
 			active.hasEnded = true;
 			active.endedError = result.error;
+			void active.modelReady.complete();
 			if (active.stopping) { return; }
 			// Ended stops delivery, but the backend resource still needs its explicit release.
 			void this.finish(active).catch(() => undefined);
 		}));
 		this._register(backend.onDidDisconnect(() => {
 			if (!this.active) { return; }
+			void this.active.modelReady.complete();
 			this.active = undefined;
 			this.setStatus({ state: LocalTranscriptionModelState.Error, error: localize('dictation.connectionLost', 'Dictation connection lost') });
 		}));
@@ -81,6 +86,10 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 
 	public prepareModel(model: string, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
 		return this.startModelOperation(model, { type: 'prepare' }, onProgress);
+	}
+
+	public warmModel(model: string): ILocalTranscriptionModelOperation {
+		return this.startModelOperation(model, { type: 'warm' }, () => { });
 	}
 
 	public importPackage(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation {
@@ -126,9 +135,8 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 			if (active.discard) throw canceled();
 			await this.backend.start(resourceId, options.model ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL);
 		});
-		const active: ActiveTranscription = { resourceId, started, audio: started, text: '', finalDelivered: false, finalReceived: false, queuedBytes: 0, discard: false, hasEnded: false, cancelled: new DeferredPromise<string>() };
+		const active: ActiveTranscription = { resourceId, started, modelReady: new DeferredPromise<void>(), audio: started, text: '', finalDelivered: false, finalReceived: false, queuedBytes: 0, discard: false, hasEnded: false, cancelled: new DeferredPromise<string>() };
 		this.active = active;
-		this.setStatus({ state: LocalTranscriptionModelState.Loading });
 		try {
 			await started;
 		} catch (error) {
@@ -160,6 +168,7 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		const active = this.active;
 		if (!active) return Promise.resolve();
 		active.discard = true;
+		void active.modelReady.complete();
 		// Cancellation bypasses audio and finalization; both may be waiting for the backend being cancelled.
 		active.cancelling ??= Promise.resolve().then(async () => {
 			try { await active.started; } catch { return; }
@@ -191,7 +200,10 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 			// Failed audio must still release the admitted backend resource.
 			let audioError: unknown;
 			try { await active.audio; } catch (error) { audioError = error; }
-			if (this.active !== active) { return ''; }
+			// The short-lived stop RPC should only wait for inference and final audio,
+			// even if the user stops while a first-use download is still running.
+			await active.modelReady.p;
+			if (this.active !== active || active.discard) { return ''; }
 			const text = await this.backend.stop(active.resourceId);
 			if (this.active !== active) { return ''; }
 			if (audioError) throw audioError;
@@ -288,9 +300,10 @@ export function registerLocalTranscriptionService(services: InstantiationService
 
 function transcriptionStatus(status: IDictationModelStatus): ILocalTranscriptionModelStatus {
 	switch (status.state) {
-		case DictationModelState.Checking: case DictationModelState.Loading: return { state: LocalTranscriptionModelState.Loading };
+		case DictationModelState.Checking: return { state: LocalTranscriptionModelState.Checking };
+		case DictationModelState.Loading: return { state: LocalTranscriptionModelState.Loading };
 		case DictationModelState.Cancelled: return { state: LocalTranscriptionModelState.Idle };
-		case DictationModelState.Downloading: return { state: LocalTranscriptionModelState.Downloading };
+		case DictationModelState.Downloading: return { state: LocalTranscriptionModelState.Downloading, file: status.file, downloadedBytes: status.downloadedBytes };
 		case DictationModelState.Ready: return { state: LocalTranscriptionModelState.Ready };
 		case DictationModelState.Error: return { state: LocalTranscriptionModelState.Error, error: status.error };
 	}

@@ -14,8 +14,7 @@ import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/t
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
-import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsList.css';
-import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsToasts.css';
+import '../../../src/ash/workbench/browser/media/notifications.css';
 import { ITelemetryService } from '../../../src/ash/platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../src/ash/platform/telemetry/common/telemetryUtils.js';
 import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';

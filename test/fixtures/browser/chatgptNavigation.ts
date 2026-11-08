@@ -1,9 +1,14 @@
 import './chatFixtureLocalization.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
+import '../../../src/ash/sessions/contrib/projects/browser/projects.contribution.js';
+import { IProjectDialogService } from '../../../src/ash/sessions/contrib/projects/browser/projectDialogService.js';
+import { IProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
-import { IProjectsService, ProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
-import { ISessionsTitlebarService } from '../../../src/ash/sessions/browser/parts/titlebarPart.js';
+import { Menus } from '../../../src/ash/sessions/browser/menus.js';
+import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
+import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
+import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -37,9 +42,13 @@ import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
 import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
 import { IChatListCatalog, type ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
+import { SessionActionsService } from '../../../src/ash/sessions/browser/sessionActionsService.js';
+import { IAgentSessionActionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
 import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
+import { registerChatGPTResponseActions } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTResponseActions.js';
+import { ChatCopyActionRendering } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -78,9 +87,10 @@ import { AshChatSelectionService, IAshChatSelectionService } from '../../../src/
 import { ISessionsSearchService } from '../../../src/ash/sessions/contrib/search/browser/searchService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { IAshChatSessionService } from '../../../src/ash/sessions/contrib/chat/browser/ashChatSessionService.js';
-import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
+import { ISessionsService, type SessionsSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { ISessionSectionOrderService } from '../../../src/ash/sessions/services/sessions/browser/sessionSectionOrderService.js';
 import { IGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
+import { BlockedSessionsIndicatorModel, IBlockedSessionsIndicatorService } from '../../../src/ash/sessions/contrib/sessions/browser/blockedSessionsIndicatorModel.js';
 import { SessionsWorkspaceModeContext } from '../../../src/ash/sessions/common/contextkeys.js';
 import { ISessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
@@ -105,13 +115,15 @@ import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/pa
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
+registerChatGPTResponseActions();
 // The renderer widgets consume the containing Sessions host's visual defaults.
 document.body.classList.add('ash-workbench');
 const sessionsRoot = document.createElement('div');
@@ -154,7 +166,8 @@ if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	...getSingletonServiceDescriptors().filter(([id]) =>
 		id === IChatWidgetService || id === IActionViewItemService || id === IChatSlashCommandService
-		|| id === IChatPasteTargetService || id === IChatResponseResourceFileSystemProvider),
+		|| id === IChatPasteTargetService || id === IChatResponseResourceFileSystemProvider
+		|| id === IProjectsService || id === IProjectDialogService),
 	[IAgentVoiceService, undefined],
 	[IMessageHistoryService, undefined],
 	[IVoiceModeOnboardingService, { showIfNeeded() { }, registerHost: () => toDisposable(() => { }) } as unknown as IVoiceModeOnboardingService],
@@ -212,8 +225,14 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 )));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+const commands = resources.add(new CommandService(services));
+services.registerInstance(ICommandService, commands);
 registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
+services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
+	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: configuration,
+})));
+resources.add(services.createInstance(ChatCopyActionRendering));
 const attachmentFolder = URI.file('/fixture-folder');
 const attachmentFile = URI.joinPath(attachmentFolder, 'notes.txt');
 if (parameters.has('folderPicker')) {
@@ -227,7 +246,6 @@ services.registerInstance(IFileDialogService, {
 		return undefined;
 	},
 } as IFileDialogService);
-const commands = resources.add(new CommandService(services));
 const menuService = new MenuService(commands, services.get(IContextKeyService));
 services.registerInstance(IMenuService, menuService);
 ChatContextKeys.enabled.bindTo(services.get(IContextKeyService)).set(true);
@@ -241,7 +259,7 @@ services.registerInstance(IChatAttachmentResolveService, new ChatAttachmentResol
 services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
 	menuService, services.get(IContextKeyService),
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
-	services.get(IContextViewService), resources.add(new TestNotificationService()),
+	services.get(IContextViewService), notifications,
 )));
 services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: services, contextKeyService: services.get(IContextKeyService) })));
 const dialogs = resources.add(new DialogService());
@@ -276,6 +294,7 @@ window.ashChatGPTIntegration = {
 	setVisible: visible => widget.setVisible(visible),
 	setAshChatSelected: selected => ashChatSelected.set(selected),
 	notifications: () => notifications.model.getNotifications().map(({ id, message }) => ({ id, message })),
+	toggleArchivedProjects: () => commands.executeCommand('sessions.toggleArchivedProjects'),
 	retryHistory: async () => {
 		const retry = notifications.model.getNotifications().flatMap(item => item.actions?.primary ?? []).find(action => action.id === 'sessions.chatgpt.retryHistory');
 		if (!retry) { throw new Error('Missing history retry action'); }
@@ -284,7 +303,6 @@ window.ashChatGPTIntegration = {
 };
 services.registerInstance(ISessionsListModelService, new SessionsListModelService(storage));
 services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);
-services.registerInstance(IProjectsService, resources.add(services.createInstance(ProjectsService)));
 const groups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None, getOrder: (_mode, ids) => ids } as ISessionSectionOrderService);
@@ -293,14 +311,16 @@ services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionP
 services.registerInstance(ISessionsManagementService, {
 	state: 'ready', onDidChange: Event.None, untitledSessions: [],
 	sessions: parameters.has('mixedCatalog') ? [{
-		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', surface: 'code',
+		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', kind: 'code',
 		chats: [{ threadId: 'fixture-code', status: 'active', origin: { type: 'root' } }],
 	}] : [],
 } as unknown as ISessionsManagementService);
 services.registerInstance(ISessionsService, {
 	onDidChange: Event.None,
-	openSession: (sessionId, threadId) => { document.body.dataset.openedCode = `${sessionId}/${threadId}`; },
+	getSelection: (): SessionsSelection => ({ activeSelection: undefined, visibleSelections: [] }),
+	openSession: async (sessionId, threadId) => { document.body.dataset.openedCode = `${sessionId}/${threadId}`; },
 } as ISessionsService);
+services.registerInstance(IBlockedSessionsIndicatorService, services.createInstance(BlockedSessionsIndicatorModel));
 const sources: ChatListSource[] = [resources.add(services.createInstance(ChatGPTList))];
 if (parameters.has('mixedCatalog')) {
 	const ashServices = resources.add(services.createChild(new ServiceCollection(
@@ -308,7 +328,7 @@ if (parameters.has('mixedCatalog')) {
 		[IAshChatSessionService, {
 			initializeCatalog() {},
 			catalog: constObservable([{
-				sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', surface: 'chat',
+				sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
 				manager: { status: 'idle' },
 				threads: [{ threadId: 'fixture-thread', status: 'active', createdAtUnixMs: 1 }],
 			}]),
@@ -328,18 +348,16 @@ if (parameters.has('mixedCatalog')) {
 	sources.push(resources.add(ashServices.createInstance(AshChatNavigationSource)));
 }
 services.registerInstance(IChatListCatalog, { sources });
+services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));
 const titlebarContent = document.createElement('div');
 titlebarContent.className = 'ash-sessions-titlebar-page-content';
 titlebarContent.style.display = 'contents';
 document.body.prepend(titlebarContent);
-services.registerInstance(ISessionsTitlebarService, {
-	setPageContent: content => {
-		titlebarContent.replaceChildren(content);
-		return toDisposable(() => {
-			if (content.parentElement === titlebarContent) content.remove();
-		});
-	},
-} as ISessionsTitlebarService);
+const presentations = services.get(IActionViewItemService);
+resources.add(new MenuWorkbenchToolBar(titlebarContent, menuService, services.get(IContextMenuService), Menus.TitleBarPageContent, {
+	toolbarOptions: { primaryGroup: () => true },
+	actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarPageContent, action.id)?.(action, options, services, 0),
+}));
 widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));
 widget.create(document.getElementById('editor')!);
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
@@ -354,11 +372,15 @@ const view = resources.add(services.createInstance(PaneComposite, host, {
 	onDidFailCreateView: (error: unknown) => { throw error; },
 }));
 view.setVisible(true);
+let activePane: ProjectsEditorPane | ReplyChatEditor = widget;
 if (parameters.has('projects')) {
 	const projects = resources.add(services.createInstance(ProjectsEditorPane));
 	projects.create(document.getElementById('editor')!);
 	projects.setVisible(true);
+	activePane = projects;
 }
+services.registerInstance(IEditorPart, { activePane, activeGroup: { activePane }, onDidChangeEditors: Event.None } as unknown as IEditorPart);
+resources.add(services.createInstance(ProjectTitleBarContribution));
 const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
 resize.observe(host);
 resources.add(toDisposable(() => resize.disconnect()));

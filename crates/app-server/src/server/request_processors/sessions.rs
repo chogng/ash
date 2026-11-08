@@ -484,6 +484,12 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
+        if connection.code_sessions_only() && params.kind == ash_protocol::SessionKind::Chat {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
         let created = self.create_session(params)?;
         self.updates
             .subscribe_session(connection.connection_id, created.session.session_id.clone());
@@ -505,10 +511,11 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 .validate(&values.0)
                 .map_err(core_error)?;
         }
-        let execution_target =
-            SessionExecutionRoute::new(params.surface, params.execution_target.clone())
-                .admit_creation(self.dir_services.as_deref())
-                .map_err(core_error)?;
+        let execution_target = SessionExecutionRoute::admit_creation(
+            params.execution_target.clone(),
+            self.dir_services.as_deref(),
+        )
+        .map_err(core_error)?;
         let has_worktree_start = params.worktree_start.is_some();
         if has_worktree_start && params.branch_name.is_none() {
             return Err(core_error(core_api::CoreError::InvalidInput(
@@ -548,13 +555,11 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 .agent_runtime()
                 .read_session_catalog(&existing.session_id)
                 .map_err(core_error)?;
-            let existing_surface = existing_session
-                .as_ref()
-                .and_then(|session| session.surface);
+            let existing_kind = existing_session.as_ref().map(|session| session.kind);
             let existing_execution_target =
                 existing_session.and_then(|session| session.execution_target);
             if !matches
-                || params.surface != existing_surface
+                || Some(params.kind) != existing_kind
                 || params.title != existing.creation_title
                 || existing_execution_target != execution_target
                 || (expected_agent_id != existing.agent_id && !legacy_creation)
@@ -591,7 +596,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 .context
                 .agent_runtime()
                 .start_thread(StartThreadRequest {
-                    surface: params.surface,
+                    kind: params.kind,
                     agent_id: params.agent_id,
                     command_id: params.command_id,
                     title: params.title,
@@ -773,10 +778,12 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         })
     }
 
-    pub(super) fn session_list(&self) -> Result<Value, RpcError> {
-        result(&SessionListResult {
-            sessions: self.context.session_views()?,
-        })
+    pub(super) fn session_list(&self, connection: &ConnectionState) -> Result<Value, RpcError> {
+        let mut sessions = self.context.session_views()?;
+        if connection.code_sessions_only() {
+            sessions.retain(|session| session.kind == ash_protocol::SessionKind::Code);
+        }
+        result(&SessionListResult { sessions })
     }
 
     pub(super) fn session_catalog_subscribe(
@@ -784,7 +791,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         connection: &ConnectionState,
     ) -> Result<Value, RpcError> {
         self.updates.subscribe_catalog(connection.connection_id);
-        self.session_list()
+        self.session_list(connection)
     }
 
     pub(super) fn session_catalog_unsubscribe(

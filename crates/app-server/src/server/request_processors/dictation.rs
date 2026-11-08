@@ -29,9 +29,12 @@ use realtime_voice::CloudTranscriptionProvider;
 use realtime_voice::DictationEvent;
 use realtime_voice::DictationRequest;
 use realtime_voice::LocalDictationRequest;
+use realtime_voice::ModelProgress;
 use realtime_voice::SubscriptionDictationRequest;
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use super::update_broker::notification;
 
@@ -263,15 +266,25 @@ impl<'a> DictationRequestProcessor<'a> {
             DictationRequest::Cloud(_) | DictationRequest::Subscription(_) => None,
         };
         let notifications = connection.outbound_notifications.clone();
+        let updates = Arc::clone(self.updates);
+        let downloaded = AtomicBool::new(false);
         let on_event = move |event| match event {
-            DictationEvent::ModelProgress(progress) => notifications.push(notification(
-                ServerNotificationMethod::DictationModelProgress,
-                &DictationModelProgress {
-                    resource_id: resource_id.clone(),
-                    model_id: model_id.clone().expect("local model progress"),
-                    stage: model_stage(progress),
-                },
-            )),
+            DictationEvent::ModelProgress(progress) => {
+                let model_id = model_id.as_ref().expect("local model progress");
+                if matches!(progress, ModelProgress::Downloading { .. }) {
+                    downloaded.store(true, Ordering::Relaxed);
+                } else if progress == ModelProgress::Ready && downloaded.load(Ordering::Relaxed) {
+                    updates.publish_dictation_model_changed(model_id.clone());
+                }
+                notifications.push(notification(
+                    ServerNotificationMethod::DictationModelProgress,
+                    &DictationModelProgress {
+                        resource_id: resource_id.clone(),
+                        model_id: model_id.clone(),
+                        stage: model_stage(progress),
+                    },
+                ))
+            }
             DictationEvent::Transcript { text, is_final } => notifications.push(notification(
                 ServerNotificationMethod::DictationTranscript,
                 &DictationTranscript {
@@ -376,10 +389,14 @@ impl<'a> DictationRequestProcessor<'a> {
         let size_bytes = realtime_voice::DictationModelManager::size_bytes(&root, &model_id)
             .map_err(dictation_error)?;
         let stage = self.dictation_models.progress(&model_id).map(model_stage);
+        let download = realtime_voice::DictationModelManager::download_info(&model_id);
         Ok(DictationModelStatus {
             model_id,
             available,
             size_bytes,
+            download_size_bytes: download.map(|(size, _)| size),
+            recommended_languages: download
+                .map_or_else(Vec::new, |(_, languages)| languages.to_vec()),
             stage,
         })
     }
@@ -432,9 +449,11 @@ impl<'a> DictationRequestProcessor<'a> {
                 "Stop voice input before deleting the model".into(),
             ));
         }
+        let root = self.dictation_model_root()?;
         self.dictation_models
-            .remove(&self.dictation_model_root()?, &params.model_id)
+            .remove(&root, &params.model_id)
             .map_err(dictation_error)?;
+        self.dictation.forget_local_model(&root, &params.model_id);
         self.updates
             .publish_dictation_model_changed(params.model_id);
         result(&())
@@ -447,6 +466,7 @@ impl<'a> DictationRequestProcessor<'a> {
     ) -> Result<Value, RpcError> {
         require_product_host(connection)?;
         let params: DictationModelStartParams = decode(params)?;
+        let warm = matches!(params.operation, DictationModelOperation::Warm);
         let operation = match params.operation {
             DictationModelOperation::Prepare => realtime_voice::ModelOperation::Prepare {
                 network: self.dictation_model_network()?,
@@ -456,6 +476,7 @@ impl<'a> DictationRequestProcessor<'a> {
                     source: source_directory.into(),
                 }
             }
+            DictationModelOperation::Warm => realtime_voice::ModelOperation::Warm,
         };
         let model_id = params.model_id.clone();
         let resource_id = params.resource_id.clone();
@@ -481,7 +502,9 @@ impl<'a> DictationRequestProcessor<'a> {
                             stage: model_stage(progress),
                         },
                     ));
-                    updates.publish_dictation_model_changed(model_id.clone());
+                    if !warm {
+                        updates.publish_dictation_model_changed(model_id.clone());
+                    }
                 },
             )
             .map_err(dictation_error)?;
@@ -570,9 +593,11 @@ fn model_stage(progress: realtime_voice::ModelProgress) -> DictationModelStage {
         realtime_voice::ModelProgress::Downloading {
             file,
             downloaded_bytes,
+            package_downloaded_bytes,
         } => DictationModelStage::Downloading {
             file,
             downloaded_bytes,
+            package_downloaded_bytes: Some(package_downloaded_bytes),
         },
         realtime_voice::ModelProgress::Loading => DictationModelStage::Loading,
         realtime_voice::ModelProgress::Ready => DictationModelStage::Ready,

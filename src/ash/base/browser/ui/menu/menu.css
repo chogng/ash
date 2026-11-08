@@ -84,6 +84,23 @@
 	outline-offset: -1px;
 }
 
+.ash-menu .ash-button.ash-menu-destructive-action:not(:disabled) {
+	color: var(--ash-error-foreground);
+}
+
+.ash-menu
+	.ash-action-view-item.focused
+	> .ash-menu-destructive-action:not(:disabled) {
+	/* Keep the danger foreground legible on the highlight in all built-in themes. */
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-menu
+	.ash-action-view-item.focused
+	> .ash-menu-destructive-action:focus-visible {
+	outline-color: var(--ash-focusBorder);
+}
+
 .ash-menu::-webkit-scrollbar {
 	width: var(--ash-spacing-size80);
 	height: var(--ash-spacing-size80);
@@ -123,15 +140,71 @@
 	flex: 0 0 16px;
 }
 /* A hidden check must not reserve space beside the action icon. */
-.ash-menu-leading-check > .ash-icon {
+:is(.ash-menu-leading-slot, .ash-menu-trailing-slot) > .ash-icon-check {
 	display: none;
+	color: var(--ash-menu-check-foreground, currentColor);
 }
-.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon {
+.ash-menu
+	.ash-button.checked
+	> :is(.ash-menu-leading-check, .ash-menu-trailing-check)
+	> .ash-icon {
 	display: block;
 }
-.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
+.ash-menu
+	.ash-button.checked
+	> :is(.ash-menu-leading-check, .ash-menu-trailing-check)
+	> .ash-menu-action-icon {
 	display: none;
 }
+.ash-menu-action-icon {
+	display: inline-flex;
+}
+
+:is(.ash-menu-icons-trailing, .ash-menu-indicators-trailing)
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-button-content {
+	flex: 1 1 auto;
+}
+:is(.ash-menu-icons-trailing, .ash-menu-indicators-trailing)
+	> .ash-action-view-item
+	> .ash-button
+	> :is(.ash-menu-badge, .ash-menu-keybinding) {
+	margin-inline-start: 0;
+}
+:is(.ash-menu-icons-trailing, .ash-menu-indicators-trailing)
+	.ash-button
+	> .ash-menu-keybinding {
+	flex-shrink: 0;
+}
+:is(.ash-menu-icons-trailing, .ash-menu-indicators-trailing)
+	.ash-button
+	> .ash-menu-trailing-slot {
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	order: 1;
+	margin-inline-start: 0;
+}
+
+/* Reserve a column for all standard rows only when a row needs it. */
+.ash-menu:not(.has-icon-column)
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-menu-leading-slot,
+.ash-menu-icons-trailing:not(.has-icon-column)
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-menu-trailing-slot,
+.ash-menu-indicators-trailing
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-menu-trailing-slot:empty {
+	display: none;
+}
+
 /* Count the menu padding toward the divider inset from the popup edge. */
 .ash-menu .ash-action-view-item-separator {
 	width: auto;
@@ -144,7 +217,8 @@
 	);
 	opacity: 1;
 }
-.ash-menu .ash-button:has(> .ash-submenu-indicator) {
+.ash-menu:not(.ash-menu-icons-trailing, .ash-menu-indicators-trailing)
+	.ash-button.ash-submenu-trigger {
 	position: relative;
 	--ash-menu-item-padding-end: var(--ash-menu-submenu-padding-end);
 }

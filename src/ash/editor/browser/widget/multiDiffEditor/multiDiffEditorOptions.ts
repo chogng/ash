@@ -1,3 +1,5 @@
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import type { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
 import type { DiffEditorWidgetOptions } from '../diffEditor/diffEditorOptions.js';
 import type { IEditorOptions } from '../../../common/config/editorOptions.js';
 import { getWindow, isHTMLElement } from '../../../../base/browser/dom.js';
@@ -44,6 +46,8 @@ export interface IMultiDiffEditorWidgetOptions extends MultiDiffViewOptions {
 	readonly ariaLabel?: string;
 	/** Opt-in review prototype. Wrapped content continues to use the full editor. */
 	readonly preview?: boolean;
+	/** Attaches host-owned contributions for the lifetime of one mounted comparison. */
+	readonly attachEditor?: (item: IDocumentDiffItem, editor: DiffEditorWidget) => IDisposable | undefined;
 	readonly onOpenEditor?: (item: IDocumentDiffItem, side: 'original' | 'modified', range: Range) => void;
 	readonly workbenchUIElementFactory?: IWorkbenchUIElementFactory;
 }

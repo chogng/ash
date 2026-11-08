@@ -216,6 +216,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		return this.custom !== undefined && this.customProcess?.input === undefined;
 	}
 
+	get ownsProcess(): boolean { return this.customProcess?.ownsProcess !== false; }
+	get isClosing(): boolean { return this.closed; }
+
 	get exitCode(): number | undefined {
 		return this._exitCode;
 	}
@@ -344,6 +347,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			}
 		}));
 		lifetime.add(process.onProcessReady(ready => { this.processReady = ready; }));
+		if (process.onDidChangeInputMode) lifetime.add(process.onDidChangeInputMode(() => {
+			if (this.screen) this.screen.raw.options.disableStdin = this.isReadOnly;
+		}));
 		lifetime.add(process.onDidChangeProperty(property => {
 			if (property.type === ProcessPropertyType.Title) {
 				this._title = property.value;
@@ -730,7 +736,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	async refreshProperty<T extends ProcessPropertyType>(property: T): Promise<IProcessPropertyMap[T]> {
 		if (property === ProcessPropertyType.Title) return this.title as IProcessPropertyMap[T];
-		if (this._state === 'exited' || this.closed) return false as IProcessPropertyMap[T];
+		if (this._state === 'exited' || this.closed || !this.ownsProcess) return false as IProcessPropertyMap[T];
 		return this.shellProcessManager ? this.shellProcessManager.refreshProperty(property) : true as IProcessPropertyMap[T];
 	}
 

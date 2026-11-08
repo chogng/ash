@@ -9,7 +9,7 @@ test('PR follow-up persists across Agents windows and pauses without dropping it
 	try {
 		expect(connection.client.capabilities?.contracts?.automationConditions?.version).toBe(1);
 		const source = await connection.client.request(APP_SERVER_METHODS['session/create'], {
-			commandId: 'follow-up-source', title: 'PR follow-up source', agent: { type: 'default' },
+			commandId: 'follow-up-source', kind: 'code', title: 'PR follow-up source', agent: { type: 'default' },
 			executionTarget: { type: 'local', root: testWorkspace.directory },
 		});
 		const sessionId = source.session.sessionId;

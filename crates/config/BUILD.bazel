@@ -4,6 +4,7 @@ ash_rust_crate(
     name = "config",
     crate_features = ["schema"],
     crate_name = "ash_config",
+    data = glob(["migrations/**/*.sql"]),
 )
 
 exports_files(["schema.json"])

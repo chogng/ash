@@ -177,6 +177,15 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
                     source_url: None,
                 }
             }
+            crate::thread::composer::ChatInputItem::ChatReference {
+                name,
+                session_id,
+                thread_id,
+            } => ash_protocol::UserInput::ChatReference {
+                name,
+                session_id,
+                thread_id,
+            },
             crate::thread::composer::ChatInputItem::Text(text) => {
                 ash_protocol::UserInput::Text { text }
             }

@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.lib.grammars import resolve_grammars_cargo_env
 from build.lib.file_lock import exclusive_lock
+from build.lib.v8 import DEFAULT_CACHE as DEFAULT_V8_CACHE
 
 ROOT = Path(__file__).resolve().parents[2]
 ENTRY = "crates/app-server-subsecond"
@@ -134,7 +135,7 @@ def main() -> None:
     environment.update(
         ASH_DEV_RUNTIME_ROOT=str(pointer.parent / generation),
         CARGO_TARGET_DIR=str(ROOT / ".build/desktop/subsecond-target"),
-        RUSTY_V8_MIRROR=str(ROOT / "third_party/.cache/v8"),
+        RUSTY_V8_MIRROR=str(DEFAULT_V8_CACHE),
     )
     lock = workspace.parent / "driver.lock"
     with exclusive_lock(lock, create=True, blocking=False) as acquired:

@@ -146,6 +146,8 @@ import { IClipboardService } from '../../../src/ash/platform/clipboard/common/cl
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { LocalChatSessionUri } from '../../../src/ash/workbench/contrib/chat/common/model/chatUri.js';
+import { fillChatReferenceDragData } from '../../../src/ash/sessions/browser/dnd.js';
 import { IGitHubService } from '../../../src/ash/platform/github/common/githubService.js';
 import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
@@ -175,6 +177,9 @@ declare global {
 		toggleNoticeFocus(): Promise<unknown>;
 		noticeAccessibility(): { help?: string; content?: string; };
 		dictationState(): { stops: number; errors: string[]; };
+		setDictationLevel(level: number): void;
+		dictationLevelReads(): number;
+		setReduceMotion(value: 'auto' | 'on' | 'off'): Promise<void>;
 		emitDictation(text: string, final: boolean): void;
 		finishDictation(text: string, error?: string): void;
 		setInputBlocked(blocked: boolean): void;
@@ -367,28 +372,22 @@ services.registerInstance(IInstructionService, {
 		];
 	},
 });
+const referenceConversations = () => [
+	{ providerId: 'local', sessionId: composerWidget.sessionId!, threadId: composerWidget.threadId!, title: 'Current session' },
+	{ providerId: 'local', sessionId: 'active-session', threadId: 'active-thread', title: 'Active elsewhere' },
+	{ providerId: 'local', sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' },
+];
 services.registerInstance(IChatSessionNavigationService, {
 	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 	revision: 0,
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
-	getConversations: () => [
-		{ sessionId: composerWidget.sessionId!, threadId: composerWidget.threadId!, title: 'Current session' },
-		{ sessionId: 'active-session', threadId: 'active-thread', title: 'Active elsewhere' },
-		{ sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' },
-	],
+	getConversations: referenceConversations,
+	getConversationsForReference: referenceConversations,
 	startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },
 	appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined, openConversation: async (sessionId, threadId) => { recordDestination({ sessionId, threadId }); },
 });
 services.registerInstance(IChatService, {
-	readThread: async (sessionId: string, threadId: string) => ({
-		transcript: {
-			sessionId, threadId, durableSequence: 2, revision: 1, entries: [
-				{ type: 'item', transient: false, item: { type: 'userMessage', text: 'Design the attachment picker' } },
-				{ type: 'item', transient: false, item: { type: 'agentMessage', text: 'Use one resource search owner' } },
-				{ type: 'item', transient: false, item: { type: 'reasoning', text: 'Private reasoning is not attached' } },
-			]
-		}
-	}),
+	readThread: async () => { throw new Error('Conversation references should be sent as identities'); },
 } as unknown as IChatService);
 resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => [{ id: 'repo', label: 'workspace', path: '/workspace', root: 'file:///workspace', head: { type: 'branch', name: 'main', objectId: 'abc' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'alpha' } }] }]));
 
@@ -575,12 +574,15 @@ let dictationStops = 0;
 let emitDictation: ((text: string, final: boolean) => void) | undefined;
 let finishDictation: ((result: { text: string; error?: string; }) => void) | undefined;
 const dictationFixture = new URLSearchParams(location.search).has('dictation');
+const dictationConnecting = new URLSearchParams(location.search).has('dictationConnecting');
+const dictationAudio = dictationFixture ? resources.add(installTestDictationAudio(window)) : undefined;
 if (dictationFixture) {
-	resources.add(installTestDictationAudio(window));
 	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 }
 services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixture ? createTestDictationBackend(resources, {
+	getOptions: async () => ({ inputDevices: [], languages: ['en', 'zh'] }),
 	start: async (_options, transcript) => {
+		if (dictationConnecting) await new Promise<void>(() => { });
 		emitDictation = transcript;
 		return {
 			stop: async () => {
@@ -893,6 +895,19 @@ const delegate: ChatInputDelegate = {
 	resolveInteraction: async response => { if (response.type === 'approval' || response.type === 'toolResultReview') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
+const conversationDrop = new URLSearchParams(location.search).has('conversationDrop');
+if (conversationDrop) {
+	const row = document.createElement('div');
+	row.id = 'conversation-drop-source';
+	row.draggable = true;
+	row.textContent = 'Earlier design';
+	document.querySelector('main')!.before(row);
+	resources.add(addDisposableListener(row, 'dragstart', event => {
+		if (!event.dataTransfer) return;
+		const drag = resources.add(fillChatReferenceDragData(event.dataTransfer, LocalChatSessionUri.forSession('previous-session', 'previous-thread')));
+		row.addEventListener('dragend', () => drag.dispose(), { once: true });
+	}));
+}
 registerCodeEditorServices(services);
 resources.add(services.createInstance(ChatInputSessionLinkProvider));
 resources.add(services.createInstance(ChatReferenceAttachmentWidgetContribution));
@@ -909,7 +924,7 @@ const workspaceChanged = resources.add(new Emitter<IWorkspacePickerItem | undefi
 let selectedWorkspace: IWorkspacePickerItem | undefined;
 const workspaceChoices = [{ uri: URI.file('/fixture/workspace'), label: 'Fixture workspace', isFolder: true }];
 let part!: ChatInputPart;
-part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
+part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, services.get(IContextMenuService), services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
@@ -1037,6 +1052,7 @@ function sampleContextCategories(tokens: number): ChatContextUsage['categories']
 
 let state: ChatInputState = {
 	mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready',
+	...(conversationDrop ? { conversation: { sessionId: composerWidget.sessionId!, threadId: composerWidget.threadId! } } : {}),
 	contextUsage: { estimatedTokens: 200, contextWindow: 1000, autoCompactAt: 800, categories: sampleContextCategories(200), latestRequestTokens: 180 }, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
 	interaction: {
 		requestId: 'approval', request: {
@@ -1142,6 +1158,9 @@ window.ashChatInputIntegration = {
 	recoveryState: () => ({ pending: finishSubmission !== undefined, drafts: recoveryDrafts }),
 	setInputBlocked: inputBlocked => { state = { ...state, inputBlocked }; part.render(state); },
 	dictationState: () => ({ stops: dictationStops, errors: notifications.model.getNotifications().map(item => item.message) }),
+	setDictationLevel: level => dictationAudio?.setLevel(level),
+	dictationLevelReads: () => dictationAudio?.levelReads ?? 0,
+	setReduceMotion: value => services.get(IConfigurationService).updateValue('workbench.reduceMotion', value),
 	emitDictation: (text, final) => emitDictation?.(text, final),
 	finishDictation: (text, error) => finishDictation?.({ text, error }),
 	finishPaste: () => CopyPasteController.get(inlineEditor!.codeEditor)!.finishedPaste(),

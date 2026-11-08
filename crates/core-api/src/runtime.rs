@@ -204,6 +204,11 @@ pub trait AgentRuntime {
     ) -> Result<ThreadView, CoreError>;
     fn replace_thread(&self, request: ReplaceThreadRequest) -> Result<ThreadView, CoreError>;
     fn rewind_thread(&self, request: RewindThreadRequest) -> Result<ThreadView, CoreError>;
+    /// Finds a previously created rewind branch without provisioning a worktree.
+    fn read_rewound_thread(
+        &self,
+        request: &RewindThreadRequest,
+    ) -> Result<Option<ThreadView>, CoreError>;
     fn restore_message(&self, request: RestoreMessageRequest) -> Result<ThreadView, CoreError>;
     fn move_thread_history(
         &self,
@@ -262,6 +267,14 @@ pub trait AgentRuntime {
         thread_id: &ThreadId,
         request: SteerTurnRequest,
     ) -> Result<TurnReceipt, CoreError>;
+    /// Returns only an already delivered steer with the same target and input.
+    fn replay_steer(
+        &self,
+        thread_id: &ThreadId,
+        command_id: &CommandId,
+        turn_id: &TurnId,
+        input: &[UserInput],
+    ) -> Result<Option<TurnReceipt>, CoreError>;
     fn interrupt_turn(
         &self,
         thread_id: &ThreadId,

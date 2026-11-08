@@ -105,6 +105,41 @@ pub struct CommandSessionUpdate {
     pub stderr: CommandSessionOutput,
 }
 
+/// A byte-preserving read of a PTY already owned by the command executor.
+pub struct CommandTerminalOutput {
+    pub bytes: Vec<u8>,
+    pub next_cursor: u64,
+    pub gap: bool,
+    pub exited: bool,
+    pub exit_code: Option<i32>,
+}
+
+/// Keeps a PTY's bounded output readable after the tool session is retired.
+pub struct CommandTerminalReader(Arc<(Mutex<SessionData>, Notify)>);
+
+impl CommandTerminalReader {
+    pub fn read(&self, cursor: u64) -> Result<CommandTerminalOutput, ExecutionError> {
+        let (data, _) = &*self.0;
+        let state = data
+            .lock()
+            .map_err(|_| session_error("command session output is unavailable"))?;
+        let (bytes, next_cursor, gap) = state.stdout.read_bytes(cursor)?;
+        let exit_code = match &state.final_state {
+            Some(SessionFinal::Outcome(CommandExecutionOutcome::Completed(output))) => {
+                output.exit_code
+            }
+            _ => None,
+        };
+        Ok(CommandTerminalOutput {
+            bytes,
+            next_cursor,
+            gap,
+            exited: state.final_state.is_some(),
+            exit_code,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandSessionStart {
     Completed(CommandExecutionOutcome),
@@ -198,6 +233,15 @@ impl StreamBuffer {
     }
 
     fn read(&self, cursor: u64) -> Result<CommandSessionOutput, ExecutionError> {
+        let (bytes, next_cursor, gap) = self.read_bytes(cursor)?;
+        Ok(CommandSessionOutput {
+            text: String::from_utf8_lossy(&bytes).into_owned(),
+            next_cursor,
+            gap,
+        })
+    }
+
+    fn read_bytes(&self, cursor: u64) -> Result<(Vec<u8>, u64, bool), ExecutionError> {
         let end = self.end();
         if cursor > end {
             return Err(session_error("output cursor is beyond the current stream"));
@@ -205,11 +249,7 @@ impl StreamBuffer {
         let actual = cursor.max(self.start);
         let skip = usize::try_from(actual - self.start).unwrap_or(self.bytes.len());
         let bytes = self.bytes.iter().skip(skip).copied().collect::<Vec<_>>();
-        Ok(CommandSessionOutput {
-            text: String::from_utf8_lossy(&bytes).into_owned(),
-            next_cursor: end,
-            gap: cursor < self.start,
-        })
+        Ok((bytes, end, cursor < self.start))
     }
 
     fn retained(&self) -> (Vec<u8>, bool) {
@@ -384,6 +424,18 @@ impl<B: SandboxBackend> ProcessExecutor<B> {
         record
             .read(id, cursor, wait_budget)
             .map(|(update, _)| update)
+    }
+
+    pub fn command_terminal_reader(
+        &self,
+        owner: &ProcessSessionOwner,
+        id: &CommandSessionId,
+    ) -> Result<CommandTerminalReader, ExecutionError> {
+        let record = self.record(owner, id)?;
+        if !matches!(record.io, ash_sandboxing::ProcessIo::Pty(_)) {
+            return Err(session_error("command does not have a PTY"));
+        }
+        Ok(CommandTerminalReader(Arc::clone(&record.data)))
     }
 
     /// Waits for process completion without returning for intermediate output.

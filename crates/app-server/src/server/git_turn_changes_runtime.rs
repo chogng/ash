@@ -17,6 +17,7 @@ use ash_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationResult;
 use ash_config::ConfigStore;
 use ash_core::ThreadController;
+use ash_file_access::Permission;
 use ash_protocol::CommandId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -35,11 +36,11 @@ use git_turn_changes::TurnChangeSet;
 use git_turn_changes::TurnChangeStore;
 use git_turn_changes::WriteLifecycleTracker;
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
 use worktree::ManagedDirBinding;
 use worktree::ManagedDirKind;
+use worktree::ManagedDirOwner;
 
 /// App Server adapter from Turn execution events to the Git ChangeSet domain.
 pub(super) struct GitTurnChangesRuntime {
@@ -92,7 +93,7 @@ impl Drop for GitTurnChangesRuntime {
 
 impl GitTurnChangesRuntime {
     pub(super) fn open(
-        database_path: &Path,
+        store: Arc<SqliteTurnChangeStore>,
         config: Arc<ConfigStore>,
         threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
@@ -100,10 +101,7 @@ impl GitTurnChangesRuntime {
         updates: Arc<UpdateBroker>,
         workflows: Arc<workflows::Store>,
     ) -> Result<Arc<Self>, String> {
-        let store = Arc::new(
-            SqliteTurnChangeStore::open(database_path)
-                .map_err(|error| format!("cannot open Turn change ledger: {error}"))?,
-        );
+        let history_restorations = store.path().with_extension("history-restorations");
         let ledger_store: Arc<dyn TurnChangeStore> = store.clone();
         let ledger = TurnChangeLedger::start(ledger_store).map_err(|error| error.to_string())?;
         let runtime = Arc::new_cyclic(|weak| Self {
@@ -121,7 +119,7 @@ impl GitTurnChangesRuntime {
             write_lifecycles: WriteLifecycleTracker::default(),
             watchers: RwLock::new(BTreeMap::new()),
             file_watchers: RwLock::new(BTreeMap::new()),
-            history_restorations: database_path.with_extension("history-restorations"),
+            history_restorations,
         });
         let hook_observer = Arc::new(GitRuntimeHandle(Arc::downgrade(&runtime)));
         dirs.hooks.set_execution_observer(hook_observer);
@@ -300,6 +298,33 @@ impl GitTurnChangesRuntime {
                 ManagedDirKind::Directory => "isolated non-Git directory copy".into(),
             },
         })
+    }
+
+    /// Projects only a checkout root already inside the owning Thread's current read scope.
+    pub(super) fn readable_worktree_path(&self, thread_id: &ThreadId) -> Option<String> {
+        let binding = self.binding(thread_id)?;
+        let ManagedDirOwner::Thread { thread_id: owner } = binding.owner();
+        if binding.kind() != ManagedDirKind::Git || owner != thread_id.as_str() {
+            return None;
+        }
+        let scope = self
+            .dirs
+            .file_access
+            .thread_scope(thread_id, Permission::ReadFiles)
+            .ok()??;
+        let authorization = scope.primary();
+        if authorization.dir().canonical_path() != binding.dir() {
+            return None;
+        }
+        let root = authorization
+            .dir()
+            .resolve_existing_path(binding.checkout_root())
+            .ok()?;
+        if root != binding.checkout_root() {
+            return None;
+        }
+        authorization.ensure_active().ok()?;
+        root.to_str().map(ToOwned::to_owned)
     }
 
     pub(super) fn list(

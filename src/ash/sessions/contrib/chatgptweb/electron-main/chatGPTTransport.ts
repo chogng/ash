@@ -12,7 +12,8 @@ import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.j
 import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAuthentication.js';
 
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
-const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', '/realtime/vp']);
+const createProjectPath = '/backend-api/projects';
+const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', createProjectPath, '/realtime/vp']);
 const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
 const nativeHistoryPath = (path: string): boolean => /^\/backend-api\/conversations\/[A-Za-z0-9_-]{1,240}(?:\/messages)?$/u.test(path);
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
@@ -158,7 +159,7 @@ export class ChatGPTTransport extends Disposable {
 				return response;
 			};
 			const gate = request.method === 'GET' && url.pathname === '/backend-api/conversations' ? this.options.recentHistoryGate : undefined;
-			const response = gate && authorization.cacheScope ? await gate.request(authorization.cacheScope, signal, send) : await send();
+			const response = gate && authorization.cacheScope ? await gate.request(authorization.cacheScope, this.options.native === true, signal, send) : await send();
 			const contentType = response.headers.get('content-type') ?? '';
 			const headers = new Headers();
 			const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : null;
@@ -330,6 +331,16 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 					: value.method === 'DELETE' && (deletePath(url.pathname) || projectDetailsPath(url.pathname))));
 	if (!allowed || (value.method === 'GET' && value.body !== undefined)) { throw new TypeError('Invalid ChatGPT endpoint'); }
 	if (value.method === 'DELETE' && value.body !== undefined) { throw new TypeError('Invalid ChatGPT deletion'); }
+	if (value.method === 'POST' && url.pathname === createProjectPath) {
+		let body: unknown;
+		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
+		catch { throw new TypeError('Invalid ChatGPT project creation'); }
+		if (!isRecord(body) || Object.keys(body).length !== 4
+			|| typeof body.name !== 'string' || !body.name.trim() || body.name.length > 200
+			|| body.instructions !== '' || body.emoji !== null || body.theme !== null) {
+			throw new TypeError('Invalid ChatGPT project creation');
+		}
+	}
 	if (value.method === 'PATCH' && projectUpdatePath(url.pathname)) {
 		let body: unknown;
 		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
@@ -350,7 +361,7 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 		if (!isRecord(body)) { throw new TypeError('Invalid ChatGPT conversation update'); }
 		const valid = value.method === 'PATCH'
 			? Object.keys(body).length === 1 && (typeof body.is_starred === 'boolean' || body.is_archived === true
-				|| (typeof body.gizmo_id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(body.gizmo_id)))
+				|| body.gizmo_id === null || (typeof body.gizmo_id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(body.gizmo_id)))
 			: renamePath(url.pathname)
 				? Object.keys(body).length === 1 && typeof body.title === 'string' && !!body.title.trim() && body.title.length <= 256
 				: Object.keys(body).length === 3 && body.is_anonymous === true && typeof body.conversation_id === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(body.conversation_id)

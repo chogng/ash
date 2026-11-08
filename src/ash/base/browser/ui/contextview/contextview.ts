@@ -276,11 +276,12 @@ export class ContextView
 		// Account for the surface inset before viewport fitting so rows can line up.
 		let top = anchor.top;
 		if (options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal) {
-			if (options.alignBottomTo) {
-				const rowBottom = options.alignBottomTo.getBoundingClientRect().bottom - bounds.top + options.content.scrollTop;
+			const { alignBottomTo, alignTopTo } = options;
+			if (alignBottomTo) {
+				const rowBottom = alignBottomTo.getBoundingClientRect().bottom - bounds.top + options.content.scrollTop;
 				top += anchor.height - rowBottom;
-			} else if (options.alignTopTo) {
-				top -= options.alignTopTo.getBoundingClientRect().top - bounds.top + options.content.scrollTop;
+			} else if (alignTopTo) {
+				top -= alignTopTo.getBoundingClientRect().top - bounds.top + options.content.scrollTop;
 			}
 		}
 		const result = layout2d(

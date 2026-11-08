@@ -258,6 +258,10 @@ pub struct FileFuzzyMatch {
 pub struct FileGlobCancelParams {
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,
+    /// Selects the same Session host as the original glob through a profile gateway.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub target: Option<FileGlobTarget>,
 }
 
 /// Directory identity is supplied by the owning Workspace or Session, never inferred from cwd.

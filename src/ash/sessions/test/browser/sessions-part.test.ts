@@ -64,8 +64,9 @@ import { INotificationService } from '../../../platform/notification/common/noti
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IChatService, type ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import type { IUntitledChatSession } from '../../services/sessions/common/session.js';
-import { SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
+import type { ISession, IUntitledChatSession } from '../../services/sessions/common/session.js';
+import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { ISessionsService, SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
@@ -126,6 +127,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	dom.window.document.body.replaceChildren();
 	const onDidChange = resources.add(new Emitter<void>());
+	let catalog: readonly ISession[] = [];
 	let untitledSessions: readonly IUntitledChatSession[] = [];
 	let nextUntitledSessionId = 0;
 	let activeUntitledSessionId: string | undefined;
@@ -133,11 +135,12 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		navigationRevision: 0,
 		onDidChange: onDidChange.event,
 		materializedSessions: observableValue('materialized drafts', new Map()),
-		sessions: [],
+		get sessions() { return catalog; },
 		active: undefined,
 		get untitledSessions() { return untitledSessions; },
 		get activeUntitledSession() { return untitledSessions.find(session => session.untitledSessionId === activeUntitledSessionId); },
 		state: 'ready',
+		primaryCatalogReady: true,
 		error: undefined,
 		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
 		async initialize() { },
@@ -178,6 +181,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			throw new Error('Session creation is unavailable');
 		},
 		promoteUntitledSession() { },
+		completeBackgroundSend(): never { throw new Error('Unexpected background send'); },
 		async ensureActiveThread() {
 			throw new Error('No active thread');
 		},
@@ -362,11 +366,35 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(ICustomViewService, customViews);
 	services.registerInstance(ICommandService, commandService);
 	using viewService = services.createInstance(SessionsService);
+	services.registerInstance(ISessionsService, viewService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	services.registerInstance(ICoworkTipService, resources.add(services.createInstance(CoworkTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
+	const popup = new JSDOM('', { pretendToBeVisual: true });
+	resources.add(toDisposable(() => popup.window.close()));
+	const popupClosed = resources.add(new Emitter<void>());
+	let popupFocused = false;
+	popup.window.document.hasFocus = () => popupFocused;
+	popup.window.focus = () => { };
+	const auxiliaryWindow = resources.add(new class extends Disposable {
+		readonly id = 100;
+		readonly window = popup.window as unknown as Window;
+		readonly container = popup.window.document.body;
+		readonly onWillLayout = Event.None;
+		readonly onDidLayout = Event.None;
+		readonly onBeforeUnload = Event.None;
+		readonly onDidClose = popupClosed.event;
+		readonly whenStylesHaveLoaded = Promise.resolve();
+		layout() { }
+		createState(): never { throw new Error('Unexpected popup state capture'); }
+	}());
+	services.registerInstance(IAuxiliaryWindowService, resources.add(new class extends Disposable {
+		readonly onDidOpenWindow = Event.None;
+		async open() { return auxiliaryWindow; }
+		getWindow() { return undefined; }
+	}()));
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
@@ -404,6 +432,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		newDraftVisible: observableValue('draft visibility', false),
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
+		markVisibleThreadViewed: entry => viewService.markVisibleThreadViewed(entry),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
@@ -511,7 +540,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		active: {
 			threadId: 'unavailable-thread',
 			session: {
-				sessionId: 'unavailable-session',
+				sessionId: 'unavailable-session', kind: 'code' as const,
 				title: 'Unavailable Session',
 				status: 'active',
 				nextApprovalMode: 'manual',
@@ -521,6 +550,32 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	} as const;
 	part.updateVisibleSessions([unavailable], unavailable);
 	assert.equal(await part.didActiveCodeHistoryFail(), true);
+
+	const { session, threadId } = unavailable.active;
+	const entry = { sessionId: session.sessionId, threadId };
+	const publishActivity = (timestamp: number) => {
+		catalog = [{ ...session, chats: [{ ...session.chats[0], updatedAt: new Date(timestamp) }] }];
+		onDidChange.fire();
+	};
+	await part.openInNewWindow(unavailable);
+	assert.ok(popup.window.document.querySelector('.ash-chat-auxiliary-content'));
+	publishActivity(100);
+	assert.equal(viewService.getLastViewedAt(entry), undefined);
+
+	popupFocused = true;
+	popup.window.dispatchEvent(new popup.window.Event('focus'));
+	assert.equal(viewService.getLastViewedAt(entry), 100);
+	publishActivity(200);
+	assert.equal(viewService.getLastViewedAt(entry), 200);
+
+	popupFocused = false;
+	publishActivity(300);
+	assert.equal(viewService.getLastViewedAt(entry), 200);
+	popupClosed.fire();
+	const lastViewedAfterClose = viewService.getLastViewedAt(entry);
+	popupFocused = true;
+	publishActivity(Date.now() + 60_000);
+	assert.equal(viewService.getLastViewedAt(entry), lastViewedAfterClose);
 });
 
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {

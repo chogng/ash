@@ -21,7 +21,11 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		assert.equal(layoutSetting.title, '布局样式');
 		assert.equal(layoutSetting.valueType, 'select');
 		assert.deepEqual(layoutSetting.options, [{ value: 'modern', label: 'Modern' }, { value: 'flat', label: 'Flat' }]);
-		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '会话设置');
+		const activityBarSetting = registry.getConfiguration(SessionsConfiguration.activityBarLocation)?.setting;
+		assert.ok(activityBarSetting?.valueType === 'select');
+		assert.equal(activityBarSetting.description, '将活动栏放在侧边、顶部或底部。');
+		assert.deepEqual(activityBarSetting.options.map(option => option.value), ['default', 'top', 'bottom']);
+		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '设置');
 		assert.equal(registry.getConfiguration(SESSIONS_DIFF_VIEW_MODE)?.setting?.title, '差异视图');
 		for (const [key, label] of Object.entries({
 			'sessions.settings.section.basics': '基础',
@@ -47,7 +51,7 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 	}
 });
 
-test('Activity Bar position enum keeps Workbench and Sessions settings as strings', async () => {
+test('Activity Bar positions persist as strings and legacy Hidden falls back only in Sessions', async () => {
 	const configuration = new WorkbenchConfigurationService();
 	try {
 		await configuration.updateValue(WorkbenchConfiguration.activityBarLocation, ActivityBarPosition.TOP);
@@ -59,10 +63,10 @@ test('Activity Bar position enum keeps Workbench and Sessions settings as string
 		});
 		await configuration.write(JSON.stringify({
 			[WorkbenchConfiguration.activityBarLocation]: 'hidden',
-			[SessionsConfiguration.activityBarLocation]: 'top',
+			[SessionsConfiguration.activityBarLocation]: 'hidden',
 		}), saved.revision);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarLocation), ActivityBarPosition.HIDDEN);
-		assert.equal(configuration.getValue(SessionsConfiguration.activityBarLocation), ActivityBarPosition.TOP);
+		assert.equal(configuration.getValue(SessionsConfiguration.activityBarLocation), ActivityBarPosition.DEFAULT);
 	} finally {
 		configuration.dispose();
 	}

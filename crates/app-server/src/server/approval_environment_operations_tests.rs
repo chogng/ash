@@ -338,7 +338,7 @@ fn thread_scope_uses_its_worktree_even_when_another_directory_is_selected() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 agent_id: None,
                 agent: None,
                 command_id: ash_protocol::CommandId::new("start").unwrap(),

@@ -27,12 +27,14 @@ export function readExecuteContext(value: unknown): IChatExecuteActionContext {
 	if (context.inputValue !== undefined && typeof context.inputValue !== 'string') { throw new TypeError(invalid); }
 	const options = context.acceptInputOptions;
 	if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options)
-		|| Object.keys(options).some(key => key !== 'queue' && key !== 'cancelCurrentRequest' && key !== 'sideChat')
+		|| Object.keys(options).some(key => key !== 'queue' && key !== 'cancelCurrentRequest' && key !== 'sideChat' && key !== 'background')
 		|| options.queue !== undefined && options.queue !== ChatRequestQueueKind.Queued && options.queue !== ChatRequestQueueKind.Steering
 		|| options.cancelCurrentRequest !== undefined && typeof options.cancelCurrentRequest !== 'boolean'
 		|| options.cancelCurrentRequest === true && options.queue !== undefined
 		|| options.sideChat !== undefined && typeof options.sideChat !== 'boolean'
-		|| options.sideChat === true && (options.queue !== undefined || options.cancelCurrentRequest === true))) {
+		|| options.sideChat === true && (options.queue !== undefined || options.cancelCurrentRequest === true)
+		|| options.background !== undefined && typeof options.background !== 'boolean'
+		|| options.background === true && (options.queue !== undefined || options.cancelCurrentRequest === true || options.sideChat === true))) {
 		throw new TypeError(invalid);
 	}
 	return context;
@@ -146,6 +148,15 @@ export function registerChatExecuteActions(): DisposableStore {
 	const store = new DisposableStore();
 	store.add(registerAction2(ChatSubmitAction));
 	store.add(registerAction2(CancelAction));
+	store.add(registerAction2(class CancelEdit extends Action2 {
+		constructor() {
+			super({ id: 'workbench.edit.chat.cancel', title: localize2('chat.edit.cancel', 'Cancel Edit') });
+		}
+
+		override run(accessor: ServicesAccessor): void {
+			accessor.get(IChatWidgetService).lastFocusedWidget?.cancelEditing?.();
+		}
+	}));
 	store.add(registerAction2(OpenModelPickerAction));
 	store.add(registerAction2(OpenModePickerAction));
 	store.add(registerAction2(OpenPermissionPickerAction));

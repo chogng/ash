@@ -6,12 +6,13 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
+import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { IChatWidgetService, type ChatMessagePresentation } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
@@ -20,7 +21,7 @@ import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browse
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import { ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
+import { BackgroundSendAvailableContext, ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
@@ -28,6 +29,9 @@ import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
 import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
+import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
+import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/newChatEnvironment.css';
@@ -37,6 +41,7 @@ interface INewChatWidgetOptions {
 	readonly panelId: string;
 	readonly model: ChatWidgetModel;
 	readonly createNewSession: () => void;
+	readonly messagePresentation?: ChatMessagePresentation;
 }
 
 /** Owns the native conversation and projects its composer for the active workspace. */
@@ -52,7 +57,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 
 	constructor(
 		container: HTMLElement,
-		{ panelId, model, createNewSession }: INewChatWidgetOptions,
+		{ panelId, model, createNewSession, messagePresentation }: INewChatWidgetOptions,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
@@ -65,6 +70,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IChatSessionNavigationService navigation: IChatSessionNavigationService,
+		@IEditorService editors: IEditorService,
 	) {
 		let composer!: SharedChatInputComposer;
 		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
@@ -74,10 +81,29 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			() => contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code');
 		const welcomeTitle = observableValue<string | null | undefined>('native chat welcome', undefined);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
-			undefined, undefined, undefined,
+			undefined, editors, undefined,
 			(inputContainer, delegate) => {
+				const sendInBackground: NonNullable<ChatInputDelegate['sendInBackground']> = async (text, mode, skills, contexts, signal) => {
+					const resolved = await Promise.all(contexts.map(resolveChatContextAttachment));
+					const active = await model.sendInBackground(text, mode, skills, resolved, signal);
+					if (!active || this.isDisposed) return;
+					notifications.notify({
+						severity: Severity.Info,
+						message: localize('sessions.chat.backgroundSend.sent', 'Message sent in the background.'),
+						actions: {
+							primary: [{
+								id: 'sessions.openBackgroundSession',
+								label: localize('sessions.chat.backgroundSend.open', 'Open Session'),
+								tooltip: '',
+								enabled: true,
+								run: () => navigation.openConversation(active.session.sessionId, active.threadId),
+							}],
+						},
+					});
+				};
 				composer = instantiationService.createInstance(SharedChatInputComposer, inputContainer, {
 					...delegate,
+					get sendInBackground() { return model.untitledSessionId && !model.isNestedDraft ? sendInBackground : undefined; },
 					send: async (...args: Parameters<ChatInputDelegate['send']>) => {
 						const submissionSignal = args[4];
 						if (this.isDisposed || submissionSignal?.aborted) {
@@ -102,6 +128,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				return composer.input;
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
+			messagePresentation,
 			welcomeTitle,
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		this.composer = this._register(composer);
@@ -154,11 +181,17 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		}
 		this.renderDraftNotice(parent);
 		parent.append(footer);
+		this.input.useResponsiveFooter(() => this.sessionControls?.responsivePickers ?? []);
 		refreshChatInputStack(parent);
 		this.composerThreadId = model.threadId;
 		const pickersAvailable = NewSessionPickersAvailableContext.bindTo(this.scopedContextKeys);
-		const updatePickerAvailability = () => pickersAvailable.set(this.visible && !!model.untitledSessionId && !model.isNestedDraft
-			&& !model.inputState.aiDisabled && model.inputState.phase !== 'submitting');
+		const backgroundSendAvailable = BackgroundSendAvailableContext.bindTo(this.scopedContextKeys);
+		const updatePickerAvailability = () => {
+			const available = this.visible && !!model.untitledSessionId && !model.isNestedDraft
+				&& !model.inputState.aiDisabled && model.inputState.phase !== 'submitting';
+			pickersAvailable.set(available);
+			backgroundSendAvailable.set(available && !model.inputState.inputBlocked);
+		};
 		this._register(this.onDidChangeVisibility(updatePickerAvailability));
 		this._register(autorun(reader => {
 			chatPresentation.read(reader);

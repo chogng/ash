@@ -129,6 +129,11 @@ pub struct DictationModelStatus {
     pub available: bool,
     #[ts(type = "number")]
     pub size_bytes: u64,
+    /// Expected download size, when Ash can fetch the model package.
+    #[ts(type = "number | null")]
+    pub download_size_bytes: Option<u64>,
+    /// Ordered BCP 47 tags for languages recommended by the model catalog.
+    pub recommended_languages: Vec<String>,
     /// Last process-owned preparation stage, including its terminal result.
     pub stage: Option<DictationModelStage>,
 }
@@ -169,6 +174,7 @@ pub struct DictationModelStartParams {
 pub enum DictationModelOperation {
     Prepare,
     Import { source_directory: String },
+    Warm,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -184,6 +190,10 @@ pub enum DictationModelStage {
         file: String,
         #[ts(type = "number")]
         downloaded_bytes: u64,
+        /// Cumulative bytes across the model's package files.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        package_downloaded_bytes: Option<u64>,
     },
     Loading,
     Ready,

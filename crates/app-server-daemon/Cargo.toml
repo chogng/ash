@@ -26,6 +26,7 @@ process-hardening = { workspace = true }
 build-info = { workspace = true }
 dunce = { workspace = true }
 libc = { workspace = true }
+portable-pty = { workspace = true }
 rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

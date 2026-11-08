@@ -48,7 +48,8 @@ impl ThreadController {
                 ));
             }
         }
-        let validated = user_input::validate(&input, &[])?;
+        let resolved_input = user_input::resolve_chat_references(self, &input);
+        let validated = user_input::validate(&resolved_input, &[])?;
         let command = ThreadCommand::SteerTurn {
             turn_id: request.turn_id.clone(),
             input: input.clone(),

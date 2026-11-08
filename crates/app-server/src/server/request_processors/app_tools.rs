@@ -7,10 +7,14 @@ use super::project_projection;
 use app_tools::AppToolContext;
 use app_tools::AppToolOperation;
 use app_tools::AutomationOperation;
+use app_tools::ModelEvaluationSelection;
+use app_tools::ModelEvaluationWorkspace;
 use app_tools::OpenTarget;
 use ash_app_server_protocol::protocol::app_tools::AppHostOperation;
 use ash_app_server_protocol::protocol::app_tools::AppHostRequestParams;
 use ash_app_server_protocol::protocol::app_tools::AppHostResult;
+use ash_app_server_protocol::protocol::app_tools::ModelComparisonSelection;
+use ash_app_server_protocol::protocol::app_tools::ModelComparisonWorkspaceMode;
 use ash_app_server_protocol::protocol::automation::AutomationDeleteParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunParams;
 use ash_app_server_protocol::protocol::automation::AutomationRunsParams;
@@ -132,7 +136,7 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
             AppToolOperation::ReadThread { session_id, thread_id } => self.context.session_thread_read(&json!({"sessionId":session_id,"threadId":thread_id,"history":{"type":"latest","turnLimit":20}})).map_err(rpc_error)?,
             AppToolOperation::CreateThread { title } => {
                 let caller = self.context.session_view(&context.session_id).map_err(rpc_error)?;
-                serde_json::to_value(self.context.create_session(SessionCreateParams { surface: None, agent_id: None, agent: Default::default(), command_id, title, execution_target: caller.execution_target, branch_name: None, worktree_start: None, environment_variables: None }).map_err(rpc_error)?).map_err(json_error)?
+                serde_json::to_value(self.context.create_session(SessionCreateParams { kind: caller.kind, agent_id: None, agent: Default::default(), command_id, title, execution_target: caller.execution_target, branch_name: None, worktree_start: None, environment_variables: None }).map_err(rpc_error)?).map_err(json_error)?
             }
             AppToolOperation::ForkThread { session_id, thread_id, title } => serde_json::to_value(self.context.fork_session_request(SessionMutation { command_id, session_id }, thread_id, title).map_err(rpc_error)?).map_err(json_error)?,
             AppToolOperation::SetThreadArchived { session_id, archived } => {
@@ -154,6 +158,26 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
             AppToolOperation::AutomationUpdate { operation } => self.execute_app_automation(operation, &command_id, context)?,
             other => {
                 let operation = match other {
+                    AppToolOperation::GetComparisonModels { workspace_mode } => AppHostOperation::GetComparisonModels {
+                        workspace_mode: comparison_workspace(workspace_mode),
+                    },
+                    AppToolOperation::CreateModelComparison { workspace_mode, prompt, attempts, judge, synthesizer } => {
+                        if matches!(caller.origin, ash_protocol::ThreadOrigin::Comparison { .. })
+                            || comparison_evidence(&caller, context).is_ok() {
+                            return Err(CoreError::Policy("comparison participants cannot launch further comparisons".into()));
+                        }
+                        AppHostOperation::CreateModelComparison {
+                            workspace_mode: comparison_workspace(workspace_mode),
+                            prompt,
+                            attempts: attempts.into_iter().map(comparison_selection).collect(),
+                            judge: judge.map(comparison_selection),
+                            synthesizer: synthesizer.map(comparison_selection),
+                        }
+                    }
+                    AppToolOperation::ListModelComparisons { include_archived, workspace, comparison_ids, cursor } => AppHostOperation::ListModelComparisons {
+                        include_archived, workspace, comparison_ids, cursor,
+                    },
+                    AppToolOperation::ReadModelComparison { comparison_id } => AppHostOperation::ReadModelComparison { comparison_id },
                     AppToolOperation::TasksList { directory } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Read)?; AppHostOperation::TasksList { directory } }
                     AppToolOperation::TasksDescribe { directory, task_id, revision } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Execute)?; AppHostOperation::TasksDescribe { directory, task_id, revision } }
                     AppToolOperation::TasksRun { directory, task_id, revision } => { let directory = self.validate_task_directory(&directory, context, TaskDirectoryAccess::Execute)?; AppHostOperation::TasksRun { directory, task_id, revision } }
@@ -332,12 +356,13 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
         command_id: &CommandId,
         context: &AppToolContext,
     ) -> Result<Value, CoreError> {
+        let scope = ash_automation::AutomationScope::CodeOnly;
         let result = match operation {
-            AutomationOperation::List {} => self.automation_processor.automation_list(),
+            AutomationOperation::List {} => self.automation_processor.automation_list(scope),
             AutomationOperation::View { id } => {
                 let list = self
                     .automation_processor
-                    .automation_list()
+                    .automation_list(scope)
                     .map_err(rpc_error)?;
                 return list["automations"]
                     .as_array()
@@ -372,14 +397,16 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                         "PR artifact Autopilot requires explicit user authorization".into(),
                     ));
                 }
-                self.automation_processor
-                    .automation_write(AutomationWriteParams {
+                self.automation_processor.automation_write(
+                    AutomationWriteParams {
                         command_id: command_id.to_string(),
                         id,
                         expected_revision,
                         definition,
                         status,
-                    })
+                    },
+                    scope,
+                )
             }
             AutomationOperation::Delete {
                 id,
@@ -390,6 +417,7 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                     expected_revision,
                 })
                 .map_err(json_error)?,
+                scope,
             ),
             AutomationOperation::Run { id } => self.automation_processor.automation_run(
                 &serde_json::to_value(AutomationRunParams {
@@ -397,13 +425,16 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                     command_id: command_id.to_string(),
                 })
                 .map_err(json_error)?,
+                scope,
             ),
             AutomationOperation::Runs { id } => self.automation_processor.automation_runs(
                 &serde_json::to_value(AutomationRunsParams { id, limit: 20 })
                     .map_err(json_error)?,
+                scope,
             ),
             AutomationOperation::Stop { run_id } => self.automation_processor.automation_stop(
                 &serde_json::to_value(AutomationStopParams { run_id }).map_err(json_error)?,
+                scope,
             ),
         };
         result.map_err(rpc_error)
@@ -560,6 +591,22 @@ fn host_error(error: crate::client_host::ClientHostError) -> CoreError {
     match error {
         crate::client_host::ClientHostError::Cancelled(reason) => CoreError::Cancelled(reason),
         other => CoreError::Execution(format!("{other:?}")),
+    }
+}
+
+fn comparison_workspace(mode: ModelEvaluationWorkspace) -> ModelComparisonWorkspaceMode {
+    match mode {
+        ModelEvaluationWorkspace::Worktree => ModelComparisonWorkspaceMode::Worktree,
+        ModelEvaluationWorkspace::Folderless => ModelComparisonWorkspaceMode::Folderless,
+    }
+}
+
+fn comparison_selection(selection: ModelEvaluationSelection) -> ModelComparisonSelection {
+    ModelComparisonSelection {
+        source_id: selection.source_id,
+        agent: selection.agent,
+        model: selection.model,
+        reasoning_effort: selection.reasoning_effort,
     }
 }
 

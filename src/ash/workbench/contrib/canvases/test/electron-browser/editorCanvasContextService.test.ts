@@ -12,12 +12,12 @@ import type { IConfigurationService } from '../../../../../platform/configuratio
 import type { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
 import type { SessionCatalogReadResult } from '../../../../../platform/agentHost/common/agent.js';
 import type { IAgentHostCanvasCollection } from '../../common/agentHostCanvas.js';
-import type { ICanvasOwner } from '../../common/canvas.js';
+import type { ICanvasOwner } from '../../../../common/canvasReference.js';
 import { EditorCanvasContextService } from '../../electron-browser/editorCanvasContextService.js';
 
 suite('IDE Canvas conversation contexts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	const active: SessionCatalogReadResult = { session: { sessionId: 'source', title: 'Source', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, status: 'active', threads: [{ threadId: 'one', title: 'One', status: 'active' }] } };
+	const active: SessionCatalogReadResult = { session: { sessionId: 'source', kind: 'code' as const, title: 'Source', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, status: 'active', threads: [{ threadId: 'one', title: 'One', status: 'active' }] } };
 	const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 
 	test('widget changes preserve background owners and only an authoritative catalog removal retires them', async () => {

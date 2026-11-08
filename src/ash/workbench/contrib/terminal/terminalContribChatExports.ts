@@ -4,6 +4,7 @@ import type { ITerminalOutputSnapshot } from '../../../platform/terminal/common/
 /** Stable command identity shared by terminal menus and Chat integration. */
 export const enum TerminalChatCommandId {
 	AttachToChat = 'workbench.action.terminal.attachToChat',
+	RevealAgentCommand = 'workbench.action.terminal.revealAgentCommand',
 }
 
 /** Only accepted display snapshots offer a passive terminal preview. */

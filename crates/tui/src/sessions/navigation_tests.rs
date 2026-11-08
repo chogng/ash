@@ -174,7 +174,7 @@ fn manager_repeats_only_navigation_and_keeps_mutations_for_key_presses() {
 
 fn session(value: &str) -> Session {
     Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         model: None,
         session_id: session_id(value),

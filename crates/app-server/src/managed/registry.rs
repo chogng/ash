@@ -813,9 +813,11 @@ impl ash_automation::AutomationExecutor for ProfileAppServerRegistry {
         run: &ash_protocol::AutomationRun,
         now: ash_protocol::UnixMillis,
     ) -> Result<ash_protocol::AutomationRun, String> {
+        let directory = (run.definition.session != ash_protocol::AutomationSession::NewChat)
+            .then(|| PathBuf::from(&run.definition.directory));
         let options = ConnectionOptions::new(
             self.host.profile_root(),
-            Some(PathBuf::from(&run.definition.directory)),
+            directory,
             GrantSource::UserConfig,
             self.host.product_services().map(Path::to_path_buf),
         );
@@ -848,6 +850,7 @@ fn open_server_with_profile_runtime(
 ) -> Result<AppServer, String> {
     let mut options = AppServerOptions::new(host.profile_root())
         .with_host_grok_auth()
+        .with_host_kimi_credentials()
         .with_host_zcode_credentials()
         .with_profile_runtime(profile_runtime);
     options = options.with_pty_helper(std::env::current_exe().map_err(|error| error.to_string())?);

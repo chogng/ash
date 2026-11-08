@@ -35,6 +35,7 @@ import { CommandsRegistry, ICommandService } from '../../../platform/commands/co
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
+import { IProjectService, type Project } from '../../../platform/projects/common/projectService.js';
 import '../../contrib/sessions/browser/views/sessionGroupAppearancePicker.js';
 
 registerNewChatActions();
@@ -78,6 +79,7 @@ test('Sessions owns its New Session command and routes explicit provider choices
 	const viewService: ISessionsService = {
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
+		markVisibleThreadViewed() { },
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: onDidChange.event,
@@ -188,8 +190,8 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	services.registerInstance(ISessionsManagementService, {
 		resolveNewSessionTarget: async () => ({ providerId: 'test', workspace: { type: 'current' } }),
 		sessions: [
-			{ sessionId: 'session', title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] },
-			{ sessionId: 'legacy', title: 'Legacy session', status: 'active', chats: [{ threadId: 'legacy', status: 'active', origin: { type: 'root' } }] },
+			{ sessionId: 'session', kind: 'code' as const, title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] },
+			{ sessionId: 'legacy', kind: 'code' as const, title: 'Legacy session', status: 'active', chats: [{ threadId: 'legacy', status: 'active', origin: { type: 'root' } }] },
 		],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
@@ -218,7 +220,7 @@ test('Sessions History ranks recent active chats ahead of unvisited chats', asyn
 	const quickInput = new TestQuickInputService();
 	const sessions: readonly ISession[] = [
 		{
-			sessionId: 'session-1',
+			sessionId: 'session-1', kind: 'code' as const,
 			title: 'First Session',
 			status: 'active',
 			nextApprovalMode: 'manual',
@@ -228,14 +230,14 @@ test('Sessions History ranks recent active chats ahead of unvisited chats', asyn
 			],
 		},
 		{
-			sessionId: 'recent',
+			sessionId: 'recent', kind: 'code' as const,
 			title: 'Recent Session',
 			status: 'active',
 			nextApprovalMode: 'manual',
 			chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }],
 		},
 		{
-			sessionId: 'session-2',
+			sessionId: 'session-2', kind: 'code' as const,
 			title: 'Archived Session',
 			status: 'archived',
 			nextApprovalMode: 'manual',
@@ -270,7 +272,7 @@ test('Session History shows each branch management state in Chinese before openi
 	const opened: string[] = [];
 	services.registerInstance(ISessionsManagementService, {
 		sessions: [{
-			sessionId: 'branch-session', title: 'Branch session', status: 'active', nextApprovalMode: 'manual',
+			sessionId: 'branch-session', kind: 'code' as const, title: 'Branch session', status: 'active', nextApprovalMode: 'manual',
 			chats: [
 				{ threadId: 'root', origin: { type: 'root' }, status: 'active', management: { status: 'readyForReview', statusChangedAtUnixMs: 10 } },
 				{ threadId: 'fork', title: '独立分支名称', origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 }, status: 'active', management: { status: 'needsInput', statusChangedAtUnixMs: 20, activity: { type: 'question', text: 'Choose a path' } } },
@@ -296,7 +298,7 @@ test('Session History has an unread group for new background activity since the 
 	using commands = new CommandService(services);
 	const quickInput = new TestQuickInputService();
 	const catalog: ISession[] = ['unread', 'read', 'working'].map(sessionId => ({
-		sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		sessionId, kind: 'code' as const, title: sessionId, status: 'active', nextApprovalMode: 'manual',
 		chats: [{
 			threadId: 'root', origin: { type: 'root' }, status: 'active',
 			updatedAt: new Date(200), executionStatus: sessionId === 'working' ? 'running' : 'completed'
@@ -321,7 +323,7 @@ test('Session Details opens a localized read-only snapshot of active user sessio
 		using commands = new CommandService(services);
 		const opened: Parameters<IEditorService['openEditor']>[] = [];
 		const local: ISession = {
-			sessionId: 'local', title: 'Local\nTask', status: 'active', nextApprovalMode: 'manual', chats: [],
+			sessionId: 'local', kind: 'code' as const, title: 'Local\nTask', status: 'active', nextApprovalMode: 'manual', chats: [],
 			workspace: { authorityId: 'local', root: 'C:\\work' },
 		};
 		services.registerInstance(ISessionsManagementService, {
@@ -349,7 +351,7 @@ test('Show Conversation Recap opens the latest saved text for the selected branc
 	using commands = new CommandService(services);
 	const opened: Parameters<IEditorService['openEditor']>[] = [];
 	const session: ISession = {
-		sessionId: 'session', title: 'Task', status: 'active', nextApprovalMode: 'manual',
+		sessionId: 'session', kind: 'code' as const, title: 'Task', status: 'active', nextApprovalMode: 'manual',
 		chats: [
 			{ threadId: 'root', origin: { type: 'root' }, status: 'active', recap: 'Root recap' },
 			{ threadId: 'branch', origin: { type: 'root' }, status: 'active', recap: 'Branch recap' },
@@ -370,7 +372,7 @@ test('Show Conversation Recap opens the latest saved text for the selected branc
 test('Moving a conversation follows its destination only if navigation stayed on the original conversation', async () => {
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
-	const source: ISession = { sessionId: 'source', title: 'Source', status: 'active', nextApprovalMode: 'manual', chats: [] };
+	const source: ISession = { sessionId: 'source', kind: 'code' as const, title: 'Source', status: 'active', nextApprovalMode: 'manual', chats: [] };
 	const destination: ISession = { ...source, sessionId: 'destination', title: 'Destination' };
 	const calls: string[][] = [];
 	let navigationRevision = 0;
@@ -426,6 +428,33 @@ test('The group appearance picker localizes choices and saves or resets the sele
 		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'icon');
 		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'color');
 		assert.deepEqual(updates, [['review', 'icon', 'chat'], ['review', 'color', 'terminal.ansiRed'], ['review', 'icon', undefined]]);
+	} finally { resetNlsResolver(); }
+});
+
+test('The project appearance command uses the project revision and the shared localized picker', async () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const input = new TestQuickInputService(['聊天', '默认', null]);
+		services.registerInstance(IQuickInputService, input);
+		const project: Project = {
+			id: 'review', revision: 3, name: 'Review', archived: false, createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
+			description: '', materials: [], sessionIds: [], color: 'terminal.ansiRed',
+		};
+		const updates: unknown[][] = [];
+		services.registerInstance(IProjectService, {
+			read: async (id: string) => { assert.equal(id, project.id); return project; },
+			setAppearance: async (...args: unknown[]) => { updates.push(args); },
+		} as IProjectService);
+		await commands.executeCommand('sessions.list.changeProjectAppearance', 'review', 'icon');
+		assert.equal(input.picker?.ariaLabel, '更改项目图标');
+		await commands.executeCommand('sessions.list.changeProjectAppearance', 'review', 'color');
+		assert.equal(input.picker?.ariaLabel, '更改项目颜色');
+		assert.equal(input.picker?.activeItems[0]?.id, 'terminal.ansiRed');
+		await commands.executeCommand('sessions.list.changeProjectAppearance', 'review', 'color');
+		assert.deepEqual(updates, [[project, 'icon', 'chat'], [project, 'color', undefined]]);
 	} finally { resetNlsResolver(); }
 });
 

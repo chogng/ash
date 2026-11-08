@@ -417,7 +417,7 @@ suite('Editor font completion', () => {
 			const document = { uri: UserSettingsResource.toString(), languageId: 'jsonc', version: 1, text: '{ "editor.fontFamily": ' };
 			const position = { line: 0, character: document.text.length };
 			const before = await features.complete(document, position);
-			assert.deepEqual(before?.items.map(item => item.label), ['""']);
+			assert.deepEqual(before?.items.map(item => item.label), ['', 'Ash Mono', 'Ash Mono SC'].map(family => JSON.stringify(family)));
 			assert.equal(schemaReads, 1);
 			const pending = new DeferredPromise<IJSONSchemaSnippet[]>();
 			const registration = registerEditorFontConfigurations(() => pending.p);
@@ -426,7 +426,7 @@ suite('Editor font completion', () => {
 			await pending.complete([{ body: 'Test Mono' }, { body: '字体 "测试"' }]);
 			await registration;
 			const after = await features.complete(document, position);
-			assert.deepEqual(after?.items.map(item => item.label), ['', 'Test Mono', '字体 "测试"'].map(family => JSON.stringify(family)));
+			assert.deepEqual(after?.items.map(item => item.label), ['', 'Ash Mono', 'Ash Mono SC', 'Test Mono', '字体 "测试"'].map(family => JSON.stringify(family)));
 			assert.equal(schemaReads, 2);
 		} finally {
 			editorConfiguration.properties[key] = originalSchema;

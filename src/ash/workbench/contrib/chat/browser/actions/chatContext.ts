@@ -26,12 +26,11 @@ import { filterQuickPickItems } from '../../../../../platform/quickinput/browser
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './chatToolPicker.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
-import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { readLocalRepositories } from '../../../github/common/localRepository.js';
-import { captureChatReference } from '../../common/attachments/chatVariableEntries.js';
+import { createChatReferenceVariableEntry } from '../../common/attachments/chatVariableEntries.js';
 
 /** Registers stateless sources once; each invocation borrows its composer's state. */
 export class ChatContextContributions extends Disposable {
@@ -222,7 +221,6 @@ class SessionReferenceContextPickerPick implements IChatContextPickerItem {
 	public get label(): string { return localize('chat.context.sessions', 'Sessions…'); }
 	constructor(
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
-		@IChatService private readonly chat: IChatService,
 	) { }
 	public asPicker(widget?: IChatWidget): IChatContextPicker {
 		const current = widget ?? this.navigation.getActiveConversation();
@@ -237,7 +235,8 @@ class SessionReferenceContextPickerPick implements IChatContextPickerItem {
 			picks: picksWithPromiseFn(async query => [...filterQuickPickItems(conversations.map(conversation => ({
 				label: conversation.title,
 				description: conversation.providerLabel,
-				asAttachment: () => captureChatReference(this.chat, conversation, controller.signal),
+				asAttachment: () => controller.signal.aborted ? []
+					: createChatReferenceVariableEntry(conversation.sessionId, conversation.threadId, conversation.title),
 			})), query)]),
 			dispose: () => controller.abort(),
 		};

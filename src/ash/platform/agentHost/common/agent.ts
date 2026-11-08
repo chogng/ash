@@ -30,6 +30,7 @@ export interface SessionMutationParams {
 export type AgentInput =
 	| { readonly type: 'text'; readonly text: string; }
 	| { readonly type: 'context'; readonly name: string; readonly content: string; readonly sourceUrl?: string; }
+	| { readonly type: 'chatReference'; readonly name: string; readonly sessionId: SessionId; readonly threadId: ThreadId; }
 	| { readonly type: 'toolSelection'; readonly disabled: string[]; }
 	| { readonly type: 'image'; readonly url: string; }
 	| { readonly type: 'imageAttachment'; readonly attachment: ChatImageAttachment; }
@@ -104,10 +105,10 @@ export interface SessionWorktreeStart {
 	readonly commit: string;
 }
 
-export type SessionSurface = 'chat' | 'code';
+export type SessionKind = 'chat' | 'code';
 
 export interface SessionCreateParams {
-	readonly surface?: SessionSurface;
+	readonly kind: SessionKind;
 	readonly worktreeStart?: SessionWorktreeStart;
 	readonly environmentVariables?: Readonly<Record<string, string>>;
 	readonly commandId: string;
@@ -143,7 +144,7 @@ export interface AgentSessionChange {
 }
 
 export interface AgentSession {
-	readonly surface?: SessionSurface;
+	readonly kind: SessionKind;
 	readonly sessionId: string;
 	readonly source?: 'automation';
 	readonly title: string;
@@ -551,6 +552,8 @@ export interface PlanUpdate {
 }
 
 export interface Turn {
+	/** Execution directory at acceptance, when recorded by the Thread owner. */
+	readonly directory?: SessionCreateParams['executionTarget'];
 	/** Missing only in older local consumers; the protocol adapter always preserves the Core purpose. */
 	readonly kind?: 'coding' | 'review' | 'advisor' | 'shell' | 'tool' | 'contextCompaction';
 	readonly turnId: string;
@@ -682,7 +685,7 @@ export interface ActionApprovalCapability {
 	readonly scope: string;
 }
 
-export type ActionApprovalDecision = 'approveOnce' | 'approveForSession' | 'approveAndSaveRule' | 'decline';
+export type ActionApprovalDecision = 'approveOnce' | 'approveForSession' | 'approveFileWriteForSession' | 'approveCommandPrefixForSession' | 'approveAndSaveRule' | 'decline';
 
 export interface ActionApprovalRiskAssessment {
 	readonly riskLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -693,6 +696,7 @@ export interface ActionApprovalRequest {
 	readonly riskAssessment?: ActionApprovalRiskAssessment | null;
 	readonly allowedDecisions?: readonly ActionApprovalDecision[];
 	readonly command?: { readonly program: string; readonly arguments: readonly string[]; } | null;
+	readonly sessionCommandPrefix?: { readonly program: string; readonly arguments: readonly string[]; } | null;
 	/** Captured sandbox enforcement evidence; an ordinary failed command is not a denial. */
 	readonly sandboxDenial?: {
 		readonly reason: string;
@@ -824,7 +828,9 @@ export type ThreadCommittedEvent =
 		| 'contextCheckpointCommitted'
 		| 'contextOverflowRecoveryCommitted'
 		| 'turnAccepted'
+		| 'turnSkillsLoaded'
 		| 'turnStarted'
+		| 'turnSkillsLoaded'
 		| 'turnPermissionPolicyChanged'
 		| 'turnSteered'
 		| 'turnSteerDelivered'
@@ -889,7 +895,14 @@ export interface AgentVoiceTranscript {
 	readonly afterItemId: string | null;
 }
 
+export interface LoadedTurnSkill {
+	readonly name: string;
+	readonly source: string;
+	readonly reason: 'explicit' | 'automatic';
+}
+
 export type ThreadTranscriptEntry =
+	| { readonly type: 'skillLoad'; readonly entryId: string; readonly turnId: string; readonly skill: LoadedTurnSkill; }
 	| { readonly type: 'voiceTranscript'; readonly entryId: string; readonly turnId?: undefined; readonly transcript: AgentVoiceTranscript; }
 	| { readonly type: 'hookRun'; readonly entryId: string; readonly turnId: string; readonly run: ChatHookRun; }
 	| {

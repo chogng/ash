@@ -11,21 +11,21 @@ import { ViewContainerLocation } from '../../../../../workbench/common/views.js'
 import { SessionsList, type SessionsListPresentation } from './sessionsList.js';
 import type { SessionsCatalogAccessibility, SessionsCatalogListInput } from './sessionsCatalogList.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../../chat/common/constants.js';
+import { IProjectDialogService } from '../../../projects/browser/projectDialogService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
 
 export function registerSessionsNavigation(): IDisposable {
-	if (SessionsViewRegistry.getViewContainers(ViewContainerLocation.Sidebar).some(container => container.id === CHAT_WORKSPACE_NAVIGATION_ID)) {
-		return Disposable.None;
-	}
+	const hasChatCatalog = SessionsViewRegistry.getViewContainers(ViewContainerLocation.Sidebar).some(container => container.id === CHAT_WORKSPACE_NAVIGATION_ID);
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
 		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsView, ['chat'])],
 		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(SessionsView, ['code'])],
 	] as const) {
+		if (id === SESSIONS_NAVIGATION_CONTAINER_ID && hasChatCatalog) continue;
 		registrations.add(SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location: ViewContainerLocation.Sidebar, order: 0 }));
 		registrations.add(SessionsViewRegistry.registerViews(id, [{ id: id + '.view', title, localizationKey: { bundle: 'ash', key }, ctorDescriptor, canToggleVisibility: false }]));
 	}
@@ -46,7 +46,10 @@ export class SessionsView extends ViewPane {
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
 	private readonly embedded: boolean;
 	private readonly restoreListState?: AnimationFrameScheduler;
-	constructor(presentation: SessionsListPresentation | SessionsCatalogPresentation, parent: HTMLElement, options: IViewPaneOptions, @IInstantiationService instantiation: IInstantiationService) {
+	constructor(presentation: SessionsListPresentation | SessionsCatalogPresentation, parent: HTMLElement, options: IViewPaneOptions,
+		@IInstantiationService instantiation: IInstantiationService,
+		@IProjectDialogService private readonly projectDialogs: IProjectDialogService,
+	) {
 		const embedded = typeof presentation !== 'string' && 'openCommand' in presentation;
 		super(parent, embedded ? { ...options, headerSize: 32, minimumBodySize: 0 } : options);
 		this.embedded = embedded;
@@ -56,6 +59,10 @@ export class SessionsView extends ViewPane {
 			const input = this._register(instantiation.createInstance(presentation.input));
 			input.attach(getWindow(this.element), () => this.isBodyVisible());
 			presentation = { catalog: input, accessibility: presentation.accessibility };
+		}
+		if (presentation === 'code') {
+			presentation = { createProject: () => this.projectDialogs.showCodeProjectDialog(this.element) };
+			this._register(toDisposable(() => this.projectDialogs.close(this.element)));
 		}
 		const title = localize({ bundle: 'ash.sessions', key: 'sessions.list.header' }, 'Sessions');
 		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), title, presentation);
@@ -119,7 +126,8 @@ export class SessionsView extends ViewPane {
 		// Retain the view model while only the current mode contributes sidebar rows and tab stops.
 		if (visible) this.contentElement.append(this.list.element);
 		else {
-			this.list.closeIconPickers();
+			this.projectDialogs.close(this.element);
+			this.list.closePopups();
 			this.list.element.remove();
 		}
 		if (visible && this.hiddenListState) {

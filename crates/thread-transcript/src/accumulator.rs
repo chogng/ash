@@ -187,6 +187,7 @@ impl TranscriptAccumulator {
                     } => !completed_tools.contains(&(turn_id, tool_call_id)),
                     ThreadTranscriptEntry::VoiceTranscript { .. }
                     | ThreadTranscriptEntry::HookRun { .. }
+                    | ThreadTranscriptEntry::SkillLoad { .. }
                     | ThreadTranscriptEntry::TurnPlan { .. }
                     | ThreadTranscriptEntry::TurnError { .. } => true,
                 })
@@ -235,6 +236,11 @@ impl TranscriptAccumulator {
 
     fn apply_committed(&mut self, event: &ThreadEvent, changes: &mut Vec<ThreadTranscriptChange>) {
         match event {
+            ThreadEvent::TurnSkillsLoaded { turn_id, loads, .. } => {
+                changes.extend(loads.iter().map(|load| ThreadTranscriptChange::Upsert {
+                    entry: crate::model::skill_load_entry(turn_id, load),
+                }));
+            }
             ThreadEvent::HookRunUpdated { run, .. } => {
                 if let Some(turn_id) = &run.turn_id {
                     changes.push(ThreadTranscriptChange::Upsert {
@@ -494,7 +500,8 @@ impl TranscriptAccumulator {
                 | ThreadTranscriptEntry::TurnError { .. }
                 | ThreadTranscriptEntry::ToolOutput { .. } => None,
                 ThreadTranscriptEntry::VoiceTranscript { .. }
-                | ThreadTranscriptEntry::HookRun { .. } => None,
+                | ThreadTranscriptEntry::HookRun { .. }
+                | ThreadTranscriptEntry::SkillLoad { .. } => None,
             })
             .collect::<Vec<_>>();
         for entry_id in &removed {

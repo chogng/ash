@@ -143,10 +143,10 @@ fn queue_uses_session_approval_defaults_and_replays_the_accepted_mode() {
     let response = call(&server, &mut connection, update(2, 0, "auto"));
     assert!(response.get("error").is_none(), "{response}");
     let mut accepted = Vec::new();
-    for (id, surface, expected) in [(3, Some("chat"), "manual"), (5, None, "auto")] {
-        let mut create = json!({"commandId":format!("create-{id}"),"title":"Queue route","executionTarget":null});
-        if let Some(surface) = surface {
-            create["surface"] = json!(surface);
+    for (id, kind, expected) in [(3, Some("chat"), "manual"), (5, None, "auto")] {
+        let mut create = json!({"commandId":format!("create-{id}"),"title":"Queue route","kind":"code", "executionTarget":null});
+        if let Some(kind) = kind {
+            create["kind"] = json!(kind);
         }
         let created = call(
             &server,
@@ -216,6 +216,253 @@ fn queue_is_shared_across_connections_and_uses_the_existing_turn_receipt() {
 }
 
 #[test]
+fn code_only_clients_cannot_resolve_chat_references_through_code_turns_or_queue_edits() {
+    let root = tempfile::tempdir().unwrap();
+    let (server, store) = queued_server(root.path());
+    let mut desktop = server.connection();
+    let (code, destination) = create(&server, &mut desktop);
+    let chat = call(
+        &server,
+        &mut desktop,
+        json!({"jsonrpc":"2.0","id":4,"method":"session/create","params":{
+            "commandId":"chat-source","kind":"chat","title":"Chat source","executionTarget":null
+        }}),
+    );
+    let chat = chat["result"]["session"]["sessionId"].as_str().unwrap();
+    let reference = |session: &str| json!([{"type":"chatReference","name":"Source","sessionId":session,"threadId":chat}]);
+    let mut cli = server.connection();
+    let initialized = call(
+        &server,
+        &mut cli,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "clientInfo":{"name":"ash-cli","version":"1"},"capabilities":{}
+        }}),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let direct = call(
+        &server,
+        &mut cli,
+        json!({"jsonrpc":"2.0","id":2,"method":"session/thread/read","params":{"sessionId":chat,"threadId":chat}}),
+    );
+    assert_eq!(direct["error"]["code"], -32011, "{direct}");
+
+    for (offset, request) in [
+        json!({"type":"startTurn","threadId":destination,"expectedSequence":0,"input":reference(chat)}),
+        json!({"type":"startTurn","threadId":destination,"expectedSequence":0,"input":reference(&code)}),
+        json!({"type":"steerTurn","threadId":destination,"expectedSequence":0,"turnId":"unused","input":reference(chat)}),
+        json!({"type":"rewriteThread","parentThreadId":destination,"beforeTurnId":"unused","title":"Rewrite","input":reference(chat)}),
+    ].into_iter().enumerate() {
+        let response = call(&server, &mut cli, json!({"jsonrpc":"2.0","id":3+offset,
+            "method":"session/request","params":{"commandId":format!("restricted-{offset}"),"sessionId":code,"request":request}
+        }));
+        assert_eq!(response["error"], direct["error"], "{response}");
+    }
+
+    let enqueue = json!({"jsonrpc":"2.0","id":7,"method":"queue/enqueue","params":{
+        "commandId":"cross-kind-queue","sessionId":code,"threadId":destination,"input":reference(chat)
+    }});
+    let denied = call(&server, &mut cli, enqueue.clone());
+    assert_eq!(denied["error"], direct["error"], "{denied}");
+    let allowed = call(&server, &mut desktop, enqueue);
+    let allowed: queue::QueuedMessage =
+        serde_json::from_value(allowed["result"].clone()).expect(&allowed.to_string());
+    let edit = |client: &mut crate::ConnectionState, id, revision, action| {
+        call(
+            &server,
+            client,
+            json!({"jsonrpc":"2.0","id":id,"method":"queue/edit","params":{
+                "commandId":allowed.request.command_id,"sessionId":code,"threadId":destination,
+                "expectedRevision":revision,"action":action
+            }}),
+        )
+    };
+    let paused = edit(&mut desktop, 8, allowed.revision, json!({"type":"pause"}));
+    let revision = paused["result"]["revision"].as_i64().unwrap();
+    let denied = edit(
+        &mut cli,
+        8,
+        revision,
+        json!({"type":"replace","input":reference(chat)}),
+    );
+    assert_eq!(denied["error"], direct["error"], "{denied}");
+    let denied = edit(&mut cli, 9, revision, json!({"type":"send","turnId":null}));
+    assert_eq!(denied["error"], direct["error"], "{denied}");
+    let resumed = edit(&mut desktop, 9, revision, json!({"type":"resume"}));
+    let resumed: queue::QueuedMessage =
+        serde_json::from_value(resumed["result"].clone()).expect(&resumed.to_string());
+    server.close_connection(desktop);
+    server.close_connection(cli);
+
+    // A pre-upgrade row has no record of its submitting connection's scope.
+    let mut legacy = resumed.request.clone();
+    legacy.command_id = ash_protocol::CommandId::new("legacy-cross-kind-reference").unwrap();
+    let legacy = store.enqueue(&legacy).unwrap();
+    let reopened = queue::QueueStore::open(&root.path().join("state.sqlite")).unwrap();
+    let persisted = |message: &queue::QueuedMessage| {
+        reopened.get(&message.request.command_id).unwrap().unwrap()
+    };
+    assert!(matches!(
+        server.deliver_queued_message(&persisted(&legacy)).unwrap(),
+        queue::Delivery::Rejected(reason) if reason == "referenceUnavailable"
+    ));
+    assert!(matches!(
+        server.deliver_queued_message(&persisted(&resumed)).unwrap(),
+        queue::Delivery::Started(_)
+    ));
+}
+
+#[test]
+fn referenced_session_commands_replay_after_the_source_is_deleted() {
+    let server = server();
+    let mut connection = server.connection();
+    let (session, destination) = create(&server, &mut connection);
+    let source = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0","id":4,"method":"session/create","params":{
+                "commandId":"chat-source","kind":"chat","title":"Chat source","executionTarget":null
+            }
+        }),
+    );
+    let source_id = &source["result"]["session"]["sessionId"];
+    assert!(source_id.is_string(), "{source}");
+    let input = json!([{"type":"chatReference","name":"Source","sessionId":source_id,"threadId":source_id}]);
+    let mut start = json!({
+        "jsonrpc":"2.0","id":5,"method":"session/request","params":{
+            "commandId":"start-with-reference","sessionId":session,"request":{
+                "type":"startTurn","threadId":destination,"expectedSequence":1,"input":input
+            }
+        }
+    });
+    let started = call(&server, &mut connection, start.clone());
+    assert_eq!(started["result"]["type"], "turn", "{started}");
+    super::wait_for_latest_turn(&server, &destination, ash_protocol::TurnStatus::Completed);
+    let mut rewrite = json!({
+        "jsonrpc":"2.0","id":6,"method":"session/request","params":{
+            "commandId":"rewrite-with-reference","sessionId":session,"request":{
+                "type":"rewriteThread","parentThreadId":destination,
+                "beforeTurnId":started["result"]["value"]["turnId"],"title":"Rewritten","input":input
+            }
+        }
+    });
+    let rewritten = call(&server, &mut connection, rewrite.clone());
+    let branch = rewritten["result"]["value"]["threadId"]
+        .as_str()
+        .expect(&rewritten.to_string());
+    super::wait_for_latest_turn(&server, branch, ash_protocol::TurnStatus::Completed);
+
+    let deleted = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0","id":7,"method":"session/request","params":{
+                "commandId":"delete-source","sessionId":source_id,"request":{"type":"delete"}
+            }
+        }),
+    );
+    assert_eq!(deleted["result"]["type"], "deleted", "{deleted}");
+    start["id"] = json!(8);
+    rewrite["id"] = json!(9);
+    let replayed = call(&server, &mut connection, start.clone());
+    assert_eq!(replayed["result"], started["result"], "{replayed}");
+    let replayed = call(&server, &mut connection, rewrite);
+    assert_eq!(
+        replayed["result"]["value"]["threadId"], branch,
+        "{replayed}"
+    );
+    assert_eq!(
+        replayed["result"]["value"]["turn"],
+        rewritten["result"]["value"]["turn"]
+    );
+
+    start["id"] = json!(10);
+    start["params"]["request"]["input"][0]["name"] = json!("Changed reference");
+    let conflict = call(&server, &mut connection, start.clone());
+    assert_eq!(
+        conflict["error"]["message"], "CommandConflict",
+        "{conflict}"
+    );
+    start["id"] = json!(11);
+    start["params"]["commandId"] = json!("new-command");
+    let denied = call(&server, &mut connection, start);
+    assert_eq!(denied["error"]["code"], -32011, "{denied}");
+}
+
+#[test]
+fn queued_chat_reference_reads_the_source_at_delivery_and_replays_the_same_turn() {
+    let root = tempfile::tempdir().unwrap();
+    let (server, queue) = queued_server(root.path());
+    let mut connection = server.connection();
+    let (session, destination) = create(&server, &mut connection);
+    let source = create_thread(&server, &mut connection, 4, "reference-source", &session, 0);
+    let source_id = source["result"]["value"]["threadId"].as_str().unwrap();
+    let enqueue = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":5,"method":"queue/enqueue","params":{
+            "commandId":"queued-reference","sessionId":session,"threadId":destination,
+            "input":[{"type":"chatReference","name":"Earlier design","sessionId":session,"threadId":source_id}]
+        }}),
+    );
+    let message: queue::QueuedMessage =
+        serde_json::from_value(enqueue["result"].clone()).expect(&enqueue.to_string());
+    let saved = queue.get(&message.request.command_id).unwrap().unwrap();
+    assert!(matches!(
+        saved.request.input.as_slice(),
+        [ash_protocol::UserInput::ChatReference { .. }]
+    ));
+
+    let send_to_source = |connection: &mut crate::ConnectionState, id, text: &str| {
+        let source_thread = ash_protocol::ThreadId::new(source_id).unwrap();
+        let sequence = server
+            .threads()
+            .read_thread(&source_thread)
+            .unwrap()
+            .sequence;
+        let response = call(
+            &server,
+            connection,
+            json!({"jsonrpc":"2.0","id":id,"method":"session/request","params":{
+                "commandId":format!("source-send-{id}"),"sessionId":session,"request":{
+                    "type":"startTurn","threadId":source_id,"expectedSequence":sequence,
+                    "mode":"agent","input":[{"type":"text","text":text}]
+                }
+            }}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        super::wait_for_latest_turn(&server, source_id, ash_protocol::TurnStatus::Completed);
+    };
+    send_to_source(&mut connection, 6, "Decision made after enqueue");
+    server.close_connection(connection);
+
+    let queue::Delivery::Started(turn) = server.deliver_queued_message(&saved).unwrap() else {
+        panic!("queue was not delivered");
+    };
+    let destination_items = || {
+        server
+            .threads()
+            .read_thread(&saved.request.thread_id)
+            .unwrap()
+            .items
+    };
+    assert!(destination_items().iter().any(|item| matches!(item,
+        ash_protocol::ThreadItem::UserContext { name, content, .. }
+            if name == "Earlier design" && content.contains("Decision made after enqueue")
+    )));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    send_to_source(&mut connection, 7, "Later decision after delivery");
+    assert!(matches!(
+        server.deliver_queued_message(&saved).unwrap(),
+        queue::Delivery::Started(replayed) if replayed == turn
+    ));
+    assert!(!destination_items().iter().any(|item| matches!(item,
+        ash_protocol::ThreadItem::UserContext { content, .. } if content.contains("Later decision after delivery")
+    )));
+}
+
+#[test]
 fn queue_dispatch_survives_connection_close() {
     let root = tempfile::tempdir().unwrap();
     let (server, store) = queued_server(root.path());
@@ -254,7 +501,7 @@ fn profile_chat_queue_delivers_without_a_directory() {
         &server,
         &mut connection,
         json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{
-            "commandId":"create-chat","title":"Profile Chat","surface":"chat","executionTarget":null
+            "commandId":"create-chat","title":"Profile Chat","kind":"chat","executionTarget":null
         }}),
     );
     let session = created["result"]["session"]["sessionId"]
@@ -283,7 +530,7 @@ fn profile_chat_queue_delivers_without_a_directory() {
             core_api::StartThreadRequest {
                 command_id: ash_protocol::CommandId::new("bound-code").unwrap(),
                 title: "Directory-bound Code".into(),
-                surface: Some(ash_protocol::SessionSurface::Code),
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
                     root: root.path().to_owned(),
                 }),
@@ -1002,6 +1249,7 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
         std::fs::create_dir(&skills).unwrap();
         let body = "Rust persisted decision";
         let citation = memories::MemoryCitation {
+            namespace: memories::MemoryNamespace::Code,
             memory_id: memories::MemoryId::new("decision").unwrap(),
             scope: memories::MemoryScope::Profile,
             revision: 1,
@@ -1167,6 +1415,7 @@ fn memories_code_mode_calls_share_identity_policy_and_durable_results() {
     for enabled in [true, false] {
         let root = tempfile::tempdir().unwrap();
         let citation = memories::MemoryCitation {
+            namespace: memories::MemoryNamespace::Code,
             memory_id: memories::MemoryId::new("seed").unwrap(),
             scope: memories::MemoryScope::Profile,
             revision: 1,

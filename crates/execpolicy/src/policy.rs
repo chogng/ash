@@ -145,7 +145,7 @@ impl ExecPolicySnapshot {
         let mut effective: Option<(ExecPolicyEffect, ExecPolicySource)> = None;
         for layer in &self.layers {
             for rule in layer.rules() {
-                if !rule.selector().matches(subject) {
+                if !rule.selector().matches_rule(subject, rule.effect()) {
                     continue;
                 }
                 let source = ExecPolicySource {

@@ -3,6 +3,7 @@ import { MinimapTokensColorTracker } from '../../../common/viewModel/minimapToke
 import { TokenizationRegistry } from '../../../common/languages.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { GlobalPointerMoveMonitor } from '../../../../base/browser/globalPointerMoveMonitor.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -46,7 +47,7 @@ export class Minimap extends ViewPart {
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly canvas: HTMLCanvasElement;
 	private readonly slider: HTMLDivElement;
-	private dragging = false;
+	private readonly drag = this._register(new GlobalPointerMoveMonitor());
 	private dragOffset = 0;
 	private contentHeight = 0;
 	private sliderHeight = 0;
@@ -76,28 +77,18 @@ export class Minimap extends ViewPart {
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.invalidateRaster()));
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => {
-			if (event.button !== 0) return;
+			if (event.button !== 0 || this.drag.isMonitoring()) return;
 			const localY = event.clientY - this.domNode.getBoundingClientRect().top;
 			this.dragOffset = localY >= this.sliderTop && localY <= this.sliderTop + this.sliderHeight
 				? localY - this.sliderTop
 				: this.sliderHeight / 2;
-			this.dragging = true;
 			this.domNode.classList.add('stanza-editor-minimap-dragging');
-			this.domNode.setPointerCapture(event.pointerId);
+			this.drag.startMonitoring(this.domNode, event.pointerId, event.buttons,
+				next => this.moveTo(next.clientY),
+				() => this.domNode.classList.remove('stanza-editor-minimap-dragging'),
+				event.pointerType);
 			this.moveTo(event.clientY);
 			event.preventDefault();
-		}));
-		this._register(addDisposableListener(this.domNode, 'pointermove', event => {
-			if (this.dragging) this.moveTo(event.clientY);
-		}));
-		this._register(addDisposableListener(this.domNode, 'pointerup', event => {
-			this.dragging = false;
-			this.domNode.classList.remove('stanza-editor-minimap-dragging');
-			if (this.domNode.hasPointerCapture(event.pointerId)) this.domNode.releasePointerCapture(event.pointerId);
-		}));
-		this._register(addDisposableListener(this.domNode, 'pointercancel', () => {
-			this.dragging = false;
-			this.domNode.classList.remove('stanza-editor-minimap-dragging');
 		}));
 	}
 

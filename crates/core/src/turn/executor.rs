@@ -1306,6 +1306,32 @@ impl TurnExecutor {
                     }
                 }
             }
+            let request_skills = turn
+                .activated_skills
+                .iter()
+                .filter(|skill| {
+                    let identity = format!("{}:{}", skill.id.source, skill.id.name);
+                    invocation.context().instructions().iter().any(|fragment| {
+                        let source = fragment.source();
+                        source.kind() == "skill"
+                            && source.identity() == identity
+                            && source.revision() == skill.content_digest.as_str()
+                            && fragment.placement() == crate::context::InstructionPlacement::Skill
+                            && !fragment.body().trim().is_empty()
+                    })
+                })
+                .cloned()
+                .collect();
+            check_cancellation(cancellation)?;
+            let source_sequence = invocation.context().source_thread_sequence();
+            let loaded_at = self
+                .threads
+                .record_turn_skill_loads(thread_id, turn_id, request_skills)
+                .map_err(ExecutionFailure::persistence)?;
+            if loaded_at.is_some() {
+                self.publish_committed_after(thread_id, source_sequence);
+            }
+            let stream_sequence = loaded_at.unwrap_or(source_sequence);
             let mut transient_attempt = 0;
             let mut invalid_response_attempt = false;
             let mut empty_attempt = false;
@@ -1317,7 +1343,7 @@ impl TurnExecutor {
                     invocation.session_id().clone(),
                     invocation.thread_id().clone(),
                     invocation.turn_id().clone(),
-                    invocation.context().source_thread_sequence(),
+                    stream_sequence,
                     cancellation.clone(),
                 );
                 let mut attempt = crate::diagnostic_model::start_attempt(

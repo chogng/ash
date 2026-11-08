@@ -10,10 +10,11 @@ import { IStorageService, StorageScope } from '../../../platform/storage/common/
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import './media/sessionsPart.css';
-import { Dimension, h } from '../../../base/browser/dom.js';
+import { addDisposableListener, Dimension, h } from '../../../base/browser/dom.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
+import type { SessionRecencyEntry } from '../../services/sessions/browser/sessionsRecencyHistory.js';
 import { sessionViewSelectionKey } from '../../services/sessions/browser/visibleSessions.js';
 import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { SessionView, type ISessionsConversationPane } from './sessionView.js';
@@ -24,6 +25,7 @@ import { Disposable, DisposableStore, type IDisposable, setDisposableOwner, toDi
 import type { IObservable } from '../../../base/common/observable.js';
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
+import { IsNewSessionContext } from '../../common/contextkeys.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -47,6 +49,7 @@ export interface SessionsPartOptions {
 		selection: SessionsViewSelection,
 	) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
+	readonly markVisibleThreadViewed: (entry: SessionRecencyEntry) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
 	readonly createComparisonControls?: (container: HTMLElement) => IDisposable;
@@ -73,7 +76,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private readonly openingPopouts = new Map<SessionView, Promise<void>>();
 
 	override get minimumWidth(): number {
-		return 420;
+		return 400;
 	}
 
 	constructor(
@@ -108,7 +111,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					id,
 					item: {
 						command: infoCommand,
-						when: ContextKeyExpr.equals('sessions.toolsAvailable', true),
+						when: ContextKeyExpr.and(
+							ContextKeyExpr.equals('sessions.toolsAvailable', true),
+							id === Menus.TitleBarRightLayout ? ContextKeyExpr.not(IsNewSessionContext.key) : undefined,
+						),
 						group: 'navigation',
 						order: -1,
 					},
@@ -287,10 +293,23 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			window.container.classList.add('ash-sessions-window');
 			shell.mount(view.element);
 			view.setVisible(true);
-			window.window.document.title = title;
+			const document = window.window.document;
+			const markViewed = () => {
+				if (this.popouts.get(view)?.window !== window || document.hidden || !document.hasFocus()) return;
+				const selection = view.currentSelection;
+				if (selection.kind === 'session') {
+					const { session, threadId } = selection.active;
+					this.options.markVisibleThreadViewed({ sessionId: session.sessionId, threadId });
+				}
+			};
+			resources.add(addDisposableListener(window.window, 'focus', markViewed));
+			resources.add(addDisposableListener(document, 'visibilitychange', markViewed));
+			resources.add(this.sessionService.onDidChange(markViewed));
+			document.title = title;
 			window.layout();
 			window.window.focus();
 			view.focus();
+			markViewed();
 		} catch (error) {
 			resources.dispose();
 			window.dispose();

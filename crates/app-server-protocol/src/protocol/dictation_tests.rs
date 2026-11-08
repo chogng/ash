@@ -59,6 +59,10 @@ fn model_operations_reject_cache_paths_and_unknown_stages() {
     let decoded: DictationModelStartParams = serde_json::from_value(request.clone()).unwrap();
     assert_eq!(serde_json::to_value(decoded).unwrap(), request);
     assert!(serde_json::from_value::<DictationModelStartParams>(json!({"resourceId":"model-1", "modelId":"custom", "operation":{"type":"import", "sourceDirectory":"C:/models", "cacheDir":"C:/elsewhere"}})).is_err());
+    let warmup = json!({"resourceId":"warmup", "modelId":"custom", "operation":{"type":"warm"}});
+    let decoded: DictationModelStartParams = serde_json::from_value(warmup.clone()).unwrap();
+    assert_eq!(decoded.operation, super::DictationModelOperation::Warm);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), warmup);
     let progress = json!({"resourceId":"model-1", "modelId":"custom", "stage":{"type":"downloading", "file":"encoder.onnx", "downloadedBytes":1048576}});
     let decoded: DictationModelProgress = serde_json::from_value(progress.clone()).unwrap();
     assert_eq!(serde_json::to_value(decoded).unwrap(), progress);
@@ -71,8 +75,29 @@ fn model_operations_reject_cache_paths_and_unknown_stages() {
 }
 
 #[test]
-fn model_list_serializes_shared_preparation_and_installed_size() {
-    let value = json!({"cacheDirectory":"C:/ash/dictation-models","packageVersion":1,"models":[{"modelId":"custom","available":false,"sizeBytes":0,"stage":{"type":"downloading","file":"encoder.onnx","downloadedBytes":1048576}}]});
+fn model_list_serializes_shared_preparation_and_download_metadata() {
+    let value = json!({
+        "cacheDirectory": "C:/ash/dictation-models",
+        "packageVersion": 1,
+        "models": [
+            {
+                "modelId": "downloadable",
+                "available": false,
+                "sizeBytes": 0,
+                "downloadSizeBytes": 2097152,
+                "recommendedLanguages": ["cmn", "en"],
+                "stage": {"type":"downloading","file":"decoder.onnx","downloadedBytes":262144,"packageDownloadedBytes":1048576}
+            },
+            {
+                "modelId": "custom",
+                "available": true,
+                "sizeBytes": 1024,
+                "downloadSizeBytes": null,
+                "recommendedLanguages": [],
+                "stage": null
+            }
+        ]
+    });
     let decoded: super::DictationModelList = serde_json::from_value(value.clone()).unwrap();
     assert_eq!(serde_json::to_value(decoded).unwrap(), value);
     let changed = json!({"modelId":"custom"});

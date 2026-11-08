@@ -9,6 +9,8 @@ export interface IAction {
 	readonly label: string;
 	readonly tooltip: string;
 	readonly icon?: Icon;
+	/** Marks an action whose effect can permanently remove or destroy data. */
+	readonly destructive?: boolean;
 	readonly class?: string;
 	readonly enabled: boolean;
 	readonly checked?: boolean;
@@ -145,6 +147,8 @@ export class SubmenuAction implements IAction {
 		readonly label: string,
 		readonly actions: readonly IAction[],
 		readonly icon?: Icon,
+		/** If present, load fresh children on expansion while showing `actions` as placeholders. */
+		readonly loadActions?: () => Promise<readonly IAction[]>,
 	) { }
 
 	run(): void { }

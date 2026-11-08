@@ -124,6 +124,11 @@ suite('Sessions native titlebar layout', () => {
 		await input.press('Escape');
 		await expect(button).toBeFocused();
 		const actions = widget.getByRole('button', { name: '更多会话操作' });
+		await button.press('Enter');
+		await input.fill('失焦时取消此名称');
+		await actions.focus();
+		await expect(input).toBeHidden();
+		await expect(button).toHaveText('Task from Host B');
 		const menuBounds = (await actions.boundingBox())!;
 		expect(menuBounds.width).toBe(menuBounds.height);
 		await actions.press('Enter');
@@ -137,6 +142,19 @@ suite('Sessions native titlebar layout', () => {
 		await button.click();
 		const longTitle = '新的会话名称'.repeat(35);
 		await input.fill(longTitle);
+		const renameHosts = () => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls
+			.filter(call => call.method === 'rename').map(call => call.host));
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.pauseNextRename());
+		await input.press('Enter');
+		await expect.poll(renameHosts).toEqual(['Host B']);
+		await expect(input).not.toBeEditable();
+		await actions.press('Enter');
+		await page.getByRole('menuitem', { name: '重命名', exact: true }).click();
+		await expect(input).toHaveValue(longTitle);
+		await expect(input).not.toBeEditable();
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.rejectPausedRename());
+		await expect(input).toBeEditable();
+		await expect(input).toHaveValue(longTitle);
 		await input.press('Enter');
 		const renamedButton = widget.getByRole('button', { name: `重命名会话（${longTitle}）` });
 		await expect(renamedButton).toBeVisible();
@@ -148,9 +166,7 @@ suite('Sessions native titlebar layout', () => {
 		const tooltip = page.getByRole('tooltip').filter({ hasText: longTitle });
 		await expect(tooltip).toBeVisible();
 		await expect(tooltip).toHaveCSS('overflow-wrap', 'anywhere');
-		const renamedHosts = await page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls
-			.filter(call => call.method === 'rename').map(call => call.host));
-		expect(renamedHosts).toEqual(['Host B']);
+		expect(await renameHosts()).toEqual(['Host B', 'Host B']);
 	});
 
 	for (const os of ['windows', 'mac']) {

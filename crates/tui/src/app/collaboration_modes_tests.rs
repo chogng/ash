@@ -867,6 +867,7 @@ fn running_turn(mode: CollaborationMode) -> Turn {
         status: TurnStatus::Running,
         kind: Default::default(),
         instructions: None,
+        directory: None,
         model: None,
         reasoning_effort: None,
         tool_profile: None,
@@ -878,6 +879,7 @@ fn running_turn(mode: CollaborationMode) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     }
 }

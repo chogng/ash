@@ -19,6 +19,8 @@ pub(super) fn project(project: &Project) -> ProjectDto {
         status: status(project.status),
         name: project.name.clone(),
         description: project.description.clone(),
+        icon: project.icon.clone(),
+        color: project.color.clone(),
         roots: project
             .roots
             .values()
@@ -60,6 +62,8 @@ pub(super) fn summary(project: &Project) -> ProjectSummaryDto {
         updated_at_ms: project.updated_at_ms,
         status: status(project.status),
         name: project.name.clone(),
+        icon: project.icon.clone(),
+        color: project.color.clone(),
         root_count: project.roots.len() as u64,
         session_count: project.session_ids.len() as u64,
     }

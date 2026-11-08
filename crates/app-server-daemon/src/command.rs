@@ -16,6 +16,26 @@ pub fn run_command(
         return Err("daemon executable must be an absolute path".into());
     }
     let arguments = arguments.into_iter().collect::<Vec<_>>();
+    if matches!(
+        arguments.first().map(String::as_str),
+        Some("diagnostic-target" | "profile-process")
+    ) {
+        let profile = ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?;
+        let target = crate::client::diagnostic_target(&profile)?;
+        return match arguments.as_slice() {
+            [command] if command == "diagnostic-target" => {
+                println!(
+                    "{}",
+                    serde_json::json!({ "pid": target.pid, "instanceId": target.instance_id })
+                );
+                Ok(())
+            }
+            [command, profiler, output] if command == "profile-process" => {
+                crate::profiling::record(&target, Path::new(profiler), Path::new(output))
+            }
+            _ => Err(usage().into()),
+        };
+    }
     if let [command, generation_file] = arguments.as_slice()
         && command == "lease-development"
     {
@@ -147,6 +167,7 @@ fn parse(arguments: &[String]) -> Result<(Command, Option<PathBuf>), String> {
         "start" => Command::Lifecycle(LifecycleCommand::Start),
         "ensure-selected" => Command::Lifecycle(LifecycleCommand::EnsureSelected),
         "restart" => Command::Lifecycle(LifecycleCommand::Restart),
+        "restart-selected" => Command::Lifecycle(LifecycleCommand::RestartSelected),
         "stop" => Command::Lifecycle(LifecycleCommand::Stop),
         "version" => Command::Lifecycle(LifecycleCommand::Version),
         _ => return Err(usage().into()),
@@ -160,7 +181,7 @@ fn parse(arguments: &[String]) -> Result<(Command, Option<PathBuf>), String> {
 }
 
 fn usage() -> &'static str {
-    "usage: ash-app-server-daemon <connect|connect-selected|update|start|ensure-selected|restart|stop|version> [--product-services PATH]"
+    "usage: ash-app-server-daemon <connect|connect-selected|update|start|ensure-selected|restart|restart-selected|stop|version|diagnostic-target> [--product-services PATH]\n       ash-app-server-daemon profile-process <profiler> <output>"
 }
 
 /// Runs the daemon executable's command, selecting the bundled backend for Setup.

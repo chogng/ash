@@ -49,7 +49,12 @@ export class AutomationRunner implements IAutomationRunner {
 				finally { listener.dispose(); }
 			} catch (error) {
 				if (!admitted) await dispatched.complete({ kind: 'notStarted', reason: token.isCancellationRequested ? 'cancelled' : 'error' });
-				if (!token.isCancellationRequested) this.notifications.error(localize('automations.runFailed', 'Automation {0}: {1}', automation.name, error instanceof Error ? error.message : String(error)));
+				if (!token.isCancellationRequested) {
+					const message = error instanceof Error ? error.message : String(error);
+					this.notifications.error(automation.target.session.type === 'newChat'
+						? localize('scheduled.runFailed', 'Scheduled task {0}: {1}', automation.name, message)
+						: localize('automations.runFailed', 'Routine {0}: {1}', automation.name, message));
+				}
 			}
 		})();
 		return { whenDispatched: dispatched.p, whenCompleted };

@@ -8,6 +8,59 @@
 
 - [ ] **验收 · SSH 工作区信任** · 已通过本地桌面场景和远程路径的定向自动化测试。真实远程主机验收缺少可连接的 SSH 地址及允许创建临时目录的路径。取得这两项后，在隔离目录验证 SSH 工作区启动恢复、已有受限授权时重新提示并在确认后挂载，以及取消后目录未挂载。用远端目录绑定状态核对结果。
 
+## ChatGPT Web · 历史读取实测
+
+- [ ] **测量** · Ash 已用隔离测试验证缓存复用、过期刷新和 429 恢复。现有浏览器连接读不到已登录 Edge 标签页的 DevTools Network，缺真实网页的请求次数、状态码和耗时。可访问 Network 后保持缓存开启，分别采样一次普通刷新和一次切回聚焦，单独记录 `/backend-api/conversations` 的请求，与 Ash 模拟结果对照。用模拟响应验证 429。
+
+## Desktop Chat · App Server 调试与采样
+
+- [ ] **macOS 实机验收** · 用同一个本地 Ash 桌面窗口和带调试符号的 Rust App Server 验证断点、分离和 CPU 调用栈。
+
+  1. 在 macOS 的 Terminal 中进入 Ash 仓库根目录。若缺少 Xcode Command Line Tools，先运行 `xcode-select --install`。若缺少 Samply，运行 `cargo install --locked samply`，再运行 `export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"`。从能找到 Samply 的同一个终端启动 Ash。逐条确认以下命令成功：
+
+     ```sh
+     node --version
+     pnpm --version
+     /usr/bin/lldb --version
+     samply --version
+     pnpm install --frozen-lockfile
+     pnpm prepare:backend
+     pnpm debug:backend
+     pnpm build
+     ASH_HOME="$PWD/.build/desktop/debug/profile" \
+       ASH_DEV_APP_SERVER_RELOAD=1 \
+       ASH_DEV_APP_SERVER_GENERATION="$PWD/.build/desktop/debug/app-server/current.json" \
+       pnpm start --backend-prepared --user-data-dir="$PWD/.build/desktop/debug/user-data"
+     ```
+
+  2. 在新启动的 Ash 窗口按 `F1`，运行「网络诊断」（`Network Diagnostics`），等报告打开，确认后端已就绪。另开一个 Terminal 标签页，在仓库根目录运行 `pnpm debug:backend:status`，记下 `pid` 和 `instanceId`。
+  3. 回到 Ash，运行「调试本地 App Server」（`Debug Local App Server`）。若 macOS 弹出控制 Terminal 或附加调试的授权提示，批准后继续。确认 Terminal 中的 LLDB 附加到刚才记录的 PID，然后在 LLDB 输入：
+
+     ```text
+     breakpoint set --file network.rs --line 85
+     breakpoint list
+     continue
+     ```
+
+     断点应解析到 `crates/app-server/src/server/request_processors/network.rs` 的 `network_targets`。如果行号随源码变动，改用该函数首个可执行语句的行号。回到 Ash 再运行一次「网络诊断」，看到 LLDB 因断点暂停后，在 LLDB 输入：
+
+     ```text
+     thread backtrace
+     process detach
+     quit
+     ```
+
+     保留包含 `network_targets` 和 `Process … detached` 的终端输出。确认暂停时发起的网络诊断在分离后打开新报告，再运行 `pnpm debug:backend:status`，核对 `pid` 和 `instanceId` 与附加前一致。
+
+  4. 在同一个 Ash 窗口运行「开始录制本地 App Server CPU 样本」（`Start Local App Server CPU Recording`）。等开始通知出现后，多跑几次「网络诊断」，每次等报告返回。运行「停止录制本地 App Server CPU 样本」（`Stop Local App Server CPU Recording`），在保存对话框中把报告保存为 `~/Downloads/ash-app-server-cpu.json`，然后运行：
+
+     ```sh
+     samply load "$HOME/Downloads/ash-app-server-cpu.json"
+     pnpm debug:backend:status
+     ```
+
+     `samply load` 运行期间，在打开的 Firefox Profiler 中选择刚才记录的 `ash-app-server` 进程及有样本的线程，检查 `Call Tree` 能展开多层调用栈并显示 Rust 函数名。查看完按 `Ctrl+C` 退出 `samply load`，再核对 `pid` 和 `instanceId`。断点、分离和采样均通过后，保留 LLDB 输出及 CPU JSON，再移除本条待办。
+
 ## Roadmap · Rust 运行时与 Node 退场
 
 最终目标是让 Rust 承担产品宿主、核心执行与基础设施，移除产品对 Node 运行时的依赖。迁移以实际调用链、打包依赖和进程退出为完成条件；把 Node 文件操作包成 Rust 原生模块、改目录名或另建一套平行业务后端，都不等于 Node 退场。浏览器 JavaScript／TypeScript 与 Node 是不同运行时：界面可以继续使用浏览器能力，Rust 可逐步进入前端计算与渲染流程，不要求先整体重写 UI。
@@ -139,14 +192,16 @@
 
 ## Chat / Speech · TODO
 
+- [ ] **验收 · 听写模型最终版桌面安装** · 已撤掉开发态的一次性迁移。25 项 Rust 测试通过，空缓存已实测 Paraformer 下载、校验、加载和复用。当前 `pnpm prepare:backend` 卡在 `crates/automation/src/store.rs:101`，该处仍引用已不存在的 `AutomationSession::NewChat`。待 Automation 修复后重新构建 Ash，在空模型缓存的隔离桌面 profile 中从「设置 → 语音」安装 Paraformer，核对下载进度、安装完成后显示已就绪，以及重开设置后仍能选用该模型。通过后移除此条。
+
 - [ ] **共享宿主前置 · widgetHosts 窗口归位** · 上游独立 Chat 窗口沿 `chatMoveActions.ts` 进入公共 `browser/parts/editor/auxiliaryEditorPart.ts` 与 titlebar，Quick Chat 外框由 Quick Input 承担。迁移本地 `widgetHosts/chatAuxiliaryWindow.ts` 及其样式前，先闭合非编辑器 Chat／Cowork 组件在公共窗口中的挂载、焦点、置顶、关闭归还和释放契约；现有 `ITitleService.createAuxiliaryTitlebarPart` 要求编辑器分组，不能用虚构分组或转调壳承接。`widgetHosts/media/chatQuick.css` 的外框迁移也先补公共 QuickWidget 外框 owner，保留 Chat 自身的标题与内容布局。随后迁移真实调用方并验证同一组件／草稿与关闭归还。
 
 - [ ] **验收前置 · 上游同场景对照** · Ash 当前命令提示、补全、链接及快照已取得 86 项定向回归、2 项链接补验和 Windows Desktop 两个自托管场景的通过证据，范围见 `docs/chat.md`。Actions 的移动命令、工作区选择入口及四个内置 context 来源已完成本地迁移，128 项上下文界面回归、36 项最终定向测试和 macOS Electron 键盘流程通过。后续听写显式注册、New Chat／Helpful 命令契约与 Find 行为已通过本地定向测试，新的 New Chat ID 及附件键盘流程也通过 macOS Electron 自托管。 本轮三个诊断命令、Agent 窗口目录服务装配及日志导出共享入口已通过 IDE／Agent Window 两个 Electron/App Server 场景。本轮插件管理入口及 New Chat 的共享注册／窗口焦点委派通过 89 项定向测试和两个 Desktop 场景。只读 VS Code 源码的测试产物已由其原编译工具补齐，官方 Chromium runner 的 105 项 actions／插件入口测试通过；上游真实桌面的 Plugins 查询、重复打开、搜索焦点及未发送草稿四项语义也已补验。其内置 GitHub／Emmet／Git 扩展产物仍不齐，这组通过结果不覆盖插件安装、授权或 marketplace。仍需对 `chatMoveActions`、`chatExecuteActions`、`chatContext`、`chatNewActions`、`chatTitleActions`、`chatFindActions`、`chatSpeechToTextActions`、`chatDeveloperActions` 的完整界面场景复核输入、焦点／选区、换行和主题；完整上游 API／UI 对齐验收仍未完成。
 - [ ] **PromptSyntax 剩余能力（用户已确认六类均需要）** · 已实现 Skill／Agent／Instructions 的原生 schema 编辑、引用补全与跳转、正文原生文件引用补全、Quick Fix、Agent／Instructions 文件创建与角色管理、保留来源及 digest 的 Skill 执行、从当前已保存 Agent 打开草稿并正常发送，以及项目 Instructions 的审阅导入与后续加载；这些链路已有中英文 Ash 自举与定向回归。已接入用户级 Claude／Codex Instructions 导入、Agent 工具列表 CodeLens 和新聊天浮层。Claude 同步 POSIX PreToolUse 命令可审阅后导入为禁用，重复来源可识别，后端执行继续使用原 Hook 权限。本轮按 Ash 原生范围继续，第三方 harness Hook 兼容与迁移暂缓。原生剩余项包括扩展来源作者契约、模型引用的目录校验（已接入目录补全和引用格式校验）、工具集编辑、通用改写和 URL 入口。当前 Markdown 已可另存为原生 Agent 或 Instructions；逐条沿原 owner 实现并验收，不能以补文件计完成。范围与现状见 [promptSyntax 目录对应](docs/chat.md#promptsyntax-目录对应)，跨产品同场景复核仍待执行。
 
-- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListRenderer.ts` 的 `ChatListItemRenderer` 创建及增量更新助手 Markdown 时仍未传入目录基址（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff) 已从 `chatListWidget.ts` 迁出逐消息渲染），`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。现有 `parseInlineFileReference` 与 `resolveFileLink` 已支持显式、无 authority 的本机 `file:///…#L…` 引用并打开到行号，但不解析 `README.md` 等相对路径；保留该受限入口，不将其重复列为缺失。`chatGPTWidgetModel.ts` 已通过 `getResponseLinkOpener` 为外部 Web 回复提供独立外链策略，具有 Ash 来源的内嵌回复仍回到原入口；此候选只补原生 Ash Session／Thread 的相对文件链接，不将外部回复套用本机目录。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
-  - 前提与范围：复用 `ISessionWorkspace` 的 `authorityId`／`root`、既有本地／SSH URI 和 `openChatMarkdownLink` 打开边界；优先采用所属 Thread 的执行目录，不能用父 Session 的目录覆盖子 agent／worktree；目录 URI 须保留目录基址语义。先明确历史回复所属目录的来源，目录未水合、历史来源不确定或 provider 不支持时不猜测回退本机。来源 Session／Thread／目录变化时使对应渲染基址失效；不全局放宽 file scheme、不将模型 Markdown 标为可信，也不新增第二份工作区状态。
-  - 验收：在 `src/ash/workbench/contrib/chat/test/browser/chatListWidget.test.ts` 和 `widget/chatContentMarkdownRenderer.test.ts` 补实时／历史恢复、切换会话及线程、流式重渲染、空格／Unicode／父目录路径、本地与 SSH 同名文件场景，并从真实 Chat 点击验证目标执行环境。复用现有打开与文件权限检查，不跨连接；外链和已有会话链接保持可用，脚本与未信任 command 仍拒绝，缺少来源的链接不伪造可打开地址。
+- [ ] **边界验收 · Chat 回复的相对文件链接**：[按回复工作目录解析](https://github.com/chogng/ash/commit/4ed9c4593a965328b520cd0dc2d956b0dff78f82) 已记录并持久化每个 Turn 的执行目录，经 `src/ash/sessions/common/agentHostSessionWorkspace.ts`、`chatViewModel.ts` 与 `ChatListItemRenderer` 传入 `chatContentParts/chatMarkdownFileReferences.ts`，完成回复中的显式相对文件链接已可解析并沿既有 `openChatMarkdownLink` 打开；不再将缺少 `baseUri` 等同于功能缺失。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)）。现有实现同时识别唯一的普通文本文件名，缺文件或同名歧义不激活；不扩大本项范围。
+  - 已有依据与边界：源码测试覆盖两个真实 Git worktree 的同名文件、显式相对链接与行号、缺文件、歧义文件名及流式未完成时不激活；提交记录报告 macOS Electron 重开窗口后的双 worktree 点击、60 项 Chat／文件搜索测试，以及协议和 SQLite 目录历史测试通过，本轮未重跑。文件搜索 API 测试已有 SSH／中文 URI 映射及取消后晚到结果隔离，不能重复列为缺失。解析使用记录的目录与 authority、既有文件服务和打开边界；目录缺失不猜测当前工作区，外部 Web 回复保留独立策略，越出记录根目录的相对路径仍拒绝，不全局放宽 file scheme 或信任模型 Markdown。
+  - 剩余验收：沿现有 Chat 集成链补齐尚未证实的历史回复缺目录、本地／SSH 同名文件的真实点击、切换线程或目录时的异步解析取消／过期结果、空格／Unicode 路径；重复利用已覆盖的本地 worktree 和行号用例，不重建另一套状态。保留外链、已有会话链接、脚本及未信任 command 拒绝的回归，核实恢复与流式重渲染不会将旧结果绑定到新回复；上述边界通过前不标记整项完成。
 
 - [ ] **可做 · Chat 表格单元格换行**：`src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.ts` 的普通助手 Markdown 未开启 HTML，表格里的 `<br>` 当前会显示为字面文本。参考 [VS Code 表格换行](https://github.com/microsoft/vscode/pull/342956)（2026-10-20 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），仅在 Chat 的 table header／body 内递归处理 inline token，将严格无属性的 `<br>`、`<BR/>`、`<br />` 转为原生换行 token，改善模型多行表格的可读性；复用现有 marked token walk、数学扩展和 sanitizer，不打开通用 HTML，也不改变共享基础 Markdown 的默认策略。
   - 风险与验收：在 `src/ash/workbench/contrib/chat/test/browser/widget/chatContentMarkdownRenderer.test.ts` 覆盖完整渲染、逐字流式与前缀纠正输出一致，包含表头／单元格、嵌套强调／链接、未闭合及长表格。代码字面量和表格外 HTML 仍按原语义显示，带属性标签和脚本不放行；保留数学、代码块与 sanitizer 回归。当前依据源码核对，未运行新行为测试；Ash 已通过 parser 执行 token walk，不照搬上游另一条 lexer 旁路修补。
@@ -279,7 +334,7 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 
 ### 网络目录上的状态数据库策略
 
-- [ ] **验证 · 网络目录上的状态数据库策略**：ASH_HOME 可落在 NFS，当前共享连接及 automation／queue 等 owner 打开同一 state.sqlite3 时仍分别指定 WAL。参考 [Codex 按数据库目录选择初始化 journal](https://github.com/openai/codex/pull/56552)（2026-10-23 已合并，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），先核实支持范围及实际 NFS 启动／重开行为；统一每个数据库实际目录的探测和 owner 策略，避免仅改共享连接后被其他 owner 改回。若不支持此布局，启动时明确诊断；若纳入支持，再评估新库 DELETE，已有库不自动切换或搬迁。
+- [ ] **验证 · 网络目录上的状态数据库策略**：ASH_HOME 可落在 NFS，当前 state.sqlite3 的共享连接策略仍固定 WAL；[数据库迁移整理](https://github.com/chogng/ash/commit/46fb022f42805cd225a7e037f3b8be608b320b53)后，automation 已复用 `crates/state/src/sqlite_runtime.rs`，`crates/ext/queue/src/store.rs` 仍独立指定 WAL。参考 [Codex 按数据库目录选择初始化 journal](https://github.com/openai/codex/pull/56552)（2026-10-23 已合并，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），先核实支持范围及实际 NFS 启动／重开行为；统一每个数据库实际目录的探测和 owner 策略，避免仅改共享连接后被其他 owner 改回。若不支持此布局，启动时明确诊断；若纳入支持，再评估新库 DELETE，已有库不自动切换或搬迁。
   - 前提与验收：适配 rusqlite 而非照搬 SQLx；保持 Durable 至少现有 FULL 耐久性，DELETE 评估 EXTRA，不将 WAL 改为上游 NORMAL。覆盖本地新库、NFS 新库、已有 WAL／DELETE、初始化中断、目录探测失败、多个 owner 重开和持锁并发，确认实际 pragma 返回值与错误可诊断；对回滚 journal 的读写竞争及吞吐做基线测量。是否正式支持多主机共用 profile 属单独产品决定，不由此候选授权。
   - 上游后续已合并[已有库迁移与初始化门禁](https://github.com/openai/codex/pull/57225)及[迁移权限说明](https://github.com/openai/codex/pull/57226)（2026-10-26，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)）：迁移要求所有主机的客户端停用、跨客户端锁有效，并保留 WAL 备份和中断恢复；替换文件仅保留 mode bits，不继承原 owner／group／扩展 ACL。此处仍不授权 Ash 自动迁移或照搬 unsafe 开关；若之后单独批准迁移，再将锁竞争、恢复、权限变化披露与失败不触发损坏重建纳入验收，不能把初始化 journal 选择等同于已有数据安全转换。
 

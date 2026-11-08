@@ -59,7 +59,7 @@ test('IDE opens an SSH conversation link and continues on its original host', { 
 		await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-remote-link-fixture-key' });
 		const title = 'SSH link fixture';
 		const { session } = await client.request(methods['session/create'], {
-			commandId: 'remote-link-session', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot },
+			commandId: 'remote-link-session', kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot },
 		});
 		const sessionId = session.sessionId;
 		const threadId = session.threads[0].threadId;

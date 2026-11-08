@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 #[derive(Default)]
-struct RecordingInvoker {
+pub(super) struct RecordingInvoker {
     calls: Mutex<Vec<NestedToolCall>>,
 }
 

@@ -11,7 +11,9 @@ import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources
 import { URI } from '../../../../../base/common/uri.js';
 import { createSshRemoteWorkspaceUri, createProviderRemoteWorkspaceUri, withRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -21,9 +23,35 @@ import { throwIfCancelled } from '../../../../../base/common/cancellation.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { ChatRequestActionContext, IChatWidgetService } from '../chat.js';
 
 export const RestoreCheckpointActionId = 'workbench.action.chat.restoreCheckpoint';
 export const RedoChatHistoryActionId = 'workbench.action.chat.redoEdit';
+export const EditChatRequestActionId = 'workbench.action.chat.editRequests';
+const canEditRequest = ContextKeyExpr.and(ChatContextKeys.requestCanEdit.isEqualTo(true), ChatContextKeys.transcriptProgressActive.isEqualTo(false));
+
+export function registerChatEditRequestAction(): void {
+	registerAction2(class EditAction extends Action2 {
+		constructor() {
+			super({
+				id: EditChatRequestActionId,
+				title: localize2('chat.edit.label', 'Edit message'),
+				icon: Lxicon.edit,
+				menu: { id: MenuId.ChatMessageTitle, group: 'navigation', order: 2, when: canEditRequest },
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (context instanceof ChatRequestActionContext && context.visible && context.item.requestSource) {
+				await context.startEditing(context.item.id);
+			} else if (context === undefined) {
+				const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
+				const item = widget?.getFocus();
+				if (item?.requestSource) await widget?.startEditing(item.id);
+			}
+		}
+	});
+}
 
 export function registerChatRestoreCheckpointAction(): void {
 	registerAction2(class RestoreCheckpointAction extends Action2 {
@@ -191,6 +219,11 @@ class ThreadChangesNotCurrentError extends Error {
 
 /** Opens precisely the checkpoint revision advertised by the composer, across all repositories. */
 export async function createThreadMultiDiffEditorInput(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string, signal?: AbortSignal): Promise<MultiDiffEditorInput> {
+	return (await readThreadChangesComparison(chat, sessionId, threadId, expectedRevision, signal)).input;
+}
+
+/** Returns the comparison and the metadata from the same checkpoint revision. */
+export async function readThreadChangesComparison(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string, signal?: AbortSignal) {
 	const read = <T>(promise: Promise<T>): Promise<T> => signal ? raceCancellationError(promise, signal) : promise;
 	if (signal) { throwIfCancelled(signal); }
 	const summary = await read(chat.readThreadChanges(sessionId, threadId));
@@ -218,11 +251,12 @@ export async function createThreadMultiDiffEditorInput(chat: IChatService, sessi
 	// A history move between the final file read and publication must not publish a stale review.
 	if (items.length && (await read(chat.readThreadChanges(sessionId, threadId))).revision !== summary.revision) throw changed();
 	const label = localize('chat.changes.conversationTitle', 'Conversation Changes');
-	return createMultiDiffEditorInput(
+	const input = createMultiDiffEditorInput(
 		URI.from({ scheme: 'ash-multi-diff', path: `/conversation/${sessionId}/${threadId}`, query: summary.revision }),
 		items, summary.warnings.length ? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', label, summary.warnings.join('; ')) : label,
 		{ kind: 'snapshot', label },
 	);
+	return { input, summary };
 }
 
 export function registerChatChangesActions(): void {

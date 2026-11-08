@@ -34,6 +34,7 @@ export interface ICommandAction {
 	readonly shortTitle?: CommandActionTitle;
 	readonly tooltip?: CommandActionTitle;
 	readonly icon?: Icon;
+	readonly destructive?: boolean;
 	readonly precondition?: ContextKeyExpression;
 	readonly toggled?: ContextKeyExpression | ICommandActionToggleInfo;
 }

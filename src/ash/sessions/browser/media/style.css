@@ -35,8 +35,13 @@
 	);
 	--ash-action-widget-filter-position: relative;
 	--ash-action-widget-filter-divider-content: "";
+	--ash-action-widget-icon-size: var(--ash-lxiconFontSize-large);
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
+}
+
+.ash-sessions-window[data-interface-font="system"] {
+	--ash-font-family: var(--ash-system-font-family);
 }
 
 .ash-sessions-window .ash-workbench-sidebar {
@@ -66,7 +71,13 @@
 
 .ash-sessions-window .ash-button .ash-icon-label-icon > .ash-icon,
 .ash-sessions-window .ash-action-label-icon > .ash-icon,
-.ash-sessions-window .ash-menu-leading-check > .ash-icon {
+.ash-sessions-window
+	:is(
+		.ash-menu-leading-check,
+		.ash-menu-trailing-check,
+		.ash-menu-action-icon
+	)
+	> .ash-icon {
 	width: var(--ash-lxiconFontSize-large);
 	height: var(--ash-lxiconFontSize-large);
 	font-size: var(--ash-lxiconFontSize-large);
@@ -148,6 +159,43 @@
 	content: none;
 }
 
+.ash-sessions-window
+	.ash-context-view-default:has(> .ash-chat-context-details) {
+	border-radius: var(--ash-cornerRadius-xLarge);
+	box-shadow: var(--ash-sessions-soft-shadow);
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-window
+	.ash-context-view-default:has(> .ash-chat-context-details) {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+.ash-sessions-window .ash-chat-context-details {
+	border-radius: inherit;
+}
+
+.ash-sessions-window .ash-chat-context-details-summary {
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-window .ash-chat-context-details-table thead {
+	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-sessions-window
+	.ash-chat-context-details-table
+	:is(th:not(:first-child), td) {
+	padding-inline-start: var(--ash-spacing-size80);
+}
+
+.ash-sessions-window .ash-chat-context-details-actions {
+	margin-top: var(--ash-spacing-size120);
+	padding-top: 0;
+	border-top: 0;
+}
+
 .ash-sessions-window .ash-context-view-menu {
 	/* The inner menu owns the inset. Reset the native popover padding. */
 	padding: 0;
@@ -156,19 +204,6 @@
 .ash-sessions-window .ash-context-view-menu,
 .ash-sessions-window .ash-context-view > .ash-action-widget {
 	border-radius: var(--ash-cornerRadius-xxLarge);
-}
-
-.ash-sessions-window :is(.ash-notification, .ash-notifications-center) {
-	border-radius: var(--ash-cornerRadius-xLarge);
-	box-shadow: 0 2px 8px
-		color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
-}
-
-.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
-	.ash-sessions-window
-	:is(.ash-notification, .ash-notifications-center) {
-	border-color: var(--ash-contrastBorder);
-	box-shadow: none;
 }
 
 .ash-sessions-window .ash-menu {
@@ -287,6 +322,82 @@
 	.ash-sessions-window
 	.ash-button-primary:focus-visible {
 	/* The HC focus color matches the fill; separate the ring from that fill. */
+	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-sessions-window .ash-dialog-form {
+	--ash-dialog-form-padding: var(--ash-spacing-size120);
+	--ash-dialog-form-viewport-margin: var(--ash-spacing-size200);
+	--ash-dialog-form-radius: var(--ash-cornerRadius-xLarge);
+	--ash-dialog-form-header-height: var(--ash-spacing-size280);
+	--ash-dialog-nonmodal-backdrop: var(--ash-dialog-backdropBackground);
+}
+
+:is(.hc-black, .hc-light) :where(.ash-sessions-window) .ash-dialog-form {
+	--ash-dialog-nonmodal-backdrop: color-mix(
+		in srgb,
+		var(--ash-dialog-backdropBackground) 35%,
+		transparent
+	);
+}
+
+.ash-sessions-form-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+:where(
+		.ash-workbench:is(
+			[data-color-scheme="light"],
+			[data-color-scheme="dark"]
+		)
+	)
+	:where(.ash-sessions-window)
+	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
+	:is(.ash-button-secondary, .ash-button-danger) {
+	border-color: transparent;
+}
+
+:where(
+		.ash-workbench:is(
+			[data-color-scheme="light"],
+			[data-color-scheme="dark"]
+		)
+	)
+	:where(.ash-sessions-window)
+	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
+	.ash-button-secondary {
+	background: color-mix(in srgb, var(--ash-foreground) 6%, transparent);
+}
+
+:where(
+		.ash-workbench:is(
+			[data-color-scheme="light"],
+			[data-color-scheme="dark"]
+		)
+	)
+	:where(.ash-sessions-window)
+	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
+	.ash-button-danger {
+	background: color-mix(
+		in srgb,
+		var(--ash-error-foreground) 10%,
+		transparent
+	);
+}
+
+:is(.hc-black, .hc-light) :where(.ash-sessions-window) .ash-dialog-form {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light)
+	:where(.ash-sessions-window)
+	.ash-dialog-form
+	.ash-button:focus-visible {
 	outline-offset: var(--ash-spacing-size20);
 }
 

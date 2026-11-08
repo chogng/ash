@@ -1,0 +1,9 @@
+.ash-sessions-window .ash-menu.ash-sessions-sidebar-account-menu {
+	/* The Grid width includes the sidebar border, and the menu shell adds two borders. */
+	width: calc(
+		var(--ash-sessions-sidebar-width) - 2 * var(--ash-spacing-size120) - 3 *
+			var(--ash-strokeThickness)
+	);
+	min-width: 0;
+	grid-template-columns: minmax(0, 1fr);
+}

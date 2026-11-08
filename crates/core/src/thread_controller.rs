@@ -44,6 +44,7 @@ use ash_protocol::ModelRef;
 use ash_protocol::RequestId;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
+use ash_protocol::SessionKind;
 use ash_protocol::SessionManagerActivity;
 use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionManagerStatus;
@@ -99,6 +100,7 @@ mod mode;
 mod restore;
 mod steering;
 mod user_input;
+pub(crate) use user_input::chat_reference_source;
 
 pub use agent::CreateAgentThreadRequest;
 pub use mailbox::ThreadExecutionContext;
@@ -226,6 +228,12 @@ pub struct CreateThreadRequest {
     pub thread_id: ThreadId,
     pub title: String,
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
+}
+
+#[derive(Clone, Copy)]
+enum ThreadCreationKind {
+    Fixed(SessionKind),
+    SessionDefault(SessionKind),
 }
 
 enum ForkDestination {
@@ -692,15 +700,24 @@ impl ThreadController {
     /// Creates the child Thread already planned by its owning Session.
     ///
     /// Repeating the same request is safe when the durable Thread identity, owner, and title all
-    /// match. A conflicting existing stream is rejected.
+    /// match. The Session kind is a default for new children, including in Sessions whose older
+    /// children have a different persisted kind.
     pub fn create_thread(&self, request: CreateThreadRequest) -> Result<ThreadSnapshot, CoreError> {
-        self.create_thread_with_history(request, None, Vec::new(), Vec::new())
+        let kind = self
+            .read_session_catalog(&request.session_id)?
+            .map_or(SessionKind::Code, |session| session.kind);
+        self.create_thread_with_history(
+            request,
+            ThreadCreationKind::SessionDefault(kind),
+            Vec::new(),
+            Vec::new(),
+        )
     }
 
     fn create_thread_with_history(
         &self,
         request: CreateThreadRequest,
-        surface: Option<ash_protocol::SessionSurface>,
+        kind: ThreadCreationKind,
         initial_events: Vec<ThreadEvent>,
         history_prefixes: Vec<ash_history::HistoryPrefix>,
     ) -> Result<ThreadSnapshot, CoreError> {
@@ -717,13 +734,13 @@ impl ThreadController {
             .lock()
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         if let Some(existing) = loaded.as_ref() {
-            return matching_created_thread(&existing.snapshot, &request, surface);
+            return matching_created_thread(&existing.snapshot, &request, kind);
         }
         let durable = self.store.load(&request.thread_id)?;
         if !durable.is_empty() {
             let existing = crate::history::HistoryReader::new(self.store.as_ref(), &[])
                 .load_thread(&request.thread_id)?;
-            let existing = matching_created_thread(&existing, &request, surface)?;
+            let existing = matching_created_thread(&existing, &request, kind)?;
             *loaded = Some(self.loaded_threads.install(existing.clone()));
             return Ok(existing);
         }
@@ -734,7 +751,9 @@ impl ThreadController {
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
             title: request.title,
-            surface,
+            kind: match kind {
+                ThreadCreationKind::Fixed(kind) | ThreadCreationKind::SessionDefault(kind) => kind,
+            },
             execution_target: request.execution_target,
         }];
         events.extend(initial_events);
@@ -802,7 +821,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: request.execution_target,
             },
-            request.surface,
+            ThreadCreationKind::Fixed(request.kind),
             Vec::new(),
             Vec::new(),
         )
@@ -936,7 +955,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target,
             },
-            source.surface,
+            ThreadCreationKind::Fixed(source.kind),
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id,
                 prefix: reference,
@@ -1092,6 +1111,26 @@ impl ThreadController {
         })
     }
 
+    pub(crate) fn read_rewound_thread(
+        &self,
+        request: &RewindThreadRequest,
+    ) -> Result<Option<ThreadSnapshot>, CoreError> {
+        let thread_id = command_thread_id("rewind", &request.command_id)?;
+        let thread = match self.read_thread(&thread_id) {
+            Ok(thread) => thread,
+            Err(CoreError::NotFound(_)) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let origin = ThreadOrigin::Rewind {
+            parent_thread_id: request.source_thread_id.clone(),
+            before_turn_id: request.before_turn_id.clone(),
+        };
+        if thread.origin != origin || thread.creation_title != request.title {
+            return Err(CoreError::CommandConflict);
+        }
+        Ok(Some(thread))
+    }
+
     /// Creates a child Thread containing the source's terminal Turns before one checkpoint.
     ///
     /// The source remains immutable. Repeating the request after the import event committed is
@@ -1135,7 +1174,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.surface,
+            ThreadCreationKind::Fixed(source.kind),
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -1192,7 +1231,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.surface,
+            ThreadCreationKind::Fixed(source.kind),
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -1204,7 +1243,17 @@ impl ThreadController {
     pub fn start_turn(
         &self,
         thread_id: &ThreadId,
+        request: StartTurnRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        self.start_turn_in_directory(thread_id, request, None)
+    }
+
+    /// Accepts a Turn with the host's effective checkout while leaving the Thread's route intact.
+    pub fn start_turn_in_directory(
+        &self,
+        thread_id: &ThreadId,
         mut request: StartTurnRequest,
+        directory: Option<ash_protocol::SessionExecutionTarget>,
     ) -> Result<StartTurnResult, CoreError> {
         self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
@@ -1355,7 +1404,8 @@ impl ThreadController {
             }
             activated_skills.push(activation);
         }
-        let validated_input = user_input::validate(&normalized_input, &activated_skills)?;
+        let resolved_input = user_input::resolve_chat_references(self, &normalized_input);
+        let validated_input = user_input::validate(&resolved_input, &activated_skills)?;
         let command = ThreadCommand::StartTurn {
             context_policy: request.context_policy.clone(),
             kind: request.kind,
@@ -1414,6 +1464,7 @@ impl ThreadController {
                 kind: request.kind,
                 mode: request.mode,
                 instructions: Some(request.instructions.clone()),
+                directory: directory.or_else(|| snapshot.execution_target.clone()),
                 policy_revision: request.policy_revision.clone(),
                 approval_mode: request.approval_mode,
                 tool_mode: request.tool_mode,
@@ -1553,6 +1604,7 @@ impl ThreadController {
                         kind: TurnKind::Coding,
                         mode: request.mode,
                         instructions: Some(request.instructions.clone()),
+                        directory: None,
                         policy_revision: request.policy_revision.clone(),
                         approval_mode: request.approval_mode,
                         tool_mode: request.tool_mode,
@@ -2017,6 +2069,7 @@ impl ThreadController {
                     kind: TurnKind::ContextCompaction,
                     mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
+                    directory: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: ApprovalMode::Manual,
                     tool_mode: ash_protocol::ToolMode::Direct,
@@ -2171,6 +2224,7 @@ impl ThreadController {
                     kind,
                     mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
+                    directory: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: request.approval_mode,
                     tool_mode: ash_protocol::ToolMode::Direct,
@@ -3077,6 +3131,21 @@ impl ThreadController {
         Ok(deleted)
     }
 
+    /// Serializes host work with mutations of the Session's root Thread, including restore.
+    /// The operation may read Thread state while holding the permit.
+    pub fn with_session_lifecycle<R>(
+        &self,
+        session_id: &SessionId,
+        operation: impl FnOnce() -> Result<R, CoreError>,
+    ) -> Result<R, CoreError> {
+        let thread_id = ThreadId::new(session_id.as_str())
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        let slot = self.loaded_threads.slot(&thread_id)?;
+        let _permit = slot.enter_mutation()?;
+        let _lease = self.acquire_writer_lease(&thread_id)?;
+        operation()
+    }
+
     /// Restores the Session's root conversation without restarting Turns or completed agents.
     pub fn restore_session(&self, session_id: &SessionId) -> Result<ThreadSnapshot, CoreError> {
         let thread_id = ThreadId::new(session_id.as_str())
@@ -3620,6 +3689,7 @@ impl ThreadController {
                 *workspace_checkpoint = Some(captures[0].workspace().clone());
             }
             let envelope = StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: if matches!(
                     &event,
                     ThreadEvent::ItemCompleted {
@@ -4011,10 +4081,14 @@ fn fork_origin(
 fn matching_created_thread(
     snapshot: &ThreadSnapshot,
     request: &CreateThreadRequest,
-    surface: Option<ash_protocol::SessionSurface>,
+    kind: ThreadCreationKind,
 ) -> Result<ThreadSnapshot, CoreError> {
+    let kind_matches = match kind {
+        ThreadCreationKind::Fixed(kind) => snapshot.kind == kind,
+        ThreadCreationKind::SessionDefault(_) => true,
+    };
     if snapshot.session_id == request.session_id
-        && snapshot.surface == surface
+        && kind_matches
         && snapshot.agent_id == request.agent_id
         && snapshot.origin == request.origin
         && snapshot.thread_id == request.thread_id
@@ -4037,7 +4111,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             origin: snapshot.origin.clone(),
         },
         session_id: snapshot.session_id.clone(),
-        surface: snapshot.surface,
+        kind: snapshot.kind,
         preview: crate::thread_title::preview(snapshot),
         thread: SessionThread {
             recap: snapshot.recap.as_ref().map(|recap| recap.text.clone()),

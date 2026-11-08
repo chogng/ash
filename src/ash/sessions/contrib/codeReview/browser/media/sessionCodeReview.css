@@ -1,0 +1,283 @@
+.ash-session-code-review-editor {
+	position: relative;
+	container: ash-code-review / inline-size;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	font-family: var(--ash-font-family, system-ui);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-session-code-review-workspace {
+	display: grid;
+	grid-template-areas: "comparison";
+	grid-template-columns: minmax(0, 1fr);
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+}
+
+.ash-session-code-review-workspace.has-review {
+	grid-template-areas: "notes comparison";
+	grid-template-columns: minmax(12rem, 27%) minmax(0, 1fr);
+}
+
+.ash-session-code-review {
+	grid-area: notes;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	min-width: 0;
+	min-height: 0;
+	border-inline-end: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	background: var(--ash-sideBar-background);
+}
+
+.ash-session-code-review[hidden],
+.ash-session-code-review-footer > [hidden],
+.ash-session-code-review-header [hidden] {
+	display: none;
+}
+
+.ash-session-code-review-notes-header,
+.ash-session-code-review-footer {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-session-code-review-notes-header {
+	border-block-end: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+
+.ash-session-code-review-title h2,
+.ash-session-code-review-notes-header h3,
+.ash-session-code-review-note-group h4 {
+	margin: 0;
+	font-size: var(--ash-fontSize-body2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-session-code-review-notes {
+	min-height: 0;
+	padding: var(--ash-spacing-size120);
+	overflow: auto;
+}
+
+.ash-session-code-review-note-group + .ash-session-code-review-note-group {
+	margin-block-start: var(--ash-spacing-size160);
+}
+
+.ash-session-code-review-note-group h4 {
+	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+}
+
+.ash-session-code-review-note-group ul {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-session-code-review-note {
+	display: grid;
+	gap: var(--ash-spacing-size40);
+	width: 100%;
+	padding: var(--ash-spacing-size80);
+	text-align: start;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	cursor: pointer;
+}
+
+.ash-session-code-review-note:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-session-code-review-note-location {
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-session-code-review-note-body {
+	display: -webkit-box;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}
+
+.ash-session-code-review-note-empty,
+.ash-session-code-review-message {
+	margin: var(--ash-spacing-size160);
+	color: var(--ash-description-foreground);
+}
+
+.ash-session-code-review-footer {
+	flex-wrap: wrap;
+	justify-content: space-between;
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-widget-border);
+}
+
+.ash-session-code-review-status,
+.ash-session-code-review-seen-progress,
+.ash-session-code-review-saved-label {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-session-code-review-comparison {
+	grid-area: comparison;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	min-width: 0;
+	min-height: 0;
+}
+
+.ash-session-code-review-header {
+	display: grid;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+	border-block-end: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+
+.ash-session-code-review-title,
+.ash-session-code-review-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.ash-session-code-review-controls:empty {
+	display: none;
+}
+
+.ash-session-code-review-select {
+	min-width: 0;
+	max-width: 100%;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	font: inherit;
+}
+
+.ash-session-code-review-file-picker {
+	margin-inline-start: auto;
+	max-width: 48%;
+}
+
+.ash-session-code-review-select:focus-visible,
+.ash-session-code-review-note:focus-visible,
+.ash-session-code-review-input:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
+}
+
+.ash-session-code-review-stats {
+	display: inline-flex;
+	gap: var(--ash-spacing-size40);
+	font-size: var(--ash-fontSize-body2);
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-session-code-review-added {
+	color: var(--ash-diffEditorOverview-insertedForeground);
+}
+
+.ash-session-code-review-removed {
+	color: var(--ash-diffEditorOverview-removedForeground);
+}
+
+.ash-session-code-review-diff {
+	position: relative;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-session-code-review-seen {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	white-space: nowrap;
+}
+
+.ash-session-code-review-seen input {
+	margin: 0;
+	accent-color: var(--ash-focusBorder);
+}
+
+.ash-session-code-review-diff .ash-review-zone-panel {
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-session-code-review-input {
+	box-sizing: border-box;
+	width: 100%;
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	resize: vertical;
+}
+
+.ash-session-code-review-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-session-code-review-comment {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+@container ash-code-review (max-width: 39rem) {
+	.ash-session-code-review-workspace.has-review {
+		grid-template-areas: "comparison" "notes";
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) fit-content(35%);
+	}
+
+	.ash-session-code-review {
+		border-inline-end: 0;
+		border-block-start: var(--ash-strokeThickness) solid
+			var(--ash-widget-border);
+	}
+}
+
+.ash-session-code-review-diff
+	.stanza-multi-diff-editor-file-actions:has(.ash-session-code-review-seen) {
+	position: relative;
+	padding-inline-end: var(--ash-spacing-size120);
+	opacity: 1;
+	pointer-events: auto;
+	background: transparent;
+}
+
+.ash-session-code-review-diff
+	.stanza-multi-diff-editor-file-actions:has(
+		.ash-session-code-review-seen
+	)::before {
+	display: none;
+}

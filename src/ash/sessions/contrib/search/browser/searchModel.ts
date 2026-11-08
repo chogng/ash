@@ -67,7 +67,7 @@ export class SessionsSearchModel extends Disposable {
 				});
 			}
 			for (const session of sessions.sessions) {
-				if (session.status !== 'active' || session.surface === 'chat') { continue; }
+				if (session.status !== 'active' || session.kind === 'chat') { continue; }
 				for (const thread of session.chats) {
 					if (thread.status !== 'active') { continue; }
 					results.push({
@@ -118,7 +118,7 @@ export class SessionsSearchModel extends Disposable {
 	async refresh(): Promise<void> {
 		this.error.set(undefined);
 		await Promise.all([this.projects.reload(), this.automations.refresh().catch(() => {
-			if (!this.isDisposed) { this.error.set(localize('sessions.search.schedulesFailed', 'Could not load schedules. Try opening Search again.')); }
+			if (!this.isDisposed) { this.error.set(localize('sessions.search.schedulesFailed', 'Could not load tasks. Try opening Search again.')); }
 		})]);
 	}
 }

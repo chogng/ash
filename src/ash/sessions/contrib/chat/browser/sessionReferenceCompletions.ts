@@ -8,9 +8,8 @@ import { getNLSLanguage, localize } from '../../../../nls.js';
 import { CHAT_INPUT_LANGUAGE_ID } from '../../../../workbench/contrib/chat/browser/widget/input/editor/chatInputCompletions.js';
 import { computeCompletionRanges, getCompletionRangeWord } from '../../../../workbench/contrib/chat/browser/widget/input/editor/chatInputCompletionUtils.js';
 import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import { captureChatReference } from '../../../../workbench/contrib/chat/common/attachments/chatVariableEntries.js';
+import { createChatReferenceVariableEntry } from '../../../../workbench/contrib/chat/common/attachments/chatVariableEntries.js';
 import { matchedCharacterIndices } from '../../../../workbench/contrib/chat/common/slashCommands.js';
-import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
@@ -30,14 +29,13 @@ function referenceTitle(title: string): string {
 	return title.replace(/\s+/gu, ' ').trim() || localize('sessions.list.untitled', 'Untitled Session');
 }
 
-/** Offers same-host conversation snapshots in a saved Sessions composer. */
+/** Offers same-host conversation references in a saved Sessions composer. */
 export class SessionReferenceCompletions extends Disposable {
 	constructor(
 		input: ChatInputPart,
 		composer: Pick<ChatWidgetModel, 'session' | 'threadId'>,
 		@ILanguageFeaturesService features: ILanguageFeaturesService,
 		@ISessionsManagementService sessions: ISessionsManagementService,
-		@IChatService chat: IChatService,
 	) {
 		super();
 		const editor = input.inputEditor;
@@ -103,10 +101,10 @@ export class SessionReferenceCompletions extends Disposable {
 				const thread = session?.chats.find(candidate => candidate.threadId === selection.threadId);
 				if (!session || !thread) return;
 				const title = referenceTitle(thread.title ?? session.title);
-				const accepted = await input.acceptContextCompletion(selection, async draftSignal => {
-					const captures = await captureChatReference(chat, { sessionId: session.sessionId, threadId: thread.threadId, title }, draftSignal);
-					// Each insertion owns its own snapshot and position, even for a repeated conversation.
-					return captures.map(attachment => ({ ...attachment, id: `${attachment.id}:${createUuid()}` }));
+				const accepted = await input.acceptContextCompletion(selection, async () => {
+					const attachment = createChatReferenceVariableEntry(session.sessionId, thread.threadId, title);
+					// Repeated references have independent editor positions.
+					return [{ ...attachment, id: `${attachment.id}:${createUuid()}` }];
 				}, signal);
 				if (!this.isDisposed && !signal.aborted && accepted?.length) status(localize('chat.context.added', 'Added {0}', title));
 			},

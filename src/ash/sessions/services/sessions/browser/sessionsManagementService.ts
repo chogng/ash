@@ -25,6 +25,7 @@ import { backendSession, parseSessionIdentity, projectSession, sessionIdentity, 
 export class SessionsManagementService extends Disposable implements ISessionsManagementService {
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private _sessions: readonly ISession[] = [];
+	private _primaryCatalogReady = false;
 	private _active: IActiveSessionThread | undefined;
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
 	private _activeUntitledSessionId: string | undefined;
@@ -114,6 +115,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}));
 		if (provider.connectionStatus) listeners.add(provider.connectionStatus.onDidChange(status => {
 			if (!this.initializePromise) return;
+			if (provider.id === this.defaultProviderId && status !== 'connected') this._primaryCatalogReady = false;
 			if (status !== 'connected' && this.availableProviders().every(provider => provider.connectionStatus?.get() !== 'connected')) {
 				this._state = status === 'connecting' ? 'loading' : 'error';
 				this._error = status === 'disconnected' ? localize('sessions.connection.disconnected', 'The session host is disconnected. Reconnect to load your sessions.') : undefined;
@@ -175,6 +177,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	get sessions(): readonly ISession[] { return this._sessions; }
+	get primaryCatalogReady(): boolean { return this._primaryCatalogReady; }
 	get navigationRevision(): number { return this.selectionRevision; }
 	get active(): IActiveSessionThread | undefined { return this._active; }
 	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
@@ -267,6 +270,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			model: undefined,
 			agent: undefined,
 			workspace,
+			...(options?.kind ? { kind: options.kind } : {}),
 			...(options?.projectId ? { projectId: options.projectId } : {}),
 			...(title === undefined ? { automaticTitle: true } : {}),
 			...(forkSource ? { forkSource } : {}),
@@ -435,7 +439,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	async materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal, surface?: ISessionCreateOptions['surface']): Promise<IActiveSessionThread> {
+	async materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread> {
 		if (this.isDisposed || signal?.aborted) throw canceled();
 		const materialized = this.materializedSessions.get().get(untitledSessionId);
 		if (materialized) {
@@ -475,9 +479,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				const workspace = session.workspace;
 				const additionalFolders = session.environment?.folders.filter(folder =>
 					!('root' in workspace) || workspace.type !== folder.type || workspace.root !== folder.root);
-				const active = await this.createSession(session.title, workspace, session.agent, untitledSessionId, session.providerId, {
+				const active = await this.createSession(session.title, workspace, session.agent, session.creationId ?? untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
-					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, surface,
+					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, kind: session.kind,
 				}, session.forkSource);
 				if (project && !project.sessionIds.includes(active.session.sessionId)) {
 					// The same draft creation ID recovers this Session if linking needs a retry.
@@ -531,6 +535,18 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this.materializations.get(untitledSessionId)?.cancellation.cancel();
 	}
 
+	completeBackgroundSend(untitledSessionId: string, active: IActiveSessionThread): void {
+		if (this.isDisposed) return;
+		this.materializations.delete(untitledSessionId);
+		this._untitledSessions = this._untitledSessions.map(draft => draft.untitledSessionId === untitledSessionId
+			? { ...draft, creationId: createUuid() } : draft);
+		// Catalog refresh may already contain a newer projection of the accepted request.
+		if (!this._sessions.some(session => session.sessionId === active.session.sessionId)) {
+			this._sessions = [active.session, ...this._sessions];
+		}
+		this._onDidChange.fire();
+	}
+
 	async ensureActiveThread(): Promise<IActiveSessionThread> {
 		await this.initialize();
 		const draft = this.activeUntitledSession;
@@ -556,14 +572,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 
-	canChangeDirectory(sessionId: SessionId): boolean {
+	canChangeDirectory(sessionId: SessionId, options?: { readonly ignoreActivity?: true; }): boolean {
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
 		const chat = session?.chats[0];
 		if (!session || session.source || session.status !== 'active' || session.chats.length !== 1 || chat?.threadId !== sessionId
 			|| chat.origin.type !== 'root' || chat.status !== 'active'
-			|| session.workspace && (session.workspace.authorityId !== 'local' || session.workspace.runtime)
-			|| chat.executionStatus === 'queued' || chat.executionStatus === 'running' || chat.executionStatus === 'waiting'
-			|| chat.management?.status === 'working' || chat.management?.status === 'needsInput') return false;
+			|| session.workspace && (session.workspace.authorityId !== 'local' || session.workspace.runtime)) return false;
+		if (!options?.ignoreActivity && (chat.executionStatus === 'queued' || chat.executionStatus === 'running' || chat.executionStatus === 'waiting'
+			|| chat.management?.status === 'working' || chat.management?.status === 'needsInput')) return false;
 		const provider = this.providers.getProvider(parseSessionIdentity(sessionId, this.defaultProviderId).providerId);
 		return !!provider?.changeDirectory && provider.canChangeDirectory?.() === true;
 	}
@@ -586,7 +602,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	getChatMoveDestinations(sessionId: SessionId, threadId: ThreadId): readonly ISession[] {
 		const source = this._sessions.find(session => session.sessionId === sessionId);
 		const thread = source?.chats.find(chat => chat.threadId === threadId);
-		if (!source || source.source || source.surface === 'chat' || source.status !== 'active' || !thread || threadId === sessionId
+		if (!source || source.source || source.kind === 'chat' || source.status !== 'active' || !thread || threadId === sessionId
 			|| !source.chats.some(chat => chat.threadId === sessionId && chat.status === 'active')
 			|| thread.status !== 'active' || thread.origin.type !== 'root'
 			|| thread.executionStatus === 'queued' || thread.executionStatus === 'running' || thread.executionStatus === 'waiting'
@@ -598,7 +614,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const workspace = source.workspace;
 		if (workspace === undefined) return [];
 		return this._sessions.filter(session => session.sessionId !== sessionId && !session.source
-			&& session.status === 'active' && session.surface !== 'chat' && session.providerId === source.providerId
+			&& session.status === 'active' && session.kind !== 'chat' && session.providerId === source.providerId
 			&& session.chats.some(chat => chat.threadId === session.sessionId && chat.status === 'active')
 			&& (workspace === null ? session.workspace === null : session.workspace?.root === workspace.root
 				&& session.workspace.authorityId === workspace.authorityId
@@ -727,6 +743,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	private async loadSessions(): Promise<void> {
 		const generation = ++this.catalogGeneration;
+		this._primaryCatalogReady = false;
 		// Superseded jobs can finish later, but must not own the new catalog's refresh slots.
 		this.hydrating.clear();
 		this.refreshes.clear();
@@ -734,10 +751,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		try {
 			const providers = this.availableProviders();
 			const primary = providers[0];
-			const sessions = providers.length === 1 && primary?.id === this.defaultProviderId
-				? await primary.list()
-				: providers.length ? await this.loadProviderCatalogs(providers) : [];
+			const { sessions, primaryReady } = providers.length === 1 && primary?.id === this.defaultProviderId
+				? { sessions: await primary.list(), primaryReady: true }
+				: await this.loadProviderCatalogs(providers);
 			if (this.isDisposed || generation !== this.catalogGeneration) return;
+			this._primaryCatalogReady = primaryReady && (!primary?.connectionStatus || primary.connectionStatus.get() === 'connected');
 			const hydrated = this._sessions.filter(session => session.agentTree !== undefined).map(session => session.sessionId);
 			const active = this._active;
 			this._sessions = sessions;
@@ -753,16 +771,17 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 	}
 
-	private async loadProviderCatalogs(providers: readonly ISessionsProvider[]): Promise<readonly ISession[]> {
-		let successful = 0;
+	private async loadProviderCatalogs(providers: readonly ISessionsProvider[]): Promise<{ sessions: readonly ISession[]; primaryReady: boolean; }> {
 		const results = await Promise.allSettled(providers.map(async provider => {
 			const listed = await provider.list();
-			if (!this.availableProviders().includes(provider)) throw canceled();
-			successful++;
+			this.assertCurrentProvider(provider);
 			return listed.map(session => this.project(session, provider));
 		}));
-		if (!successful) throw results.find(result => result.status === 'rejected')?.reason;
-		return results.flatMap((result, index) => result.status === 'fulfilled' ? result.value : this._sessions.filter(session => session.providerId === providers[index].id));
+		if (results.length && results.every(result => result.status === 'rejected')) throw results[0].reason;
+		return {
+			sessions: results.flatMap((result, index) => result.status === 'fulfilled' ? result.value : this._sessions.filter(session => session.providerId === providers[index].id)),
+			primaryReady: providers[0]?.id === this.defaultProviderId && results[0]?.status === 'fulfilled',
+		};
 	}
 
 	private scheduleRefresh(sessionId: SessionId): void {
@@ -863,7 +882,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 function firstActiveThread(sessions: readonly ISession[]): IActiveSessionThread | undefined {
 	for (const session of sessions) {
-		if (session.status !== 'active' || session.surface === 'chat') continue;
+		if (session.status !== 'active' || session.kind === 'chat') continue;
 		const thread = session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
 		if (thread) return { session, threadId: thread.threadId };
 	}
@@ -885,7 +904,7 @@ function sameManagement(left: SessionManagementInfo | undefined, right: SessionM
 
 function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
 	if (!left || !right) return left === right;
-	if (left.title !== right.title || left.surface !== right.surface || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
+	if (left.title !== right.title || left.kind !== right.kind || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
 	if (left.nextApprovalMode !== right.nextApprovalMode || !sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];

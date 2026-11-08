@@ -101,7 +101,9 @@ export class MenuId {
 	static readonly DiffEditorHunkToolbar = new MenuId('DiffEditorHunkToolbar');
 	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
 	static readonly ChatTitle = new MenuId('ChatTitle');
+	static readonly ChatMessageTitle = new MenuId('ChatMessageTitle');
 	static readonly ChatMessageFooter = new MenuId('ChatMessageFooter');
+	static readonly ChatMessageCheckpoint = new MenuId('ChatMessageCheckpoint');
 	static readonly ChatExecute = new MenuId('ChatExecute');
 	static readonly ChatExecuteQueue = new MenuId('ChatExecuteQueue');
 	static readonly ChatNewMenu = new MenuId('ChatNewMenu');
@@ -258,6 +260,7 @@ export class MenuItemAction implements IAction {
 	readonly label: string;
 	readonly tooltip: string;
 	readonly icon?: Icon;
+	readonly destructive?: boolean;
 	readonly enabled: boolean;
 	readonly checked?: boolean;
 	private readonly options: IMenuActionOptions | undefined;
@@ -280,6 +283,7 @@ export class MenuItemAction implements IAction {
 			? commandActionLabel(item.tooltip)
 			: this.label;
 		this.icon = item.icon;
+		this.destructive = item.destructive;
 		this.enabled = contextKeyService.contextMatchesRules(item.precondition);
 
 		if (item.toggled) {

@@ -116,7 +116,7 @@ ASH_TEST_CHATGPT_DESKTOP_VERSION=26.1029.61003 just test ash-chatgpt --lib \
 
 ### Ash 如何保持列表更新
 
-Ash 先显示缓存，限流时保留已加载的数据。实验性入口在窗口重新聚焦、页面重新可见和网络恢复时检查最近列表的缓存。成功列表有 5 分钟的新鲜期，重开窗口时也会读取缓存时间。手动重试可跳过新鲜期。网页版入口还在侧栏可见时每 60 秒触发刷新。 [Ash 刷新触发](../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.ts) · [刷新与缓存合并](../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.ts)
+Ash 先显示当前账号的缓存，限流时保留已加载的数据。网页版和实验性入口分别保存项目及置顶列表的上次成功读取时间。重开窗口或重启 Ash 后，15 分钟内直接复用对应列表。缓存到期后，在下次打开、窗口重新聚焦、页面重新可见或网络恢复时更新。实验性入口的最近会话列表单独使用 5 分钟新鲜期。手动重新加载可跳过新鲜期。网页版入口有待同步的本地操作时，每 60 秒尝试一次同步。 [Ash 刷新触发](../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.ts) · [刷新与缓存合并](../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.ts)
 
 Ash 转发 429 的 `Retry-After`，分别记录最近列表、项目聊天列表和会话详情的冷却。最近列表至少等 60 秒。实验性入口由桌面主进程按账号保存最近列表冷却截止时间，重开窗口或重启 Ash 后仍遵守有效的截止时间。项目列表和详情按各自收到的有效服务端截止时间等待，缺少有效时间时等 60 秒。冷却到期后的下一次刷新可重新发起读取。 [传输层](../../src/ash/sessions/contrib/chatgptweb/electron-main/chatGPTTransport.ts) · [客户端冷却](../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTClient.ts)
 

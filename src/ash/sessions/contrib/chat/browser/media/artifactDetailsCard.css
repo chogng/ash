@@ -1,0 +1,20 @@
+.ash-session-artifact-card-heading {
+	margin: 0;
+	font: inherit;
+}
+
+.ash-session-artifact-card-heading > .ash-button {
+	inline-size: 100%;
+	justify-content: flex-start;
+	text-align: start;
+	color: inherit;
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-session-artifact-card-heading > .ash-button:hover {
+	background: var(--ash-button-hoverBackground);
+}
+
+.ash-session-artifact-card-content:not([hidden]) {
+	padding-inline: var(--ash-spacing-size80);
+}

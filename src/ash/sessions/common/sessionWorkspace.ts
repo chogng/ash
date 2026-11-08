@@ -2,7 +2,15 @@ import type { IAgentConnection } from '../../platform/agentHost/common/agentServ
 import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../base/common/uri.js';
 import { ASH_REMOTE_SCHEME, withRemoteWorkspacePath } from '../../platform/remote/common/remote.js';
-import type { ISessionWorkspace } from '../services/sessions/common/session.js';
+import type { ISessionWorkspace, IUntitledChatSession } from '../services/sessions/common/session.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from './agentHostSessionsProvider.js';
+
+/** A local Code draft needs a project selection in addition to its execution directory. */
+export function hasSelectedCodeWorkspace({ providerId, projectId, workspace }: IUntitledChatSession): boolean {
+	return (!!projectId || (!!providerId && providerId !== LOCAL_AGENT_HOST_PROVIDER_ID))
+		&& workspace.type !== 'current'
+		&& (workspace.type !== 'multiple' || workspace.folders.length > 0);
+}
 
 export interface ISessionFolderAuthorizationService {
 	/** Checks existing local directory permissions without prompting or granting access. */

@@ -107,6 +107,7 @@ for (const locale of ['en', 'zh-CN'])
 			name: locale === 'en' ? 'Search categories' : '搜索分类',
 			exact: true,
 		});
+		const tasksLabel = locale === 'en' ? 'Tasks' : '任务';
 		const input = picker.getByRole('combobox');
 		await expect(input).toBeFocused();
 		await expect(picker).toHaveAttribute('aria-modal', 'true');
@@ -136,7 +137,7 @@ for (const locale of ['en', 'zh-CN'])
 		}
 		await input.focus();
 		await expect(categories.getByRole('tab')).toHaveText(
-			locale === 'en' ? ['All', 'Sessions', 'Projects', 'Scheduled'] : ['全部', '会话', '项目', '计划'],
+			locale === 'en' ? ['All', 'Sessions', 'Projects', tasksLabel] : ['全部', '会话', '项目', tasksLabel],
 		);
 		await expect(picker.getByRole('option', { name: /Search project fixture/ })).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath(`sessions-search-full-${locale}.png`) });
@@ -176,11 +177,11 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(search).toBeFocused();
 		await search.click();
 		await input.fill('Daily search fixture');
-		await categories.getByRole('tab', { name: locale === 'en' ? 'Scheduled' : '计划', exact: true }).click();
+		await categories.getByRole('tab', { name: tasksLabel, exact: true }).click();
 		await expect(picker.getByRole('option')).toHaveCount(1);
 		await picker.getByRole('option').click();
 		const scheduleDialog = page.getByRole('dialog', {
-			name: locale === 'en' ? 'Edit automation' : '编辑自动化',
+			name: locale === 'en' ? 'Edit routine' : '编辑例行任务',
 			exact: true,
 		});
 		await expect(scheduleDialog).toBeVisible();
@@ -1258,12 +1259,14 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await page.keyboard.press('Tab');
 	await expect(page.locator('.ash-sessions-chat-slot.active').getByRole('button', { name: 'Add context' })).toBeFocused();
 	await page.keyboard.press('Tab');
-	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 	await expect(dictation).toBeFocused();
 	const actions = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
 	const send = actions.locator('.ash-chat-input-send-action');
-	await expect(send).toBeDisabled();
-	await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	const voice = actions.getByRole('button', { name: 'Voice conversation', exact: true });
+	await expect(voice).toBeDisabled();
+	await expect(voice.locator('[data-ash-icon-id="voice-mode"]')).toBeVisible();
+	await expect(send).toHaveCount(0);
 	await page.keyboard.press('Tab');
 	await expect(picker).toBeFocused();
 	await page.keyboard.press('Tab');
@@ -1272,7 +1275,10 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-mode-action')).toBeFocused();
 	await input.focus();
 	await page.keyboard.insertText('Draft');
+	await expect(voice).toHaveCount(0);
+	await expect(send.locator('[data-ash-icon-id="enter"]')).toBeVisible();
 	await expect(send).toBeDisabled();
+	await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-status'))
 		.toHaveText('Choose a project before sending.');
 	await input.press('Enter');
@@ -1520,7 +1526,7 @@ test.describe('Sessions settings components', () => {
 	test('modified settings refresh after configuration changes and reset without replacing search', async ({
 		page,
 	}) => {
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const search = settings.getByRole('searchbox', { name: 'Search settings' });
 		const setting = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]');
 		const empty = settings.locator('.ash-sessions-settings-empty');
@@ -1561,7 +1567,7 @@ test.describe('Sessions settings components', () => {
 	test('preferences keyboard navigation clears search before handing off to shared shortcuts', async ({
 		page,
 	}, testInfo) => {
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const search = settings.getByRole('searchbox');
 		await search.fill('compact');
 		await search.press('Escape');
@@ -1611,7 +1617,7 @@ test.describe('Sessions settings components', () => {
 	test('Customize settings and feature links open the actual Workbench settings owner', async ({
 		page,
 	}, testInfo) => {
-		let settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		let settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await settings.locator('[data-settings-category-id="customize"]').click();
 		await settings.getByRole('button', { name: 'Open Workbench Settings', exact: true }).click();
 		await expect(settings).toHaveCount(0);
@@ -1639,7 +1645,7 @@ test.describe('Sessions settings components', () => {
 		] as const) {
 			await page.getByRole('button', { name: 'Accounts', exact: true }).click();
 			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-			settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			await settings.locator(`[data-settings-category-id="${category}"]`).click();
 			await settings.getByRole('button', { name: label, exact: true }).click();
 			await expect(settings).toHaveCount(0);
@@ -1659,7 +1665,7 @@ test.describe('Sessions settings components', () => {
 			['customize', 'Preferences: Open User Settings (JSON)', 'User Settings (JSON)', '{}'],
 			['keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)', 'Keyboard Shortcuts (JSON)', '[]'],
 		] as const) {
-			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			await settings.locator(`[data-settings-category-id="${category}"]`).click();
 			await settings.getByRole('button', { name: command, exact: true }).click();
 			await expect(settings).toHaveCount(0);
@@ -1681,10 +1687,11 @@ test.describe('Sessions settings components', () => {
 	});
 
 	test('dictation settings switch between local models and API connections', async ({ page }) => {
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
+		await navigation.getByRole('button', { name: 'Voice', exact: true }).click();
 		await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
-		await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
+		await expect(settings.getByRole('group', { name: 'Local dictation models' })).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toHaveCount(0);
 		const dictationBackend = settings.locator('[data-configuration-key="dictation.backend"]').getByRole('combobox');
 		const originalDictationBackend = (await dictationBackend.textContent())!.trim();
@@ -1693,10 +1700,10 @@ test.describe('Sessions settings components', () => {
 		await page.getByRole('option', { name: changedDictationBackend }).click();
 		await expect(dictationBackend).toHaveText(changedDictationBackend);
 		await expect(settings.locator('[data-configuration-key="dictation.cloudProvider"]')).toBeVisible();
-		await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toHaveCount(0);
+		await expect(settings.getByRole('group', { name: 'Local dictation models' })).toHaveCount(0);
 		await settings.getByRole('button', { name: 'Manage API connections' }).click();
 		await expect(settings.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
-		await navigation.getByRole('button', { name: 'General' }).click();
+		await navigation.getByRole('button', { name: 'Voice', exact: true }).click();
 		await dictationBackend.click();
 		await page.getByRole('option', { name: originalDictationBackend }).click();
 	});

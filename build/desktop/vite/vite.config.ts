@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, normalizePath, type Plugin } from 'vite';
 import { AshRendererDirectory } from '../../../src/ash/code/common/application.js';
@@ -49,6 +50,7 @@ export default defineConfig(({ mode, command }) => {
 			import { migrateLegacyBrowserSettings } from '${moduleUrl('workbench/services/userData/browser/userDataInit.ts')}';
 			import { BrowserLanguagePackStore } from '${moduleUrl('platform/languagePacks/browser/languagePackStore.ts')}';
 			import { initializeBrowserLocalization } from '${moduleUrl('workbench/services/localization/browser/localizationBootstrap.ts')}';
+			import { getNLSLanguage } from '${moduleUrl('nls.ts')}';
 			import { showStartupError } from '${moduleUrl('workbench/browser/startupError.ts')}';
 			import { readBrowserPartsSplash } from '${moduleUrl('workbench/contrib/splash/browser/splash.ts')}';
 			import { showSessionsSplash } from '${moduleUrl('sessions/contrib/splash/browser/sessionsSplash.ts')}';
@@ -62,6 +64,7 @@ export default defineConfig(({ mode, command }) => {
 					using registration = files.registerProvider(Schemas.vscodeUserData, provider);
 					await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
 				}
+				document.documentElement.lang = getNLSLanguage();
 				const { create } = await import('${moduleUrl('sessions/sessions.web.main.internal.ts')}');
 				create(container, import.meta.env.ASH_SESSIONS_PROFILE);
 			} catch (error) {
@@ -119,6 +122,17 @@ export default defineConfig(({ mode, command }) => {
 				},
 			} satisfies Plugin]),
 			buildMetricsPlugin(),
+			{
+				name: 'ash-type-license',
+				apply: 'build',
+				generateBundle() {
+					this.emitFile({
+						type: 'asset',
+						fileName: 'licenses/Ash-Type-System.txt',
+						source: readFileSync(resolve(repositoryRoot, 'resources/fonts/OFL-LICENSE.txt')),
+					});
+				},
+			} satisfies Plugin,
 			hotReloadPlugin({ desktopRoot }),
 			workbenchEntryPlugin(browserEntryPath, [{
 				url: `/${sessionsWebEntry}.html`,

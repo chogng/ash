@@ -206,21 +206,7 @@ pub(crate) fn resolve(
                 && grant.access() == SandboxDirAccess::ReadWrite)
         {
             readwrite.insert(root.clone());
-            for name in PROTECTED_DIR_METADATA_NAMES {
-                let path = root.join(name);
-                match std::fs::symlink_metadata(&path) {
-                    Ok(_) => {
-                        readonly.insert(resolve_owned(grant.dir(), Path::new(name))?);
-                    }
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => {
-                        return Err(SandboxError::Io(format!(
-                            "cannot inspect protected path '{}': {error}",
-                            path.display()
-                        )));
-                    }
-                }
-            }
+            readonly.extend(protected_metadata(grant.dir())?);
         } else {
             readonly.insert(root);
         }
@@ -260,6 +246,24 @@ pub(crate) fn resolve(
         readonly_paths: readonly.into_iter().collect(),
         denied_paths: denied.into_iter().collect(),
     })
+}
+
+pub(super) fn protected_metadata(dir: &Dir) -> Result<Vec<PathBuf>, SandboxError> {
+    let mut protected = Vec::new();
+    for name in PROTECTED_DIR_METADATA_NAMES {
+        let path = dir.canonical_path().join(name);
+        match std::fs::symlink_metadata(&path) {
+            Ok(_) => protected.push(resolve_owned(dir, Path::new(name))?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(SandboxError::Io(format!(
+                    "cannot inspect protected path '{}': {error}",
+                    path.display()
+                )));
+            }
+        }
+    }
+    Ok(protected)
 }
 
 /// Reject a multiply linked file when a path-based deny cannot identify its aliases.

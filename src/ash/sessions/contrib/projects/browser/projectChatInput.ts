@@ -1,5 +1,6 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { isWeb } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -32,6 +33,8 @@ export class ProjectChatInput extends Disposable {
 			undefined,
 			LOCAL_AGENT_HOST_PROVIDER_ID,
 			false,
+			undefined,
+			isWeb ? undefined : { kind: 'chat' },
 		);
 		const scope = this._register(scopes.createScope(undefined, draft.providerId));
 		scope.registerSingleton(ILanguageModelsConfigurationService, () =>

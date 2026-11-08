@@ -24,6 +24,11 @@ pub(super) trait MemoriesRequestProcessorContext: Send + Sync {
         &self,
         thread_id: Option<&ash_protocol::ThreadId>,
     ) -> Result<Vec<(memories::MemoryScope, String)>, String>;
+    fn validate_memory_origin(
+        &self,
+        origin: &memories::MemoryTurnSource,
+        scope: &memories::MemoryScope,
+    ) -> Result<(), RpcError>;
 }
 
 pub(super) struct MemoriesRequestProcessor<'ctx, C: MemoriesRequestProcessorContext + ?Sized> {
@@ -123,6 +128,9 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
     ) -> Result<Value, RpcError> {
         let params: MemoryAddParams = decode(value)?;
         self.authorize_memory_scope(connection, &params.scope)?;
+        if let Some(origin) = &params.origin {
+            self.context.validate_memory_origin(origin, &params.scope)?;
+        }
         self.context.refresh_analytics()?;
         let mutation = self
             .memories(connection)?
@@ -133,6 +141,7 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
                     scope: params.scope,
                     title: params.title,
                     body: params.body,
+                    origin: params.origin,
                 },
                 cancellation,
             )
@@ -159,6 +168,10 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
             .memory_scope_labels(params.thread_id.as_ref())
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
             .into_iter()
+            .filter(|(scope, _)| {
+                scope.namespace() == memories::MemoryNamespace::Code
+                    || connection.allows_chat_project_memories()
+            })
             .map(|(scope, label)| {
                 memories.policy(&scope).map(|policy| {
                     ash_app_server_protocol::protocol::memory::MemoryScopeDescriptor {
@@ -302,12 +315,30 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
         scope: &memories::MemoryScope,
     ) -> Result<(), RpcError> {
         self.memories(connection)?;
-        if let memories::MemoryScope::Project { project_id } = scope {
-            self.projects
+        let chat = scope.namespace() == memories::MemoryNamespace::Chat;
+        if chat && !connection.allows_chat_project_memories() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        if let memories::MemoryScope::Project { project_id }
+        | memories::MemoryScope::ChatProject { project_id } = scope
+        {
+            let project = self
+                .projects
                 .as_deref()
                 .ok_or_else(|| RpcError::new(-32130, AppServerErrorName::MemoryUnavailable))?
                 .read(project_id)
                 .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            if (!chat && project.scope() != ash_projects::ProjectScope::Code)
+                || (chat && !project.is_active())
+            {
+                return Err(RpcError::new(
+                    -32073,
+                    AppServerErrorName::PermissionRequired,
+                ));
+            }
         }
         if let memories::MemoryScope::Team { team_id } = scope {
             self.teams

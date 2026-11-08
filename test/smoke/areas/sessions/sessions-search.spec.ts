@@ -147,7 +147,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				});
 				await page.keyboard.press('Escape');
 				await expect(search).toBeFocused();
-				await page.locator('[data-action-id="sessions.open.projects"] button').click();
+				await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 				await expect(page.locator('.ash-chatgpt-widget')).toBeHidden();
 				await search.click();
 				const input = dialog.getByRole('combobox');

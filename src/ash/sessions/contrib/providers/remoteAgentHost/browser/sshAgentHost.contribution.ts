@@ -12,7 +12,6 @@ import { ILayoutService } from '../../../../../platform/layout/browser/layoutSer
 import { RemotesWidget } from './remotesWidget.js';
 import { canonicalRemoteConnectionDefinition, IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
-import { Menus } from '../../../../browser/menus.js';
 
 function hostStatus(state: IAgentHostConnectionInfo['state']): string {
 	switch (state) {
@@ -58,7 +57,6 @@ export class SSHAgentHostContribution extends Disposable {
 		}));
 		const command = { id: manageHostsCommand, title: localize2({ bundle: 'ash.workbench', key: 'agentHosts.manage' }, 'Agents: Manage Connected Hosts') };
 		this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command }));
-		this._register(MenusRegistry.appendMenuItem(Menus.SessionsViewFilter, { command, group: '2_manage' }));
 	}
 
 	private async addEnvironment(transport?: 'ssh' | 'tunnel'): Promise<boolean> {

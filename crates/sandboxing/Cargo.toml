@@ -16,6 +16,7 @@ serde = { workspace = true, features = ["derive"] }
 globset = { workspace = true }
 ash-utils-pty = { workspace = true }
 ash-file-access = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi-util = { workspace = true }

@@ -184,6 +184,19 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal('panel' in saved.code, false);
 	});
 
+	test('a saved details preference cannot reopen an empty side bar in Chat', async () => {
+		using fixture = new EntryFixture({ ashChat: { details: true, documents: false } });
+		await fixture.service.openEntry({
+			...chatEntry, id: 'ashChat', content: 'editor', focus: 'editor',
+		}, undefined, { source: 'restore' });
+
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+		assert.equal(fixture.partChanges.includes('show:auxiliarybar'), false);
+		const saved = JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!);
+		assert.equal(saved.ashChat.details, false);
+	});
+
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('opening an ordinary document from Cowork reveals its body after switching to Code', async () => {

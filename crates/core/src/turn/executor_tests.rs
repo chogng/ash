@@ -68,6 +68,7 @@ use ash_protocol::SkillRef;
 use ash_protocol::SkillSourceId;
 use ash_protocol::StableTurnErrorCode;
 use ash_protocol::StopReason;
+use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
 use ash_protocol::ThreadUpdate;
@@ -1313,9 +1314,32 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
 
 #[test]
 fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
-    let threads = Arc::new(ThreadController::with_store(Arc::new(
-        InMemoryThreadStore::default(),
-    )));
+    struct StreamingSkillModel(ScriptedModel);
+
+    impl ModelService for StreamingSkillModel {
+        fn invoke(
+            &self,
+            selection: ModelSelection<'_>,
+            request: &ModelRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            self.0.invoke(selection, request, cancellation)
+        }
+
+        fn stream(
+            &self,
+            selection: ModelSelection<'_>,
+            request: &ModelRequest,
+            cancellation: &CancellationToken,
+            sink: &mut dyn ModelStreamSink,
+        ) -> Result<ModelResponse, CoreError> {
+            sink.emit(ModelStreamEvent::TextDelta("done".into()))?;
+            self.invoke(selection, request, cancellation)
+        }
+    }
+
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = Arc::new(ThreadController::with_store(store.clone()));
     let thread_id = ThreadId::new("skill-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
@@ -1369,7 +1393,9 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         )
         .unwrap()
         .turn_id;
-    let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
+    let model = Arc::new(StreamingSkillModel(ScriptedModel::new([Ok(
+        text_response("done"),
+    )])));
     let mut extensions = ash_extension_api::ExtensionRegistryBuilder::new();
     extensions.turn_input_contributor(
         "skills",
@@ -1378,14 +1404,16 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
             body: "# Review workflow\nInspect correctness first.".into(),
         }),
     );
+    let updates = Arc::new(RecordingUpdates::default());
     let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_thread_updates(updates.clone())
         .with_extensions(Arc::new(extensions.build()));
 
     executor
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
         .unwrap();
 
-    let request = &model.requests()[0];
+    let request = &model.0.requests()[0];
     assert!(request_contains(request, "Inspect correctness first."));
     assert!(request_contains(request, digest.as_str()));
     assert!(request_contains(request, "<skill-instructions"));
@@ -1393,7 +1421,36 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
     assert!(!request_contains(request, "catalog-generation"));
     assert_eq!(
         threads.read_thread(&thread_id).unwrap().turns[0].activated_skills,
-        vec![activation]
+        vec![activation.clone()]
+    );
+    let events = store.events();
+    let loaded_at = events
+        .iter()
+        .position(|event| {
+            matches!(&event.event,
+            ThreadEvent::TurnSkillsLoaded { loads, .. }
+                if loads.len() == 1 && loads[0].skill == activation)
+        })
+        .expect("the request's Skill load is durable");
+    assert!(
+        events[loaded_at + 1..]
+            .iter()
+            .any(|event| matches!(event.event, ThreadEvent::TurnCompleted { .. }))
+    );
+    let published = updates.updates();
+    let first_output = published
+        .iter()
+        .position(|update| update.stream_cursor.is_some())
+        .expect("the model published output");
+    assert!(published[..first_output].iter().any(|update| matches!(
+        update.update,
+        ThreadUpdate::Committed { ref event } if matches!(event, ThreadEvent::TurnSkillsLoaded { .. })
+    )));
+    let reopened = ThreadController::with_store(store);
+    let history = reopened.read_thread(&thread_id).unwrap().public_thread();
+    assert_eq!(
+        history.turns[0].skill_loads.as_ref().unwrap()[0].skill,
+        activation
     );
 }
 

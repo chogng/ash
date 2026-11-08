@@ -10,6 +10,8 @@ export interface ResolvedChatContext {
 	readonly sourceUrl?: string;
 	readonly name: string;
 	readonly content: string;
+	/** The backend reads this conversation when it admits the Turn, including queued Turns. */
+	readonly chatReference?: { readonly sessionId: string; readonly threadId: string; };
 	/** UTF-16 offsets in the untrimmed submitted text, replacing the visible attachment label. */
 	readonly reference?: { readonly start: number; readonly end: number; };
 	/** Images hold a URL; instructions hold an authorized backend path; tool selections hold a JSON array of disabled names. */
@@ -22,7 +24,7 @@ export interface ChatContextAttachment {
 	readonly terminalSnapshot?: ITerminalOutputSnapshot;
 	readonly id: string;
 	readonly kind: string;
-	/** Original source; the resolved content remains the selected snapshot. */
+	/** Original source for opening an attachment. */
 	readonly resource?: URI;
 	readonly name: string;
 	/** Provider presentation is optional; accepted content remains an immutable draft snapshot. */
@@ -55,16 +57,20 @@ export interface IChatContextTarget {
 	acceptInput(value?: string): Promise<void>;
 }
 
-/** Serializes the accepted composer snapshot for a workspace or window handoff. */
+/** Serializes attachments for drafts, clipboard and window handoff. */
 export async function captureChatDraft(text: string, mode: SessionMode, attachments: readonly ChatContextAttachment[]): Promise<NonNullable<IOpenAgentsWindowOptions['draft']>> {
-	const contexts = await Promise.all(attachments.map(async attachment => ({
-		id: attachment.id,
-		kind: attachment.kind,
-		name: attachment.name,
-		content: (await attachment.resolve()).content,
-		...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
-		...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
-		...(attachment.reference ? { reference: attachment.reference } : {}),
-	})));
+	const contexts = await Promise.all(attachments.map(async attachment => {
+		const resolved = await attachment.resolve();
+		return {
+			id: attachment.id,
+			kind: attachment.kind,
+			name: attachment.name,
+			content: resolved.content,
+			...(resolved.chatReference ? { chatReference: true as const } : {}),
+			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
+			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
+			...(attachment.reference ? { reference: attachment.reference } : {}),
+		};
+	}));
 	return { mode, text, contexts };
 }

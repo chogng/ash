@@ -53,7 +53,7 @@ function fixture() {
 			assert.deepEqual(params.executionTarget, { type: 'local', root: URI.file('/workspace/repository').fsPath });
 			if (fail) throw new Error('Controlled review failure');
 			return {
-				session: { sessionId: 'review', title: params.title, status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'thread', title: 'Review', status: 'active' }] },
+				session: { sessionId: 'review', kind: 'code' as const, title: params.title, status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'thread', title: 'Review', status: 'active' }] },
 				agentTree: { roots: [] },
 			} satisfies SessionResult;
 		},

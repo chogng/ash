@@ -1,0 +1,231 @@
+.ash-projects-form input,
+.ash-projects-form textarea,
+.ash-projects-form select {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-small);
+	padding: var(--ash-spacing-size120);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	user-select: text;
+}
+
+.ash-projects-form input::placeholder,
+.ash-projects-form textarea::placeholder {
+	color: var(--ash-input-placeholderForeground);
+}
+
+.ash-projects-dialog.ash-dialog {
+	width: 520px;
+	height: 360px;
+}
+
+.ash-projects-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+}
+
+.ash-projects-form label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-projects-form input,
+.ash-projects-form textarea {
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-projects-form input {
+	min-height: var(--ash-spacing-size360);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
+	line-height: 1.5;
+}
+
+.ash-projects-form textarea {
+	min-height: 88px;
+	resize: vertical;
+}
+.ash-projects-conflicts:not([hidden]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+}
+.ash-projects-conflicts span {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 160px;
+	overflow: auto;
+}
+.ash-projects-form-error {
+	color: var(--ash-error-foreground);
+	margin: 0;
+}
+.ash-projects-form-error:empty {
+	display: none;
+}
+
+.ash-projects-dialog.ash-code-project-dialog {
+	height: fit-content;
+}
+
+.ash-project-name-group {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-project-name {
+	display: flex;
+	align-items: stretch;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-input-background);
+}
+
+.ash-project-name > :is(span, .ash-project-appearance-trigger) {
+	display: grid;
+	place-items: center;
+	flex: 0 0 var(--ash-spacing-size360);
+	border-inline-end: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+}
+
+.ash-project-name > .ash-project-appearance-trigger {
+	min-inline-size: 0;
+	border-start-start-radius: var(--ash-cornerRadius-large);
+	border-end-start-radius: var(--ash-cornerRadius-large);
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
+}
+
+.ash-project-name > input {
+	border: 0;
+	background: transparent;
+}
+
+.ash-project-name > input:focus {
+	outline: none;
+}
+
+.ash-project-name:focus-within {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-project-appearance {
+	color: var(--ash-foreground);
+	background: var(--ash-editor-background);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+}
+
+.ash-project-appearance-colors {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-project-appearance-colors > button {
+	display: grid;
+	place-items: center;
+	inline-size: var(--ash-spacing-size360);
+	block-size: var(--ash-spacing-size360);
+	padding: 0;
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-circle);
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.ash-project-appearance-colors > button > span {
+	inline-size: var(--ash-spacing-size240);
+	block-size: var(--ash-spacing-size240);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-circle);
+}
+
+.ash-project-appearance-colors > button:is(:hover, [aria-pressed="true"]) {
+	background: var(--ash-list-hoverBackground);
+	border-color: var(--ash-widget-border);
+}
+
+.ash-project-appearance-colors > button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-project-appearance .ash-icon-select-item[aria-selected="true"] {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-project-appearance-footer {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-project-appearance {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+.ash-code-project-source {
+	min-inline-size: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.ash-code-project-source > legend {
+	padding: 0;
+	margin-block-end: var(--ash-spacing-size80);
+}
+
+.ash-code-project-folder-panel {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--ash-spacing-size120);
+	box-sizing: border-box;
+	min-block-size: 104px;
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-input-background);
+}
+
+.ash-code-project-folder-panel > span {
+	color: var(--ash-description-foreground);
+}
+
+.ash-code-project-folder-list {
+	align-self: stretch;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-code-project-folder-list > li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-code-project-folder-list > li > span {
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

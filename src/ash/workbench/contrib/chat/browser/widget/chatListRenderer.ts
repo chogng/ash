@@ -2,30 +2,29 @@ import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
+import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../../../base/common/actions.js';
-import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
-import { createActionViewItem, MenuEntryActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
-import { IMenuService, MenuId, MenuItemAction } from '../../../../../platform/actions/common/actions.js';
-import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { createActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
+import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
-import { HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { ChatInputEditors, type ChatInputEditorOptions, type IChatInputEditor } from './input/chatInputEditorRegistry.js';
-import { installChatInputLayout } from './input/chatInputLayout.js';
 import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
 import { DefaultChatAttachmentWidget } from '../attachments/chatAttachmentWidgets.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from './chatContentParts/chatAttachmentsContentPart.js';
-import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, getWindowId, h } from '../../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { parseMemoryReference, type MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { markdownFrameThreshold } from './chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
@@ -41,47 +40,33 @@ import { ChatThinkingContentPart } from './chatContentParts/chatThinkingContentP
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
-import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
-import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
-import { CopyItemActionId } from '../actions/chatCopyActions.js';
+import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, getResponseVote, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
+import { MarkHelpfulActionId, ShowLoadedSkillsActionId } from '../actions/chatTitleActions.js';
 import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction } from '../actions/chatQueueActions.js';
-import { ChatModelFeedbackSurveyActionId } from '../actions/chatModelFeedbackSurveyActions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
-import { ChatTurnChangesPill } from './chatTurnPills.js';
-import type { ChatTurnChangesOpener } from '../chat.js';
+import { ChatLoadedSkillsActionViewItem, ChatTurnChangesPill } from './chatTurnPills.js';
+import { ChatRequestActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import { RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
+import { EditChatRequestActionId, RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
 
-import type { IChatInputPart } from './input/chatInputPart.js';
-import type { ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 
-export interface ChatRequestInputOptions {
-	readonly container: HTMLElement;
-	readonly descriptionId: string;
-	readonly initialHeight: number;
-	readonly submit: (text: string, contexts: readonly ResolvedChatContext[]) => Promise<void>;
-	readonly reportError: (error: unknown) => void;
-}
-
-/** The conversation model supplies response capabilities and any destination-specific labels. */
+/** The conversation model supplies row-scoped menu capabilities. */
 export interface ChatResponseActions {
-	readonly remote?: {
-		readonly readAloud: (window: Window & typeof globalThis, signal: AbortSignal) => Promise<void>;
-		readonly forkLabel: string;
-		readonly fork: () => Promise<void>;
-		readonly share: () => Promise<void>;
-	};
-	readonly openOriginal?: { readonly label: string; readonly icon: Icon; readonly run: () => Promise<void>; };
+	/** Context keys that are true for this row. Reuse the array while the capabilities are unchanged. */
+	readonly menuContext?: readonly string[];
 }
 
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
-	readonly createRequestInput?: (options: ChatRequestInputOptions) => IChatInputPart;
-	readonly createRequestEditor?: (options: ChatInputEditorOptions) => IChatInputEditor;
+	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
+	readonly onDidRequestEdit: (requestId: string) => void | Promise<void>;
+	readonly canEditRequest: () => boolean;
+	readonly cancelRequestEdit: () => boolean;
+	readonly refreshRequestAfterEdit: () => void;
 	readonly deferCodeBlockModels: boolean;
 	readonly isVisible: () => boolean;
 	/** Borrowed view state remains owned by the list across row replacements. */
@@ -89,11 +74,12 @@ interface ChatListItemRendererOptions {
 	readonly contextExpansion: Map<string, boolean>;
 	readonly thinkingExpansion: Map<string, boolean>;
 	readonly onDidChangeHeight: () => void;
-	readonly beginRequestEdit: (close: () => boolean) => IDisposable | undefined;
-	readonly onWillChangeRequestEditor: (opening: boolean) => () => void;
+	readonly beginRequestEdit: (close: (restoreFocus: boolean) => boolean) => IDisposable | undefined;
+	readonly onWillCloseRequestEditor: (options: { readonly heightChanges: boolean; readonly sent: boolean; }) => () => void;
 	readonly onDidChangeMarkdownHeight: (id: string) => void;
 	readonly onDidChangeContent: () => void;
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
@@ -104,7 +90,6 @@ interface ChatListItemRendererOptions {
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
 
-const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
 const chatEnabledContextKeys = new Set([ChatContextKeys.enabled.key]);
 
 /** Owns one message's DOM, incremental content, actions and disposable resources. */
@@ -113,11 +98,12 @@ export class ChatListItemRenderer extends Disposable {
 	public getLastFocusedFileTree() { return this.toolPart?.getLastFocusedFileTree() ?? this.resources.value?.getLastFocusedFileTree(); }
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
-	private copyButton: Button | undefined;
-	private readonly responsePlayback = this._register(new MutableDisposable());
+	private requestActionContext: ChatRequestActionContext | undefined;
+	private openRequestEditor: (() => void) | undefined;
+	private deferredRequestUpdate = false;
+	private responseActionContext: ChatResponseActionContext | undefined;
 	private updateResponseActions: ((beforeLayout?: () => void) => boolean) | undefined;
 	private updateTurnChanges: (() => void) | undefined;
-	private readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly mediaChanges = this._register(new MutableDisposable());
@@ -149,6 +135,7 @@ export class ChatListItemRenderer extends Disposable {
 		@IStorageService private readonly storageService: IStorageService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IMenuService private readonly menus: IMenuService,
+		@IActionViewItemService private readonly actionViewItems: IActionViewItemService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 	) {
 		super();
@@ -165,8 +152,20 @@ export class ChatListItemRenderer extends Disposable {
 		const same = sameItem(this.item, item);
 		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			this.item = item;
+			this.requestActionContext?.update(item);
 			// Providers can gain or lose response actions without changing the transcript.
-			if (this.options.getResponseActions && this.updateResponseActions?.(beforeLayout)) return 'updated';
+			if (this.options.getResponseActions) {
+				if (this.updateResponseActions?.(beforeLayout)) return 'updated';
+			} else {
+				this.responseActionContext?.update(item);
+			}
+			return 'unchanged';
+		}
+		const source = this.item.requestSource;
+		if (this.edit.value && source && item.type === 'userMessage' && item.requestSource?.sessionId === source.sessionId
+			&& item.requestSource.threadId === source.threadId && item.requestSource.turnId === source.turnId && item.requestSource.itemId === source.itemId) {
+			// Keep the editor mounted across presentation updates to the same request.
+			this.deferredRequestUpdate = true;
 			return 'unchanged';
 		}
 		if (item.text.length >= markdownFrameThreshold && this.tryQueuePlainResponse(item)) return 'queued';
@@ -189,7 +188,7 @@ export class ChatListItemRenderer extends Disposable {
 			this.thinkingPart.updateThinking(item);
 			this.item = item;
 			this.updateState();
-		} else if (this.markdownPart && !same && this.item.type === item.type && this.item.markdown?.supportHtml === item.markdown?.supportHtml && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
+		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && this.item.markdown?.supportHtml === item.markdown?.supportHtml && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
 			&& (this.item.text === item.text && this.item.transient === item.transient
 				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
 			this.item = item;
@@ -206,7 +205,7 @@ export class ChatListItemRenderer extends Disposable {
 		const previous = this.item;
 		// Keep controls and attachments on the synchronous path when their inputs change.
 		if (!this.markdownPart || item.type !== 'agentMessage' || !previous.transient || !item.transient || !previous.text || previous.text === item.text
-			|| previous.resources?.length || item.resources?.length || this.reading.value || this.options.getResponseActions
+			|| previous.resources?.length || item.resources?.length || this.responseActionContext?.isReading || this.options.getResponseActions
 			|| previous.content?.some(part => part.type !== 'text') || item.content?.some(part => part.type !== 'text')
 			|| this.options.onDidRequestMemoryReference && (this.memoryReferences.size || item.text.includes('memory:'))
 			|| !sameItemPresentation(previous, item)) return false;
@@ -222,9 +221,6 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private refreshContent(): void {
-		if (this.copyButton) this.copyButton.enabled = this.item.text.length > 0;
-		const reading = this.reading.value;
-		if (reading && (reading.item.text !== this.item.text || reading.item.attachmentSource?.sessionId !== this.item.attachmentSource?.sessionId || reading.item.attachmentSource?.threadId !== this.item.attachmentSource?.threadId)) this.reading.clear();
 		this.updateResponseActions?.();
 		this.updateTurnChanges?.();
 		this.renderAttachments();
@@ -233,8 +229,7 @@ export class ChatListItemRenderer extends Disposable {
 
 	public setVisible(visible: boolean): void {
 		if (!visible) {
-			this.reading.clear();
-			this.responsePlayback.clear();
+			this.responseActionContext?.stop();
 			this.updateResponseActions?.();
 		}
 		this.media.value?.setVisible(visible);
@@ -291,174 +286,147 @@ export class ChatListItemRenderer extends Disposable {
 		return actions;
 	}
 
-	private renderCopyAction(lifetime: DisposableStore): HTMLElement {
-		const actions = this.createMessageActions();
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('chat.message.copy', 'Copy message'),
-			title: localize('chat.message.copy', 'Copy message'),
-			icon: Lxicon.copy,
-			presentation: 'quiet',
-			size: 'small',
-			enabled: this.item.text.length > 0,
+	private createMessageToolbar(actions: HTMLElement, menu: MenuId, label: string, context: IContextKeyService, lifetime: DisposableStore): MenuWorkbenchToolBar {
+		const windowId = getWindowId(getWindow(actions)) ?? 0;
+		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, menu, {
+			ariaLabel: label,
+			contextKeyService: context,
+			menuOptions: { shouldForwardArgs: true, renderShortTitle: true },
+			actionViewItemProvider: (action, options) => {
+				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
+				if (action.id === ShowLoadedSkillsActionId && this.item.loadedSkills?.length) {
+					return new ChatLoadedSkillsActionViewItem(action, buttonOptions, this.item.loadedSkills.length);
+				}
+				const factory = this.actionViewItems.lookUp(menu, action.id);
+				return factory?.(action, buttonOptions, this.instantiationService, windowId)
+					?? createActionViewItem(action, this.contextMenus, buttonOptions)
+					?? new ButtonActionViewItem(action, buttonOptions);
+			},
 		}));
-		this.copyButton = button;
-		const copy = this.createCopyHandler(actions, lifetime);
-		lifetime.add(button.onDidClick(() => void copy(button.domNode, item => this.commands.executeCommand(CopyItemActionId, item))));
-		return actions;
+		lifetime.add(toolbar.actionRunner.onDidRun(event => {
+			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
+		}));
+		return toolbar;
 	}
 
-	private createCopyHandler(actions: HTMLElement, lifetime: DisposableStore) {
-		const feedback = h(this.element.ownerDocument, 'span');
-		feedback.className = 'ash-chat-message-copy-status';
-		feedback.setAttribute('role', 'status');
-		actions.append(feedback);
-		const clear = lifetime.add(new RunOnceScheduler(() => { feedback.textContent = ''; }, 2000));
-		let copying = false;
-		return async (button: HTMLElement, run: (item: IChatListItem) => unknown) => {
-			if (copying || this.isDisposed || !this.options.isVisible() || !this.item.text) return;
-			const item = this.item;
-			copying = true;
-			button.setAttribute('aria-busy', 'true');
-			clear.cancel();
-			feedback.textContent = '';
-			try {
-				await run(item);
-				if (this.isDisposed || this.item !== item) return;
-				feedback.textContent = localize('chat.message.copied', 'Message copied.');
-				clear.schedule();
-			} catch (error) {
-				if (this.isDisposed || this.item !== item) return;
-				feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
-			} finally {
-				copying = false;
-				button.removeAttribute('aria-busy');
-			}
-		};
+	private renderRequestActions(requestText: HTMLElement, lifetime: DisposableStore): HTMLElement {
+		const actions = this.createMessageActions();
+		const context = lifetime.add(this.contextKeys.createScoped(actions));
+		ChatContextKeys.requestHasText.bindTo(context).set(!!this.item.text);
+		ChatContextKeys.requestCanEdit.bindTo(context).set(!!this.item.requestSource);
+		const toolbar = this.createMessageToolbar(actions, MenuId.ChatMessageTitle, localize('chat.request.actions', 'Message actions'), context, lifetime);
+		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible, this.options.onDidRequestEdit));
+		if (this.item.requestSource) {
+			this.installRequestEditor(requestText, lifetime, actions, () => {
+				toolbar.element.querySelector<HTMLButtonElement>(`[data-action-id="${EditChatRequestActionId}"] > button`)?.focus({ preventScroll: true });
+			});
+			lifetime.add(addDisposableListener(this.element, 'keydown', event => {
+				if (event.target !== this.element || event.key !== 'Enter' || event.isComposing || event.repeat
+					|| event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !this.options.canEditRequest()) return;
+				event.preventDefault();
+				void this.commands.executeCommand(EditChatRequestActionId, this.requestActionContext);
+			}));
+		}
+		actions.prepend(toolbar.element);
+		return actions;
 	}
 
 	private renderResponseFooter(lifetime: DisposableStore): void {
 		const actions = this.createMessageActions();
-		const copy = this.createCopyHandler(actions, lifetime);
 		const context = lifetime.add(this.contextKeys.createScoped(actions));
 		const hasText = ChatContextKeys.responseHasText.bindTo(context);
-		hasText.set(!!this.item.text);
-		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, MenuId.ChatMessageFooter, {
-			ariaLabel: localize('chat.message.actions', 'Response actions'),
-			contextKeyService: context,
-			menuOptions: { shouldForwardArgs: true },
-			actionViewItemProvider: (action, options) => {
-				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
-				if (action instanceof MenuItemAction && action.id === CopyItemActionId) {
-					return new class extends MenuEntryActionViewItem {
-						protected override runAction(): Promise<void> {
-							return copy(this.button.domNode, item => action.run(item));
-						}
-					}(action, buttonOptions);
-				}
-				return createActionViewItem(action, this.contextMenus, buttonOptions) ?? new ButtonActionViewItem(action, buttonOptions);
-			},
+		const hasFeedbackSurvey = ChatContextKeys.responseHasFeedbackSurvey.bindTo(context);
+		const requestClientId = ChatContextKeys.responseRequestClientId.bindTo(context);
+		const hasConversationLink = ChatContextKeys.responseHasConversationLink.bindTo(context);
+		const hasLoadedSkills = ChatContextKeys.responseHasLoadedSkills.bindTo(context);
+		const canFork = ChatContextKeys.responseCanFork.bindTo(context);
+		const canCompareResults = ChatContextKeys.responseCanCompareResults.bindTo(context);
+		const vote = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) && !this.options.getResponseActions
+			? ChatContextKeys.responseVote.bindTo(context) : undefined;
+		const updateVote = () => {
+			const source = !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
+			vote?.set(source ? getResponseVote(this.storageService, source) : undefined);
+		};
+		if (vote) lifetime.add(this.storageService.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith(ChatResponseFeedbackStoragePrefix)) updateVote();
 		}));
-		actions.prepend(toolbar.element);
-		const getActions = () => this.options.getResponseActions?.(this.item);
-		const read = this.responseAction('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
-			const available = getActions()?.remote;
-			if (!available || this.responsePlayback.value) return;
-			const controller = new AbortController();
-			const playback = toDisposable(() => controller.abort());
-			this.responsePlayback.value = playback;
-			update();
-			try {
-				await available.readAloud(getWindow(this.element), controller.signal);
-			} catch (error) {
-				if (!controller.signal.aborted && !isCancellationError(error) && !this.isDisposed) {
-					this.notifications.error(localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error)));
-				}
-			} finally {
-				if (this.responsePlayback.value === playback) {
-					this.responsePlayback.clear();
-					update();
-				}
+		const canRead = ChatContextKeys.responseCanRead.bindTo(context);
+		ChatContextKeys.responseUsesNativeSpeech.bindTo(context).set(!this.options.getResponseActions);
+		const reading = ChatContextKeys.responseIsReadingAloud.bindTo(context);
+		const targetWindow = getWindow(this.element);
+		let footer: MenuWorkbenchToolBar | undefined;
+		const response = this.responseActionContext = lifetime.add(new ChatResponseActionContext(
+			this.item, actions, targetWindow, this.options.isVisible, value => {
+				const toolbar = footer;
+				const active = actions.ownerDocument.activeElement;
+				const focusedAction = toolbar && active instanceof targetWindow.HTMLElement ? toolbar.getItemAction(active) : undefined;
+				const index = toolbar && focusedAction
+					? Array.from({ length: toolbar.getItemsLength() }, (_, i) => toolbar.getItemAction(i)).indexOf(focusedAction)
+					: -1;
+				reading.set(value);
+				// Read and Stop share a slot but have separate command IDs.
+				if (toolbar && index >= 0 && toolbar.getItemAction(index)?.id !== focusedAction?.id) toolbar.focus(index);
+			},
+		));
+		let menuContext: readonly string[] | undefined;
+		const updateMenuContext = (nextMenuContext?: readonly string[]) => {
+			hasText.set(!!this.item.text);
+			canRead.set(!this.item.transient && !!this.item.text);
+			const hasCompletedSource = !!this.item.feedbackSource && !this.item.transient && !this.item.isError;
+			hasFeedbackSurvey.set(hasCompletedSource && this.item.canGiveModelFeedback === true);
+			hasConversationLink.set(hasCompletedSource);
+			requestClientId.set(hasCompletedSource ? this.item.requestClientId ?? '' : '');
+			hasLoadedSkills.set(!!this.item.loadedSkills?.length);
+			canFork.set(hasCompletedSource && this.item.canForkAfterResponse === true);
+			canCompareResults.set(hasCompletedSource && this.item.canCompareResults === true);
+			updateVote();
+			if (nextMenuContext === menuContext) return;
+			for (const key of menuContext ?? []) {
+				if (!nextMenuContext?.includes(key)) context.removeContext(key);
 			}
-		});
-		const stop = this.responseAction(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
-			this.responsePlayback.clear();
-			update();
-		});
-		let fork: IAction | undefined;
-		let openOriginal: IAction | undefined;
-		const share = this.responseAction('chat.response.share', localize('chat.message.share', 'Share response'), Lxicon.share, () => getActions()?.remote?.share());
+			for (const key of nextMenuContext ?? []) context.setContext(key, true);
+			menuContext = nextMenuContext;
+		};
+		const getActions = () => this.options.getResponseActions?.(this.item);
+		updateMenuContext(getActions()?.menuContext);
+		const toolbar = footer = this.createMessageToolbar(actions, MenuId.ChatMessageFooter, localize('chat.message.actions', 'Response actions'), context, lifetime);
+		toolbar.context = response;
+		actions.prepend(toolbar.element);
 		let trailing: readonly IAction[] = [];
 		const update = (beforeLayout?: () => void): boolean => {
 			if (this.isDisposed) return false;
-			toolbar.context = this.item;
-			hasText.set(!!this.item.text);
 			const available = getActions();
-			const next: IAction[] = [];
-			if (available?.remote) {
-				if (fork?.label !== available.remote.forkLabel) {
-					fork = this.responseAction('chat.response.fork', available.remote.forkLabel, Lxicon.fork, () => getActions()?.remote?.fork());
-				}
-				next.push(this.responsePlayback.value ? stop : read, fork, share);
-			} else {
-				this.responsePlayback.clear();
-			}
-			const original = available?.openOriginal;
-			if (original && this.contextKeys.getValue(ChatContextKeys.enabled.key) === true) {
-				if (openOriginal?.label !== original.label || openOriginal.icon !== original.icon) {
-					openOriginal = this.responseAction('chat.response.openOriginal', original.label, original.icon, () => getActions()?.openOriginal?.run());
-				}
-				next.push(openOriginal);
-			}
-			const nativeRead = getNativeRead?.();
+			const menuChanged = available?.menuContext !== menuContext;
+			const previousSkillCount = response.item.loadedSkills?.length;
+			const skillCount = this.item.loadedSkills?.length;
+			const refreshSkillCount = !!previousSkillCount && !!skillCount && previousSkillCount !== skillCount;
+			if (menuChanged || refreshSkillCount) beforeLayout?.();
+			context.bufferChangeEvents(() => {
+				response.update(this.item);
+				updateMenuContext(available?.menuContext);
+				if (menuChanged) response.stop();
+			});
+			if (refreshSkillCount) toolbar.refresh();
 			const helpful = getHelpful?.();
-			if (nativeRead) next.push(nativeRead);
-			if (helpful) next.push(helpful);
-			if (getModelFeedbackTarget()) next.push(modelFeedback);
-			if (next.length === trailing.length && next.every((action, index) => trailing[index] === action)) return false;
+			const next = helpful ? [helpful] : [];
+			if (next.length === trailing.length && next.every((action, index) => trailing[index] === action)) return menuChanged || refreshSkillCount;
 			beforeLayout?.();
 			trailing = next;
 			toolbar.setTrailingActions(next);
 			return true;
 		};
-		const getNativeRead = this.options.getResponseActions ? undefined : this.createReadAloudAction(actions, lifetime, update);
 		const getHelpful = this.options.getResponseActions || this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
 			? undefined : this.createHelpfulAction(actions, lifetime, update);
-		const getModelFeedbackTarget = () => this.contextKeys.getValue(ChatContextKeys.enabled.key) === true
-			&& this.item.canGiveModelFeedback && !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
-		let openingFeedback = false;
-		const feedbackLabel = localize('chat.modelFeedback.messageAction', 'Give model feedback');
-		const modelFeedback = this.responseAction(ChatModelFeedbackSurveyActionId, feedbackLabel, Lxicon.comment, async () => {
-			const target = getModelFeedbackTarget();
-			if (!target || openingFeedback) return;
-			openingFeedback = true;
-			try {
-				await this.commands.executeCommand(ChatModelFeedbackSurveyActionId, target);
-			} catch (error) {
-				if (!this.isDisposed && !isCancellationError(error)) {
-					this.notifications.error(localize('chat.messageAction.failed', 'Could not run {0}: {1}', feedbackLabel, String(error)));
-				}
-			} finally {
-				openingFeedback = false;
-			}
-		});
-		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(chatEnabledContextKeys)) update(); }));
 		this.updateResponseActions = update;
-		lifetime.add(toolbar.actionRunner.onDidRun(event => {
-			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
-		}));
 		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
-			if (event.key !== 'Escape' || (!this.responsePlayback.value && !this.reading.value)) return;
-			this.responsePlayback.clear();
-			this.reading.clear();
-			update();
+			if (event.key !== 'Escape' || !response.stop()) return;
 			event.preventDefault();
 			event.stopPropagation();
 		}));
 		this.renderTurnChanges(actions, lifetime);
 	}
 
-	private responseAction(id: string, label: string, icon: Icon, run: () => unknown): IAction {
+	private messageAction(id: string, label: string, icon: Icon, run: () => unknown): IAction {
 		return {
 			id, label, tooltip: label, icon, enabled: true, run: () => {
 				if (!this.isDisposed && this.options.isVisible()) return run();
@@ -511,6 +479,28 @@ export class ChatListItemRenderer extends Disposable {
 		}));
 	}
 
+	private installRequestCheckpointMenu(requestText: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
+		const context = lifetime.add(this.contextKeys.createScoped(requestText));
+		ChatContextKeys.requestCanRunAnotherVersion.bindTo(context).set(true);
+		const menu = lifetime.add(this.menus.createMenu(MenuId.ChatMessageCheckpoint, context));
+		const showMenu = (event: MouseEvent | KeyboardEvent) => {
+			const actions = menu.getActions({ arg: source }).flatMap(([, group]) => group);
+			if (!actions.length) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.contextMenus.showContextMenu({
+				getAnchor: () => 'clientX' in event ? { x: event.clientX, y: event.clientY, targetWindow: getWindow(requestText) } : requestText,
+				getActions: () => actions,
+			});
+		};
+		lifetime.add(addDisposableListener(requestText, 'contextmenu', event => {
+			if (requestText.ownerDocument.getSelection()?.isCollapsed !== false) showMenu(event);
+		}));
+		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
+			if (event.target === this.element && (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10')) showMenu(event);
+		}));
+	}
+
 	private renderMessageCommandActions(
 		actions: HTMLElement,
 		lifetime: DisposableStore,
@@ -559,7 +549,7 @@ export class ChatListItemRenderer extends Disposable {
 		const feedback = lifetime.add(new MutableDisposable());
 		let pending = false;
 		const getTarget = () => !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
-		const helpful = this.responseAction(MarkHelpfulActionId, localize('chat.response.helpful', 'Helpful'), Lxicon.thumbsup, async () => {
+		const helpful = this.messageAction(MarkHelpfulActionId, localize('chat.response.helpful', 'Helpful'), Lxicon.thumbsup, async () => {
 			const target = getTarget();
 			if (!target || pending) return;
 			const button = actions.querySelector<HTMLElement>(`[data-action-id="${MarkHelpfulActionId}"] > button`);
@@ -596,209 +586,149 @@ export class ChatListItemRenderer extends Disposable {
 		};
 	}
 
-	private renderEditAction(requestText: HTMLElement, lifetime: DisposableStore, actions?: HTMLElement): void {
-		const edit = actions && !this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) ? lifetime.add(new Button(actions, {
-			...defaultButtonStyles, label: localize('chat.edit.label', 'Edit message'), presentation: 'quiet', size: 'small',
-		})) : undefined;
-		const editTarget = edit?.domNode ?? requestText;
+	public startEditing(): void {
+		if (!this.isDisposed) this.openRequestEditor?.();
+	}
+
+	private installRequestEditor(requestText: HTMLElement, lifetime: DisposableStore, actions: HTMLElement, focusEdit: () => void): void {
+		const bubble = h(this.element.ownerDocument, 'div', { className: 'ash-chat-request-bubble' });
+		requestText.before(bubble);
+		bubble.append(requestText);
 		requestText.classList.add('ash-chat-request-editable');
-		const open = (): void => {
-			if (this.edit.value || !this.item.requestSource || !this.options.isVisible()) return;
+		this.openRequestEditor = () => {
+			if (this.edit.value || !this.item.requestSource || !this.options.isVisible() || !this.options.canEditRequest()) return;
 			const source = this.item.requestSource;
 			const store = new DisposableStore();
-			const editor = h(this.element.ownerDocument, 'div');
-			editor.className = 'ash-chat-request-editor';
-			const editorHost = h(editor.ownerDocument, 'div');
-			editorHost.className = 'ash-chat-input-editor-host';
-			const explanation = h(editor.ownerDocument, 'span');
+			const document = this.element.ownerDocument;
+			const input = h(document, 'textarea', { className: 'ash-chat-request-editor' });
+			input.value = this.item.text;
+			input.setAttribute('aria-label', localize('chat.edit.input', 'Edit request'));
+			const explanation = h(document, 'span');
 			explanation.id = createUuid();
 			explanation.hidden = true;
 			explanation.textContent = localize('chat.edit.description', 'Sending creates a new chat from before this request. Its context and attachments are kept; the original chat and draft stay available.');
-			const feedback = h(editor.ownerDocument, 'div');
+			input.setAttribute('aria-describedby', explanation.id);
+			const feedback = h(document, 'div', { className: 'ash-chat-request-edit-feedback' });
 			feedback.setAttribute('role', 'status');
-			editor.append(explanation, feedback);
-			const close = (restoreFocus = true): void => {
-				const returnToEdit = restoreFocus && this.options.isVisible() && editor.contains(editor.ownerDocument.activeElement);
-				const restoreReadingPosition = this.options.isVisible() ? this.options.onWillChangeRequestEditor(false) : undefined;
+			const controls = h(document, 'div', { className: 'ash-chat-request-edit-actions' });
+			const cancel = store.add(new Button(controls, {
+				...defaultButtonStyles, label: localize('chat.edit.cancelButton', 'Cancel'), ariaLabel: localize('chat.edit.cancelLabel', 'Cancel edit'),
+				presentation: 'secondary', size: 'small',
+			}));
+			const send = store.add(new Button(controls, {
+				...defaultButtonStyles, label: localize('chat.edit.sendButton', 'Send'), ariaLabel: localize('chat.edit.resend', 'Send edited request'),
+				presentation: 'primary', size: 'small',
+			}));
+			const isInside = (target: Node | null) => bubble.contains(target) || controls.contains(target);
+			const close = (restoreFocus: boolean, sent = false): void => {
+				const visible = this.options.isVisible();
+				const returnToEdit = restoreFocus && visible && isInside(document.activeElement);
+				const finishClose = visible ? this.options.onWillCloseRequestEditor({
+					heightChanges: !!feedback.textContent && feedback.offsetHeight > 0,
+					sent,
+				}) : undefined;
 				this.edit.clear();
-				if (returnToEdit) editTarget.focus({ preventScroll: true });
-				restoreReadingPosition?.();
-				this.options.onDidChangeHeight();
+				if (returnToEdit) focusEdit();
+				finishClose?.();
 				this.options.onDidChangeContent();
+				if (this.deferredRequestUpdate) {
+					this.deferredRequestUpdate = false;
+					this.options.refreshRequestAfterEdit();
+				}
 			};
 			let pending = false;
-			let requestInput: IChatInputPart | undefined;
-			const canClose = () => !pending && !requestInput?.isSubmitting;
-			const editLease = this.options.beginRequestEdit(() => {
-				if (!canClose()) return false;
-				close(false);
+			const editLease = this.options.beginRequestEdit(restoreFocus => {
+				if (pending) return false;
+				close(restoreFocus);
 				return true;
 			});
 			if (!editLease) { store.dispose(); return; }
 			store.add(editLease);
 			this.edit.value = store;
-			const originalBounds = requestText.getBoundingClientRect();
-			const restoreReadingPosition = this.options.onWillChangeRequestEditor(true);
-			if (this.options.createRequestInput) editor.style.inlineSize = `${originalBounds.width}px`;
-			requestText.before(editor);
-			requestText.hidden = true;
-			if (actions) actions.hidden = true;
+			// The read-only bubble and actions still size the row while their replacements are overlaid.
+			requestText.classList.add('ash-chat-request-editing');
+			bubble.append(input, explanation);
+			actions.append(controls);
+			actions.after(feedback);
 			store.add(toDisposable(() => {
-				editor.remove();
-				requestText.hidden = false;
-				if (actions) actions.hidden = false;
+				input.remove();
+				explanation.remove();
+				controls.remove();
+				feedback.remove();
+				requestText.classList.remove('ash-chat-request-editing');
 			}));
-			let attempt: { signature: string; commandId: string; } | undefined;
-			const reportError = (error: unknown): void => {
-				if (this.edit.value === store) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
-			};
-			const submit = async (text: string, contexts: readonly ResolvedChatContext[] = []): Promise<void> => {
+			let attempt: { text: string; commandId: string; } | undefined;
+			const updateSend = () => { send.enabled = !pending && !!input.value.trim(); };
+			const sendEdit = async (): Promise<void> => {
+				const text = input.value;
 				if (pending || !text.trim() || this.isDisposed || !this.options.isVisible()) return;
-				const signature = JSON.stringify([text, contexts]);
-				if (attempt?.signature !== signature) attempt = { signature, commandId: createUuid() };
+				if (!this.options.canEditRequest()) {
+					feedback.textContent = localize('chat.edit.blocked', 'The conversation is currently unavailable for editing.');
+					return;
+				}
+				if (attempt?.text !== text) attempt = { text, commandId: createUuid() };
 				pending = true;
-				editor.setAttribute('aria-busy', 'true');
+				input.readOnly = true;
+				input.setAttribute('aria-busy', 'true');
+				if (controls.contains(document.activeElement)) input.focus({ preventScroll: true });
+				updateSend();
+				cancel.enabled = false;
 				feedback.textContent = '';
 				try {
-					await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, text, commandId: attempt.commandId, contexts });
-					if (this.edit.value === store) close();
+					await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, text, commandId: attempt.commandId });
+					if (this.edit.value === store) close(true, true);
+				} catch (error) {
+					if (this.edit.value === store) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
 				} finally {
-					pending = false;
-					if (this.edit.value === store) editor.removeAttribute('aria-busy');
+					if (this.edit.value === store) {
+						pending = false;
+						input.readOnly = false;
+						input.removeAttribute('aria-busy');
+						updateSend();
+						cancel.enabled = true;
+					}
 				}
 			};
-			try {
-				if (this.options.createRequestInput) {
-					const style = getWindow(requestText).getComputedStyle(requestText);
-					const initialHeight = Math.max(0, originalBounds.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
-						- parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth));
-					const input = requestInput = store.add(this.options.createRequestInput({ container: editor, descriptionId: explanation.id, initialHeight, submit, reportError }));
-					input.appendToDraft(this.item.text);
-					input.focus();
-				} else {
-					editor.classList.add('ash-chat-input-container');
-					const controls = h(editor.ownerDocument, 'div', { className: 'ash-chat-input-toolbars' });
-					const send = store.add(new Button(controls, {
-						...defaultButtonStyles, label: localize('chat.edit.resend', 'Send edited request'), icon: Lxicon.arrowUp, iconOnly: true,
-					}));
-					send.domNode.classList.add('ash-chat-input-action', 'ash-chat-input-send-action');
-					editor.prepend(editorHost, controls);
-					const options: ChatInputEditorOptions = {
-						container: editorHost, placeholder: '', ariaLabel: localize('chat.edit.input', 'Edit request'),
-						ariaDescribedBy: explanation.id, submitWithModifier: true, height: { minimum: 0 }, tabFocusMode: true,
-					};
-					const input = store.add(this.options.createRequestEditor?.(options) ?? ChatInputEditors.create(options));
-					input.value = this.item.text;
-					send.enabled = !!input.value.trim();
-					store.add(installChatInputLayout(editor, input, controls));
-					const sendEdit = async (): Promise<void> => {
-						if (pending || !input.value.trim()) return;
-						input.setReadOnly(true);
-						send.enabled = false;
-						try { await submit(input.value); }
-						catch (error) { reportError(error); }
-						finally {
-							if (this.edit.value === store) {
-								input.setReadOnly(false);
-								send.enabled = !!input.value.trim();
-								const active = editor.ownerDocument.activeElement;
-								if (this.options.isVisible() && (editor.contains(active) || active === editor.ownerDocument.body)) input.focus();
-							}
-						}
-					};
-					store.add(send.onDidClick(() => void sendEdit()));
-					store.add(input.onDidChange(() => { send.enabled = !!input.value.trim() && !pending; }));
-					store.add(input.onDidSubmit(() => void sendEdit()));
-					input.layout();
-					input.focus();
-					input.setSelection({ anchor: input.value.length, active: input.value.length });
+			updateSend();
+			store.add(send.onDidClick(() => void sendEdit()));
+			store.add(cancel.onDidClick(() => this.options.cancelRequestEdit()));
+			store.add(addDisposableListener(input, 'input', updateSend));
+			store.add(addDisposableListener(this.element, 'keydown', event => {
+				if (event.isComposing || !isInside(document.activeElement)) return;
+				if (event.key === 'Escape' && this.options.cancelRequestEdit()) {
+					event.preventDefault();
+					event.stopPropagation();
+				} else if (event.target === input && event.key === 'Enter' && !event.shiftKey && (event.ctrlKey || event.metaKey)) {
+					event.preventDefault();
+					event.stopPropagation();
+					void sendEdit();
 				}
-			} catch (error) {
-				this.edit.clear();
-				throw error;
-			} finally {
-				restoreReadingPosition();
-			}
-			// Wait until the outside click finishes so collapsing the editor does not move its target.
+			}));
+			input.setSelectionRange(input.value.length, input.value.length);
+			input.focus({ preventScroll: true });
+
+			// Wait until the outside click finishes so closing the editor does not interfere with its target.
 			const quickInput = this.instantiationService.getOptional(IQuickInputService);
-			const dismiss = store.add(new RunOnceScheduler(() => { if (canClose()) close(false); }, 0));
+			const dismiss = store.add(new RunOnceScheduler(() => { if (!pending) close(false); }, 0));
 			let pressedInside = false;
-			store.add(addDisposableListener(editor.ownerDocument, 'pointerdown', event => {
-				pressedInside = event.composedPath().includes(editor) || !!quickInput?.currentQuickInput;
+			store.add(addDisposableListener(document, 'pointerdown', event => {
+				pressedInside = event.composedPath().some(target => target === bubble || target === controls) || !!quickInput?.currentQuickInput;
 			}, true));
-			store.add(addDisposableListener(editor.ownerDocument, 'click', event => {
-				if (canClose() && event.detail > 0 && !pressedInside && !event.composedPath().includes(editor)) dismiss.schedule();
+			store.add(addDisposableListener(document, 'click', event => {
+				if (!pending && event.detail > 0 && !pressedInside && !event.composedPath().some(target => target === bubble || target === controls)) dismiss.schedule();
 			}, true));
-			store.add(addDisposableListener(editor, 'keydown', event => {
-				if (event.isComposing) return;
-				if (event.key === 'Escape' && canClose()) { event.preventDefault(); event.stopPropagation(); close(); }
-			}));
-			this.options.onDidChangeHeight(); this.options.onDidChangeContent();
+			this.options.onDidChangeContent();
 		};
-		if (edit) {
-			lifetime.add(edit.onDidClick(open));
-		} else {
-			requestText.tabIndex = 0;
-			requestText.setAttribute('role', 'button');
-			requestText.setAttribute('aria-description', localize('chat.edit.label', 'Edit message'));
-			lifetime.add(addDisposableListener(requestText, 'keydown', event => {
-				if (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')) return;
-				event.preventDefault();
-				event.stopPropagation();
-				if (!event.repeat) open();
-			}));
-		}
 		lifetime.add(addDisposableListener(requestText, 'click', event => {
 			// Keep drag-to-select available on the message text.
 			const selection = requestText.ownerDocument.getSelection();
-			if (event.button === 0 && (!selection || selection.isCollapsed)) open();
+			if (event.button === 0 && (!selection || selection.isCollapsed)) void this.options.onDidRequestEdit(this.item.id);
 		}));
-	}
-
-	private createReadAloudAction(actions: HTMLElement, lifetime: DisposableStore, update: () => void): () => IAction | undefined {
-		const feedback = h(actions.ownerDocument, 'span');
-		feedback.className = 'ash-chat-message-read-status';
-		feedback.setAttribute('role', 'status');
-		actions.append(feedback);
-		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(speechContextKeys)) update(); }));
-		lifetime.add(CommandsRegistry.onDidChangeCommands(update));
-		const hasProvider = () => CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') && this.contextKeys.getValue(HasSpeechProvider.key) === true;
-		const read = this.responseAction('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
-			if (!hasProvider() || this.reading.value || this.item.transient || !this.item.text || this.contextKeys.getValue(TextToSpeechInProgress.key) === true) return;
-			const item = this.item;
-			const source = new CancellationTokenSource();
-			const operation = Object.assign(toDisposable(() => source.dispose(true)), { source, item });
-			this.reading.value = operation; feedback.textContent = ''; update();
-			try {
-				await this.commands.executeCommand('workbench.action.chat.readChatResponseAloud', { type: item.type, text: item.text, source });
-			} catch (error) {
-				if (!this.isDisposed && this.reading.value === operation && !source.token.isCancellationRequested && !isCancellationError(error)) {
-					feedback.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
-				}
-			} finally {
-				if (this.reading.value === operation) this.reading.clear();
-				update();
-			}
-		});
-		const ready = { ...read, checked: false };
-		const disabled = { ...ready, enabled: false };
-		const stop = {
-			...this.responseAction(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
-				const source = this.reading.value?.source;
-				if (source) return this.commands.executeCommand('workbench.action.chat.stopReadChatItemAloud', { source });
-			}),
-			checked: true,
-		};
-		return () => {
-			if (!hasProvider()) return undefined;
-			if (this.reading.value) return stop;
-			return !this.item.transient && this.item.text && this.contextKeys.getValue(TextToSpeechInProgress.key) !== true ? ready : disabled;
-		};
 	}
 
 	private renderMemoryReferences(): void {
 		if (!this.options.onDidRequestMemoryReference || this.options.getResponseLinkOpener?.(this.item)) return;
-		const references = [...new Set(this.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
+		const references = [...new Set(this.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => parseMemoryReference(reference, this.options.memoryNamespace ?? 'code')).slice(0, 8);
 		for (const [reference] of this.memoryReferences) {
 			if (!references.includes(reference)) this.memoryReferences.deleteAndDispose(reference);
 		}
@@ -830,6 +760,14 @@ export class ChatListItemRenderer extends Disposable {
 			disposables.add(part.onDidChangeHeight(() => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); }));
 			article.append(part.domNode);
 			this.toolPart = part;
+			return;
+		}
+		if (item.type === 'skillLoad') {
+			const line = h(article.ownerDocument, 'div', { className: 'ash-chat-skill-activity' });
+			const icon = h(article.ownerDocument, 'span', { className: 'ash-chat-tool-status-icon', attributes: { 'aria-hidden': 'true' } });
+			appendIcon(Lxicon.skill, icon);
+			line.append(icon, this.accessibilityProvider.getAriaLabel(item), ' · ', item.text);
+			article.append(line);
 			return;
 		}
 		if (item.type === 'hook' && item.hookPart) {
@@ -873,7 +811,15 @@ export class ChatListItemRenderer extends Disposable {
 		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
 		if (item.type === 'userMessage' || item.type === 'queuedMessage') article.classList.add('ash-chat-user-message');
 		if (item.type === 'userMessage' || item.type === 'agentMessage') {
-			article.setAttribute('aria-label', this.accessibilityProvider.getAriaLabel(item));
+			const presentation = this.options.messagePresentation;
+			const participant = item.type === 'userMessage' ? presentation?.user : presentation?.assistant;
+			article.setAttribute('aria-label', participant?.name ?? this.accessibilityProvider.getAriaLabel(item));
+			if (participant) {
+				const document = article.ownerDocument;
+				const avatar = h(document, 'span', { className: 'ash-chat-participant-avatar', attributes: { 'aria-hidden': 'true' } });
+				if (participant.icon) appendIcon(participant.icon, avatar);
+				article.append(h(document, 'header', { className: 'ash-chat-participant' }, avatar, h(document, 'span', participant.name)));
+			}
 		} else if (item.type !== 'reasoning') {
 			const label = h(article.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
 			label.className = `${this.options.classPrefix}-item-label`;
@@ -898,6 +844,7 @@ export class ChatListItemRenderer extends Disposable {
 				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
+				fileReferenceDirectory: !openResponseLink && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
 				actionHandler: openResponseLink
 					? (target: string) => { void openResponseLink(target).catch(error => this.instantiationService.getOptional(INotificationService)?.error(String(error))); }
 					: this.options.onDidRequestLink,
@@ -960,6 +907,19 @@ export class ChatListItemRenderer extends Disposable {
 				}),
 			}));
 		}
+		const references = this.options.messagePresentation?.getReferences?.(item);
+		if (references?.length) {
+			const actions = h(article.ownerDocument, 'div', { className: 'ash-chat-message-references' });
+			body.append(actions);
+			for (const reference of references) {
+				const button = disposables.add(new Button(actions, {
+					...defaultButtonStyles, label: reference.label, icon: Lxicon.codeReview,
+					presentation: 'quiet', size: 'small',
+				}));
+				button.domNode.dataset.chatReferenceId = reference.id;
+				disposables.add(button.onDidClick(() => reference.open(button.domNode)));
+			}
+		}
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
 		if (item.type === 'agentMessage') {
@@ -975,16 +935,15 @@ export class ChatListItemRenderer extends Disposable {
 				{ id: ChatRemovePendingRequestAction.ID, label: localize('chat.queue.rowRemove', 'Remove queued message'), icon: Lxicon.close },
 			], () => this.item.queueTarget);
 		} else if (requestText) {
-			const checkpoint = item.canForkBeforeRequest && item.requestSource;
-			const actions = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
-				? (checkpoint ? this.createMessageActions() : undefined)
-				: this.renderCopyAction(disposables);
-			if (item.requestSource) this.renderEditAction(requestText, disposables, actions);
-			if (checkpoint && actions) {
-				this.renderRestoreCheckpointAction(actions, checkpoint, disposables);
-				const { sessionId, threadId, itemId } = checkpoint;
-				disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
+			const actions = this.renderRequestActions(requestText, disposables);
+			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) && item.requestSource) {
+				if (item.canForkBeforeRequest) {
+					this.renderRestoreCheckpointAction(actions, item.requestSource, disposables);
+					const { sessionId, threadId, itemId } = item.requestSource;
+					disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
+				}
 			}
+			if (item.canRunAnotherVersion && item.requestSource) this.installRequestCheckpointMenu(requestText, item.requestSource, disposables);
 		}
 	}
 
@@ -1028,15 +987,21 @@ function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 
 function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.contextText === right.contextText && left.contextSourceUrl === right.contextSourceUrl
-		&& left.canGiveModelFeedback === right.canGiveModelFeedback && left.feedbackSource?.sessionId === right.feedbackSource?.sessionId
+		&& left.canGiveModelFeedback === right.canGiveModelFeedback && left.canForkAfterResponse === right.canForkAfterResponse
+		&& left.canRunAnotherVersion === right.canRunAnotherVersion && left.canCompareResults === right.canCompareResults
+		&& left.feedbackSource?.sessionId === right.feedbackSource?.sessionId
 		&& left.feedbackSource?.threadId === right.feedbackSource?.threadId && left.feedbackSource?.turnId === right.feedbackSource?.turnId
 		&& left.feedbackSource?.itemId === right.feedbackSource?.itemId
+		&& left.requestClientId === right.requestClientId
 		&& left.turnChanges?.files === right.turnChanges?.files && left.turnChanges?.additions === right.turnChanges?.additions
 		&& left.turnChanges?.deletions === right.turnChanges?.deletions
 		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId
 		&& left.requestSource?.turnId === right.requestSource?.turnId && left.requestSource?.itemId === right.requestSource?.itemId
 		&& left.canForkBeforeRequest === right.canForkBeforeRequest
+		&& left.loadedSkills?.length === right.loadedSkills?.length
+		&& (left.loadedSkills?.every((skill, index) => skill === right.loadedSkills?.[index]) ?? true)
 		&& left.hookPart?.run === right.hookPart?.run
+		&& sameFileReferenceDirectory(left, right)
 		&& left.resources === right.resources && left.markdown?.supportHtml === right.markdown?.supportHtml
 		&& left.contextEntries === right.contextEntries
 		&& left.conversationLink?.sessionId === right.conversationLink?.sessionId
@@ -1049,6 +1014,16 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& left.attachmentSource?.itemId === right.attachmentSource?.itemId
 		&& left.attachmentSource?.kind === right.attachmentSource?.kind
 		&& sameAction(left.action, right.action);
+}
+
+function sameFileReferenceDirectory(left: IChatListItem, right: IChatListItem): boolean {
+	const a = left.fileReferenceDirectory;
+	const b = right.fileReferenceDirectory;
+	if (a === b) return true;
+	if (!a || !b || a.resource.toString() !== b.resource.toString()) return false;
+	return a.target.type === 'session' && b.target.type === 'session'
+		? a.target.sessionId === b.target.sessionId && a.target.path === b.target.path
+		: a.target.type === 'workspace' && b.target.type === 'workspace' && a.target.dirId === b.target.dirId;
 }
 
 function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorAction | undefined): boolean {

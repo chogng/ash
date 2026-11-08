@@ -3,11 +3,13 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { ArtifactAction, IArtifactIntegrationBinding } from '../../../../platform/artifactIntegrations/common/artifactIntegration.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { ArtifactDetailsCardState } from './artifactDetailsCard.js';
 import { ArtifactDetailsPanel } from './artifactDetailsPanel.js';
 
 /** Owns one artifact picker until the user selects an action or closes it. */
 export class ArtifactDetailsContextView extends Disposable {
 	private readonly current = this._register(new MutableDisposable<DisposableStore>());
+	private readonly cardStates = new Map<string, ArtifactDetailsCardState>();
 
 	constructor(
 		private readonly anchor: HTMLElement,
@@ -16,14 +18,21 @@ export class ArtifactDetailsContextView extends Disposable {
 		super();
 	}
 
-	choose(binding: IArtifactIntegrationBinding, renderFollowUp?: (container: HTMLElement) => Disposable): Promise<ArtifactAction | undefined> {
+	choose(binding: IArtifactIntegrationBinding, renderFollowUp?: (container: HTMLElement, state: ArtifactDetailsCardState) => Disposable): Promise<ArtifactAction | undefined> {
 		if (this.isDisposed || !this.anchor.isConnected) return Promise.resolve(undefined);
 		const lifetime = this.current.value = new DisposableStore();
 		const choice = new DeferredPromise<ArtifactAction | undefined>();
 		const panel = new ArtifactDetailsPanel(this.anchor.ownerDocument, binding, action => {
 			void choice.complete(action);
 			this.close();
-		}, () => this.close(), renderFollowUp);
+		}, () => this.close(), renderFollowUp && (container => {
+			let state = this.cardStates.get(binding.id);
+			if (!state) {
+				state = new ArtifactDetailsCardState();
+				this.cardStates.set(binding.id, state);
+			}
+			return renderFollowUp(container, state);
+		}));
 		lifetime.add(toDisposable(() => {
 			if (!choice.isSettled) void choice.complete(undefined);
 			if (panel.element.isConnected) this.views.hide();

@@ -249,6 +249,7 @@ impl SlashCommandInvocation {
             | Some(ChatInputItem::Audio { .. })
             | Some(ChatInputItem::AudioAttachment(_))
             | Some(ChatInputItem::Context { .. })
+            | Some(ChatInputItem::ChatReference { .. })
             | Some(ChatInputItem::Skill { .. })
             | None => {
                 self.arguments.insert(0, ChatInputItem::Text(command_text));

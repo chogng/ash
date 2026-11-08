@@ -545,7 +545,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	async openEditor(
 		input: IResourceEditorInput,
-		options: EditorOpenOptions = {},
+		options: EditorOpenOptions & { readonly restoring?: boolean; } = {},
 		instanceId?: EditorInstanceId,
 	): Promise<IEditorPane> {
 		if (input.toUntyped && options.preferredEditorId !== undefined && options.preferredEditorId !== input.editorId) {
@@ -694,7 +694,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		return this.commitEditorPane(input, options, paneInstance, existing, instanceId);
 	}
 
-	private commitEditorPane(input: IResourceEditorInput, options: EditorOpenOptions, paneInstance: EditorPaneInstance, existing: EditorGroupEntry | undefined, instanceId?: EditorInstanceId): IEditorPane {
+	private commitEditorPane(input: IResourceEditorInput, options: EditorOpenOptions & { readonly restoring?: boolean; }, paneInstance: EditorPaneInstance, existing: EditorGroupEntry | undefined, instanceId?: EditorInstanceId): IEditorPane {
 		const pane = paneInstance.pane;
 		// Completed panes and error pages can commit; cancelled loads retain the previous tab.
 		const pinned = options.pinned !== false || this.configurationService?.getValue<boolean>(EditorEnablePreviewConfiguration) === false || getEditorWorkingCopies(pane).some(copy => copy.isDirty);
@@ -728,7 +728,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		});
 		this.ordinaryContent = undefined;
 		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorOpened', editor: this.editorState(entry) }));
-		if (options.inactive && this.activeInput) {
+		if (options.inactive && (this.activeInput || options.restoring)) {
 			paneInstance.setVisible(false);
 			this.renderContent();
 			this.renderChrome();

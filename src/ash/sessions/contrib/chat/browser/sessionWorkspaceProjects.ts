@@ -2,10 +2,24 @@ import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/re
 import type { URI } from '../../../../base/common/uri.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import type { IProjectService, Project } from '../../../../platform/projects/common/projectService.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import type { ISession } from '../../../services/sessions/common/session.js';
 
 export async function readCodeProjects(projects: IProjectService): Promise<readonly Project[]> {
 	const summaries = await projects.list('code');
 	return Promise.all(summaries.map(project => projects.read(project.id, 'code')));
+}
+
+export function workspaceFolderKey(resource: URI): string {
+	const path = resource.toEncodedComponents().path.replace(/\/+$/u, '') || '/';
+	return extUriBiasedIgnorePathCase.getComparisonKey(resource.withEncodedPath(path));
+}
+
+export function unassignedCodeFolder(session: ISession, organized: ReadonlySet<string>): URI | undefined {
+	if (session.kind !== 'code' || session.status !== 'active' || session.backendSessionId
+		|| !session.workspace || organized.has(session.sessionId)) return undefined;
+	const resource = sessionWorkspaceUri(session.workspace);
+	return resource.scheme === 'file' && !resource.authority ? resource : undefined;
 }
 
 export function projectFolders(project: Project): URI[] {

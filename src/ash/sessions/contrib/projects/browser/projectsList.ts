@@ -2,8 +2,9 @@ import type { IAction } from '../../../../base/common/actions.js';
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { IntervalTimer } from '../../../../base/common/async.js';
+import { formatTimeAgo } from '../../../../base/common/date.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Disposable, MutableDisposable, toDisposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -15,6 +16,7 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import type { ChatListEntry, ChatListGroup } from '../../chat/browser/chatListModel.js';
 import type { ProjectsActions } from './projectsActions.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
@@ -72,66 +74,7 @@ export class ProjectsList extends Disposable {
 		this.relativeTimeUpdate.cancel();
 	}
 
-	renderCatalog(state: ProjectsState, groups: readonly ChatListGroup[], archived: readonly ChatListGroup[] | undefined, content: DisposableStore): void {
-		const query = state.query.trim().toLocaleLowerCase();
-		if (archived) {
-			this.renderArchivedProjects(state, archived, query, content);
-			return;
-		}
-		const localIds = new Set(state.projects.map(project => project.id));
-		const conversationCards = groups.filter(group => !localIds.has(group.key) && group.title.toLocaleLowerCase().includes(query));
-		const projects = this.projects.getProjects();
-		if (!state.selectedId && (projects.length || conversationCards.length)) {
-			this.renderCards(projects, conversationCards, content);
-		} else if (state.loading) {
-			this.renderLoading();
-		} else if (!state.message) {
-			this.renderEmpty(!!state.query, content);
-		}
-	}
-
-	private renderEmpty(searching: boolean, content: DisposableStore): void {
-		const document = this.body.ownerDocument;
-		const empty = h(document, 'div', { className: 'ash-projects-empty' });
-		const illustration = h(
-			document,
-			'div',
-			{ className: 'ash-projects-illustration', attributes: { 'aria-hidden': 'true' } },
-			h(document, 'span'),
-			h(document, 'span'),
-			h(document, 'span'),
-		);
-		empty.append(
-			illustration,
-			h(
-				document,
-				'h2',
-				{},
-				searching
-					? localize('projects.noResults', 'No matching projects')
-					: localize('projects.emptyTitle', 'Looking to start a project?'),
-			),
-			h(
-				document,
-				'p',
-				{},
-				searching
-					? localize('projects.searchHint', 'Try another name or clear your search.')
-					: localize('projects.emptyDescription', 'Bring your materials and goals together in one space.'),
-			),
-		);
-		content.add(new Button(empty, {
-			...defaultButtonStyles,
-			label: searching
-				? localize('projects.clearSearch', 'Clear search')
-				: localize('projects.new', 'New project'),
-			presentation: 'secondary',
-			onClick: () => (searching ? this.projects.setQuery('') : this.actions.createProject()),
-		}));
-		this.body.append(empty);
-	}
-
-	private renderCards(projects: readonly ProjectSummary[], conversationCards: readonly ChatListGroup[], disposables: DisposableStore): void {
+	renderCards(projects: readonly ProjectSummary[], conversationCards: readonly ChatListGroup[], disposables: DisposableStore): void {
 		const document = this.body.ownerDocument;
 		const list = h(document, 'ul', {
 			className: 'ash-projects-grid',
@@ -142,34 +85,15 @@ export class ProjectsList extends Disposable {
 			const card = h(document, 'button', {
 				className: 'ash-button ash-button-quiet ash-projects-card',
 				properties: { type: 'button' },
-				attributes: { 'aria-label': project.name },
 			});
 			card.dataset.projectControl = project.id;
 			const mark = h(document, 'span', {
 				className: 'ash-projects-card-mark',
 				attributes: { 'aria-hidden': 'true' },
 			});
-			appendIcon(Lxicon.projects, mark);
-			const content = h(
-				document,
-				'span',
-				{ className: 'ash-projects-card-content' },
-				h(document, 'span', { className: 'ash-projects-card-name' }, project.name),
-			);
-			const timestamp = project.updatedAtMs ?? project.createdAtMs;
-			if (timestamp !== undefined) {
-				const date = new Date(timestamp);
-				const updatedAt = localize('projects.updatedAt', 'Updated {0}', date.toLocaleString(getNLSLanguage()));
-				const caption = h(document, 'time', {
-					className: 'ash-projects-card-caption',
-					properties: { dateTime: date.toISOString(), id: generateUuid() },
-					attributes: { 'aria-label': updatedAt },
-				});
-				card.setAttribute('aria-describedby', caption.id);
-				content.append(caption);
-				disposables.add(this.hover.setupDelayedHover(caption, { content: updatedAt }));
-			}
-			card.append(mark, content);
+			appendIcon((project.icon && getRegisteredIcon(project.icon, document)) || Lxicon.projects, mark);
+			if (project.color) mark.style.color = `var(${colorCssVariable(project.color)})`;
+			card.append(mark, this.renderCardContent(card, project.name, project.updatedAtMs, disposables));
 			const actionsHost = this.renderCardActions(row, project.id, project.name, this.actions.getProjectActions(project), disposables);
 			disposables.add(this.hover.setupDelayedHover(card, { content: project.name }));
 			disposables.add(
@@ -190,7 +114,7 @@ export class ProjectsList extends Disposable {
 			card.dataset.conversationProject = '';
 			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
 			appendIcon(Lxicon.projects, mark);
-			card.append(mark, h(document, 'span', { className: 'ash-projects-card-name' }, project.title));
+			card.append(mark, this.renderCardContent(card, project.title, project.project?.updatedAt, disposables, project.project?.createdAt));
 			disposables.add(addDisposableListener(card, 'click', () => {
 				this.projects.openConversationProject(project.key);
 				this.options.openedProject();
@@ -205,7 +129,32 @@ export class ProjectsList extends Disposable {
 		}
 	}
 
-	private renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string, content: DisposableStore): void {
+	private renderCardContent(card: HTMLButtonElement, title: string, updatedAt: number | undefined, disposables: DisposableStore, createdAt?: number): HTMLElement {
+		const document = card.ownerDocument;
+		card.setAttribute('aria-label', title);
+		const content = h(document, 'span', { className: 'ash-projects-card-content' },
+			h(document, 'span', { className: 'ash-projects-card-name' }, title),
+		);
+		const timestamp = updatedAt ?? createdAt;
+		if (timestamp !== undefined) {
+			const date = new Date(timestamp);
+			const absoluteTime = date.toLocaleString(getNLSLanguage());
+			const description = updatedAt === undefined
+				? localize('projects.createdAt', 'Created {0}', absoluteTime)
+				: localize('projects.updatedAt', 'Updated {0}', absoluteTime);
+			const caption = h(document, 'time', {
+				className: 'ash-projects-card-caption',
+				properties: { dateTime: date.toISOString(), id: generateUuid() },
+				attributes: { 'aria-label': description },
+			});
+			card.setAttribute('aria-describedby', caption.id);
+			content.append(caption);
+			disposables.add(this.hover.setupDelayedHover(caption, { content: description }));
+		}
+		return content;
+	}
+
+	renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string, content: DisposableStore): void {
 		const document = this.body.ownerDocument;
 		const projects = [
 			...state.projects.filter(project => project.archived).map(project => ({
@@ -270,11 +219,6 @@ export class ProjectsList extends Disposable {
 								delegate.onHide?.(didCancel);
 							},
 						});
-						// The menu mounts synchronously in this window; Projects owns its destructive styling.
-						const destructiveAction = row.ownerDocument.querySelector(
-							'.ash-projects-menu [data-action-id="projects.delete"]',
-						);
-						destructiveAction?.classList.add('ash-projects-destructive-action');
 					},
 				},
 				{
@@ -340,24 +284,14 @@ export class ProjectsList extends Disposable {
 
 	private updateCardTimes(): void {
 		const now = Date.now();
-		const units = [
-			{ unit: 'year', milliseconds: 365 * 86_400_000 },
-			{ unit: 'month', milliseconds: 30 * 86_400_000 },
-			{ unit: 'day', milliseconds: 86_400_000 },
-			{ unit: 'hour', milliseconds: 3_600_000 },
-			{ unit: 'minute', milliseconds: 60_000 },
-		] as const;
 		// Refresh text in place so time passing never replaces cards or interrupts keyboard focus.
 		for (const caption of this.body.querySelectorAll<HTMLTimeElement>('time.ash-projects-card-caption')) {
-			const elapsed = Math.max(0, now - Date.parse(caption.dateTime));
-			const unit = units.find(candidate => elapsed >= candidate.milliseconds);
-			caption.textContent = unit
-				? this.relativeTime.format(-Math.floor(elapsed / unit.milliseconds), unit.unit)
-				: localize('projects.justNow', 'Just now');
+			caption.textContent = formatTimeAgo(Date.parse(caption.dateTime), now, this.relativeTime)
+				?? localize('projects.justNow', 'Just now');
 		}
 	}
 
-	private renderLoading(): void {
+	renderLoading(): void {
 		const document = this.body.ownerDocument;
 		const placeholder = (className: string) =>
 			h(document, 'span', { className: `ash-projects-placeholder ${className}` });

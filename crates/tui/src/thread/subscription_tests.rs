@@ -453,6 +453,7 @@ fn turn(turn_id: &str) -> Turn {
         status: TurnStatus::Completed,
         kind: Default::default(),
         instructions: None,
+        directory: None,
         model: None,
         reasoning_effort: None,
         tool_profile: None,
@@ -464,6 +465,7 @@ fn turn(turn_id: &str) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     }
 }
@@ -478,7 +480,7 @@ fn update(session_id: &str, thread_id: &str, durable_sequence: u64) -> ThreadUpd
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,

@@ -22,7 +22,7 @@ fn fixture() -> (Arc<ThreadController>, ThreadSnapshot) {
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             crate::StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

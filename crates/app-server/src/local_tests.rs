@@ -341,6 +341,122 @@ fn run_local_git(root: &Path, arguments: &[&str]) -> String {
 }
 
 #[test]
+fn local_composition_starts_memories_with_a_legacy_profile() {
+    let profile = tempfile::tempdir().unwrap();
+    let state = ash_state::StateRuntime::open(profile.path()).unwrap();
+    let legacy = ash_state::open_sqlite_database(
+        state.database_path(),
+        ash_state::SqliteDurability::Durable,
+    )
+    .unwrap();
+    legacy
+        .execute_batch(
+            "CREATE TABLE ash_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );
+             INSERT INTO ash_schema_migrations VALUES ('memories', 3);",
+        )
+        .unwrap();
+
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills(),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut connection = server.product_host_connection();
+    let mut call = |id, method, params| {
+        local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
+        )
+    };
+    let initialized = call(
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo": {"name": "test", "version": "1"}}),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let listed = call(
+        2,
+        "memory/list",
+        serde_json::json!({"scope": {"type": "profile"}}),
+    );
+    assert_eq!(
+        listed["result"]["memories"],
+        serde_json::json!([]),
+        "{listed}"
+    );
+    let version: u32 = legacy
+        .query_row(
+            "SELECT version FROM ash_schema_migrations WHERE component = 'memories'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, 3);
+}
+
+#[test]
+fn local_composition_starts_with_an_unsupported_memories_database() {
+    let profile = tempfile::tempdir().unwrap();
+    let state = ash_state::StateRuntime::open(profile.path()).unwrap();
+    let memories = ash_state::open_sqlite_database(
+        state.memories_database_path(),
+        ash_state::SqliteDurability::Durable,
+    )
+    .unwrap();
+    memories
+        .execute_batch(
+            "CREATE TABLE ash_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );
+             INSERT INTO ash_schema_migrations VALUES ('memories', 4294967295);",
+        )
+        .unwrap();
+
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills(),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut connection = server.product_host_connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "clientInfo":{"name":"test","version":"1"}
+        }}),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let listed = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"memory/list","params":{
+            "scope":{"type":"profile"}
+        }}),
+    );
+    assert_eq!(
+        listed["error"]["data"]["kind"], "MemoryUnavailable",
+        "{listed}"
+    );
+    let version: u32 = memories
+        .query_row(
+            "SELECT version FROM ash_schema_migrations WHERE component = 'memories'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, u32::MAX);
+}
+
+#[test]
 fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     let profile = tempfile::tempdir().unwrap();
     let server = open_app_server(
@@ -1256,7 +1372,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"session/create",
-            "params":{"commandId":"create-session","title":"Turn changes","executionTarget":{"type":"local","root":dir.path()}}
+            "params":{"commandId":"create-session","title":"Turn changes","kind":"code", "executionTarget":{"type":"local","root":dir.path()}}
         }),
     );
     assert!(session.get("error").is_none(), "{session}");
@@ -1670,7 +1786,7 @@ fn windows_shell_turn_enforces_isolation_through_rpc(backend: WindowsShellSandbo
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":3,"method":"session/create",
-            "params":{"commandId":"sandbox-session","title":"Sandbox","executionTarget":{"type":"local","root":work}}
+            "params":{"commandId":"sandbox-session","title":"Sandbox","kind":"code", "executionTarget":{"type":"local","root":work}}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -1884,7 +2000,7 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"network-session","title":"Network","executionTarget":null}
+            "jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"network-session","title":"Network","kind":"code", "executionTarget":null}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -2040,7 +2156,7 @@ fn non_git_turns_keep_their_isolated_dir_without_creating_change_sets() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":3,"method":"session/create",
-            "params":{"commandId":"create-non-git-session","title":"Plain directory","executionTarget":null}
+            "params":{"commandId":"create-non-git-session","title":"Plain directory","kind":"code", "executionTarget":null}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -2127,8 +2243,8 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
     };
     let first = open(first_dir.path());
     let second = open(second_dir.path());
-    let mut first_connection = first.connection();
-    let mut second_connection = second.connection();
+    let mut first_connection = first.product_host_connection();
+    let mut second_connection = second.product_host_connection();
     for (server, connection) in [
         (&first, &mut first_connection),
         (&second, &mut second_connection),
@@ -2140,13 +2256,45 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
         assert!(initialized.contains("\"result\""));
     }
 
+    let saved = local_call(
+        &first,
+        &mut first_connection,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 90, "method": "memory/add",
+            "params": {"commandId":"add-shared-memory", "memoryId":"shared-memory", "scope":{"type":"profile"},
+                       "title":"Shared memory", "body":"Available from both Directory runtimes"}
+        }),
+    );
+    assert_eq!(
+        saved["result"]["memory"]["memoryId"], "shared-memory",
+        "{saved}"
+    );
+    let listed = local_call(
+        &second,
+        &mut second_connection,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 91, "method": "memory/list", "params": {"scope":{"type":"profile"}}
+        }),
+    );
+    assert_eq!(
+        listed["result"]["memories"][0]["memoryId"], "shared-memory",
+        "{listed}"
+    );
+    assert!(
+        runtime
+            .state
+            .cache_root()
+            .join("github-issues.sqlite3")
+            .is_file()
+    );
+
     // Windows canonicalize may add a verbatim prefix. Session requests accept that spelling,
     // but return the canonical path owned by the selected directory runtime.
     let requested_root = first_dir.path().canonicalize().unwrap();
     let expected_dir = Dir::open_local(first_dir.path()).unwrap();
     let created: serde_json::Value = serde_json::from_str(&first.handle_json(
         &mut first_connection,
-        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","executionTarget":{"type":"local","root":requested_root}}}).to_string(),
+        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","kind":"code", "executionTarget":{"type":"local","root":requested_root}}}).to_string(),
     ))
     .unwrap();
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
@@ -2574,7 +2722,7 @@ fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
     let created = rpc(
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"release-create","title":"Headless release fixture","executionTarget":null}),
+        serde_json::json!({"commandId":"release-create","title":"Headless release fixture","kind":"code", "executionTarget":null}),
     );
     let session = &created["session"]["sessionId"];
     let thread = &created["session"]["threads"][0]["threadId"];
@@ -4827,7 +4975,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
     let session = local_call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"root","title":"Restore messages","executionTarget":{"type":"local","root":repo.path()}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"root","title":"Restore messages","kind":"code", "executionTarget":{"type":"local","root":repo.path()}}}),
     );
     let session_id = session["result"]["session"]["sessionId"]
         .as_str()
@@ -4992,6 +5140,89 @@ fn message_restore_points_preserve_git_versions_after_restart() {
 }
 
 #[test]
+fn storage_cleanup_preserves_archived_session_and_refuses_dirty_worktree() {
+    let profile = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    run_local_git(repo.path(), &["init", "--quiet", "--initial-branch=main"]);
+    run_local_git(repo.path(), &["config", "user.name", "Ash Test"]);
+    run_local_git(repo.path(), &["config", "user.email", "ash@example.test"]);
+    std::fs::write(repo.path().join("tracked.txt"), "initial\n").unwrap();
+    run_local_git(repo.path(), &["add", "."]);
+    run_local_git(repo.path(), &["commit", "--quiet", "-m", "initial"]);
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_dir_root(repo.path()),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut connection = server.product_host_connection();
+    let mut call = |id, method: &str, params| {
+        local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": id, "method": method, "params": params,
+            }),
+        )
+    };
+    let initialized = call(
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"storage-test","version":"1"},"capabilities":{}}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let created = call(
+        2,
+        "session/create",
+        serde_json::json!({"commandId":"storage-create","title":"Storage fixture","kind":"code","executionTarget":{"type":"local","root":repo.path()}}),
+    );
+    assert!(created.get("error").is_none(), "{created}");
+    let session_id = &created["result"]["session"]["sessionId"];
+    let archived = call(
+        3,
+        "session/request",
+        serde_json::json!({"commandId":"storage-archive","sessionId":session_id,"request":{"type":"archive"}}),
+    );
+    assert!(archived.get("error").is_none(), "{archived}");
+    let overview = call(4, "storage/overview", serde_json::json!({}));
+    assert!(overview.get("error").is_none(), "{overview}");
+    let worktree = &overview["result"]["worktrees"][0];
+    assert!(worktree["sizeBytes"].as_u64().unwrap() > 0, "{overview}");
+    assert_eq!(overview["result"]["worktreeBytes"], worktree["sizeBytes"]);
+    assert!(overview["result"]["sessionBytes"].as_u64().unwrap() > 0);
+    let identity = &worktree["identity"];
+    let checkout = std::path::Path::new(identity["checkoutRoot"].as_str().unwrap());
+    let uncommitted = checkout.join("uncommitted.txt");
+    std::fs::write(&uncommitted, "keep me").unwrap();
+    let refused = call(5, "storage/worktree/cleanup", identity.clone());
+    assert!(refused.get("error").is_some(), "{refused}");
+    assert_eq!(std::fs::read_to_string(&uncommitted).unwrap(), "keep me");
+    run_local_git(checkout, &["add", "uncommitted.txt"]);
+    run_local_git(checkout, &["commit", "--quiet", "-m", "detached change"]);
+    let refused = call(6, "storage/worktree/cleanup", identity.clone());
+    assert!(refused.get("error").is_some(), "{refused}");
+    assert!(uncommitted.is_file());
+    run_local_git(
+        checkout,
+        &["switch", "--quiet", "-c", "keep-detached-change"],
+    );
+    let cleaned = call(7, "storage/worktree/cleanup", identity.clone());
+    assert!(cleaned.get("error").is_none(), "{cleaned}");
+    assert!(!checkout.exists());
+    assert_eq!(
+        run_local_git(
+            repo.path(),
+            &["show", "keep-detached-change:uncommitted.txt"]
+        ),
+        "keep me"
+    );
+    let sessions = call(8, "session/list", serde_json::json!({}));
+    assert_eq!(sessions["result"]["sessions"][0]["sessionId"], *session_id);
+    assert_eq!(sessions["result"]["sessions"][0]["status"], "archived");
+}
+
+#[test]
 fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_contents() {
     let profile = tempfile::tempdir().unwrap();
     let repo = tempfile::tempdir().unwrap();
@@ -5020,7 +5251,7 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
     let created = local_call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-managed","title":"Managed work","executionTarget":null}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-managed","title":"Managed work","kind":"code", "executionTarget":null}}),
     );
     assert!(created.get("error").is_none(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();

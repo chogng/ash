@@ -8,20 +8,134 @@ use http_client::HttpMethod;
 use http_client::HttpRequest;
 use http_client::OutboundNetworkSnapshot;
 use http_client::ReqwestHttpClient;
+use serde::Deserialize;
 use sha2::Digest;
 use sha2::Sha256;
+use std::collections::HashSet;
 use std::io::Write;
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
-pub const DEFAULT_MODEL_ID: &str = "paraformer-large-online-ec6a3c64";
 /// Revision of the prepared Sherpa Paraformer package format accepted by this backend.
 pub const MODEL_PACKAGE_FORMAT_VERSION: u32 = 1;
 const FORMAT: &str = "sherpa-online-paraformer-v1";
-const BASE_URL: &str = "https://modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx/resolve/master";
+
+pub(crate) static BUILTIN_MODELS: LazyLock<Vec<BuiltinModel>> = LazyLock::new(|| {
+    let catalog = include_str!("../models/dictation.json");
+    #[cfg(debug_assertions)]
+    let catalog_override = std::env::var_os("ASH_DEV_RUNTIME_ROOT")
+        .and_then(|_| std::env::var_os("ASH_DEV_DICTATION_CATALOG"))
+        .map(|path| {
+            let path = Path::new(&path);
+            assert!(
+                path.is_absolute(),
+                "dictation catalog path must be absolute"
+            );
+            std::fs::read_to_string(path).expect("could not read development dictation catalog")
+        });
+    #[cfg(debug_assertions)]
+    let catalog = catalog_override.as_deref().unwrap_or(catalog);
+    let models: Vec<BuiltinModel> =
+        serde_json::from_str(catalog).expect("invalid dictation model catalog");
+    let mut ids = HashSet::new();
+    for model in &models {
+        assert!(
+            ModelPackage::validate_id(&model.id).is_ok(),
+            "invalid built-in dictation model ID: {}",
+            model.id
+        );
+        assert!(
+            ids.insert(&model.id),
+            "duplicate dictation model ID: {}",
+            model.id
+        );
+        assert_eq!(
+            model.download_size_bytes,
+            model.file_bytes(),
+            "dictation model download size does not match its files: {}",
+            model.id
+        );
+        let mut languages = HashSet::new();
+        for language in &model.recommended_languages {
+            let mut subtags = language.split('-');
+            let primary = subtags.next().unwrap_or_default();
+            assert!(
+                (2..=8).contains(&primary.len())
+                    && primary.bytes().all(|byte| byte.is_ascii_alphabetic())
+                    && subtags.all(|part| {
+                        !part.is_empty()
+                            && part.len() <= 8
+                            && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                    })
+                    && languages.insert(language.to_ascii_lowercase()),
+                "invalid or duplicate dictation language tag: {language}"
+            );
+        }
+    }
+    models
+});
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BuiltinModel {
+    pub id: String,
+    pub recommended_languages: Vec<String>,
+    pub download_size_bytes: u64,
+    base_url: String,
+    paraformer: ParaformerMetadata,
+    files: DownloadFiles,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ParaformerMetadata {
+    vocab_size: NonZeroUsize,
+    lfr_window_size: NonZeroUsize,
+    lfr_window_shift: NonZeroUsize,
+    encoder_output_size: NonZeroUsize,
+    decoder_num_blocks: NonZeroUsize,
+    decoder_kernel_size: NonZeroUsize,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DownloadFiles {
+    encoder: DownloadFile,
+    decoder: DownloadFile,
+    tokens: DownloadFile,
+    cmvn: DownloadFile,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DownloadFile {
+    name: String,
+    sha256: String,
+    size_bytes: u64,
+}
+
+impl BuiltinModel {
+    fn downloads(&self) -> [(&DownloadFile, &'static str); 4] {
+        [
+            (&self.files.encoder, "encoder.onnx.download"),
+            (&self.files.decoder, "decoder.onnx.download"),
+            (&self.files.tokens, "tokens.json"),
+            (&self.files.cmvn, "am.mvn"),
+        ]
+    }
+
+    fn file_bytes(&self) -> u64 {
+        self.downloads()
+            .iter()
+            .try_fold(0u64, |total, (file, _)| total.checked_add(file.size_bytes))
+            .expect("dictation model download size overflow")
+    }
+}
 
 pub(crate) struct ModelPackage {
     pub encoder: PathBuf,
@@ -96,11 +210,15 @@ impl ModelPackage {
         cancellation.check().map_err(|error| error.to_string())?;
         progress(ModelProgress::Checking);
         let directory = cache_root.join(model_id);
-        if model_id == DEFAULT_MODEL_ID && !directory.join("dictation-model.json").is_file() {
+        if let Some(model) = BUILTIN_MODELS.iter().find(|model| model.id == model_id)
+            && !directory.join("dictation-model.json").is_file()
+        {
             let install = Installation::new(cache_root, model_id)?;
             // Recheck after acquiring the cross-process lock: another client may have published it.
             if !directory.join("dictation-model.json").is_file() {
-                prepare_default(
+                Installation::require_absent_destination(&directory)?;
+                prepare_download(
+                    model,
                     &install.staging,
                     network,
                     cancellation,
@@ -179,9 +297,7 @@ impl ModelPackage {
         }
         let install = Installation::new(root, model_id)?;
         let destination = root.join(model_id);
-        if destination.exists() {
-            return Err("Dictation model already exists; import with a different model ID".into());
-        }
+        Installation::require_absent_destination(&destination)?;
         progress(ModelProgress::Checking);
         Self::read(source)?;
         for name in [
@@ -255,41 +371,19 @@ impl Installation {
         })
     }
 
-    fn publish(&self, destination: &Path) -> Result<(), String> {
-        if destination.exists() {
-            let outputs = [
-                "encoder.onnx.download",
-                "decoder.onnx.download",
-                "tokens.txt.download",
-                "encoder.onnx",
-                "decoder.onnx",
-                "tokens.txt",
-                "tokens.json",
-                "am.mvn",
-            ];
-            for entry in std::fs::read_dir(destination).map_err(|error| error.to_string())? {
-                let entry = entry.map_err(|error| error.to_string())?;
-                if !outputs.iter().any(|name| entry.file_name() == *name)
-                    || !entry
-                        .file_type()
-                        .map_err(|error| error.to_string())?
-                        .is_file()
-                {
-                    return Err("Dictation model destination contains files outside an unfinished installation".into());
-                }
-            }
-            // An install without its marker is unfinished. Remove only known package outputs;
-            // remove_dir rejects unknown user files instead of recursively deleting them.
-            for name in outputs {
-                let file = destination.join(name);
-                match std::fs::remove_file(file) {
-                    Ok(()) => {}
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => return Err(error.to_string()),
-                }
-            }
-            std::fs::remove_dir(destination).map_err(|error| error.to_string())?;
+    fn require_absent_destination(destination: &Path) -> Result<(), String> {
+        match std::fs::symlink_metadata(destination) {
+            Ok(_) => Err(format!(
+                "Dictation model destination already exists: {}",
+                destination.display()
+            )),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.to_string()),
         }
+    }
+
+    fn publish(&self, destination: &Path) -> Result<(), String> {
+        Self::require_absent_destination(destination)?;
         std::fs::rename(&self.staging, destination).map_err(|error| error.to_string())
     }
 }
@@ -302,7 +396,8 @@ impl Drop for Installation {
     }
 }
 
-async fn prepare_default(
+async fn prepare_download(
+    model: &'static BuiltinModel,
     directory: &Path,
     network: OutboundNetworkSnapshot,
     cancellation: &CancellationToken,
@@ -312,49 +407,28 @@ async fn prepare_default(
         .await
         .map_err(|error| format!("Could not create dictation model directory: {error}"))?;
     let client = ReqwestHttpClient::with_network(network).map_err(|error| error.to_string())?;
-    download(
-        &client,
-        "model_quant.onnx",
-        &directory.join("encoder.onnx.download"),
-        "dd4121cf45102018c26f9256f0b862df416edfcd06b0863ef4ce378a63c7d5e2",
-        cancellation,
-        Arc::clone(&progress),
-    )
-    .await?;
-    download(
-        &client,
-        "decoder_quant.onnx",
-        &directory.join("decoder.onnx.download"),
-        "873d21ee80c7345bfc27944b843699fe16bba021fd020747d38aef2dfc103681",
-        cancellation,
-        Arc::clone(&progress),
-    )
-    .await?;
-    download(
-        &client,
-        "tokens.json",
-        &directory.join("tokens.json"),
-        "2b20c2b12572d682afff84ce1c8d560f67b8b32a4c1f21567411d141ed352127",
-        cancellation,
-        Arc::clone(&progress),
-    )
-    .await?;
-    download(
-        &client,
-        "am.mvn",
-        &directory.join("am.mvn"),
-        "29b3c740a2c0cfc6b308126d31d7f265fa2be74f3bb095cd2f143ea970896ae5",
-        cancellation,
-        Arc::clone(&progress),
-    )
-    .await?;
+    let mut completed_bytes = 0;
+    for (file, name) in model.downloads() {
+        download(
+            &client,
+            &model.base_url,
+            file,
+            directory.join(name),
+            cancellation,
+            completed_bytes,
+            Arc::clone(&progress),
+        )
+        .await?;
+        completed_bytes += file.size_bytes;
+    }
     let tokens: Vec<String> = serde_json::from_slice(
         &fs::read(directory.join("tokens.json"))
             .await
             .map_err(|error| error.to_string())?,
     )
     .map_err(|error| format!("Invalid Paraformer vocabulary: {error}"))?;
-    if tokens.len() != 8404 {
+    let metadata = &model.paraformer;
+    if tokens.len() != metadata.vocab_size.get() {
         return Err("Unexpected Paraformer vocabulary size".into());
     }
     let vocabulary = tokens
@@ -374,7 +448,12 @@ async fn prepare_default(
     let cmvn = fs::read_to_string(directory.join("am.mvn"))
         .await
         .map_err(|error| error.to_string())?;
-    let (neg_mean, inv_stddev) = parse_cmvn(&cmvn)?;
+    let cmvn_dimensions = metadata
+        .lfr_window_size
+        .get()
+        .checked_mul(80)
+        .ok_or("Invalid Paraformer CMVN dimensions")?;
+    let (neg_mean, inv_stddev) = parse_cmvn(&cmvn, cmvn_dimensions)?;
     let mut encoder = fs::OpenOptions::new()
         .append(true)
         .open(directory.join("encoder.onnx.download"))
@@ -383,12 +462,21 @@ async fn prepare_default(
     // ONNX ModelProto field 14 is repeated metadata_props. Appending valid protobuf
     // entries preserves the original graph bytes and supplies sherpa's frontend metadata.
     for (key, value) in [
-        ("vocab_size", tokens.len().to_string()),
-        ("lfr_window_size", "7".into()),
-        ("lfr_window_shift", "6".into()),
-        ("encoder_output_size", "512".into()),
-        ("decoder_num_blocks", "16".into()),
-        ("decoder_kernel_size", "11".into()),
+        ("vocab_size", metadata.vocab_size.to_string()),
+        ("lfr_window_size", metadata.lfr_window_size.to_string()),
+        ("lfr_window_shift", metadata.lfr_window_shift.to_string()),
+        (
+            "encoder_output_size",
+            metadata.encoder_output_size.to_string(),
+        ),
+        (
+            "decoder_num_blocks",
+            metadata.decoder_num_blocks.to_string(),
+        ),
+        (
+            "decoder_kernel_size",
+            metadata.decoder_kernel_size.to_string(),
+        ),
         ("neg_mean", neg_mean),
         ("inv_stddev", inv_stddev),
     ] {
@@ -411,6 +499,11 @@ async fn prepare_default(
     )
     .await
     .map_err(|error| error.to_string())?;
+    for name in ["tokens.json", "am.mvn"] {
+        fs::remove_file(directory.join(name))
+            .await
+            .map_err(|error| error.to_string())?;
+    }
     // This marker is written last, so an interrupted install is never treated as usable.
     fs::write(
         directory.join("dictation-model.json"),
@@ -422,16 +515,16 @@ async fn prepare_default(
 
 async fn download(
     client: &ReqwestHttpClient,
-    name: &str,
-    path: &Path,
-    expected_sha256: &str,
+    base_url: &str,
+    file: &'static DownloadFile,
+    path: PathBuf,
     cancellation: &CancellationToken,
+    completed_bytes: u64,
     progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
 ) -> Result<(), String> {
     let client = client.clone();
-    let name = name.to_owned();
-    let path = path.to_owned();
-    let expected_sha256 = expected_sha256.to_owned();
+    let name = file.name.as_str();
+    let url = format!("{base_url}/{name}");
     let cancellation = cancellation.clone();
     tokio::task::spawn_blocking(move || {
         struct FileSink {
@@ -439,8 +532,18 @@ async fn download(
             digest: Sha256,
             downloaded_bytes: u64,
             reported_bytes: u64,
+            completed_bytes: u64,
             progress: Arc<dyn Fn(ModelProgress) + Send + Sync>,
             name: String,
+        }
+        impl FileSink {
+            fn report_progress(&self) {
+                (self.progress)(ModelProgress::Downloading {
+                    file: self.name.clone(),
+                    downloaded_bytes: self.downloaded_bytes,
+                    package_downloaded_bytes: self.completed_bytes + self.downloaded_bytes,
+                });
+            }
         }
         impl HttpBodySink for FileSink {
             fn emit(&mut self, chunk: &[u8]) -> Result<(), HttpClientError> {
@@ -451,17 +554,14 @@ async fn download(
                 self.downloaded_bytes += chunk.len() as u64;
                 if self.downloaded_bytes - self.reported_bytes >= 1024 * 1024 {
                     self.reported_bytes = self.downloaded_bytes;
-                    (self.progress)(ModelProgress::Downloading {
-                        file: self.name.clone(),
-                        downloaded_bytes: self.downloaded_bytes,
-                    });
+                    self.report_progress();
                 }
                 Ok(())
             }
         }
         let request = HttpRequest::new(
             HttpMethod::Get,
-            format!("{BASE_URL}/{name}"),
+            url,
             // ModelScope rejects requests with an empty User-Agent at its CDN.
             vec![http_client::HttpHeader::new(
                 "User-Agent",
@@ -475,9 +575,11 @@ async fn download(
             digest: Sha256::new(),
             downloaded_bytes: 0,
             reported_bytes: 0,
+            completed_bytes,
             progress: Arc::clone(&progress),
-            name: name.clone(),
+            name: name.into(),
         };
+        sink.report_progress();
         let response = client
             .execute_streaming_with_cancellation(&request, &cancellation, &mut sink)
             .map_err(|error| format!("Could not download dictation model {name}: {error}"))?;
@@ -488,12 +590,12 @@ async fn download(
             ));
         }
         sink.file.sync_all().map_err(|error| error.to_string())?;
-        progress(ModelProgress::Downloading {
-            file: name.clone(),
-            downloaded_bytes: sink.downloaded_bytes,
-        });
+        sink.report_progress();
         progress(ModelProgress::Checking);
-        if format!("{:x}", sink.digest.finalize()) != expected_sha256 {
+        if sink.downloaded_bytes != file.size_bytes {
+            return Err(format!("Dictation model {name} has an unexpected size"));
+        }
+        if format!("{:x}", sink.digest.finalize()) != file.sha256 {
             return Err(format!(
                 "Dictation model {name} failed SHA-256 verification"
             ));
@@ -504,8 +606,8 @@ async fn download(
     .map_err(|error| error.to_string())?
 }
 
-fn parse_cmvn(cmvn: &str) -> Result<(String, String), String> {
-    fn values(cmvn: &str, marker: &str) -> Result<String, String> {
+fn parse_cmvn(cmvn: &str, dimensions: usize) -> Result<(String, String), String> {
+    fn values(cmvn: &str, marker: &str, dimensions: usize) -> Result<String, String> {
         let section = cmvn
             .split_once(marker)
             .and_then(|(_, rest)| rest.split_once('['))
@@ -513,12 +615,17 @@ fn parse_cmvn(cmvn: &str) -> Result<(String, String), String> {
             .map(|(values, _)| values)
             .ok_or("Invalid Paraformer CMVN")?;
         let numbers = section.split_whitespace().collect::<Vec<_>>();
-        if numbers.len() != 560 || numbers.iter().any(|number| number.parse::<f32>().is_err()) {
+        if numbers.len() != dimensions
+            || numbers.iter().any(|number| number.parse::<f32>().is_err())
+        {
             return Err("Invalid Paraformer CMVN dimensions".into());
         }
         Ok(numbers.join(","))
     }
-    Ok((values(cmvn, "<AddShift>")?, values(cmvn, "<Rescale>")?))
+    Ok((
+        values(cmvn, "<AddShift>", dimensions)?,
+        values(cmvn, "<Rescale>", dimensions)?,
+    ))
 }
 
 fn metadata_entry(key: &str, value: &str) -> Vec<u8> {

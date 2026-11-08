@@ -74,6 +74,17 @@ pub enum TurnLoopReason {
     NewInput,
 }
 
+/// A Skill whose instructions were included in a model request during this Turn.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnSkillLoad {
+    pub skill: crate::FrozenSkillActivation,
+    /// The last committed item in this Turn when the Skill was first loaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub after_item_id: Option<crate::ItemId>,
+}
+
 /// Canonical readable state for one user-intent-driven Agent execution.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -91,6 +102,10 @@ pub struct Turn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub instructions: Option<TurnInstructions>,
+    /// Execution directory captured when the Turn was accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub directory: Option<crate::SessionExecutionTarget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub model: Option<ModelRef>,
@@ -113,6 +128,9 @@ pub struct Turn {
     #[ts(optional = nullable)]
     pub context_usage: Option<ModelContextUsage>,
     pub items: Vec<ThreadItem>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub skill_loads: Option<Vec<TurnSkillLoad>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub plan: Option<PlanUpdate>,

@@ -46,11 +46,12 @@ import { IViewsService } from '../../../workbench/services/views/common/viewsSer
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
+import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
 import { createThreadMultiDiffEditorInput, registerChatChangesActions } from '../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -66,6 +67,17 @@ await import('../../browser/workbenchChat.contribution.js');
 registerChatChangesActions();
 await import('../../contrib/changes/browser/changesMultiDiffSourceResolver.js');
 const { SESSIONS_FILES_CONTAINER_ID } = await import('../../contrib/files/browser/files.contribution.js');
+
+function createReviewServices(profileId: string): InstantiationService {
+	const services = new InstantiationService();
+	services.registerSingleton(IStorageService, () => new BrowserStorageService({
+		ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: profileId, profileId, flushInterval: 0,
+	}));
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, undefined));
+	return services;
+}
 
 test('Workspace changes focus SCM only after their opening command completes', async () => {
 	using services = new InstantiationService();
@@ -155,7 +167,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	assert.deepEqual(navigation.getConversations(), []);
 	assert.equal(navigation.getActiveConversation(), undefined);
 	assert.equal(await navigation.captureActiveDraft(), undefined);
-	using contributions = WorkbenchContributionsRegistry.createHost(services);
+	using contributions = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.contrib.workbenchStartup']);
 	contributions.advance(WorkbenchPhase.BlockRestore);
 	await sessions.initialize();
 	assert.equal(subscriptions, 2); // The provider and the ambient Chat backend each consume Session changes.
@@ -231,7 +243,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 			return summaries;
 		},
 	} as unknown as IChatService;
-	using services = new InstantiationService();
+	using services = createReviewServices('turn-review');
 	services.registerInstance(IQuickInputService, {
 		...quickInputServiceTestControls,
 		input: async () => 'feat: reviewed selection', createQuickPick() { throw new Error('This scenario uses a message input'); }
@@ -244,13 +256,9 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 		sessions: [session],
 		initialize: async () => { },
 	} as unknown as ISessionsManagementService);
-	services.registerInstance(IStorageService, {} as IStorageService);
-	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
-	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
-	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	const resolvers = new MultiDiffSourceResolverService();
 	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
-	using contributions = WorkbenchContributionsRegistry.createHost(services);
+	using contributions = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.contrib.multiDiffSource']);
 	contributions.advance(WorkbenchPhase.BlockStartup);
 	assert.deepEqual(resolvers.sourceActions(), []);
 	services.registerInstance(IEditorService, {
@@ -360,12 +368,8 @@ test('Chat opens the current checkpoint when composer counts arrive before its f
 		},
 	} as unknown as IChatService;
 	const session = { sessionId: 'session', chats: [{ threadId: 'B' }] };
-	using services = new InstantiationService();
+	using services = createReviewServices('composer-review');
 	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, active: { session, threadId: 'B' }, sessions: [session] } as unknown as ISessionsManagementService);
-	services.registerInstance(IStorageService, {} as IStorageService);
-	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
-	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
-	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	const opened: MultiDiffEditorInput[] = [];
 	services.registerInstance(IEditorService, {
@@ -392,17 +396,16 @@ test('Conversation review cannot open after an A-B-A selection change', async ()
 		readThreadChanges: async () => ({ sequence: 1, revision: 'checkpoint', statistics: { files: 1, additions: 1, deletions: 1 }, repositories: [{ repositoryId: 'repo', files: [{ path: 'file', kind: 'modified', binary: false, additions: 1, deletions: 1 }] }], warnings: [] }),
 		readThreadChangeFile: () => { void reading.complete(); return pending.p; },
 	} as unknown as IChatService;
-	using services = new InstantiationService();
+	using services = createReviewServices('review-selection');
 	services.registerInstance(ISessionsManagementService, sessions as unknown as ISessionsManagementService);
-	services.registerInstance(IStorageService, {} as IStorageService);
-	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
-	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
-	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	let opened = false;
 	services.registerInstance(IEditorService, { openEditor: async () => { opened = true; } } as unknown as IEditorService);
-	const opening = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!(services, 'session', 'A');
-	await reading.p;
+	const opening = Promise.resolve(CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!(services, 'session', 'A'));
+	await Promise.race([
+		reading.p,
+		opening.then(() => assert.fail('The review command finished before reading checkpoint files.')),
+	]);
 	sessions.active = { session, threadId: 'B' }; changed.fire();
 	sessions.active = { session, threadId: 'A' }; changed.fire();
 	await pending.complete({ path: 'file', binary: false, truncated: false, before: 'before', after: 'after' });

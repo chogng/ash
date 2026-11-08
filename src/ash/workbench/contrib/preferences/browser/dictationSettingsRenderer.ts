@@ -2,11 +2,11 @@ import { SettingsPageRenderer } from './settingsRenderers.js';
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../speech/common/speechService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../platform/dictation/common/dictation.js';
-import { readDictationOptions } from '../../chat/browser/speechToText/dictationInput.js';
+import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../platform/dictation/common/dictation.js';
+import { getDictationMicrophoneChoices, readDictationInputDevices } from '../../chat/browser/speechToText/dictationInput.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import './media/dictationSettingsRenderer.css';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
@@ -30,6 +30,7 @@ import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { IChatSpeechToTextService } from '../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
@@ -43,14 +44,14 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	setting: {
 		valueType: 'boolean',
 		title: localize('dictation.models.verbosityTitle', 'Dictation model accessibility help'),
-		description: localize('dictation.models.verbosityDescription', 'Announce how to open accessibility help when the model table receives focus.'),
+		description: localize('dictation.models.verbosityDescription', 'Announce how to open accessibility help when the local model settings receive focus.'),
 	},
 });
 
 /** Shared dictation content; each settings host owns navigation, search and setting widgets. */
 export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | SettingsSectionReference> {
 	public readonly categoryId = 'voice-input';
-	public override get settingIds(): readonly string[] { return [...Object.values(DictationConfiguration), AccessibilityVerbositySettingId.DictationModels]; }
+	public override get settingIds(): readonly string[] { return Object.values(DictationConfiguration); }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly controls: LocalTranscriptionModelControls;
@@ -60,18 +61,21 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 	private readonly subscriptionTitle: string;
 	private readonly subscriptionDescription: string;
 	private readonly connectionStatus: HTMLElement;
-	private readonly inputOptions: HTMLElement;
-	private readonly microphone: SelectBox;
-	private readonly language: SelectBox;
+	private readonly window: Window & typeof globalThis;
+	private readonly microphone: { readonly row: HTMLElement; readonly select: SelectBox; readonly title: string; };
+	private readonly language: { readonly row: HTMLElement; readonly select: SelectBox; readonly title: string; };
+	private showLanguage = false;
 	private visible = false;
 	private requestVersion = 0;
 
 	constructor(container: HTMLElement,
+		private readonly options: { readonly showGroupHeader: boolean; },
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ILanguageModelsService private readonly chat: ILanguageModelsService,
 		@IPreferencesService preferences: IPreferencesService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IContextViewService contextViewProvider: IContextViewService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 		@ILocalTranscriptionModelService private readonly localTranscription: ILocalTranscriptionModelService,
 		@ISpeechService private readonly speechProviders: ISpeechService,
@@ -81,17 +85,24 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 	) {
 		super();
 		const document = container.ownerDocument;
+		this.window = document.defaultView as Window & typeof globalThis;
 		this.controls = this._register(instantiation.createInstance(LocalTranscriptionModelControls, h(document, 'div')));
-		this.inputOptions = h(document, 'div');
-		this.inputOptions.className = 'ash-dictation-input-options';
-		this.microphone = this._register(new SelectBox(this.inputOptions, {
-			options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone')
-		}, defaultSelectBoxStyles));
-		this.language = this._register(new SelectBox(this.inputOptions, {
-			options: [], ariaLabel: localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language')
-		}, defaultSelectBoxStyles));
-		this._register(this.microphone.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.inputDevice, value); }));
-		this._register(this.language.onDidSelect(({ value }) => { void this.configure(DictationConfiguration.language, value); }));
+		const createSelectRow = (key: string, title: string) => {
+			const row = h(document, 'div');
+			row.className = 'ash-configuration-setting ash-general-setting';
+			const label = h(document, 'span', title);
+			label.className = 'ash-configuration-setting-title ash-general-setting-title';
+			row.append(label);
+			const select = this._register(new SelectBox(row, { options: [], ariaLabel: title, presentation: 'field', contextViewProvider }, defaultSelectBoxStyles));
+			select.element.classList.add('ash-general-setting-control');
+			this._register(select.onDidSelect(({ value }) => { void this.configure(key, value); }));
+			return { row, select, title };
+		};
+		this.microphone = createSelectRow(DictationConfiguration.inputDevice, localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone'));
+		this.language = createSelectRow(DictationConfiguration.language, localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language'));
+		this.setMicrophoneOptions([]);
+		const mediaDevices = this.window.navigator.mediaDevices;
+		if (mediaDevices) this._register(addDisposableListener(mediaDevices, 'devicechange', () => this.updateVisibility()));
 		const updateHint = (): void => {
 			const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.DictationModels);
 			this.controls.setAriaDescription(hint);
@@ -135,6 +146,10 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 			if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language)) { this.updateVisibility(); }
 		}));
 		this._register(speech.onDidChangeState(() => this.updateVisibility()));
+		this._register(speechProviders.onDidChangeHasSpeechProvider(() => {
+			this.updateVisibility();
+			this.changed.fire();
+		}));
 		this._register(chat.onDidChangeModels(() => this.updateVisibility()));
 		const scoped = this._register(contextKeys.createScoped(this.controls.domNode));
 		scoped.createKey('dictationModelsFocused', true);
@@ -150,7 +165,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 					const focused = document.activeElement as HTMLElement;
 					if (!this.visible || !this.controls.domNode.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.DictationModels, { type },
-						() => type === AccessibleViewType.Help ? localize('dictation.models.help', 'Local dictation models\nUse arrow keys to move between rows and cells. Use Tab to reach model actions. Install downloads an available model; Use model selects an installed model. Cancel stops preparation. Uninstall requires confirmation and keeps the original import directory. Preparation continues after Settings closes. Import model accepts a prepared package directory.') : this.controls.getAccessibleContent(),
+						() => type === AccessibleViewType.Help ? localize('dictation.models.help', 'Local dictation models\nUse the Dictation models selector to switch between installed models. Use Tab to reach model actions. The Install button shows progress during preparation. Hover over it or focus it with the keyboard to reveal Cancel. Activate Cancel to stop preparation. Uninstall requires confirmation and shows when removal is in progress. Preparation continues after Settings closes.') : this.controls.getAccessibleContent(),
 						() => focused.focus(), AccessibilityVerbositySettingId.DictationModels);
 				},
 			}));
@@ -168,13 +183,17 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 				},
 			};
 		};
-		const children: SettingsTreeNode<ISetting | SettingsSectionReference>[] = [settingNode(DictationConfiguration.backend), {
+		const inputNode = (id: string, input: typeof this.microphone): SettingsTreeNode<SettingsSectionReference> => ({
 			element: {
-				kind: 'item', id: 'dictation.inputOptions', keywords: [DictationConfiguration.inputDevice, DictationConfiguration.language], title: localize({ bundle: 'ash', key: 'dictation.inputOptions' }, 'Microphone and language'),
-				description: localize({ bundle: 'ash', key: 'dictation.inputOptionsDescription' }, 'Select the microphone for dictation. Language hints are available for supported cloud services; local models use their own languages.'),
-				value: this.retainElement('dictation.inputOptions', this.inputOptions),
-			}
-		}];
+				kind: 'item', id, title: input.title, description: '',
+				value: this.retainElement(id, input.row),
+			},
+		});
+		const children: SettingsTreeNode<ISetting | SettingsSectionReference>[] = [settingNode(DictationConfiguration.backend)];
+		if (!this.speechProviders.hasSpeechProvider) {
+			children.push(inputNode(DictationConfiguration.inputDevice, this.microphone));
+			if (this.showLanguage) children.push(inputNode(DictationConfiguration.language, this.language));
+		}
 		const backend = dictationBackend(this.configuration);
 		if (backend.type === 'cloud') {
 			children.push(settingNode(DictationConfiguration.cloudProvider), {
@@ -194,12 +213,15 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 				},
 			});
 		} else if (backend.type === 'local') {
+			if (this.localTranscription.isSupported && !this.speechProviders.hasSpeechProvider) {
+				children.push(settingNode(DictationConfiguration.modelLoadTiming));
+			}
 			children.push({
 				element: {
 					kind: 'item', id: DictationConfiguration.model,
 					title: localize('dictation.model.table', 'Local dictation models'),
 					description: localize('dictation.model.tableDescription', 'Install a model, select it for dictation, or uninstall it.'),
-					keywords: ['model', 'install', 'import', 'uninstall'],
+					keywords: ['model', 'install', 'uninstall'],
 					value: this.retainElement(DictationConfiguration.model, this.controls.domNode),
 				},
 			});
@@ -214,58 +236,78 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 				},
 			});
 		}
-		children.push(settingNode(AccessibilityVerbositySettingId.DictationModels));
-		return [{
+		const items = children.map(node => ({ ...node, element: { ...node.element, keywords: [...node.element.keywords ?? [], 'dictation', 'speech', localize('sessions.settings.dictation', 'Dictation'), localize('settings.dictation.group', 'Voice input')] } }));
+		return this.options.showGroupHeader ? [{
 			element: { kind: 'group', id: 'dictation', title: localize('settings.dictation.group', 'Voice input'), description: localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.') },
-			children: children.map(node => ({ ...node, element: { ...node.element, keywords: [...node.element.keywords ?? [], 'dictation', 'speech', localize('sessions.settings.dictation', 'Dictation'), localize('settings.dictation.group', 'Voice input')] } })),
-		}];
+			children: items,
+		}] : items;
 	}
 
 	public setVisible(visible: boolean): void {
+		if (this.visible === visible) return;
 		this.visible = visible;
 		this.updateVisibility();
 	}
 
 	private updateVisibility(): void {
-		this.requestVersion++;
+		const version = ++this.requestVersion;
 		const backend = dictationBackend(this.configuration);
 		const cloud = backend.type === 'cloud';
 		this.cloudModel.textContent = backend.type === 'cloud' ? backend.modelId : '';
 		this.controls.setVisible(this.visible && backend.type === 'local');
-		if (this.visible && cloud) { void this.readConnection(this.requestVersion); }
-		if (this.visible) { void this.readInputOptions(this.requestVersion); }
+		if (this.visible && cloud) { void this.readConnection(version); }
+		if (this.visible && !this.speechProviders.hasSpeechProvider) { void this.readMicrophones(version); }
+		if (this.visible) { void this.readLanguages(backend, version); }
 	}
 
 	private async configure(key: string, value: string): Promise<void> {
+		if (value === this.configuration.getValue<string>(key)) return;
+		const microphone = key === DictationConfiguration.inputDevice;
 		try {
 			if (this.speech.isBusy) {
-				if (key === DictationConfiguration.inputDevice && this.speech.analyserNode) await this.speech.switchMicrophone(this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis, value);
+				if (microphone && this.speech.analyserNode) await this.speech.switchMicrophone(this.window, value);
 				else await this.speech.stopAndTranscribe();
 			}
 			await this.configuration.updateValue(key, value);
-		} catch (error) { this.notifications.error(String(error)); }
+		} catch (error) {
+			const select = microphone ? this.microphone.select : this.language.select;
+			const saved = this.configuration.getValue<string>(key);
+			if (select.value === value && select.options.some(option => option.value === saved)) select.value = saved;
+			this.notifications.error(String(error));
+		}
 	}
 
-	private async readInputOptions(version: number): Promise<void> {
-		this.microphone.enabled = this.language.enabled = false;
-		if (!this.speech.isConfigured) { return; }
+	private setMicrophoneOptions(devices: Awaited<ReturnType<typeof readDictationInputDevices>>): void {
+		const configuredDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
+		this.microphone.select.setOptions(getDictationMicrophoneChoices(devices, configuredDevice).map(({ id, label }) => ({ value: id, label })));
+		this.microphone.select.value = configuredDevice;
+	}
+
+	private async readMicrophones(version: number): Promise<void> {
 		try {
-			const options = await readDictationOptions(this.inputOptions.ownerDocument.defaultView as Window & typeof globalThis, this.configuration, this.backend, this.speechProviders);
-			if (this.isDisposed || version !== this.requestVersion) { return; }
-			this.inputOptions.hidden = !options;
-			if (!options) return;
-			this.microphone.setOptions([{ value: '', label: localize({ bundle: 'ash', key: 'dictation.systemMicrophone' }, 'System default microphone') }, ...options.inputDevices.map(device => ({ value: device.id, label: device.label }))]);
-			const configuredDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
-			if (configuredDevice && !options.inputDevices.some(device => device.id === configuredDevice)) {
-				this.microphone.setOptions([...this.microphone.options, { value: configuredDevice, label: localize({ bundle: 'ash', key: 'dictation.missingMicrophone' }, 'Selected microphone is disconnected'), disabled: true }]);
-			}
-			this.microphone.value = configuredDevice;
-			this.microphone.enabled = true;
+			const devices = await readDictationInputDevices(this.window);
+			if (!this.isDisposed && version === this.requestVersion) this.setMicrophoneOptions(devices);
+		} catch (error) { if (!this.isDisposed && version === this.requestVersion) { this.notifications.error(String(error)); } }
+	}
+
+	private async readLanguages(backend: DictationBackend, version: number): Promise<void> {
+		this.language.select.enabled = false;
+		try {
+			const options = backend.type !== 'local' && !this.speechProviders.hasSpeechProvider && this.backend?.isConnected
+				? await this.backend.getOptions(backend)
+				: undefined;
+			if (this.isDisposed || version !== this.requestVersion) return;
+			const languages = options?.languages ?? [];
 			const configuredLanguage = this.configuration.getValue<string>(DictationConfiguration.language);
-			const unavailableLanguage = options.languages.length && configuredLanguage !== 'auto' && !options.languages.includes(configuredLanguage) ? [{ value: configuredLanguage, label: localize('dictation.unavailableLanguage', 'Language {0} is unavailable with this service', configuredLanguage), disabled: true }] : [];
-			this.language.setOptions([...unavailableLanguage, { value: 'auto', label: localize({ bundle: 'ash', key: 'dictation.autoLanguage' }, 'Automatic language detection') }, ...options.languages.map(value => ({ value, label: new Intl.DisplayNames([this.inputOptions.ownerDocument.documentElement.lang || 'en'], { type: 'language' }).of(value)! }))]);
-			this.language.value = options.languages.length ? this.configuration.getValue<string>(DictationConfiguration.language) : 'auto';
-			this.language.enabled = options.languages.length > 0;
+			const unavailableLanguage = configuredLanguage !== 'auto' && !languages.includes(configuredLanguage) ? [{ value: configuredLanguage, label: localize('dictation.unavailableLanguage', 'Language {0} is unavailable with this service', configuredLanguage) }] : [];
+			const displayNames = new Intl.DisplayNames([this.window.document.documentElement.lang || 'en'], { type: 'language' });
+			this.language.select.setOptions([...unavailableLanguage, { value: 'auto', label: localize({ bundle: 'ash', key: 'dictation.autoLanguage' }, 'Automatic language detection') }, ...languages.map(value => ({ value, label: displayNames.of(value)! }))]);
+			this.language.select.value = configuredLanguage;
+			this.language.select.enabled = languages.length > 0;
+			if (this.showLanguage !== (languages.length > 0)) {
+				this.showLanguage = languages.length > 0;
+				this.changed.fire();
+			}
 		} catch (error) { if (!this.isDisposed && version === this.requestVersion) { this.notifications.error(String(error)); } }
 	}
 

@@ -1,9 +1,12 @@
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IProjectService } from '../../../../platform/projects/common/projectService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWording } from '../../../../platform/chat/common/sessionArchiveActions.js';
+import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { SessionGroupingContext, SessionsCatalogProject, SessionsCatalogProjectAppearance, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
@@ -16,7 +19,7 @@ import { localize } from '../../../../nls.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 
 import type { SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
-import { sessionListProjectActions, sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
+import { sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
 
 export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
@@ -24,19 +27,22 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly title: string;
 	/** Session catalog identity, when this row represents an Ash session. */
 	readonly sessionId?: string;
+	readonly groupingContext?: SessionGroupingContext;
 	/** Milliseconds since the Unix epoch, when supplied by the catalog. */
 	readonly createdAt?: number;
 	readonly updatedAt?: number;
 	readonly projectId?: string;
 	readonly selected: boolean;
+	readonly selectedThreadId?: string;
 	readonly status?: ISessionStatusIcon;
 	readonly disabled?: boolean;
 	readonly actionsDisabled?: boolean;
 	readonly defaultIcon: Icon;
 	readonly iconId?: string;
 	readonly setIcon?: (icon: Icon | undefined) => void;
-	readonly open: (signal: AbortSignal) => Promise<void>;
-	readonly getActions: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
+	readonly open: (signal: AbortSignal, threadId?: string) => Promise<void>;
+	readonly archive?: () => Promise<boolean>;
+	readonly getActions?: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
 }
 
 type ProjectHistory =
@@ -57,12 +63,16 @@ export interface ChatListProject {
 	/** Stable identity for membership and persisted expansion. */
 	readonly id: string;
 	readonly title: string;
+	/** Milliseconds since the Unix epoch, when supplied by the project owner. */
+	readonly createdAt?: number;
+	readonly updatedAt?: number;
 	readonly history: ProjectHistory;
 	readonly archived?: boolean;
-	readonly archive?: () => void;
+	readonly archive?: () => Promise<boolean>;
 	readonly restore?: () => void;
 	readonly remove?: { readonly removesContents: boolean; run(): Promise<void>; };
 	readonly editDetails?: (signal: AbortSignal) => Promise<ConversationProjectEditor>;
+	readonly appearance?: SessionsCatalogProjectAppearance;
 }
 
 export interface ChatListSnapshot {
@@ -152,6 +162,8 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		@IProjectService private readonly projectService: IProjectService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IStorageService storage: IStorageService,
+		@ICommandService private readonly commands: ICommandService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		this.migrateCollapseState(storage);
@@ -159,9 +171,9 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			const projects = this.projects.state.read(reader).projects.filter(project => !project.archived);
 			this.membershipVersion.read(reader);
 			const snapshots = this.catalog.sources.map(source => source.snapshot.read(reader));
-			const projectIds = new Set(projects.map(project => project.id));
+			const localProjects = new Map(projects.map(project => [project.id, project]));
 			for (const id of this.membership.keys()) {
-				if (!projectIds.has(id)) this.membership.delete(id);
+				if (!localProjects.has(id)) this.membership.delete(id);
 			}
 			const projectGroups = new Map(groupChatList(snapshots, 'projects').filter(group => group.project).map(group => [group.key, group]));
 			const entries = snapshots.flatMap(snapshot => snapshot.entries);
@@ -182,7 +194,9 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			}
 			const recent = groups.find(group => group.key === 'recent');
 			const grouped = new Set<string>();
+			const sessionIds = new Set(entries.map(entry => entry.sessionId));
 			for (const group of snapshots.flatMap(snapshot => snapshot.groups ?? [])) {
+				if (group.sessionIds.length && !group.sessionIds.some(id => sessionIds.has(id))) continue;
 				const members = new Set(group.sessionIds);
 				const rows = (recent?.rows ?? []).filter(entry => entry.sessionId && members.has(entry.sessionId)
 					&& !projectEntryIds.has(entry.id) && !grouped.has(entry.id));
@@ -199,7 +213,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 					const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id))
 						.map(entry => this.toRow(entry, projects));
 					const projectGroups = key === 'pinned' ? pinnedProjects : key === 'projects' ? otherProjects : [];
-					return { key, rows, projects: projectGroups.map(project => this.toProject(project, projects)) };
+					return { key, rows, projects: projectGroups.map(project => this.toProject(project, projects, localProjects.get(project.key))) };
 				}),
 			} satisfies SessionsCatalogSnapshot;
 		});
@@ -217,16 +231,18 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 	}
 
 	private migrateCollapseState(storage: IStorageService): void {
-		const prefix = 'sessions.list.code.collapsed.';
+		const prefix = 'sessions.list.chat.collapsed.';
+		const previousListPrefix = 'sessions.list.code.collapsed.';
 		const previousPrefixes = [
 			`workbench.viewContainer.${CHAT_WORKSPACE_NAVIGATION_ID}.${CHAT_WORKSPACE_NAVIGATION_ID}.`,
 			'sessions.chatgpt.navigation.collapsed.',
 		];
 		for (const key of storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE)) {
+			const previousProject = key.startsWith(`${previousListPrefix}catalog-project:`);
 			const previousPrefix = previousPrefixes.find(prefix => key.startsWith(prefix));
-			if (!previousPrefix) continue;
-			const section = key.slice(previousPrefix.length).replace(/\.collapsed$/, '');
-			const group = section === 'pinned' || section === 'recent' || section.startsWith('group:');
+			if (!previousProject && !previousPrefix) continue;
+			const section = previousProject ? key.slice(previousListPrefix.length) : key.slice(previousPrefix!.length).replace(/\.collapsed$/, '');
+			const group = previousProject || section === 'pinned' || section === 'recent' || section.startsWith('group:');
 			const next = prefix + (group ? section : `catalog-project:${section.replace(/^project:/, '')}`);
 			const previous = storage.getBoolean(key, StorageScope.PROFILE);
 			if (section && section !== 'projects' && previous !== undefined && storage.getBoolean(next, StorageScope.PROFILE) === undefined) {
@@ -257,24 +273,33 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		return request;
 	}
 
-	private toProject(project: ChatListGroup, destinations: readonly { readonly id: string; readonly name: string; }[]): SessionsCatalogProject {
+	private toProject(project: ChatListGroup, destinations: readonly ProjectSummary[], localProject: ProjectSummary | undefined): SessionsCatalogProject {
 		const rows = project.rows.map(entry => this.toRow(entry, destinations, project.key));
 		const current = this.membership.get(project.key);
 		const history = project.project?.history;
+		const editDetails = project.project?.editDetails;
 		const loading = history?.state === 'loading' || (current !== undefined && current.failed === undefined);
 		const retry = current?.failed ? () => {
 			this.membership.delete(project.key);
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		} : undefined;
-		const label = retry ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
-			: !rows.length && !loading && (!history || history.state === 'complete')
-				? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
 		return {
 			key: project.key,
 			title: project.title,
 			rows,
 			loading,
-			history: label ? { label, action: retry } : undefined,
+			localProject,
+			appearance: project.project?.appearance,
+			operations: {
+				rename: editDetails && (async (name, signal) => {
+					const editor = await editDetails(signal);
+					signal.throwIfAborted();
+					await editor.save({ ...editor.details, name });
+				}),
+				archive: project.project?.archive,
+				remove: project.project?.remove,
+			},
+			history: retry ? { label: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'), action: retry } : undefined,
 			onExpand: history?.state === 'idle' ? history.load : undefined,
 			loadMore: history?.state === 'more' ? history.load : undefined,
 		};
@@ -289,7 +314,9 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		} : () => entry.project;
 		return {
 			id: entry.id,
+			sessionId,
 			title: entry.title,
+			groupingContext: entry.groupingContext,
 			createdAt: entry.createdAt,
 			updatedAt: entry.updatedAt,
 			selected: entry.selected,
@@ -304,33 +331,24 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			organization: () => entry.disabled || entry.actionsDisabled ? undefined : {
 				pinned: entry.pinned, setPinned: entry.setPinned, moveToGroup: entry.moveToGroup, project: project(),
 			},
-			open: () => {
+			open: threadId => {
 				const controller = new AbortController();
 				this.opening.value = toDisposable(() => controller.abort());
-				void entry.open(controller.signal).catch(error => {
+				void entry.open(controller.signal, threadId).catch(error => {
 					if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
 				});
 			},
 			getActions: async (signal, restoreFocus) => {
-				const actions = [...await entry.getActions(signal, restoreFocus)];
-				const organization = project();
-				if (!signal.aborted && organization && (organization.current || organization.destinations.length || organization.loadDestinations)) {
-					try {
-						const destinations = organization.loadDestinations ? await organization.loadDestinations(signal) : organization.destinations;
-						if (signal.aborted) return actions;
-						const projectActions = sessionListProjectActions(organization, destinations, async run => {
-							try {
-								await run();
-								restoreFocus();
-							} catch (error) {
-								this.notifications.error(toErrorMessage(error));
-							}
-						});
-						const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
-						actions.splice(separator < 0 ? actions.length : separator, 0, ...projectActions);
-					} catch (error) {
-						if (!signal.aborted) this.notifications.error(toErrorMessage(error));
-					}
+				const contributed = await entry.getActions?.(signal, restoreFocus);
+				const actions = [...contributed ?? []];
+				if (entry.archive && !signal.aborted) {
+					const presentation = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(this.configuration)).archive;
+					const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
+					actions.splice(separator < 0 ? actions.length : separator + 1, 0, {
+						id: 'agentSession.archive',
+						label: presentation.title.value, tooltip: presentation.title.value, icon: presentation.icon, enabled: true,
+						run: () => this.commands.executeCommand('agentSession.archive', { catalogId: entry.id }),
+					});
 				}
 				return actions;
 			},

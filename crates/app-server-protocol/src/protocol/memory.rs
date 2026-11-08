@@ -14,6 +14,9 @@ pub struct MemoryAddParams {
     pub title: String,
     #[schemars(length(min = 1, max = 16384))]
     pub body: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub origin: Option<memories::MemoryTurnSource>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

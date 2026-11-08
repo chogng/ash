@@ -1,5 +1,5 @@
 import { localize } from '../../nls.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 
@@ -48,29 +48,52 @@ export const SESSIONS_EDITOR_WORD_WRAP = registerEditorPreference('sessions.edit
 
 export const SESSIONS_CHATGPT_DEFAULT_BACKEND = 'sessions.chatgpt.defaultBackend';
 
+export type SessionsActivityBarLocation = Exclude<ActivityBarPosition, ActivityBarPosition.HIDDEN>;
+
 /** Appearance preferences owned by the dedicated Sessions window. */
 export const SessionsConfiguration = Object.freeze({
-	activityBarLocation: configurationRegistry.registerConfiguration<ActivityBarPosition>({
+	interfaceFontFamily: configurationRegistry.registerConfiguration<'ash-sans' | 'system'>({
+		key: 'sessions.interfaceFontFamily',
+		defaultValue: 'ash-sans',
+		scope: ConfigurationScope.APPLICATION,
+		parse(value: unknown) {
+			if (value === 'ash-sans' || value === 'system') return value;
+			throw new TypeError(localize('sessions.interfaceFontFamily.invalid', 'Choose Ash Sans or System font.'));
+		},
+		setting: {
+			included: false,
+			valueType: 'select',
+			get title() { return localize('sessions.interfaceFontFamily.title', 'Interface font'); },
+			get description() { return localize('sessions.interfaceFontFamily.description', 'Choose the font for Agent Window navigation, menus, tabs, and controls.'); },
+			get options() {
+				return [
+					{ value: 'ash-sans', label: 'Ash Sans' },
+					{ value: 'system', label: localize('sessions.interfaceFontFamily.system', 'System font') },
+				] as const;
+			},
+		},
+	}),
+	activityBarLocation: configurationRegistry.registerConfiguration<SessionsActivityBarLocation>({
 		key: 'sessions.activityBar.location',
 		defaultValue: ActivityBarPosition.DEFAULT,
-		parse(value: unknown): ActivityBarPosition {
+		parse(value: unknown): SessionsActivityBarLocation {
 			if (value === ActivityBarPosition.DEFAULT) return ActivityBarPosition.DEFAULT;
 			if (value === ActivityBarPosition.TOP) return ActivityBarPosition.TOP;
 			if (value === ActivityBarPosition.BOTTOM) return ActivityBarPosition.BOTTOM;
-			if (value === ActivityBarPosition.HIDDEN) return ActivityBarPosition.HIDDEN;
+			// Restore navigation for profiles that saved the former Hidden option.
+			if (value === ActivityBarPosition.HIDDEN) return ActivityBarPosition.DEFAULT;
 			throw new TypeError(`Unknown Sessions Activity Bar location: ${String(value)}`);
 		},
 		setting: {
 			included: false,
 			valueType: 'select',
 			get title() { return localize('sessions.activityBar.location.title', 'Activity Bar position'); },
-			get description() { return localize('sessions.activityBar.location.description', 'Place the Activity Bar on the side, top, or bottom, or hide it.'); },
+			get description() { return localize('sessions.activityBar.location.description', 'Place the Activity Bar on the side, top, or bottom.'); },
 			get options() {
 				return [
 					{ value: ActivityBarPosition.DEFAULT, label: localize('workbench.activityBar.location.side', 'Side') },
 					{ value: ActivityBarPosition.TOP, label: localize('workbench.activityBar.location.top', 'Top') },
 					{ value: ActivityBarPosition.BOTTOM, label: localize('workbench.activityBar.location.bottom', 'Bottom') },
-					{ value: ActivityBarPosition.HIDDEN, label: localize('workbench.activityBar.location.hidden', 'Hidden') },
 				] as const;
 			}
 		},

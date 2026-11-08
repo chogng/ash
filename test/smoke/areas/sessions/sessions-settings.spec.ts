@@ -5,12 +5,80 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Workbench } from '../../../automation/workbench.js';
 import { EditorGroup } from '../../../automation/editors.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
+import type { Locator } from '@playwright/test';
+
+test('Sessions Memory guards unsaved changes at every Settings close control', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const quickAccess = new QuickAccess(page);
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+	const memory = settings.locator('.ash-memories');
+	const title = memory.getByRole('textbox', { name: 'Memory title', exact: true });
+	const body = memory.getByRole('textbox', { name: 'Memory content', exact: true });
+	const save = memory.getByRole('button', { name: 'Save memory', exact: true });
+	const close = settings.getByRole('button', { name: 'Close Dialog', exact: true });
+	const saved = memory.getByLabel('Saved memories', { exact: true });
+	const prompt = page.getByText('Discard unsaved memory changes?', { exact: true });
+	const clickBackdrop = async () => {
+		const box = await settings.boundingBox();
+		expect(box).not.toBeNull();
+		await page.mouse.click(box!.x / 2, box!.y / 2);
+	};
+	await quickAccess.runCommand('ash.memories.open');
+	await expect(save).toBeEnabled();
+	await title.fill('Synthetic saved memory');
+	await body.fill('Saved content');
+	await save.click();
+	await expect(memory.getByText('Memory saved.', { exact: true })).toBeVisible();
+
+	await body.fill('Unsaved edit');
+	for (const dismiss of [() => body.press('Escape'), () => close.click(), clickBackdrop]) {
+		await dismiss();
+		await expect(prompt).toBeVisible();
+		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(prompt).toBeHidden();
+		await expect(settings).toBeVisible();
+		await expect(body).toHaveValue('Unsaved edit');
+	}
+	await clickBackdrop();
+	await expect(prompt).toBeVisible();
+	await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+	await expect(settings).toHaveCount(0);
+
+	await quickAccess.runCommand('ash.memories.open');
+	await saved.selectOption({ label: 'Synthetic saved memory' });
+	await expect(body).toHaveValue('Saved content');
+	await close.click();
+	await expect(settings).toHaveCount(0);
+});
+
+test.describe('Sessions Memory in Simplified Chinese', () => {
+	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+	test('Sessions Memory keeps a new draft when the localized discard prompt is cancelled', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		await new QuickAccess(page).runCommand('ash.memories.open');
+		const settings = page.getByRole('dialog', { name: '设置', exact: true });
+		const body = settings.getByRole('textbox', { name: '记忆内容', exact: true });
+		await expect(settings.getByRole('button', { name: '保存记忆', exact: true })).toBeEnabled();
+		await body.fill('未保存的测试记忆');
+		await body.press('Escape');
+		const prompt = page.getByText('放弃未保存的记忆更改？', { exact: true });
+		await expect(prompt).toBeVisible();
+		await expect(page.getByRole('button', { name: '放弃更改', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(prompt).toBeHidden();
+		await expect(body).toHaveValue('未保存的测试记忆');
+		await expect(body).toBeFocused();
+	});
+});
 
 test('Sessions General settings switch the interface language after restart', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, reloadWorkbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.getByRole('button', { name: 'Accounts', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'General', exact: true }).click();
 	const language = settings.getByRole('combobox', { name: 'Interface language', exact: true });
 	await expect(language).toHaveText('English');
@@ -29,6 +97,7 @@ test('Sessions General settings switch the interface language after restart', { 
 });
 
 test('Sessions Settings command queries reuse search and restore saved values after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
+	const settingId = 'chat.tips.enabled';
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
 	await group.editor.input.press('ControlOrMeta+A');
@@ -37,8 +106,8 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		clipboardData.setData('text/plain', source);
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
 	}, JSON.stringify([
-		{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'chat.disableAIFeatures' },
-		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:chat.disableAIFeatures', target: 3 } },
+		{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: settingId },
+		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: `@id:${settingId}`, target: 3 } },
 		{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
 		{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
 		{ key: 'ctrl+alt+p', command: 'workbench.action.openSettings', args: { openToSide: true, query: '@id:editor.fontSize' } },
@@ -52,30 +121,30 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		await launcher.focus();
 		await expect(launcher).toBeFocused();
 		await sessionsPage.keyboard.press('Control+Alt+Y');
-		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-		await expect(settings.getByRole('searchbox')).toHaveValue('chat.disableAIFeatures');
+		const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
+		await expect(settings.getByRole('searchbox')).toHaveValue(settingId);
 		await expect(settings.getByRole('searchbox')).toBeFocused();
 		await settings.getByRole('searchbox').evaluate(element => element.setAttribute('data-settings-query-reuse', 'retained'));
 		await settings.getByRole('searchbox').press('Control+Alt+U');
 		await expect(settings.getByRole('searchbox')).toHaveAttribute('data-settings-query-reuse', 'retained');
-		await expect(settings.getByRole('searchbox')).toHaveValue('@id:chat.disableAIFeatures');
+		await expect(settings.getByRole('searchbox')).toHaveValue(`@id:${settingId}`);
 		await expect(settings.getByRole('searchbox')).toBeFocused();
-		await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(1);
+		await expect(sessionsPage.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(1);
 	};
 	await openQuery();
-	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	const disabledAI = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch');
-	await expect(disabledAI).not.toBeChecked();
-	await disabledAI.press('Space');
-	await expect(disabledAI).toBeChecked();
+	let settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
+	const tips = (settings: Locator) => settings.locator(`[data-settings-item-id="${settingId}"]`).getByRole('switch');
+	await expect(tips(settings)).toBeChecked();
+	await tips(settings).press('Space');
+	await expect(tips(settings)).not.toBeChecked();
 	const readSaved = async (): Promise<unknown> => {
 		if ('windows' in application) {
 			const profile = await application.evaluate(() => process.env.ASH_HOME!);
-			return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))['chat.disableAIFeatures'];
+			return JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8'))[settingId];
 		}
-		return (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content)['chat.disableAIFeatures']; })();
+		return (async () => { const snapshot = await readUserSettings(sessionsPage); return JSON.parse(snapshot.content)[settingId]; })();
 	};
-	await expect.poll(readSaved).toBe(true);
+	await expect.poll(readSaved).toBe(false);
 	await settings.getByRole('searchbox').press('Control+Alt+I');
 	await expect(settings.getByRole('searchbox')).toHaveValue('');
 	await expect(settings.getByRole('searchbox')).toBeFocused();
@@ -84,17 +153,17 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await expect(settings).toHaveCount(0);
 	await openQuery();
-	await expect(sessionsPage.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
-	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).evaluate(element => (element as HTMLDialogElement).requestClose());
+	await expect(tips(settings)).not.toBeChecked();
+	await sessionsPage.getByRole('dialog', { name: 'Settings', exact: true }).evaluate(element => (element as HTMLDialogElement).requestClose());
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openQuery();
-	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
-	await expect.poll(readSaved).toBe(true);
+	settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
+	await expect(tips(settings)).not.toBeChecked();
+	await expect.poll(readSaved).toBe(false);
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await openQuery();
-	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).getByRole('searchbox').fill('@lang:plaintext @id:editor.fontSize');
-	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
+	await sessionsPage.getByRole('dialog', { name: 'Settings', exact: true }).getByRole('searchbox').fill('@lang:plaintext @id:editor.fontSize');
+	await expect(sessionsPage.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
 	const sharedSettings = sessionsPage.getByRole('dialog').filter({ has: sessionsPage.locator('.ash-settings-editor') });
 	await expect(sharedSettings.getByRole('searchbox')).toHaveValue('@lang:plaintext @id:editor.fontSize');
 	const languageSize = sharedSettings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
@@ -109,7 +178,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect(groupedSettings).toBeVisible();
 	await expect(groupedSettings.getByRole('searchbox')).toHaveValue('@id:editor.fontSize');
 	await expect(groupedSettings.getByRole('searchbox')).toBeFocused();
-	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
+	await expect(sessionsPage.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
 
 	await testInfo.attach('sessions-settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
@@ -133,7 +202,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 		await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	};
 	await openSettings();
-	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	let settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('searchbox').fill('AI @id:chat.disableAIFeatures');
 	const filter = settings.getByRole('button', { name: 'Filter Settings', exact: true });
 	const inputBounds = await settings.getByRole('searchbox').boundingBox();
@@ -205,7 +274,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	}
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openSettings();
-	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('searchbox').fill('@modified @id:chat.disableAIFeatures');
 	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]')).toHaveCount(0);
 	await settings.getByRole('button', { name: 'Filter Settings', exact: true }).press('Enter');
@@ -250,7 +319,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		});
 	}
 	try {
-		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 		const openSettings = async (): Promise<void> => {
 			const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
 			// The saved custom menu style also applies to the Sessions account menu.
@@ -365,7 +434,7 @@ test('Workbench and Sessions keep one settings document across edits and window 
 		await accounts.click();
 		await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	}
-	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
 	await settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox').click();
 	await sessionsPage.getByRole('option', { name: 'Modern', exact: true }).click();
@@ -409,11 +478,11 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 			await accounts.click();
 			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 		}
-		await expect(page.getByRole('dialog', { name: 'Sessions Settings' })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
 	};
 	const openShortcuts = async (): Promise<void> => {
 		await openPreferences();
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await settings.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
 		await settings.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
 		await expect(settings).toHaveCount(0);
@@ -442,7 +511,7 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 	await expect(shortcuts.locator('.ash-keybindings-recorder')).toBeHidden();
 	await expect(userRows()).toHaveCount(1);
 	await openPreferences();
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('searchbox').fill('compact');
 	await settings.getByRole('searchbox').press('Escape');
 	await expect(settings).toBeVisible();

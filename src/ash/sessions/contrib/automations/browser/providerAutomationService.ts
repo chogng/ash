@@ -32,7 +32,11 @@ export class ProviderAutomationService extends Disposable implements IAutomation
 			const states = stores(reader).map(({ store }) => store.historyState?.read(reader) ?? 'ready');
 			return states.includes('error') ? 'error' : states.includes('loading') ? 'loading' : !states.length || states.includes('unavailable') ? 'unavailable' : 'ready';
 		});
-		this.availableProviders = derived(reader => stores(reader).filter(({ store }) => store.catalogueState.read(reader) === 'ready').map(({ provider }) => ({ id: provider.id, label: provider.label })));
+		this.availableProviders = derived(reader => stores(reader).filter(({ store }) => store.catalogueState.read(reader) === 'ready').map(({ provider, store }) => ({
+			id: provider.id,
+			label: provider.label,
+			...(store.supportsChatSchedules ? { supportsChatSchedules: true } : {}),
+		})));
 	}
 
 	async refresh(): Promise<void> {
@@ -71,13 +75,13 @@ export class ProviderAutomationService extends Disposable implements IAutomation
 
 	private storeFor(id: string): IAutomationStore {
 		const store = this.findStore(id);
-		if (!store) throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
+		if (!store) throw new Error(localize('automations.missing', 'This task or run is unavailable on its owning provider.'));
 		return store;
 	}
 
 	private requireProvider(id: string): IAutomationStore {
 		const store = this.providers.getProvider(id)?.automations;
-		if (!store) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
+		if (!store) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning execution host and try again.'));
 		return store;
 	}
 }

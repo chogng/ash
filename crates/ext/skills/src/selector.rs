@@ -93,6 +93,7 @@ fn selector_text(input: &[UserInput]) -> String {
         | UserInput::Audio { .. }
         | UserInput::Image { .. }
         | UserInput::LocalImage { .. }
+        | UserInput::ChatReference { .. }
         | UserInput::Skill { .. }
         | UserInput::Mention { .. }
         | UserInput::ToolSelection { .. } => None,

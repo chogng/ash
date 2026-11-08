@@ -151,7 +151,7 @@ fn run_directory_binding(kind: DirectoryKind, creation: CreationRuntime) {
             "jsonrpc":"2.0", "id":2, "method":"session/create", "params":{
                 "commandId":"binding-session", "title":"Directory binding regression",
                 "agent":{"type":"default"},
-                "executionTarget":{"type":"local","root":source.path()}
+                "kind":"code", "executionTarget":{"type":"local","root":source.path()}
             }
         }),
     );

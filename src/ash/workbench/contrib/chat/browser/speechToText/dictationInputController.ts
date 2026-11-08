@@ -34,6 +34,7 @@ export class DictationInput extends Disposable {
 	private recordingGeneration = 0;
 	private readonly recordingEvents = this._register(new MutableDisposable());
 	private preparing = false;
+	private stopping: Promise<void> | undefined;
 	private committedText = '';
 	private readonly ended = this._register(new Emitter<string | undefined>());
 	public readonly onDidEnd = this.ended.event;
@@ -44,13 +45,33 @@ export class DictationInput extends Disposable {
 	public get showButton(): boolean { return this.configuration.getValue<boolean>('dictation.enabled') !== false && this.configuration.getValue<boolean>('dictation.showButton') !== false; }
 	public get isStarting(): boolean { return this.isActive && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
 	private get isAvailable(): boolean { return this.service.isConfigured; }
+	public get preparationLabel(): string | undefined {
+		if (!this.isActive || !this.service.isPreparingModel) return undefined;
+		const stage = this.service.isDownloadingModel
+			? localize('dictation.downloadingModel', 'Downloading dictation model…')
+			: this.service.currentBackend === 'local'
+				? localize('dictation.loadingModel', 'Loading dictation model…')
+				: localize('dictation.connectingService', 'Connecting to dictation service…');
+		return this.service.state === ChatSpeechToTextState.Recording
+			? localize('dictation.recordingWhilePreparing', 'Recording · {0}', stage)
+			: stage;
+	}
+
 	public get action(): MenuItemAction {
 		const active = this.isActive;
-		const label = active ? localize('chat.input.dictationStop', 'Stop dictation') : localize('chat.input.dictate', 'Dictate message');
+		const preparation = this.preparationLabel;
+		const label = preparation ?? (active ? localize('chat.input.dictationStop', 'Stop dictation') : localize('chat.input.dictate', 'Dictate message'));
+		const tooltip = preparation
+			? this.isStarting
+				? localize('dictation.cancelWhilePreparing', '{0} Activate to cancel.', preparation)
+				: this.service.state === ChatSpeechToTextState.Recording
+					? localize('dictation.stopWhilePreparing', '{0} Activate to stop recording.', preparation)
+					: preparation
+			: active || this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable');
 		return new DictationInputAction({
 			id: ToggleChatSpeechToTextAction.ID, title: label, icon: active ? Lxicon.stopCircle : Lxicon.mic,
-			tooltip: active || this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
-			precondition: this.isAvailable && (!this.service.isBusy || active) && !this.isStarting && this.service.state !== ChatSpeechToTextState.Transcribing ? ContextKeyExpr.true() : ContextKeyExpr.false(),
+			tooltip,
+			precondition: this.isAvailable && (!this.service.isBusy || active) && (!this.isStarting || preparation !== undefined) && this.service.state !== ChatSpeechToTextState.Transcribing ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 			toggled: active && this.service.state === ChatSpeechToTextState.Recording ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 		}, this.contextKeys, this.commands, () => this.toggle());
 	}
@@ -74,13 +95,14 @@ export class DictationInput extends Disposable {
 		const clearPreview = (): void => { preview.textContent = ''; preview.hidden = true; };
 		this._register(service.onDidChangeState(state => {
 			if (state === ChatSpeechToTextState.Idle && !service.isBusy) {
-				this.finish();
+				if (!this.stopping) this.finish();
 				clearPreview();
 			}
 		}));
 	}
 
 	private async toggle(): Promise<void> {
+		if (this.isStarting && this.service.isPreparingModel) { await this.cancel(); return; }
 		if (this.preparing) { return; }
 		try {
 			if (this.isActive) { await this.stop(); return; }
@@ -89,14 +111,14 @@ export class DictationInput extends Disposable {
 			this.preparing = true;
 			const preparation = await readDictationPreparation(this.configuration, this.localTranscription, this.speechProviders);
 			if (this.isDisposed || !this.isVisible() || this.service.isBusy) { return; }
-			if (preparation && (!preparation.available || isModelPreparing(preparation.status))) {
+			if (preparation && (isModelPreparing(preparation.status) || !preparation.available && preparation.downloadSizeBytes === undefined)) {
 				await this.showPreparation(preparation);
 				return;
 			}
-			this.onboarding.showIfNeeded();
+			if (preparation?.available !== false) this.onboarding.showIfNeeded();
 			await this.start();
 		} catch (error) {
-			if (!this.isDisposed && !isCancellationError(error)) { this.ended.fire(String(error)); }
+			if (!this.isDisposed && !isCancellationError(error)) { this.ended.fire(error instanceof Error ? error.message : String(error)); }
 		} finally {
 			this.preparing = false;
 		}
@@ -113,9 +135,10 @@ export class DictationInput extends Disposable {
 			this.recordingEvents.value = events;
 			events.add(this.service.onDidUpdateTranscript(event => {
 				if (!this.active || this.recordingGeneration !== owner || !this.isVisible()) return;
-				const phrase = event.finalizedText.slice(this.committedText.length);
-				this.committedText = event.finalizedText;
-				this.preview.textContent = this.service.showTranscriptWhileDictating ? event.text.slice(event.finalizedText.length) : '';
+				const finalized = this.editor.codeEditor || event.completed || this.service.state === ChatSpeechToTextState.Transcribing;
+				const phrase = finalized ? event.finalizedText.slice(this.committedText.length) : '';
+				if (finalized) this.committedText = event.finalizedText;
+				this.preview.textContent = this.service.showTranscriptWhileDictating ? event.text.slice(this.committedText.length) : '';
 				this.preview.hidden = !this.preview.textContent;
 				if (phrase && !this.editor.codeEditor) { this.editor.insertText(phrase); this.editor.focus(); status(localize('chat.input.dictationInserted', 'Dictation added to message')); }
 			}));
@@ -124,6 +147,7 @@ export class DictationInput extends Disposable {
 			else await this.service.start(window, this.surface);
 		} catch (error) {
 			this.active = false;
+			this.recordingEvents.clear();
 			throw error;
 		}
 	}
@@ -139,9 +163,25 @@ export class DictationInput extends Disposable {
 	}
 
 	public async stop(): Promise<void> {
+		if (this.isStarting && this.service.currentBackend === 'local') { await this.cancel(); return; }
 		if (this.isActive) {
 			if (this.editor.codeEditor) await stopDictationForEditor(this.editor.codeEditor);
-			else await this.service.stopAndTranscribe();
+			else {
+				const owner = this.recordingGeneration;
+				this.stopping ??= Promise.resolve().then(async () => {
+					try {
+						const text = await this.service.stopAndTranscribe();
+						if (this.active && this.recordingGeneration === owner && this.isVisible() && text?.startsWith(this.committedText)) {
+							const remainder = text.slice(this.committedText.length);
+							if (remainder) this.editor.insertText(remainder);
+						}
+					} finally {
+						this.stopping = undefined;
+						if (this.recordingGeneration === owner) this.finish();
+					}
+				});
+				await this.stopping;
+			}
 		}
 	}
 
@@ -199,7 +239,7 @@ export class DictationAccessibilityHelp extends Disposable {
 						AccessibleViewProviderId.Dictation,
 						{ type },
 						() => type === AccessibleViewType.Help
-							? localize('dictation.targetHelp', 'Dictation is active. Completed phrases are inserted at the current editor selection or into terminal input. Terminal dictation never presses Enter. Use Tab to reach Stop and Cancel. Escape cancels recording and discards unfinished text. Use <keybinding:editor.action.accessibleView> to read the transcript.')
+							? localize('dictation.targetHelp', 'Dictation is active. Spoken phrases appear at the editor selection. Use Tab to reach Stop and Cancel. Escape cancels recording and removes unedited dictated text. Use <keybinding:editor.action.accessibleView> to read the transcript.')
 							: session.getAccessibleContent(),
 						() => focused.focus(),
 						AccessibilityVerbositySettingId.Dictation,

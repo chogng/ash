@@ -228,6 +228,7 @@ fn history_prefix(id: &str) -> ash_history::HistoryPrefix {
     let thread_id = ThreadId::new(id).unwrap();
     let prefix = ash_history::HistoryPrefix {
         events: vec![ash_history::StoredEvent {
+            thread_created_kind_encoding: Default::default(),
             time_context: None,
             schema_version: ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION,
             event_id: ash_history::EventId(format!("{id}-1")),
@@ -236,7 +237,7 @@ fn history_prefix(id: &str) -> ash_history::HistoryPrefix {
             recorded_at: ash_history::Timestamp(0),
             command: None,
             event: ash_protocol::ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 agent_id: Some(ash_protocol::AgentId::new(format!("agent-{id}")).unwrap()),
                 origin: Default::default(),
                 agent: None,

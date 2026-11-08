@@ -8,7 +8,7 @@ import { Schemas } from '../../../base/common/network.js';
 import { migrateLegacyBrowserSettings } from '../../../workbench/services/userData/browser/userDataInit.js';
 import { BrowserLanguagePackStore } from '../../../platform/languagePacks/browser/languagePackStore.js';
 import { initializeBrowserLocalization } from '../../../workbench/services/localization/browser/localizationBootstrap.js';
-import { localize2 } from '../../../nls.js';
+import { getNLSLanguage, localize2 } from '../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../platform/actions/common/actions.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
@@ -25,6 +25,7 @@ try {
 		using registration = files.registerProvider(Schemas.vscodeUserData, provider);
 		await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
 	}
+	document.documentElement.lang = getNLSLanguage();
 	await import('../../../workbench/workbench.web.main.js');
 	await import('../../../sessions/common/configuration.js');
 	await import('../../../sessions/common/theme.js');

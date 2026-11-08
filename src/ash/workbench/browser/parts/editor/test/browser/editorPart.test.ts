@@ -5446,6 +5446,22 @@ test('compact window commands hide chrome only in their target and restore navig
 		await commands.executeCommand('workbench.action.disableCompactAuxiliaryWindow');
 		assert.equal(status.hidden, false);
 		assert.equal((first.activePane as TestEditorPane).dimension!.height, expandedHeight);
+
+		const { getWindowId, registerWindow } = await import('../../../../../../base/browser/window.js');
+		const secondStatus = secondWindow.container.querySelector<HTMLElement>('.ash-workbench-statusbar')!;
+		let context: { windowId: number; };
+		{
+			using registration = registerWindow(secondWindow.window);
+			context = { windowId: getWindowId(secondWindow.window)! };
+			await commands.executeCommand('workbench.action.enableCompactAuxiliaryWindow', context);
+			assert.equal(secondStatus.hidden, true);
+			assert.equal(status.hidden, false);
+			await commands.executeCommand('workbench.action.disableCompactAuxiliaryWindow', context);
+			assert.equal(secondStatus.hidden, false);
+		}
+		await commands.executeCommand('workbench.action.enableCompactAuxiliaryWindow', context);
+		assert.equal(status.hidden, false, 'A stale window ID must not fall back to the active window');
+
 		await commands.executeCommand('workbench.action.toggleCompactAuxiliaryWindow');
 		assert.equal(status.hidden, true);
 		await first.openEditor(input('/another.ts'), { pinned: true });

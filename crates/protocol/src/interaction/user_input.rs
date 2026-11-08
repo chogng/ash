@@ -34,6 +34,12 @@ pub enum UserInput {
         #[ts(optional = nullable)]
         source_url: Option<String>,
     },
+    /// A same-host conversation to resolve when this input is admitted.
+    ChatReference {
+        name: String,
+        session_id: crate::SessionId,
+        thread_id: crate::ThreadId,
+    },
     /// Narrows this Turn's tool surface without granting execution authority.
     ToolSelection {
         disabled: Vec<crate::ToolName>,

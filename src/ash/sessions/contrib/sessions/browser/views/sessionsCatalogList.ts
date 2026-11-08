@@ -2,8 +2,12 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
 import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import type { ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
+import type { ISession } from '../../../../services/sessions/common/session.js';
 import type { SessionListOrganization } from './sessionsListActions.js';
+
+export type SessionGroupingContext = Pick<ISession, 'sessionId' | 'workspace' | 'management'> & Partial<Pick<ISession, 'providerLabel'>>;
 
 export interface SessionsCatalogAccessibility {
 	readonly focusContext: string;
@@ -13,7 +17,10 @@ export interface SessionsCatalogAccessibility {
 
 export interface SessionsCatalogRow {
 	readonly id: string;
+	/** Canonical Session identity for rows backed by the Sessions catalog. */
+	readonly sessionId?: string;
 	readonly title: string;
+	readonly groupingContext?: SessionGroupingContext;
 	readonly createdAt?: number;
 	readonly updatedAt?: number;
 	readonly selected: boolean;
@@ -26,7 +33,7 @@ export interface SessionsCatalogRow {
 	readonly pinned?: boolean;
 	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
 	organization(): SessionListOrganization | undefined;
-	open(): void;
+	open(threadId?: string): void;
 	getActions(signal: AbortSignal, restoreFocus: () => void): readonly IAction[] | Promise<readonly IAction[]>;
 }
 
@@ -35,9 +42,24 @@ export interface SessionsCatalogProject {
 	readonly title: string;
 	readonly rows: readonly SessionsCatalogRow[];
 	readonly loading: boolean;
-	readonly history?: { readonly label: string; readonly action?: () => void; };
+	readonly localProject?: ProjectSummary;
+	readonly appearance?: SessionsCatalogProjectAppearance;
+	readonly operations?: SessionsCatalogProjectOperations;
+	readonly history?: { readonly label: string; readonly action: () => void; };
 	readonly onExpand?: () => void;
 	readonly loadMore?: () => void;
+}
+
+export interface SessionsCatalogProjectAppearance {
+	readonly icon?: string;
+	readonly color?: string;
+	set(field: 'icon' | 'color', value: string | undefined): void | Promise<void>;
+}
+
+export interface SessionsCatalogProjectOperations {
+	readonly rename?: (name: string, signal: AbortSignal) => Promise<void>;
+	readonly archive?: () => Promise<boolean>;
+	readonly remove?: { readonly removesContents: boolean; run(): Promise<void>; };
 }
 
 interface SessionsCatalogSection {

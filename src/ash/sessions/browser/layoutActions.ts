@@ -8,6 +8,7 @@ import { DisposableStore, toDisposable, type IDisposable } from '../../base/comm
 import { MenusRegistry, MenuId, Action2, registerAction2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
+import type { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import {
 	SideBarVisibleContext,
 	PanelVisibleContext,
@@ -15,7 +16,8 @@ import {
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
-import { CanGoBackContext, CanGoForwardContext } from '../common/contextkeys.js';
+import { CanGoBackContext, CanGoForwardContext, IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../common/contextkeys.js';
+import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 const conversationCovered = new RawContextKey<boolean>('sessions.conversationCovered', false);
@@ -26,6 +28,7 @@ export function registerLayoutActions(
 	sessions: ISessionsService,
 	contextKeys: IContextKeyService,
 	editor: DesktopEditorParts,
+	workspace: IWorkspaceContextService,
 ): IDisposable {
 	const disposables = new DisposableStore();
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);
@@ -34,6 +37,8 @@ export function registerLayoutActions(
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
 	const covered = conversationCovered.bindTo(contextKeys);
+	const isNewSession = IsNewSessionContext.bindTo(contextKeys);
+	const hasUsableWorkspace = NewSessionHasUsableWorkspaceContext.bindTo(contextKeys);
 	const updateContext = (): void =>
 		contextKeys.bufferChangeEvents(() => {
 			sidebarVisible.set(layout.isPartVisible('sidebar'));
@@ -42,11 +47,16 @@ export function registerLayoutActions(
 			codeAvailable.set(contextKeys.getValue('sessions.desktopCode') === true);
 			panelVisible.set(false);
 			covered.set(codeAvailable.get() === true && layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
+			const selection = sessions.activeSelection;
+			isNewSession.set(layout.isPartVisible('sessions') && selection?.kind === 'untitled' && !selection.session.forkSource);
+			hasUsableWorkspace.set(selection?.kind === 'untitled' && hasSelectedCodeWorkspace(selection.session)
+				&& workspace.getWorkspace().folders.length > 0);
 		});
 	updateContext();
 	disposables.add(layout.onDidChangePartVisibility(updateContext));
 	disposables.add(editor.onDidChangeEditors(updateContext));
 	disposables.add(sessions.onDidChange(updateContext));
+	disposables.add(workspace.onDidChangeWorkspace(updateContext));
 	disposables.add(layout.onDidLayoutMainContainer(updateContext));
 	disposables.add(
 		toDisposable(() =>
@@ -57,6 +67,8 @@ export function registerLayoutActions(
 				codeAvailable.reset();
 				panelVisible.reset();
 				covered.reset();
+				isNewSession.reset();
+				hasUsableWorkspace.reset();
 			}),
 		),
 	);

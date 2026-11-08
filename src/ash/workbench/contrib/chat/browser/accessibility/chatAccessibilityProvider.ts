@@ -12,6 +12,7 @@ export class ChatAccessibilityProvider {
 		switch (item.type) {
 			case 'voiceTranscript': return localize('chat.voice.transcript.label', 'Voice transcript');
 			case 'hook': return 'Hook';
+			case 'skillLoad': return localize('chat.skills.activity', 'Loaded Skill');
 			case 'userMessage':
 			case 'userContext':
 			case 'userImage':

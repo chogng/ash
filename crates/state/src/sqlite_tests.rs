@@ -2,17 +2,21 @@ use super::SqliteThreadStore;
 use super::SqliteTurnChangeStore;
 use super::TurnChangeCommandOutcome;
 use ash_core::CreateThreadRequest;
+use ash_core::NoThreadWorktreeBinder;
 use ash_core::RequestTurnInteraction;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use ash_history::EventId;
 use ash_history::StoredEvent;
+use ash_history::ThreadCreatedKindEncoding;
 use ash_history::Timestamp;
+use ash_protocol::CommandId;
 use ash_protocol::ModelId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::SessionId;
+use ash_protocol::SessionKind;
 use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionThread;
 use ash_protocol::ThreadEvent;
@@ -24,6 +28,9 @@ use ash_thread_store::ThreadEventBatch;
 use ash_thread_store::ThreadStore;
 use ash_thread_store::ThreadStoreError;
 use ash_thread_store::session_from_catalog;
+use core_api::CoreError;
+use core_api::CreateBranchRequest;
+use core_api::StartThreadRequest;
 use git_turn_changes::ChangeSetId;
 use git_turn_changes::MessageState;
 use git_turn_changes::TerminalTurnState;
@@ -183,7 +190,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
 
 fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         model: None,
         resumable_model_providers: Some(Default::default()),
         directory_configured: false,
@@ -248,6 +255,7 @@ fn append_created_thread(
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId(format!("thread-event-{ordinal}")),
@@ -256,7 +264,7 @@ fn append_created_thread(
                 recorded_at: Timestamp(u128::from(ordinal)),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
-                    surface: None,
+                    kind: ash_protocol::SessionKind::Code,
                     execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
@@ -294,7 +302,7 @@ fn append_recent_activity_with_padding(
     let turn = TurnId::new(format!("turn-{label}")).unwrap();
     let target = ash_protocol::SessionExecutionTarget::Local { root: root.into() };
     let mut events = vec![ThreadEvent::ThreadCreated {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         execution_target: Some(target.clone()),
         agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
         origin: Default::default(),
@@ -357,6 +365,7 @@ fn append_recent_activity_with_padding(
                 .into_iter()
                 .enumerate()
                 .map(|(index, event)| StoredEvent {
+                    thread_created_kind_encoding: Default::default(),
                     time_context: None,
                     schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                     event_id: EventId(format!("event-{label}-{index}")),
@@ -639,6 +648,7 @@ fn sqlite_thread_store_recovers_typed_events() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let thread_event = StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("thread-event-1".into()),
@@ -647,7 +657,7 @@ fn sqlite_thread_store_recovers_typed_events() {
         recorded_at: Timestamp(2),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -824,6 +834,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
             thread_id: thread_id.clone(),
             expected_sequence: 1,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId("advisor-event".into()),
@@ -858,6 +869,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
             thread_id: thread_id.clone(),
             expected_sequence: 2,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId("archive-event".into()),
@@ -1117,6 +1129,7 @@ fn assert_session_catalog_fact_updates(
                 thread_id: thread_id.clone(),
                 expected_sequence: sequence - 1,
                 events: vec![StoredEvent {
+                    thread_created_kind_encoding: Default::default(),
                     time_context: None,
                     schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                     event_id: EventId(format!("catalog-facts-{sequence}")),
@@ -1209,8 +1222,18 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
             origin: Default::default(),
             agent: None,
             title: "Existing conversation".into(),
-            execution_target: Some(ash_protocol::SessionExecutionTarget::Local { root: previous }),
+            execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
+                root: previous.clone(),
+            }),
         })
+        .unwrap();
+    let model = ModelRef::new(
+        ProviderId::new("directory-provider").unwrap(),
+        ModelId::new("directory-model").unwrap(),
+    );
+    let before = start_catalog_model_turn(&threads, &thread_id, "before-directory", model.clone());
+    threads
+        .complete_turn(&thread_id, &before, "Before".into())
         .unwrap();
     let original = store.load(&thread_id).unwrap();
     let command = ash_protocol::CommandId::new("directory-command").unwrap();
@@ -1249,6 +1272,10 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
         )
         .unwrap();
     assert_eq!(changed.sequence, retried.sequence);
+    let after = start_catalog_model_turn(&threads, &thread_id, "after-directory", model);
+    threads
+        .complete_turn(&thread_id, &after, "After".into())
+        .unwrap();
     drop(threads);
     drop(store);
     let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
@@ -1261,6 +1288,29 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
     let replayed = threads.read_thread(&thread_id).unwrap();
     assert_eq!(replayed.execution_target, target);
     assert_eq!(replayed.title, "Existing conversation");
+    let expected_directories = [
+        Some(ash_protocol::SessionExecutionTarget::Local { root: previous }),
+        target.clone(),
+    ];
+    assert_eq!(
+        replayed
+            .turns
+            .iter()
+            .map(|turn| turn.directory.clone())
+            .collect::<Vec<_>>(),
+        expected_directories
+    );
+    let page = threads
+        .read_thread_history(&thread_id, &latest_history_window(2))
+        .unwrap();
+    assert_eq!(
+        page.thread
+            .turns
+            .iter()
+            .map(|turn| turn.directory.clone())
+            .collect::<Vec<_>>(),
+        expected_directories
+    );
     assert_eq!(
         &store.load(&thread_id).unwrap()[..original.len()],
         original.as_slice()
@@ -1812,6 +1862,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId("thread-event-1".into()),
@@ -1820,7 +1871,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
                 recorded_at: Timestamp(2),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
-                    surface: None,
+                    kind: ash_protocol::SessionKind::Code,
                     execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
@@ -1940,6 +1991,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event-1".into()),
@@ -1948,7 +2000,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -1998,6 +2050,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let mut event = StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event-1".into()),
@@ -2006,7 +2059,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -2049,6 +2102,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     ));
 
     event.schema_version = ash_history::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
+    event.thread_created_kind_encoding = ash_history::ThreadCreatedKindEncoding::Omitted;
     let json = serde_json::to_string(&event).unwrap();
     let digest = ash_protocol::ContentDigest::sha256(json.as_bytes());
     connection
@@ -2071,6 +2125,33 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
             .unwrap(),
         vec![event.clone()]
     );
+    for table in ["thread_catalog", "session_catalog"] {
+        let json: String = connection
+            .query_row(&format!("SELECT record_json FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let json = json.replace(r#","kind":"code""#, "");
+        let digest = ash_protocol::ContentDigest::sha256(json.as_bytes());
+        connection
+            .execute(
+                &format!("UPDATE {table} SET record_json = ?1, record_digest = ?2"),
+                rusqlite::params![json, digest.as_str()],
+            )
+            .unwrap();
+    }
+    let threads = ThreadController::with_store(Arc::new(SqliteThreadStore::open(&path).unwrap()));
+    assert_eq!(
+        threads.list_sessions().unwrap()[0].kind,
+        ash_protocol::SessionKind::Code
+    );
+    let repaired: String = connection
+        .query_row("SELECT record_json FROM session_catalog", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert!(repaired.contains(r#""kind":"code""#));
+    drop(threads);
     connection
         .execute(
             "UPDATE thread_streams SET current_sequence = 2 WHERE thread_id = ?1",
@@ -2088,19 +2169,128 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     fs::remove_file(path).unwrap();
 }
 
+#[test]
+fn sqlite_retries_legacy_chat_branch_creation_after_upgrade() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let start = |kind| StartThreadRequest {
+        kind,
+        agent_id: None,
+        agent: None,
+        command_id: CommandId::new("start-chat").unwrap(),
+        title: "Chat".into(),
+        branch_name: None,
+        worktree_start: None,
+        execution_target: None,
+    };
+    let root = threads
+        .start_thread(&NoThreadWorktreeBinder, start(SessionKind::Chat))
+        .unwrap();
+    let branch_request = |command, title: &str| CreateBranchRequest {
+        agent_id: None,
+        command_id: CommandId::new(command).unwrap(),
+        session_id: root.session_id.clone(),
+        title: title.into(),
+    };
+    let branch = threads
+        .create_branch(
+            &NoThreadWorktreeBinder,
+            branch_request("create-branch", "Branch"),
+        )
+        .unwrap();
+    // Legacy branches omitted the classification even when their root stored a Chat surface.
+    let mut branch_catalog = threads.thread_catalog_record(&branch.thread_id).unwrap();
+    branch_catalog.kind = SessionKind::Code;
+    store.backfill_catalog(&branch_catalog).unwrap();
+    let legacy_events = [&root.thread_id, &branch.thread_id].map(|thread_id| {
+        let mut event = store.load(thread_id).unwrap().remove(0);
+        event.schema_version = 32;
+        event.thread_created_kind_encoding = if thread_id == &root.thread_id {
+            ThreadCreatedKindEncoding::Surface
+        } else {
+            ThreadCreatedKindEncoding::Omitted
+        };
+        event
+    });
+    drop(threads);
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    for event in legacy_events {
+        let json = serde_json::to_string(&event).unwrap();
+        let digest = ash_protocol::ContentDigest::sha256(json.as_bytes());
+        connection
+            .execute(
+                "INSERT INTO history_records (digest, record_json) VALUES (?1, ?2)",
+                rusqlite::params![digest.as_str(), json],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE thread_events SET schema_version = ?1, record_digest = ?2 WHERE thread_id = ?3 AND sequence = 1",
+                rusqlite::params![event.schema_version, digest.as_str(), event.thread_id.as_str()],
+            )
+            .unwrap();
+    }
+    drop(connection);
+
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    for _ in 0..2 {
+        let retried = threads
+            .create_branch(
+                &NoThreadWorktreeBinder,
+                branch_request("create-branch", "Branch"),
+            )
+            .unwrap();
+        assert_eq!(retried.thread_id, branch.thread_id);
+        assert_eq!(retried.sequence, branch.sequence);
+        assert_eq!(retried.kind, SessionKind::Code);
+    }
+    assert_eq!(store.load(&branch.thread_id).unwrap().len(), 1);
+    assert!(matches!(
+        threads.create_branch(
+            &NoThreadWorktreeBinder,
+            branch_request("create-branch", "Different branch"),
+        ),
+        Err(CoreError::CommandConflict)
+    ));
+    assert!(matches!(
+        threads.start_thread(&NoThreadWorktreeBinder, start(SessionKind::Code)),
+        Err(CoreError::CommandConflict)
+    ));
+    let new_branch = threads
+        .create_branch(
+            &NoThreadWorktreeBinder,
+            branch_request("create-new-branch", "New branch"),
+        )
+        .unwrap();
+    assert_eq!(new_branch.kind, SessionKind::Chat);
+}
+
 #[cfg(unix)]
 #[test]
 fn sqlite_authority_database_is_private_to_the_host_user() {
+    use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
 
-    let path = database_path("permissions");
-    let store = SqliteThreadStore::open(&path).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    drop(SqliteThreadStore::open(&path).unwrap());
+    assert_eq!(fs::metadata(&path).unwrap().mode() & 0o777, 0o600);
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    drop(SqliteThreadStore::open(&path).unwrap());
+    let before = fs::metadata(&path).unwrap();
+    assert_eq!(before.mode() & 0o777, 0o600);
 
-    let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o600);
-
-    drop(store);
-    fs::remove_file(path).unwrap();
+    drop(SqliteThreadStore::open(&path).unwrap());
+    let after = fs::metadata(&path).unwrap();
+    assert_eq!(
+        (after.ctime(), after.ctime_nsec()),
+        (before.ctime(), before.ctime_nsec())
+    );
 }
 
 #[test]
@@ -2322,6 +2512,34 @@ fn history_window_repairs_missing_stale_and_damaged_indexes() {
             latest
         );
     }
+    connection
+        .pragma_update(None, "foreign_keys", "ON")
+        .unwrap();
+    connection
+        .execute(
+            "DELETE FROM thread_history_turns WHERE thread_id = ?1 AND turn_id = ?2",
+            rusqlite::params![thread_id.as_str(), expected.turns[2].turn_id.as_str()],
+        )
+        .unwrap();
+    let older = ash_thread_store::ThreadHistoryWindow::Before {
+        turn_id: expected.turns[2].turn_id.clone(),
+        turn_limit: std::num::NonZeroU32::new(2).unwrap(),
+    };
+    let cold = ThreadController::with_store(store.clone());
+    assert_eq!(
+        cold.read_thread_history(&thread_id, &older)
+            .unwrap()
+            .thread
+            .turns,
+        expected.turns[..2]
+    );
+    assert!(
+        store
+            .read_history_page(&thread_id, &older)
+            .unwrap()
+            .is_some()
+    );
+
     let first = ThreadController::with_store(store.clone())
         .read_thread_history(
             &thread_id,

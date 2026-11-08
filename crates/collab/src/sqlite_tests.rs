@@ -8,6 +8,67 @@ use crate::SqliteDocumentCollaborationRooms;
 use tempfile::TempDir;
 
 #[test]
+fn concurrent_open_installs_empty_and_legacy_room_schemas() {
+    let directory = TempDir::new().unwrap();
+    for legacy in [false, true] {
+        let path = directory
+            .path()
+            .join(format!("collaboration-{legacy}.sqlite3"));
+        let room = legacy.then(|| {
+            let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+            let opened = rooms
+                .open(open_params(None, "client-a", document("old")))
+                .unwrap();
+            let room = opened.snapshot.room_id;
+            rooms
+                .submit(submit(&room, "client-a", 1, 0, "saved"))
+                .unwrap();
+            drop(rooms);
+            rusqlite::Connection::open(&path)
+                .unwrap()
+                .execute_batch(
+                    "ALTER TABLE document_collaboration_rooms DROP COLUMN presence_generation;
+                     DROP TABLE ash_schema_migrations;",
+                )
+                .unwrap();
+            room
+        });
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+                    if let Some(room) = &room {
+                        let snapshot = rooms
+                            .open(open_params(
+                                Some(room.clone()),
+                                "client-b",
+                                document("ignored"),
+                            ))
+                            .unwrap()
+                            .snapshot;
+                        assert_eq!(snapshot.document, document("saved"));
+                        assert_eq!(snapshot.version, 1);
+                    }
+                });
+            }
+        });
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        for component in ["document-rooms", "channel-resources"] {
+            let version: u32 = connection
+                .query_row(
+                    "SELECT version FROM ash_schema_migrations WHERE component = ?1",
+                    [component],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(version, 1);
+        }
+    }
+}
+
+#[test]
 fn sqlite_rooms_recover_ordered_snapshots_after_reopening() {
     let directory = TempDir::new().unwrap();
     let path = directory.path().join("collaboration.sqlite3");

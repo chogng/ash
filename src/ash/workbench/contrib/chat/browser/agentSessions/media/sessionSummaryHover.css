@@ -1,0 +1,11 @@
+.ash-session-summary-hover {
+	display: grid;
+	gap: var(--ash-spacing-size20);
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+	white-space: pre-line;
+}
+
+.ash-session-summary-hover-title {
+	font-weight: var(--ash-fontWeight-semiBold);
+}

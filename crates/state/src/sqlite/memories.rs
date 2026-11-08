@@ -2,6 +2,8 @@ use super::connection::from_sql_integer;
 use super::connection::to_sql_integer;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use crate::sqlite_migrations::Migration;
+use crate::sqlite_migrations::Migrator;
 use ash_protocol::CommandId;
 use async_utils::CancellationToken;
 use memories::Memory;
@@ -18,6 +20,7 @@ use memories::MemoryReadMode;
 use memories::MemoryScope;
 use memories::MemorySource;
 use memories::MemoryStore;
+use memories::MemoryStoreContext;
 use memories::MemoryStoreContextRequest;
 use memories::MemoryStoreError;
 use memories::MemoryStoreListRequest;
@@ -33,8 +36,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-const MEMORIES_COMPONENT: &str = "memories";
-const MEMORIES_SCHEMA_VERSION: u32 = 3;
+const MIGRATOR: Migrator<'_> = Migrator::new(
+    "memories",
+    &[Migration::sql(
+        4,
+        include_str!("../../migrations/memories/0004_baseline.sql"),
+    )],
+);
 
 /// SQLite implementation of Memory records, tombstones, catalog revisions, and command receipts.
 pub struct SqliteMemoryStore {
@@ -50,7 +58,9 @@ impl SqliteMemoryStore {
         connection
             .pragma_update(None, "secure_delete", "ON")
             .map_err(storage_error)?;
-        initialize(&mut connection)?;
+        MIGRATOR
+            .run(&mut connection)
+            .map_err(MemoryStoreError::Storage)?;
         Ok(Self {
             path,
             connection: Mutex::new(connection),
@@ -158,65 +168,41 @@ impl MemoryStore for SqliteMemoryStore {
     fn context(
         &self,
         request: &MemoryStoreContextRequest,
-    ) -> Result<Vec<Memory>, MemoryStoreError> {
-        if request.normalized_terms.is_empty() || request.limit == 0 {
-            return Ok(Vec::new());
-        }
+    ) -> Result<MemoryStoreContext, MemoryStoreError> {
         let mut connection = self.connection()?;
         let transaction = connection.transaction().map_err(storage_error)?;
         let mut enabled = Vec::new();
+        let mut projects = Vec::new();
         for scope in &request.scopes {
             if read_policy(&transaction, scope)?.automatic_read == MemoryReadMode::FirstInvocation {
-                enabled.push(scope.storage_key());
+                let key = scope.storage_key();
+                if request.project_index_limit > 0
+                    && matches!(
+                        scope,
+                        MemoryScope::Project { .. } | MemoryScope::ChatProject { .. }
+                    )
+                {
+                    projects.push(rusqlite::types::Value::Text(key.clone()));
+                }
+                enabled.push(key);
             }
         }
-        if enabled.is_empty() {
-            return Ok(Vec::new());
-        }
-        let scope_slots = (1..=enabled.len())
-            .map(|index| format!("?{index}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let matches = (0..request.normalized_terms.len())
-            .map(|index| {
-                format!(
-                    "(instr(normalized_search, ?{}) > 0)",
-                    enabled.len() + index + 1
-                )
-            })
-            .collect::<Vec<_>>();
-        let predicates = matches.join(" OR ");
-        let score = matches.join(" + ");
-        let sql = format!(
-            "SELECT memory_id, scope_key, record_revision, record_json FROM memories
-            WHERE scope_key IN ({scope_slots}) AND ({predicates})
-            ORDER BY ({score}) DESC, memory_id LIMIT ?{}",
-            enabled.len() + request.normalized_terms.len() + 1
-        );
-        let mut values = enabled
-            .into_iter()
-            .map(rusqlite::types::Value::Text)
-            .collect::<Vec<_>>();
-        values.extend(
-            request
-                .normalized_terms
-                .iter()
-                .cloned()
-                .map(rusqlite::types::Value::Text),
-        );
-        values.push(rusqlite::types::Value::Integer(
-            i64::try_from(request.limit).map_err(storage_error)?,
-        ));
-        let memories = {
-            let mut statement = transaction.prepare(&sql).map_err(storage_error)?;
-            let rows = statement
-                .query_map(rusqlite::params_from_iter(values), row_tuple)
-                .map_err(storage_error)?;
-            rows.map(|row| decode_row(row.map_err(storage_error)?))
-                .collect::<Result<Vec<_>, _>>()?
+        let matches = context_matches(&transaction, request, enabled)?;
+        let project_index = if matches.iter().any(|memory| {
+            matches!(
+                memory.scope,
+                MemoryScope::Project { .. } | MemoryScope::ChatProject { .. }
+            )
+        }) {
+            Vec::new()
+        } else {
+            context_project_index(&transaction, projects, request.project_index_limit)?
         };
         transaction.commit().map_err(storage_error)?;
-        Ok(memories)
+        Ok(MemoryStoreContext {
+            matches,
+            project_index,
+        })
     }
 
     fn add(
@@ -303,9 +289,7 @@ impl MemoryStore for SqliteMemoryStore {
         authorize_model_write(&transaction, &commit.scope, &commit.source)?;
         reject_policy_command(&transaction, &commit.command_id)?;
         let mut memory = load_memory(&transaction, &commit.scope, &commit.memory_id)?;
-        if matches!(&commit.source, MemorySource::Model { .. })
-            && memory.source == MemorySource::User
-        {
+        if matches!(&commit.source, MemorySource::Model { .. }) && memory.source.is_user_owned() {
             return Err(MemoryStoreError::WriteDenied);
         }
         if let Some(command) = load_command(&transaction, &commit.command_id)? {
@@ -339,7 +323,12 @@ impl MemoryStore for SqliteMemoryStore {
             .ok_or_else(|| MemoryStoreError::Storage("Memory revision overflow".into()))?;
         memory.title = commit.title.clone();
         memory.body = commit.body.clone();
-        memory.source = commit.source.clone();
+        if !matches!(
+            (&memory.source, &commit.source),
+            (MemorySource::UserFromTurn(_), MemorySource::User)
+        ) {
+            memory.source = commit.source.clone();
+        }
         memory.updated_at_unix_ms = commit.updated_at_unix_ms;
         let catalog_revision = next_catalog_revision(&transaction)?;
         transaction.execute(
@@ -470,101 +459,6 @@ fn check_cancellation(cancellation: &CancellationToken) -> Result<(), MemoryStor
         .map_err(|signal| MemoryStoreError::Cancelled(signal.reason().to_string()))
 }
 
-fn initialize(connection: &mut Connection) -> Result<(), MemoryStoreError> {
-    connection
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
-                 component TEXT PRIMARY KEY,
-                 version INTEGER NOT NULL
-             );",
-        )
-        .map_err(storage_error)?;
-    let transaction = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(storage_error)?;
-    let version = transaction
-        .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = ?1",
-            [MEMORIES_COMPONENT],
-            |row| row.get::<_, u32>(0),
-        )
-        .optional()
-        .map_err(storage_error)?;
-    match version {
-        None => {
-            transaction
-                .execute_batch(
-                    "CREATE TABLE memory_catalog (
-                         singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-                         revision INTEGER NOT NULL
-                     );
-                     INSERT INTO memory_catalog (singleton, revision) VALUES (1, 0);
-                     CREATE TABLE memories (
-                         memory_id TEXT PRIMARY KEY,
-                         scope_key TEXT NOT NULL,
-                         record_revision INTEGER NOT NULL,
-                         record_json TEXT NOT NULL,
-                         normalized_search TEXT NOT NULL
-                     );
-                     CREATE INDEX memories_scope_id ON memories(scope_key, memory_id);
-                     CREATE TABLE memory_tombstones (
-                         memory_id TEXT PRIMARY KEY,
-                         scope_key TEXT NOT NULL,
-                         deleted_revision INTEGER NOT NULL,
-                         catalog_revision INTEGER NOT NULL
-                     );
-                     CREATE TABLE memory_commands (
-                         command_id TEXT PRIMARY KEY,
-                         operation TEXT NOT NULL,
-                         fingerprint TEXT NOT NULL,
-                         memory_id TEXT NOT NULL,
-                         scope_key TEXT NOT NULL,
-                         record_revision INTEGER NOT NULL,
-                         catalog_revision INTEGER NOT NULL
-                     );",
-                )
-                .map_err(storage_error)?;
-            transaction
-                .execute(
-                    "INSERT INTO ash_schema_migrations (component, version) VALUES (?1, ?2)",
-                    params![MEMORIES_COMPONENT, MEMORIES_SCHEMA_VERSION],
-                )
-                .map_err(storage_error)?;
-        }
-        Some(1 | 2 | MEMORIES_SCHEMA_VERSION) => {}
-        Some(version) => {
-            return Err(MemoryStoreError::Storage(format!(
-                "unsupported Memories SQLite schema version {version}"
-            )));
-        }
-    }
-    if matches!(version, None | Some(1)) {
-        transaction.execute_batch(
-            "CREATE TABLE memory_policies (scope_key TEXT PRIMARY KEY, policy_json TEXT NOT NULL);
-             CREATE TABLE memory_policy_commands (command_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result_json TEXT NOT NULL);"
-        ).map_err(storage_error)?;
-        transaction
-            .execute(
-                "UPDATE ash_schema_migrations SET version = ?1 WHERE component = ?2",
-                params![MEMORIES_SCHEMA_VERSION, MEMORIES_COMPONENT],
-            )
-            .map_err(storage_error)?;
-    }
-    if version == Some(2) {
-        transaction.execute_batch(
-            "UPDATE memory_policies SET policy_json = json_set(policy_json, '$.modelWrite', 'disabled');
-             UPDATE memory_policy_commands SET result_json = json_set(result_json, '$.policy.modelWrite', 'disabled');"
-        ).map_err(storage_error)?;
-        transaction
-            .execute(
-                "UPDATE ash_schema_migrations SET version = ?1 WHERE component = ?2",
-                params![MEMORIES_SCHEMA_VERSION, MEMORIES_COMPONENT],
-            )
-            .map_err(storage_error)?;
-    }
-    transaction.commit().map_err(storage_error)
-}
-
 fn page(
     connection: &Connection,
     request: &MemoryStoreListRequest,
@@ -644,6 +538,88 @@ fn decode_row(row: (String, String, i64, String)) -> Result<Memory, MemoryStoreE
         ));
     }
     Ok(memory)
+}
+
+fn context_matches(
+    connection: &Connection,
+    request: &MemoryStoreContextRequest,
+    enabled: Vec<String>,
+) -> Result<Vec<Memory>, MemoryStoreError> {
+    if enabled.is_empty() || request.normalized_terms.is_empty() || request.limit == 0 {
+        return Ok(Vec::new());
+    }
+    let scope_slots = scope_slots(enabled.len());
+    let matches = (0..request.normalized_terms.len())
+        .map(|index| {
+            format!(
+                "(instr(normalized_search, ?{}) > 0)",
+                enabled.len() + index + 1
+            )
+        })
+        .collect::<Vec<_>>();
+    let predicates = matches.join(" OR ");
+    let score = matches.join(" + ");
+    let sql = format!(
+        "SELECT memory_id, scope_key, record_revision, record_json FROM memories
+        WHERE scope_key IN ({scope_slots}) AND ({predicates})
+        ORDER BY ({score}) DESC, memory_id LIMIT ?{}",
+        enabled.len() + request.normalized_terms.len() + 1
+    );
+    let mut values = enabled
+        .into_iter()
+        .map(rusqlite::types::Value::Text)
+        .collect::<Vec<_>>();
+    values.extend(
+        request
+            .normalized_terms
+            .iter()
+            .cloned()
+            .map(rusqlite::types::Value::Text),
+    );
+    values.push(rusqlite::types::Value::Integer(
+        i64::try_from(request.limit).map_err(storage_error)?,
+    ));
+    query_context_records(connection, &sql, values)
+}
+
+fn context_project_index(
+    connection: &Connection,
+    mut values: Vec<rusqlite::types::Value>,
+    limit: usize,
+) -> Result<Vec<Memory>, MemoryStoreError> {
+    if values.is_empty() || limit == 0 {
+        return Ok(Vec::new());
+    }
+    let slots = scope_slots(values.len());
+    let sql = format!(
+        "SELECT memory_id, scope_key, record_revision, record_json FROM memories
+         WHERE scope_key IN ({slots})
+         ORDER BY json_extract(record_json, '$.updatedAtUnixMs') DESC, memory_id LIMIT ?"
+    );
+    values.push(rusqlite::types::Value::Integer(
+        i64::try_from(limit).map_err(storage_error)?,
+    ));
+    query_context_records(connection, &sql, values)
+}
+
+fn scope_slots(count: usize) -> String {
+    (1..=count)
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn query_context_records(
+    connection: &Connection,
+    sql: &str,
+    values: Vec<rusqlite::types::Value>,
+) -> Result<Vec<Memory>, MemoryStoreError> {
+    let mut statement = connection.prepare(sql).map_err(storage_error)?;
+    let rows = statement
+        .query_map(rusqlite::params_from_iter(values), row_tuple)
+        .map_err(storage_error)?;
+    rows.map(|row| decode_row(row.map_err(storage_error)?))
+        .collect()
 }
 
 fn load_memory(

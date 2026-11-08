@@ -11,6 +11,14 @@ use std::sync::Mutex;
 const MAX_NOTE_BYTES: usize = 1_000_000;
 const MAX_THREAD_BYTES: i64 = 8_000_000;
 
+const MIGRATOR: state::SqliteMigrator<'_> = state::SqliteMigrator::new(
+    "history-notes",
+    &[state::SqliteMigration::sql(
+        1,
+        include_str!("../migrations/0001_history_notes.sql"),
+    )],
+);
+
 #[derive(Serialize)]
 pub struct Note {
     pub path: String,
@@ -34,8 +42,8 @@ impl NotesStore {
                 .map_err(|e| e.to_string())?,
         )
     }
-    fn from_database(database: Connection) -> Result<Self, String> {
-        database.execute_batch("CREATE TABLE IF NOT EXISTS task_notes (session TEXT NOT NULL, thread TEXT NOT NULL, path TEXT NOT NULL, revision INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY(session, thread, path));").map_err(|e| e.to_string())?;
+    fn from_database(mut database: Connection) -> Result<Self, String> {
+        MIGRATOR.run(&mut database)?;
         Ok(Self {
             database: Mutex::new(database),
         })

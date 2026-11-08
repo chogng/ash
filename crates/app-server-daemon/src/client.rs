@@ -112,6 +112,20 @@ pub(crate) fn run_lifecycle(
             output.status = LifecycleStatus::Restarted;
             Ok(output)
         }
+        LifecycleCommand::RestartSelected => {
+            let installed = crate::installation::install_from_client(
+                options.profile_root(),
+                backend_executable,
+                crate::installation::ClientSelection::Explicit,
+            )?;
+            let selected = resolve_backend_executable(&installed, PackageDigest::NotProvided)?;
+            // Validate the new executable before stopping the current generation.
+            stop_unlocked(&endpoint)?;
+            let mut output =
+                start_new_unlocked(&endpoint, &options, &selected, StartupCheck::Initialize)?;
+            output.status = LifecycleStatus::Restarted;
+            Ok(output)
+        }
         LifecycleCommand::Stop => stop_unlocked(&endpoint).map_err(Into::into),
         LifecycleCommand::Version => version_unlocked(&endpoint, &options),
     }
@@ -639,6 +653,14 @@ fn validate_managed_response(
         return Err("App Server daemon endpoint does not match its managed process record".into());
     }
     Ok(record)
+}
+
+pub(crate) fn diagnostic_target(profile_root: &Path) -> Result<ProcessRecord, String> {
+    let endpoint = EndpointPaths::prepare(profile_root).map_err(|error| error.to_string())?;
+    let control = request_control(&endpoint, ControlCommand::Status)?
+        .filter(|response| response.state != ControlState::Stopping)
+        .ok_or_else(|| "No running Local App Server for this profile".to_string())?;
+    validate_managed_response(&endpoint, &control)
 }
 
 fn request_control(

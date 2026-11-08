@@ -13,23 +13,23 @@ use serde_json::json;
 use std::path::Path;
 use std::sync::Mutex;
 
+const MIGRATOR: ash_state::SqliteMigrator<'_> = ash_state::SqliteMigrator::new(
+    "calls",
+    &[ash_state::SqliteMigration::sql(
+        1,
+        include_str!("../migrations/0001_calls.sql"),
+    )],
+);
+
 pub struct CallStore {
     connection: Mutex<Connection>,
 }
 
 impl CallStore {
     pub fn open(path: &Path) -> Result<Self, CallError> {
-        let connection = Connection::open(path).map_err(storage)?;
-        connection
-            .busy_timeout(std::time::Duration::from_secs(5))
-            .map_err(storage)?;
-        connection.execute_batch("PRAGMA journal_mode=WAL;
-            CREATE TABLE IF NOT EXISTS media_calls(id TEXT PRIMARY KEY, snapshot TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS media_members(credential TEXT PRIMARY KEY, call_id TEXT NOT NULL, member_id TEXT NOT NULL);
-            CREATE TABLE IF NOT EXISTS media_devices(call_id TEXT NOT NULL, member_id TEXT NOT NULL, device_id TEXT NOT NULL, PRIMARY KEY(call_id, member_id));
-            CREATE TABLE IF NOT EXISTS media_operations(actor TEXT NOT NULL, operation TEXT NOT NULL, request TEXT NOT NULL, call_id TEXT NOT NULL, PRIMARY KEY(actor, operation));
-        ").map_err(storage)?;
+        let mut connection = Connection::open(path).map_err(storage)?;
         ash_collab::channels::configure_resources(&connection).map_err(storage)?;
+        MIGRATOR.run(&mut connection).map_err(storage)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

@@ -1,0 +1,16 @@
+---
+source: crates/tui/src/thread/interaction/approval_tests.rs
+expression: text
+---
+┌需 要 批 准 ──────────────────────────────────────────────────────────────┐
+│Write workspace configuration?                                        │
+│写 入 文 件   ·  /project/.vscode/tasks.json                              │
+│  仅 批 准 一 次                                                           │
+│> 本 会 话 内 允 许 编 辑 此 文 件                                               │
+│  拒 绝                                                                 │
+│                                                                      │
+│                                                                      │
+│                                                                      │
+│                                                                      │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘

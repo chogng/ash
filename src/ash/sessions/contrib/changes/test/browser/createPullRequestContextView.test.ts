@@ -42,7 +42,14 @@ function fixture() {
 			},
 		},
 	};
-	const session = { sessionId: 'qualified-session', title: 'Remote', status: 'active', nextApprovalMode: 'manual', chats: [], workspace: { authorityId: 'ssh+builder', root: '/historical' } } as ISession;
+	const session: ISession = {
+		sessionId: 'qualified-session', kind: 'code', title: 'Remote', status: 'active', nextApprovalMode: 'manual',
+		workspace: { authorityId: 'ssh+builder', root: '/source' },
+		chats: [
+			{ threadId: 'root', status: 'active', origin: { type: 'root' }, workspace: { authorityId: 'ssh+builder', root: '/root-worktree' } },
+			{ threadId: 'qualified-thread', status: 'active', origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 }, workspace: { authorityId: 'ssh+builder', root: '/historical' } },
+		],
+	};
 	const scope: ISessionProviderScope = {
 		providerId: 'remote', services: { host } as unknown as SessionProviderServices, thread: base.thread,
 		identity: value => `qualified-${value}`, backendIdentity: value => { assert.equal(value, session.sessionId); return 'same-session'; },
@@ -63,7 +70,7 @@ function fixture() {
 	return { [Symbol.dispose]: () => view.dispose(), view, calls, get recorded() { return recorded; }, retire: () => { retired = true; }, get creation() { assert.ok(options); return options.creation; } };
 }
 
-test('PR creation captures the remote historical Session repository and attaches the result through its raw backend identity', async () => {
+test('PR creation captures the selected remote Thread checkout and attaches the result through its raw backend identity', async () => {
 	using context = fixture();
 	await context.view.show(document.body);
 	const details = await context.creation.prepare(CancellationToken.None);

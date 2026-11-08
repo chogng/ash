@@ -26,7 +26,13 @@ import type { ChatGPTVoiceSession } from './chatGPTVoiceSession.js';
 
 const catalogKey = 'sessions.chatgpt.catalog.v1';
 const historyFreshnessMs = 60_000;
-const nativeRecentFreshnessMs = 5 * 60_000;
+const recentFreshnessMs = 5 * 60_000;
+const sidebarFreshnessMs = 15 * 60_000;
+
+function isCachedTimestamp(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(new Date(value).getTime());
+}
+
 type HistoryValidation = Pick<ChatGPTHistory, 'parentId' | 'model' | 'thinkingEffort'> & { readonly validatedAt: number; };
 interface ProjectHistory {
 	readonly status: 'loading' | 'ready' | 'error';
@@ -176,13 +182,14 @@ export interface IChatGPTService {
 	loadProjectConversations(projectId: string, nextPage?: boolean): Promise<void>;
 	rename(id: string, title: string): Promise<void>;
 	setPinned(id: string, pinned: boolean): Promise<void>;
-	archive(id: string): Promise<void>;
+	archive(id: string): Promise<boolean>;
 	deleteConversation(id: string): Promise<void>;
 	moveToProject(id: string, projectId: string | null): Promise<void>;
+	createProjectAndMove(id: string, name: string): Promise<void>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
-	listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]>;
 	editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit>;
+	archiveProjectConversations(id: string): Promise<boolean>;
 	deleteProject(id: string): Promise<void>;
 	setDraft(value: string): void;
 	setDraftTarget(change: Partial<ChatGPTDraftTarget>): void;
@@ -251,6 +258,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	// Auxiliary pin results do not advance the recent-history pagination offset.
 	private recentOffset = 0;
 	private recentFetchedAt: number | undefined;
+	private projectsFetchedAt: number | undefined;
+	private pinsFetchedAt: number | undefined;
 	private readonly recentIds = new Set<string>();
 
 	public readonly state: IObservable<ChatGPTState> = this.model;
@@ -323,6 +332,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.drafts.set(this.newConversationId, { text: draft, attachments: [] });
 		this.persistDraftText(this.newConversationId, draft);
 		this.recentIds.clear(); this.recentOffset = 0; this.recentFetchedAt = undefined;
+		this.projectsFetchedAt = this.pinsFetchedAt = undefined;
 		this.cacheScope = undefined;
 		this.remoteTimeline = undefined;
 		this.outbox = undefined;
@@ -358,6 +368,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				this.generation++;
 			}
 		} else {
+			if (!this.native) { this.recentFetchedAt = undefined; }
 			this.historyConnection = new AbortController();
 			this.closeHistoryNotice();
 		}
@@ -387,18 +398,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		finally { this.refreshOperation = undefined; }
 		await this.syncOutbox();
 	}
-	public async listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]> {
-		this.refreshOperation?.abort();
-		const request = AbortSignal.any([signal, this.management.signal, AbortSignal.timeout(30_000)]);
-		const projects = await this.client.projects(request);
-		request.throwIfAborted();
-		const previous = this.model.get().projects;
-		if (projects.length !== previous.length || projects.some((project, index) => project.id !== previous[index]?.id || project.title !== previous[index]?.title)) {
-			this.updateCatalog({ projects });
-		}
-		return projects;
-	}
-
 	public async editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit> {
 		const account = this.management.signal;
 		const details = await this.client.projectDetails(id, AbortSignal.any([account, signal, AbortSignal.timeout(30_000)]));
@@ -422,6 +421,35 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				});
 			},
 		};
+	}
+
+	public async archiveProjectConversations(id: string): Promise<boolean> {
+		const state = this.model.get();
+		if (this.isDisposed || state.busy || state.sending || state.managing || state.voice !== 'idle'
+			|| !state.connected || !state.networkAvailable || !state.projects.some(project => project.id === id)) return false;
+		const account = this.management.signal;
+		const projectHistory = new Map(state.projectHistory);
+		// Retire in-flight pages so an old response cannot repopulate archived rows.
+		projectHistory.delete(id);
+		this.refreshOperation?.abort();
+		this.update({ managing: true, projectHistory });
+		const archived = new Set<string>();
+		try {
+			const ids = await this.client.listProjectConversationIds(id, AbortSignal.any([account, AbortSignal.timeout(30_000)]));
+			for (const conversationId of ids) {
+				account.throwIfAborted();
+				await this.removeRemoteConversation(conversationId, false, AbortSignal.any([account, AbortSignal.timeout(30_000)]));
+				archived.add(conversationId);
+			}
+			account.throwIfAborted();
+			return true;
+		} finally {
+			if (!account.aborted) {
+				this.update({ managing: false });
+				const selected = this.model.get().conversationId;
+				if (selected && archived.has(selected)) this.newChat();
+			}
+		}
 	}
 
 	public async deleteProject(id: string): Promise<void> {
@@ -454,7 +482,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public async loadProjectConversations(projectId: string, nextPage = false): Promise<void> {
 		const state = this.model.get();
 		const previous = state.projectHistory.get(projectId);
-		if (this.isDisposed || !state.connected || !state.networkAvailable || !state.projects.some(project => project.id === projectId)
+		if (this.isDisposed || state.managing || !state.connected || !state.networkAvailable || !state.projects.some(project => project.id === projectId)
 			|| previous?.status === 'loading' || (previous && (!nextPage || previous.status === 'ready' && !previous.cursor))) { return; }
 
 		const management = this.management;
@@ -524,7 +552,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	public archive(id: string): Promise<void> { return this.removeConversation(id, false); }
+	public archive(id: string): Promise<boolean> { return this.removeConversation(id, false); }
 	public async deleteConversation(id: string): Promise<void> {
 		const outbox = this.outbox;
 		const state = this.model.get();
@@ -559,10 +587,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 	}
 
-	private async removeConversation(id: string, deleted: boolean): Promise<void> {
+	private async removeConversation(id: string, deleted: boolean): Promise<boolean> {
 		if (id.startsWith('local:')) {
 			const state = this.model.get();
-			if (state.sending || state.managing) return;
+			if (state.sending || state.managing || !deleted && !state.conversations.some(item => item.id === id)) return false;
 			const wasSelected = selectedChatConversationId(state) === id;
 			if (deleted) {
 				const localId = this.timeline.read(id)?.localId;
@@ -572,21 +600,27 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			} else this.updateLocalConversation(id, { archived: true });
 			this.update({ conversations: this.model.get().conversations.filter(item => item.id !== id) });
 			if (wasSelected) this.newChat();
-			return;
+			return true;
 		}
 		const completed = await this.manage(id, async signal => {
-			if (deleted) {
-				try { await this.client.deleteConversation(id, signal); }
-				catch (error) { if (!isMissingConversation(error)) { throw error; } }
-			}
-			else { await this.client.updateConversation(id, { is_archived: true }, signal); }
-			signal.throwIfAborted();
-			if (this.recentIds.delete(id)) { this.recentOffset = Math.max(0, this.recentOffset - 1); }
-			this.updateCatalog({ conversations: this.model.get().conversations.filter(item => item.id !== id) });
-			if (deleted) { this.forgetRemoteConversation(id); }
+			await this.removeRemoteConversation(id, deleted, signal);
 			return true;
 		});
 		if (completed && this.model.get().conversationId === id) { this.newChat(); }
+		return completed === true;
+	}
+
+	private async removeRemoteConversation(id: string, deleted: boolean, signal: AbortSignal): Promise<void> {
+		try {
+			if (deleted) await this.client.deleteConversation(id, signal);
+			else await this.client.updateConversation(id, { is_archived: true }, signal);
+		} catch (error) {
+			if (!deleted || !isMissingConversation(error)) throw error;
+		}
+		signal.throwIfAborted();
+		if (this.recentIds.delete(id)) this.recentOffset = Math.max(0, this.recentOffset - 1);
+		this.updateCatalog({ conversations: this.model.get().conversations.filter(item => item.id !== id) });
+		if (deleted) this.forgetRemoteConversation(id);
 	}
 
 	private forgetRemoteConversation(id: string): void {
@@ -601,24 +635,45 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async moveToProject(id: string, projectId: string | null): Promise<void> {
 		const moved = await this.manage(id, async signal => {
-			await this.client.updateConversation(id, { gizmo_id: projectId }, signal);
-			signal.throwIfAborted();
-			const state = this.model.get();
-			const projectHistory = new Map(state.projectHistory);
-			const previous = state.conversations.find(item => item.id === id)?.projectId;
-			if (previous) projectHistory.delete(previous);
-			if (projectId) projectHistory.delete(projectId);
-			this.updateCatalog({
-				projectHistory,
-				conversations: state.conversations.map(item => item.id !== id ? item : {
-					...item,
-					projectId: projectId ?? undefined,
-					projectOnly: projectId ? item.projectOnly : undefined,
-				}),
-			});
+			await this.assignConversationToProject(id, projectId, signal);
 			return true;
 		});
 		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));
+	}
+
+	public async createProjectAndMove(id: string, name: string): Promise<void> {
+		const moved = await this.manage(id, async signal => {
+			const project = await this.client.createProject(name, signal);
+			signal.throwIfAborted();
+			this.updateCatalog({
+				projects: [project, ...this.model.get().projects.filter(item => item.id !== project.id)],
+			});
+			try {
+				await this.assignConversationToProject(id, project.id, signal);
+			} catch {
+				throw new Error(localize('sessions.chatgpt.projectCreatedMoveFailed', 'Created {0}. Choose it from Move to project to try the move again.', project.title));
+			}
+			return true;
+		});
+		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectCreateMoveFailed', 'Could not create a project and move this conversation. Try again.'));
+	}
+
+	private async assignConversationToProject(id: string, projectId: string | null, signal: AbortSignal): Promise<void> {
+		await this.client.updateConversation(id, { gizmo_id: projectId }, signal);
+		signal.throwIfAborted();
+		const state = this.model.get();
+		const projectHistory = new Map(state.projectHistory);
+		const previous = state.conversations.find(item => item.id === id)?.projectId;
+		if (previous) projectHistory.delete(previous);
+		if (projectId) projectHistory.delete(projectId);
+		this.updateCatalog({
+			projectHistory,
+			conversations: state.conversations.map(item => item.id !== id ? item : {
+				...item,
+				projectId: projectId ?? undefined,
+				projectOnly: projectId ? item.projectOnly : undefined,
+			}),
+		});
 	}
 
 	public share(id: string, messageId?: string): Promise<string | undefined> { return this.manage(id, signal => this.client.share(id, signal, messageId)); }
@@ -1178,6 +1233,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.historyValidations.clear();
 		this.cacheScope = scope;
 		this.recentFetchedAt = undefined;
+		this.projectsFetchedAt = this.pinsFetchedAt = undefined;
 		this.recentOffset = 0;
 		this.recentIds.clear();
 		this.remoteTimeline = new ChatTimelineStorage(this.storage, `chatgpt-web:${scope}`);
@@ -1196,11 +1252,17 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				...(item.projectOnly === true ? { projectOnly: true } : {}),
 			}];
 		}) : [];
-		const projects = Array.isArray(value.projects) ? value.projects.flatMap(item =>
-			isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' ? [{ id: item.id, title: item.title }] : []) : [];
+		const projects = Array.isArray(value.projects) ? value.projects.flatMap(item => {
+			if (!isRecord(item) || typeof item.id !== 'string' || typeof item.title !== 'string') { return []; }
+			return [{
+				id: item.id, title: item.title,
+				...(isCachedTimestamp(item.createdAt) ? { createdAt: item.createdAt } : {}),
+				...(isCachedTimestamp(item.updatedAt) ? { updatedAt: item.updatedAt } : {}),
+			}];
+		}) : [];
 		const recent = value.recent;
 		const now = Date.now();
-		const restoredRecent = this.native && isRecord(recent)
+		const restoredRecent = isRecord(recent)
 			&& typeof recent.fetchedAt === 'number' && Number.isSafeInteger(recent.fetchedAt)
 			&& recent.fetchedAt > 0 && recent.fetchedAt <= now
 			&& typeof recent.offset === 'number' && Number.isSafeInteger(recent.offset) && recent.offset >= 0
@@ -1209,10 +1271,21 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (restoredRecent) {
 			this.recentFetchedAt = restoredRecent.fetchedAt;
 			this.recentOffset = restoredRecent.offset;
-			for (const item of conversations) {
-				if (!item.pinned && !item.projectOnly) this.recentIds.add(item.id);
+			if (this.native) {
+				for (const item of conversations) {
+					if (!item.pinned && !item.projectOnly) this.recentIds.add(item.id);
+				}
+			} else if (isRecord(recent) && Array.isArray(recent.ids)) {
+				for (const id of recent.ids) {
+					if (typeof id === 'string') { this.recentIds.add(id); }
+				}
 			}
 		}
+		const freshAt = (timestamp: unknown) =>
+			typeof timestamp === 'number' && Number.isSafeInteger(timestamp) && timestamp > 0 && timestamp <= now ? timestamp : undefined;
+		// Older catalogs recorded projectsFetchedAt before project timestamps were decoded.
+		this.projectsFetchedAt = freshAt(value.projectMetadataFetchedAt);
+		this.pinsFetchedAt = freshAt(value.pinsFetchedAt);
 		this.update({ conversations: this.withLocalConversations(conversations), projects, ...(restoredRecent ? { hasMore: restoredRecent.hasMore } : {}) });
 	}
 
@@ -1229,7 +1302,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.storage.store(`${catalogKey}:${this.cacheScope}`, JSON.stringify({
 				conversations: conversations.filter(item => !item.local),
 				projects,
-				...(this.native && this.recentFetchedAt !== undefined ? { recent: { fetchedAt: this.recentFetchedAt, offset: this.recentOffset, hasMore } } : {}),
+				...(this.recentFetchedAt !== undefined ? {
+					recent: { fetchedAt: this.recentFetchedAt, offset: this.recentOffset, hasMore, ids: this.native ? undefined : [...this.recentIds] },
+				} : {}),
+				projectMetadataFetchedAt: this.projectsFetchedAt,
+				pinsFetchedAt: this.pinsFetchedAt,
 			}), StorageScope.PROFILE, StorageTarget.MACHINE);
 		}
 	}
@@ -1350,7 +1427,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		return { signal: AbortSignal.any([this.operation.signal, AbortSignal.timeout(30_000)]), generation: this.generation };
 	}
 
-	private async loadCatalog(background?: AbortController, forceRecent = false): Promise<void> {
+	private async loadCatalog(background?: AbortController, forceReload = false): Promise<void> {
 		if (this.isDisposed || this.model.get().sending || this.model.get().managing) { return; }
 		const retainedLocal = this.retainedConversation();
 		if (!background && retainedLocal?.startsWith('local:') && selectedChatConversationId(this.model.get()) !== retainedLocal) this.restoreLocalConversation(retainedLocal);
@@ -1376,24 +1453,38 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				return;
 			}
 			const now = Date.now();
-			const useFreshRecent = this.native && !forceRecent && this.recentFetchedAt !== undefined
-				&& now >= this.recentFetchedAt && now - this.recentFetchedAt < nativeRecentFreshnessMs;
+			const isFresh = (fetchedAt: number | undefined, maxAge: number) =>
+				!forceReload && fetchedAt !== undefined && now >= fetchedAt && now - fetchedAt < maxAge;
+			const recoveringSend = !this.native && this.outbox?.creations().some(entry => entry.submittedAgainst);
+			const readRecent = !isFresh(this.recentFetchedAt, recoveringSend ? 60_000 : recentFreshnessMs);
+			const readProjects = !isFresh(this.projectsFetchedAt, sidebarFreshnessMs);
+			const readPins = !isFresh(this.pinsFetchedAt, sidebarFreshnessMs);
+			const stateBeforeReads = this.model.get();
+			const refreshRetainedHistory = this.native && !!(this.retainedConversation() ?? stateBeforeReads.conversationId);
+			if (background && !readRecent && !readProjects && !readPins && !refreshRetainedHistory) { return; }
+			const fullRecent = this.native || forceReload;
 			const [catalog, [projects, pins, conversations]] = await Promise.all([
-				!background && (!this.model.get().connected || !this.model.get().conversationId) ? this.client.models(signal) : undefined,
-				Promise.allSettled([this.client.projects(signal), this.client.pinnedConversations(signal), useFreshRecent ? undefined : this.readLoadedRecentPages(signal)]),
+				!background && (!stateBeforeReads.connected || !stateBeforeReads.conversationId) ? this.client.models(signal) : undefined,
+				Promise.allSettled([
+					readProjects ? this.client.projects(signal) : undefined,
+					readPins ? this.client.pinnedConversations(signal) : undefined,
+					readRecent ? this.readRecentPages(signal, fullRecent) : undefined,
+				]),
 			]);
 			if (generation !== this.generation || background?.signal.aborted) { return; }
 			const recent = conversations.status === 'fulfilled' ? conversations.value : undefined;
+			const recentFailed = conversations.status === 'rejected' || recent?.rateLimit !== undefined;
 			// Recent history is auxiliary to restoring a known conversation and its
 			// continuation. Its rate limit must not disable an otherwise usable chat.
 			const items = new Map((recent?.items ?? this.model.get().conversations.filter(item => !item.local)).map(item => [item.id, item]));
-			if (pins.status === 'fulfilled') {
-				if (conversations.status === 'rejected') {
+			const pinned = pins.status === 'fulfilled' ? pins.value : undefined;
+			if (pinned) {
+				if (!recent) {
 					for (const item of items.values()) {
 						if (!item.local && item.pinned) { items.set(item.id, { ...item, pinned: false }); }
 					}
 				}
-				for (const item of pins.value) {
+				for (const item of pinned) {
 					const listed = items.get(item.id);
 					const previous = listed ?? this.model.get().conversations.find(candidate => candidate.id === item.id);
 					items.set(item.id, {
@@ -1402,6 +1493,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 						updatedAt: listed?.updatedAt ?? item.updatedAt ?? previous?.updatedAt,
 						...(previous?.projectOnly ? { projectOnly: true } : {}),
 					});
+				}
+			} else if (recent && !this.native) {
+				for (const previous of this.model.get().conversations) {
+					const item = items.get(previous.id);
+					if (item && previous.pinned && !item.pinned) { items.set(item.id, { ...item, pinned: true }); }
 				}
 			}
 			const hidden = await this.reconcilePendingCreations(items, signal);
@@ -1413,8 +1509,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const missing = recent ? before.conversations.filter(item => !item.local && !item.projectOnly && !items.has(item.id) && !hidden.has(item.id)) : [];
 			const retained = this.retainedConversation() ?? before.conversationId;
 			const histories = new Map<string, PromiseSettledResult<ChatGPTHistory>>();
-			const ids = missing.filter(item => item.id !== retained && (pins.status === 'fulfilled' || !item.pinned)).map(item => item.id);
-			if (retained && !retained.startsWith('local:') && !retained.startsWith('pending:') && !this.outbox?.isDeleted(retained) && retained.length < 1024) { ids.unshift(retained); }
+			const ids = fullRecent && !recentFailed ? missing.filter(item => item.id !== retained && (pinned || !item.pinned)).map(item => item.id) : [];
+			if (retained && !retained.startsWith('local:') && !retained.startsWith('pending:') && !this.outbox?.isDeleted(retained) && retained.length < 1024) {
+				const needsHistory = before.uncertain || !this.freshHistory(retained, before.parentId);
+				if (!background || this.native || readRecent && needsHistory) { ids.unshift(retained); }
+			}
 			// Offset pagination can shift as other devices write. Verify omitted
 			// rows directly, in bounded batches, before treating them as deleted.
 			for (let offset = 0; offset < ids.length && !signal.aborted; offset += 4) {
@@ -1432,28 +1531,30 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					deleted.add(item.id);
 				} else if (history?.status !== 'fulfilled' || !history.value.archived) {
 					const title = history?.status === 'fulfilled' ? history.value.title : item.title;
-					items.set(item.id, { ...item, title, pinned: pins.status === 'rejected' && item.pinned === true });
+					items.set(item.id, { ...item, title, pinned: !pinned && item.pinned === true });
 				}
 			}
 			const history = retained ? histories.get(retained) : undefined;
-			if (retained && !deleted.has(retained) && !items.has(retained) && recent && pins.status === 'fulfilled'
+			if (retained && !deleted.has(retained) && !items.has(retained) && recent && (!this.native || pinned)
 				&& history?.status === 'rejected' && isMissingConversation(history.reason)) {
 				this.forgetRemoteConversation(retained);
 				deleted.add(retained);
 			}
-			if (recent) {
-				this.resetRecentPage(recent);
-				if (this.native) { this.recentFetchedAt = Date.now(); }
-			} else if (conversations.status === 'rejected') {
-				this.recentFetchedAt = undefined;
-			}
+			// Changes beyond the refreshed pages can shift the old offset even
+			// when the head is unchanged. Keep cached rows visible while the
+			// next scroll continues from the last page actually read.
+			if (recent) { this.resetRecentPage(recent); }
+			const fetchedAt = Date.now();
+			if (readRecent) { this.recentFetchedAt = recent && !recentFailed ? fetchedAt : undefined; }
+			if (readProjects) { this.projectsFetchedAt = projects.status === 'fulfilled' ? fetchedAt : undefined; }
+			if (readPins) { this.pinsFetchedAt = pins.status === 'fulfilled' ? fetchedAt : undefined; }
 			const state = this.model.get();
-			const currentProjects = projects.status === 'fulfilled' ? projects.value : state.projects;
+			const currentProjects = (projects.status === 'fulfilled' ? projects.value : undefined) ?? state.projects;
 			if (recent) {
 				const projectIds = new Set(currentProjects.map(project => project.id));
 				for (const item of state.conversations) {
 					if (item.projectOnly && item.projectId && projectIds.has(item.projectId) && !items.has(item.id) && !hidden.has(item.id) && !this.outbox?.isDeleted(item.id)) {
-						items.set(item.id, { ...item, pinned: pins.status === 'rejected' && item.pinned === true });
+						items.set(item.id, { ...item, pinned: !pinned && item.pinned === true });
 					}
 				}
 			}
@@ -1466,13 +1567,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				...(catalog ? { models: catalog.models } : {}),
 				...(selected ? { model: selected.id, modelPreset: this.resolveModelPreset(selected, state.modelPreset) } : {}),
 				conversations: this.withLocalConversations([...items.values()]), hasMore: recent?.hasMore ?? state.hasMore,
-				historyListFailed: conversations.status === 'rejected',
+				historyListFailed: readRecent ? recentFailed : state.historyListFailed,
 				projects: currentProjects,
 				...(!background ? { error: modelError } : {}),
 			});
 			const failures = [conversations, projects, pins].filter(result => result.status === 'rejected');
-			const failure = failures.find(result => isChatGPTRateLimit(result.reason)) ?? failures[0];
-			this.setHistoryFailure('catalog', failure && { error: failure.reason, retry: this.reloadHistory });
+			const failure = recent?.rateLimit ?? (failures.find(result => isChatGPTRateLimit(result.reason)) ?? failures[0])?.reason;
+			this.setHistoryFailure('catalog', failure && { error: failure, retry: this.reloadHistory });
 			const requested = this.retainedConversation();
 			if (!background && requested && requested !== retained && !requested.startsWith('local:')) {
 				await this.select(requested);
@@ -1508,14 +1609,16 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 	}
 
-	private async readLoadedRecentPages(signal: AbortSignal): ReturnType<ChatGPTClient['conversations']> {
+	private async readRecentPages(signal: AbortSignal, includeOlder: boolean): Promise<Awaited<ReturnType<ChatGPTClient['conversations']>> & { rateLimit?: ChatGPTRequestError; }> {
+		if (!includeOlder) { return this.client.conversations(0, signal); }
 		const depth = Math.max(this.recentOffset, this.model.get().conversations.filter(item => !item.local && !item.pinned && !item.projectOnly).length);
 		let page = await this.client.conversations(0, signal);
 		const items = [...page.items];
 		while (page.hasMore && page.nextOffset < depth) {
 			try { page = await this.client.conversations(page.nextOffset, signal); }
 			catch (error) {
-				if (isChatGPTRateLimit(error)) { throw error; }
+				// Publish the pages already read while the unread tail is cooling down.
+				if (isChatGPTRateLimit(error)) { return { ...page, items, rateLimit: error }; }
 				break;
 			}
 			items.push(...page.items);

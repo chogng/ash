@@ -13,7 +13,10 @@ import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/com
 import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
+import type { Project, ProjectScope } from '../../../src/ash/platform/projects/common/projectService.js';
+import type { ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
 import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from '../../../src/ash/platform/update/common/updateService.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -160,16 +163,78 @@ if (new URL(location.href).searchParams.has('creator') || new URL(location.href)
 }
 const projectChanges = new Emitter<void>();
 window.addEventListener('pagehide', () => projectChanges.dispose(), { once: true });
+if (new URL(location.href).searchParams.has('projectCreation')) {
+	const { ChatListCatalog, IChatListCatalog } = await import('../../../src/ash/sessions/contrib/chat/browser/chatListModel.js');
+	const remote = new SyncDescriptor(class implements ChatListSource {
+		readonly snapshot = constObservable({
+			entries: [],
+			projects: [{ id: 'g-p-research', title: 'Remote research', history: { state: 'complete' as const } }],
+		});
+	});
+	getSingletonServiceDescriptors().find(([id]) => id === IChatListCatalog)![1] = new SyncDescriptor(ChatListCatalog, [[remote]]);
+	const projects = new Map<string, Project>();
+	const scopes = new Map<string, ProjectScope>();
+	const codeProjectCreation = new URL(location.href).searchParams.has('codeProjectCreation');
+	let failCodeSave = codeProjectCreation;
+	if (codeProjectCreation) {
+		const { FileDialogService } = await import('../../../src/ash/workbench/services/dialogs/browser/fileDialogService.js');
+		let folder = 0;
+		const title = new URL(location.href).searchParams.get('locale') === 'zh-CN' ? '选择文件夹' : 'Choose a folder';
+		FileDialogService.prototype.showOpenDialog = async options => {
+			if (options.title !== title || options.canSelectFiles || !options.canSelectFolders || options.availableFileSystems?.join() !== 'file') {
+				throw new Error('Expected a local folder picker');
+			}
+			return [URI.file(folder++ === 0 ? '/workspace/first' : '/workspace/second')];
+		};
+	}
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		projects: {
+			...disconnectedApi.projects,
+			onDidChange: projectChanges.event,
+			list: async scope => [...projects.values()].filter(project => !scope || scopes.get(project.id) === scope),
+			read: async (id, scope) => {
+				const project = projects.get(id);
+				if (!project || scope && scopes.get(id) !== scope) throw new Error('Project not found');
+				return project;
+			},
+			create: async (id, name, description, materials, scope = 'chat', appearance) => {
+				if (codeProjectCreation) {
+					if (scope !== 'code' || description || materials.length !== 1 || materials[0]?.resource.fsPath !== '/workspace/second') {
+						throw new Error('Expected only the remaining source folder in the Code project');
+					}
+					if (failCodeSave) {
+						failCodeSave = false;
+						throw new Error('Synthetic save failure');
+					}
+				}
+				const now = Date.now();
+				const project: Project = { id, name, description, materials, ...appearance, revision: 1, archived: false, createdAtMs: now, updatedAtMs: now, sessionCount: 0, sessionIds: [] };
+				projects.set(id, project);
+				scopes.set(id, scope);
+				projectChanges.fire();
+				return project;
+			},
+			update: async (project, name, description, materials) => {
+				if (projects.get(project.id)?.revision !== project.revision) throw new Error('Unexpected project revision');
+				const saved = { ...project, name, description, materials, revision: project.revision + 1 };
+				projects.set(saved.id, saved);
+				projectChanges.fire();
+				return saved;
+			},
+		},
+	} };
+}
 if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {
-	const updatedAt = new URL(location.href).searchParams.get('projectUpdatedAt');
-	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
+	const updatedAt = Number(new URL(location.href).searchParams.get('projectUpdatedAt') ?? Date.now());
+	const createdAt = Number(new URL(location.href).searchParams.get('projectCreatedAt') ?? updatedAt);
 	const project = {
 		id: 'search-project', revision: 1, name: 'Search project fixture', archived: false, sessionCount: 0,
 		description: 'Synthetic project for Search navigation',
 		materials: new URL(location.href).searchParams.has('projectPicker')
 			? [{ kind: 'folder' as const, name: 'source', resource: URI.file('/workspace/host-a') }] : [],
 		sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [],
-		updatedAtMs: updatedAt === null ? undefined : Number(updatedAt), createdAtMs: createdAt === null ? undefined : Number(createdAt),
+		updatedAtMs: updatedAt, createdAtMs: createdAt,
 	};
 	const codeProject = new URL(location.href).searchParams.has('projectPicker')
 		? { ...project, id: 'code-project', name: 'Code project fixture' } : project;

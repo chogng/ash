@@ -12,7 +12,8 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { CanvasInput, type ICanvasReference } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvasReference } from '../../../../workbench/common/canvasReference.js';
+import { CanvasInput } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { ActivityBarItemContext } from '../../../common/contextkeys.js';
 import { Menus } from '../../../browser/menus.js';
 import { IPinnedCanvasService, type PinnedCanvasTarget } from '../browser/pinnedCanvases.js';

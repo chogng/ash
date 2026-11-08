@@ -38,6 +38,32 @@ fn parser_rejects_spoofed_identity_and_ambiguous_operations() {
     );
     assert!(AppToolService::operation(&call("list_threads", json!({"connection_id":7}))).is_err());
 }
+
+#[test]
+fn creating_a_model_comparison_requires_approval_for_the_validated_scenario() {
+    let selection = json!({"source_id":"directory","agent":"Review","model":{"provider":"fixture","model":"model-1"}});
+    let mut arguments = json!({"prompt":"Review the patch","attempts":[selection,selection]});
+    let tools = AppToolService::new(Arc::new(Host));
+    let request = tools
+        .prepare(&call("create_model_comparison", arguments.clone()))
+        .unwrap();
+    assert!(request.action().summary().contains("Review the patch"));
+    assert!(matches!(
+        AppToolPolicy
+            .decide(
+                &request,
+                &ash_async_utils::CancellationSource::new().token()
+            )
+            .unwrap(),
+        ExecutionDecision::AskUser(_)
+    ));
+    arguments["attempts"][0]["approval_mode"] = json!("bypassPermissions");
+    assert!(
+        tools
+            .prepare(&call("create_model_comparison", arguments))
+            .is_err()
+    );
+}
 #[test]
 fn section_reordering_keeps_uniqueness_at_the_boundary_without_an_unsupported_strict_keyword() {
     assert!(

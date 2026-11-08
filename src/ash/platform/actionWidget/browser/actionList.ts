@@ -1,9 +1,7 @@
 import { getTabbableElements } from '../../../base/browser/focus.js';
 import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultMenuStyles, defaultKeybindingLabelStyles, defaultCheckboxStyles } from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
-import { ActionViewItem, ButtonActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
-import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
-import { Lxicon } from '../../../base/common/lxicons.js';
+import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../base/browser/ui/inputbox/inputbox.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -12,11 +10,14 @@ import '../../../base/browser/ui/menu/menu.css';
 import '../../../base/browser/ui/toggle/toggle.css';
 import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
 import type { AnchorPosition, ContextView } from '../../../base/browser/ui/contextview/contextview.js';
-import { Menu } from '../../../base/browser/ui/menu/menu.js';
+import { KeybindingLabel } from '../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
+import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
+import { Menu, type IMenuOptions } from '../../../base/browser/ui/menu/menu.js';
 import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 import { isMacintosh } from '../../../base/common/platform.js';
 import { localize } from '../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
@@ -67,6 +68,7 @@ export interface IActionListOptions {
 	readonly anchorPosition?: AnchorPosition;
 	readonly className?: string;
 	readonly presentation?: 'menu' | 'details';
+	readonly menuIconPlacement?: IMenuOptions['iconPlacement'];
 	/** Enable row tooltips in menus, or disable the default tooltips in detail rows. */
 	readonly showRowTooltips?: boolean;
 	readonly showFilter?: boolean;
@@ -119,7 +121,8 @@ class ActionListHeader extends ActionViewItem {
 }
 
 /** A selectable row keeps its checked state, summary and badge within one navigation stop. */
-class ActionListAction extends ButtonActionViewItem {
+class ActionListAction extends ActionViewItem {
+	private button: Button | undefined;
 	private toggleIndicator: HTMLElement | undefined;
 
 	constructor(action: IAction, private readonly entry: IActionListItem<unknown>, private readonly options: IActionListOptions) {
@@ -128,66 +131,90 @@ class ActionListAction extends ButtonActionViewItem {
 
 	public override render(container: HTMLElement): void {
 		container.classList.add('ash-action-widget-action');
-		super.render(container);
-		const button = this.button.domNode;
-		button.classList.add('ash-action-widget-primary');
 		const listbox = this.options.ariaMultiselectable && this.options.filterAsCombobox;
 		const toggle = this.entry.standaloneToggle;
 		const checked = toggle?.checked ?? this.entry.checked;
+		const trailingCheck = this.options.menuIconPlacement === 'leading-with-trailing-check' && !toggle;
+		const icon = checked && !toggle && !trailingCheck ? undefined : this.action.icon;
+		const ownerDocument = container.ownerDocument;
+		const control = this.button = this.createButton(container, {
+			label: '',
+			ariaLabel: toggle?.label ?? this.action.label,
+			enabled: this.action.enabled,
+			checked,
+			onClick: () => this.runActionWithContext(),
+		});
+		const button = control.domNode;
+		button.classList.add('ash-action-widget-primary');
+		button.classList.toggle('ash-action-widget-check-trailing', trailingCheck);
 		let role = toggle ? 'menuitemcheckbox' : checked === undefined ? 'menuitem' : 'menuitemradio';
 		if (this.options.ariaMultiselectable) {
 			button.id = `${this.action.id}.option`;
 			role = listbox ? 'option' : 'menuitemcheckbox';
 		}
 		button.setAttribute('role', role);
-		if (toggle) { button.setAttribute('aria-label', toggle.label); }
 		button.removeAttribute('aria-pressed');
 		if (checked !== undefined) {
 			button.setAttribute('aria-checked', String(checked));
 			if (listbox) { button.setAttribute('aria-selected', String(checked)); }
-			const check = h(container.ownerDocument, 'span');
-			check.setAttribute('aria-hidden', 'true');
 			if (toggle) {
-				check.className = 'ash-action-widget-check ash-toggle ash-switch';
-				check.classList.toggle('checked', checked);
-				check.append(h(container.ownerDocument, 'span', { className: 'ash-switch-track' }));
-				this.toggleIndicator = check;
-			} else {
-				check.className = 'ash-action-widget-check';
-				check.hidden = !checked;
-				appendIcon(Lxicon.check, check);
+				const indicator = h(ownerDocument, 'span', { className: 'ash-action-widget-switch ash-toggle ash-switch' });
+				indicator.setAttribute('aria-hidden', 'true');
+				indicator.classList.toggle('checked', checked);
+				indicator.append(h(ownerDocument, 'span', { className: 'ash-switch-track' }));
+				this.toggleIndicator = indicator;
 			}
-			button.append(check);
+		}
+		if (trailingCheck || (checked !== undefined && !toggle && !icon)) {
+			const indicator = h(ownerDocument, 'span', { className: 'ash-action-widget-selection' });
+			indicator.setAttribute('aria-hidden', 'true');
+			appendIcon(Lxicon.check, indicator);
+			button.append(indicator);
+		}
+		if (icon) {
+			appendIcon(icon, button).classList.add('ash-action-widget-command-icon');
+		} else if (trailingCheck) {
+			button.append(h(ownerDocument, 'span', { className: 'ash-action-widget-command-icon', attributes: { 'aria-hidden': 'true' } }));
+		}
+		button.append(h(ownerDocument, 'span', { className: 'ash-action-widget-label' }, this.action.label));
+		if (this.toggleIndicator) {
+			button.append(this.toggleIndicator);
 		}
 		const description = [this.entry.detail, this.entry.description, this.entry.badge].filter(Boolean).join(' · ');
 		if (description) { button.setAttribute('aria-description', description); }
 		if (this.entry.description && (this.options.presentation === 'details' || this.options.ariaMultiselectable)) {
-			const summary = h(container.ownerDocument, 'span');
-			summary.className = 'ash-action-widget-summary';
-			summary.textContent = this.entry.description;
-			button.append(summary);
+			button.classList.toggle('ash-action-widget-detail-row', this.options.presentation === 'details');
+			button.append(h(ownerDocument, 'span', { className: 'ash-action-widget-summary' }, this.entry.description));
 		}
 		if (this.entry.badge) {
-			const badge = h(container.ownerDocument, 'span');
-			badge.className = 'ash-menu-badge';
-			badge.textContent = this.entry.badge;
-			button.append(badge);
+			button.append(h(ownerDocument, 'span', { className: 'ash-menu-badge' }, this.entry.badge));
+		}
+		if (trailingCheck && this.entry.keybinding) {
+			const shortcut = this._register(new KeybindingLabel(button, { ...defaultKeybindingLabelStyles, keybinding: this.entry.keybinding }));
+			shortcut.element.classList.add('ash-menu-keybinding');
+		}
+		if (this.options.showRowTooltips !== false && (!trailingCheck || this.options.showRowTooltips || this.options.presentation === 'details' || this.options.ariaMultiselectable)) {
+			this.setupDelayedHover(button, this.entry.tooltip ?? [this.action.label, this.entry.description].filter(Boolean).join(' · '));
 		}
 	}
 
+	public override focus(): void {
+		this.button?.focus();
+	}
+
+	public override setTabbable(tabbable: boolean): void {
+		if (this.button) this.button.domNode.tabIndex = tabbable ? 0 : -1;
+	}
+
 	updateToggle(checked: boolean): void {
-		if (this.isDisposed || !this.toggleIndicator) return;
+		if (this.isDisposed || !this.toggleIndicator || !this.button) return;
 		this.toggleIndicator.classList.toggle('checked', checked);
+		this.button.toggleClassName('checked', checked);
 		const button = this.button.domNode;
 		button.setAttribute('aria-checked', String(checked));
 		if (button.getAttribute('role') === 'option') {
 			button.setAttribute('aria-selected', String(checked));
 		}
-	}
-
-	protected override setupTooltip(): void {
-		if (this.options.showRowTooltips === false) { return; }
-		this.setupDelayedHover(this.button.domNode, this.entry.tooltip ?? [this.action.label, this.entry.description].filter(Boolean).join(' · '));
 	}
 }
 
@@ -432,9 +459,12 @@ export class ActionList<T> extends Disposable {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			className: 'ash-action-widget-menu',
-			submenuClassName: 'ash-action-widget-menu ash-action-widget-submenu',
+			submenuClassName: this.options.menuIconPlacement && this.options.menuIconPlacement !== 'leading'
+				? undefined
+				: 'ash-action-widget-menu ash-action-widget-submenu',
 			submenuContextView: this.sidePanel,
 			tabLeavesSubmenu: !!this.sidePanel,
+			iconPlacement: this.options.menuIconPlacement,
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeyBinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),

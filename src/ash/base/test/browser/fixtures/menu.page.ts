@@ -1,4 +1,5 @@
-import { Action, ActionRunner, SubmenuAction, type IAction } from '../../../common/actions.js';
+import { Action, ActionRunner, Separator, SubmenuAction, type IAction } from '../../../common/actions.js';
+import { DeferredPromise } from '../../../common/async.js';
 import { DisposableStore, MutableDisposable } from '../../../common/lifecycle.js';
 import { Menu, HorizontalDirection, VerticalDirection } from '../../../browser/ui/menu/menu.js';
 import { MenuBar } from '../../../browser/ui/menu/menubar.js';
@@ -6,6 +7,7 @@ import { getActiveElement } from '../../../browser/dom.js';
 import { ContextView, ContextViewFocusRestore } from '../../../browser/ui/contextview/contextview.js';
 import { Keybinding, logicalKey, resolveKeybinding } from '../../../common/keybindings.js';
 import { OperatingSystem } from '../../../common/platform.js';
+import { Lxicon } from '../../../common/lxicons.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { defaultMenuStyles, defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
@@ -25,6 +27,7 @@ let menu: Menu | undefined;
 let bar: MenuBar | undefined;
 let primary: Action | undefined;
 let lastShadow: ShadowRoot | undefined;
+let loadedActions: DeferredPromise<readonly IAction[]> | undefined;
 const overlay = Object.assign(new EventTarget(), {
 	visible: false,
 	getTitlebarAreaRect: () => overlayRect,
@@ -32,13 +35,14 @@ const overlay = Object.assign(new EventTarget(), {
 let overlayRect = new DOMRect();
 Object.defineProperty(navigator, 'windowControlsOverlay', { configurable: true, value: overlay });
 
-function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' | 'menubar' | 'compact'): void {
+function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'async' | 'event' | 'menubar' | 'compact' | 'trailing' | 'leading-with-trailing-check'): void {
 	scene.clear();
 	host.replaceChildren();
 	host.style.transform = '';
 	host.style.width = '320px';
 	menu = undefined;
 	bar = undefined;
+	loadedActions = undefined;
 	calls.length = providers.length = scrolls.length = 0;
 	const lifetime = scene.value = new DisposableStore();
 	const action = (id: string, label: string): Action => lifetime.add(new Action(id, label, '', true, context => {
@@ -61,8 +65,20 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 	Object.defineProperty(primary, 'alt', { value: alternate });
 	const checked = action('choice', '&Choice');
 	checked.checked = false;
+	const iconPlacement = kind === 'trailing' || kind === 'leading-with-trailing-check' ? kind : undefined;
+	if (iconPlacement) {
+		primary.icon = Lxicon.search;
+		checked.checked = true;
+	}
 	const child = action('child', '&Child');
-	const first = new SubmenuAction('first', '&First', [checked, new SubmenuAction('nested', '&Nested', [child])]);
+	let first: SubmenuAction;
+	if (kind === 'async') {
+		const pending = loadedActions = new DeferredPromise<readonly IAction[]>();
+		const loading = lifetime.add(new Action('loading', 'Loading', '', false));
+		first = new SubmenuAction('first', '&First', [loading], undefined, () => pending.p);
+	} else {
+		first = new SubmenuAction('first', '&First', [checked, new SubmenuAction('nested', '&Nested', [child])]);
+	}
 	const second = new SubmenuAction('second', '&Second', [action('other', '&Other')]);
 	let container: HTMLElement = host;
 	if (kind === 'shadow') {
@@ -79,11 +95,12 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 		: [primary, action('after', '&After'), first, second];
 	menu = lifetime.add(new Menu(container, actions, {
 		enableMnemonics: true,
+		iconPlacement,
 		expandDirection: kind === 'left' ? { horizontal: HorizontalDirection.Left, vertical: VerticalDirection.Above } : undefined,
 		context: { version: 1 },
 		useEventAsContext: kind === 'event',
 		actionRunner: lifetime.add(new ActionRunner()),
-		getKeyBinding: item => item.id === 'primary' || item.id === 'alternate'
+		getKeyBinding: item => item.id === 'primary' || item.id === 'alternate' || (iconPlacement && item.id === 'first')
 			? resolveKeybinding(Keybinding.single(logicalKey(item.id === 'primary' ? 'p' : 'a', { ctrlKey: true })), OperatingSystem.Windows) : undefined,
 		getAriaDescription: item => `Details for ${item.id}`,
 		getCheckedActionsRepresentation: () => 'radio',
@@ -96,6 +113,12 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 
 const api = {
 	mount,
+	resolveSubmenu(): Promise<void> {
+		// Shift the first row's inset to ensure layout measures the replacement.
+		return loadedActions!.complete([new Separator(), {
+			id: 'loaded', label: 'Loaded', enabled: true, tooltip: '', run() { },
+		}]);
+	},
 	overlay(x: number, width: number, height: number, visible = true): void {
 		overlayRect = new DOMRect(x, 0, width, height);
 		overlay.visible = visible;

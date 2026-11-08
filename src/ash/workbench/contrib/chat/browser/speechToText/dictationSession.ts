@@ -1,3 +1,4 @@
+import './media/dictationSession.css';
 import { Emitter } from '../../../../../base/common/event.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
@@ -5,6 +6,7 @@ import { canceled } from '../../../../../base/common/errors.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
+import { TrackedRangeStickiness } from '../../../../../editor/common/model.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
 import { type ChatDictationSurface, type IChatSpeechToTextService } from './chatSpeechToTextService.js';
 
@@ -14,6 +16,8 @@ interface EditorRecording {
 	readonly lifetime: DisposableStore;
 	readonly surface: ChatDictationSurface;
 	readonly wholeDraft: boolean;
+	readonly revert: () => void;
+	readonly applyTranscript: (text: string) => void;
 	starting: Promise<void>;
 	committed: string;
 	cancelled: boolean;
@@ -76,24 +80,55 @@ async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor
 	if (editor.getOption(EditorOption.readOnly)) return;
 	settleSample(editor, false);
 	const lifetime = new DisposableStore();
-	const current: EditorRecording = { service, editor, lifetime, surface, wholeDraft: editor.getModel()!.getValue().length === 0, starting: Promise.resolve(), committed: '', cancelled: false };
+	const edits = new Map<string, { readonly original: string; readonly dictated: string; }>();
+	const revert = (): void => {
+		if (editor.getModel() !== model || editor.getOption(EditorOption.readOnly)) return;
+		// Restore only ranges still owned by this recording. Manual edits and undo
+		// can change a range before cancellation, and must survive it.
+		for (const [id, { original, dictated }] of [...edits].reverse()) {
+			const range = model.getDecorationRange(id);
+			if (range && model.getValueInRange(range) === dictated) {
+				editor.executeEdits('dictation', [{ range, text: original }]);
+			}
+		}
+	};
+	const current: EditorRecording = { service, editor, lifetime, surface, wholeDraft: model.getValue().length === 0, revert, applyTranscript, starting: Promise.resolve(), committed: '', cancelled: false };
+	lifetime.add(toDisposable(() => {
+		if (!model.isDisposed()) model.deltaDecorations([...edits.keys()], []);
+		edits.clear();
+	}));
 	recording = current;
 	const abort = (): void => { if (recording === current) cancelDictation(); };
 	if (signal) lifetime.add(addDisposableListener(signal, 'abort', abort, { once: true }));
-	lifetime.add(service.onDidUpdateTranscript(event => {
-		if (recording !== current || current.cancelled || !event.finalizedText.startsWith(current.committed)) return;
-		const text = event.finalizedText.slice(current.committed.length);
-		current.committed = event.finalizedText;
+	function applyTranscript(finalizedText: string): void {
+		if (recording !== current || current.cancelled || !finalizedText.startsWith(current.committed)) return;
+		const text = finalizedText.slice(current.committed.length);
+		current.committed = finalizedText;
 		const selection = editor.getSelection();
 		if (!text || !selection || editor.getOption(EditorOption.readOnly)) return;
 		const model = editor.getModel();
 		if (!model) return;
 		const before = model.getValue().slice(0, model.getOffsetAt(selection.getStartPosition()));
 		const separator = /[A-Za-z0-9]$/u.test(before) && /^[A-Za-z0-9]/u.test(text) ? ' ' : '';
+		const original = model.getValueInRange(selection);
 		editor.pushUndoStop();
-		editor.executeEdits('dictation', [{ range: selection, text: separator + text }], inverse => inverse.map(edit => Selection.fromPositions(edit.range.getEndPosition())));
+		editor.executeEdits('dictation', [{ range: selection, text: separator + text }], inverse => inverse.map(edit => {
+			const [id] = model.deltaDecorations([], [{
+				range: edit.range,
+				options: {
+					description: 'dictation-transcript',
+					inlineClassName: current.stopping ? undefined : 'ash-dictation-provisional-text',
+					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				},
+			}]);
+			edits.set(id, { original, dictated: model.getValueInRange(edit.range) });
+			return Selection.fromPositions(edit.range.getEndPosition());
+		}));
 		editor.pushUndoStop();
 		editor.focus();
+	}
+	lifetime.add(service.onDidUpdateTranscript(event => {
+		if (event.completed || service.showTranscriptWhileDictating) applyTranscript(event.finalizedText);
 	}));
 	lifetime.add(editor.onWillChangeModel(() => cancelDictation()));
 	lifetime.add(editor.onDidDispose(() => cancelDictation()));
@@ -119,7 +154,10 @@ export async function stopDictation(): Promise<void> {
 	current.stopping ??= (async () => {
 		try {
 			await current.starting;
-			if (!current.cancelled) await current.service.stopAndTranscribe();
+			if (!current.cancelled) {
+				const final = await current.service.stopAndTranscribe();
+				if (final) current.applyTranscript(final);
+			}
 		} finally {
 			finishRecording(current);
 		}
@@ -141,6 +179,7 @@ export function cancelDictation(): void {
 	if (!current) { publishEditor(); return; }
 	current.cancelled = true;
 	recording = undefined;
+	current.revert();
 	current.lifetime.dispose();
 	// The service owns late acquisition cleanup. A pending browser permission request must not block the next input.
 	releasing = current.service.cancel().catch(() => undefined);

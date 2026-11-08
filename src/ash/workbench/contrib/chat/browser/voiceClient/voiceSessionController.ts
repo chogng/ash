@@ -4,6 +4,8 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../../base/c
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { localize } from '../../../../../nls.js';
 import { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { AgentsVoiceSettingId } from '../../../agentsVoice/common/agentsVoice.js';
 import { type AgentVoiceSource, type AgentVoiceTaskRequest, type AgentVoiceSessionState, type AgentVoiceSelection, type AgentVoiceConnectionChoice } from '../../../../../platform/agentHost/common/agent.js';
 
 /** Browser controller for one Chat widget. AgentHost owns the connection; Core owns every transcript. */
@@ -36,6 +38,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 
 	constructor(private readonly dispatch: (request: AgentVoiceTaskRequest, signal: AbortSignal) => Promise<void>, private readonly onError: (error: unknown) => void, private readonly prepare: (() => Promise<AgentVoiceSource>) | undefined,
 		@IAgentVoiceService private readonly voice: IAgentVoiceService | undefined,
+		@IConfigurationService private readonly configuration?: IConfigurationService,
 	) {
 		super();
 		if (voice) {
@@ -88,10 +91,16 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 		try {
 			const connections = await this.voice.getOptions();
 			if (controller.signal.aborted || this.isDisposed || !sameSource(originalTarget, this.target) || originalIdentity !== this.targetIdentity) throw canceled();
-			const connection = connections.find(connection => connection.connectionId === 'openai') ?? connections[0];
-			if (!connection) throw new Error(localize('chat.voice.configureProvider', 'Configure a supported voice provider with a direct API credential in Models settings.'));
-			const model = connection.models.find(model => model.modelId === connection.defaultModel);
-			const selection = select ? await select(connections, controller.signal) : { connectionId: connection.connectionId, modelId: connection.defaultModel, ...(model ? { voice: model.defaultVoice } : {}) };
+			if (!connections.length) throw new Error(localize('chat.voice.configureProvider', 'Configure a supported voice provider with a direct API credential in Models settings.'));
+			const configuredModel = this.configuration?.getValue<string>(AgentsVoiceSettingId.Model);
+			const eligible = configuredModel ? connections.flatMap(connection => {
+				const model = connection.models.find(candidate => candidate.modelId === configuredModel);
+				return model ? [{ ...connection, defaultModel: model.modelId, models: [model] }] : [];
+			}) : connections;
+			const connection = eligible.find(candidate => candidate.connectionId === 'openai') ?? eligible[0];
+			if (!connection) throw new Error(localize('chat.voice.configuredModelUnavailable', 'No connected voice provider offers {0}. Check your API connections in Models settings.', configuredModel));
+			const model = connection.models.find(candidate => candidate.modelId === connection.defaultModel);
+			const selection = select ? await select(eligible, controller.signal) : { connectionId: connection.connectionId, modelId: connection.defaultModel, ...(model ? { voice: model.defaultVoice } : {}) };
 			if (!selection || controller.signal.aborted || this.isDisposed || originalIdentity !== this.targetIdentity) throw canceled();
 			this.preparing = controller;
 			let target: AgentVoiceSource;
@@ -147,7 +156,7 @@ export function pickVoiceConversation(quickInput: IQuickInputService, connection
 	const resources = new DisposableStore();
 	const picker = resources.add(quickInput.createQuickPick<IQuickPickItem & { readonly selection: AgentVoiceSelection; }>());
 	picker.items = items; picker.sortByLabel = false;
-	picker.placeholder = localize('chat.voice.selection.hint', 'Choose a voice, model and provider for this conversation.');
+	picker.placeholder = localize('chat.voice.selection.hint', 'Choose a voice and provider for this conversation.');
 	picker.ariaLabel = localize('chat.voice.selection.label', 'Voice conversation options');
 	picker.activeItems = [items.find(item => item.picked) ?? items[0]!].filter(Boolean);
 	return new Promise(resolve => {

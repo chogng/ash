@@ -106,7 +106,7 @@ fn session_create_pins_a_pull_request_worktree_without_copying_source_changes() 
     let mut params = serde_json::json!({
         "commandId":"new-pr-session",
         "title":"#7 Review",
-        "executionTarget":{"type":"local","root":source.path()},
+        "kind":"code", "executionTarget":{"type":"local","root":source.path()},
         "branchName":"ash/pr-7",
         "worktreeStart":{"remote":"origin","remoteIdentity":"ash-test/owner/repo","reference":"refs/pull/7/head","commit":base},
     });

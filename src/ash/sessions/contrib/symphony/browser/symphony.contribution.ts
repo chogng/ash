@@ -16,6 +16,7 @@ import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/edit
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { ISymphonyService, SymphonyService, SymphonyNavigationId, SymphonyMonitorResource } from './symphonyService.js';
 import { SymphonyTasksView, SymphonyMonitorEditor, symphonyAccessibleContent } from './symphonyViews.js';
@@ -46,8 +47,8 @@ async function openSymphony(accessor: ServicesAccessor, source?: 'restore'): Pro
 registerAction2(class OpenSymphony extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.agent,
-			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'more', order: 40 }
+			id: 'sessions.open.symphony', title: localize2('symphony.title', 'Symphony'), f1: true, icon: Lxicon.bot,
+			toggled: ContextKeyExpr.has('sessions.activity.symphonySelected'), menu: { id: Menus.ActivityBar, group: 'more', order: 40, when: SessionsWorkspaceModeContext.isEqualTo('code') }
 		});
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> { await openSymphony(accessor, source === 'restore' ? source : undefined); }

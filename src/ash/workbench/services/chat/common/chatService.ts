@@ -1,6 +1,6 @@
 import { URI } from '../../../../base/common/uri.js';
 import type { EditSuggestionId } from '../../../../editor/common/textModelEditSource.js';
-import type { CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
+import type { AgentInput, CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentInteractionDecision, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
 	ChatImageAttachment,
@@ -37,6 +37,7 @@ export type {
 	ThreadUpdate,
 	ThreadUpdateEnvelope,
 	ThreadTranscriptEntry,
+	LoadedTurnSkill,
 	ChatHookRun,
 	ThreadTranscriptSnapshot,
 	ThreadTranscriptChange,
@@ -64,6 +65,7 @@ export type { ModelCatalogEntry } from './modelCatalog.js';
 import type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint, AgentThreadHistoryState } from '../../../../platform/agentHost/common/agent.js';
 export type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agent.js';
 export { AgentThreadHistoryConflictError as ChatHistoryConflictError } from '../../../../platform/agentHost/common/agentService.js';
+export { AgentThreadHistoryAnchorError as ChatHistoryAnchorError } from '../../../../platform/agentHost/common/agentService.js';
 
 /** Identifies the reply that produced a document edit, independently of the visible Chat. */
 export interface ChatEditSource {
@@ -230,6 +232,8 @@ export interface TurnChangeDetails {
 export interface ThreadChangesSummary {
 	readonly sequence: number;
 	readonly revision: string;
+	/** Verified root of the current thread's managed Git checkout, when readable. */
+	readonly worktreePath?: string;
 	readonly statistics: TurnChangeSetSummary['statistics'];
 	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[]; }[];
 	readonly warnings: readonly string[];
@@ -286,19 +290,42 @@ export interface ChatInteractionOfferChange {
 	readonly offer?: AgentInteractionOffer;
 }
 
-export interface RewriteChatRequestOptions {
+export type RewriteChatRequestOptions = {
 	readonly signal?: AbortSignal;
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly turnId: string;
 	readonly itemId: string;
+	readonly commandId: string;
+} & ({
 	readonly text: string;
 	readonly contexts?: readonly ResolvedChatContext[];
-	readonly commandId: string;
+} | {
+	/** Replay the accepted submission, without borrowing text from the rendered row. */
+	readonly text?: undefined;
+	readonly contexts?: undefined;
+});
+
+export function getAcceptedChatRequest(turn: Turn) {
+	const message = turn.items.find(item => item.type === 'userMessage');
+	if (message?.type !== 'userMessage' || !message.clientId) return undefined;
+	const input: AgentInput[] = [];
+	// Submission identity separates the accepted request from later steering.
+	for (const item of turn.items) {
+		if (!('clientId' in item) || item.clientId !== message.clientId) continue;
+		switch (item.type) {
+			case 'userMessage': input.push({ type: 'text', text: item.text }); break;
+			case 'userContext': input.push({ type: 'context', name: item.name, content: item.content, ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}) }); break;
+			case 'userImage': input.push({ type: 'image', url: item.url }); break;
+			case 'userImageAttachment': input.push({ type: 'imageAttachment', attachment: item.attachment }); break;
+			case 'userAudioAttachment': input.push({ type: 'audioAttachment', attachment: item.attachment }); break;
+		}
+	}
+	return { message, input };
 }
 
 export interface IChatService {
-	/** Rewrites an initial user message while retaining its accepted context and attachments. */
+	/** Sends the accepted or edited request from its checkpoint in a separate Thread. */
 	rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }>;
 	renameThread(sessionId: SessionId, threadId: ThreadId, title: string): Promise<void>;
 	/** Only accepted local submissions establish window activity; broadcasts never establish ownership. */

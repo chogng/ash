@@ -55,7 +55,9 @@ fn issue_server(root: &std::path::Path, origin: &str) -> AppServer {
     server.issue_processor = Some(Arc::new(
         crate::server::issue_operations::IssueRequestProcessor::open(
             root,
-            &root.join("state.sqlite3"),
+            Some(Arc::new(
+                ash_state::SqliteIssueCache::open(&root.join("state.sqlite3")).unwrap(),
+            )),
         )
         .unwrap(),
     ));
@@ -1286,7 +1288,7 @@ fn assert_stalled_reads_keep_dispatch_available(method: &str) {
         101,
         "session/create",
         json!({
-            "commandId":"network-independent-session", "title":"ready", "executionTarget":null,
+            "commandId":"network-independent-session", "title":"ready", "kind":"code", "executionTarget":null,
         }),
     );
     loop {

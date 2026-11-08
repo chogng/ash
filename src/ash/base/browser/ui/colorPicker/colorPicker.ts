@@ -1,5 +1,6 @@
 import './colorPicker.css';
 import { addDisposableListener, h } from '../../dom.js';
+import { GlobalPointerMoveMonitor } from '../../globalPointerMoveMonitor.js';
 import { Color, HSLA, HSVA, RGBA } from '../../../common/color.js';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, DisposableStore, type IDisposable } from '../../../common/lifecycle.js';
@@ -64,7 +65,7 @@ export class ColorPicker extends Disposable {
 	private readonly recentColors: Color[] = [];
 	private selectedColor = Color.white;
 	private format: ColorFormat = 'hex';
-	private gesture: { readonly pointerId: number; readonly color: Color; } | undefined;
+	private readonly areaDrag = this._register(new GlobalPointerMoveMonitor());
 	private rangeOriginal: Color | undefined;
 
 	constructor(private readonly ownerDocument: Document, private readonly variant: 'dialog' | 'embedded' | 'input' = 'dialog', private readonly input?: ColorPickerInputOptions) {
@@ -170,30 +171,27 @@ export class ColorPicker extends Disposable {
 			}));
 		}
 		this._register(addDisposableListener(this.areaDomNode, 'pointerdown', event => {
-			if (event.button !== 0 || this.gesture) { return; }
+			if (event.button !== 0 || this.areaDrag.isMonitoring()) { return; }
 			event.preventDefault();
 			this.areaDomNode.focus();
-			this.gesture = { pointerId: event.pointerId, color: this.selectedColor };
-			this.areaDomNode.setPointerCapture(event.pointerId);
+			const original = this.selectedColor;
+			this.areaDrag.startMonitoring(this.areaDomNode, event.pointerId, event.buttons, next => this.handlePointer(next), stop => {
+				switch (stop?.type) {
+					case 'pointerup':
+					case 'mouseup':
+						this.handlePointer(stop as MouseEvent);
+						this.commit(this.selectedColor);
+						break;
+					case 'pointermove':
+						this.commit(this.selectedColor);
+						break;
+					default:
+						this.change(original);
+						break;
+				}
+			}, event.pointerType);
 			this.handlePointer(event);
 		}));
-		this._register(addDisposableListener(this.areaDomNode, 'pointermove', event => {
-			if (this.gesture?.pointerId === event.pointerId) { this.handlePointer(event); }
-		}));
-		this._register(addDisposableListener(this.areaDomNode, 'pointerup', event => {
-			if (this.gesture?.pointerId !== event.pointerId) { return; }
-			this.handlePointer(event);
-			this.gesture = undefined;
-			this.areaDomNode.releasePointerCapture(event.pointerId);
-			this.commit(this.selectedColor);
-		}));
-		for (const event of ['pointercancel', 'lostpointercapture'] as const) {
-			this._register(addDisposableListener(this.areaDomNode, event, () => {
-				const original = this.gesture?.color;
-				this.gesture = undefined;
-				if (original) { this.change(original); }
-			}));
-		}
 		this._register(addDisposableListener(this.areaDomNode, 'keydown', event => {
 			const { h: hue, s, v, a } = this.selectedColor.hsva;
 			const step = event.shiftKey ? 0.1 : 0.01;
@@ -242,9 +240,7 @@ export class ColorPicker extends Disposable {
 			if (targetChanged && !this.committing) { this.cancel(); }
 			else if (!changed || this.committing || echo) { return; }
 		}
-		const pointerId = this.gesture?.pointerId;
-		this.gesture = undefined;
-		if (pointerId !== undefined) { this.areaDomNode.releasePointerCapture(pointerId); }
+		this.areaDrag.stopMonitoring(false);
 		this.rangeOriginal = undefined;
 		this.selectedColor = color;
 		this.render();
@@ -284,7 +280,7 @@ export class ColorPicker extends Disposable {
 		}
 	}
 
-	private handlePointer(event: PointerEvent): void {
+	private handlePointer(event: MouseEvent): void {
 		const bounds = this.areaDomNode.getBoundingClientRect();
 		const { h: hue, a } = this.selectedColor.hsva;
 		this.change(new Color(new HSVA(hue, (event.clientX - bounds.left) / bounds.width, 1 - (event.clientY - bounds.top) / bounds.height, a)));
@@ -451,6 +447,7 @@ export class ColorPicker extends Disposable {
 		this.popupVisible = true;
 		this.swatch!.domNode.setAttribute('aria-expanded', 'true');
 		const visible = this.input!.popup.show(this.swatch!.domNode, this.panelDomNode!, commit => {
+			this.areaDrag.stopMonitoring(false);
 			this.popupVisible = false;
 			this.swatch!.domNode.setAttribute('aria-expanded', 'false');
 			if (commit) { this.commit(this.selectedColor); }

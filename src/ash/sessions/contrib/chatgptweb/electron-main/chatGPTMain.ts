@@ -60,9 +60,7 @@ export class ChatGPTMain extends Disposable {
 		const transport = resources.add(this.instantiation.createInstance(ChatGPTTransport, {
 			authentication,
 			native: role === 'credentials-codex',
-			recentHistoryGate: role === 'credentials-codex'
-				? this.recentHistoryGate ??= this._register(this.instantiation.createInstance(ChatGPTRecentHistoryGate))
-				: undefined,
+			recentHistoryGate: this.recentHistoryGate ??= this._register(this.instantiation.createInstance(ChatGPTRecentHistoryGate)),
 			readVerificationScript: signal => this.readVerificationScript(signal),
 			createRuntime: authorize => new ChatGPTVerificationRuntime(authorize),
 		} satisfies ChatGPTTransportOptions));

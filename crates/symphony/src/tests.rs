@@ -44,6 +44,34 @@ fn observation(status: SymphonyTaskStatus) -> Observation {
 }
 
 #[test]
+fn concurrent_open_preserves_existing_v1_symphony_state() {
+    let directory = tempfile::tempdir().unwrap();
+    for legacy in [false, true] {
+        let path = directory.path().join(format!("state-{legacy}.sqlite3"));
+        let plan = workflow(&directory, "agent:\n  max_concurrent_agents: 1");
+        let job = legacy.then(|| {
+            let store = Store::open(&path).unwrap();
+            store.configure("configure", plan.clone()).unwrap();
+            store.submit("submit", &plan.id, "saved", "verify").unwrap()
+        });
+        let barrier = std::sync::Barrier::new(4);
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    barrier.wait();
+                    let store = Store::open(&path).unwrap();
+                    let jobs = store.jobs().unwrap();
+                    assert_eq!(jobs.len(), usize::from(legacy));
+                    if let Some(id) = &job {
+                        assert_eq!(&jobs[0].id, id);
+                    }
+                });
+            }
+        });
+    }
+}
+
+#[test]
 fn reservations_survive_reopen_and_controls_win_over_old_observations() {
     let root = tempfile::tempdir().unwrap();
     let plan = workflow(&root, "agent:\n  max_concurrent_agents: 1");

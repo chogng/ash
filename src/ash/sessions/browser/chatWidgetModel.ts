@@ -1,8 +1,8 @@
 import { SessionModelSelection } from './sessionModelSelection.js';
 import { findLastIdx } from '../../base/common/arraysFind.js';
-import { ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
-import { raceCancellationError } from '../../base/common/async.js';
+import { raceCancellationError, RunOnceScheduler } from '../../base/common/async.js';
 import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
 import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -34,8 +34,12 @@ import type { ThreadHistoryBoundary, ThreadRead } from '../../workbench/services
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, parseCodeConversationModel, type CodeConversationDefaults, type CodeConversationModel } from '../common/codeConversationDefaults.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
+import { agentHostTurnDirectory } from '../common/agentHostSessionWorkspace.js';
+import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
+import { readChatRequestVersions } from './chatRequestVersions.js';
+import { isNative } from '../../base/common/platform.js';
 
 const historyPageTurns = 20;
 
@@ -47,7 +51,12 @@ export type ChatWidgetState =
 
 /** The local or durable identity currently displayed by a Chat pane. */
 export type ChatWidgetSelection =
-	| { readonly kind: 'session'; readonly active: IActiveSessionThread; }
+	| {
+		readonly kind: 'session';
+		readonly active: IActiveSessionThread;
+		/** The host can present the conversation from its first request after inherited context. */
+		readonly firstRequestClientId?: string;
+	}
 	| { readonly kind: 'untitled'; readonly session: IUntitledChatSession; };
 
 /**
@@ -72,6 +81,9 @@ export class ChatWidgetModel extends Disposable {
 	private olderHistoryError: string | undefined;
 	private selection: ChatWidgetSelection;
 	private _thread: Thread | undefined;
+	private comparableVersionTurns = new Set<string>();
+	private requestVersionRevision = 0;
+	private readonly refreshRequestVersions = this._register(new RunOnceScheduler(() => void this.loadRequestVersions(), 100));
 	private contextUsage: ChatContextUsage | undefined;
 	private contextUsageRequest = 0;
 	private _state: ChatWidgetState = 'loading';
@@ -82,7 +94,7 @@ export class ChatWidgetModel extends Disposable {
 	private generation = 0;
 	private readPending: number | undefined;
 	private readRequest = 0;
-	private threadRead: { readonly generation: number; promise: Promise<void>; invalidated: boolean; } | undefined;
+	private threadRead: { readonly generation: number; promise: Promise<void>; invalidated: boolean; replaceHistory: boolean; } | undefined;
 	private durableSequence = 0;
 	private snapshotRequest = 0;
 	private initializePromise: Promise<void> | undefined;
@@ -141,9 +153,15 @@ export class ChatWidgetModel extends Disposable {
 		if (contextKeys) {
 			const keys = new Set([SessionsWorkspaceModeContext.key]);
 			this._register(contextKeys.onDidChangeContext(event => {
-				if (event.affectsSome(keys)) this._onDidChange.fire();
+				if (event.affectsSome(keys)) {
+					this.refreshRequestVersions.schedule();
+					this._onDidChange.fire();
+				}
 			}));
 		}
+		this._register(sessionService.onDidChange(() => {
+			if (this.isCodeConversation) this.refreshRequestVersions.schedule();
+		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ChatAIDisabledSettingId)) this._onDidChange.fire();
 		}));
@@ -171,6 +189,7 @@ export class ChatWidgetModel extends Disposable {
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
 		this._register(this.skills.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
+			if (update.sessionId === this.sessionId && this.isCodeConversation) this.refreshRequestVersions.schedule();
 			if (update.sessionId !== this.sessionId || update.threadId !== this.threadId) return;
 			this.acceptChangeSets(update.changeSets);
 			void this.refreshChanges();
@@ -236,14 +255,12 @@ export class ChatWidgetModel extends Disposable {
 
 	private get workspaceRequiredMessage(): string | undefined {
 		if (this.selection.kind === 'session' || this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return undefined;
-		const { forkSource, workspace, providerId, projectId } = this.selection.session;
+		const { forkSource } = this.selection.session;
 		if (forkSource) {
 			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === forkSource.sessionId);
 			if (session && chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === forkSource.threadId))) return undefined;
-		} else {
-			const requiresProject = !providerId || providerId === LOCAL_AGENT_HOST_PROVIDER_ID;
-			if ((!requiresProject || projectId)
-				&& workspace.type !== 'current' && (workspace.type !== 'multiple' || workspace.folders.length)) return undefined;
+		} else if (hasSelectedCodeWorkspace(this.selection.session)) {
+			return undefined;
 		}
 		return localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.');
 	}
@@ -257,9 +274,15 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get olderHistory(): { readonly loading: boolean; readonly error?: string; } | undefined {
-		return this.historyBoundary?.hasOlderTurns && this.historyBoundary.oldestTurnId
+		return this.historyBoundary?.hasOlderTurns && this.historyBoundary.oldestTurnId && !this.hasFirstPresentedRequest
 			? { loading: !!this.olderHistoryRequest, error: this.olderHistoryError }
 			: undefined;
+	}
+
+	private get hasFirstPresentedRequest(): boolean {
+		const firstRequest = this.selection.kind === 'session' && this.selection.firstRequestClientId;
+		return !!firstRequest && this.transcriptEntries.some(entry => entry.type === 'item'
+			&& entry.item.type === 'userMessage' && entry.item.clientId === firstRequest);
 	}
 
 	/** Older pages never replace the live cursor, execution state or interaction offer. */
@@ -268,13 +291,28 @@ export class ChatWidgetModel extends Disposable {
 		if (this.olderHistoryRequest) return this.olderHistoryRequest;
 		const active = this.activeSession;
 		const boundary = this.historyBoundary;
-		if (!active || !boundary?.hasOlderTurns || !boundary.oldestTurnId) return Promise.resolve();
+		if (!active || !boundary?.hasOlderTurns || !boundary.oldestTurnId || this.hasFirstPresentedRequest) return Promise.resolve();
+		const cursor = boundary.oldestTurnId;
 		const generation = this.generation;
+		const readPage = (turnId: string) => this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'before', turnId, turnLimit: historyPageTurns });
 		this.olderHistoryError = undefined;
 		const pending = Promise.resolve().then(async () => {
+			let pageBoundary = boundary;
 			try {
-				const page = await this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'before', turnId: boundary.oldestTurnId!, turnLimit: historyPageTurns });
-				if (this.isDisposed || generation !== this.generation || this.historyBoundary !== boundary) return;
+				let page: ThreadRead;
+				try {
+					page = await readPage(cursor);
+				} catch (error) {
+					if (!(error instanceof ChatHistoryAnchorError) || this.isDisposed || generation !== this.generation) throw error;
+					await this.refreshThread({ replaceHistory: true });
+					if (this.isDisposed || generation !== this.generation) return;
+					const refreshed = this.historyBoundary;
+					if (!refreshed?.hasOlderTurns || !refreshed.oldestTurnId) return;
+					pageBoundary = refreshed;
+					if (refreshed.oldestTurnId === cursor) throw error;
+					page = await readPage(refreshed.oldestTurnId);
+				}
+				if (this.isDisposed || generation !== this.generation || this.historyBoundary !== pageBoundary) return;
 				if (!this._thread || page.thread.threadId !== active.threadId || page.thread.sequence < this.durableSequence) {
 					this.scheduleRefresh();
 					throw new Error(localize('chat.history.changed', 'Chat history changed. Try loading again.'));
@@ -285,7 +323,7 @@ export class ChatWidgetModel extends Disposable {
 				this.historyBoundary = page.history;
 				if (page.thread.sequence > this._thread.sequence) this.scheduleRefresh();
 			} catch (error) {
-				if (!this.isDisposed && generation === this.generation && this.historyBoundary === boundary) {
+				if (!this.isDisposed && generation === this.generation && this.historyBoundary === pageBoundary) {
 					this.olderHistoryError = localize('chat.history.olderFailed', 'Could not load earlier messages: {0}', String(error));
 				}
 			} finally {
@@ -406,12 +444,58 @@ export class ChatWidgetModel extends Disposable {
 	get items(): readonly IChatListItem[] {
 		const thread = this._thread;
 		const latestTurnId = thread?.turns.at(-1)?.turnId;
-		const transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, thread, {
+		const provider = this.selection.kind === 'session' ? this.selection.active.session.providerId : this.selection.session.providerId;
+		const source = thread && {
+			sessionId: thread.sessionId, threadId: thread.threadId, commandTerminals: isNative && (!provider || provider === LOCAL_AGENT_HOST_PROVIDER_ID),
+			directoryForTurn: (turn: Turn) => agentHostTurnDirectory(thread.sessionId, turn.directory),
+		};
+		let transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
 		}, this._changeSets);
+		const firstRequest = this.selection.kind === 'session' && this.selection.firstRequestClientId;
+		if (firstRequest) {
+			const start = transcript.findIndex(item => item.type === 'userMessage' && item.requestClientId === firstRequest);
+			if (start > 0) transcript = transcript.slice(start);
+		}
+		if (thread && this.isCodeConversation && (this._changeSets.length || this.comparableVersionTurns.size)) {
+			const captured = new Map<string, boolean>();
+			for (const change of this._changeSets) {
+				if (change.threadId !== thread.threadId) continue;
+				captured.set(change.turnId, captured.get(change.turnId) !== false && change.captureState === 'sealed' && change.terminalState === 'completed');
+			}
+			const finalReplies = new Map<string, string>();
+			const replayableTurns = new Set(thread.turns.filter(turn => (!turn.kind || turn.kind === 'coding')
+				&& turn.items.find(item => item.type === 'userMessage')?.clientId).map(turn => turn.turnId));
+			for (const item of transcript) {
+				const source = item.feedbackSource;
+				if (source && this.comparableVersionTurns.has(source.turnId)) finalReplies.set(source.turnId, item.id);
+			}
+			transcript = transcript.map(item => {
+				const request = item.requestSource;
+				if (request && thread.status === 'active' && replayableTurns.has(request.turnId) && captured.get(request.turnId)) return { ...item, canRunAnotherVersion: true };
+				if (item.feedbackSource && finalReplies.get(item.feedbackSource.turnId) === item.id) return { ...item, canCompareResults: true };
+				return item;
+			});
+		}
 		const redo = this.historyRedo.item(thread);
 		const queued = this.queue.length && thread?.status === 'active' ? chatQueuedMessageListItems(this.queue) : [];
 		return redo || queued.length ? [...transcript, ...(redo ? [redo] : []), ...queued] : transcript;
+	}
+
+	private get isCodeConversation(): boolean {
+		return this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) === 'code';
+	}
+
+	private async loadRequestVersions(): Promise<void> {
+		const threadId = this.threadId;
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === this.sessionId);
+		const revision = ++this.requestVersionRevision;
+		const pairs = this.isCodeConversation && session && threadId ? await readChatRequestVersions(this.chatService, session, threadId) : [];
+		if (this.isDisposed || this.requestVersionRevision !== revision || threadId !== this.threadId || (session && session.sessionId !== this.sessionId)) return;
+		const turns = new Set(pairs.flatMap(({ original, alternate }) => original.threadId === threadId ? [original.turnId] : [alternate.turnId]));
+		if (turns.size === this.comparableVersionTurns.size && [...turns].every(turnId => this.comparableVersionTurns.has(turnId))) return;
+		this.comparableVersionTurns = turns;
+		this._onDidChange.fire();
 	}
 
 	get interaction(): TurnInteraction | undefined {
@@ -580,6 +664,15 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
+		await this.submitMessage(text, mode, skills, contexts, options);
+	}
+
+	sendInBackground(text: string, mode: ChatMode, skills: readonly SkillReference[] | undefined, contexts: readonly ResolvedChatContext[], signal?: AbortSignal): Promise<IActiveSessionThread | undefined> {
+		if (this.selection.kind !== 'untitled' || this.selection.session.forkSource) throw canceled();
+		return this.submitMessage(text, mode, skills, contexts, { signal }, this.selection.session.untitledSessionId);
+	}
+
+	private async submitMessage(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions, backgroundDraftId?: string): Promise<IActiveSessionThread | undefined> {
 		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
 		this.assertWorkspaceSelected();
@@ -604,15 +697,24 @@ export class ChatWidgetModel extends Disposable {
 			const reasoningEffort = this.selectedReasoningEffort;
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
-			const active = await this.ensureActiveSession(operation.signal);
-			if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
-			// Materializing this composer changes its identity from draft to durable Thread.
-			operation.identity = active.threadId;
-			if (this._thread?.threadId !== active.threadId) {
-				await this.subscribe(active);
+			let active: IActiveSessionThread;
+			let thread: Thread | undefined;
+			if (backgroundDraftId) {
+				active = await this.sessionService.materializeUntitledSession(backgroundDraftId, operation.signal);
+				this.requireCurrentOperation(operation);
+				thread = (await this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'latest', turnLimit: 1 })).thread;
+				if (thread.turns.length > 0) {
+					throw new Error(localize('sessions.chat.backgroundSend.alreadyStarted', 'This session already has a request. Open it from the session list to continue.'));
+				}
+			} else {
+				active = await this.ensureActiveSession(operation.signal);
+				if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
+				// Materializing a foreground composer changes its identity to the durable Thread.
+				operation.identity = active.threadId;
+				if (this._thread?.threadId !== active.threadId) await this.subscribe(active);
+				thread = this._thread;
 			}
 			this.requireCurrentOperation(operation);
-			const thread = this._thread;
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error('Chat Thread is not available');
 			}
@@ -636,6 +738,12 @@ export class ChatWidgetModel extends Disposable {
 				source: options?.source,
 				skills,
 			};
+			if (backgroundDraftId) {
+				await this.chatService.startTurn(submission);
+				this.sessionService.completeBackgroundSend(backgroundDraftId, active);
+				if (this.isCurrentTarget(operation)) this.setState('ready');
+				return active;
+			}
 			const needsNewTurn = !!turn && (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || !!skills?.length);
 			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn) {
 				throw new Error(localize('chat.steer.incompatible', 'The current request has a different mode, Skill or task type. Add this message to the queue instead.'));
@@ -1237,6 +1345,7 @@ export class ChatWidgetModel extends Disposable {
 			const changeSets = await this.chatService.listTurnChanges(owner.session.sessionId, owner.threadId);
 			if (this.isDisposed || threadGeneration !== this.generation || changesGeneration !== this.changesGeneration) return;
 			this._changeSets = changeSets;
+			if (this.isCodeConversation) this.refreshRequestVersions.schedule();
 			this._onDidChange.fire();
 			for (const changeSet of changeSets) void this.loadChangeDetails(changeSet.changeSetId, changesGeneration);
 		} catch {
@@ -1301,7 +1410,11 @@ export class ChatWidgetModel extends Disposable {
 					const entry = cloneTranscriptEntry(change.entry);
 					if (index < 0) this.transcriptEntries.push(entry);
 					else {
-						if (update.changes.length === 1) streamingResponse = chatStreamingResponseUpdate(this.transcriptEntries[index], entry);
+						if (update.changes.length === 1) {
+							const turn = this._thread?.turns.at(-1);
+							const workspace = turn && turn.turnId === entry.turnId ? agentHostTurnDirectory(update.sessionId, turn.directory) : undefined;
+							streamingResponse = chatStreamingResponseUpdate(this.transcriptEntries[index], entry, workspace);
+						}
 						this.transcriptEntries[index] = entry;
 					}
 					break;
@@ -1331,23 +1444,26 @@ export class ChatWidgetModel extends Disposable {
 		});
 	}
 
-	private refreshThread(): Promise<void> {
+	private refreshThread({ replaceHistory = false } = {}): Promise<void> {
 		if (this.isDisposed || !this.activeSession) return Promise.resolve();
 		const generation = this.generation;
 		if (this.threadRead?.generation === generation) {
 			this.threadRead.invalidated = true;
+			this.threadRead.replaceHistory ||= replaceHistory;
 			// The pending result may still advance state, but its failure no longer
 			// describes the refresh requested after this notification or mutation.
 			this.readRequest++;
 			return this.threadRead.promise;
 		}
-		const read = { generation, promise: Promise.resolve(), invalidated: false };
+		const read = { generation, promise: Promise.resolve(), invalidated: false, replaceHistory };
 		this.threadRead = read;
 		read.promise = (async () => {
 			try {
 				do {
 					read.invalidated = false;
-					await this.readThreadSnapshot();
+					const replaceHistory = read.replaceHistory;
+					read.replaceHistory = false;
+					await this.readThreadSnapshot(replaceHistory);
 					// Retire the original read before issuing one replacement for the
 					// accumulated updates. Writes keep their own execution and result.
 				} while (!this.isDisposed && generation === this.generation && read.invalidated);
@@ -1358,7 +1474,7 @@ export class ChatWidgetModel extends Disposable {
 		return read.promise;
 	}
 
-	private async readThreadSnapshot(): Promise<void> {
+	private async readThreadSnapshot(replaceHistory: boolean): Promise<void> {
 		const active = this.activeSession;
 		if (!active) return;
 		const threadId = active.threadId;
@@ -1367,14 +1483,14 @@ export class ChatWidgetModel extends Disposable {
 		try {
 			let result = await this.chatService.readThread(active.session.sessionId, threadId, { type: 'latest', turnLimit: historyPageTurns });
 			if (this.isDisposed || generation !== this.generation) return;
-			result = await this.bridgeHistoryGap(result, generation);
+			if (!replaceHistory) result = await this.bridgeHistoryGap(result, generation);
 			if (
 				this.isDisposed ||
 				generation !== this.generation ||
 				(request !== this.readRequest && result.thread.sequence <= (this._thread?.sequence ?? 0) && result.transcript.revision <= this.transcriptRevision) ||
 				result.thread.threadId !== this.threadId
 			) return;
-			const snapshot = this.acceptThreadSnapshot(result, request, true);
+			const snapshot = this.acceptThreadSnapshot(result, request, { refresh: true, replaceHistory });
 			if (!snapshot.thread) { if (snapshot.transcript) this._onDidChange.fire(); return; }
 			void this.loadContextUsage(generation);
 			this._error = undefined;
@@ -1415,11 +1531,12 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	/** Hydration and refresh obey the same sequence floor; streaming revisions advance independently. */
-	private acceptThreadSnapshot(result: Awaited<ReturnType<IChatService['readThread']>>, request: number, refresh = false): { readonly thread: boolean; readonly transcript: boolean; } {
+	private acceptThreadSnapshot(result: ThreadRead, request: number, { refresh = false, replaceHistory = false } = {}): { readonly thread: boolean; readonly transcript: boolean; } {
 		const sequence = this._thread?.sequence ?? 0;
 		const thread = result.thread.sequence >= this.durableSequence && (result.thread.sequence > sequence || result.thread.sequence === sequence && request >= this.snapshotRequest);
 		const incoming = new Set(result.thread.turns.map(turn => turn.turnId));
-		const overlap = this._thread?.turns.findIndex(turn => incoming.has(turn.turnId)) ?? -1;
+		// A rejected anchor means the loaded prefix may have been retired by a history move.
+		const overlap = replaceHistory ? -1 : this._thread?.turns.findIndex(turn => incoming.has(turn.turnId)) ?? -1;
 		const prefix = result.history && overlap > 0 ? this._thread!.turns.slice(0, overlap) : [];
 		if (thread) {
 			this._thread = { ...result.thread, turns: [...prefix, ...result.thread.turns] };
@@ -1542,9 +1659,8 @@ export class ChatWidgetModel extends Disposable {
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
 		const generation = this.composerGeneration;
-		const surface = this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' : undefined;
 		return commitChatSession({
-			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal, surface),
+			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal),
 			isCurrent: () => !this.isDisposed && this.composerGeneration === generation,
 			adopt: created => {
 				// Catalog notifications may create a durable pane before the create response.
@@ -1615,6 +1731,7 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 function cloneTranscriptEntry(entry: ThreadTranscriptEntry): ThreadTranscriptEntry {
 	switch (entry.type) {
 		case 'voiceTranscript': return { ...entry, transcript: { ...entry.transcript } };
+		case 'skillLoad': return { ...entry, skill: { ...entry.skill } };
 		case 'hookRun': return { ...entry, run: { ...entry.run, status: { ...entry.run.status } } };
 		case 'item': return { ...entry, item: { ...entry.item } };
 		case 'turnPlan': return { ...entry, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };

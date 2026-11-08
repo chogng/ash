@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-/// One inference session; the supervisor owns the process lifetime.
+/// One loaded model and its current audio stream; the supervisor owns the process lifetime.
 #[derive(Default)]
 pub struct RecognitionHost(Arc<Mutex<Option<Recognition>>>);
 struct Recognition {
@@ -115,6 +115,14 @@ impl RecognitionHost {
                     return Err("invalid media capability response".into());
                 };
                 resource.recognizer.reset(&resource.stream);
+                Ok(Response::Done)
+            }
+            Request::RestartStream => {
+                let mut state = self.0.lock().map_err(|_| "recognizer unavailable")?;
+                let resource = state.as_mut().ok_or("invalid media capability response")?;
+                // A finished stream has received end-of-input. Give the next recording a
+                // fresh stream while keeping the model weights loaded.
+                resource.stream = resource.recognizer.create_stream();
                 Ok(Response::Done)
             }
         }

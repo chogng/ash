@@ -575,6 +575,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
             kind: ash_protocol::TurnKind::Coding,
             mode: ash_protocol::CollaborationMode::Agent,
             instructions: None,
+            directory: None,
             model: None,
             reasoning_effort: None,
             advisor: None,
@@ -587,6 +588,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
         hook_runs: Vec::new(),
@@ -852,6 +854,42 @@ fn subscription_commit_releases_only_updates_after_the_response_and_grants_owner
     );
     assert!(broker.is_agent_interaction_owner(1, &RequestId::new("approval_1").unwrap()));
     broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 2)]);
+    assert!(queue.drain().is_empty());
+}
+
+#[test]
+fn thread_subscription_replays_a_pending_approval_already_offered_to_its_session() {
+    let (broker, queue, session_id, thread_id) = subscription_lifecycle_fixture();
+    let background = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    broker.commit_session_thread_subscription(background, 0, 0, ThreadSubscriptionScope::Session);
+
+    let request = approval_request(&session_id, &thread_id);
+    let request_id = request.interaction.request_id.clone();
+    broker.offer_agent_request(request, 1);
+    let original = queue.drain();
+    assert_eq!(original.len(), 1);
+    assert_eq!(original[0]["method"], "agent/request");
+
+    let refresh = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    broker.commit_session_thread_subscription(refresh, 1, 0, ThreadSubscriptionScope::Session);
+    assert!(queue.drain().is_empty());
+
+    let opened_chat = broker
+        .begin_session_thread_subscription(1, session_id.clone(), thread_id.clone())
+        .unwrap();
+    broker.commit_session_thread_subscription(opened_chat, 1, 0, ThreadSubscriptionScope::Thread);
+    assert_eq!(queue.drain(), original);
+    assert!(broker.is_agent_interaction_owner(1, &request_id));
+
+    broker.retire_agent_request(&request_id);
+    let opened_again = broker
+        .begin_session_thread_subscription(1, session_id, thread_id)
+        .unwrap();
+    broker.commit_session_thread_subscription(opened_again, 1, 0, ThreadSubscriptionScope::Thread);
     assert!(queue.drain().is_empty());
 }
 
@@ -1126,6 +1164,7 @@ fn approval_request(session_id: &SessionId, thread_id: &ThreadId) -> AgentReques
                         ash_protocol::ActionApprovalDecision::Decline,
                     ],
                     risk_assessment: None,
+                    session_command_prefix: None,
                     sandbox_denial: None,
                 },
             },

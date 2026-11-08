@@ -2,7 +2,7 @@ import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../../plat
 import { ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
-import { readDictationPreparation, readDictationOptions } from './dictationInput.js';
+import { getDictationMicrophoneChoices, readDictationPreparation, readDictationOptions } from './dictationInput.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import './media/dictationOnboarding.css';
@@ -215,9 +215,8 @@ class DictationOnboardingBanner extends Disposable {
 				: localize('speech.extensionIntroduction', 'Try speaking with your speech extension. It controls recognition and microphone access. Test text stays here.');
 			if (!options) return;
 			const selected = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
-			const missing = selected && !options.inputDevices.some(device => device.id === selected) ? [{ value: selected, label: localize({ bundle: 'ash', key: 'dictation.missingMicrophone' }, 'Selected microphone is disconnected'), disabled: true }] : [];
-			this.microphone.setOptions([...missing, { value: '', label: localize({ bundle: 'ash', key: 'dictation.systemMicrophone' }, 'System default microphone') }, ...options.inputDevices.map(device => ({ value: device.id, label: device.label }))]);
-			this.microphone.value = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
+			this.microphone.setOptions(getDictationMicrophoneChoices(options.inputDevices, selected).map(({ id, label }) => ({ value: id, label })));
+			this.microphone.value = selected;
 			this.microphone.enabled = true;
 			const configuredLanguage = this.configuration.getValue<string>(DictationConfiguration.language);
 			const unavailableLanguage = options.languages.length && configuredLanguage !== 'auto' && !options.languages.includes(configuredLanguage) ? [{ value: configuredLanguage, label: localize('dictation.unavailableLanguage', 'Language {0} is unavailable with this service', configuredLanguage), disabled: true }] : [];
@@ -227,6 +226,7 @@ class DictationOnboardingBanner extends Disposable {
 		} catch (error) { if (!this.isDisposed && request === this.optionsRequest) { this.transcript.textContent = String(error); } }
 	}
 	private async configure(key: string, value: string): Promise<void> {
+		if (key === DictationConfiguration.inputDevice && value === this.configuration.getValue<string>(key)) return;
 		try {
 			if (this.speech.isBusy) {
 				if (key === DictationConfiguration.inputDevice && this.speech.analyserNode) await (this.switchMicrophone ? this.switchMicrophone(value) : this.speech.switchMicrophone(this.domNode.ownerDocument.defaultView as Window & typeof globalThis, value));

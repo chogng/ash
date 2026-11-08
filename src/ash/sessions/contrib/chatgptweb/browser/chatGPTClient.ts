@@ -17,7 +17,12 @@ export interface ChatGPTConversation {
 	/** This row was discovered outside the window's recent-history pagination. */
 	readonly projectOnly?: boolean;
 }
-export interface ChatGPTProject { readonly id: string; readonly title: string; }
+export interface ChatGPTProject {
+	readonly id: string;
+	readonly title: string;
+	readonly createdAt?: number;
+	readonly updatedAt?: number;
+}
 export type ChatGPTProjectCursor = { readonly kind: 'project'; readonly value: string; } | { readonly kind: 'recent'; readonly offset: number; };
 
 function conversationTimestamp(value: unknown): number | undefined {
@@ -31,6 +36,15 @@ function conversationTimestamps(item: Record<string, unknown>): Pick<ChatGPTConv
 	return {
 		...(createdAt === undefined ? {} : { createdAt }),
 		...(updatedAt === undefined ? {} : { updatedAt }),
+	};
+}
+
+function projectTimestamps(gizmo: Record<string, unknown>): Pick<ChatGPTProject, 'createdAt' | 'updatedAt'> {
+	const createdAt = typeof gizmo.created_at === 'string' ? Date.parse(gizmo.created_at) : NaN;
+	const updatedAt = typeof gizmo.updated_at === 'string' ? Date.parse(gizmo.updated_at) : NaN;
+	return {
+		...(Number.isFinite(createdAt) ? { createdAt } : {}),
+		...(Number.isFinite(updatedAt) ? { updatedAt } : {}),
 	};
 }
 
@@ -75,7 +89,7 @@ export function isChatGPTRateLimit(error: unknown): error is ChatGPTRequestError
 	return error instanceof ChatGPTRequestError && error.status === 429;
 }
 
-type HistoryRead = 'recent' | 'project' | 'conversation';
+type HistoryRead = 'recent' | 'projects' | 'pins' | 'project' | 'conversation';
 
 /** ChatGPT web conversation client. Authentication is supplied by the host per request. */
 export class ChatGPTClient {
@@ -147,7 +161,7 @@ export class ChatGPTClient {
 	}
 
 	async pinnedConversations(signal: AbortSignal): Promise<readonly ChatGPTConversation[]> {
-		const value = await this.json('/pins?item_type=conversation', signal);
+		const value = await this.json('/pins?item_type=conversation', signal, this.native ? undefined : 'pins');
 		if (!Array.isArray(value)) { throw this.invalidResponse(); }
 		return value.flatMap(pin => {
 			const item = isRecord(pin) ? pin.item : undefined;
@@ -162,7 +176,7 @@ export class ChatGPTClient {
 		let cursor: string | undefined;
 		do {
 			const query = new URLSearchParams({ conversations_per_gizmo: '0', limit: '20', owned_only: 'false', ...(cursor ? { cursor } : {}) });
-			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal);
+			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal, this.native ? undefined : 'projects');
 			if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string')) { throw this.invalidResponse(); }
 			for (const item of value.items) {
 				if (!isRecord(item) || !isRecord(item.gizmo)) { continue; }
@@ -170,7 +184,7 @@ export class ChatGPTClient {
 				const gizmo = isRecord(item.gizmo.gizmo) ? item.gizmo.gizmo : item.gizmo;
 				if (!isRecord(gizmo.display) || typeof gizmo.id !== 'string'
 					|| typeof gizmo.display.name !== 'string' || (gizmo.gizmo_snorlax_type === 'locked_chats' || gizmo.is_archived === true)) { continue; }
-				projects.set(gizmo.id, { id: gizmo.id, title: gizmo.display.name });
+				projects.set(gizmo.id, { id: gizmo.id, title: gizmo.display.name, ...projectTimestamps(gizmo) });
 			}
 			cursor = value.cursor || undefined;
 			if (cursor && cursors.has(cursor)) { throw this.invalidResponse(); }
@@ -181,6 +195,18 @@ export class ChatGPTClient {
 
 	async deleteProject(id: string, signal: AbortSignal): Promise<void> {
 		await this.consume(`/gizmos/${encodeURIComponent(id)}`, signal, 'DELETE');
+	}
+
+	async createProject(name: string, signal: AbortSignal): Promise<ChatGPTProject> {
+		const response = await this.request('/projects', signal, {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name, instructions: '', emoji: null, theme: null }),
+		});
+		const value: unknown = await response.json();
+		signal.throwIfAborted();
+		const gizmo = isRecord(value) && isRecord(value.gizmo) ? value.gizmo : undefined;
+		if (typeof gizmo?.id !== 'string' || !/^g-p-[A-Za-z0-9_-]{1,240}$/u.test(gizmo.id)) throw this.invalidResponse();
+		return { id: gizmo.id, title: name, ...projectTimestamps(gizmo) };
 	}
 
 	async projectDetails(id: string, signal: AbortSignal): Promise<{ name: string; description: string; emoji: string | null; theme: string | null; }> {
@@ -229,6 +255,23 @@ export class ChatGPTClient {
 			}
 			offset = page.nextOffset;
 		}
+	}
+
+	/** Snapshot the project before mutations can change its pagination. */
+	async listProjectConversationIds(projectId: string, signal: AbortSignal): Promise<readonly string[]> {
+		const ids = new Set<string>();
+		const cursors = new Set<string>();
+		let cursor: string | undefined;
+		do {
+			const page = await this.readProjectConversations(projectId, cursor, signal);
+			for (const item of page.items) ids.add(item.id);
+			cursor = page.cursor;
+			if (cursor) {
+				if (cursors.has(cursor)) throw this.invalidResponse();
+				cursors.add(cursor);
+			}
+		} while (cursor);
+		return [...ids];
 	}
 
 	private async readProjectConversations(projectId: string, cursor: string | undefined, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; cursor?: string; }> {
@@ -527,11 +570,10 @@ export class ChatGPTClient {
 			return value;
 		} catch (error) {
 			if (!history || !isChatGPTRateLimit(error) || signal.aborted) { throw error; }
-			// The recent list uses a minimum cooldown. Detail reads can resume sooner
-			// when the server gives a deadline. A local rejection never extends it.
+			// A shared cooldown can return only a few seconds remaining.
+			// A local rejection must never extend that deadline.
 			const now = Date.now();
-			const fallback = history === 'recent' || error.retryAt === undefined ? now + chatGPTHistoryCooldownMs : now;
-			const retryAt = Math.max(fallback, error.retryAt ?? 0, this.historyLimits.get(history)?.retryAt ?? 0);
+			const retryAt = Math.max(error.retryAt ?? now + chatGPTHistoryCooldownMs, this.historyLimits.get(history)?.retryAt ?? 0);
 			const message = history === 'conversation'
 				? localize('sessions.chatgpt.conversationRateLimited', 'ChatGPT conversation sync is temporarily paused. Try again later.')
 				: error.message;

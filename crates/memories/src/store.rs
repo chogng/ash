@@ -77,10 +77,12 @@ pub trait MemoryStore: Send + Sync {
         &self,
         commit: &MemoryPolicyCommit,
     ) -> Result<crate::MemoryPolicyMutationResult, MemoryStoreError>;
-    /// Reads policy and matching content in one storage snapshot. Disabled scopes must not load
+    /// Reads policy, matching content, and the project index in one storage snapshot. Disabled scopes must not load
     /// bodies; deletion and consent changes committed before this snapshot are immediately visible.
-    fn context(&self, request: &MemoryStoreContextRequest)
-    -> Result<Vec<Memory>, MemoryStoreError>;
+    fn context(
+        &self,
+        request: &MemoryStoreContextRequest,
+    ) -> Result<MemoryStoreContext, MemoryStoreError>;
     /// Adds one record using the write cancellation cutoff described on this trait.
     fn add(
         &self,
@@ -165,4 +167,11 @@ pub struct MemoryStoreContextRequest {
     pub scopes: Vec<MemoryScope>,
     pub normalized_terms: Vec<String>,
     pub limit: usize,
+    pub project_index_limit: usize,
+}
+
+#[derive(Default)]
+pub struct MemoryStoreContext {
+    pub matches: Vec<Memory>,
+    pub project_index: Vec<Memory>,
 }

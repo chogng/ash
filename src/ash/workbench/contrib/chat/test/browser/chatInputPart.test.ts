@@ -61,7 +61,7 @@ import { ILanguageModelsService } from '../../common/languageModels.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
-import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, LocalTranscriptionModelState, type ILocalTranscriptionModelStatus, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { Severity } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -608,12 +608,65 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	using part = inputPart(notifications, { start: async () => { throw new Error('HTTP 403'); } });
 	const failure = new DeferredPromise<void>();
 	using notification = part.inputNotificationsForTest.onDidChange(() => { void failure.complete(); });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')?.click();
 	await failure.p;
-	assert.equal(part.element.querySelector('.ash-chat-input-notification-message')?.textContent, 'Dictation failed: Error: HTTP 403');
+	assert.equal(part.element.querySelector('.ash-chat-input-notification-message')?.textContent, 'Dictation failed: HTTP 403');
 	assert.deepEqual(notifications.model.getNotifications(), []);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
-	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.disabled, false);
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')?.disabled, false);
+});
+
+test('Chat shows first-use model download on the mic button, supports cancellation and explains a failed retry in Chinese', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using modelStatus = new Emitter<ILocalTranscriptionModelStatus>();
+		let cancelled = 0;
+		using part = inputPart(sharedNotifications, undefined, 'agent', {}, undefined, {
+			_serviceBrand: undefined, isSupported: true,
+			onDidChangeModels: AshEvent.None, onDidChangeModelStatus: modelStatus.event, onDidTranscribe: AshEvent.None,
+			getModel: async model => ({ model, available: false, sizeBytes: 0, downloadSizeBytes: 100 }),
+			getCacheDirectory: async () => 'C:/models',
+			getModelStatus: async () => ({ state: LocalTranscriptionModelState.Idle }),
+			listModels: async () => [],
+			prepareModel: () => assert.fail('Recording must prepare its own model'),
+			importPackage: () => assert.fail('Unexpected model import'),
+			importModel: async () => assert.fail('Unexpected model import'),
+			cancelModel: async () => { }, deleteModel: async () => { }, pushAudio: async () => { },
+			start: async () => modelStatus.fire({ state: LocalTranscriptionModelState.Downloading, file: 'encoder.onnx', downloadedBytes: 25 }),
+			stop: async () => assert.fail('Cancelling the download must not transcribe'),
+			cancel: async () => { cancelled++; modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); },
+		});
+		const microphone = () => part.element.querySelector<HTMLButtonElement>('.ash-chat-input-mic-action')!;
+		edit(part, '保留草稿');
+		microphone().click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
+		assert.equal(microphone().lastElementChild?.textContent, '正在下载听写模型…');
+		assert.match(microphone().getAttribute('aria-label') ?? '', /按下可取消/u);
+		assert.ok(microphone().querySelector('.ash-loading-spinner'));
+		assert.equal(microphone().classList.contains('ash-dictation-recording'), false);
+		modelStatus.fire({ state: LocalTranscriptionModelState.Checking });
+		modelStatus.fire({ state: LocalTranscriptionModelState.Downloading, file: 'decoder.onnx', downloadedBytes: 50 });
+		assert.equal(microphone().lastElementChild?.textContent, '正在下载听写模型…');
+		microphone().click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(cancelled, 1);
+		assert.equal(microphone().disabled, false);
+		assert.equal(microphone().getAttribute('aria-label'), '听写');
+		assert.equal(part.element.querySelector('textarea')?.value, '保留草稿');
+
+		microphone().click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.ok(microphone().querySelector('.ash-loading-spinner'));
+		modelStatus.fire({ state: LocalTranscriptionModelState.Error, error: 'HTTP 503' });
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(microphone().getAttribute('aria-label'), '听写');
+		assert.match(part.element.querySelector('.ash-chat-input-notification-message')?.textContent ?? '', /HTTP 503.*未录制音频.*可重试/u);
+		assert.equal(part.element.querySelector('.ash-dictation-onboarding'), null);
+		assert.equal(part.element.querySelector('textarea')?.value, '保留草稿');
+	} finally {
+		initializeTestLocalization('en');
+	}
 });
 
 test('Chat keeps model preparation in settings and reads it only when dictation is requested', async () => {
@@ -642,10 +695,9 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 		pushAudio: async () => { }, start: async () => { starts++; }, stop: async () => '', cancel: async () => { },
 	});
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
-	assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
 	assert.equal(reads, 0);
 	edit(part, 'Text still works');
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await opened;
 	await Promise.resolve();
 	assert.deepEqual(categories, ['dictation']);
@@ -657,9 +709,8 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 	part.setVisible(false);
 	part.setVisible(true);
 	assert.equal(reads, 1);
-	assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
 	opened = new Promise<void>(resolve => { settingsOpened = resolve; });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await opened;
 	assert.deepEqual(categories, ['dictation', 'dictation']);
 	assert.deepEqual({ reads, starts, prepared, cancelled }, { reads: 2, starts: 0, prepared: 0, cancelled: 0 });
@@ -676,11 +727,11 @@ test('Chat dictation session failure appears in notifications and releases the m
 			return { stop: async () => { }, cancel: async () => { } };
 		}
 	});
-	const microphone = part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+	const microphone = part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 	assert.ok(microphone);
 	microphone.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.getAttribute('aria-pressed'), 'true');
+	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')?.getAttribute('aria-pressed'), 'true');
 	const failed = new DeferredPromise<void>();
 	using notificationAdded = notifications.model.onDidAdd(() => { void failed.complete(); });
 	endSession?.('HTTP 403');
@@ -689,7 +740,7 @@ test('Chat dictation session failure appears in notifications and releases the m
 		{ severity: Severity.Error, message: 'Dictation failed: Error: HTTP 403' },
 	]);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
-	assert.notEqual(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.getAttribute('aria-pressed'), 'true');
+	assert.notEqual(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')?.getAttribute('aria-pressed'), 'true');
 });
 
 for (const layout of [undefined, 'compact'] as const) test(`Dictation replaces the selection and submission waits for final transcription (${layout ?? 'default'})`, async () => {
@@ -707,7 +758,7 @@ for (const layout of [undefined, 'compact'] as const) test(`Dictation replaces t
 	edit(part, 'before old after');
 	const input = part.element.querySelector('textarea')!;
 	input.setSelectionRange(7, 10);
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	transcript('partial', false);
 	assert.equal(input.value, 'before old after');
@@ -739,7 +790,7 @@ for (const layout of [undefined, 'compact'] as const) test(`Enter submits an int
 		},
 	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	transcript('interim words', false);
 	const input = part.element.querySelector('textarea')!;
@@ -765,7 +816,7 @@ for (const layout of [undefined, 'compact'] as const) test(`Failed dictation fin
 	}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	edit(part, 'Existing draft');
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	await assert.rejects(part.acceptInput(), /transcription failed/u);
 	assert.deepEqual(sent, []);
@@ -789,7 +840,7 @@ for (const locale of ['en', 'zh-CN']) for (const layout of [undefined, 'compact'
 			}),
 		}, 'agent', { send: async text => { sent.push(text); } }, undefined, undefined, undefined, layout);
 		part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
-		const microphone = () => part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!;
+		const microphone = () => part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!;
 		assert.ok(microphone().querySelector('.ash-icon-mic'));
 		microphone().click();
 		await new Promise(resolve => setTimeout(resolve, 0));
@@ -819,11 +870,11 @@ test('submitting an edited dictated draft records aggregate accuracy once withou
 		start: async (_options, onTranscript) => ({ stop: async () => onTranscript('cat', true), cancel: async () => { } }),
 	}, 'agent', { send: async () => { } }, undefined, undefined, new Telemetry());
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	const inserted = new DeferredPromise<void>();
 	using changed = part.onDidChangeInputForTest(() => { if (part.element.querySelector('textarea')!.value === 'cat') void inserted.complete(); });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await inserted.p;
 	edit(part, 'cats');
 	await part.acceptInput();
@@ -835,9 +886,11 @@ test('Closing an input during microphone acquisition closes the resulting sessio
 	let completeStart!: (session: { stop(): Promise<void>; cancel(): Promise<void>; }) => void;
 	let stopped = 0;
 	const part = inputPart(sharedNotifications, { start: () => new Promise(resolve => { completeStart = resolve; void acquiring.complete(); }) });
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await acquiring.p;
-	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.disabled, true);
+	const microphone = part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!;
+	assert.equal(microphone.disabled, false);
+	assert.ok(microphone.querySelector('.ash-loading-spinner'));
 	part.dispose();
 	completeStart({ stop: async () => { stopped++; }, cancel: async () => { stopped++; } });
 	await new Promise(resolve => setTimeout(resolve, 0));
@@ -869,12 +922,12 @@ test('Shared dictation only changes its owning input and returns the complete tr
 	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
-	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await started;
 	transcript('first', false);
 	assert.equal(first.element.querySelector('.ash-chat-dictation-preview')!.textContent, 'first');
 	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['', '']);
-	assert.equal(second.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.disabled, true);
+	assert.equal(second.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.disabled, true);
 	second.setVisible(false);
 	assert.equal(stops, 0);
 	assert.equal(await speech.stopAndTranscribe(), 'first second');
@@ -905,7 +958,7 @@ test('Hiding the recording input discards stop-time text and permits another inp
 	using first = inputPart(sharedNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(sharedNotifications, undefined, 'agent', {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
-	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await started;
 	transcript('interim', false);
 	first.setVisible(false);
@@ -916,7 +969,7 @@ test('Hiding the recording input discards stop-time text and permits another inp
 	assert.deepEqual([first.element.querySelector('textarea')!.value, second.element.querySelector('textarea')!.value], ['', '']);
 	assert.equal(first.element.querySelector('.ash-chat-dictation-preview')!.textContent, '');
 	const restarted = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
-	second.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	second.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await restarted;
 	transcript('new input', false);
 	assert.equal(second.element.querySelector('.ash-chat-dictation-preview')!.textContent, 'new input');
@@ -947,7 +1000,7 @@ test('A failed shared session notifies its window once without notifying unrelat
 	using first = inputPart(firstNotifications, undefined, 'agent', {}, services);
 	using second = inputPart(secondNotifications, undefined, 'agent', {}, services);
 	const started = waitForSpeechState(speech, ChatSpeechToTextState.Recording);
-	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	first.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await started;
 	const notified = new DeferredPromise<void>();
 	using notificationAdded = windowNotifications.model.onDidAdd(() => { void notified.complete(); });
@@ -1201,7 +1254,7 @@ for (const layout of [undefined, 'compact'] as const) for (const input of [
 	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [{ name: 'compact', description: 'Compact context', argumentMode: 'none' }], skillSelectors: [], canSelectAgent: false };
 	part.render(ready);
 	// Start capture while the draft is empty; slash commands intentionally hide the microphone.
-	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')!.click();
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	edit(part, input.text);
 	const sending = part.acceptInput();
@@ -1551,6 +1604,50 @@ test('approval exposes only offered reusable decisions and renders exact argv as
 		[...interaction.querySelectorAll('button')].find(button => button.textContent === label)!.click();
 	}
 	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveForSession' } }, { type: 'approval', response: { decision: 'approveAndSaveRule' } }]);
+});
+
+test('file write approval submits the offered session scope', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'file-write', request: {
+				type: 'approval', request: {
+					reason: 'File write', capabilities: [{ kind: 'fileWrite', scope: '/workspace/.vscode/tasks.json' }],
+					allowedDecisions: ['decline', 'approveOnce', 'approveFileWriteForSession']
+				}
+			}
+		},
+	});
+	const interaction = part.element.querySelector('.ash-chat-interaction')!;
+	assert.equal(interaction.querySelector('code')?.textContent, '/workspace/.vscode/tasks.json');
+	const buttons = [...interaction.querySelectorAll('button')];
+	assert.ok(!buttons.some(button => button.textContent === 'Save approval for this exact action'));
+	buttons.find(button => button.textContent === 'Allow edits to this file this session')!.click();
+	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveFileWriteForSession' } }]);
+});
+
+test('shell approval displays and submits the backend command prefix', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'shell-prefix', request: {
+				type: 'approval', request: {
+					reason: 'Run Git status', capabilities: [{ kind: 'processSpawn', scope: '/workspace' }],
+					command: { program: 'bash', arguments: ['-c', 'git status --short'] },
+					sessionCommandPrefix: { program: 'git', arguments: ['status'] },
+					allowedDecisions: ['decline', 'approveOnce', 'approveCommandPrefixForSession']
+				}
+			}
+		},
+	});
+	const interaction = part.element.querySelector('.ash-chat-interaction')!;
+	const button = [...interaction.querySelectorAll('button')].find(button => button.textContent === 'Allow the git status prefix this session')!;
+	button.click();
+	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveCommandPrefixForSession' } }]);
 });
 
 test('result review retains literal evidence and sends only the exact offer decision', async () => {
@@ -2225,7 +2322,8 @@ suite('chatInput browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }, { text }] });
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
 		} else {
-			await expect(send).toBeDisabled();
+			await expect(send).toHaveCount(0);
+			await expect(page.locator('.ash-chat-input-voice-action [data-ash-icon-id="voice-mode"]')).toBeVisible();
 		}
 	});
 
@@ -2236,7 +2334,7 @@ suite('chatInput browser component', () => {
 		const composer = page.locator('.ash-chat-input-container');
 		const input = composer.locator('.stanza-editor-input');
 		await input.pressSequentially('Review ');
-		const microphone = composer.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+		const microphone = composer.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 		if (stage === 'attachments') {
 			await dropResources(['file:///workspace/drop-pending.ts']);
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
@@ -2271,13 +2369,73 @@ suite('chatInput browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`Compact Chat shows the dictation connection stage within the composer (${locale})`, async () => {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 400, height: 500 });
+		await page.goto(`/chatInput.html?inlineCode&compact&dictation&dictationConnecting&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const composer = page.locator('.ash-chat-input-container');
+		const mic = composer.locator('.ash-chat-input-mic-action');
+		const label = mic.locator('.ash-loading-spinner + span');
+		await mic.click();
+		await expect(label).toBeVisible();
+		await expect(label).toHaveText(locale === 'en' ? 'Connecting to dictation service…' : '正在连接听写服务…');
+		await expect(mic).toHaveAccessibleName(locale === 'en' ? 'Connecting to dictation service… Activate to cancel.' : '正在连接听写服务…按下可取消。');
+		expect(await composer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await mic.press('Enter');
+		await expect(label).toHaveCount(0);
+		await expect(mic).toHaveAccessibleName(locale === 'en' ? 'Dictate message' : '听写');
+	});
+
+	test('Chat dictation reflects microphone volume and uses a static mark with reduced motion', async () => {
+		const { page } = browserTests;
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await page.goto('/chatInput.html?inlineCode&compact&dictation');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const composer = page.locator('.ash-chat-input-container');
+		const mic = composer.locator('.ash-chat-input-mic-action');
+		const volume = mic.locator('.ash-dictation-volume');
+		const staticMark = () => mic.evaluate(element => getComputedStyle(element, '::after').content);
+		await mic.click();
+		await expect(mic).toHaveAccessibleName('Stop dictation');
+		await expect(volume).toHaveAttribute('aria-hidden', 'true');
+		await expect(volume).toHaveCSS('opacity', '0');
+		expect(await staticMark()).toBe('""');
+
+		await page.evaluate(() => window.ashChatInputIntegration.setDictationLevel(0.5));
+		const opacity = () => volume.evaluate(element => Number(getComputedStyle(element).opacity));
+		await expect.poll(opacity).toBeGreaterThan(0.7);
+		await page.evaluate(() => window.ashChatInputIntegration.setDictationLevel(0));
+		await expect.poll(opacity).toBeLessThan(0.1);
+
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await expect(volume).toHaveCount(0);
+		expect(await staticMark()).toBe('""');
+		const samples = await page.evaluate(async () => {
+			const reads = () => window.ashChatInputIntegration.dictationLevelReads();
+			const before = reads();
+			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+			return reads() - before;
+		});
+		expect(samples).toBe(0);
+
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await expect(volume).toHaveCount(1);
+		await page.evaluate(() => window.ashChatInputIntegration.setReduceMotion('on'));
+		await expect(volume).toHaveCount(0);
+		expect(await staticMark()).toBe('""');
+		await composer.locator('.stanza-editor-input').press('Escape');
+		await expect(mic).toHaveAccessibleName('Dictate message');
+		expect(await staticMark()).toBe('none');
+	});
+
 	for (const outcome of ['success', 'empty', 'failure'] as const) test(`Rich compact input finalizes dictation before Enter submission (${outcome})`, async () => {
 		const { page } = browserTests;
 		await page.goto('/chatInput.html?inlineCode&compact&dictation');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const composer = page.locator('.ash-chat-input-container');
 		const input = composer.locator('.stanza-editor-input');
-		const microphone = composer.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+		const microphone = composer.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 		if (outcome === 'failure') {
 			await input.focus();
 			await page.keyboard.insertText('Keep this draft');
@@ -2289,7 +2447,7 @@ suite('chatInput browser component', () => {
 		await expect(page.locator('.ash-chat-dictation-preview')).toHaveText('Still recognizing');
 		const send = composer.locator('[data-action-id="ash.chat.input.send"] button');
 		if (outcome === 'failure') await expect(send).toBeEnabled();
-		else await expect(send).toBeDisabled();
+		else await expect(send).toHaveCount(0);
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().stops)).toBe(1);
 		await input.press('Enter');
@@ -3023,7 +3181,12 @@ suite('chatInput browser component', () => {
 				await input.press('Home');
 				for (let index = 0; index < 8; index++) await input.press('ArrowRight');
 				await page.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true }).press('Enter');
+				const search = page.getByRole('menuitem', { name: locale === 'en' ? 'Search attachments' : '搜索附件', exact: true });
+				await page.keyboard.press('ArrowDown');
+				await expect(search).toBeFocused();
+				await page.keyboard.press('Enter');
 				const picker = page.getByRole('dialog');
+				await expect(picker.getByRole('combobox')).toBeFocused();
 				await picker.getByRole('combobox').fill('edited');
 				await picker.getByRole('option', { name: /edited.ts/ }).click();
 				const wholeFile = page.locator('.ash-chat-code-reference').filter({ hasText: /^edited.ts$/ });
@@ -3226,6 +3389,7 @@ suite('chatInput browser component', () => {
 				await input.press('Enter');
 				await expect(page.getByLabel('Submission', { exact: true })).toHaveText('[]');
 				await page.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true }).press('Enter');
+				await page.getByRole('menuitem', { name: locale === 'en' ? 'Search attachments' : '搜索附件', exact: true }).click();
 				const picker = page.getByRole('dialog');
 				await picker.getByRole('combobox').fill('edited');
 				await picker.getByRole('option', { name: /edited.ts/ }).click();
@@ -3398,9 +3562,11 @@ suite('chatInput browser component', () => {
 				const picker = page.locator('.ash-action-widget');
 				await expect(picker).toBeVisible();
 				await expect(picker.getByRole('menuitemradio')).toHaveCount(3);
-				await expect(picker.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
-				for (const label of await picker.locator('.ash-button-label').all()) {
-					await expect(label).toHaveCSS('font-weight', '600');
+				await expect(picker.locator('.ash-keybinding-label-keycap')).toHaveCount(0);
+				const labels = picker.locator('.ash-action-widget-label');
+				await expect(labels).toHaveCount(3);
+				for (const label of await labels.all()) {
+					await expect(label).toHaveCSS('font-weight', '400');
 				}
 				await expect(picker.locator('.ash-action-widget-summary')).toHaveCount(3);
 				await page.keyboard.press('End');
@@ -3427,6 +3593,9 @@ suite('chatInput browser component', () => {
 				await expect(permissions).toHaveAttribute('aria-expanded', 'false');
 				await permissions.click();
 				await page.keyboard.press('1');
+				await expect(permissions).toHaveAttribute('aria-expanded', 'true');
+				await page.keyboard.press('Home');
+				await page.keyboard.press('Enter');
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toBeVisible();
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toHaveText(locale === 'en' ? 'Auto' : '自动');
 				await expect(picker).toBeHidden();
@@ -3766,7 +3935,10 @@ suite('chatInput browser component', () => {
 			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
 			const effortMenu = page.getByRole('menu', { name: '推理强度' });
 			await expect(effortMenu.getByRole('menuitemradio')).toHaveText(['低', '高']);
-			await expect(effortMenu.getByRole('menuitemradio', { checked: true })).toHaveText('低');
+			const selectedEffort = effortMenu.getByRole('menuitemradio', { checked: true });
+			await expect(selectedEffort).toHaveText('低');
+			await expect(selectedEffort.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
+			await expect(selectedEffort.locator('.ash-menu-leading-slot')).toBeHidden();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedReasoningEffort: undefined });
 			await effortMenu.getByRole('menuitemradio', { name: '低', exact: true }).click();
 			await expect(picker).toHaveCount(0);
@@ -4095,6 +4267,8 @@ suite('chatInput browser component', () => {
 			await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
 			await expect(menu.getByRole('menuitemradio').and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
 			await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
+			await expect(item.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+			await expect(item.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(mode).toBeFocused();
 		}
@@ -4789,10 +4963,16 @@ suite('chatInput browser component', () => {
 			const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
 			await expect(agent).toBeFocused();
 			await expect(agent).toHaveAttribute('aria-checked', 'true');
-			await expect(agent.locator('.ash-icon-label-icon [data-ash-icon-id="unlimited"]')).toBeVisible();
-			await expect(agent.locator('.ash-menu-leading-check > [data-ash-icon-id="check"]')).toBeVisible();
+			await expect(agent.locator('.ash-menu-leading-slot [data-ash-icon-id="unlimited"]')).toBeVisible();
+			const check = agent.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]');
+			await expect(check).toBeVisible();
+			const labelBounds = (await agent.locator('.ash-button-label').boundingBox())!;
+			const checkBounds = (await check.boundingBox())!;
+			expect(checkBounds.x).toBeGreaterThan(labelBounds.x + labelBounds.width);
 			await agent.press('ArrowDown');
-			await expect(widget.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
+			const plan = widget.getByRole('menuitemradio', { name: 'Plan', exact: true });
+			await expect(plan).toBeFocused();
+			await expect(plan.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeHidden();
 			await page.keyboard.press('Escape');
 			await expect(widget).toHaveCount(0);
 			await expect(picker).toBeFocused();
@@ -4912,12 +5092,13 @@ suite('chatInput browser component', () => {
 		}
 	});
 
-	test('Chat input places the microphone beside voice or send at the right edge', async function () {
+	test('Chat dictation settings stay beside the microphone as voice switches to send', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/chatInput.html?inlineCode');
+		await page.goto('/chatInput.html?inlineCode&dictation&voiceInput');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const chat = page.locator('main');
+		await chat.evaluate(element => element.classList.add('ash-workbench'));
 		const toolbar = chat.locator('.ash-chat-input-toolbars');
 		const rightActionLayout = async (actionId: string) => toolbar.evaluate((element, id) => {
 			const mic = element.querySelector<HTMLElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"]');
@@ -4933,8 +5114,50 @@ suite('chatInput browser component', () => {
 			};
 		}, actionId);
 		await expect(toolbar.locator('[data-action-id="ash.chat.input.attachment"]')).toHaveCount(0);
-		await expect(toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toHaveCount(1);
+		const dictation = toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"]');
+		const microphoneSurface = dictation.locator('.ash-split-action-primary');
+		const settingsSurface = dictation.locator('.ash-split-action-dropdown');
 		const voiceButton = toolbar.locator('[data-action-id="ash.chat.input.voice"] button');
+		const microphone = toolbar.getByRole('button', { name: 'Dictate message', exact: true });
+		const settings = toolbar.getByRole('button', { name: 'Dictation settings', exact: true });
+		const transparent = 'rgba(0, 0, 0, 0)';
+		await expect(dictation).toHaveCSS('column-gap', '2px');
+		await expect(microphone).toHaveCSS('border-radius', '4px');
+		await expect(settings).toHaveCSS('border-radius', '4px');
+		await expect(voiceButton).toHaveCSS('border-radius', '8px');
+		await expect(voiceButton).toHaveCSS('background-color', transparent);
+		await expect(microphoneSurface).toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).toHaveCSS('background-color', transparent);
+		await microphone.hover();
+		await expect(microphoneSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).not.toHaveCSS('background-color', transparent);
+		await expect(microphone).not.toHaveCSS('background-color', transparent);
+		await expect(settings).toHaveCSS('background-color', transparent);
+		await settings.hover();
+		await expect(dictation).toHaveCSS('background-color', transparent);
+		await expect(microphoneSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).not.toHaveCSS('background-color', transparent);
+		await expect(microphone).toHaveCSS('background-color', transparent);
+		await expect(settings).not.toHaveCSS('background-color', transparent);
+		await voiceButton.hover();
+		await expect(microphoneSurface).toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).toHaveCSS('background-color', transparent);
+		await expect(voiceButton).not.toHaveCSS('background-color', transparent);
+		await microphone.focus();
+		await microphone.press('ArrowRight');
+		await expect(settings).toBeFocused();
+		await settings.press('Enter');
+		const defaultMicrophone = page.getByRole('menuitemradio', { name: 'System', exact: true });
+		await expect(defaultMicrophone).toHaveAttribute('aria-checked', 'true');
+		await expect(defaultMicrophone.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]')).toBeVisible();
+		await expect(page.getByRole('menuitemradio', { name: 'Test microphone', exact: true })).toBeVisible();
+		await expect(microphoneSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settings).not.toHaveCSS('background-color', transparent);
+		await expect(microphone).toHaveCSS('background-color', transparent);
+		await expect(dictation).toHaveCSS('background-color', transparent);
+		await page.getByRole('menuitemradio', { name: 'USB microphone' }).click();
+		await expect(settings).toBeFocused();
 		await expect(voiceButton).toBeVisible();
 		const emptyLayout = await rightActionLayout('ash.chat.input.voice');
 		expect(emptyLayout.micLeft).toBeGreaterThan(emptyLayout.toolbarMiddle);
@@ -4944,23 +5167,31 @@ suite('chatInput browser component', () => {
 		await expect(voiceButton.locator('[data-ash-icon-id="voice-mode"]')).toHaveCount(1);
 		const shape = await voiceButton.evaluate(button => {
 			const bounds = button.getBoundingClientRect();
-			return { width: bounds.width, height: bounds.height, radius: getComputedStyle(button).borderRadius, background: getComputedStyle(button).backgroundColor };
+			return { width: bounds.width, height: bounds.height };
 		});
 		expect(shape.width).toBe(shape.height);
-		expect(shape.radius).toBe('50%');
-		expect(shape.background).not.toBe('rgba(0, 0, 0, 0)');
 		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('Hello');
 		await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"]')).toHaveCount(0);
 		const sendButton = toolbar.locator('[data-action-id="ash.chat.input.send"] button');
-		await expect(sendButton.locator('[data-ash-icon-id="arrow-up"]')).toHaveCount(1);
+		await expect(sendButton.locator('[data-ash-icon-id="enter"]')).toHaveCount(1);
+		await settings.click();
+		await expect(page.getByRole('menuitemradio', { name: 'USB microphone' })).toHaveAttribute('aria-checked', 'true');
+		const language = page.getByRole('menuitem', { name: 'Transcription language' });
+		await language.focus();
+		await language.press('ArrowRight');
+		await expect(page.getByRole('menuitemradio', { name: 'Automatic language detection' })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		await expect(settings).toBeFocused();
 		await expect(sendButton).toHaveCSS('border-radius', '8px');
 		const messageLayout = await rightActionLayout('ash.chat.input.send');
 		expect(messageLayout.micLeft).toBeGreaterThan(messageLayout.toolbarMiddle);
 		expect(messageLayout.gap).toBeGreaterThanOrEqual(0);
 		expect(messageLayout.gap).toBeLessThanOrEqual(16);
 		expect(messageLayout.rightInset).toBeLessThanOrEqual(2);
+		expect(messageLayout.micLeft).toBeCloseTo(emptyLayout.micLeft);
 		await input.press('Home');
 		await input.press('Shift+End');
 		await page.keyboard.press('Backspace');

@@ -2,25 +2,202 @@
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
-	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
-	gap: var(--ash-spacing-size80);
+	padding-top: var(--ash-spacing-size240);
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-settings-card > .ash-local-transcription-model-controls::before {
+	content: none;
+}
+
+.ash-local-transcription-model-heading {
+	margin: 0;
+	font-size: inherit;
+}
+
+.ash-local-transcription-model-selection.ash-configuration-setting {
+	min-height: 0;
+	padding-block: 0;
+}
+
+.ash-local-transcription-model-selection > .ash-select-box {
+	max-width: 100%;
+}
+
+.ash-local-transcription-model-row-state {
+	display: block;
+	color: var(--ash-description-foreground);
+}
+
+.ash-local-transcription-model-controls:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-local-transcription-model-table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-regular);
 	line-height: 1.5;
 }
 
-.ash-local-transcription-model-source .ash-input-box {
-	width: 100%;
+.ash-local-transcription-model-table :is(th, td) {
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	text-align: start;
+	font-weight: var(--ash-fontWeight-regular);
+	overflow-wrap: anywhere;
+}
+
+.ash-local-transcription-model-table thead {
+	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-local-transcription-model-table thead th:first-child {
+	width: 40%;
+}
+
+.ash-local-transcription-model-table thead th:last-child {
+	width: 24%;
+}
+
+.ash-local-transcription-model-table tbody tr {
+	border-top: var(--ash-strokeThickness) solid
+		var(--ash-settings-itemSeparator);
+}
+
+.ash-local-transcription-model-language-tag {
+	padding-inline: var(--ash-spacing-size40);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-list-hoverBackground);
+	color: var(--ash-foreground);
+}
+
+.ash-local-transcription-model-language-tag
+	+ .ash-local-transcription-model-language-tag {
+	margin-inline-start: var(--ash-spacing-size40);
 }
 
 .ash-local-transcription-model-actions {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--ash-spacing-size80);
+}
+
+.ash-button.ash-local-transcription-model-action {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.ash-local-transcription-model-action .ash-button-label {
+	white-space: normal;
+}
+
+.ash-button.ash-local-transcription-model-install-progress {
+	--ash-dictation-download-progress: 0%;
+	display: inline-grid;
+	grid-template-columns: minmax(0, 1fr);
+	position: relative;
+	isolation: isolate;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-local-transcription-model-install-progress::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	/* Match the hovered microphone, where both the button and its split-action slot paint the toolbar hover color. */
+	background:
+		linear-gradient(
+			var(--ash-toolbar-hoverBackground),
+			var(--ash-toolbar-hoverBackground)
+		),
+		linear-gradient(
+			var(--ash-toolbar-hoverBackground),
+			var(--ash-toolbar-hoverBackground)
+		),
+		var(--ash-editor-background);
+	clip-path: inset(0 calc(100% - var(--ash-dictation-download-progress)) 0 0);
+	pointer-events: none;
+}
+
+.ash-high-contrast .ash-local-transcription-model-install-progress::before {
+	inset-block-start: auto;
+	height: var(--ash-strokeThickness);
+	background: currentColor;
+}
+
+.ash-local-transcription-model-cancel-label,
+.ash-local-transcription-model-width-samples {
+	display: none;
+}
+
+.ash-local-transcription-model-install-progress
+	> :is(
+		.ash-button-content,
+		.ash-local-transcription-model-cancel-label,
+		.ash-local-transcription-model-width-samples
+	) {
+	grid-area: 1 / 1;
+	justify-self: center;
+}
+
+.ash-local-transcription-model-install-progress
+	> .ash-local-transcription-model-width-samples {
+	display: grid;
+	block-size: 0;
+	visibility: hidden;
+}
+
+.ash-local-transcription-model-width-samples > span {
+	grid-area: 1 / 1;
+}
+
+.ash-local-transcription-model-install-progress
+	> .ash-local-transcription-model-cancel-label {
+	display: block;
+	visibility: hidden;
+}
+
+.ash-local-transcription-model-install-progress:enabled:is(
+		:focus-visible,
+		:hover:not(.awaiting-pointer-exit)
+	)
+	> .ash-button-content {
+	visibility: hidden;
+}
+
+.ash-local-transcription-model-install-progress:enabled:is(
+		:focus-visible,
+		:hover:not(.awaiting-pointer-exit)
+	)
+	> .ash-local-transcription-model-cancel-label {
+	visibility: visible;
+}
+
+.ash-button-danger.ash-local-transcription-model-action:not(:enabled:hover) {
+	background: color-mix(
+		in srgb,
+		var(--ash-error-foreground) 10%,
+		transparent
+	);
+}
+
+.ash-high-contrast
+	.ash-button-danger.ash-local-transcription-model-action:not(
+		:enabled:hover
+	) {
+	background: transparent;
 }
 
 .ash-local-transcription-model-status {
 	margin: 0;
+	padding-inline: var(--ash-spacing-size160);
 	color: var(--ash-description-foreground);
 	overflow-wrap: anywhere;
 }
@@ -37,25 +214,4 @@
 }
 .ash-local-transcription-model-status progress[hidden] {
 	display: none;
-}
-.ash-local-transcription-model-inventory {
-	min-width: 0;
-}
-.ash-local-transcription-model-cell-text {
-	min-width: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-.ash-local-transcription-model-controls details {
-	display: block;
-}
-.ash-local-transcription-model-controls summary {
-	cursor: pointer;
-	margin-bottom: var(--ash-spacing-size80);
-}
-.ash-local-transcription-model-controls
-	details
-	> .ash-local-transcription-model-actions {
-	margin-top: var(--ash-spacing-size80);
 }

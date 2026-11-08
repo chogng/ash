@@ -259,6 +259,9 @@ export class AgentThreadHistoryConflictError extends Error {
 	constructor() { super('Thread files changed after their checkpoint'); }
 }
 
+/** The requested pagination anchor is unavailable in the current Thread history. */
+export class AgentThreadHistoryAnchorError extends Error { }
+
 /** The displayed queue revision is stale or has already entered delivery. */
 export class AgentQueueConflictError extends Error { }
 

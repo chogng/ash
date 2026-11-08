@@ -308,7 +308,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
     let (outbound, incoming) = crate::server::message_queue::outbound_queue(256);
     thread::scope(|scope| {
         let requests = RequestDispatcher::start(scope)?;
-        let profile_connection = profile_server.product_host_connection();
+        let profile_connection = profile_server.agents_gateway_connection();
         let wire_connection = profile_connection.clone();
         let writer_telemetry = profile_server.telemetry.clone();
         let writer_handle = scope.spawn(move || {
@@ -1390,6 +1390,10 @@ fn selected_execution_target(
     // issued while reviewing on that Session's execution runtime. Ignore unrelated
     // top-level identity fields that are not part of these methods' contracts.
     let session_selector = match method {
+        Some("file/search/glob" | "file/search/glob/cancel") => params
+            .and_then(|params| params.get("target"))
+            .filter(|target| target["type"] == "session")
+            .and_then(|target| target.get("sessionId")),
         Some("instructions/importPreview" | "instructions/import") => params
             .and_then(|params| params.get("directory"))
             .and_then(|directory| directory.get("sessionId")),

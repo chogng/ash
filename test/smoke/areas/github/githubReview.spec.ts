@@ -69,7 +69,7 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await expect(workbench.settingsEditor.element).toBeHidden();
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	await new QuickAccess(sessionsPage).runCommand('workbench.action.openSettings');
-	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings', exact: true });
+	const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'Git & PRs', exact: true }).click();
 	const sessionsSection = settings.locator('.ash-settings-section');
 	await expect(sessionsSection.getByRole('button', { name: 'Manage automatic reviews', exact: true })).toBeVisible();
@@ -86,7 +86,7 @@ test('Session Issue associations persist through reopen and expose keyboard acti
 	if (webAppServer) { await source.goto(workbench.page.url(), { waitUntil: 'domcontentloaded' }); }
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, source);
 	try {
-		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'issue-session', title: 'Issue associations', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'issue-session', kind: 'code', title: 'Issue associations', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		for (const number of [11, 12, 11]) {
 			await connection.client.request(APP_SERVER_METHODS['github/session/issue/attach'], { sessionId, reference: { repository: { host: 'github.com', owner: 'ash-fixture', name: 'issues' }, number } });

@@ -7,7 +7,7 @@ import { TerminalWindowLifetimeHost } from '../../platform/terminal/electron-mai
 import { parseJsonc } from '../../base/common/jsonc.js';
 import { parseDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
 import { LogLevelToString } from '../../platform/log/common/log.js';
-import type { AppServerConnectionTarget } from '../../platform/agentHost/common/appServerTransport.js';
+import { LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL, LOCAL_APP_SERVER_RESTART_CHANNEL, type AppServerConnectionTarget, type LocalAppServerDiagnosticOperation } from '../../platform/agentHost/common/appServerTransport.js';
 import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
 import type { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
 import { IMAGE_VIEW_ATTACH_CHANNEL, IMAGE_VIEW_CANCEL_CHANNEL, IMAGE_VIEW_OPEN_CHANNEL, validateImageViewId, validateImageViewRequest, type ImageViewRequest } from '../../platform/imageView/common/imageView.js';
@@ -59,6 +59,7 @@ import { IClipboardService } from '../../platform/clipboard/common/clipboardServ
 import { AppServerConnectionRelay } from '../../platform/agentHost/electron-main/appServerConnectionRelay.js';
 import { DevelopmentAppServerReloader } from '../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from '../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
+import { AppServerProcessDiagnostics } from '../../platform/app-server-daemon/electron-main/appServerProcessDiagnostics.js';
 import { remoteExecutablePath } from '../../platform/remote/node/remotePackage.js';
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platform/ipc/electron-main/trustedIpcRouter.js';
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
@@ -150,6 +151,8 @@ import { StorageScope, StorageTarget } from '../../platform/storage/common/stora
 import { AgentsWindowInvitationState, EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY, AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY, type IAgentHostEditorState } from '../../platform/chat/common/agentsWindowInvitation.js';
 import { AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, validateAgentHostEditorState } from '../../platform/native/common/nativeHost.js';
 import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
+import { DesktopStorageChannel } from '../../platform/storage/electron-main/desktopStorageChannel.js';
+import { desktopStorageChannelName } from '../../platform/storage/common/profileStorageService.js';
 import { LoggerService } from '../../platform/log/electron-main/loggerService.js';
 import { spawn } from 'node:child_process';
 import { hostLogExecutable, hostIntegrityExecutable } from '../../../../.build/desktop/hostLogs.js';
@@ -381,6 +384,8 @@ export class AshApplication extends Disposable {
 	private readonly logService = this._register(this.loggerService.createLogger('main'));
 	private readonly maintenance = this._register(new MutableDisposable<IDisposable>());
 	private closePersistentServicesPromise: Promise<void> | undefined;
+	private localAppServerRestart: Promise<void> | undefined;
+	private readonly appServerProcessDiagnostics = this._register(new AppServerProcessDiagnostics());
 	private quitRequested = false;
 	private quitAfterServicesClosed = false;
 	private quitAfterStateSaved = false;
@@ -670,6 +675,7 @@ export class AshApplication extends Disposable {
 		this.mainProcessIpcServer.registerChannel('browserPasswords', browserPasswordChannel(browserPasswords));
 		this.windowServices.registerInstance(ILogService, this.logService);
 		this.mainProcessIpcServer.registerChannel('storage', new StorageDatabaseChannel(storage));
+		this.mainProcessIpcServer.registerChannel(desktopStorageChannelName, new DesktopStorageChannel(app.getPath('userData'), this.profileRoot));
 		const launchServices = this._register(new InstantiationService());
 		launchServices.registerInstance(IStateService, this.services.state);
 		this.workspacesHistory = this._register(launchServices.createInstance(WorkspacesHistoryMainService));
@@ -797,9 +803,9 @@ export class AshApplication extends Disposable {
 		for (const entry of selection.windows) {
 			try {
 				if (entry.kind === 'workbench') {
-					await this.openWorkspace(entry.workspace, workspaces, true, entry.windowSessionId);
+					await this.performOpenWorkspace(entry.workspace, workspaces, true, { windowSessionId: entry.windowSessionId, restoring: true });
 				} else {
-					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace));
+					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace, { restoring: true }));
 				}
 			} catch (error) {
 				console.error('Failed to restore window', error);
@@ -1217,13 +1223,14 @@ export class AshApplication extends Disposable {
 
 	private async openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string, terminalTransferStartup = false): Promise<WorkbenchWindowRecord | undefined> {
 		if (forceNewWindow) {
-			return this.performOpenWorkspace(workspace, workspaces, true, windowSessionId, terminalTransferStartup);
+			return this.performOpenWorkspace(workspace, workspaces, true, { windowSessionId, terminalTransferStartup });
 		}
 		const window = await this.windowsMainService.openWorkspace(workspace, async () => (await this.performOpenWorkspace(workspace, workspaces))?.window);
 		return window ? this.workbenchWindowData.get(window.id) : undefined;
 	}
 
-	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string, terminalTransferStartup = false): Promise<WorkbenchWindowRecord | undefined> {
+	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, options: { readonly windowSessionId?: string; readonly terminalTransferStartup?: boolean; readonly restoring?: boolean; } = {}): Promise<WorkbenchWindowRecord | undefined> {
+		let windowSessionId = options.windowSessionId;
 		const existingWindow = this.windowsMainService.findWorkspace(workspace);
 		const existing = existingWindow ? this.workbenchWindowData.get(existingWindow.id) : undefined;
 		if (existing && !forceNewWindow) {
@@ -1233,7 +1240,7 @@ export class AshApplication extends Disposable {
 		const resources = new DisposableStore();
 		let reservedWindowSessionId: string | undefined;
 		try {
-			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
+			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace, options);
 			if ('configPath' in workspace) workspace = { ...workspace, ...(getWorkspaceRemoteAuthority(resolvedWorkspace) ? { remoteAuthority: getWorkspaceRemoteAuthority(resolvedWorkspace) } : {}) };
 			// A closed window's checkpoint can outlive the open-window session list.
 			// Claim an unoccupied identity before opening yields to another launch.
@@ -1258,7 +1265,7 @@ export class AshApplication extends Disposable {
 				resources.dispose();
 				return undefined;
 			}
-			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId, terminalTransferStartup);
+			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId, options.terminalTransferStartup ?? false);
 		} catch (error) {
 			resources.dispose();
 			throw error;
@@ -1283,7 +1290,7 @@ export class AshApplication extends Disposable {
 		];
 	}
 
-	private mainProcessIpcRoutes(window: BrowserWindow): readonly IpcRoute<unknown, unknown>[] {
+	private mainProcessIpcRoutes(window: BrowserWindow, localAppServer: () => AppServerConnectionRelay | undefined): readonly IpcRoute<unknown, unknown>[] {
 		return [
 			{
 				channel: NLS_CONFIGURATION_CHANNEL,
@@ -1304,6 +1311,35 @@ export class AshApplication extends Disposable {
 				channel: HOST_RESTART_CHANNEL,
 				validate: value => { if (value !== undefined) { throw new TypeError('Restart takes no arguments'); } return undefined; },
 				invoke: () => { this.restartRequested = true; app.quit(); },
+			},
+			{
+				channel: LOCAL_APP_SERVER_RESTART_CHANNEL,
+				validate: value => { if (value !== undefined) throw new TypeError('App Server restart takes no arguments'); return undefined; },
+				invoke: () => {
+					const options = localAppServer()?.options;
+					if (!options?.enabled || !(options.processLauncher instanceof AppServerDaemonLauncher)) {
+						throw new Error('No local App Server lifecycle is available for this window');
+					}
+					// One restart serves every window attached to this profile.
+					return this.localAppServerRestart ??= options.processLauncher.restart().finally(() => { this.localAppServerRestart = undefined; });
+				},
+			},
+			{
+				channel: LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL,
+				validate: value => {
+					if (value !== 'debug' && value !== 'startProfile' && value !== 'stopProfile') {
+						throw new TypeError('Invalid App Server process diagnostic operation');
+					}
+					return value;
+				},
+				invoke: value => {
+					const options = localAppServer()?.options;
+					if (!options?.enabled || !(options.processLauncher instanceof AppServerDaemonLauncher)) {
+						throw new Error('No local App Server lifecycle is available for this window');
+					}
+					return this.appServerProcessDiagnostics.run(value as LocalAppServerDiagnosticOperation, options.processLauncher,
+						this.dialogs.showSaveDialog.bind(this.dialogs), window);
+				},
 			},
 			{
 				channel: 'ash:ipc:window-id',
@@ -1731,7 +1767,7 @@ export class AshApplication extends Disposable {
 
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const ipcRoutes = [
-			...this.mainProcessIpcRoutes(window),
+			...this.mainProcessIpcRoutes(window, () => getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()) ? undefined : supervisor),
 			...this.terminalLifetimeRoutes(windowDisposables),
 			...this.remoteAgentHostRoutes(window, rendererEntry.url, windowDisposables),
 			...workspaceHost.routes(),
@@ -2170,7 +2206,7 @@ export class AshApplication extends Disposable {
 						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send('ash:terminal:prepareReplacement'),
 					}));
 					const ipcRoutes = [
-						...this.mainProcessIpcRoutes(window),
+						...this.mainProcessIpcRoutes(window, () => getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()) ? undefined : sessionsRelay),
 						applicationBadgeIpcRoute(setApplicationBadge),
 						...this.terminalLifetimeRoutes(windowDisposables),
 						...this.remoteAgentHostRoutes(window, sessionsEntry.url, windowDisposables),
@@ -2246,6 +2282,7 @@ export class AshApplication extends Disposable {
 					windowDisposables.add(session.workspaceContext.onDidChangeWorkspace(({ workspace, resolvedWorkspace }) => {
 						if (!window.isDestroyed()) {
 							this.windowsMainService.updateWorkspace(window.id, workspace);
+							this.windowSessionStateHandler.windowChanged();
 							this.windowsMainService.getWindowById(window.id)?.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 						}
 					}));
@@ -2517,16 +2554,17 @@ export class AshApplication extends Disposable {
 	}
 
 	private getOpenWindowSessions(): readonly IWindowSessionWindow<WindowSessionEntry>[] {
-		const focusedWindowId = BrowserWindow.getFocusedWindow()?.id;
+		// A focused auxiliary editor belongs to its top-level window in the saved session.
+		const activeWindowId = this.windowsMainService.getLastActiveWindow()?.id;
 		const session = this.sessionsWindow.value;
 		const sessionsWindow = session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 		return [
 			...this.windowsMainService.getWindows().map(window => ({
 				id: window.id,
 				entry: { kind: 'workbench' as const, workspace: this.workbenchWindowData.get(window.id)!.workspaceContext.getWorkspace(), windowSessionId: this.workbenchWindowData.get(window.id)!.windowSessionId },
-				focused: window.id === focusedWindowId,
+				focused: window.id === activeWindowId,
 			})),
-			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace() }, focused: sessionsWindow.id === focusedWindowId }] : []),
+			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace() }, focused: sessionsWindow.id === activeWindowId }] : []),
 		];
 	}
 

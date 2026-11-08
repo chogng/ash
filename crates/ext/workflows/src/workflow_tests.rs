@@ -46,7 +46,7 @@ impl Fixture {
             .start_thread(
                 &NoThreadWorktreeBinder,
                 StartThreadRequest {
-                    surface: None,
+                    kind: protocol::SessionKind::Code,
                     execution_target: None,
                     branch_name: None,
                     worktree_start: None,
@@ -546,7 +546,7 @@ fn prepared_and_accepted_commands_recover_once_with_core_and_workflow_in_the_sam
             .start_thread(
                 &NoThreadWorktreeBinder,
                 StartThreadRequest {
-                    surface: None,
+                    kind: protocol::SessionKind::Code,
                     execution_target: None,
                     branch_name: None,
                     worktree_start: None,

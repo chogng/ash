@@ -31,8 +31,8 @@ import { AshChatSelectionService, IAshChatSelectionService } from '../../../chat
 import { IAshChatSessionService } from '../../../chat/browser/ashChatSessionService.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization } from '../../electron-browser/chatGPTWeb.js';
-import { IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
-import { SHOW_EXPERIMENTAL_CHATGPT } from '../../common/chatGPTNative.js';
+import { IChatGPTNativeService, IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
+import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../../common/chatGPTNative.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
 import { ChatWorkspaceContribution, registerChatWorkspace } from '../../../chat/electron-browser/chatWorkspace.contribution.js';
@@ -203,8 +203,8 @@ suite('ChatGPT entry', () => {
 		assert.deepEqual(new AshChatSelectionService(storage).selection.get(), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
 	});
 
-	test('a retained Chat draft applies Ash model visibility while default model reads are pending', async () => {
-		const native = { model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', longContext: null };
+	test('an experimental Chat draft applies Ash model visibility while default model reads are pending', async () => {
+		const native = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'GPT-6.1 Sol', longContext: null };
 		const web = { provider: 'chatgpt', model: 'web' };
 		const state = observableValue<ChatGPTState>('draft', {
 			...newChatState, localConversationId: 'draft', draft: '', attachments: [], voice: 'idle', voiceTranscript: [],
@@ -228,7 +228,7 @@ suite('ChatGPT entry', () => {
 			{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService);
 		const calls: unknown[][] = [];
 		using services = new InstantiationService(new ServiceCollection(
-			[IChatGPTService, { state, newDraftRevision: 1 } as unknown as IChatGPTService],
+			[IChatGPTService, { native: true, state, newDraftRevision: 1 } as unknown as IChatGPTService],
 			[IClipboardService, {} as IClipboardService],
 			[IDialogService, {} as IDialogService],
 			[IOpenerService, {} as IOpenerService],
@@ -259,6 +259,11 @@ suite('ChatGPT entry', () => {
 			assert.deepEqual(choices, [web, native.model]);
 			await draft.selectModel(native.model);
 			assert.deepEqual(calls, [[OPEN_ASH_CHAT_WITH_MODEL_COMMAND, native.model]]);
+
+			state.set({ ...state.get(), conversationId: 'existing' }, undefined);
+			assert.deepEqual(choices, [web]);
+			await assert.rejects(draft.selectModel(native.model), /no longer available/);
+			assert.deepEqual(calls, [[OPEN_ASH_CHAT_WITH_MODEL_COMMAND, native.model]]);
 		} finally {
 			await pendingDefaults.complete({ ...defaults, revision: 2 });
 		}
@@ -269,16 +274,18 @@ suite('ChatGPT entry', () => {
 		const storage = { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
 		const selection = new AshChatSelectionService(storage);
 		let mode = 'code';
+		let experimental = false;
 		const state = observableValue<ChatGPTState>('draft', {
 			localConversationId: 'chatgpt-draft', draft: 'Unsent prompt', voice: 'idle',
 			conversations: [], messages: [], coworkTasks: [], attachments: [],
 		} as unknown as ChatGPTState);
+		const experimentalState = observableValue<ChatGPTState>('experimentalDraft', { ...state.get(), localConversationId: 'experimental-draft', draft: 'Experimental prompt' });
 		const model = { provider: 'fixture-provider', model: 'fixture-model' };
 		let modelVisible = true;
 		const calls: unknown[][] = [];
 		using services = new InstantiationService(new ServiceCollection(
 			[IConfigurationService, { getValue: () => false } as unknown as IConfigurationService],
-			[IContextKeyService, { getValue: (key: string) => key === 'sessions.workspaceMode' ? mode : key === 'sessions.activity.chatgptSelected' } as unknown as IContextKeyService],
+			[IContextKeyService, { getValue: (key: string) => key === 'sessions.workspaceMode' ? mode : key === (experimental ? experimentalChatGPTSelected : 'sessions.activity.chatgptSelected') } as unknown as IContextKeyService],
 			[ISessionProviderScopeService, {
 				getProviderScope: (provider: string) => {
 					assert.equal(provider, LOCAL_AGENT_HOST_PROVIDER_ID);
@@ -286,6 +293,7 @@ suite('ChatGPT entry', () => {
 				}
 			} as unknown as ISessionProviderScopeService],
 			[IChatGPTService, { state, newDraftRevision: 1 } as unknown as IChatGPTService],
+			[IChatGPTNativeService, { native: true, state: experimentalState, newDraftRevision: 1 } as unknown as IChatGPTService],
 			[ICommandService, { executeCommand: async (id: string) => { calls.push([id]); } } as ICommandService],
 			[IAshChatSelectionService, selection],
 			[IStorageService, storage],
@@ -318,6 +326,20 @@ suite('ChatGPT entry', () => {
 		assert.deepEqual(selected.model, model);
 		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`, chatInputStatePersistence), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
 		assert.deepEqual(new AshChatSelectionService(storage).selection.get(), selected);
+
+		experimental = true;
+		const experimentalHandoff = services.invokeFunction(command, model);
+		experimental = false;
+		await experimentalHandoff;
+		assert.deepEqual(calls, [[SHOW_ASH_CHAT_COMMAND]]);
+
+		experimental = true;
+		await services.invokeFunction(command, model);
+		assert.deepEqual(calls, [[SHOW_ASH_CHAT_COMMAND], [SHOW_ASH_CHAT_COMMAND]]);
+		const experimentalSelection = selection.selection.get();
+		assert.equal(experimentalSelection.kind, 'draft');
+		assert.deepEqual(experimentalSelection.model, model);
+		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${experimentalSelection.id}`, chatInputStatePersistence), { text: 'Experimental prompt', mode: 'agent', contexts: [] });
 	});
 
 	test('unified search projects the live ChatGPT catalogue and opens the exact conversation after navigation', async () => {

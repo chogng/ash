@@ -15,6 +15,9 @@ export interface IAppServerByteTransport extends IDisposable {
 // A local carrier installs and verifies the bundled backend on first use before
 // it can forward initialize. Main and Renderer must allow that same cold start.
 export const LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS = 90_000;
+export const LOCAL_APP_SERVER_RESTART_CHANNEL = 'ash:app-server:restart-local-backend';
+export const LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL = 'ash:app-server:local-process-diagnostics';
+export type LocalAppServerDiagnosticOperation = 'debug' | 'startProfile' | 'stopProfile';
 
 /** A Main-owned carrier lease, distinct from workspace and backend Session identities. */
 export type AppServerConnectionTarget = 'workspace' | 'local' | { readonly id: string; };

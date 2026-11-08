@@ -52,13 +52,20 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 }
 
 function modelSnapshot(status: DictationModelStatus) {
-	return { model: status.modelId, available: status.available, sizeBytes: status.sizeBytes, status: status.stage ? modelStatus(status.stage) : undefined };
+	return {
+		model: status.modelId,
+		available: status.available,
+		sizeBytes: status.sizeBytes,
+		downloadSizeBytes: status.downloadSizeBytes ?? undefined,
+		recommendedLanguages: status.recommendedLanguages,
+		status: status.stage ? modelStatus(status.stage) : undefined,
+	};
 }
 
 function modelStatus(stage: DictationModelStage): IDictationModelStatus {
 	switch (stage.type) {
 		case 'checking': return { state: DictationModelState.Checking };
-		case 'downloading': return { state: DictationModelState.Downloading, file: stage.file, downloadedBytes: stage.downloadedBytes };
+		case 'downloading': return { state: DictationModelState.Downloading, file: stage.file, downloadedBytes: stage.downloadedBytes, packageDownloadedBytes: stage.packageDownloadedBytes };
 		case 'loading': return { state: DictationModelState.Loading };
 		case 'ready': return { state: DictationModelState.Ready };
 		case 'cancelled': return { state: DictationModelState.Cancelled };

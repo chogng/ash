@@ -111,6 +111,7 @@ pub struct ExecPolicySubject<'a> {
     capabilities: Vec<ExecPolicyCapability>,
     command: Option<&'a ExecPolicyCommand>,
     network_target: Option<&'a ExecPolicyNetworkTarget>,
+    shell_commands: Option<(&'a [ExecPolicyCommand], bool)>,
 }
 
 impl<'a> ExecPolicySubject<'a> {
@@ -133,6 +134,7 @@ impl<'a> ExecPolicySubject<'a> {
             capabilities: capabilities.into_iter().collect(),
             command,
             network_target,
+            shell_commands: None,
         }
     }
 
@@ -158,6 +160,20 @@ impl<'a> ExecPolicySubject<'a> {
 
     pub fn command(&self) -> Option<&ExecPolicyCommand> {
         self.command
+    }
+
+    /// Supplies verified child invocations. An empty list means the script is opaque.
+    pub fn with_shell_commands(
+        mut self,
+        commands: &'a [ExecPolicyCommand],
+        allow_prefix: bool,
+    ) -> Self {
+        self.shell_commands = Some((commands, allow_prefix));
+        self
+    }
+
+    pub(crate) fn shell_commands(&self) -> Option<(&'a [ExecPolicyCommand], bool)> {
+        self.shell_commands
     }
 
     pub fn network_target(&self) -> Option<&ExecPolicyNetworkTarget> {

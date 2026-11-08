@@ -1,12 +1,8 @@
 import { addDisposableListener, h } from '../../dom.js';
 import { FastDomNode } from '../../fastDomNode.js';
+import { GlobalPointerMoveMonitor } from '../../globalPointerMoveMonitor.js';
 import { StandardPointerEvent } from '../../mouseEvent.js';
-import {
-	Disposable,
-	DisposableStore,
-
-	toDisposable,
-} from '../../../common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import type { ScrollbarAxisMetrics } from './scrollbarState.js';
 import { ScrollbarVisibility } from '../../../common/scrollable.js';
 import { ScrollbarVisibilityController } from './scrollbarVisibilityController.js';
@@ -29,7 +25,7 @@ export abstract class AbstractScrollbar extends Disposable {
 	private readonly options: AbstractScrollbarOptions;
 	private readonly getMetrics: () => ScrollbarAxisMetrics;
 	private readonly setPosition: (position: number) => void;
-	private readonly dragListeners: DisposableStore;
+	private readonly drag = this._register(new GlobalPointerMoveMonitor());
 	private readonly visibility = this._register(new ScrollbarVisibilityController(ScrollbarVisibility.Auto, 'ash-scrollbar-visible', 'ash-scrollbar-invisible'));
 
 	protected constructor(
@@ -47,7 +43,6 @@ export abstract class AbstractScrollbar extends Disposable {
 		this.thumb = thumb;
 		this.trackNode = new FastDomNode(track);
 		this.thumbNode = new FastDomNode(thumb);
-		this.dragListeners = this._register(new DisposableStore());
 		this._register(toDisposable(() => track.remove()));
 
 		this.trackNode.setClassName(
@@ -171,65 +166,16 @@ export abstract class AbstractScrollbar extends Disposable {
 		const startMetrics = this.getMetrics();
 		const thumbTravel = startMetrics.trackSize - startMetrics.thumbSize;
 		if (thumbTravel <= 0 || startMetrics.maximumPosition <= 0) return;
-		this.dragListeners.clear();
 		this.trackNode.toggleClassName('active', true);
-		if (
-			typeof this.track.setPointerCapture === 'function' &&
-			browserEvent.pointerId !== undefined
-		) {
-			this.track.setPointerCapture(event.pointerId);
-		}
-		const targetWindow = this.track.ownerDocument.defaultView;
-		if (!targetWindow) {
-			throw new Error('Scrollbar drag requires a browser window');
-		}
-		const move = (nextBrowserEvent: PointerEvent) => {
+		this.drag.startMonitoring(this.track, browserEvent.pointerId, browserEvent.buttons, nextBrowserEvent => {
 			const next = new StandardPointerEvent(nextBrowserEvent);
-			if (
-				browserEvent.pointerId !== undefined &&
-				nextBrowserEvent.pointerId !== browserEvent.pointerId
-			) return;
-			next.preventDefault();
 			const pointerDelta =
 				this.pointerCoordinate(next) - startCoordinate;
 			this.setPosition(
 				startMetrics.position +
 				pointerDelta * startMetrics.maximumPosition / thumbTravel,
 			);
-		};
-		const stop = () => {
-			if (
-				typeof this.track.hasPointerCapture === 'function' &&
-				this.track.hasPointerCapture(event.pointerId)
-			) {
-				this.track.releasePointerCapture(event.pointerId);
-			}
-			this.trackNode.toggleClassName('active', false);
-			this.dragListeners.clear();
-		};
-		this.dragListeners.add(addDisposableListener(
-			targetWindow,
-			'pointermove',
-			move,
-		));
-		this.dragListeners.add(addDisposableListener(
-			targetWindow,
-			'pointerup',
-			stop,
-			{ once: true },
-		));
-		this.dragListeners.add(addDisposableListener(
-			targetWindow,
-			'pointercancel',
-			stop,
-			{ once: true },
-		));
-		this.dragListeners.add(addDisposableListener(
-			targetWindow,
-			'blur',
-			stop,
-			{ once: true },
-		));
+		}, () => this.trackNode.toggleClassName('active', false), browserEvent.pointerType);
 	}
 
 	private handleTrackPointerDown(browserEvent: PointerEvent): void {

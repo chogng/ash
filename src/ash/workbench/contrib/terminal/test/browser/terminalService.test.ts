@@ -45,6 +45,7 @@ import { TerminalService } from '../../browser/terminalService.js';
 import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalProcessManager } from '../../browser/terminalProcessManager.js';
 import { AgentHostTerminalService } from '../../browser/agentHostTerminalService.js';
+import { AgentCommandPty } from '../../browser/agentHostPty.js';
 import { BasePty } from '../../common/basePty.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../browser/terminal.js';
@@ -67,6 +68,49 @@ const DEFAULT_PROFILE = {
 	title: 'Command Prompt',
 	isDefault: true,
 } as const;
+
+test('Agent command PTY drains final output and detaches a read-only view', async () => {
+	const events: (string | number | undefined)[] = [];
+	let detaches = 0;
+	const bytes = new TextEncoder().encode('final output');
+	using pty = new AgentCommandPty(1, {
+		attach: async () => { throw new Error('The terminal service attaches before creating the PTY'); },
+		read: async cursor => {
+			assert.equal(cursor, 0);
+			return { bytes, nextCursor: bytes.length, gap: false, exited: true, exitCode: 23 };
+		},
+		takeInput: async () => { throw new Error('Unexpected input takeover'); },
+		detach: async () => {
+			assert.equal(events[0], 'final output');
+			detaches++;
+		},
+		write: async () => { throw new Error('Unexpected input'); },
+		resize: async () => { throw new Error('Unexpected resize'); },
+	}, 80, 24);
+	using data = pty.onProcessData(text => events.push(text));
+	using exit = pty.onProcessExit(code => events.push(code));
+	await pty.start();
+	await pty.shutdown();
+	assert.deepEqual(events, ['final output', 23]);
+	assert.equal(detaches, 1);
+});
+
+test('Agent command PTY detaches when its initial read fails', async () => {
+	const failure = new Error('Command output unavailable');
+	let detaches = 0;
+	using pty = new AgentCommandPty(1, {
+		attach: async () => { throw new Error('The terminal service attaches before creating the PTY'); },
+		read: async () => { throw failure; },
+		takeInput: async () => { throw new Error('Unexpected input takeover'); },
+		detach: async () => { detaches++; },
+		write: async () => { throw new Error('Unexpected input'); },
+		resize: async () => { throw new Error('Unexpected resize'); },
+	}, 80, 24);
+	await assert.rejects(pty.start(), error => error === failure);
+	assert.equal(detaches, 1);
+	await pty.shutdown();
+	assert.equal(detaches, 1);
+});
 
 for (const decision of [true, false, undefined]) {
 	test(`terminal creation waits for trust before profile discovery and respects decision ${decision}`, async () => {
@@ -287,22 +331,28 @@ test('the signal picker sends only its accepted item and retires when the active
 	assert.deepEqual(processes.closeCalls, []);
 });
 
-test('TerminalService restores an empty reload checkpoint without a process attachment capability', async () => {
+test('TerminalService accepts an empty reload checkpoint after the workspace changes without needing a process attachment capability', async () => {
 	const processes = new TestTerminalProcessService([]);
 	using workspace = new TestWorkspaceService({ id: 'empty-reload' });
 	using services = terminalServices(processes, workspace);
 	const stateKey = 'terminal.reload.12345678-1234-1234-1234-123456789abc';
 	services.get(IStorageService).store(stateKey, JSON.stringify({
-		version: 1, workspaceId: 'empty-reload', instances: [], groups: [],
+		version: 1, workspaceId: 'previous-workspace', instances: [], groups: [],
 	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	await services.get(ISecretStorageService).set(TerminalStorageKeys.Reload, JSON.stringify({
 		stateKey, expiresAt: Date.now() + 60_000, leases: [],
 	}));
 	assert.equal((processes as ITerminalProcessService).attach, undefined);
-	const terminals = services.get(ITerminalService);
-	await terminals.whenConnected;
-	assert.deepEqual(terminals.instances, []);
-	assert.equal(processes.createCalls.length, 0);
+	const errors: unknown[] = [];
+	const previous = errorHandler.getUnexpectedErrorHandler();
+	setUnexpectedErrorHandler(error => errors.push(error));
+	try {
+		const terminals = services.get(ITerminalService);
+		await terminals.whenConnected;
+		assert.deepEqual(terminals.instances, []);
+		assert.deepEqual(processes.createCalls, []);
+		assert.deepEqual(errors, []);
+	} finally { setUnexpectedErrorHandler(previous); }
 });
 
 for (const rejectFirst of [false, true]) {

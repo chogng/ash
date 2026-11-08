@@ -34,6 +34,7 @@ use ash_file_system::FileSystem;
 use ash_model_provider::ProviderCredentialService;
 use ash_protocol::InteractionCancelReason;
 use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_skills_extension::SkillConfigSnapshotProvider;
 use ash_skills_extension::SkillRuntime;
@@ -273,6 +274,7 @@ mod session_execution_router;
 mod speech_instructions;
 #[cfg(test)]
 mod speech_instructions_tests;
+mod storage_overview;
 #[cfg(test)]
 mod testing_operations_tests;
 mod thread_dir_binding;
@@ -467,6 +469,7 @@ pub struct ConnectionState {
     tcp_streams: Arc<network_proxy::TcpStreams>,
     pub(super) connection_id: u64,
     authority: ConnectionAuthority,
+    chat_project_memories: bool,
     pub(crate) ide_attachment: Arc<crate::client_host::IdeAttachment>,
     state: Arc<Mutex<ConnectionMutableState>>,
     outbound_notifications: NotificationQueue,
@@ -490,6 +493,7 @@ struct ConnectionMutableState {
     request_ids: request_processing::RequestIds,
     extension_packages_leases: BTreeSet<String>,
     directory_grants_host: bool,
+    code_sessions_only: bool,
 }
 
 impl ConnectionState {
@@ -520,12 +524,36 @@ impl ConnectionState {
         connection_state(self).initialized = true;
     }
 
+    fn code_sessions_only(&self) -> bool {
+        connection_state(self).code_sessions_only
+    }
+
+    fn automation_scope(&self) -> ash_automation::AutomationScope {
+        if self.code_sessions_only() {
+            ash_automation::AutomationScope::CodeOnly
+        } else {
+            ash_automation::AutomationScope::Profile
+        }
+    }
+
+    fn reference_read_scope(&self) -> queue::ReferenceReadScope {
+        if self.code_sessions_only() {
+            queue::ReferenceReadScope::CodeOnly
+        } else {
+            queue::ReferenceReadScope::Profile
+        }
+    }
+
     fn record_request_id(&self, request_id: u64) -> bool {
         connection_state(self).request_ids.insert(request_id)
     }
 
     fn set_directory_grants_host(&self, supported: bool) {
         connection_state(self).directory_grants_host = supported;
+    }
+
+    fn allows_chat_project_memories(&self) -> bool {
+        self.chat_project_memories && !self.code_sessions_only()
     }
 
     fn allows_product_host_capabilities(&self) -> bool {
@@ -1311,6 +1339,8 @@ impl AppServer {
             request_scheduler.clone(),
             request_cancellations.clone(),
         );
+        let dictation = realtime_voice::DictationManager::default();
+        let dictation_models = realtime_voice::DictationModelManager::with_dictation(&dictation);
         Self {
             trace_recorder: Arc::new(ash_rollout_trace::TraceRecorder::default()),
             task_delivery: None,
@@ -1344,8 +1374,8 @@ impl AppServer {
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             calls: Arc::new(call_runtime::Calls::default()),
             voices: voice_operations::Voices::default(),
-            dictation: realtime_voice::DictationManager::default(),
-            dictation_models: realtime_voice::DictationModelManager::default(),
+            dictation,
+            dictation_models,
             microphone_gate: Mutex::new(()),
             channels: ash_collab::channel_client::ChannelAccount::default(),
             collaboration_processor: collaboration_operations::CollaborationRequestProcessor::new(
@@ -1542,10 +1572,11 @@ impl AppServer {
 
     pub(crate) fn with_local_dir_services(
         self,
-        database_path: &std::path::Path,
         profile_root: &std::path::Path,
         dir_root: &std::path::Path,
+        turn_changes: Arc<ash_state::SqliteTurnChangeStore>,
         workflows: Arc<workflows::Store>,
+        issue_cache: Option<Arc<ash_state::SqliteIssueCache>>,
     ) -> Result<Self, String> {
         let config = self
             .config
@@ -1572,7 +1603,7 @@ impl AppServer {
             &self.threads,
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
-            database_path,
+            turn_changes,
             config,
             Arc::clone(&self.threads),
             Arc::clone(&self.model),
@@ -1584,70 +1615,87 @@ impl AppServer {
         server.dir_services = Some(dirs);
         server.issue_processor = Some(Arc::new(issue_operations::IssueRequestProcessor::open(
             dir_root,
-            database_path,
+            issue_cache,
         )?));
         Ok(server)
     }
 
     pub(crate) fn with_debug_workspace_store(
         mut self,
-        path: &std::path::Path,
-    ) -> Result<Self, String> {
-        self.debug_workspaces = Some(Arc::new(
-            ash_debug_manager::DebugWorkspaceStore::open(path)
-                .map_err(|error| error.to_string())?,
-        ));
-        Ok(self)
+        store: Arc<ash_debug_manager::DebugWorkspaceStore>,
+    ) -> Self {
+        self.debug_workspaces = Some(store);
+        self
     }
 
+    #[cfg(test)]
     pub(crate) fn with_local_projects(
-        mut self,
+        self,
         database_path: &std::path::Path,
     ) -> Result<Self, String> {
         let store: Arc<dyn ash_projects::ProjectStore> = Arc::new(
             ash_state::SqliteProjectStore::open(database_path)
                 .map_err(|error| error.to_string())?,
         );
-        self.projects = Some(Arc::new(ash_projects::ProjectCoordinator::new(store)));
+        self.with_projects(Arc::new(ash_projects::ProjectCoordinator::new(store)))
+    }
+
+    pub(crate) fn with_projects(
+        mut self,
+        projects: Arc<ash_projects::ProjectCoordinator>,
+    ) -> Result<Self, String> {
+        self.projects = Some(projects);
         self.with_memory_extension()
     }
 
-    pub(crate) fn with_local_teams(
-        mut self,
-        database_path: &std::path::Path,
-    ) -> Result<Self, String> {
+    #[cfg(test)]
+    pub(crate) fn with_local_teams(self, database_path: &std::path::Path) -> Result<Self, String> {
         let store: Arc<dyn ash_teams::TeamStore> = Arc::new(
             ash_state::SqliteTeamStore::open(database_path).map_err(|error| error.to_string())?,
         );
-        self.teams = Some(Arc::new(ash_teams::TeamCoordinator::new(store)));
+        self.with_teams(Arc::new(ash_teams::TeamCoordinator::new(store)))
+    }
+
+    pub(crate) fn with_teams(
+        mut self,
+        teams: Arc<ash_teams::TeamCoordinator>,
+    ) -> Result<Self, String> {
         self.team_memberships
-            .set(Arc::clone(
-                self.teams.as_ref().expect("Team coordinator was set"),
-            ))
+            .set(teams.clone())
             .map_err(|_| "Team coordinator is already initialized".to_string())?;
+        self.teams = Some(teams);
         Ok(self)
     }
 
-    pub(crate) fn with_local_assets(
-        mut self,
-        database_path: &std::path::Path,
-    ) -> Result<Self, String> {
+    #[cfg(test)]
+    pub(crate) fn with_local_assets(self, database_path: &std::path::Path) -> Result<Self, String> {
         let store = Arc::new(
             ash_state::SqliteAssetStore::open(database_path).map_err(|error| error.to_string())?,
         );
-        self.asset_processor =
-            asset_operations::AssetsRequestProcessor::new(Arc::new(assets::Assets::new(store)));
-        Ok(self)
+        Ok(self.with_asset_store(store))
     }
 
+    pub(crate) fn with_asset_store(mut self, store: Arc<ash_state::SqliteAssetStore>) -> Self {
+        self.asset_processor =
+            asset_operations::AssetsRequestProcessor::new(Arc::new(assets::Assets::new(store)));
+        self
+    }
+
+    #[cfg(test)]
     pub(crate) fn with_local_memories(
-        mut self,
+        self,
         database_path: &std::path::Path,
     ) -> Result<Self, String> {
-        let store: Arc<dyn memories::MemoryStore> = Arc::new(
-            ash_state::SqliteMemoryStore::open(database_path).map_err(|error| error.to_string())?,
-        );
-        self.memories = Some(Arc::new(memories::Memories::new(store)));
+        let store =
+            ash_state::SqliteMemoryStore::open(database_path).map_err(|error| error.to_string())?;
+        self.with_memories(Some(Arc::new(memories::Memories::new(Arc::new(store)))))
+    }
+
+    pub(crate) fn with_memories(
+        mut self,
+        memories: Option<Arc<memories::Memories>>,
+    ) -> Result<Self, String> {
+        self.memories = memories;
         self.with_memory_extension()
     }
 
@@ -1670,15 +1718,28 @@ impl AppServer {
         self.open_connection(ConnectionAuthority::ProductHost)
     }
 
+    pub(crate) fn agents_gateway_connection(&self) -> ConnectionState {
+        self.open_connection_for_surface(ConnectionAuthority::ProductHost, true)
+    }
+
     fn browser_connection(&self) -> ConnectionState {
         self.open_connection(ConnectionAuthority::Browser)
     }
 
     fn open_connection(&self, authority: ConnectionAuthority) -> ConnectionState {
+        self.open_connection_for_surface(authority, false)
+    }
+
+    fn open_connection_for_surface(
+        &self,
+        authority: ConnectionAuthority,
+        chat_project_memories: bool,
+    ) -> ConnectionState {
         let connection = ConnectionState {
             outbound_notifications: NotificationQueue::before_initialize(),
             connection_id: self.updates.allocate_connection_id(),
             authority,
+            chat_project_memories,
             ..ConnectionState::default()
         };
         self.updates.register(
@@ -1689,6 +1750,10 @@ impl AppServer {
             ),
             &connection.outbound_notifications,
         );
+        if chat_project_memories {
+            self.updates
+                .enable_chat_memory_notifications(connection.connection_id);
+        }
         connection
     }
 
@@ -1825,6 +1890,12 @@ impl AppServer {
     pub fn close_connection(&self, connection: ConnectionState) {
         if !connection.mark_closed() {
             return;
+        }
+        if let Some(terminals) = self
+            .local_env_tool_ports()
+            .and_then(|ports| ports.command_terminals())
+        {
+            terminals.release_connection(connection.connection_id);
         }
         connection.wire_log.lock().unwrap().close();
         connection.tcp_streams.close_all();
@@ -2951,6 +3022,7 @@ impl AppServer {
             // A queued admission must not race a directory change after the route check.
             request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
         }
+        let directory = self.bound_turn_directory(thread);
         let mut started = None;
         self.client_host.submit_turn_with_ide(
             thread,
@@ -2958,7 +3030,9 @@ impl AppServer {
             document_mode,
             expected_ide,
             || {
-                let result = self.threads.start_turn(thread, request)?;
+                let result = self
+                    .threads
+                    .start_turn_in_directory(thread, request, directory)?;
                 let receipt = core_api::TurnReceipt {
                     turn_id: result.turn_id.clone(),
                     sequence: result.sequence,
@@ -3340,6 +3414,50 @@ impl AppServer {
         self.dispatch_request(connection, request, cancellation)
     }
 
+    fn check_code_session_access(&self, params: &Value) -> Result<(), RpcError> {
+        let check_session = |id: &str| {
+            let id = SessionId::new(id)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            read_scoped_session(
+                &self.agent_runtime(),
+                queue::ReferenceReadScope::CodeOnly,
+                &id,
+            )
+        };
+        let session = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .map(check_session)
+            .transpose()?
+            .flatten();
+        if let Some(thread_id) = params.get("threadId").and_then(Value::as_str)
+            && !session.as_ref().is_some_and(|session| {
+                session
+                    .threads
+                    .iter()
+                    .any(|thread| thread.thread_id.as_str() == thread_id)
+            })
+        {
+            // A request may carry a Thread without a Session, or an unrelated Session ID.
+            let thread_id = ThreadId::new(thread_id)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            match self.threads.thread_catalog_record(&thread_id) {
+                Ok(record) => {
+                    check_session(record.session_id.as_str())?;
+                }
+                Err(CoreError::NotFound(_)) => {}
+                Err(error) => return Err(core_error(error)),
+            }
+        }
+        if let Some(destination) = params
+            .pointer("/request/destinationSessionId")
+            .and_then(Value::as_str)
+        {
+            check_session(destination)?;
+        }
+        Ok(())
+    }
+
     fn dispatch_request(
         &self,
         connection: &mut ConnectionState,
@@ -3359,9 +3477,19 @@ impl AppServer {
         if !connection.is_initialized() {
             return Err(RpcError::new(-32001, AppServerErrorName::NotInitialized));
         }
+        if connection.code_sessions_only() {
+            self.check_code_session_access(&request.params)?;
+        }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize | ClientMethod::TransportHello) => {
                 unreachable!("startup requests are handled before the initialization gate")
+            }
+            Some(ClientMethod::StorageOverview) => {
+                decode::<ash_app_server_protocol::protocol::common::EmptyParams>(&request.params)?;
+                self.storage_overview(connection, cancellation)
+            }
+            Some(ClientMethod::StorageWorktreeCleanup) => {
+                self.storage_worktree_cleanup(connection, decode(&request.params)?)
             }
             Some(ClientMethod::BrowserConfigure) => self
                 .browser_processor()
@@ -3656,7 +3784,7 @@ impl AppServer {
             Some(ClientMethod::AgentCapabilitiesRead) => {
                 self.agent_processor().agent_capabilities_read(connection)
             }
-            Some(ClientMethod::SessionList) => self.session_processor().session_list(),
+            Some(ClientMethod::SessionList) => self.session_processor().session_list(connection),
             Some(ClientMethod::SessionCatalogSubscribe) => self
                 .session_processor()
                 .session_catalog_subscribe(connection),
@@ -3735,10 +3863,10 @@ impl AppServer {
             }
             Some(ClientMethod::QueueEdit) => self
                 .queue_processor()
-                .queue_edit(connection.connection_id, &request.params),
+                .queue_edit(connection, &request.params),
             Some(ClientMethod::QueueEnqueue) => self
                 .queue_processor()
-                .queue_enqueue(connection.connection_id, &request.params),
+                .queue_enqueue(connection, &request.params),
             Some(ClientMethod::QueueList) => self.queue_processor().queue_list(&request.params),
             Some(ClientMethod::QueueCancel) => self.queue_processor().queue_cancel(&request.params),
             Some(
@@ -3850,7 +3978,21 @@ impl AppServer {
             Some(ClientMethod::MessageHistoryClear) => {
                 self.message_history_processor.clear(connection.authority)
             }
-            Some(ClientMethod::AutomationList) => self.automation_processor.automation_list(),
+            Some(ClientMethod::AutomationList) => {
+                let include_chat = if request.params.is_null() {
+                    false
+                } else {
+                    let params: ash_app_server_protocol::protocol::automation::AutomationListParams =
+                        decode(&request.params)?;
+                    params.include_chat == Some(true)
+                };
+                let scope = if include_chat {
+                    connection.automation_scope()
+                } else {
+                    ash_automation::AutomationScope::CodeOnly
+                };
+                self.automation_processor.automation_list(scope)
+            }
             Some(ClientMethod::AutomationPreview) => self
                 .automation_processor
                 .automation_preview(&request.params),
@@ -3864,24 +4006,28 @@ impl AppServer {
                 {
                     return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                 }
-                let response = self.automation_processor.automation_write(params)?;
+                let response = self
+                    .automation_processor
+                    .automation_write(params, connection.automation_scope())?;
                 self.advance_stopping_automations()?;
                 Ok(response)
             }
-            Some(ClientMethod::AutomationDelete) => {
-                self.automation_processor.automation_delete(&request.params)
-            }
-            Some(ClientMethod::AutomationRun) => {
-                self.automation_processor.automation_run(&request.params)
-            }
+            Some(ClientMethod::AutomationDelete) => self
+                .automation_processor
+                .automation_delete(&request.params, connection.automation_scope()),
+            Some(ClientMethod::AutomationRun) => self
+                .automation_processor
+                .automation_run(&request.params, connection.automation_scope()),
             Some(ClientMethod::AutomationRunRead) => self
                 .automation_processor
-                .automation_run_read(&request.params),
-            Some(ClientMethod::AutomationRuns) => {
-                self.automation_processor.automation_runs(&request.params)
-            }
+                .automation_run_read(&request.params, connection.automation_scope()),
+            Some(ClientMethod::AutomationRuns) => self
+                .automation_processor
+                .automation_runs(&request.params, connection.automation_scope()),
             Some(ClientMethod::AutomationStop) => {
-                let response = self.automation_processor.automation_stop(&request.params)?;
+                let response = self
+                    .automation_processor
+                    .automation_stop(&request.params, connection.automation_scope())?;
                 self.advance_stopping_automations()?;
                 Ok(response)
             }
@@ -3894,6 +4040,9 @@ impl AppServer {
             Some(ClientMethod::ProjectDetailsUpdate) => self
                 .project_processor()
                 .project_details_update(connection, &request.params),
+            Some(ClientMethod::ProjectAppearanceUpdate) => self
+                .project_processor()
+                .project_appearance_update(connection, &request.params),
             Some(ClientMethod::ProjectRootAdd) => self
                 .project_processor()
                 .project_root_add(connection, &request.params),
@@ -4854,6 +5003,9 @@ impl AppServer {
             Some(ClientMethod::TerminalAttach) => self
                 .terminal_processor()
                 .terminal_attach(connection, &request.params),
+            Some(ClientMethod::TerminalCommandSession) => self
+                .terminal_processor()
+                .terminal_command_session(connection, &request.params),
             Some(ClientMethod::TerminalWrite) => self
                 .terminal_processor()
                 .terminal_write(connection, &request.params),
@@ -5088,6 +5240,43 @@ pub(super) fn result<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> 
         .map_err(|_| RpcError::new(-32000, AppServerErrorName::InternalError))
 }
 
+fn read_scoped_session(
+    runtime: &impl AgentRuntime,
+    scope: queue::ReferenceReadScope,
+    id: &SessionId,
+) -> Result<Option<ash_protocol::Session>, RpcError> {
+    let session = runtime.read_session_catalog(id).map_err(core_error)?;
+    if matches!(scope, queue::ReferenceReadScope::CodeOnly)
+        && session
+            .as_ref()
+            .is_some_and(|session| session.kind == ash_protocol::SessionKind::Chat)
+    {
+        return Err(core_error(CoreError::NotFound(id.to_string())));
+    }
+    Ok(session)
+}
+
+fn check_chat_reference_sources<'a>(
+    runtime: &impl AgentRuntime,
+    scope: queue::ReferenceReadScope,
+    references: impl IntoIterator<Item = (&'a SessionId, &'a ThreadId)>,
+) -> Result<(), RpcError> {
+    for (session_id, thread_id) in references {
+        // Authorize the source pair without loading its history. Core also binds the
+        // excerpt to this pair when it reads the thread, so moves cannot redirect it.
+        let session = read_scoped_session(runtime, scope, session_id)?;
+        if !session.is_some_and(|session| {
+            session
+                .threads
+                .iter()
+                .any(|thread| &thread.thread_id == thread_id)
+        }) {
+            return Err(core_error(CoreError::NotFound(thread_id.to_string())));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn core_error(error: CoreError) -> RpcError {
     // Keep private diagnostics actionable while the public protocol uses stable error names.
     eprintln!("App Server core operation failed: {error}");
@@ -5178,23 +5367,30 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
                     .ok_or_else(|| CoreError::Execution("Thread file owner was disposed".into()))
             })
             .transpose()?;
-        let mode = match &directories {
+        let (mode, directory) = match &directories {
             Some(directories) => match (
                 directories.binding(parent_thread),
                 directories.binding(child_thread),
             ) {
-                (Some(parent), Some(child)) if parent.checkout_root() == child.checkout_root() => {
-                    crate::client_host::TextDocumentMode::Client
+                (Some(parent), Some(child)) => {
+                    let mode = if parent.checkout_root() == child.checkout_root() {
+                        crate::client_host::TextDocumentMode::Client
+                    } else {
+                        crate::client_host::TextDocumentMode::FileSystem
+                    };
+                    let directory = ash_protocol::SessionExecutionTarget::Local {
+                        root: child.dir().to_path_buf(),
+                    };
+                    (mode, Some(directory))
                 }
-                (Some(_), Some(_)) => crate::client_host::TextDocumentMode::FileSystem,
-                (None, None) => crate::client_host::TextDocumentMode::Client,
+                (None, None) => (crate::client_host::TextDocumentMode::Client, None),
                 _ => {
                     return Err(CoreError::Execution(
                         "parent and child directory bindings are incomplete".into(),
                     ));
                 }
             },
-            None => crate::client_host::TextDocumentMode::Client,
+            None => (crate::client_host::TextDocumentMode::Client, None),
         };
         self.clients.submit_agent_turn(
             parent_thread,
@@ -5202,7 +5398,10 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
             child_thread,
             replayed_turn,
             mode,
-            || self.threads.start_turn(child_thread, request),
+            || {
+                self.threads
+                    .start_turn_in_directory(child_thread, request, directory)
+            },
         )
     }
 }
@@ -5212,13 +5411,21 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
 mod mcp_resource_tests;
 
 impl AppServer {
+    #[cfg(test)]
     pub(crate) fn with_local_approval_environment(
-        mut self,
+        self,
         database: &std::path::Path,
     ) -> Result<Self, String> {
         let store = std::sync::Arc::new(
             ash_state::SqliteEnvironmentStore::open(database).map_err(|error| error.to_string())?,
         );
+        Ok(self.with_approval_environment_store(store))
+    }
+
+    pub(crate) fn with_approval_environment_store(
+        mut self,
+        store: Arc<ash_state::SqliteEnvironmentStore>,
+    ) -> Self {
         let environment = std::sync::Arc::new(guardian_environment::Environment::new(store));
         let owner = self
             .local_env_host
@@ -5244,7 +5451,7 @@ impl AppServer {
         self.turn_backend.install_executor(executor.clone());
         self.env_runtime_mut().turn_executor = executor;
         self.approval_environment = Some(environment);
-        Ok(self)
+        self
     }
     pub(crate) fn with_network_diagnostics(
         mut self,

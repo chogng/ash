@@ -1,5 +1,4 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import './media/notificationsCenter.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';

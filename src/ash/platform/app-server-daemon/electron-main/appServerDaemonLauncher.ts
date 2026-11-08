@@ -211,6 +211,37 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 		return value.logPath;
 	}
 
+	/** Restarts the managed process, independently of the renderer carrier leases. */
+	async restart(): Promise<void> {
+		await this.validate();
+		const command = this.options.generationFile || this.options.args[0] === 'connect-selected' ? 'restart-selected' : 'restart';
+		await promisify(execFile)(this.executable, [command], {
+			env: { ...this.environmentValue }, timeout: LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS, maxBuffer: 64 * 1024, windowsHide: true,
+		});
+	}
+
+	/** Identifies the managed process without opening an App Server protocol connection. */
+	async diagnosticPid(): Promise<number> {
+		await this.validate();
+		const { stdout } = await promisify(execFile)(this.executable, ['diagnostic-target'], {
+			env: { ...this.environmentValue }, timeout: 5_000, maxBuffer: 8 * 1024, windowsHide: true,
+		});
+		const value: unknown = JSON.parse(stdout);
+		if (!value || typeof value !== 'object' || !('pid' in value) || typeof value.pid !== 'number'
+			|| !Number.isInteger(value.pid) || value.pid < 1 || value.pid > 0xffff_ffff) {
+			throw new TypeError('Invalid App Server diagnostic PID');
+		}
+		return value.pid;
+	}
+
+	/** The daemon resolves and watches the target and owns the profiler's private console. */
+	launchProfiler(profiler: string, output: string): ChildProcessWithoutNullStreams {
+		this.assertNotDisposed();
+		return spawn(this.executable, ['profile-process', profiler, output], {
+			env: { ...this.environmentValue }, stdio: 'pipe', windowsHide: true,
+		});
+	}
+
 	protected override disposeCore(): void {
 		this.ownedDevelopmentRuntime?.dispose();
 	}

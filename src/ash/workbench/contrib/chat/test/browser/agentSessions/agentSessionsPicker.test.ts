@@ -71,9 +71,10 @@ test('Workbench history renders a borrowed host catalog without Session services
 		assert.equal(picker.value, 'Alpha');
 		assert.equal(picker.activeItems[0]?.label, 'Alpha renamed');
 		picker.selectedItems = [picker.activeItems[0]!];
+		items[1] = { ...items[1]!, open: () => { opened.push('current host-b'); } };
 		await picker.accept();
 		await picking;
-		assert.deepEqual(opened, ['host-b']);
+		assert.deepEqual(opened, ['current host-b']);
 		assert.equal(changes.hasListeners(), false);
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 	} finally {

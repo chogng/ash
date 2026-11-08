@@ -28,7 +28,10 @@
 	min-width: 0;
 	flex: 1 1 auto;
 	flex-direction: column;
-	background: var(--ash-editor-background);
+	background: var(
+		--ash-chat-transcript-surface,
+		var(--ash-editor-background)
+	);
 }
 
 .ash-chat[hidden] {
@@ -103,6 +106,21 @@
 .ash-chat:has(> .ash-chat-transcript-overlaps-composer) > .ash-chat-input-part {
 	position: relative;
 	z-index: 1;
+}
+
+/* Keep the floating labels legible where the transcript extends behind them. */
+.ash-chat:has(
+		> .ash-chat-transcript-overlaps-composer.ash-chat-transcript-has-more-below
+	)
+	> .ash-chat-input-part
+	> :is(.ash-chat-status, .ash-chat-input-changes) {
+	box-sizing: border-box;
+	inline-size: fit-content;
+	max-inline-size: 100%;
+	background-color: var(
+		--ash-chat-transcript-surface,
+		var(--ash-editor-background)
+	);
 }
 
 .ash-chat-input-part {
@@ -331,6 +349,14 @@
 	margin-top: 0;
 }
 
+.ash-chat-input-footer.ash-chat-input-footer-measuring > * {
+	flex-shrink: 0;
+}
+
+.ash-chat-input-footer-measuring > .ash-chat-input-toolbars {
+	flex-basis: max-content;
+}
+
 .ash-chat-textarea-input {
 	display: block;
 	box-sizing: border-box;
@@ -389,6 +415,15 @@
 }
 
 .ash-chat-input-toolbars.ash-toolbar
+	.ash-chat-input-mode-selector
+	.ash-chat-input-action.ash-chat-input-mode-action.icon-only {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	padding: 0;
+}
+
+.ash-chat-input-toolbars.ash-toolbar
 	.ash-action-view-item.icon.ash-chat-input-mode-selector
 	.ash-icon-label-container {
 	display: inline-flex;
@@ -396,6 +431,10 @@
 
 .ash-chat-input-toolbars.ash-toolbar
 	.ash-action-view-item.icon.ash-chat-input-mode-selector.compact
+	.ash-icon-label-container,
+.ash-chat-input-toolbars.ash-toolbar
+	.ash-action-view-item.icon.ash-chat-input-mode-selector
+	.icon-only
 	.ash-icon-label-container {
 	display: none;
 }
@@ -471,7 +510,6 @@
 }
 
 .ash-chat-input-toolbars .ash-chat-input-send-action,
-.ash-chat-input-toolbars .ash-chat-input-voice-action,
 .ash-chat-input-interrupt-action {
 	width: var(--ash-toolbar-actionSize);
 	min-width: var(--ash-toolbar-actionSize);
@@ -481,7 +519,8 @@
 	background: var(--ash-button-primaryBackground);
 }
 
-.ash-chat-input-toolbars .ash-chat-input-send-action {
+.ash-chat-input-toolbars .ash-chat-input-send-action,
+.ash-chat-input-toolbars .ash-chat-input-voice-action {
 	border-radius: var(--ash-cornerRadius-large);
 }
 
@@ -491,28 +530,9 @@
 	opacity: 1;
 }
 
-.ash-chat-input-toolbars .ash-chat-input-voice-action.disabled {
-	color: var(--ash-button-foreground);
-	background: color-mix(
-		in srgb,
-		var(--ash-button-foreground) 12%,
-		transparent
-	);
-	opacity: 1;
-}
-
 .ash-chat-input-toolbars .ash-chat-input-send-action:not(:disabled):hover,
-.ash-chat-input-toolbars .ash-chat-input-voice-action:hover,
 .ash-chat-input-interrupt-action:hover {
 	background: var(--ash-button-primaryHoverBackground);
-}
-
-.ash-chat-input-toolbars .ash-chat-input-voice-action.disabled:hover {
-	background: color-mix(
-		in srgb,
-		var(--ash-button-foreground) 12%,
-		transparent
-	);
 }
 
 @container (max-width: 360px) {

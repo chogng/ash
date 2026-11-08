@@ -25,6 +25,7 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import { TestNotificationService } from '../../../../../../../../test/fixtures/browser/notificationFixture.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../../workbench/browser/media/style.css';
+import '../../../../../browser/media/style.css';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
@@ -85,6 +86,7 @@ await import('../../../../sessions/browser/sessions.contribution.js');
 const resources = new DisposableStore();
 
 const services = resources.add(new InstantiationService());
+services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected opener request'); } } as unknown as IOpenerService);
 services.registerInstance(IChatWidgetService, resources.add(new ChatWidgetService()));
 services.registerInstance(ISessionProviderScopeService, { onDidChangeScopes: Event.None, getScopes: () => [] } as unknown as ISessionProviderScopeService);
 
@@ -311,7 +313,7 @@ const drafts: IUntitledChatSession[] = [{
 	untitledSessionId: 'draft', title: 'Draft', model: undefined, agent: undefined,
 	get workspace() { return { type: 'local' as const, root: directory }; }
 }];
-const backgroundSession: ISession = { providerId: 'host', source: 'automation', sessionId: 'background-session', title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
+const backgroundSession: ISession = { providerId: 'host', source: 'automation', sessionId: 'background-session', kind: 'code' as const, title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
 const management = {
 	sessions: [backgroundSession], untitledSessions: drafts, state: 'ready', materializedSessions: observableValue('materialized', new Map()),
 	onDidChange: sessionChanged.event,
@@ -365,7 +367,6 @@ if (parameters.has('hosts')) {
 		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 		showContextMenu() { throw new Error('Unexpected Quick Input context menu'); }, hideContextMenu() { },
 	});
-	services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected host picker link'); } } as unknown as IOpenerService);
 	services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 	services.registerInstance(IRemoteConnectionApi, {
 		available: true, list: async () => hostTargets,
@@ -413,7 +414,7 @@ declare global {
 			selectDirectory(value: string): void; help(): { help: string; view: string; }; rejectSave(): void;
 			remoteEdit(): Promise<void>; disconnect(): void; reopen(): Promise<unknown>; stops(): number; finish(): Promise<void>;
 			back(): void; forward(): void; openDraft(): void; selectedTitle(): string | undefined;
-			failHistory(): void; retryHistory(): Promise<void>; deferRun(): void; failRun(): Promise<void>;
+			failHistory(): void; recoverHistory(): void; deferRun(): void; failRun(): Promise<void>;
 		};
 	}
 }
@@ -437,7 +438,7 @@ window.ashAutomations = {
 	selectDirectory(value) { directory = value; },
 	rejectSave() { rejectSave = true; },
 	failHistory() { historyUnavailable = true; },
-	async retryHistory() { historyUnavailable = false; await services.get(IAutomationService).refresh(); },
+	recoverHistory() { historyUnavailable = false; },
 	deferRun() { deferNextRun = true; },
 	async failRun() { run = { ...run, status: 'failed', message: 'Could not create session' }; await services.get(IAutomationService).refresh(); },
 	back() { return sessions.openPreviousSession(); },

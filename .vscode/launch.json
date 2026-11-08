@@ -29,6 +29,15 @@
 			"presentation": { "group": "0_ash", "order": 22 }
 		},
 		{
+			"name": "Ash Dictation Test",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "pnpm dev:dictation-test",
+			"autoAttachChildProcesses": true,
+			"cwd": "${workspaceFolder}",
+			"presentation": { "group": "0_ash", "order": 23 }
+		},
+		{
 			"name": "Ash Launcher",
 			"type": "node",
 			"request": "launch",

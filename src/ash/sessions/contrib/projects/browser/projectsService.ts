@@ -1,7 +1,7 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import { IProjectService, type Project, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectAppearance, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
@@ -30,7 +30,7 @@ export interface IProjectsService {
 	openConversationProject(id: string): void;
 	showProjects(): void;
 	reload(): Promise<void>;
-	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
+	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], appearance?: ProjectAppearance): Promise<boolean>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
 	readProject(id: string): Promise<Project | undefined>;
 	archive(project: ProjectSummary): Promise<boolean>;
@@ -110,8 +110,8 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		}
 	}
 
-	public create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
-		return this.mutate(() => this.projects.create(id, name, description, materials, 'chat'), true);
+	public create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], appearance?: ProjectAppearance): Promise<boolean> {
+		return this.mutate(() => this.projects.create(id, name, description, materials, 'chat', appearance), true);
 	}
 	public update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
 		return this.mutate(() => this.projects.update(project, name, description, materials));
@@ -142,7 +142,11 @@ export class ProjectsService extends Disposable implements IProjectsService {
 			if (project) {
 				this.patch({
 					projects: [...state.projects.filter(item => item.id !== project.id), project],
-					...(open || state.selectedId === project.id ? { selectedId: project.archived ? undefined : project.id, selected: project.archived ? undefined : project } : {}),
+					...(open || state.selectedId === project.id ? {
+						conversationProjectId: undefined,
+						selectedId: project.archived ? undefined : project.id,
+						selected: project.archived ? undefined : project,
+					} : {}),
 					loading: false,
 				});
 			} else {
@@ -175,8 +179,8 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		return state.projects.filter(project => !project.archived && project.name.toLocaleLowerCase().includes(query))
 			.sort((a, b) => {
 				const pinned = Number(this.isPinned(b.id)) - Number(this.isPinned(a.id));
-				const time = state.sortOrder === 'updated' ? (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0)
-					: state.sortOrder === 'created' ? (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0) : 0;
+				const time = state.sortOrder === 'updated' ? b.updatedAtMs - a.updatedAtMs
+					: state.sortOrder === 'created' ? b.createdAtMs - a.createdAtMs : 0;
 				return pinned || time || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 			});
 	}

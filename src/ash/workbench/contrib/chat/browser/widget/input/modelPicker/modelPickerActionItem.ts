@@ -46,6 +46,10 @@ export class ModelPickerActionItem extends ActionViewItem {
 		this.pickerWidget.focus();
 	}
 
+	public setCompact(compact: boolean): void {
+		this.pickerWidget.setCompact(compact);
+	}
+
 	public openModelPicker(): void {
 		this.focus();
 		this.pickerWidget.show();

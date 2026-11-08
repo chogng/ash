@@ -61,7 +61,7 @@ import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetMode
 import { ILanguageModelsConfigurationService as ICoworkModelPreferences } from '../../contrib/cowork/common/languageModelsConfiguration.js';
 import { LanguageModelsConfigurationService as CoworkModelPreferencesService } from '../../contrib/cowork/browser/languageModelsConfigurationService.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
-import { resetNlsResolver } from '../../../nls.js';
+import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../platform/accessibility/browser/accessibleView.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
@@ -98,7 +98,7 @@ import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js'
 import { Emitter, Event } from '../../../base/common/event.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
-import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { ISessionsService, SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -132,7 +132,7 @@ import { IWorkbenchLayoutService, Position, type WorkbenchPartId, type Workbench
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
+import { ChatHistoryAnchorError, IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -217,6 +217,9 @@ function createInputServices(
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+	services.registerInstance(ISessionsService, {
+		openSession: async () => { throw new Error('Opening a Code session is outside this composer fixture'); },
+	} as unknown as ISessionsService);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -1084,7 +1087,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		['Agent', 'Plan', 'Debug', 'Multitask', 'Ask'],
 	);
 	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
+		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot [data-ash-icon-id]')?.getAttribute('data-ash-icon-id') ?? null),
 		['unlimited', 'plan', 'debug', 'multitask', 'ask'],
 	);
 	assert.deepEqual(
@@ -1341,15 +1344,6 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	assert.deepEqual(submissions, [{ text: '$commit staged changes', skills: [skill] }]);
 });
 
-test('Sessions editor provider honors the height of an inline request editor', async () => {
-	using fixture = await sessionsWidgetFixture();
-	using editor = fixture.input.createEditor({
-		container: document.body, placeholder: '', ariaLabel: 'Edit request',
-		height: { minimum: 420, maximum: 420 },
-	});
-	assert.equal(editor.element.style.minHeight, '420px');
-});
-
 for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with Enter and replaces dictation with Stop task in ${locale}`, async () => {
 	initializeTestLocalization(locale);
 	try {
@@ -1366,11 +1360,15 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		assert.ok(footer.querySelector('[data-action-id="ash.chat.input.model"]'));
 		assert.equal(footer.querySelector('[data-action-id="ash.chat.input.send"]'), null);
 		const sendButton = '[data-action-id="ash.chat.input.send"] button';
-		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, true);
+		const voiceButton = '[data-action-id="ash.chat.input.voice"] button';
+		assert.equal(form.querySelector(sendButton), null);
+		assert.ok(form.querySelector(voiceButton));
 		fixture.input.appendToDraft('Keep this text');
 		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
 		assert.deepEqual(sent, []);
 		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, false);
+		assert.ok(form.querySelector(`${sendButton} .ash-icon-enter`));
+		assert.equal(form.querySelector(voiceButton), null);
 		const actions = form.querySelector('.ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
 		assert.ok(actions);
 		assert.ok(actions.contains(form.querySelector(sendButton)));
@@ -1396,7 +1394,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		assert.equal(stop.getAttribute('aria-label'), locale === 'en' ? 'Stop task' : '停止任务');
 		assert.ok(stop.querySelector('.ash-icon-stop-circle'));
 		assert.equal(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"]'), null);
-		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		assert.equal(form.querySelector(sendButton), null);
 		stop.click();
 		assert.equal(interrupted, 1);
 		assert.deepEqual(sent, ['Keep this text']);
@@ -1623,186 +1621,233 @@ test('Sessions composer cancellation keeps the text and prevents a late file fro
 	assert.deepEqual(fixture.notices.model.getNotifications(), []);
 });
 
-test('sending from one session preserves a later draft during first-session creation', async () => {
-	const dom = new JSDOM('<!doctype html><body></body>');
-	using domLifetime = toDisposable(() => dom.window.close());
-	Object.defineProperty(dom.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using editorResources = new DisposableStore();
-	const composerStorage = editorResources.add(createTestStorage());
-	const editorRoot = createCodeEditorServices(editorResources);
-	registerTestExtensionService(editorResources, editorRoot);
-	const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
-	editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
-	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
-	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
-	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
-	editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
-	editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
-	editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
-	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
-	editorServices.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
-	editorServices.registerInstance(ISearchService, {
-		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
-		fileSearch: async () => ({ results: [], messages: [] }),
-		textSearch: async () => { throw new Error('Text search is outside this composer fixture'); },
-	});
-	editorServices.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
-	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
-	editorServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
-	editorServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
-	editorServices.registerInstance(ISessionsGitHubService, {
-		onDidChange: Event.None,
-		getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
-		initialize() { },
-		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
-		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
-		invokePullRequestArtifact: async () => { throw new Error('Unexpected PR artifact action'); },
-	});
-	editorServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
-	editorServices.registerSingleton(IVoiceCodeTranscriptionClient, () => editorServices.createInstance(VoiceCodeTranscriptionClient));
-	editorServices.registerInstance(IAgentVoiceService, undefined);
-	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
-	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
-	editorServices.registerSingleton(IVoiceInputModeService, () => editorServices.createInstance(VoiceInputModeService));
-	using contextViewService = new BrowserContextViewService(dom.window.document.body);
-	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
-	editorServices.registerInstance(INotificationService, notifications);
-	editorServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
-	registerTestDictationOnboarding(editorServices);
-	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
-	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
-	editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
-	let boundThread = thread();
-	const fake = fakeApi({
-		sessions: [],
-		thread: () => boundThread,
-		createSession: session('session-1', undefined, 'New Chat'),
-		createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
-	});
-	using sessions = new SessionsManagementService(fake.api);
-	await sessions.initialize();
-	editorServices.registerInstance(ISessionsManagementService, sessions);
-	editorServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
-	using customViews = editorServices.createInstance(CustomViewService);
-	editorServices.registerInstance(ICustomViewService, customViews);
-	using commands = new CommandService(editorServices);
-	editorServices.registerInstance(ICommandService, commands);
-	using view = editorServices.createInstance(SessionsService);
-	await view.initialize();
-	view.openNewSession();
-	const draft = view.activeSelection;
-	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
-	editorServices.registerInstance(IContextViewService, contextViewService);
-	using chat = createChatService(fake.api);
-	editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
-	editorServices.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	editorServices.registerInstance(IContextMenuService, { showContextMenu: () => undefined } as unknown as IContextMenuService);
-	editorServices.registerInstance(IDialogService, recordingDialogService([]));
-	editorServices.registerInstance(IChatService, chat);
-	editorServices.registerInstance(IConfigurationService, configurationServices.get(chat)!);
-	editorServices.registerSingleton(IPromptsService, () => editorServices.createInstance(PromptsService));
-	editorServices.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read'); } });
-	editorServices.registerInstance(IAppServerSkillApi, fake.api.skills);
-	editorServices.registerSingleton(ISCMService, () => editorServices.createInstance(SCMService));
-	editorServices.registerInstance(ISessionProviderScopeService, {
-		onDidChange: Event.None, onDidChangeScopes: Event.None,
-		getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
-		createScope: () => editorServices.createChild(),
-	});
-	using composerContribution = editorServices.createInstance(SharedChatInputComposerContribution);
-	using codeView = editorServices.createInstance(NewChatView, dom.window.document.body, {
-		panelId: 'centered-chat', selection: draft, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
-	});
-	codeView.setVisible(true);
-	const widgetModel = codeView.model;
-	const widget = editorServices.get(IChatWidgetService).getAllWidgets().find(widget => widget.domNode.id === 'centered-chat');
-	assert.ok(widget instanceof NewChatWidget);
-	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
-	assert.equal(input?.classList.contains('has-conversation'), false);
-	assert.equal(input?.classList.contains('chat-composer'), true);
-	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
-	assert.ok(welcomeTip);
-	const tipSlot = welcomeTip.parentElement;
-	assert.equal(tipSlot?.nextElementSibling, input?.querySelector('.ash-chat-input-container'));
-	assert.equal(input?.lastElementChild, input?.querySelector('.ash-sessions-chat-input-footer'));
-	assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent], ['true', '']);
-	await widgetModel.initialize();
-	assert.equal(input?.getAttribute('aria-busy'), 'false');
-	assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
-	const attachment = new DeferredPromise<{ name: string; content: string; }>();
-	codeView.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
-	const sending = widget.acceptInput('Start this work');
-	view.openNewSession();
-	const chatSelection = view.activeSelection;
-	if (chatSelection?.kind !== 'untitled') throw new Error('Expected Chat draft');
-	using chatWidget = editorServices.createInstance(NewChatView, dom.window.document.body, {
-		panelId: 'separate-chat', selection: chatSelection, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
-	});
-	chatWidget.setVisible(true);
-	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
-	chatWidget.restoreDraft(chatDraft);
-	const restoredChatDraft = { ...chatDraft, text: 'Keep my Chat draft chat.txt ', contexts: chatDraft.contexts.map(context => ({ ...context, reference: { start: 19, end: 27 } })) };
-	await attachment.complete({ name: 'code.ts', content: 'Code context' });
-	await sending;
-	assert.equal(input?.classList.contains('has-conversation'), true);
-	assert.equal(tipSlot?.childElementCount, 0);
-	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
-	assert.equal(widget.sessionId, 'session-1');
-	assert.equal(codeView.model, widgetModel);
-	assert.deepEqual((await chatWidget.captureDraft())?.draft, restoredChatDraft);
-	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`, chatInputStatePersistence), restoredChatDraft);
-	assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
-	codeView.dispose();
-	assert.equal(widget.isDisposed, true);
-	assert.equal(widgetModel.isDisposed, true);
-	assert.equal(widget.input.isDisposed, true);
-	assert.equal(editorServices.get(IChatWidgetService).getAllWidgets().includes(widget), false);
-	assert.equal(view.activeSelection?.kind, 'untitled');
-	assert.equal(chatWidget.sessionId, undefined);
-	view.openSession('session-1', 'thread-1');
-	assert.equal(view.activeSelection?.kind, 'session');
-	assert.equal(await widget.captureDraft(), undefined);
-	assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
+for (const background of [false, true]) test(background
+	? 'background send keeps the new session composer focused and opens the accepted target'
+	: 'sending from one session preserves a later draft during first-session creation', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using domLifetime = toDisposable(() => dom.window.close());
+		Object.defineProperty(dom.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using editorResources = new DisposableStore();
+		const composerStorage = editorResources.add(createTestStorage());
+		const editorRoot = createCodeEditorServices(editorResources);
+		registerTestExtensionService(editorResources, editorRoot);
+		const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
+		editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
+		editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
+		editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
+		editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+		editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+		editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
+		editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
+		editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
+		editorServices.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
+		editorServices.registerInstance(ISearchService, {
+			registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
+			fileSearch: async () => ({ results: [], messages: [] }),
+			textSearch: async () => { throw new Error('Text search is outside this composer fixture'); },
+		});
+		editorServices.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
+		editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
+		editorServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
+		editorServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
+		editorServices.registerInstance(ISessionsGitHubService, {
+			onDidChange: Event.None,
+			getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
+			initialize() { },
+			attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
+			detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
+			invokePullRequestArtifact: async () => { throw new Error('Unexpected PR artifact action'); },
+		});
+		editorServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+		editorServices.registerSingleton(IVoiceCodeTranscriptionClient, () => editorServices.createInstance(VoiceCodeTranscriptionClient));
+		editorServices.registerInstance(IAgentVoiceService, undefined);
+		editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
+		editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
+		editorServices.registerSingleton(IVoiceInputModeService, () => editorServices.createInstance(VoiceInputModeService));
+		using contextViewService = new BrowserContextViewService(dom.window.document.body);
+		editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
+		editorServices.registerInstance(INotificationService, notifications);
+		const opened: { sessionId: string; threadId: string; }[] = [];
+		editorServices.registerInstance(IChatSessionNavigationService, {
+			openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); },
+		} as unknown as IChatSessionNavigationService);
+		registerTestDictationOnboarding(editorServices);
+		editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
+		Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
+		editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
+		let boundThread = thread();
+		let rejectStart = background;
+		const fake = fakeApi({
+			sessions: [],
+			thread: () => boundThread,
+			createSession: session('session-1', undefined, 'New Chat'),
+			createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
+			startTurnError: () => rejectStart ? new Error('Controlled background failure') : undefined,
+		});
+		using sessions = new SessionsManagementService(fake.api);
+		await sessions.initialize();
+		editorServices.registerInstance(ISessionsManagementService, sessions);
+		editorServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
+		using customViews = editorServices.createInstance(CustomViewService);
+		editorServices.registerInstance(ICustomViewService, customViews);
+		using commands = new CommandService(editorServices);
+		editorServices.registerInstance(ICommandService, commands);
+		using view = editorServices.createInstance(SessionsService);
+		editorServices.registerInstance(ISessionsService, view);
+		await view.initialize();
+		view.openNewSession();
+		const draft = view.activeSelection;
+		if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
+		editorServices.registerInstance(IContextViewService, contextViewService);
+		using chat = createChatService(fake.api);
+		editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
+		editorServices.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+		editorServices.registerInstance(IContextMenuService, { showContextMenu: () => undefined } as unknown as IContextMenuService);
+		editorServices.registerInstance(IDialogService, recordingDialogService([]));
+		editorServices.registerInstance(IChatService, chat);
+		editorServices.registerInstance(IConfigurationService, configurationServices.get(chat)!);
+		editorServices.registerSingleton(IPromptsService, () => editorServices.createInstance(PromptsService));
+		editorServices.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read'); } });
+		editorServices.registerInstance(IAppServerSkillApi, fake.api.skills);
+		editorServices.registerSingleton(ISCMService, () => editorServices.createInstance(SCMService));
+		editorServices.registerInstance(ISessionProviderScopeService, {
+			onDidChange: Event.None, onDidChangeScopes: Event.None,
+			getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
+			createScope: () => editorServices.createChild(),
+		});
+		using composerContribution = editorServices.createInstance(SharedChatInputComposerContribution);
+		using codeView = editorServices.createInstance(NewChatView, dom.window.document.body, {
+			panelId: 'centered-chat', selection: draft, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
+		});
+		codeView.setVisible(true);
+		const widgetModel = codeView.model;
+		const widget = editorServices.get(IChatWidgetService).getAllWidgets().find(widget => widget.domNode.id === 'centered-chat');
+		assert.ok(widget instanceof NewChatWidget);
+		const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
+		assert.equal(input?.classList.contains('has-conversation'), false);
+		assert.equal(input?.classList.contains('chat-composer'), true);
+		const welcomeTip = input?.querySelector('.ash-chat-input-tip');
+		assert.ok(welcomeTip);
+		const tipSlot = welcomeTip.parentElement;
+		assert.equal(tipSlot?.nextElementSibling, input?.querySelector('.ash-chat-input-container'));
+		assert.equal(input?.lastElementChild, input?.querySelector('.ash-sessions-chat-input-footer'));
+		assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent], ['true', '']);
+		await widgetModel.initialize();
+		assert.equal(input?.getAttribute('aria-busy'), 'false');
+		assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
+		if (background) {
+			codeView.restoreDraft({ mode: 'agent', text: 'Send this in background', contexts: [] });
+			widget.focusInput();
+			const focused = dom.window.document.activeElement;
+			assert.ok(focused && input?.contains(focused));
+			assert.equal(editorServices.get(IChatWidgetService).lastFocusedWidget, widget);
+			const before = notifications.model.getNotifications();
+			await assert.rejects(commands.executeCommand('sessions.sendInBackground'), /Controlled background failure/);
+			assert.equal((await codeView.captureDraft())?.draft.text, 'Send this in background');
+			assert.deepEqual(notifications.model.getNotifications(), before);
+			assert.equal(sessions.sessions.length, 0);
+			rejectStart = false;
 
-	const selection = view.getSelection().activeSelection;
-	assert.ok(selection?.kind === 'session');
-	const completed = thread('Finished the work');
-	const turn = completed.turns[0]!;
-	boundThread = {
-		...completed, turns: [{
-			...turn, items: [
-				{ type: 'reasoning', itemId: 'reasoning-1', turnId: turn.turnId, text: 'Checking the workspace', state: [] },
-				...turn.items,
-			]
-		}]
-	};
-	const openCodeView = (panelId: string) => editorServices.createInstance(NewChatView, dom.window.document.body, {
-		panelId, selection, createNewSession: () => { }, onDidChangeInfo: () => { },
+			const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+			using locale = toDisposable(resetNlsResolver);
+			setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+			await commands.executeCommand('sessions.sendInBackground');
+			assert.equal(fake.createSessionRequests.length, 1);
+			assert.equal(fake.turnStartRequests.length, 2);
+			assert.equal(dom.window.document.activeElement, focused);
+			assert.equal(widgetModel.untitledSessionId, draft.session.untitledSessionId);
+			assert.equal(view.activeSelection?.kind, 'untitled');
+			assert.equal((await codeView.captureDraft())?.draft.text ?? '', '');
+			assert.deepEqual(sessions.sessions.map(session => session.sessionId), ['session-1']);
+			const sent = notifications.model.getNotifications().at(-1);
+			assert.equal(sent?.message, '消息已在后台发送。');
+			const open = sent?.actions?.primary?.[0];
+			assert.equal(open?.label, '打开会话');
+			assert.deepEqual(opened, []);
+			await open?.run();
+			assert.deepEqual(opened, [{ sessionId: 'session-1', threadId: 'thread-1' }]);
+
+			// Reusing the same input starts another creation with a fresh backend identity.
+			const next = await sessions.materializeUntitledSession(draft.session.untitledSessionId);
+			assert.equal(next.threadId, 'thread-1');
+			assert.equal(fake.createSessionRequests.length, 2);
+			assert.notEqual(fake.createSessionRequests[0].commandId, fake.createSessionRequests[1].commandId);
+			return;
+		}
+		const attachment = new DeferredPromise<{ name: string; content: string; }>();
+		codeView.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
+		const sending = widget.acceptInput('Start this work');
+		view.openNewSession();
+		const chatSelection = view.activeSelection;
+		if (chatSelection?.kind !== 'untitled') throw new Error('Expected Chat draft');
+		using chatWidget = editorServices.createInstance(NewChatView, dom.window.document.body, {
+			panelId: 'separate-chat', selection: chatSelection, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
+		});
+		chatWidget.setVisible(true);
+		const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
+		chatWidget.restoreDraft(chatDraft);
+		const restoredChatDraft = { ...chatDraft, text: 'Keep my Chat draft chat.txt ', contexts: chatDraft.contexts.map(context => ({ ...context, reference: { start: 19, end: 27 } })) };
+		await attachment.complete({ name: 'code.ts', content: 'Code context' });
+		await sending;
+		assert.equal(input?.classList.contains('has-conversation'), true);
+		assert.equal(tipSlot?.childElementCount, 0);
+		assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
+		assert.equal(widget.sessionId, 'session-1');
+		assert.equal(codeView.model, widgetModel);
+		assert.deepEqual((await chatWidget.captureDraft())?.draft, restoredChatDraft);
+		assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`, chatInputStatePersistence), restoredChatDraft);
+		assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
+		codeView.dispose();
+		assert.equal(widget.isDisposed, true);
+		assert.equal(widgetModel.isDisposed, true);
+		assert.equal(widget.input.isDisposed, true);
+		assert.equal(editorServices.get(IChatWidgetService).getAllWidgets().includes(widget), false);
+		assert.equal(view.activeSelection?.kind, 'untitled');
+		assert.equal(chatWidget.sessionId, undefined);
+		view.openSession('session-1', 'thread-1');
+		assert.equal(view.activeSelection?.kind, 'session');
+		assert.equal(await widget.captureDraft(), undefined);
+		assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
+
+		const selection = view.getSelection().activeSelection;
+		assert.ok(selection?.kind === 'session');
+		const completed = thread('Finished the work');
+		const turn = completed.turns[0]!;
+		boundThread = {
+			...completed, turns: [{
+				...turn, items: [
+					{ type: 'reasoning', itemId: 'reasoning-1', turnId: turn.turnId, text: 'Checking the workspace', state: [] },
+					...turn.items,
+				]
+			}]
+		};
+		const openCodeView = (panelId: string) => editorServices.createInstance(NewChatView, dom.window.document.body, {
+			panelId, selection, createNewSession: () => { }, onDidChangeInfo: () => { },
+		});
+		using first = openCodeView('first-transcript');
+		first.setVisible(true);
+		await first.model.initialize();
+		const reasoning = first.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking');
+		assert.ok(reasoning);
+		assert.equal(reasoning.open, false);
+		reasoning.open = true;
+
+		const originalThread = boundThread;
+		boundThread = { ...thread('Another conversation'), threadId: 'thread-2' };
+		await first.model.selectThread({ ...selection.active, threadId: 'thread-2' });
+		assert.equal(first.element.querySelector('.ash-chat-thinking'), null);
+		boundThread = originalThread;
+		await first.model.selectThread(selection.active);
+		assert.equal(first.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking')?.open, true);
+		first.dispose();
+
+		using reopened = openCodeView('reopened-transcript');
+		await reopened.model.initialize();
+		reopened.setVisible(true);
+		assert.equal(reopened.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking')?.open, true);
+		assert.equal(await reopened.captureDraft(), undefined);
 	});
-	using first = openCodeView('first-transcript');
-	first.setVisible(true);
-	await first.model.initialize();
-	const reasoning = first.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking');
-	assert.ok(reasoning);
-	assert.equal(reasoning.open, false);
-	reasoning.open = true;
-
-	const originalThread = boundThread;
-	boundThread = { ...thread('Another conversation'), threadId: 'thread-2' };
-	await first.model.selectThread({ ...selection.active, threadId: 'thread-2' });
-	assert.equal(first.element.querySelector('.ash-chat-thinking'), null);
-	boundThread = originalThread;
-	await first.model.selectThread(selection.active);
-	assert.equal(first.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking')?.open, true);
-	first.dispose();
-
-	using reopened = openCodeView('reopened-transcript');
-	await reopened.model.initialize();
-	reopened.setVisible(true);
-	assert.equal(reopened.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking')?.open, true);
-	assert.equal(await reopened.captureDraft(), undefined);
-});
 
 test('an empty Session list opens an untitled session and persists it on its first send', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -2888,6 +2933,7 @@ interface FakeOptions {
 	readonly sessions?: readonly ISession[];
 	readonly createSession?: ISession;
 	readonly createSessionError?: Error;
+	readonly startTurnError?: () => Error | undefined;
 	readonly createThread?: {
 		readonly session: ISession;
 		readonly threadId: string;
@@ -4093,7 +4139,7 @@ test('Chat mode accessibility help explains switch_mode in Chinese and restores 
 		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), /退出到 Agent、Debug 或 Multitask 需要你的选择，并保留权限模式/);
 		assert.match(provider.provideContent(), /权限菜单提供 Auto、Manual 和 Bypass permissions/);
-		assert.match(provider.provideContent(), /菜单打开时按 1、2、3 选择/);
+		assert.doesNotMatch(provider.provideContent(), /按 1、2、3/);
 		assert.equal(provider.provideContent().match(/聊天：配置工具/g)?.length, 1);
 		(focused as HTMLElement).blur();
 		provider.dispose();
@@ -4117,7 +4163,8 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help s
 		assert.equal(document.activeElement, selected);
 		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), locale === 'en' ? /^Permissions/ : /^权限/);
-		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|工作区|workspace/);
+		assert.match(provider.provideContent(), locale === 'en' ? /Press Enter or Space to select it/ : /按 Enter 或空格确认选择/);
+		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|工作区|workspace|1, 2, or 3|1、2、3/);
 		provider.dispose();
 		assert.equal(document.activeElement, selected);
 		const closingProvider = focusedChatHelp(fixture.services);
@@ -4465,6 +4512,8 @@ function fakeApi(options: FakeOptions = {}): {
 			consultAdvisor: async (params: SessionOperationInput<'consultAdvisor'>) => { consultRequests.push(params); return { turnId: 'advisor-turn', sequence: params.expectedSequence + 1 }; },
 			start: async (params: SessionOperationInput<'startTurn'>) => {
 				turnStartRequests.push(params);
+				const error = options.startTurnError?.();
+				if (error) throw error;
 				return { turnId: 'turn-started', sequence: 2 };
 			},
 			compact: async (params: SessionOperationInput<'compactContext'>) => {
@@ -4519,7 +4568,7 @@ function session(
 	title = `Session ${id}`,
 ): ISession {
 	return {
-		sessionId: id,
+		sessionId: id, kind: 'code' as const,
 		title,
 		status: 'active',
 		nextApprovalMode: 'manual',
@@ -4531,7 +4580,7 @@ function session(
 
 function sessionDto(value: ISession): SessionDto {
 	return {
-		sessionId: value.sessionId,
+		sessionId: value.sessionId, kind: 'code' as const,
 		title: value.title,
 		status: value.status,
 		model: value.model,
@@ -4599,9 +4648,10 @@ function transcript(value: Thread): ThreadTranscriptSnapshot {
 /** A paged server fixture with independent snapshot and transcript cursors. */
 function pagedChatFixture(initialCount = 65) {
 	let count = initialCount;
+	let sequence = initialCount;
 	const requests: { type: 'read' | 'subscribe'; history?: import('../../../platform/agentHost/common/agent.js').ThreadSnapshotHistory; afterSequence?: number; }[] = [];
 	const full = () => ({
-		...thread(), sequence: count,
+		...thread(), sequence,
 		turns: Array.from({ length: count }, (_, index) => {
 			const turnId = `turn-${index + 1}`;
 			return { ...thread('fixture').turns[0]!, turnId, items: [{ type: 'agentMessage' as const, itemId: `answer-${index + 1}`, turnId, text: `Answer ${index + 1}` }] };
@@ -4615,7 +4665,7 @@ function pagedChatFixture(initialCount = 65) {
 		const visible = { ...value, turns: value.turns.slice(start, end) };
 		return {
 			thread: visible,
-			transcript: { sessionId: visible.sessionId, threadId: visible.threadId, durableSequence: count, revision: history?.type === 'before' ? 0 : count, entries: visible.turns.flatMap(turn => turn.items.map(item => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false }))) },
+			transcript: { sessionId: visible.sessionId, threadId: visible.threadId, durableSequence: sequence, revision: history?.type === 'before' ? 0 : sequence, entries: visible.turns.flatMap(turn => turn.items.map(item => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false }))) },
 			history: history ? { hasOlderTurns: start > 0, oldestTurnId: visible.turns[0]?.turnId } : undefined,
 		};
 	};
@@ -4629,7 +4679,7 @@ function pagedChatFixture(initialCount = 65) {
 			subscribe: async ({ history, afterSequence }) => { requests.push({ type: 'subscribe', history, afterSequence }); return { ...page(history), updates: [] }; },
 		},
 	};
-	return { active, fake, api, requests, page, setCount(value: number) { count = value; } };
+	return { active, fake, api, requests, page, setCount(value: number) { count = value; sequence = Math.max(sequence + 1, value); } };
 }
 
 test('bounded Chat pages are requested by cursor and retain every message in chronological order', async () => {
@@ -4716,6 +4766,35 @@ test('bounded Chat pagination failures retain content, allow sending and retry t
 	assert.equal(model.items.length, 40);
 	assert.equal(model.olderHistory?.error, undefined);
 });
+
+for (const retryFails of [false, true]) {
+	test(`bounded Chat refreshes a retired pagination anchor and retries only once (${retryFails ? 'second rejection' : 'success'})`, async () => {
+		const fixture = pagedChatFixture();
+		const read = fixture.api.thread.read;
+		fixture.api.thread.read = async params => {
+			if (params.history?.type === 'before' && (params.history.turnId === 'turn-46' || retryFails)) {
+				fixture.requests.push({ type: 'read', history: params.history });
+				throw new ChatHistoryAnchorError('InvalidParams');
+			}
+			return read(params);
+		};
+		using chat = createChatService(fixture.api);
+		using sessions = new SessionsManagementService(fixture.api);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
+		await model.initialize();
+		fixture.setCount(44);
+		await model.loadOlderHistory();
+		assert.deepEqual(fixture.requests.slice(1).map(request => request.history), [
+			{ type: 'before', turnId: 'turn-46', turnLimit: 20 },
+			{ type: 'latest', turnLimit: 20 },
+			{ type: 'before', turnId: 'turn-25', turnLimit: 20 },
+		]);
+		assert.deepEqual(model.items.map(item => item.text), Array.from({ length: retryFails ? 20 : 40 }, (_, index) => `Answer ${index + (retryFails ? 25 : 5)}`));
+		assert.equal(model.olderHistory?.loading, false);
+		assert.equal(!!model.olderHistory?.error, retryFails);
+		assert.equal(model.inputState.inputBlocked, false);
+	});
+}
 
 test('bounded Chat discards a retired page after A-B-A navigation and disposal', async () => {
 	const fixture = pagedChatFixture();
@@ -5193,7 +5272,7 @@ test('approval capabilities reach the composer only through owner-directed backe
 	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'interactionRequested', threadId: 'thread-1', turnId: 'turn-1', interaction } } } });
 	assert.equal(model.interaction, undefined);
 	fake.emit({ method: 'agent/request', params: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', interaction } });
-	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, riskAssessment: undefined, sandboxDenial: undefined, capabilities: interaction.request.request.capabilities } });
+	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, sessionCommandPrefix: undefined, riskAssessment: undefined, sandboxDenial: undefined, capabilities: interaction.request.request.capabilities } });
 	await nextTask();
 });
 
@@ -6973,7 +7052,8 @@ for (const aba of [false, true]) {
 			typeChatText(dom.window, input, 'Keep my later draft');
 			await oldReply.error(new Error('Old request failed'));
 			await previous;
-			assert.equal(chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')!.textContent, 'Working…');
+			assert.equal(chatPane.querySelector('.ash-chat-transcript-working')?.textContent, 'Working on your request…');
+			assert.equal(chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent, '');
 			assert.equal(input.value, 'Keep my later draft');
 			await pane.acceptInput();
 			assert.equal(fake.turnStartRequests.length, 2);

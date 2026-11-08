@@ -77,6 +77,8 @@ fn project_times_preserve_creation_and_follow_committed_updates() {
         "create-project-time",
         0,
         ProjectCommand::Create {
+            icon: None,
+            color: None,
             scope: None,
             name: "Ash".into(),
             description: String::new(),
@@ -84,8 +86,8 @@ fn project_times_preserve_creation_and_follow_committed_updates() {
         },
     );
     let created = crate::reducer::apply(None, &create, 100).unwrap();
-    assert_eq!(created.created_at_ms, Some(100));
-    assert_eq!(created.updated_at_ms, Some(100));
+    assert_eq!(created.created_at_ms, 100);
+    assert_eq!(created.updated_at_ms, 100);
     let update = request(
         "update-project-time",
         1,
@@ -96,12 +98,12 @@ fn project_times_preserve_creation_and_follow_committed_updates() {
         },
     );
     let updated = crate::reducer::apply(Some(created), &update, 300).unwrap();
-    assert_eq!(updated.created_at_ms, Some(100));
-    assert_eq!(updated.updated_at_ms, Some(300));
+    assert_eq!(updated.created_at_ms, 100);
+    assert_eq!(updated.updated_at_ms, 300);
     let archive = request("archive-project-time", 2, ProjectCommand::Archive);
     let archived = crate::reducer::apply(Some(updated), &archive, 200).unwrap();
-    assert_eq!(archived.created_at_ms, Some(100));
-    assert_eq!(archived.updated_at_ms, Some(300));
+    assert_eq!(archived.created_at_ms, 100);
+    assert_eq!(archived.updated_at_ms, 300);
 }
 
 #[test]
@@ -111,6 +113,8 @@ fn project_commands_are_revision_checked_and_retry_safe() {
         "create-project",
         0,
         ProjectCommand::Create {
+            icon: None,
+            color: None,
             scope: None,
             name: "Ash".into(),
             description: "multi-root work".into(),
@@ -119,7 +123,7 @@ fn project_commands_are_revision_checked_and_retry_safe() {
     );
     let created = coordinator.apply(create.clone()).unwrap();
     assert_eq!(created.project.revision, 1);
-    assert!(created.project.created_at_ms.is_some());
+    assert!(created.project.created_at_ms > 0);
     assert_eq!(created.project.created_at_ms, created.project.updated_at_ms);
     assert_eq!(created.disposition, ProjectCommandDisposition::Committed);
     assert_eq!(
@@ -154,6 +158,8 @@ fn project_roots_and_associations_remain_organizational_facts() {
             "create-project-associations",
             0,
             ProjectCommand::Create {
+                icon: None,
+                color: None,
                 scope: None,
                 name: "Ash".into(),
                 description: String::new(),
@@ -197,6 +203,8 @@ fn deletion_is_retry_safe_hides_the_catalog_and_prevents_restoration() {
             "delete-create",
             0,
             ProjectCommand::Create {
+                icon: None,
+                color: None,
                 scope: None,
                 name: "Delete me".into(),
                 description: String::new(),
@@ -272,6 +280,8 @@ fn materials_are_versioned_references_and_invalid_updates_are_atomic() {
             "create-material-project",
             0,
             ProjectCommand::Create {
+                icon: None,
+                color: None,
                 scope: None,
                 name: "Research".into(),
                 description: "Read the evidence".into(),

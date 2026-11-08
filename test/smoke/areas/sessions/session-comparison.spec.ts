@@ -97,7 +97,7 @@ test('Sessions automatically judges a comparison and supports retry and synthesi
 		const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'comparison-default', expectedRevision: configured.revision, model });
 		await client.request(APP_SERVER_METHODS['session/create'], {
-			commandId: 'comparison-source', title: 'Comparison source', agent: { type: 'default' },
+			commandId: 'comparison-source', kind: 'code', title: 'Comparison source', agent: { type: 'default' },
 			executionTarget: { type: 'local', root: testWorkspace.directory },
 		});
 

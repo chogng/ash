@@ -1112,6 +1112,18 @@ impl Drop for EnvToolPorts {
 }
 
 impl EnvToolPorts {
+    pub(super) fn command_terminals(
+        &self,
+    ) -> Option<Arc<dyn crate::local_tools::CommandTerminalService>> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .local
+            .as_ref()?
+            .command_terminals
+            .clone()
+    }
+
     pub(crate) fn capabilities_snapshot(
         &self,
     ) -> (
@@ -3687,6 +3699,21 @@ impl AppServer {
             -32064,
             AppServerErrorName::TerminalOperationFailed,
         ))
+    }
+
+    /// Records where the Turn ran. Filesystem operations authorize access separately.
+    pub(super) fn bound_turn_directory(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Option<ash_protocol::SessionExecutionTarget> {
+        self.env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .dir_grants
+            .thread_dir(thread_id)
+            .map(|dir| ash_protocol::SessionExecutionTarget::Local {
+                root: dir.canonical_path().to_path_buf(),
+            })
     }
 
     pub(super) fn thread_directory(

@@ -36,6 +36,8 @@ export interface IHoverLifecycleOptions {
 
 export interface HoverOptions {
 	readonly target: HTMLElement;
+	/** Position relative to this element while keeping interaction and description on the target. */
+	readonly anchor?: HTMLElement;
 	readonly content: HoverContent;
 	readonly getHoverOptions?: () => IDelayedHoverOptions;
 	readonly delayMs?: HoverDelay;
@@ -58,6 +60,7 @@ let hoverId = 0;
 /** A managed, accessible tooltip hosted in a ContextView. */
 export class Hover extends Disposable {
 	readonly element: HTMLElement;
+	private readonly anchor: HTMLElement;
 	private readonly contextView: IContextViewProvider;
 	private readonly showTimer = this._register(new MutableDisposable<IDisposable>());
 	private readonly hideTimer = this._register(new MutableDisposable<IDisposable>());
@@ -98,6 +101,7 @@ export class Hover extends Disposable {
 		super();
 		const target = options.target;
 		this.element = target;
+		this.anchor = options.anchor ?? target;
 		this.content = options.content;
 		this.getHoverOptions = options.getHoverOptions;
 		this.trapFocus = options.trapFocus ?? false;
@@ -260,7 +264,7 @@ export class Hover extends Disposable {
 		// its anchor. Treat the view as active first so disposal can close it.
 		this._visible = true;
 		const shown = this.contextView.show({
-			anchor: this.element,
+			anchor: this.anchor,
 			content: tooltip,
 			anchorAlignment: this.anchorAlignment,
 			anchorAxisAlignment,

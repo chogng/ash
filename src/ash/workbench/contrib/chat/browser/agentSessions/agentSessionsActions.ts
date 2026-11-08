@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { isRecord } from '../../../../../base/common/types.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
@@ -191,17 +192,32 @@ export function registerAgentSessionActions(): void {
 			const sessions = accessor.get(IAgentSessionActionsService);
 			const configuration = accessor.get(IConfigurationService);
 			const dialogs = accessor.get(IDialogService);
-			await sessions.initialize();
-			const target = sessions.resolveTarget(argument, true);
+			let target: { readonly title: string; archive(): Promise<boolean>; };
+			let detail: string | undefined;
+			if (isRecord(argument) && 'catalogId' in argument) {
+				if (Object.keys(argument).length !== 1 || typeof argument.catalogId !== 'string' || !argument.catalogId) {
+					throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
+				}
+				target = sessions.resolveCatalogArchiveTarget(argument.catalogId);
+			} else {
+				await sessions.initialize();
+				const session = sessions.resolveTarget(argument, true);
+				target = {
+					title: session.title,
+					archive: async () => {
+						await sessions.archiveSession((await session.resolve()).sessionId);
+						return true;
+					},
+				};
+				detail = localize('chatSession.archive.detail', 'Running work in this session will be interrupted. You can restore its root conversation later.');
+			}
 			const action = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(configuration)).archive;
 			const result = await dialogs.confirm({
 				message: localize('chatSession.archive.confirm', '{0}: {1}?', action.title.value, target.title),
-				detail: localize('chatSession.archive.detail', 'Running work in this session will be interrupted. You can restore its root conversation later.'),
+				detail,
 				primaryButton: action.title.value,
 			});
-			if (!result.confirmed) return false;
-			await sessions.archiveSession((await target.resolve()).sessionId);
-			return true;
+			return result.confirmed && await target.archive();
 		}
 	});
 

@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DisposableStore, toDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import { isMacintosh } from '../../../../../../../base/common/platform.js';
+import { DeferredPromise } from '../../../../../../../base/common/async.js';
+import { installEditorTestDom } from '../../../../../../../editor/test/browser/editorTestGlobals.js';
+import { BrowserContextViewService } from '../../../../../../../platform/contextview/browser/contextViewService.js';
 import { InstantiationService } from '../../../../../../../platform/instantiation/common/instantiationService.js';
 import { IContextViewService } from '../../../../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
@@ -13,36 +15,21 @@ import { IConnectorService } from '../../../../../../../platform/connectors/comm
 import { IPluginManagementService } from '../../../../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { setARIAContainer } from '../../../../../../../base/browser/ui/aria/aria.js';
 import { ChatInputAttachMenu } from '../../../../browser/widget/input/chatInputAttachMenu.js';
-import type { ContextViewOptions } from '../../../../../../../base/browser/ui/contextview/contextview.js';
 
-function createFixture() {
+function createFixture(listConnectors?: IConnectorService['list']) {
 	const resources = new DisposableStore();
-	const dom = new JSDOM('<!doctype html><body><div id="container"><button id="attach-btn" aria-haspopup="menu"></button></div></body>', {
+	const dom = new JSDOM('<!doctype html><body><div id="container" class="ash-sessions-window"><button id="attach-btn" aria-haspopup="menu"></button><input></div></body>', {
 		url: 'http://localhost/',
 	});
 	resources.add(toDisposable(() => dom.window.close()));
+	resources.add(installEditorTestDom(dom, ['Node']));
 	resources.add(setARIAContainer(dom.window.document.body));
 
 	const services = resources.add(new InstantiationService());
 
-	let currentViewOptions: ContextViewOptions | undefined;
-	const contextViewService: Partial<IContextViewService> = {
-		get container() { return dom.window.document.getElementById('container') as HTMLElement; },
-		show(options: ContextViewOptions) {
-			currentViewOptions = options;
-			dom.window.document.getElementById('container')!.appendChild(options.content);
-			return true;
-		},
-		hide() {
-			if (currentViewOptions) {
-				currentViewOptions.content.remove();
-				currentViewOptions.onHide?.(0 as any);
-				currentViewOptions = undefined;
-			}
-		},
-		layout() {},
-	};
-	services.registerInstance(IContextViewService, contextViewService as IContextViewService);
+	const document = dom.window.document;
+	const container = document.getElementById('container')!;
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(container)));
 
 	const executedCommands: string[] = [];
 	const commandService: Partial<ICommandService> = {
@@ -75,13 +62,13 @@ function createFixture() {
 	services.registerInstance(IProjectService, projectService as IProjectService);
 
 	const connectorService: Partial<IConnectorService> = {
-		async list() {
+		list: listConnectors ?? (async () => {
 			return {
 				connectors: [
 					{ id: 'conn-github', displayName: 'GitHub' } as any,
 				],
 			} as any;
-		},
+		}),
 	};
 	services.registerInstance(IConnectorService, connectorService as IConnectorService);
 
@@ -96,7 +83,9 @@ function createFixture() {
 	};
 	services.registerInstance(IPluginManagementService, pluginService as IPluginManagementService);
 
-	const anchor = dom.window.document.getElementById('attach-btn') as HTMLElement;
+	const anchor = document.getElementById('attach-btn')!;
+	const input = document.querySelector('input')!;
+	anchor.focus();
 	let uploaded = false;
 	let closed = false;
 	const attachedSkills: any[] = [];
@@ -104,6 +93,7 @@ function createFixture() {
 
 	const menu = resources.add(services.createInstance(ChatInputAttachMenu, {
 		anchor,
+		focusInput: () => input.focus(),
 		onUploadFiles: () => { uploaded = true; },
 		onClose: () => { closed = true; },
 		onAttachSkill: (skill: any) => { attachedSkills.push(skill); },
@@ -114,8 +104,15 @@ function createFixture() {
 	}));
 
 	return {
-		dom,
+		document,
+		input,
 		anchor,
+		key(key: string) {
+			document.activeElement?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+		},
+		popup(label = 'Add content or context') {
+			return container.querySelector<HTMLElement>(`.ash-context-view-menu:not([hidden]) > .ash-menu[aria-label="${label}"]`);
+		},
 		menu,
 		executedCommands,
 		storageValues,
@@ -123,182 +120,156 @@ function createFixture() {
 		selectedProjects,
 		get uploaded() { return uploaded; },
 		get closed() { return closed; },
-		get currentViewOptions() { return currentViewOptions; },
 		[Symbol.dispose]() { resources.dispose(); },
 	};
 }
 
+function menuItem(menu: HTMLElement, label: string): HTMLButtonElement {
+	const row = menu.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+	assert.ok(row, `Expected a menu item named ${label}`);
+	return row;
+}
+
 suite('ChatInputAttachMenu', () => {
-	test('renders all 8 items and 2 dividers with expected icons and attributes', () => {
+	test('shows action icons on the left and checks and submenu arrows on the right', () => {
 		using f = createFixture();
 		f.menu.show();
 
 		assert.equal(f.anchor.getAttribute('aria-expanded'), 'true');
-		const menuEl = f.currentViewOptions?.content;
-		assert.ok(menuEl, 'Menu content should be rendered in ContextView');
-		assert.equal(menuEl.getAttribute('role'), 'menu');
+		const menu = f.popup()!;
+		assert.equal(menu.getAttribute('role'), 'menu');
+		assert.ok(menu.classList.contains('ash-menu-indicators-trailing'));
+		assert.equal(menu.querySelectorAll('button').length, 8);
+		assert.equal(menu.querySelectorAll('[role="separator"]').length, 2);
+		assert.equal(menu.querySelectorAll('.ash-menu-leading-slot [data-ash-icon-id]').length, 8);
 
-		const items = menuEl.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-item');
-		assert.equal(items.length, 8, 'Expected 8 menu items');
+		const upload = menuItem(menu, 'Upload or add files');
+		assert.equal(upload.getAttribute('role'), 'menuitem');
+		assert.equal(upload.querySelector('.ash-menu-keybinding')?.textContent, isMacintosh ? '⌘U' : 'Ctrl+U');
+		assert.ok(upload.querySelector('.ash-menu-leading-slot [data-ash-icon-id="paperclip"]'));
+		assert.equal(upload.querySelector('.ash-menu-trailing-slot [data-ash-icon-id]'), null);
 
-		const dividers = menuEl.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-divider');
-		assert.equal(dividers.length, 2, 'Expected 2 dividers');
-
-		// 1. Upload or add files
-		assert.match(items[0].textContent ?? '', /Upload or add files/);
-		assert.equal(items[0].getAttribute('role'), 'menuitem');
-		const shortcut = items[0].querySelector('.ash-chat-attach-menu-item-shortcut');
-		assert.equal(shortcut?.textContent, isMacintosh ? '⌘U' : 'Ctrl+U');
-
-		// 2. Add to project
-		assert.match(items[1].textContent ?? '', /Add to project/);
-		assert.equal(items[1].getAttribute('aria-haspopup'), 'menu');
-		assert.ok(items[1].querySelector('.ash-chat-attach-menu-item-arrow'), 'Should have submenu arrow');
-
-		// 3. Skills
-		assert.match(items[2].textContent ?? '', /Skills/);
-		assert.equal(items[2].getAttribute('aria-haspopup'), 'menu');
-
-		// 4. Add connector
-		assert.match(items[3].textContent ?? '', /Add connector/);
-		assert.equal(items[3].getAttribute('aria-haspopup'), 'menu');
-
-		// 5. Design system
-		assert.match(items[4].textContent ?? '', /Design system/);
-		assert.equal(items[4].getAttribute('aria-haspopup'), 'menu');
-
-		// 6. Plugins
-		assert.match(items[5].textContent ?? '', /Plugins/);
-		assert.equal(items[5].getAttribute('aria-haspopup'), 'menu');
-
-		// 7. Web search
-		assert.match(items[6].textContent ?? '', /Web search/);
-		assert.equal(items[6].getAttribute('role'), 'menuitemcheckbox');
-		assert.equal(items[6].getAttribute('aria-checked'), 'true');
-		assert.ok(items[6].querySelector('.ash-chat-attach-menu-item-check:not(.hidden)'));
-
-		// 8. Memory
-		assert.match(items[7].textContent ?? '', /Memory/);
-		assert.equal(items[7].getAttribute('role'), 'menuitemcheckbox');
-		assert.equal(items[7].getAttribute('aria-checked'), 'true');
-		assert.ok(items[7].querySelector('.ash-chat-attach-menu-item-check:not(.hidden)'));
+		for (const label of ['Add to project', 'Skills', 'Add connector', 'Design system', 'Plugins']) {
+			const trigger = menuItem(menu, label);
+			assert.equal(trigger.getAttribute('aria-haspopup'), 'menu');
+			assert.ok(trigger.querySelector('.ash-menu-leading-slot [data-ash-icon-id]'));
+			assert.ok(trigger.querySelector('.ash-menu-trailing-slot.ash-submenu-indicator [data-ash-icon-id="menu-submenu"]'));
+		}
+		for (const label of ['Web search', 'Memory']) {
+			const toggle = menuItem(menu, label);
+			assert.equal(toggle.getAttribute('role'), 'menuitemcheckbox');
+			assert.equal(toggle.getAttribute('aria-checked'), 'true');
+			assert.ok(toggle.querySelector('.ash-menu-leading-slot [data-ash-icon-id]'));
+			assert.ok(toggle.querySelector('.ash-menu-trailing-slot > [data-ash-icon-id="check"]'));
+		}
 	});
 
-	test('clicking Upload or add files invokes onUploadFiles and closes menu', () => {
+	test('clicking Upload or add files invokes onUploadFiles and closes the menu', () => {
 		using f = createFixture();
 		f.menu.show();
-
-		const menuEl = f.currentViewOptions?.content!;
-		const uploadItem = menuEl.querySelector<HTMLElement>('.ash-chat-attach-menu-item')!;
-		uploadItem.click();
+		menuItem(f.popup()!, 'Upload or add files').click();
 
 		assert.equal(f.uploaded, true);
-		assert.equal(f.currentViewOptions, undefined);
+		assert.equal(f.popup(), null);
 		assert.equal(f.anchor.getAttribute('aria-expanded'), 'false');
 	});
 
-	test('toggling Web search and Memory updates state and persists to storage', () => {
+	test('toggling Web search and Memory keeps the menu open and persists the check states', () => {
 		using f = createFixture();
 		f.menu.show();
+		const menu = f.popup()!;
 
-		const menuEl = f.currentViewOptions?.content!;
-		const items = menuEl.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-item');
-		const webSearchItem = items[6];
-		const memoryItem = items[7];
-
-		// Toggle Web search off
-		webSearchItem.click();
-		assert.equal(webSearchItem.getAttribute('aria-checked'), 'false');
-		assert.equal(f.storageValues.get('ash.chat.attachMenu.webSearch.enabled'), false);
-		const webCheck = webSearchItem.querySelector('.ash-chat-attach-menu-item-check');
-		assert.ok(webCheck?.classList.contains('hidden'));
-
-		// Toggle Memory off
-		memoryItem.click();
-		assert.equal(memoryItem.getAttribute('aria-checked'), 'false');
-		assert.equal(f.storageValues.get('ash.chat.attachMenu.memory.enabled'), false);
-		const memoryCheck = memoryItem.querySelector('.ash-chat-attach-menu-item-check');
-		assert.ok(memoryCheck?.classList.contains('hidden'));
-
-		// Toggle Web search back on
-		webSearchItem.click();
-		assert.equal(webSearchItem.getAttribute('aria-checked'), 'true');
-		assert.equal(f.storageValues.get('ash.chat.attachMenu.webSearch.enabled'), true);
-		assert.ok(!webCheck?.classList.contains('hidden'));
+		for (const [label, key] of [['Web search', 'webSearch'], ['Memory', 'memory']]) {
+			const toggle = menuItem(menu, label);
+			for (const checked of [false, true]) {
+				toggle.click();
+				assert.equal(toggle.getAttribute('aria-checked'), String(checked));
+				assert.equal(toggle.classList.contains('checked'), checked);
+				assert.ok(toggle.querySelector('.ash-menu-leading-slot [data-ash-icon-id]'));
+				assert.equal(f.storageValues.get(`ash.chat.attachMenu.${key}.enabled`), checked);
+				assert.equal(f.popup(), menu);
+			}
+		}
 	});
 
-	test('keyboard navigation ArrowDown/ArrowUp and Escape', () => {
+	test('keyboard navigation opens a submenu and returns focus through both menu levels', async () => {
 		using f = createFixture();
 		f.menu.show();
+		const menu = f.popup()!;
+		const upload = menuItem(menu, 'Upload or add files');
+		const projects = menuItem(menu, 'Add to project');
+		assert.equal(f.document.activeElement, upload);
 
-		const menuEl = f.currentViewOptions?.content!;
-		const items = menuEl.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-item');
-		assert.ok(items[0].classList.contains('focused'));
+		f.key('ArrowDown');
+		assert.equal(f.document.activeElement, projects);
+		f.key('ArrowUp');
+		assert.equal(f.document.activeElement, upload);
+		f.key('ArrowDown');
+		f.key('ArrowRight');
 
-		menuEl.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-		assert.ok(items[1].classList.contains('focused'));
+		await new Promise<void>(resolve => setImmediate(resolve));
+		const submenu = f.popup('Add to project')!;
+		const firstProject = menuItem(submenu, 'Alpha Project');
+		assert.ok(firstProject.querySelector('.ash-menu-leading-slot [data-ash-icon-id]'));
+		assert.equal(f.document.activeElement, firstProject);
 
-		menuEl.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
-		assert.ok(items[0].classList.contains('focused'));
-
-		menuEl.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		assert.equal(f.currentViewOptions, undefined);
+		f.key('Escape');
+		assert.equal(f.popup('Add to project'), null);
+		assert.equal(f.document.activeElement, projects);
+		f.key('Escape');
+		assert.equal(f.popup(), null);
+		assert.equal(f.document.activeElement, f.input);
 		assert.equal(f.closed, true);
 	});
 
-	test('Design system submenu opens and triggers command', async () => {
+	test('Design system submenu triggers the selected command', async () => {
 		using f = createFixture();
 		f.menu.show();
-
-		const menuEl = f.currentViewOptions?.content!;
-		const items = menuEl.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-item');
-		const designItem = items[4]; // Design system
-
-		// Trigger submenu
-		designItem.click();
+		menuItem(f.popup()!, 'Design system').click();
 		await new Promise<void>(resolve => setImmediate(resolve));
 
-		const container = f.dom.window.document.getElementById('container')!;
-		const submenu = container.querySelector<HTMLElement>('.ash-chat-attach-submenu');
-		assert.ok(submenu, 'Submenu element should be created');
-
-		const subItems = submenu.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-item');
-		assert.equal(subItems.length, 2);
-		assert.match(subItems[0].textContent ?? '', /Artifacts/);
-		assert.match(subItems[1].textContent ?? '', /Theme editor/);
-
-		// Click Artifacts
-		subItems[0].click();
+		const submenu = f.popup('Design system')!;
+		assert.deepEqual([...submenu.querySelectorAll('button')].map(button => button.textContent), ['Artifacts', 'Theme editor']);
+		menuItem(submenu, 'Artifacts').click();
 		assert.deepEqual(f.executedCommands, ['sessions.open.creator']);
-		assert.equal(f.currentViewOptions, undefined, 'Menu should close after command execution');
+		assert.equal(f.popup(), null);
+		assert.equal(f.popup('Design system'), null);
 	});
 
-	test('Skills submenu opens and attaches skill', async () => {
+	test('Skills submenu attaches the selected skill', async () => {
 		using f = createFixture();
 		f.menu.show();
-
-		const menuEl = f.currentViewOptions?.content!;
-		const items = menuEl.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-item');
-		const skillsItem = items[2]; // Skills
-
-		// Trigger submenu
-		skillsItem.click();
+		menuItem(f.popup()!, 'Skills').click();
 		await new Promise<void>(resolve => setImmediate(resolve));
 
-		const container = f.dom.window.document.getElementById('container')!;
-		const submenu = container.querySelector<HTMLElement>('.ash-chat-attach-submenu');
-		assert.ok(submenu, 'Submenu element should be created');
+		const submenu = f.popup('Skills')!;
+		assert.equal(submenu.querySelectorAll('button').length, 2);
+		assert.ok(menuItem(submenu, 'Browse skills…'));
+		menuItem(submenu, 'Unit Testing').click();
+		assert.deepEqual(f.attachedSkills, [{ name: 'Unit Testing' }]);
+		assert.equal(f.popup(), null);
+	});
 
-		const subItems = submenu.querySelectorAll<HTMLElement>('.ash-chat-attach-menu-item');
-		// Should have 1 skill item + 1 browse skills item
-		assert.equal(subItems.length, 2);
-		assert.match(subItems[0].textContent ?? '', /Unit Testing/);
-		assert.match(subItems[1].textContent ?? '', /Browse skills/);
+	test('ignores a connector response from an earlier submenu expansion', async () => {
+		type ConnectorCatalog = Awaited<ReturnType<IConnectorService['list']>>;
+		const first = new DeferredPromise<ConnectorCatalog>();
+		const second = new DeferredPromise<ConnectorCatalog>();
+		const requests = [first, second];
+		using f = createFixture(() => requests.shift()!.p);
+		f.menu.show();
+		const trigger = menuItem(f.popup()!, 'Add connector');
+		trigger.click();
+		f.key('ArrowLeft');
+		assert.equal(f.popup('Add connector'), null);
+		trigger.click();
 
-		// Click the skill
-		subItems[0].click();
-		assert.equal(f.attachedSkills.length, 1);
-		assert.equal(f.attachedSkills[0].name, 'Unit Testing');
-		assert.equal(f.currentViewOptions, undefined);
+		await first.complete({ generation: 1, connectors: [] });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		const submenu = f.popup('Add connector')!;
+		assert.equal(menuItem(submenu, 'Loading…').disabled, true);
+
+		await second.complete({ generation: 2, connectors: [] });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(f.document.activeElement, menuItem(submenu, 'Browse connectors…'));
 	});
 });

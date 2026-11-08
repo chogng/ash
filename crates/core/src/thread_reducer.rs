@@ -73,7 +73,7 @@ pub struct ThreadSnapshot {
     pub(crate) history_workspace: Option<ash_protocol::WorkspaceCheckpoint>,
     pub agent_id: ash_protocol::AgentId,
     pub origin: ash_protocol::ThreadOrigin,
-    pub surface: Option<ash_protocol::SessionSurface>,
+    pub kind: ash_protocol::SessionKind,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub created_at_unix_ms: u64,
@@ -249,6 +249,7 @@ impl ThreadSnapshot {
                     kind: turn.kind,
                     mode: turn.mode,
                     instructions: turn.instructions.clone(),
+                    directory: turn.directory.clone(),
                     model: turn.model.clone(),
                     reasoning_effort: turn.reasoning_effort,
                     advisor: turn.advisor.clone(),
@@ -270,6 +271,7 @@ impl ThreadSnapshot {
                         .map(TurnInteraction::pending_state),
                     error: turn.failure.clone(),
                     started_tool_call_ids: Some(self.started_tool_call_ids(&turn.turn_id)),
+                    skill_loads: (!turn.skill_loads.is_empty()).then(|| turn.skill_loads.clone()),
                 })
                 .collect(),
         }
@@ -340,6 +342,7 @@ pub struct TurnSnapshot {
     pub kind: TurnKind,
     pub mode: ash_protocol::CollaborationMode,
     pub instructions: Option<TurnInstructions>,
+    pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub model: Option<ModelRef>,
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
@@ -347,6 +350,7 @@ pub struct TurnSnapshot {
     pub approval_mode: ApprovalMode,
     pub tool_mode: ToolMode,
     pub activated_skills: Vec<FrozenSkillActivation>,
+    pub skill_loads: Vec<ash_protocol::TurnSkillLoad>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
     pub execution_backend_attempt: Option<String>,
@@ -461,7 +465,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             ThreadEvent::ThreadCreated {
                 origin,
                 agent,
-                surface,
+                kind,
                 session_id,
                 title,
                 execution_target,
@@ -486,7 +490,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     agent_id: ash_history::created_thread_agent_id(envelope)
                         .map_err(CoreError::Journal)?,
                     origin: origin.clone(),
-                    surface: *surface,
+                    kind: *kind,
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                     created_at_unix_ms,
@@ -1431,6 +1435,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             kind,
             mode,
             instructions,
+            directory,
             model,
             reasoning_effort,
             policy_revision,
@@ -1477,6 +1482,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     kind: *kind,
                     mode: *mode,
                     instructions: instructions.clone(),
+                    directory: directory.clone(),
                     model: model.clone(),
                     reasoning_effort: *reasoning_effort,
                     advisor: advisor.clone(),
@@ -1484,6 +1490,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     approval_mode: *approval_mode,
                     tool_mode: *tool_mode,
                     activated_skills: activated_skills.clone(),
+                    skill_loads: Vec::new(),
                     failure: None,
                     pending_interaction: None,
                     execution_backend_attempt: None,
@@ -1581,6 +1588,35 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 },
                 response_sequence: envelope.sequence,
             });
+        }
+        ThreadEvent::TurnSkillsLoaded { turn_id, loads, .. } => {
+            require_no_command(envelope)?;
+            let after_item_id = snapshot
+                .items
+                .iter()
+                .rev()
+                .find(|item| item.turn_id() == turn_id)
+                .map(|item| item.item_id().clone());
+            let turn = find_turn_mut(&mut snapshot, turn_id)?;
+            if turn.status != TurnStatus::Running || loads.is_empty() {
+                return Err(CoreError::Journal(
+                    "Skill loads require a running Turn and at least one Skill".into(),
+                ));
+            }
+            for load in loads {
+                if load.after_item_id != after_item_id
+                    || !turn.activated_skills.contains(&load.skill)
+                    || turn.skill_loads.iter().any(|previous| {
+                        previous.skill.id == load.skill.id
+                            && previous.skill.content_digest == load.skill.content_digest
+                    })
+                {
+                    return Err(CoreError::Journal(
+                        "Skill load must match an unrecorded Turn activation and its transcript anchor".into(),
+                    ));
+                }
+                turn.skill_loads.push(load.clone());
+            }
         }
         ThreadEvent::TurnStarted { turn_id, .. } => {
             require_no_command(envelope)?;
@@ -2669,6 +2705,7 @@ fn turn_skill_activations_match(
         ash_protocol::UserInput::Skill { skill } => Some(skill),
         ash_protocol::UserInput::Text { .. }
         | ash_protocol::UserInput::Context { .. }
+        | ash_protocol::UserInput::ChatReference { .. }
         | ash_protocol::UserInput::ImageAttachment { .. }
         | ash_protocol::UserInput::AudioAttachment { .. }
         | ash_protocol::UserInput::Audio { .. }
@@ -2779,6 +2816,24 @@ fn validate_steered_items(
                     ..
                 },
             ) => input_name == item_name && input_content == item_content && input_url == item_url,
+            (
+                ash_protocol::UserInput::ChatReference {
+                    name,
+                    session_id,
+                    thread_id,
+                },
+                ThreadItem::UserContext {
+                    name: item_name,
+                    content,
+                    source_url: None,
+                    ..
+                },
+            ) => {
+                name == item_name
+                    && content.starts_with(&crate::thread_controller::chat_reference_source(
+                        session_id, thread_id,
+                    ))
+            }
             (
                 ash_protocol::UserInput::AudioAttachment { attachment: input },
                 ThreadItem::UserAudioAttachment {
@@ -2935,6 +2990,7 @@ fn import_history(
             kind: turn.kind,
             mode: turn.mode,
             instructions: turn.instructions.clone(),
+            directory: turn.directory.clone(),
             model: turn.model.clone(),
             reasoning_effort: turn.reasoning_effort,
             advisor: turn.advisor.clone(),
@@ -2942,6 +2998,7 @@ fn import_history(
             approval_mode: ApprovalMode::Manual,
             tool_mode: turn.tool_mode,
             activated_skills: Vec::new(),
+            skill_loads: turn.skill_loads.clone().unwrap_or_default(),
             failure: turn.error.clone(),
             pending_interaction: None,
             execution_backend_attempt: None,
@@ -3044,6 +3101,7 @@ fn append_imported_turn(
         kind: turn.kind,
         mode: turn.mode,
         instructions: turn.instructions.clone(),
+        directory: turn.directory.clone(),
         model: turn.model.clone(),
         reasoning_effort: turn.reasoning_effort,
         advisor: turn.advisor.clone(),
@@ -3051,6 +3109,7 @@ fn append_imported_turn(
         approval_mode: ApprovalMode::Manual,
         tool_mode: turn.tool_mode,
         activated_skills: Vec::new(),
+        skill_loads: turn.skill_loads.clone().unwrap_or_default(),
         failure: turn.error.clone(),
         pending_interaction: None,
         execution_backend_attempt: None,
@@ -3240,7 +3299,7 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
         return Err("approval reason must not be empty".into());
     }
     if request.allowed_decisions.is_empty()
-        || request.allowed_decisions.len() > 4
+        || request.allowed_decisions.len() > 6
         || !request
             .allowed_decisions
             .contains(&ash_protocol::ActionApprovalDecision::Decline)
@@ -3252,15 +3311,32 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
     {
         return Err("approval decisions must be a bounded unique set including decline".into());
     }
-    if request.command.as_ref().is_some_and(|command| {
-        command.program.is_empty()
-            || command.program.len() > 4096
-            || command.arguments.len() > 256
-            || command
-                .arguments
-                .iter()
-                .any(|argument| argument.len() > 65536 || argument.contains('\0'))
-    }) {
+    if request
+        .allowed_decisions
+        .contains(&ash_protocol::ActionApprovalDecision::ApproveCommandPrefixForSession)
+        != request.session_command_prefix.is_some()
+        || request.session_command_prefix.is_some()
+            && (request.command.is_none() || request.sandbox_denial.is_some())
+    {
+        return Err(
+            "session command prefix requires an initial approval and a displayed command".into(),
+        );
+    }
+    if request
+        .command
+        .iter()
+        .chain(&request.session_command_prefix)
+        .any(|command| {
+            command.program.is_empty()
+                || command.program.len() > 4096
+                || command.program.contains('\0')
+                || command.arguments.len() > 256
+                || command
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.len() > 65536 || argument.contains('\0'))
+        })
+    {
         return Err("approval command exceeds its display limits".into());
     }
     if let Some(denial) = &request.sandbox_denial

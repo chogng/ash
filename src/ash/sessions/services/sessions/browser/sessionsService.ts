@@ -5,7 +5,7 @@ import { autorun, transaction, type IReader } from '../../../../base/common/obse
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type { IUntitledChatSession, SessionWorkspaceSelection, SessionId, ThreadId } from '../common/session.js';
+import { canOpenThreadInCode, type IUntitledChatSession, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
@@ -33,6 +33,7 @@ export interface ISessionsService {
 	readonly canNavigateForward: boolean;
 	readonly recentSessions: readonly SessionRecencyEntry[];
 	getLastViewedAt(entry: SessionRecencyEntry): number | undefined;
+	markVisibleThreadViewed(entry: SessionRecencyEntry): void;
 	initialize(): Promise<void>;
 	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId, options?: ISessionOpenOptions): Promise<void>;
@@ -109,6 +110,16 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	get recentSessions(): readonly SessionRecencyEntry[] { return this.recency.entries.filter((entry): entry is SessionRecencyEntry => !('kind' in entry)); }
 	getLastViewedAt(entry: SessionRecencyEntry): number | undefined { return this.recency.getLastViewedAt(entry); }
+
+	markVisibleThreadViewed(entry: SessionRecencyEntry): void {
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === entry.sessionId && candidate.status === 'active');
+		const thread = session?.chats.find(candidate => candidate.threadId === entry.threadId && candidate.status === 'active');
+		if (thread) {
+			// Record the activity seen in this window, even when the provider's clock differs from ours.
+			const management = thread.management ?? (session?.chats.filter(chat => chat.status === 'active' && chat.origin.type !== 'agentSpawn').length === 1 ? session.management : undefined);
+			this.recency.markViewed(entry, Math.max(thread.updatedAt?.getTime() ?? 0, management?.statusChangedAtUnixMs ?? 0));
+		}
+	}
 	get navigationRevision(): number { return this._navigationRevision; }
 	get visibleSelections(): readonly SessionsViewSelection[] { return this.getSelection().visibleSelections; }
 	get activeSelection(): SessionsViewSelection | undefined { return this.getSelection().activeSelection; }
@@ -362,9 +373,9 @@ export class SessionsService extends Disposable implements ISessionsService {
 			const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === reference.untitledSessionId);
 			return session ? { kind: 'untitled', session } : undefined;
 		}
-		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active' && candidate.surface !== 'chat');
-		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
-		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active');
+		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId);
+		return session && thread && canOpenThreadInCode(session, thread) ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
 	}
 }
 

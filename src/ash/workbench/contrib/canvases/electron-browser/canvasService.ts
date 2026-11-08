@@ -1,5 +1,6 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableValue, observableFromEvent, type IReader } from '../../../../base/common/observable.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { autorun, observableSignalFromEvent, observableValue, observableFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { CanvasesEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
@@ -11,9 +12,9 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { BrowserViewModel } from '../../browserView/common/browserView.js';
+import type { ICanvas, ICanvasReference } from '../../../common/canvasReference.js';
 import {
-	CanvasInput, ICanvasContextService,
-	type ICanvasService, type ICanvasReference, type ICanvasReopenTarget, type ICanvasModelResolution, type ICanvas,
+	CanvasInput, ICanvasContextService, type ICanvasService, type ICanvasReopenTarget, type ICanvasModelResolution,
 } from '../common/canvas.js';
 import { localize } from '../../../../nls.js';
 
@@ -34,6 +35,8 @@ interface LiveCanvas {
 /** Projects Main-owned pages. Closing an editor never closes or serializes the native page. */
 export class CanvasService extends Disposable implements ICanvasService {
 	private readonly live = new Map<string, LiveCanvas>();
+	private readonly onDidChangeLive = this._register(new Emitter<void>());
+	private readonly liveChanged = observableSignalFromEvent(this, this.onDidChangeLive.event);
 	readonly reopenableCanvases = observableValue<readonly ICanvasReopenTarget[]>(this, []);
 	private readonly buffered: BrowserViewEvent[] = [];
 	private initialized = false;
@@ -127,6 +130,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 			entry = { input, model, lifetime, dismissed: false, requested };
 			if (this.contexts.workingSets) { lifetime.add(this.contexts.workingSets.registerEditorToRetain(input)); }
 			this.live.set(info.id, entry);
+			this.onDidChangeLive.fire();
 		} else {
 			entry.input.setCanvas(canvas);
 			if (requested) { entry.dismissed = false; entry.requested = true; }
@@ -145,6 +149,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 			const entry = this.live.get(event.targetId);
 			if (entry) {
 				this.live.delete(event.targetId);
+				this.onDidChangeLive.fire();
 				void this.closeEditors(entry.input).catch(error => this.notifications.error(error)).finally(() => entry.lifetime.dispose());
 			}
 		} else {
@@ -212,6 +217,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 	}
 
 	isPresentable(reference: ICanvasReference, reader?: IReader): boolean {
+		this.liveChanged.read(reader);
 		return !this.isDisposed && this.enabled.read(reader) && !!this.lookup(reference)
 			&& (this.contexts.isOwnerVisible(reference, reader) || this.contexts.isPresentedElsewhere?.(reference, reader) === true);
 	}

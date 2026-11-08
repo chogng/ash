@@ -33,7 +33,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 	private hooks: SettingsSectionRenderer | undefined;
 	private settings: SettingsSectionRenderer | undefined;
 
-	constructor(container: HTMLElement, private readonly closeSettings: () => Promise<void>, private readonly showEditor: () => void, private readonly openSettingsEditor: () => Promise<void>, private readonly openUserSettings: () => Promise<void>,
+	constructor(container: HTMLElement, private readonly closeSettings: () => Promise<boolean>, private readonly showEditor: () => void, private readonly openSettingsEditor: () => Promise<void>, private readonly openUserSettings: () => Promise<void>,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
@@ -118,7 +118,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 					id: 'manage', kind: 'action', label: localize({ bundle: 'ash.settings', key: 'hooks.manage' }, 'Manage Hooks'), enabled: true, run: async () => {
 						// Closing the modal releases its child service scope. Resolve the window owner first.
 						const editors = this.instantiation.invokeFunction(accessor => accessor.get(IEditorService));
-						await this.closeSettings();
+						if (!await this.closeSettings()) { return; }
 						await editors.openEditor(new AICustomizationManagementEditorInput(), { pinned: true });
 						this.showEditor();
 					}

@@ -25,6 +25,11 @@ pub enum ThreadTranscriptEntry {
         entry_id: String,
         transcript: ash_protocol::VoiceTranscript,
     },
+    SkillLoad {
+        entry_id: String,
+        turn_id: TurnId,
+        skill: ash_protocol::FrozenSkillActivation,
+    },
     HookRun {
         entry_id: String,
         turn_id: TurnId,
@@ -61,6 +66,7 @@ impl ThreadTranscriptEntry {
             Self::VoiceTranscript { entry_id, .. }
             | Self::Item { entry_id, .. }
             | Self::HookRun { entry_id, .. }
+            | Self::SkillLoad { entry_id, .. }
             | Self::TurnPlan { entry_id, .. }
             | Self::TurnError { entry_id, .. }
             | Self::ToolOutput { entry_id, .. } => entry_id,
@@ -72,6 +78,7 @@ impl ThreadTranscriptEntry {
             Self::VoiceTranscript { .. } => None,
             Self::Item { turn_id, .. }
             | Self::HookRun { turn_id, .. }
+            | Self::SkillLoad { turn_id, .. }
             | Self::TurnPlan { turn_id, .. }
             | Self::TurnError { turn_id, .. }
             | Self::ToolOutput { turn_id, .. } => Some(turn_id),
@@ -85,7 +92,8 @@ impl ThreadTranscriptEntry {
             Self::VoiceTranscript { .. }
             | Self::TurnPlan { .. }
             | Self::TurnError { .. }
-            | Self::HookRun { .. } => false,
+            | Self::HookRun { .. }
+            | Self::SkillLoad { .. } => false,
         }
     }
 }
@@ -127,18 +135,32 @@ impl ThreadTranscriptSnapshot {
     pub fn from_thread(thread: &Thread) -> Self {
         let mut entries = Vec::new();
         for turn in &thread.turns {
-            entries.extend(
-                turn.items
-                    .iter()
-                    .filter(|item| !matches!(item, ThreadItem::Reasoning { text, .. } if text.is_empty()))
-                    .cloned()
-                    .map(|item| ThreadTranscriptEntry::Item {
+            let mut loads = turn
+                .skill_loads
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .peekable();
+            let mut append_loads = |after_item_id, entries: &mut Vec<_>| {
+                while let Some(load) =
+                    loads.next_if(|load| load.after_item_id.as_ref() == after_item_id)
+                {
+                    entries.push(skill_load_entry(&turn.turn_id, load));
+                }
+            };
+            append_loads(None, &mut entries);
+            for item in &turn.items {
+                if !matches!(item, ThreadItem::Reasoning { text, .. } if text.is_empty()) {
+                    entries.push(ThreadTranscriptEntry::Item {
                         entry_id: item_entry_id(item.item_id().as_str()),
                         turn_id: turn.turn_id.clone(),
-                        item,
+                        item: item.clone(),
                         transient: false,
-                    }),
-            );
+                    });
+                }
+                append_loads(Some(item.item_id()), &mut entries);
+            }
+            entries.extend(loads.map(|load| skill_load_entry(&turn.turn_id, load)));
             entries.extend(
                 thread
                     .hook_runs
@@ -202,6 +224,23 @@ pub struct ThreadTranscriptUpdateEnvelope {
     #[ts(optional = nullable)]
     pub stream_cursor: Option<StreamCursor>,
     pub changes: Vec<ThreadTranscriptChange>,
+}
+
+pub(crate) fn skill_load_entry(
+    turn_id: &TurnId,
+    load: &ash_protocol::TurnSkillLoad,
+) -> ThreadTranscriptEntry {
+    let skill = &load.skill;
+    ThreadTranscriptEntry::SkillLoad {
+        entry_id: format!(
+            "skill-load:{turn_id}:{}:{}:{}",
+            skill.id.source,
+            skill.id.name,
+            skill.content_digest.as_str()
+        ),
+        turn_id: turn_id.clone(),
+        skill: skill.clone(),
+    }
 }
 
 pub(crate) fn item_entry_id(item_id: &str) -> String {

@@ -30,7 +30,7 @@ test('The Sessions browser menu opens only the viewed conversation and its deleg
 		node('nested', { type: 'agentSpawn', parentThreadId: 'agent', parentSequence: 1, delegationId: 'nested-delegation' }),
 	]);
 	const fork = node('fork', { type: 'fork', parentThreadId: 'root', parentSequence: 1 });
-	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [], agentTree: [node('root', { type: 'root' }, [spawned, fork])] };
+	const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [], agentTree: [node('root', { type: 'root' }, [spawned, fork])] };
 	const context = { session, threadId: 'root', onDidChange: contextChanged.event };
 	const pages = new Map(['root', 'agent', 'nested', 'fork', 'other'].map(id => [id, {
 		id, label: `Page ${id}`, isDisposed: false,

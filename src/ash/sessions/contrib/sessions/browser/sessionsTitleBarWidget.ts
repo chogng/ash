@@ -1,9 +1,10 @@
 import './media/sessionsTitleBarWidget.css';
-import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
+import { getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Separator } from '../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
-import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, observableFromEvent, observableValue } from '../../../../base/common/observable.js';
 import { environment } from '../../../../base/common/platform.js';
@@ -22,15 +23,17 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { IAgentSessionActionsService, type IAgentSessionActionTarget } from '../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from './sessionsActions.js';
-import { createSessionItemActions } from '../../../browser/agentSessionsModel.js';
+import { createSessionItemActions, createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
+import { renderInlineRenameInput, showInlineRenameInput } from '../../../browser/parts/titlebar/inlineRenameInput.js';
 import { ISessionsTitlebarService } from '../../../browser/parts/titlebarPart.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import { BlockedSessionsIndicatorModel } from './blockedSessionsIndicatorModel.js';
+import { IBlockedSessionsIndicatorService } from './blockedSessionsIndicatorModel.js';
 import { BlockedSessionsCIFixModel } from './blockedSessionsCIFixModel.js';
 import { showBlockedSessionsList } from './blockedSessionsList.js';
 
@@ -60,20 +63,15 @@ export class SessionsTitleBarWidget extends Disposable {
 		@IAgentSessionActionsService sessionActions: IAgentSessionActionsService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@ISessionsListModelService listModel: ISessionsListModelService,
+		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
+		@ISessionsManagementService management: ISessionsManagementService,
 	) {
 		super();
-		const indicator = instantiation.createInstance(BlockedSessionsIndicatorModel);
 		const fixes = instantiation.createInstance(BlockedSessionsCIFixModel);
 		const picker = this._register(new MutableDisposable());
 		const element = h(layout.mainContainer.ownerDocument, 'div', { className: 'ash-sessions-titlebar-widget' });
 		const titleContainer = h(element.ownerDocument, 'div', { className: 'ash-sessions-titlebar-title' });
 		element.append(titleContainer);
-		let edit: { key: string; target: IAgentSessionActionTarget; saving: boolean; restoreFocus: boolean; } | undefined;
-		const input = h(element.ownerDocument, 'input', {
-			className: 'ash-sessions-titlebar-rename ash-titlebar-interactive-region',
-			properties: { type: 'text', hidden: true },
-			attributes: { 'aria-label': localize('sessions.titlebar.sessionName', 'Session name') },
-		});
 		const button = this._register(new Button(titleContainer, {
 			...defaultButtonStyles,
 			presentation: 'quiet',
@@ -94,20 +92,60 @@ export class SessionsTitleBarWidget extends Disposable {
 		}));
 		button.domNode.classList.add('ash-titlebar-interactive-region');
 		const hover = this._register(hovers.setupHover({ target: button.domNode, content: undefined }));
-		titleContainer.append(input);
+		let edit: { readonly key: string; readonly target: IAgentSessionActionTarget; readonly restoreFocus: boolean; saving: boolean; } | undefined;
+		const input = renderInlineRenameInput(titleContainer, {
+			label: localize('sessions.titlebar.sessionName', 'Session name'),
+			onAccept: () => { void saveEdit(); },
+			onCancel: () => { if (!edit?.saving) finishEdit(true); },
+			onBlur: () => { if (!edit?.saving) finishEdit(false); },
+		}, this._register(new DisposableStore()));
 		const beginEdit = (target: NonNullable<ReturnType<typeof renameTarget>>, restoreFocus: boolean) => {
+			if (edit?.saving) return;
 			try {
 				const captured = sessionActions.resolveTarget(target);
-				edit = { key: JSON.stringify(target), target: captured, saving: false, restoreFocus };
-				input.value = captured.title;
-				input.readOnly = false;
-				input.hidden = false;
+				edit = { key: JSON.stringify(target), target: captured, restoreFocus, saving: false };
 				hover.hide();
-				input.focus();
-				input.select();
+				showInlineRenameInput(input, captured.title);
 				button.hidden = true;
 			} catch (error) {
 				notifications.error(toErrorMessage(error));
+			}
+		};
+		const finishEdit = (restoreFocus: boolean) => {
+			const draft = edit;
+			if (!draft) return;
+			edit = undefined;
+			button.hidden = false;
+			if (restoreFocus && draft.restoreFocus) button.focus();
+			input.hidden = true;
+			input.setCustomValidity('');
+		};
+		const saveEdit = async () => {
+			const draft = edit;
+			if (!draft || draft.saving) return;
+			const title = input.value.trim();
+			if (!title || Array.from(title).length > 256) {
+				input.setCustomValidity(localize('sessions.titlebar.invalidName', 'Enter a name with 1 to 256 characters.'));
+				input.reportValidity();
+				return;
+			}
+			if (title === draft.target.title) {
+				finishEdit(true);
+				return;
+			}
+			draft.saving = true;
+			input.readOnly = true;
+			try {
+				const resolved = await draft.target.resolve();
+				await sessionActions.renameSession(resolved.sessionId, title);
+				if (edit === draft && input.isConnected) finishEdit(getActiveElement(input.ownerDocument) === input);
+			} catch (error) {
+				notifications.error(toErrorMessage(error));
+			} finally {
+				if (edit === draft && input.isConnected) {
+					draft.saving = false;
+					input.readOnly = false;
+				}
 			}
 		};
 		const menuOpen = observableValue('sessionTitleMenuOpen', false);
@@ -127,8 +165,11 @@ export class SessionsTitleBarWidget extends Disposable {
 				const target = renameTarget(selection);
 				if (!selection || target === undefined) return;
 				const targetKey = JSON.stringify(target);
-				const actions = createSessionItemActions(selection, commands, listModel, notifications,
-					() => commands.executeCommand('sessions.openInNewWindow', selection));
+				const workspaceActions = selection.kind === 'session'
+					? createSessionWorkspaceActions(selection.active.session.sessionId, selection.active.threadId, management, commands)
+					: [];
+				const actions = Separator.join(workspaceActions, [...createSessionItemActions(selection, commands, listModel, notifications,
+					() => commands.executeCommand('sessions.openInNewWindow', selection))]);
 				menuOpen.set(true, undefined);
 				contextMenus.showContextMenu({
 					getAnchor: () => menuButton.domNode,
@@ -151,53 +192,6 @@ export class SessionsTitleBarWidget extends Disposable {
 		this._register(autorun(reader => {
 			menuButton.domNode.setAttribute('aria-expanded', String(menuOpen.read(reader)));
 		}));
-		const finishEdit = (restoreFocus: boolean) => {
-			const shouldRestoreFocus = restoreFocus && edit?.restoreFocus;
-			edit = undefined;
-			button.hidden = false;
-			if (shouldRestoreFocus) button.focus();
-			input.hidden = true;
-			input.setCustomValidity('');
-		};
-		const saveEdit = async () => {
-			const draft = edit;
-			if (!draft || draft.saving) return;
-			const title = input.value.trim();
-			if (!title || Array.from(title).length > 256) {
-				input.setCustomValidity(localize('sessions.titlebar.invalidName', 'Enter a name with 1 to 256 characters.'));
-				input.reportValidity();
-				return;
-			}
-			if (title === draft.target.title) {
-				finishEdit(true);
-				return;
-			}
-			draft.saving = true;
-			input.readOnly = true;
-			try {
-				const target = await draft.target.resolve();
-				await sessionActions.renameSession(target.sessionId, title);
-				if (edit === draft) finishEdit(getActiveElement(element.ownerDocument) === input);
-			} catch (error) {
-				if (edit === draft) {
-					draft.saving = false;
-					input.readOnly = false;
-				}
-				notifications.error(toErrorMessage(error));
-			}
-		};
-		this._register(addDisposableListener(input, 'input', () => input.setCustomValidity('')));
-		this._register(addDisposableListener(input, 'keydown', event => {
-			if (event.isComposing || (event.key !== 'Enter' && event.key !== 'Escape')) return;
-			event.preventDefault();
-			event.stopPropagation();
-			if (edit?.saving) return;
-			if (event.key === 'Escape') finishEdit(true);
-			else void saveEdit();
-		}));
-		this._register(addDisposableListener(input, 'blur', () => {
-			if (edit && !edit.saving) finishEdit(false);
-		}));
 		const folders = observableFromEvent(this, workspace.onDidChangeWorkspaceFolders, () => workspace.getWorkspace().folders);
 		const modeKey = SessionsWorkspaceModeContext.key;
 		const modeKeys = new Set([modeKey]);
@@ -214,7 +208,7 @@ export class SessionsTitleBarWidget extends Disposable {
 			menuButton.hidden = !selection || count > 0;
 			button.domNode.classList.toggle('ash-sessions-titlebar-editable', !menuButton.hidden);
 			if (edit && (element.hidden || count || edit.key !== JSON.stringify(renameTarget(selection)))) {
-				finishEdit(!element.hidden && edit.saving && getActiveElement(element.ownerDocument) === input);
+				finishEdit(!element.hidden && edit.saving && getActiveElement(input.ownerDocument) === input);
 			}
 			if (element.hidden) {
 				picker.clear();

@@ -62,16 +62,18 @@ pub struct Project {
     pub schema_version: u32,
     pub project_id: ProjectId,
     pub revision: u64,
-    /// Unix epoch milliseconds. Missing on records saved before time tracking existed.
-    #[serde(default)]
-    pub created_at_ms: Option<u64>,
-    #[serde(default)]
-    pub updated_at_ms: Option<u64>,
+    /// Unix epoch milliseconds.
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
     pub status: ProjectStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<ProjectScope>,
     pub name: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     pub roots: BTreeMap<DirId, ProjectRoot>,
     pub session_ids: BTreeSet<SessionId>,
     #[serde(default)]
@@ -110,15 +112,24 @@ impl Project {
                 "Project revision must be positive".into(),
             ));
         }
-        if self.created_at_ms == Some(0)
-            || self.updated_at_ms == Some(0)
-            || matches!((self.created_at_ms, self.updated_at_ms), (Some(created), Some(updated)) if updated < created)
-        {
+        if self.created_at_ms == 0 || self.updated_at_ms < self.created_at_ms {
             return Err(crate::ProjectError::InvalidInput(
                 "invalid Project timestamps".into(),
             ));
         }
         validate_text("Project name", &self.name)?;
+        for id in [&self.icon, &self.color].into_iter().flatten() {
+            if id.len() > 128
+                || !id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+                || !id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+            {
+                return Err(crate::ProjectError::InvalidInput(
+                    "invalid Project appearance identifier".into(),
+                ));
+            }
+        }
         for (dir_id, root) in &self.roots {
             if dir_id != &root.dir_id {
                 return Err(crate::ProjectError::InvalidInput(

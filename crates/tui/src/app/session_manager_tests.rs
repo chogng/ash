@@ -853,7 +853,7 @@ fn active_session_app() -> App {
 
 fn session() -> Session {
     Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         model: None,
         session_id: SessionId::new("current").unwrap(),

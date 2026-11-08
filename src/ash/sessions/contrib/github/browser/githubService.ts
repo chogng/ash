@@ -21,7 +21,7 @@ type RepositoryIdentity = NonNullable<GitRepositoryContext['remotes'][number]['i
 import { getPullRequestChecksStatus, getPullRequestResourceStatus } from '../../../../workbench/contrib/github/browser/githubResourceHover.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import type { ISession, SessionId } from '../../../services/sessions/common/session.js';
+import { sessionExecutionWorkspace, type ISession, type SessionId } from '../../../services/sessions/common/session.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { linkKey } from '../../../common/sessionLinks.js';
 import { agentHostSessionWorkspaceKey } from '../../../common/agentHostSessionWorkspace.js';
@@ -379,7 +379,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 			return;
 		}
 		const session = selected.active.session;
-		const workspace = session.workspace;
+		const workspace = sessionExecutionWorkspace(session);
 		const root = workspace ? sessionWorkspaceUri(workspace) : undefined;
 		const cancellation = new CancellationTokenSource();
 		this.operation.value?.cancel();
@@ -622,7 +622,7 @@ interface SessionGitHubScope {
 }
 
 function directoryKey(session: ISession): string {
-	return agentHostSessionWorkspaceKey(session.workspace) ?? '';
+	return agentHostSessionWorkspaceKey(sessionExecutionWorkspace(session)) ?? '';
 }
 
 function parsePullRequestReference(value: string): GitHubPullRequestReference {

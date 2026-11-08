@@ -22,6 +22,7 @@ import { MenuId } from '../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { Part } from '../../../workbench/browser/part.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
@@ -67,6 +68,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
+		markVisibleThreadViewed() { },
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: changed.event,
@@ -85,7 +87,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		async openPreviousSession() { historyIndex = 0; changed.fire(); },
 		async openNextSession() { historyIndex = 1; changed.fire(); },
 	};
-	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
+	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService));
 	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);

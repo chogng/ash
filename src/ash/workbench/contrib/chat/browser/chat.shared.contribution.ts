@@ -1,4 +1,5 @@
 import './promptTimeline/promptTimeline.contribution.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from './agentSessions/sessionSummaryHoverService.js';
 import { BtwSlashCommandContribution } from './btwSlashCommand.js';
 import './contextContrib/chatContext.contribution.js';
 import { ChatSideChatProvider } from './chatSideChatProvider.js';
@@ -22,11 +23,12 @@ import { registerAction2 } from '../../../../platform/actions/common/actions.js'
 import { ChatContextContributions, ChatReferenceContextContribution } from './actions/chatContext.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
-import { registerChatCopyActions } from './actions/chatCopyActions.js';
+import { ChatCopyActionRendering, registerChatCopyActions } from './actions/chatCopyActions.js';
 import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
 import { AgentTaskModelSettingsModel } from '../../preferences/browser/agentTaskModelSettingsModel.js';
+import { bundledMonospaceFonts } from '../../codeEditor/common/editorConfiguration.js';
 import { registerChatTitleActions } from './actions/chatTitleActions.js';
 import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
 import { registerChatExecuteActions } from './actions/chatExecuteActions.js';
@@ -45,11 +47,15 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import type { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
 import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
-import { registerChatChangesActions, registerChatHistoryActions, registerChatRestoreCheckpointAction } from './chatEditing/chatEditingActions.js';
+import { registerChatChangesActions, registerChatEditRequestAction, registerChatHistoryActions, registerChatRestoreCheckpointAction } from './chatEditing/chatEditingActions.js';
 import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
-import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
-import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
+import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL, ILocalTranscriptionModelService, resolveLocalTranscriptionModel, type ILocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { DictationConfiguration, dictationBackend, parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { toDisposable, Disposable } from '../../../../base/common/lifecycle.js';
+import { ISpeechService } from '../../speech/common/speechService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService, DICTATION_MODEL_SETTING } from './speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
 import { IVoiceInputModeService, VoiceInputModeService } from './voiceInputMode/voiceInputMode.js';
@@ -111,6 +117,7 @@ import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback
 import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
 // Both renderer hosts use these primitives; each host owns session navigation and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(ISessionSummaryHoverService, SessionSummaryHoverService, InstantiationType.Delayed);
 registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerSingleton(IVoiceInputModeService, VoiceInputModeService, InstantiationType.Delayed);
@@ -175,6 +182,7 @@ registerChatToolActions();
 registerChatTitleActions();
 registerChatExportActions();
 registerChatCopyActions();
+registerWorkbenchContribution(ChatCopyActionRendering.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatCopyActionRendering));
 registerChatApprovalEnvironmentActions();
 registerChatCodeBlockActions();
 registerChatElicitationActions();
@@ -382,7 +390,7 @@ configurationRegistry.registerConfiguration<ChatSessionArchiveActionWording>({
 /** Message typography leaves composer and code-editor preferences independent. */
 configurationRegistry.registerConfiguration<string>({
 	key: ChatConfiguration.FontFamily, defaultValue: 'default', scope: ConfigurationScope.WINDOW,
-	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$' },
+	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$', format: 'font-family', examples: Object.freeze(['Ash Sans', 'Ash Sans SC', 'Ash Serif', 'Ash Serif SC']) },
 	parse(value: unknown): string {
 		if (typeof value === 'string' && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
 		throw new TypeError(localize('chat.fontFamily.invalid', 'Message font must be a single-line string no longer than 256 characters.'));
@@ -390,8 +398,8 @@ configurationRegistry.registerConfiguration<string>({
 	setting: {
 		valueType: 'text',
 		get title() { return localize('chat.fontFamily.title', 'Font family'); },
-		get description() { return localize('chat.fontFamily.description', 'Set the font for chat messages, including Markdown and link text. Use default or leave empty to follow the interface font. Input and code-block fonts are configured separately.'); },
-		get placeholder() { return localize('chat.fontFamily.default', 'Interface font'); },
+		get description() { return localize('chat.fontFamily.description', 'Set the font for chat messages, including Markdown and link text. The default follows the interface font.'); },
+		get placeholder() { return localize('chat.fontFamily.default', 'Follow interface font'); },
 	},
 });
 configurationRegistry.registerConfiguration<number>({
@@ -461,7 +469,7 @@ configurationRegistry.registerConfiguration<number>({
 /** Code-block preferences override the file editor's typography within Chat replies. */
 configurationRegistry.registerConfiguration<string>({
 	key: ChatEditorConfiguration.fontFamily, defaultValue: '', scope: ConfigurationScope.APPLICATION,
-	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$' },
+	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$', format: 'font-family', examples: bundledMonospaceFonts },
 	parse(value: unknown): string {
 		if (typeof value === 'string' && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
 		throw new TypeError(localize('chat.editor.fontFamily.invalid', 'Code block font must be a single-line string no longer than 256 characters.'));
@@ -469,7 +477,7 @@ configurationRegistry.registerConfiguration<string>({
 	setting: {
 		valueType: 'text',
 		get title() { return localize('chat.editor.fontFamily.title', 'Font family'); },
-		get description() { return localize('chat.editor.fontFamily.description', 'Set the font for code blocks in replies. Leave empty to use the editor font.'); },
+		get description() { return localize('chat.editor.fontFamily.description', 'Set the font for code blocks in replies. The default follows the editor font.'); },
 		get placeholder() { return localize('chat.editor.fontFamily.default', 'Use editor font'); },
 	},
 });
@@ -600,6 +608,47 @@ configurationRegistry.registerConfiguration<string>({
 	},
 });
 
+configurationRegistry.registerConfiguration<'onDemand' | 'startup'>({
+	key: DictationConfiguration.modelLoadTiming,
+	defaultValue: 'onDemand',
+	scope: ConfigurationScope.APPLICATION,
+	parse(value: unknown) {
+		if (value === 'onDemand' || value === 'startup') return value;
+		throw new TypeError('dictation.modelLoadTiming must be onDemand or startup');
+	},
+	setting: {
+		valueType: 'select',
+		title: localize('dictation.modelLoadTiming.title', 'Load local dictation model'),
+		description: localize('dictation.modelLoadTiming.description', 'Choose when to load the local dictation model into memory. At startup, Ash only loads an installed model. Applies the next time Ash opens.'),
+		options: [
+			{ value: 'onDemand', label: localize('dictation.modelLoadTiming.onDemand', 'On first use') },
+			{ value: 'startup', label: localize('dictation.modelLoadTiming.startup', 'After startup') },
+		],
+	},
+});
+
+registerWorkbenchContribution('workbench.contrib.dictationWarmup', WorkbenchPhase.AfterRestored, accessor => {
+	const configuration = accessor.get(IConfigurationService);
+	if (configuration.getValue(DictationConfiguration.modelLoadTiming) !== 'startup'
+		|| configuration.getValue(DictationConfiguration.enabled) === false) return Disposable.None;
+	const backend = dictationBackend(configuration);
+	if (backend.type !== 'local' || accessor.get(ISpeechService).hasSpeechProvider) return Disposable.None;
+	const models = accessor.get(ILocalTranscriptionModelService);
+	if (!models.isSupported || !models.warmModel) return Disposable.None;
+	const log = accessor.get(ILogService);
+	let disposed = false;
+	let operation: ILocalTranscriptionModelOperation | undefined;
+	void resolveLocalTranscriptionModel(models, backend.modelId).then(model => {
+		if (disposed || !model.available) return;
+		operation = models.warmModel?.(model.model);
+		return operation?.completed;
+	}).catch(error => log.debug('Local dictation model warmup:', error));
+	return toDisposable(() => {
+		disposed = true;
+		void operation?.cancel().catch(() => undefined);
+	});
+});
+
 Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMigration).registerConfigurationMigrations([{
 	key: 'dictation.localModel',
 	migrateFn(value, read) {
@@ -613,6 +662,7 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 registerAgentSessionActions();
 
 registerChatChangesActions();
+registerChatEditRequestAction();
 registerChatHistoryActions();
 registerChatRestoreCheckpointAction();
 

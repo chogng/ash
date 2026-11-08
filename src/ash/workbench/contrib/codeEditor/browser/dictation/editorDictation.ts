@@ -15,6 +15,7 @@ import { EditorOption } from '../../../../../editor/common/config/editorOptions.
 import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { DictationInput, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationInputController.js';
@@ -106,11 +107,24 @@ export class EditorDictation extends Disposable {
 			void this.session.cancel().catch(error => notifications.error(String(error)));
 		}));
 	}
-	public async start(): Promise<void> {
-		if (!this.editor.isSimpleWidget && !this.editor.getOption(EditorOption.readOnly)) {
-			if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.widget.getDomNode(), focusRoot: this.editor.getContainerDomNode(), focus: () => this.editor.focus() });
-			this.editor.focus(); await this.session.action.run();
+	public async start(released?: Promise<void>): Promise<void> {
+		if (this.editor.isSimpleWidget || this.editor.getOption(EditorOption.readOnly)) return;
+		if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.widget.getDomNode(), focusRoot: this.editor.getContainerDomNode(), focus: () => this.editor.focus() });
+		this.editor.focus();
+		if (!released || this.session.isActive) {
+			await this.session.action.run();
+			return;
 		}
+		const heldFrom = Date.now();
+		const held = released.then(() => Date.now() - heldFrom >= 500);
+		let started = false;
+		let retired = false;
+		using listener = this.session.onDidChange(() => {
+			if (this.session.isActive) started = true;
+			else if (started) retired = true;
+		});
+		await this.session.action.run();
+		if (started && await held && !retired) await this.session.action.run();
 	}
 	public stop(): Promise<void> { return this.session.stop(); }
 	protected override disposeCore(): void {
@@ -130,12 +144,19 @@ registerAction2(class EditorDictationStartAction extends EditorAction2 {
 			precondition: EditorContextKeys.writable,
 			keybinding: {
 				primary: Keybinding.single(logicalKey('v', { primaryKey: true, altKey: true })),
+				win: {
+					primary: Keybinding.single(logicalKey('v', { primaryKey: true, altKey: true })),
+					secondary: [Keybinding.single(logicalKey('`', { altKey: true }))],
+				},
 				when: EditorContextKeys.editorTextFocus.isEqualTo(true),
 			},
 			menu: { id: MenuId.EditorContext, group: '1_modification', order: 6, when: EditorContextKeys.writable },
 		});
 	}
-	public override runEditorCommand(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> | undefined { return editor.getContribution<EditorDictation>(EditorDictation.ID)?.start(); }
+	public override runEditorCommand(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> | undefined {
+		const released = accessor.get(IKeybindingService).enableKeybindingHoldMode(this.desc.id);
+		return editor.getContribution<EditorDictation>(EditorDictation.ID)?.start(released);
+	}
 });
 registerAction2(class EditorDictationStopAction extends EditorAction2 {
 	constructor() {

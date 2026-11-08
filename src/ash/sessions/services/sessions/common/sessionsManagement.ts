@@ -13,6 +13,8 @@ export interface ISessionsManagementService {
 	readonly navigationRevision: number;
 	readonly onDidChange: Event<void>;
 	readonly sessions: readonly ISession[];
+	/** The current catalog includes a successful enumeration of the primary host. */
+	readonly primaryCatalogReady: boolean;
 	readonly active: IActiveSessionThread | undefined;
 	readonly untitledSessions: readonly IUntitledChatSession[];
 	/** Keeps draft identity resolvable after materialization, independently of foreground selection. */
@@ -31,7 +33,7 @@ export interface ISessionsManagementService {
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	/** Background presentations can retain a draft without changing foreground selection. */
-	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; readonly projectId?: string; }): IUntitledChatSession;
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly kind?: IUntitledChatSession['kind']; readonly devContainer?: boolean; readonly projectId?: string; }): IUntitledChatSession;
 	resolveNewSessionTarget(): Promise<{ readonly providerId: string; readonly workspace: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly projectId?: string; }>;
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
@@ -42,9 +44,11 @@ export interface ISessionsManagementService {
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
 	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; readonly projectId?: string; }): void;
 	/** Organization and first send share one creation; creating a durable identity does not submit a request. */
-	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal, surface?: ISessionCreateOptions['surface']): Promise<IActiveSessionThread>;
+	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread>;
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
+	/** Publishes the sent Session and re-arms the same composer for a different Session. */
+	completeBackgroundSend(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
 	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; readonly creationId?: string; }): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
@@ -54,7 +58,8 @@ export interface ISessionsManagementService {
 	deleteSession(sessionId: SessionId): Promise<void>;
 	renameSession(sessionId: SessionId, title: string): Promise<void>;
 	getChatMoveDestinations?(sessionId: SessionId, threadId: ThreadId): readonly ISession[];
-	canChangeDirectory?(sessionId: SessionId): boolean;
+	/** Ignore temporary activity when deciding whether to offer a disabled menu action. */
+	canChangeDirectory?(sessionId: SessionId, options?: { readonly ignoreActivity?: true; }): boolean;
 	canClearDirectory?(sessionId: SessionId): boolean;
 	changeDirectory?(sessionId: SessionId, root: string | null, signal?: AbortSignal): Promise<void>;
 	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId): Promise<void>;

@@ -82,7 +82,7 @@ fn local_agent_uses_ssh_after_approval_and_keeps_history_local() {
     );
     let created = rpc(
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-local-session","title":"SSH execution","executionTarget":null}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-local-session","title":"SSH execution","kind":"code","executionTarget":null}}),
     );
     let session = created["result"]["session"]["sessionId"].as_str().unwrap();
     let created = rpc(

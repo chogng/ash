@@ -1,4 +1,6 @@
 import { registerTestWorkbenchHostServices } from './workbenchHostTestServices.js';
+import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
 import { IChatLayoutService } from '../../contrib/chat/common/widget/chatLayoutService.js';
@@ -51,6 +53,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../browser/labels.js';
 import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { ILinkPresentationService } from '../../../platform/dataChannel/common/dataChannel.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../contrib/chat/browser/agentSessions/sessionSummaryHoverService.js';
 import { LinkPresentationService } from '../../services/dataChannel/browser/dataChannelService.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
@@ -118,6 +121,10 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IActionViewItemService)) {
+		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1];
+		services.registerSingleton(IActionViewItemService, () => services.createInstance(descriptor));
+	}
 	if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, new NullLoggerService());
 	if (!services.has(IChatLayoutService)) services.registerSingleton(IChatLayoutService, () => services.createInstance(ChatLayoutService));
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
@@ -179,6 +186,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IWebWorkerService)) services.registerInstance(IWebWorkerService, new WebWorkerService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(ILinkPresentationService)) services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
+	if (!services.has(ISessionSummaryHoverService)) services.registerSingleton(ISessionSummaryHoverService, () => services.createInstance(SessionSummaryHoverService));
 	if (configuration) {
 		services.registerInstance(IConfigurationService, configuration);
 	} else if (!services.has(IConfigurationService)) {

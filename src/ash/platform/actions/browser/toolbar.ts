@@ -1,5 +1,5 @@
 import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
-import type { ActionBarOrientation, ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
+import type { ActionBarOptions, ActionBarOrientation, ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
 import { ToolBar, type IToolBarResponsiveBehaviorOptions, type MoreActionsPlacement, type ToolBarPresentation } from '../../../base/browser/ui/toolbar/toolbar.js';
 import { SubmenuAction, type IAction, type IActionRunner } from '../../../base/common/actions.js';
@@ -14,6 +14,7 @@ export interface IWorkbenchToolBarOptions {
 	readonly responsiveBehavior?: IToolBarResponsiveBehaviorOptions;
 	readonly ariaLabel?: string;
 	readonly orientation?: ActionBarOrientation;
+	readonly tabNavigation?: ActionBarOptions['tabNavigation'];
 	readonly actionViewItemProvider?: ActionViewItemProvider;
 	readonly presentation?: ToolBarPresentation;
 	readonly highlightToggledItems?: boolean;
@@ -40,6 +41,7 @@ export class WorkbenchToolBar extends ToolBar {
 			contextMenuProvider,
 			ariaLabel: options.ariaLabel,
 			orientation: options.orientation,
+			tabNavigation: options.tabNavigation,
 			presentation: options.presentation,
 			highlightToggledItems: options.highlightToggledItems,
 			moreActionsPlacement: options.moreActionsPlacement,

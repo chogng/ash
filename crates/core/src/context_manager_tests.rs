@@ -65,7 +65,7 @@ fn manager_rejects_a_snapshot_older_than_its_observed_sequence() {
 
 fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
     ThreadSnapshot {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         voice_transcripts: Vec::new(),
         execution_target: None,
         directory_configured: false,
@@ -100,6 +100,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
+            directory: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Running,
             status_changed_at_unix_ms: 0,
@@ -111,6 +112,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             approval_mode: ash_protocol::ApprovalMode::Manual,
             tool_mode: ash_protocol::ToolMode::Direct,
             activated_skills: Vec::new(),
+            skill_loads: Vec::new(),
             failure: None,
             pending_interaction: None,
             execution_backend_attempt: None,

@@ -3,6 +3,7 @@ import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
+import './contrib/sessionComparison/browser/sessionComparison.contribution.js';
 import './contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import './contrib/github/browser/createSessionFromPullRequestAction.js';
 import '../workbench/contrib/accessibility/browser/accessibility.contribution.js';
@@ -62,6 +63,8 @@ import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
 import './contrib/cowork/browser/cowork.contribution.js';
 import './contrib/editor/browser/diffEditor.sessions.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
+import './contrib/codeReview/browser/codeReview.contribution.js';
+import './contrib/codeReview/browser/bots.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
 import './contrib/artifacts/browser/creatorEditor.contribution.js';
 import './contrib/artifacts/browser/artifacts.contribution.js';
@@ -84,6 +87,7 @@ import '../workbench/contrib/snippets/browser/snippets.contribution.js';
 import '../workbench/contrib/scm/browser/scm.service.contribution.js';
 import '../workbench/contrib/scm/browser/quickDiff.contribution.js';
 import './contrib/search/browser/search.contribution.js';
+import './contrib/inboxOne/browser/inboxOne.contribution.js';
 import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';
@@ -92,6 +96,7 @@ import '../workbench/contrib/tasks/browser/task.contribution.js';
 import { registerOutputView } from '../workbench/contrib/output/browser/output.contribution.js';
 import { registerCollabViews } from '../workbench/contrib/collab/browser/collab.contribution.js';
 import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
+import { registerMemoryManagement } from '../workbench/contrib/memories/browser/memories.contribution.js';
 import { SessionsViewRegistry } from './common/views.js';
 import { Lxicon } from '../base/common/lxicons.js';
 import { MenusRegistry } from '../platform/actions/common/actions.js';
@@ -99,7 +104,7 @@ import { ICommandService } from '../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../nls.js';
 import { Menus } from './browser/menus.js';
-import { NewSessionDraftVisibleContext } from './common/contextkeys.js';
+import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from './common/contextkeys.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -116,7 +121,7 @@ MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 	command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') },
-	group: 'more', order: 30,
+	group: 'more', order: 30, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code'),
 });
 
 registerTerminalView(SessionsViewRegistry);
@@ -124,3 +129,4 @@ registerOutputView(SessionsViewRegistry);
 
 registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);
+registerMemoryManagement(SessionsWorkspaceModeContext.isEqualTo('chat'));

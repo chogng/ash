@@ -7,6 +7,8 @@ import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/edit
 import { SessionSideChatEditor } from './sessionSideChatEditor.js';
 import { SessionSideChatEditorInput } from './sessionSideChatEditorInput.js';
 import './agentHostDelegation.js';
+import './chatRunAnotherVersionActions.js';
+import './chatCompareResultsActions.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ISessionsChatViewStateService, SessionsChatViewStateService } from './chatViewStateService.js';
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';

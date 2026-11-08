@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
+use std::time::Instant;
 
 use rusqlite::{Connection, ErrorCode};
 
@@ -16,11 +17,6 @@ pub fn open_sqlite_database(
     path: &Path,
     durability: SqliteDurability,
 ) -> Result<Connection, String> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
     prepare_private_database_file(path)?;
     let connection = Connection::open(path).map_err(sql_error)?;
     configure_connection(&connection, durability)?;
@@ -73,51 +69,65 @@ fn configure_connection(
 }
 
 fn enable_wal(connection: &Connection) -> Result<(), String> {
-    for _ in 0..100 {
+    let retry_until = Instant::now() + Duration::from_secs(1);
+    loop {
         match connection.query_row("PRAGMA journal_mode = WAL", [], |row| {
             row.get::<_, String>(0)
         }) {
             Ok(_) => return Ok(()),
             Err(rusqlite::Error::SqliteFailure(error, _))
-                if matches!(
-                    error.code,
-                    ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
-                ) =>
+                if Instant::now() < retry_until
+                    && matches!(
+                        error.code,
+                        ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
+                    ) =>
             {
                 std::thread::sleep(Duration::from_millis(10));
             }
             Err(error) => return Err(sql_error(error)),
         }
     }
-    Err("SQLite database remained locked while enabling WAL".into())
 }
 
 fn prepare_private_database_file(path: &Path) -> Result<(), String> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if !metadata.file_type().is_file() => {
-            return Err(format!(
-                "SQLite database must be a regular file: {}",
-                path.display()
-            ));
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            if let Some(parent) = path.parent()
+                && !parent.as_os_str().is_empty()
+            {
+                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            }
+            let mut options = fs::OpenOptions::new();
+            options.create_new(true).write(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            match options.open(path) {
+                Ok(_) => {}
+                // A concurrent opener can create the file after our lookup.
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error.to_string()),
+            }
+            fs::symlink_metadata(path).map_err(|error| error.to_string())?
         }
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.to_string()),
+    };
+    if !metadata.file_type().is_file() {
+        return Err(format!(
+            "SQLite database must be a regular file: {}",
+            path.display()
+        ));
     }
-
-    let mut options = fs::OpenOptions::new();
-    options.create(true).append(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path).map_err(|error| error.to_string())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-            .map_err(|error| error.to_string())?;
+        if metadata.permissions().mode() & 0o7777 != 0o600 {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+                .map_err(|error| error.to_string())?;
+        }
     }
     Ok(())
 }

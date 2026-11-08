@@ -66,7 +66,7 @@ fn installations_are_exclusive_and_released_after_failure() {
 }
 
 #[test]
-fn publication_preserves_unknown_files_and_replaces_only_unfinished_outputs() {
+fn publication_refuses_old_partial_destinations_without_removing_files() {
     let root = tempfile::tempdir().unwrap();
     let destination = root.path().join("model");
     std::fs::create_dir(&destination).unwrap();
@@ -84,12 +84,18 @@ fn publication_preserves_unknown_files_and_replaces_only_unfinished_outputs() {
         b"preserved"
     );
     std::fs::remove_file(destination.join("user-file")).unwrap();
+    assert!(install.publish(&destination).is_err());
+    assert_eq!(
+        std::fs::read(destination.join("encoder.onnx.download")).unwrap(),
+        b"partial"
+    );
+    std::fs::remove_file(destination.join("encoder.onnx.download")).unwrap();
+    std::fs::remove_dir(&destination).unwrap();
     install.publish(&destination).unwrap();
     assert_eq!(
         std::fs::read(destination.join("dictation-model.json")).unwrap(),
         b"verified"
     );
-    assert!(!destination.join("encoder.onnx.download").exists());
     // A published package is immutable, even if the caller still holds the install lock.
     assert!(install.publish(&destination).is_err());
 }
@@ -138,16 +144,17 @@ fn onnx_metadata_uses_the_model_proto_metadata_props_field() {
 
 #[test]
 fn cmvn_requires_both_full_feature_vectors() {
-    let vector = std::iter::repeat_n("0.5", 560)
+    let dimensions = 320;
+    let vector = std::iter::repeat_n("0.5", dimensions)
         .collect::<Vec<_>>()
         .join(" ");
     let cmvn = format!(
-        "<AddShift> 560 560\n<LearnRateCoef> 0 [ {vector} ]\n<Rescale> 560 560\n<LearnRateCoef> 0 [ {vector} ]"
+        "<AddShift> {dimensions} {dimensions}\n<LearnRateCoef> 0 [ {vector} ]\n<Rescale> {dimensions} {dimensions}\n<LearnRateCoef> 0 [ {vector} ]"
     );
-    let (mean, scale) = parse_cmvn(&cmvn).unwrap();
-    assert_eq!(mean.split(',').count(), 560);
-    assert_eq!(scale.split(',').count(), 560);
-    assert!(parse_cmvn("<AddShift> [ 0.5 ] <Rescale> [ 0.5 ]").is_err());
+    let (mean, scale) = parse_cmvn(&cmvn, dimensions).unwrap();
+    assert_eq!(mean.split(',').count(), dimensions);
+    assert_eq!(scale.split(',').count(), dimensions);
+    assert!(parse_cmvn("<AddShift> [ 0.5 ] <Rescale> [ 0.5 ]", dimensions).is_err());
 }
 
 #[test]
@@ -186,10 +193,16 @@ fn paraformer_streaming_model_transcribes_real_audio() {
     assert!(text.contains("了解这个项目的进度"));
 }
 
-#[tokio::test]
+#[test]
 #[ignore = "downloads and loads the pinned model into ASH_TEST_DICTATION_CACHE_DIR"]
-async fn default_model_preparation_publishes_a_loadable_package() {
-    let root = std::env::var("ASH_TEST_DICTATION_CACHE_DIR").unwrap();
+fn streamed_dictation_publishes_and_reuses_the_local_model() {
+    use crate::DictationEvent;
+    use crate::DictationManager;
+    use crate::DictationRequest;
+    use crate::LocalDictationRequest;
+    use std::sync::Mutex;
+
+    let root = std::path::PathBuf::from(std::env::var_os("ASH_TEST_DICTATION_CACHE_DIR").unwrap());
     let network = OutboundNetworkSnapshot::new(
         http_client::HttpClientConfig::new()
             .with_redirect_policy(http_client::RedirectPolicy::Follow {
@@ -209,32 +222,106 @@ async fn default_model_preparation_publishes_a_loadable_package() {
             )),
     )
     .unwrap();
-    let package = ModelPackage::resolve(
-        Path::new(&root),
-        &test_network(),
-        Path::new(&root),
-        DEFAULT_MODEL_ID,
-        network,
-        &async_utils::CancellationSource::new().token(),
-        Arc::new(|event| eprintln!("{event:?}")),
-    )
-    .await
-    .unwrap();
-    assert!(
-        crate::DictationModelManager::is_available(Path::new(&root), DEFAULT_MODEL_ID).unwrap()
-    );
-    assert!(
-        package
-            .recognizer(
-                Path::new(&root),
-                &test_network(),
-                LocalSpeechMode::Dictation
+    let manager = DictationManager::default();
+    let models = crate::DictationModelManager::with_dictation(&manager);
+    let timeout = std::time::Duration::from_secs(30);
+    for id in ["cold", "warm", "startup", "during-startup", "evicted"] {
+        let overlaps_warmup = id == "during-startup";
+        if matches!(id, "startup" | "during-startup" | "evicted") {
+            manager.forget_local_model(&root, &BUILTIN_MODELS[0].id);
+        }
+        let pending_warmup = if id == "startup" || overlaps_warmup {
+            let (send, receive) = std::sync::mpsc::channel();
+            let (resume, pause) = std::sync::mpsc::channel();
+            let pause = Mutex::new(pause);
+            models
+                .start(
+                    1,
+                    "startup-warmup".into(),
+                    crate::ModelRequest {
+                        home: root.clone(),
+                        media_network: test_network(),
+                        model_root: root.clone(),
+                        model_id: BUILTIN_MODELS[0].id.clone(),
+                        operation: crate::ModelOperation::Warm,
+                    },
+                    move |event| {
+                        let loading = event == ModelProgress::Loading;
+                        send.send(event).unwrap();
+                        if loading && overlaps_warmup {
+                            pause.lock().unwrap().recv_timeout(timeout).unwrap();
+                        }
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                receive.recv_timeout(timeout).unwrap(),
+                ModelProgress::Loading
+            );
+            assert!(!manager.is_active());
+            assert_eq!(models.progress(&BUILTIN_MODELS[0].id), None);
+            if overlaps_warmup {
+                Some((resume, receive))
+            } else {
+                assert_eq!(receive.recv_timeout(timeout).unwrap(), ModelProgress::Ready);
+                models.stop(1, "startup-warmup").unwrap();
+                None
+            }
+        } else {
+            None
+        };
+        let progress = Arc::new(Mutex::new(Vec::new()));
+        let events = Arc::clone(&progress);
+        let (waiting, observed_wait) = std::sync::mpsc::channel();
+        manager
+            .start_stream(
+                1,
+                id.into(),
+                DictationRequest::Local(LocalDictationRequest {
+                    home: root.clone(),
+                    media_network: test_network(),
+                    model_root: root.clone(),
+                    model_id: BUILTIN_MODELS[0].id.clone(),
+                    audio_host: Default::default(),
+                    network: network.clone(),
+                    input_device: None,
+                }),
+                move |event| {
+                    if let DictationEvent::ModelProgress(stage) = event {
+                        if overlaps_warmup && stage == ModelProgress::Loading {
+                            let _ = waiting.send(());
+                        }
+                        events.lock().unwrap().push(stage);
+                    }
+                },
             )
-            .is_ok()
-    );
+            .unwrap();
+        // Stop while the cold recognizer is still preparing. Its worker must
+        // consume the queued audio before it can deliver the final result.
+        for _ in 0..100 {
+            manager.push_audio(1, id, vec![0; 256]).unwrap();
+        }
+        if let Some((resume, receive)) = pending_warmup {
+            observed_wait.recv_timeout(timeout).unwrap();
+            resume.send(()).unwrap();
+            assert_eq!(receive.recv_timeout(timeout).unwrap(), ModelProgress::Ready);
+            models.stop(1, "startup-warmup").unwrap();
+        }
+        assert_eq!(manager.stop(1, id).unwrap().as_deref(), Some(""));
+        let progress = progress.lock().unwrap();
+        assert_eq!(progress.last(), Some(&ModelProgress::Ready));
+        if matches!(id, "warm" | "startup") {
+            assert_eq!(&*progress, &[ModelProgress::Ready]);
+        } else if overlaps_warmup {
+            assert_eq!(&*progress, &[ModelProgress::Loading, ModelProgress::Ready]);
+        } else {
+            assert!(progress.contains(&ModelProgress::Loading));
+        }
+    }
+    assert!(crate::DictationModelManager::is_available(&root, &BUILTIN_MODELS[0].id).unwrap());
     assert!(
-        !Path::new(&root)
-            .join(format!(".{DEFAULT_MODEL_ID}.installing"))
+        !root
+            .join(format!(".{}.installing", BUILTIN_MODELS[0].id))
             .exists()
     );
 }

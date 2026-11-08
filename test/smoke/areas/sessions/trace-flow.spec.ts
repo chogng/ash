@@ -132,7 +132,7 @@ test('Execution Trace follows a controlled model through real tools, parallel ch
 	const { client } = connection;
 	let fixtureSessionId: string | undefined;
 	try {
-		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'fixture-session', title: 'Trace controlled execution', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'fixture-session', kind: 'code', title: 'Trace controlled execution', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		fixtureSessionId = sessionId;
 		expect(created.session.threads).toHaveLength(1);
@@ -252,7 +252,7 @@ test('Execution Trace retains real model failure and cancellation during concurr
 	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 	const { client } = connection;
 	try {
-		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'fixture-session', title: 'Trace interrupted execution', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'fixture-session', kind: 'code', title: 'Trace interrupted execution', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const start = async (kind: 'failure' | 'cancel'): Promise<string> => {
 			const result = await client.request(APP_SERVER_METHODS['session/request'], { commandId: `fixture-${kind}`, sessionId, request: { type: 'createThread', title: `Trace fixture ${kind}` } });
@@ -317,7 +317,7 @@ for (const outcome of ['continued', 'denied', 'failed', 'cancelled'] as const) {
 			});
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['hook/upsert'], { commandId: `hook-config-${outcome}`, expectedRevision: config.revision, hook: { id: 'user:hook:trace-test', event: 'beforeTool', enablement: 'enabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: process.execPath, args: ['-e', script] } } });
-			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `hook-session-${outcome}`, title: `Hook ${outcome}`, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `hook-session-${outcome}`, kind: 'code', title: `Hook ${outcome}`, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0].threadId;
 			const thread = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });

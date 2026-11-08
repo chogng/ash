@@ -516,6 +516,14 @@ impl super::memories_operations::MemoriesRequestProcessorContext for AppServer {
     ) -> Result<Vec<(memories::MemoryScope, String)>, String> {
         AppServer::memory_scope_labels(self, thread_id)
     }
+
+    fn validate_memory_origin(
+        &self,
+        origin: &memories::MemoryTurnSource,
+        scope: &memories::MemoryScope,
+    ) -> Result<(), super::RpcError> {
+        AppServer::validate_memory_origin(self, origin, scope)
+    }
 }
 
 impl super::network_operations::NetworkRequestProcessorContext for AppServer {
@@ -695,6 +703,12 @@ impl super::symphony_tracker::SymphonyTrackerRequestProcessorContext for AppServ
 }
 
 impl super::terminal_operations::TerminalRequestProcessorContext for AppServer {
+    fn command_terminals(
+        &self,
+    ) -> Option<std::sync::Arc<dyn crate::local_tools::CommandTerminalService>> {
+        self.local_env_tool_ports()?.command_terminals()
+    }
+
     fn session_dir_authorization(
         &self,
         session_id: &ash_protocol::SessionId,
@@ -921,6 +935,9 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
             expected_ide,
         )
     }
+    fn workflow_store(&self) -> &workflows::Store {
+        &self.workflows
+    }
     fn terminal_service(
         &self,
     ) -> Result<std::sync::Arc<exec_server::terminal::TerminalService>, super::RpcError> {
@@ -931,6 +948,24 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
         thread_id: &ash_protocol::ThreadId,
     ) -> Result<Option<ash_protocol::SessionExecutionTarget>, super::RpcError> {
         AppServer::thread_directory(self, thread_id)
+    }
+
+    fn reply_directory_fallback(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, super::RpcError> {
+        let directory = self.bound_turn_directory(thread_id);
+        let record = self
+            .threads
+            .thread_catalog_record(thread_id)
+            .map_err(super::core_error)?;
+        // A managed binding can supply a missing reply directory while the root
+        // Thread still uses its original directory. Reading the catalog after the
+        // binding detects a concurrent directory change before applying the fallback.
+        if record.directory_configured {
+            return Ok(None);
+        }
+        Ok(directory)
     }
 }
 

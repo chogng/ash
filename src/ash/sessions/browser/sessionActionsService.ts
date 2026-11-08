@@ -16,6 +16,17 @@ import type { ISession } from '../services/sessions/common/session.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
+import type { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
+import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
+
+/** Resolve the exact saved conversation named by a sidebar command. */
+export function resolveSessionThreadSelection(sessions: ISessionsManagementService, argument: unknown): Extract<SessionsViewSelection, { kind: 'session'; }> | undefined {
+	if (!isRecord(argument) || typeof argument.sessionId !== 'string' || typeof argument.threadId !== 'string') return;
+	const session = sessions.sessions.find(session => session.sessionId === argument.sessionId && session.status === 'active');
+	return session?.chats.some(chat => chat.threadId === argument.threadId && chat.status === 'active')
+		? { kind: 'session', active: { session, threadId: argument.threadId } }
+		: undefined;
+}
 
 /** Resolve the captured item only after its picker/confirmation is accepted. */
 export function captureSessionActionTarget(sessions: ISessionsManagementService, storage: IStorageService, navigation: IChatSessionNavigationService, argument: unknown, useActive = false): { readonly title: string; resolve(): Promise<ISession>; } {
@@ -63,6 +74,7 @@ function actionItem(session: ISession): IAgentSessionActionItem {
 /** Implements Session semantics for Workbench actions without owning their prompts or menus. */
 export class SessionActionsService implements IAgentSessionActionsService {
 	constructor(
+		private readonly catalog: IChatListCatalog | undefined,
 		@ISessionsManagementService private readonly sessionsOwner: ISessionsManagementService,
 		@IStorageService private readonly storage: IStorageService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
@@ -75,6 +87,14 @@ export class SessionActionsService implements IAgentSessionActionsService {
 	restoreSession(id: string): Promise<void> { return this.sessionsOwner.restoreSession(id); }
 	renameSession(id: string, title: string): Promise<void> { return this.sessionsOwner.renameSession(id, title); }
 	deleteSession(id: string): Promise<void> { return this.sessionsOwner.deleteSession(id); }
+
+	resolveCatalogArchiveTarget(catalogId: string): { readonly title: string; archive(): Promise<boolean>; } {
+		const entry = this.catalog?.sources.flatMap(source => source.snapshot.get().entries).find(row => row.id === catalogId);
+		if (!entry?.archive || entry.disabled || entry.actionsDisabled) {
+			throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		}
+		return { title: entry.title, archive: entry.archive };
+	}
 
 	resolveTarget(argument: unknown, useActive = false): IAgentSessionActionTarget {
 		const captured = captureSessionActionTarget(this.sessionsOwner, this.storage, this.navigation, argument, useActive);

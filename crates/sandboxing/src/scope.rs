@@ -292,7 +292,7 @@ impl SandboxScope {
                 return Ok(false);
             }
         }
-        Ok(true)
+        Ok(crate::filesystem::protected_metadata(&self.command_dir)?.is_empty())
     }
 
     fn has_single_host_grant(&self) -> bool {

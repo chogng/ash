@@ -11,6 +11,7 @@ applyTo: src/ash/**
 - Render actions inside a toolbar rather than by hand. Prefer `MenuWorkbenchToolBar` (`ash/platform/actions/browser/toolbar.ts`): give it a `MenuId` so actions can be contributed from anywhere (contributions, other components) without coupling.
 - Use `WorkbenchToolBar` when you need explicit control over which actions render and where separators go.
 - Never add a separator while rendering an action. Add separators with the existing `Separator` class (`ash/base/common/actions.ts`).
+- Mark destructive menu actions such as permanent deletion with `destructive: true`. Shared menus render their labels and icons in the theme's danger foreground. Keep reversible actions such as Archive neutral.
 - If a `MenuWorkbenchToolBar` lives in a widget/view that can be rendered multiple times at once, give the toolbar a scoped `IContextKeyService` which is scoped to the dom element of that widget/view and set the context keys per individual widget/view instance.
 
 ## Editor/Session Actions

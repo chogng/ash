@@ -3,6 +3,7 @@ import { observableValue, type IObservable } from '../../../../base/common/obser
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { ICanvas, ICanvasOwner, ICanvasReference } from '../../../common/canvasReference.js';
 import { EditorInputCapabilities } from '../../../common/editor.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
@@ -12,16 +13,6 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 
 export const REVEAL_CANVAS_COMMAND_ID = 'workbench.action.agentSessions.revealCanvas';
-
-export interface ICanvas {
-	readonly resource: URI;
-	readonly instanceId: string | undefined;
-	readonly title: string;
-	readonly status?: string;
-	readonly source: URI | undefined;
-	readonly extensionId?: string;
-	readonly canvasId?: string;
-}
 
 export type CanvasExtensionSource = 'user' | 'project' | 'session' | 'plugin' | 'unknown';
 
@@ -41,16 +32,6 @@ export interface ICanvasDefinitionProvider {
 	readonly onDidChangeDefinitions: Event<void>;
 	listCanvases(): Promise<CanvasDefinitionSnapshot>;
 	openCanvas(canvas: ICanvasDefinition, instanceId: string): Promise<void>;
-}
-
-export interface ICanvasOwner {
-	readonly providerId: string;
-	readonly session: URI;
-	readonly chat: URI;
-}
-
-export interface ICanvasReference extends ICanvasOwner {
-	readonly canvas: URI;
 }
 
 export interface ICanvasReopenTarget {
@@ -116,9 +97,15 @@ export interface ICanvasService {
 	resolveCanvasModel(reference: ICanvasReference, source: URI): Promise<ICanvasModelResolution>;
 }
 
-export function canvasOwnerKey(owner: ICanvasOwner): string { return JSON.stringify([owner.providerId, owner.session.toString(), owner.chat.toString()]); }
-export function isCanvasOwner(first: ICanvasOwner, second: ICanvasOwner): boolean { return canvasOwnerKey(first) === canvasOwnerKey(second); }
-export function getCanvasReferenceKey(reference: ICanvasReference): string { return JSON.stringify([canvasOwnerKey(reference), reference.canvas.toString()]); }
+export function getPresentableCanvasTargets(service: ICanvasService, owner: ICanvasOwner, canvases: readonly ICanvas[], reader?: IReader): ICanvasReopenTarget[] {
+	const targets: ICanvasReopenTarget[] = [];
+	for (const canvas of canvases) {
+		if (!canvas.source) { continue; }
+		const reference = { ...owner, canvas: canvas.resource };
+		if (service.isOwnerPresentable(reference, reader)) { targets.push({ reference, canvas }); }
+	}
+	return targets;
+}
 
 export function isOpenableExtensionCanvasDefinition(canvas: ICanvasDefinition): boolean { return !canvas.requiresInput; }
 export function compareCanvasDefinitions(first: ICanvasDefinition, second: ICanvasDefinition): number {

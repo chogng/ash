@@ -320,26 +320,32 @@ impl PreparedCommand {
     pub fn spawn(self, environment: &[(String, String)]) -> Result<ProcessHandle, SandboxError> {
         let process = match self.launch {
             Launch::Sandbox(launch) => launch.spawn(environment),
-            Launch::Command => {
-                if let ProcessIo::Pty(_) = self.command.io() {
-                    return Err(SandboxError::UnsupportedPolicy(
-                        "the ordinary process launcher cannot attach a PTY".into(),
-                    ));
+            Launch::Command => match self.command.io() {
+                ProcessIo::Pty(size) => ProcessHandle::spawn_pty(
+                    self.command.program,
+                    self.command.arguments,
+                    self.command.working_directory,
+                    environment.iter().cloned().collect(),
+                    size,
+                ),
+                ProcessIo::Pipes => {
+                    let mut command = Command::new(self.command.program());
+                    command
+                        .args(self.command.arguments())
+                        .current_dir(self.command.working_directory())
+                        .env_clear()
+                        .envs(environment.iter().cloned())
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped());
+                    ProcessHandle::spawn_command(command).map_err(|error| {
+                        SandboxError::StartFailed {
+                            timing: SandboxDenialTiming::BeforeProcessStart,
+                            message: error.to_string(),
+                        }
+                    })
                 }
-                let mut command = Command::new(self.command.program());
-                command
-                    .args(self.command.arguments())
-                    .current_dir(self.command.working_directory())
-                    .env_clear()
-                    .envs(environment.iter().cloned())
-                    .stdin(Stdio::piped())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped());
-                ProcessHandle::spawn_command(command).map_err(|error| SandboxError::StartFailed {
-                    timing: SandboxDenialTiming::BeforeProcessStart,
-                    message: error.to_string(),
-                })
-            }
+            },
         }?;
         Ok(process.with_backend(self.backend))
     }

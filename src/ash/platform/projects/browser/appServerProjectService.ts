@@ -7,7 +7,7 @@ import { localize } from '../../../nls.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import type { IProjectService, Project, ProjectMaterial, ProjectScope, ProjectSummary } from '../common/projectService.js';
+import type { IProjectService, Project, ProjectAppearance, ProjectMaterial, ProjectScope, ProjectSummary } from '../common/projectService.js';
 
 export class AppServerProjectService implements IProjectService {
 	public readonly onDidChange: Event<void>;
@@ -24,7 +24,8 @@ export class AppServerProjectService implements IProjectService {
 			const result = await appServerRequest(this.connection, 'project/list', { scope });
 			return result.projects.map(project => ({
 				id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount,
-				createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
+				createdAtMs: project.createdAtMs, updatedAtMs: project.updatedAtMs,
+				icon: project.icon, color: project.color,
 			}));
 		} catch (error) { throw projectError(error); }
 	}
@@ -34,9 +35,12 @@ export class AppServerProjectService implements IProjectService {
 		catch (error) { throw projectError(error); }
 	}
 
-	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope): Promise<Project> {
+	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope, appearance?: ProjectAppearance): Promise<Project> {
 		try {
-			return fromDto((await appServerRequest(this.connection, 'project/create', { commandId: id, projectId: id, name, description, materials: toMaterials(materials), scope })).project);
+			return fromDto((await appServerRequest(this.connection, 'project/create', {
+				commandId: id, projectId: id, name, description, materials: toMaterials(materials), scope,
+				icon: appearance?.icon, color: appearance?.color,
+			})).project);
 		} catch (error) { throw projectError(error); }
 	}
 
@@ -78,6 +82,14 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
+	public async setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void> {
+		try {
+			await appServerRequest(this.connection, 'project/appearance/update', {
+				commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, field, value: value ?? null,
+			});
+		} catch (error) { throw projectError(error); }
+	}
+
 	public async restore(project: ProjectSummary): Promise<Project> {
 		try {
 			return fromDto((await appServerRequest(this.connection, 'project/restore', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision })).project);
@@ -95,7 +107,8 @@ export class AppServerProjectService implements IProjectService {
 function fromDto(project: ProjectDto): Project {
 	return {
 		id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived',
-		createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
+		createdAtMs: project.createdAtMs, updatedAtMs: project.updatedAtMs,
+		icon: project.icon, color: project.color,
 		description: project.description, sessionIds: project.sessionIds, sessionCount: project.sessionIds.length,
 		roots: project.roots.map(root => URI.parse(root.path)),
 		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),

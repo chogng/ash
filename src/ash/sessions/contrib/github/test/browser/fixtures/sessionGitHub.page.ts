@@ -1,3 +1,4 @@
+import { ProjectsService } from '../../../../projects/browser/projectsService.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { ISessionContext } from '../../../../../services/sessions/browser/sessionContext.js';
 import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
@@ -17,7 +18,7 @@ import { IGitHubService as ISessionGitHubService } from '../../../browser/github
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import type { IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
-import { observableValue } from '../../../../../../base/common/observable.js';
+import { constObservable, observableValue } from '../../../../../../base/common/observable.js';
 import { ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
 import type { IMenuService } from '../../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, type ICommandService } from '../../../../../../platform/commands/common/commands.js';
@@ -52,6 +53,8 @@ import { attachSessionGitHubReference, SessionChatInputToolbar } from '../../../
 import { IBrowserViewWorkbenchService } from '../../../../../../workbench/contrib/browserView/common/browserView.js';
 import { SessionsList } from '../../../../sessions/browser/views/sessionsList.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { NullLoggerService } from '../../../../../../platform/log/common/log.js';
+import type { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
 import { chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot, refreshChatInputStack, setChatInputStackSlot } from '../../../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import '../../../../../../workbench/contrib/chat/browser/widget/media/chat.css';
@@ -209,14 +212,21 @@ resources.add(setARIAContainer(document.body));
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
-if (new URL(location.href).searchParams.has('artifactDetails')) {
+const showArtifactDetails = new URL(location.href).searchParams.has('artifactDetails');
+if (showArtifactDetails) {
 	sessionStorage.setItem('test-backend-pr-references', JSON.stringify([{
 		repository: { host: 'github.com', owner: 'team', name: 'one' },
 		number: 7, isArtifact: true, artifactId: 'a'.repeat(32),
-	} satisfies GitHubPullRequestReference]));
+	}, {
+		repository: { host: 'github.com', owner: 'team', name: 'two' },
+		number: 8, isArtifact: true, artifactId: 'b'.repeat(32),
+	}] satisfies GitHubPullRequestReference[]));
 }
 const transport = new Transport();
-if (new URL(location.href).searchParams.has('artifactDetails')) transport.mergeable = true;
+if (showArtifactDetails) {
+	transport.mergeable = true;
+	transport.states.set(8, 'open');
+}
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));
 await client.connect();
@@ -225,7 +235,7 @@ resources.add(bindTestColorTheme(theme, document.body));
 const selected = resources.add(new Emitter<void>());
 const statusChanged = resources.add(new Emitter<ReturnType<typeof gitStatus>>());
 const accountsChanged = resources.add(new Emitter<AccountState>());
-const session: ISession = { sessionId: 'session', title: 'Implement PR integration', status: 'active', workspace: new URL(location.href).searchParams.has('noWorkspace') ? null : { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
+const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'Implement PR integration', status: 'active', workspace: new URL(location.href).searchParams.has('noWorkspace') ? null : { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 let selection: SessionsViewSelection | undefined = { kind: 'session', active: { session, threadId: 'thread' } };
 let branch = 'feature';
 const gitStatus = (id: string) => ({ repositoryId: id, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'branch' as const, name: branch, objectId: 'a'.repeat(40), upstream: undefined }, changes: [] });
@@ -293,7 +303,8 @@ if (inputStack) {
 	refreshChatInputStack(main);
 }
 const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
-const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage)));
+const listProjects = { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService;
+const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, listProjects, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage), { blockedSessions: constObservable([]), ignore: () => undefined }, quickInput, { confirm: () => { throw new Error('Unexpected confirmation'); } } as unknown as IDialogService, new NullLoggerService(), resources.add(new ProjectsService(listProjects, listStorage))));
 const submissions: Record<string, unknown>[] = [];
 if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;

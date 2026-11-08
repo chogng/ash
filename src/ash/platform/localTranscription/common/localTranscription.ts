@@ -26,18 +26,25 @@ export enum DictationModelState {
 
 export type IDictationModelStatus =
 	| { readonly state: DictationModelState.Checking | DictationModelState.Loading | DictationModelState.Ready | DictationModelState.Cancelled; }
-	| { readonly state: DictationModelState.Downloading; readonly file: string; readonly downloadedBytes: number; }
+	| { readonly state: DictationModelState.Downloading; readonly file: string; readonly downloadedBytes: number; readonly packageDownloadedBytes?: number; }
 	| { readonly state: DictationModelState.Error; readonly error: string; };
 
 export interface ILocalTranscriptionModelSnapshot {
 	readonly model: string;
 	readonly available: boolean;
 	readonly sizeBytes: number;
+	readonly downloadSizeBytes?: number;
+	readonly recommendedLanguages?: readonly string[];
 	readonly status?: IDictationModelStatus;
 }
 
 export function isModelPreparing(status: IDictationModelStatus | undefined): boolean {
 	return status?.state === DictationModelState.Checking || status?.state === DictationModelState.Downloading || status?.state === DictationModelState.Loading;
+}
+
+/** Keep the saved preference when installed. Otherwise use the first installed package in inventory order. */
+export function preferredInstalledModel(models: readonly ILocalTranscriptionModelSnapshot[], preferred: string): ILocalTranscriptionModelSnapshot | undefined {
+	return models.find(model => model.available && model.model === preferred) ?? models.find(model => model.available);
 }
 
 /** Disposing detaches delivery. Only cancel explicitly stops the process-owned preparation. */
@@ -46,7 +53,7 @@ export interface ILocalTranscriptionModelOperation extends IDisposable {
 	cancel(): Promise<void>;
 }
 
-export type LocalTranscriptionModelOperation = { readonly type: 'prepare'; } | { readonly type: 'import'; readonly sourceDirectory: string; };
+export type LocalTranscriptionModelOperation = { readonly type: 'prepare' | 'warm'; } | { readonly type: 'import'; readonly sourceDirectory: string; };
 
 /** Ash model inventory and preparation; inference uses the standard transcription contract below. */
 export const ILocalTranscriptionModelService = createDecorator<ILocalTranscriptionModelService>('localTranscriptionModelService');
@@ -60,15 +67,24 @@ export interface ILocalTranscriptionModelService {
 	cancelModel(model: string): Promise<void>;
 	deleteModel(model: string): Promise<void>;
 	prepareModel(model: string, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation;
+	/** Loads an installed model without opening an audio stream. Desktop only. */
+	warmModel?(model: string): ILocalTranscriptionModelOperation;
 	importPackage(options: { readonly model: string; readonly sourcePath: string; }, onProgress: (status: IDictationModelStatus) => void): ILocalTranscriptionModelOperation;
+}
+
+/** Retain the configured package for first-use download or preparation when nothing is installed. */
+export async function resolveLocalTranscriptionModel(service: ILocalTranscriptionModelService, preferred: string): Promise<ILocalTranscriptionModelSnapshot> {
+	const configured = await service.getModel(preferred);
+	return configured.available ? configured : preferredInstalledModel(await service.listModels(), preferred) ?? configured;
 }
 export interface ILocalTranscriptionModelImportResult { readonly model: string; readonly version: number; }
 export const enum LocalTranscriptionModelState {
-	Idle = 'idle', Downloading = 'downloading', Loading = 'loading', Ready = 'ready', Error = 'error',
+	Idle = 'idle', Checking = 'checking', Downloading = 'downloading', Loading = 'loading', Ready = 'ready', Error = 'error',
 }
 export interface ILocalTranscriptionModelStatus {
 	readonly state: LocalTranscriptionModelState;
-	readonly progress?: number;
+	readonly file?: string;
+	readonly downloadedBytes?: number;
 	readonly downloaded?: boolean;
 	readonly error?: string;
 	readonly errorCode?: string;

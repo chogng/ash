@@ -21,12 +21,9 @@ use sha2::Sha256;
 
 pub(super) fn create_schema(transaction: &Transaction<'_>) -> Result<(), String> {
     transaction
-        .execute_batch(
-            "CREATE TABLE turn_commits (
-        commit_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, revision INTEGER NOT NULL,
-        record_json TEXT NOT NULL);
-        CREATE INDEX turn_commits_thread ON turn_commits(thread_id);",
-        )
+        .execute_batch(include_str!(
+            "../../migrations/event-store/legacy/0011_turn_commits.sql"
+        ))
         .map_err(sql_error)?;
     let records = {
         let mut statement = transaction

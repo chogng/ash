@@ -194,7 +194,7 @@ test('Execution Trace opens current saved history and follows real new Turns and
 	const connection = await connectTraceAppServer(application, page, testWorkspace.directory);
 	const { client } = connection;
 	try {
-		const session = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'trace-create', title: 'Trace live session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const session = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'trace-create', kind: 'code', title: 'Trace live session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = session.session.sessionId;
 		const created = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'trace-thread', sessionId, request: { type: 'createThread', title: 'Trace root' } });
 		if (created.type !== 'thread') { throw new Error('Expected trace Thread'); }

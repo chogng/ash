@@ -3,15 +3,44 @@ use crate::QueueError;
 use crate::QueueInput;
 use crate::QueueStatus;
 use crate::QueuedMessage;
+use crate::ReferenceReadScope;
 use protocol::CommandId;
 use protocol::SessionId;
 use protocol::ThreadId;
 use rusqlite::Connection;
+use rusqlite::ErrorCode;
 use rusqlite::OptionalExtension;
 use rusqlite::TransactionBehavior;
 use rusqlite::params;
 use std::path::Path;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
+
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_queue.sql"),
+    include_str!("../migrations/0002_approval_modes.sql"),
+    include_str!("../migrations/0003_reference_read_scope.sql"),
+];
+
+fn enable_wal(connection: &Connection) -> rusqlite::Result<()> {
+    // The first WAL switch can report contention before SQLite invokes its busy handler.
+    let retry_until = Instant::now() + Duration::from_secs(1);
+    loop {
+        match connection.pragma_update(None, "journal_mode", "WAL") {
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if Instant::now() < retry_until
+                    && matches!(
+                        error.code,
+                        ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
+                    ) =>
+            {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            result => return result,
+        }
+    }
+}
 
 pub struct QueueStore {
     connection: Mutex<Connection>,
@@ -37,45 +66,38 @@ impl QueueStore {
 
     pub fn open(path: &Path) -> Result<Self, QueueError> {
         let mut connection = Connection::open(path)?;
-        connection.busy_timeout(std::time::Duration::from_secs(5))?;
-        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
+        connection.busy_timeout(Duration::from_secs(5))?;
+        enable_wal(&connection)?;
+        connection.pragma_update(None, "synchronous", "FULL")?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transaction.execute_batch("CREATE TABLE IF NOT EXISTS queue_metadata (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, revision INTEGER NOT NULL);
-            INSERT OR IGNORE INTO queue_metadata VALUES(1,2,0);")?;
-        let version: u32 =
-            transaction.query_row("SELECT version FROM queue_metadata WHERE id=1", [], |row| {
-                row.get(0)
-            })?;
-        if !matches!(version, 1 | 2) {
+        transaction.execute_batch(
+            "CREATE TABLE IF NOT EXISTS queue_metadata (
+                 id INTEGER PRIMARY KEY CHECK(id = 1), version INTEGER NOT NULL, revision INTEGER NOT NULL
+             );",
+        )?;
+        let version: Option<u32> = transaction
+            .query_row(
+                "SELECT version FROM queue_metadata WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(version) = version
+            && !(1..=MIGRATIONS.len() as u32).contains(&version)
+        {
             return Err(QueueError::Storage(format!(
                 "unsupported queue schema {version}"
             )));
         }
-        transaction.execute_batch(
-            "CREATE TABLE IF NOT EXISTS queued_messages (
-            position INTEGER PRIMARY KEY AUTOINCREMENT,
-            id TEXT UNIQUE NOT NULL,
-            session_id TEXT NOT NULL,
-            thread_id TEXT NOT NULL,
-            request TEXT NOT NULL,
-            status TEXT NOT NULL,
-            turn_id TEXT,
-            error TEXT,
-            revision INTEGER NOT NULL,
-            lease_until INTEGER NOT NULL DEFAULT 0,
-            ready_at INTEGER NOT NULL DEFAULT 0,
-            sort_key INTEGER NOT NULL DEFAULT 0
-        ); CREATE INDEX IF NOT EXISTS queue_thread ON queued_messages(thread_id,position);",
-        )?;
-        if version == 1 {
-            // Queue requests are mutable records, unlike content-addressed Thread history.
-            // Migrate only the permission field and preserve command identity and revision.
-            transaction.execute_batch(
-                "UPDATE queued_messages SET request=json_set(request,'$.approvalMode',
-                    CASE json_extract(request,'$.approvalMode')
-                        WHEN 'askPermissions' THEN 'manual' ELSE 'auto' END)
-                    WHERE json_extract(request,'$.approvalMode') IN ('askPermissions','autoReview');
-                 UPDATE queue_metadata SET version=2 WHERE id=1;",
+        for (target, sql) in (1_u32..)
+            .zip(MIGRATIONS)
+            .skip(version.unwrap_or(0) as usize)
+        {
+            transaction.execute_batch(sql)?;
+            transaction.execute(
+                "INSERT INTO queue_metadata (id, version, revision) VALUES (1, ?1, 0)
+                 ON CONFLICT(id) DO UPDATE SET version = excluded.version",
+                [target],
             )?;
         }
         transaction.commit()?;
@@ -111,6 +133,27 @@ impl QueueStore {
         read(&*self.lock()?, id)
     }
 
+    /// Read the authority stored with this exact revision, including after a worker restart.
+    pub fn reference_read_scope(
+        &self,
+        message: &QueuedMessage,
+    ) -> Result<Option<ReferenceReadScope>, QueueError> {
+        self.lock()?
+            .query_row(
+                "SELECT profile_reference_reads FROM queued_messages WHERE id=?1 AND revision=?2",
+                params![message.request.command_id.as_str(), message.revision],
+                |row| {
+                    Ok(if row.get(0)? {
+                        ReferenceReadScope::Profile
+                    } else {
+                        ReferenceReadScope::CodeOnly
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn edit(
         &self,
         session: &SessionId,
@@ -118,6 +161,25 @@ impl QueueStore {
         id: &CommandId,
         expected_revision: i64,
         edit: &crate::QueueEdit,
+    ) -> Result<QueuedMessage, QueueError> {
+        self.edit_scoped(
+            session,
+            thread,
+            id,
+            expected_revision,
+            edit,
+            ReferenceReadScope::CodeOnly,
+        )
+    }
+
+    pub fn edit_scoped(
+        &self,
+        session: &SessionId,
+        thread: &ThreadId,
+        id: &CommandId,
+        expected_revision: i64,
+        edit: &crate::QueueEdit,
+        scope: ReferenceReadScope,
     ) -> Result<QueuedMessage, QueueError> {
         let mut connection = self.lock()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -228,6 +290,23 @@ impl QueueStore {
                 }
             }
         }
+        // Replacements carry the editor's scope. Resuming or editing text can only
+        // narrow the scope of retained references.
+        if matches!(edit, crate::QueueEdit::Replace { .. })
+            || (matches!(scope, ReferenceReadScope::CodeOnly)
+                && matches!(
+                    edit,
+                    crate::QueueEdit::Resume
+                        | crate::QueueEdit::Send { .. }
+                        | crate::QueueEdit::ReplaceText { .. }
+                        | crate::QueueEdit::ReplaceTextWithDelivery { .. }
+                ))
+        {
+            transaction.execute(
+                "UPDATE queued_messages SET profile_reference_reads=?2 WHERE id=?1",
+                params![id.as_str(), matches!(scope, ReferenceReadScope::Profile)],
+            )?;
+        }
         // Steering targets the active Turn, so an older queued Turn must not block it.
         // Move it with its frozen text and delivery target in the same transaction.
         if matches!(
@@ -264,6 +343,14 @@ impl QueueStore {
     }
 
     pub fn enqueue(&self, input: &QueueInput) -> Result<QueuedMessage, QueueError> {
+        self.enqueue_scoped(input, ReferenceReadScope::CodeOnly)
+    }
+
+    pub fn enqueue_scoped(
+        &self,
+        input: &QueueInput,
+        scope: ReferenceReadScope,
+    ) -> Result<QueuedMessage, QueueError> {
         let encoded = serde_json::to_string(input)?;
         if input.command_id.as_str().len() > 128
             || input.input.is_empty()
@@ -290,8 +377,8 @@ impl QueueStore {
             ));
         }
         let revision = next_revision(&transaction)?;
-        transaction.execute("INSERT INTO queued_messages(id,session_id,thread_id,request,status,revision) VALUES(?1,?2,?3,?4,'pending',?5)",
-            params![input.command_id.as_str(), input.session_id.as_str(), input.thread_id.as_str(), encoded, revision])?;
+        transaction.execute("INSERT INTO queued_messages(id,session_id,thread_id,request,status,revision,profile_reference_reads) VALUES(?1,?2,?3,?4,'pending',?5,?6)",
+            params![input.command_id.as_str(), input.session_id.as_str(), input.thread_id.as_str(), encoded, revision, matches!(scope, ReferenceReadScope::Profile)])?;
         transaction.execute(
             "UPDATE queued_messages SET sort_key=position WHERE id=?1",
             [input.command_id.as_str()],

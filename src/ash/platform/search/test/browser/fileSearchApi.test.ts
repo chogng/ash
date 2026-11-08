@@ -29,30 +29,36 @@ test('fuzzy RPC preserves backend scores, root URI and an explicit query', async
 	});
 });
 
-test('fuzzy cancellation keeps the terminal response and discards its late matches', async () => {
-	const response = new DeferredPromise<FileFuzzyResult>();
-	const cancelled = new DeferredPromise<void>();
-	let operationId = '';
-	const connection = {
-		generation: 1,
-		state: 'ready',
-		onStateChange: () => Disposable.None,
-		async request(definition: { method: string; }, params: { operationId: string; }): Promise<unknown> {
-			if (definition.method === 'file/search/fuzzy') { operationId = params.operationId; return response.p; }
-			assert.equal(definition.method, 'file/search/fuzzy/cancel');
-			assert.equal(params.operationId, operationId);
-			cancelled.complete();
-			return {};
-		},
-	} as unknown as AppServerProtocolClient;
-	const controller = new AbortController();
-	const pending = createAppServerFileSearchApi(connection).fuzzy(directory, { query: 'main', maxResults: 1 }, controller.signal);
-	const rejected = assert.rejects(pending, isCancellationError);
-	controller.abort();
-	await cancelled.p;
-	response.complete({ matches: [{ path: 'main.ts', score: 10 }], totalMatches: 1, freshness: 'current' });
-	await rejected;
-});
+for (const kind of ['glob', 'fuzzy'] as const) {
+	test(`${kind} cancellation keeps the terminal response and discards its late matches`, async () => {
+		const sessionDirectory = { resource: directory.resource, target: { type: 'session' as const, sessionId: 'session', path: '/workspace' } };
+		const response = new DeferredPromise<unknown>();
+		const cancelled = new DeferredPromise<void>();
+		let operationId = '';
+		const connection = {
+			generation: 1,
+			state: 'ready',
+			onStateChange: () => Disposable.None,
+			async request(definition: { method: string; }, params: { operationId: string; }): Promise<unknown> {
+				if (definition.method === `file/search/${kind}`) { operationId = params.operationId; return response.p; }
+				assert.equal(definition.method, `file/search/${kind}/cancel`);
+				assert.deepEqual(params, kind === 'glob' ? { operationId, target: sessionDirectory.target } : { operationId });
+				cancelled.complete();
+				return {};
+			},
+		} as unknown as AppServerProtocolClient;
+		const controller = new AbortController();
+		const api = createAppServerFileSearchApi(connection);
+		const pending = kind === 'glob'
+			? api.glob(sessionDirectory, { includePatterns: [], excludePatterns: [], maxResults: 1 }, controller.signal)
+			: api.fuzzy(directory, { query: 'main', maxResults: 1 }, controller.signal);
+		const rejected = assert.rejects(pending, isCancellationError);
+		controller.abort();
+		await cancelled.p;
+		await response.complete(kind === 'glob' ? { paths: ['main.ts'], totalMatches: 1 } : { matches: [{ path: 'main.ts', score: 10 }], totalMatches: 1, freshness: 'current' });
+		await rejected;
+	});
+}
 
 for (const kind of ['glob', 'fuzzy'] as const) {
 	for (const replacement of [false, true]) {

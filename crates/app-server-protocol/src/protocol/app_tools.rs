@@ -1,5 +1,7 @@
 use crate::JsonSchema;
 use crate::TS;
+use ash_protocol::ModelRef;
+use ash_protocol::ReasoningEffort;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
@@ -24,6 +26,22 @@ pub struct AppHostRequestParams {
     pub operation: AppHostOperation,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelComparisonWorkspaceMode {
+    Worktree,
+    Folderless,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelComparisonSelection {
+    pub source_id: String,
+    pub agent: String,
+    pub model: ModelRef,
+    pub reasoning_effort: Option<ReasoningEffort>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
     tag = "type",
@@ -32,6 +50,25 @@ pub struct AppHostRequestParams {
     deny_unknown_fields
 )]
 pub enum AppHostOperation {
+    GetComparisonModels {
+        workspace_mode: ModelComparisonWorkspaceMode,
+    },
+    CreateModelComparison {
+        workspace_mode: ModelComparisonWorkspaceMode,
+        prompt: String,
+        attempts: Vec<ModelComparisonSelection>,
+        judge: Option<ModelComparisonSelection>,
+        synthesizer: Option<ModelComparisonSelection>,
+    },
+    ListModelComparisons {
+        include_archived: bool,
+        workspace: Option<String>,
+        comparison_ids: Vec<String>,
+        cursor: Option<String>,
+    },
+    ReadModelComparison {
+        comparison_id: String,
+    },
     TasksList {
         directory: String,
     },

@@ -73,7 +73,8 @@ registerWorkbenchContribution('workbench.contrib.browserView.restore', Workbench
 	const editorPart = services.get(IEditorPart);
 	void views.initialize().then(async () => {
 		for (const input of views.getContextualBrowserViews().values()) {
-			if (!editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) {
+			// Reattach live pages after a renderer reload. The editor restores serialized tabs lazily.
+			if (input.model && !editorPart.groups.some(group => group.inputs.some(candidate => extUri.isEqual(candidate.resource, input.resource)))) {
 				await editors.openEditor(input, { pinned: true, preserveFocus: true });
 			}
 		}

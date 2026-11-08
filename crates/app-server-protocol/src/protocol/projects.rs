@@ -57,14 +57,20 @@ pub struct ProjectDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
-    /// Unix epoch milliseconds; absent for legacy projects with unknown creation time.
-    #[ts(type = "number | null")]
-    pub created_at_ms: Option<u64>,
-    #[ts(type = "number | null")]
-    pub updated_at_ms: Option<u64>,
+    /// Unix epoch milliseconds.
+    #[ts(type = "number")]
+    pub created_at_ms: u64,
+    #[ts(type = "number")]
+    pub updated_at_ms: u64,
     pub status: ProjectStatusDto,
     pub name: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub color: Option<String>,
     pub roots: Vec<ProjectRootDto>,
     pub session_ids: Vec<SessionId>,
     pub materials: Vec<ProjectMaterialDto>,
@@ -76,12 +82,18 @@ pub struct ProjectSummaryDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
-    #[ts(type = "number | null")]
-    pub created_at_ms: Option<u64>,
-    #[ts(type = "number | null")]
-    pub updated_at_ms: Option<u64>,
+    #[ts(type = "number")]
+    pub created_at_ms: u64,
+    #[ts(type = "number")]
+    pub updated_at_ms: u64,
     pub status: ProjectStatusDto,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub color: Option<String>,
     #[ts(type = "number")]
     pub root_count: u64,
     #[ts(type = "number")]
@@ -128,6 +140,12 @@ pub struct ProjectCreateParams {
     pub description: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub scope: Option<ProjectScopeDto>,
 }
 
@@ -143,6 +161,25 @@ pub struct ProjectDetailsUpdateParams {
     pub expected_revision: u64,
     pub name: String,
     pub description: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectAppearanceFieldDto {
+    Icon,
+    Color,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectAppearanceUpdateParams {
+    pub command_id: CommandId,
+    pub project_id: ProjectId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub field: ProjectAppearanceFieldDto,
+    #[ts(type = "string | null")]
+    pub value: Option<String>,
 }
 
 /// Adds only a root already known to the exact Session directory scope.

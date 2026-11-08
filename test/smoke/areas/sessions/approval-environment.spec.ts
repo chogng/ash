@@ -55,8 +55,8 @@ test('Guardian setup shares reviewed project background between IDE Chat and Age
 	}
 });
 
-test('Sessions review environment scans a draft, accepts entries, and excludes changed sources', async ({ application, target, workbench, testWorkspace }) => {
-	let page = await workbench.openAgentsWindow(target.kind);
+test('Sessions review environment scans a draft, accepts entries, and excludes changed sources', async ({ target, workbench, testWorkspace }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await editor.waitForEditorFocus();
@@ -72,18 +72,20 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await permissions.press('ArrowDown');
 	const menu = page.getByRole('menu', { name: 'Permissions', exact: true });
 	await expect(menu).toBeVisible();
-	const prepare = menu.getByRole('menuitem', { name: 'Prepare review environment…', exact: true });
-	if (target.appServerMode === 'disabled') {
-		await expect(prepare).toHaveCount(0);
-		await page.keyboard.press('Escape');
-		await expect(permissions).toBeFocused();
-		return;
-	}
+	await expect(menu.getByRole('menuitem')).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(permissions).toBeFocused();
+	if (target.appServerMode === 'disabled') return;
+	const openSetup = async (): Promise<void> => {
+		await editor.input.focus();
+		await page.keyboard.insertText('/guardian setup');
+		await editor.waitForEditorContents(text => text === '/guardian setup');
+		await page.keyboard.press('Enter');
+	};
 	const file = join(testWorkspace.directory, 'package.json');
 	const original = '{"name":"review-fixture","scripts":{"build":"pnpm build"}}';
 	await writeFile(file, original);
-	await expect(prepare).toBeVisible();
-	await prepare.click();
+	await openSetup();
 	const quick = new QuickAccess(page);
 	await quick.select('Scan project…');
 	await expect(quick.items.filter({ hasText: 'Include recent project sessions' })).toContainText('aggregates command names and targets');
@@ -111,15 +113,11 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await quick.select('Save accepted entries');
 	await expect(quick.element).toBeHidden();
 	expect(await readFile(file, 'utf8')).toBe(original);
-	await editor.waitForEditorFocus();
-	await page.keyboard.insertText('/guardian setup');
-	await editor.waitForEditorContents(text => text === '/guardian setup');
-	await page.keyboard.press('Enter');
+	await openSetup();
 	await expect(entry).toContainText('Accepted');
 	await quick.close();
 	await writeFile(file, '{"name":"review-fixture","scripts":{"build":"cargo build"}}');
-	await permissions.press('ArrowDown');
-	await menu.getByRole('menuitem', { name: 'Prepare review environment…', exact: true }).click();
+	await openSetup();
 	await expect(entry.filter({ hasText: 'Source changed — excluded from review' })).toHaveCount(1);
 	await expect(entry.filter({ hasText: 'Pending review' })).toContainText('cargo build');
 	await expect(entry.filter({ hasText: 'Pending review' })).not.toContainText('Accepted');

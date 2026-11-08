@@ -9,7 +9,6 @@ use git_turn_changes::CommitState;
 use git_turn_changes::TurnChangeSet;
 use git_turn_changes::TurnChangeStore;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use worktree::ManagedDirBinding;
@@ -18,7 +17,6 @@ use worktree::ManagedDirOwner;
 use worktree::ManagedDirProvisionRequest;
 use worktree::ManagedDirSource;
 use worktree::ManagedDirTarget;
-use worktree::ManagedRepositoryBinding;
 
 #[cfg(test)]
 #[path = "thread_dir_binding_tests.rs"]
@@ -67,12 +65,50 @@ impl GitTurnChangesRuntime {
         )
     }
 
+    pub(super) fn cleanup_archived_worktree(
+        &self,
+        thread_id: &ThreadId,
+        checkout: &Path,
+    ) -> Result<(), String> {
+        let Some(binding) = self.binding(thread_id) else {
+            // A retried request can arrive after automatic cleanup has removed the checkout.
+            return if checkout.exists() {
+                Err("Thread worktree ownership changed".into())
+            } else {
+                Ok(())
+            };
+        };
+        if binding.checkout_root() != checkout
+            || binding.kind() != ManagedDirKind::Git
+            || !self.changes_settled(thread_id)?
+        {
+            return Err("Thread worktree is no longer eligible for cleanup".into());
+        }
+        self.cleanup_thread_binding(
+            thread_id,
+            &binding,
+            worktree::ManagedDirCleanupEligibility::ArchivedGitCheckoutSelectedByUser,
+        )
+    }
+
     fn cleanup_thread_binding(
         &self,
         thread_id: &ash_protocol::ThreadId,
         binding: &ManagedDirBinding,
         eligibility: worktree::ManagedDirCleanupEligibility,
     ) -> Result<(), String> {
+        let _cleanup = self
+            .dirs
+            .cleanup_gate
+            .lock()
+            .map_err(|_| "Thread worktree cleanup lock poisoned")?;
+        match self.binding(thread_id) {
+            None => return Ok(()),
+            Some(current) if &current != binding => {
+                return Err("Thread worktree ownership changed".into());
+            }
+            Some(_) => {}
+        }
         self.dirs.release_search(binding.checkout_root())?;
         // Windows directory capabilities pin their roots. Release the owning services
         // before deletion and restore them on failure so cleanup can be retried.
@@ -122,17 +158,7 @@ impl GitTurnChangesRuntime {
             if thread.status == ash_protocol::ThreadStatus::Active {
                 continue;
             }
-            let settled = self
-                .store
-                .list_for_thread(&thread_id)
-                .map_err(|error| error.to_string())?
-                .iter()
-                .all(|record| {
-                    record.files.is_empty()
-                        || record.capture_state == git_turn_changes::CaptureState::Discarded
-                        || matches!(record.commit_state, CommitState::Committed { .. })
-                });
-            if !settled {
+            if !self.changes_settled(&thread_id)? {
                 continue;
             }
             let modified = std::fs::metadata(binding.checkout_root())
@@ -149,6 +175,19 @@ impl GitTurnChangesRuntime {
             )?;
         }
         Ok(())
+    }
+
+    fn changes_settled(&self, thread_id: &ThreadId) -> Result<bool, String> {
+        Ok(self
+            .store
+            .list_for_thread(thread_id)
+            .map_err(|error| error.to_string())?
+            .iter()
+            .all(|record| {
+                record.files.is_empty()
+                    || record.capture_state == git_turn_changes::CaptureState::Discarded
+                    || matches!(record.commit_state, CommitState::Committed { .. })
+            }))
     }
 
     pub(super) fn reset_thread_to_committed_changes(
@@ -211,49 +250,6 @@ impl GitTurnChangesRuntime {
                     .map_err(|error| error.to_string())?;
             }
             Ok(())
-        })
-    }
-
-    pub(super) fn initial_baseline_paths(
-        &self,
-        binding: &ManagedDirBinding,
-        repository_binding: &ManagedRepositoryBinding,
-    ) -> Result<BTreeSet<PathBuf>, CoreError> {
-        if binding.kind() == ManagedDirKind::Directory {
-            return Ok(BTreeSet::new());
-        }
-        self.dirs.runtime.block_on(async {
-            let git = ash_git::GitClient::system();
-            let repository = git
-                .open_repository(repository_binding.worktree_root())
-                .await
-                .map_err(|error| CoreError::Journal(error.to_string()))?;
-            let target_tree = if repository_binding.target_unborn() {
-                git.empty_tree(&repository)
-                    .await
-                    .map_err(|error| CoreError::Journal(error.to_string()))?
-            } else {
-                git.resolve_tree(&repository, repository_binding.target_head())
-                    .await
-                    .map_err(|error| CoreError::Journal(error.to_string()))?
-            };
-            let baseline_tree =
-                ash_git::GitTreeId::new(repository_binding.baseline_tree().to_string())
-                    .map_err(|error| CoreError::Journal(error.to_string()))?;
-            let changes = git
-                .diff_trees(&repository, &target_tree, &baseline_tree)
-                .await
-                .map_err(|error| CoreError::Journal(error.to_string()))?;
-            Ok(changes
-                .into_iter()
-                .flat_map(|change| {
-                    [
-                        Some(change.path().to_path_buf()),
-                        change.previous_path().map(PathBuf::from),
-                    ]
-                })
-                .flatten()
-                .collect())
         })
     }
 

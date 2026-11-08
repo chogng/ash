@@ -264,6 +264,15 @@ where
                 content,
                 source_url: None,
             },
+            ChatInputItem::ChatReference {
+                name,
+                session_id,
+                thread_id,
+            } => InputItem::ChatReference {
+                name,
+                session_id,
+                thread_id,
+            },
             ChatInputItem::Attachment(attachment) => InputItem::ImageAttachment { attachment },
             ChatInputItem::Text(text) => InputItem::Text { text },
             ChatInputItem::AudioAttachment(attachment) => InputItem::AudioAttachment { attachment },

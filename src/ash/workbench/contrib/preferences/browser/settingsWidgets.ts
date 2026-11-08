@@ -6,8 +6,8 @@ import {
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsWidgets.css';
 import { localize, localize2 } from '../../../../nls.js';
-import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
-import { addDisposableListener, getActiveElement, h, stopEvent } from '../../../../base/browser/dom.js';
+import type { ContextMenuAnchor, IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isElement, stopEvent } from '../../../../base/browser/dom.js';
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -138,6 +138,7 @@ export class SettingsSearchWidget extends Disposable {
 export interface SettingWidgetOptions {
 	readonly configurationOverrides?: IConfigurationOverrides;
 	readonly configurationTarget?: ConfigurationTarget;
+	readonly actionsOnContextMenu?: boolean;
 	readonly onStatus: (message: string, isError: boolean) => void;
 	readonly onOpenSettings?: (key: string) => Promise<void>;
 	readonly onRevealSetting?: (key: string) => void;
@@ -153,6 +154,7 @@ export interface SettingWidget extends IDisposable {
 interface SettingActionsOptions {
 	readonly reference: SettingReference;
 	readonly canReset: () => boolean;
+	readonly actionsOnContextMenu?: boolean;
 	readonly onError: (error: unknown) => void;
 	readonly copySettingAsJSON?: () => string;
 	readonly editInJSON?: () => Promise<void>;
@@ -183,6 +185,16 @@ class SettingActions extends Disposable {
 		container.dataset.settingsItemKind = 'setting';
 		container.classList.add('ash-setting-item');
 		container.prepend(this.actionsDomNode);
+		if (options.actionsOnContextMenu) {
+			this._register(addDisposableListener(container, 'contextmenu', (event: MouseEvent) => {
+				if (event.defaultPrevented || (isElement(event.target) && event.target.closest('input, textarea, a, [contenteditable]'))) return;
+				stopEvent(event);
+				const anchor = event.clientX || event.clientY
+					? { x: event.clientX, y: event.clientY, targetWindow: getWindow(container) }
+					: container;
+				this.show(anchor);
+			}));
+		}
 		this._register(toDisposable(() => {
 			container.classList.remove('ash-setting-item');
 			this.actionsDomNode.remove();
@@ -196,7 +208,7 @@ class SettingActions extends Disposable {
 		this.trigger.domNode.setAttribute('aria-label', actionLabel);
 	}
 
-	private show(): void {
+	private show(anchor: ContextMenuAnchor = this.trigger.domNode): void {
 		if (this.actionsDomNode.classList.contains('is-open')) return;
 		const actions: IAction[] = [
 			{
@@ -235,7 +247,7 @@ class SettingActions extends Disposable {
 		this.setOpen(true);
 		try {
 			this.contextMenuService.showContextMenu({
-				getAnchor: () => this.trigger.domNode,
+				getAnchor: () => anchor,
 				getActions: () => actions,
 				onHide: () => this.setOpen(false),
 			});
@@ -283,7 +295,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.domNode.className = `ash-configuration-setting ash-${this.presentation}-setting`;
 		this.domNode.setAttribute('role', 'group');
 		if (kind === 'select' && this.presentation === 'editor') this.domNode.classList.add('ash-editor-setting-select-row');
-		if (kind === 'toggle') this.domNode.classList.add(`ash-${this.presentation}-toggle-setting`);
+		if (kind === 'toggle') this.domNode.classList.add('ash-configuration-toggle-setting');
 		this._register(toDisposable(() => this.domNode.remove()));
 
 		this.copyDomNode = h(document, 'span');
@@ -309,6 +321,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 					reset: () => this.resetSetting(),
 				},
 				canReset: () => !this.hasPolicyValue,
+				actionsOnContextMenu: options.actionsOnContextMenu,
 				editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
 				onError: (error: unknown) => this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 				copySettingAsJSON: descriptor.binding ? undefined : () => {
@@ -459,13 +472,11 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService, 'toggle');
+		this.domNode.append(this.copyDomNode);
 		this.toggle = this._register(new Switch(this.domNode, {
 			...defaultToggleStyles,
 			ariaLabel: descriptor.title,
-			content: this.copyDomNode,
-			contentPlacement: 'before-control',
 		}));
-		this.toggle.element.classList.add(`ash-${this.presentation}-toggle-control`);
 		this.toggle.input.dataset.configurationKey = descriptor.configuration.key;
 		this.bindState(state => {
 			this.toggle.checked = state.value;
@@ -727,7 +738,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 					this.input.focus();
 					this.input.select();
 				} else {
-					void this.updateSetting(this.model.state.defaultValue);
+					void this.updateSetting(value === 'default' ? this.model.state.defaultValue : value);
 				}
 			}));
 		} else {
@@ -751,20 +762,24 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 		this.input.value = state.value;
 		this.input.disabled = state.isPending || this.hasPolicyValue;
 		if (!this.fontMode) return;
-		const isDefaultFont = state.value === state.defaultValue;
+		const isDefaultFont = state.value === state.defaultValue || !state.value.trim();
 		// This is a projection of the CSS family list; the configuration keeps its original value.
-		const firstFamily = state.defaultValue.match(/^(?:"([^"]+)"|'([^']+)'|([^,]+))/u);
+		const firstFamily = state.defaultValue === 'default' ? undefined : state.defaultValue.match(/^(?:"([^"]+)"|'([^']+)'|([^,]+))/u);
 		let family = (firstFamily?.[1] ?? firstFamily?.[2] ?? firstFamily?.[3] ?? '').trim();
 		if (family === 'system-ui') family = isWindows ? 'Segoe UI' : localize({ bundle: 'ash.settings', key: 'font.systemUI' }, 'System UI');
 		if (family === 'ui-monospace') family = localize({ bundle: 'ash.settings', key: 'font.monospace' }, 'Monospace');
+		const bundledFonts = (this.descriptor.configuration.schema?.examples ?? [])
+			.filter((example): example is string => typeof example === 'string');
+		const mode = isDefaultFont ? 'default' : bundledFonts.includes(state.value) ? state.value : 'custom';
 		const choices = [
 			{ value: 'default', label: family ? localize({ bundle: 'ash.settings', key: 'font.system' }, 'System ({0})', family) : this.descriptor.placeholder },
+			...bundledFonts.map(font => ({ value: font, label: font })),
 			{ value: 'custom', label: localize({ bundle: 'ash.settings', key: 'font.custom' }, 'Custom') },
 		];
 		if (!sameSelectOptions(this.fontMode.options, choices)) this.fontMode.setOptions(choices);
-		this.fontMode.value = isDefaultFont ? 'default' : 'custom';
+		this.fontMode.value = mode;
 		this.fontMode.enabled = !state.isPending && !this.hasPolicyValue;
-		this.input.hidden = isDefaultFont;
+		this.input.hidden = mode !== 'custom';
 	}
 }
 

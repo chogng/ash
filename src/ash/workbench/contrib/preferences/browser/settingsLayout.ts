@@ -3,6 +3,8 @@ import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
+import { AgentsVoiceSettingId } from '../../agentsVoice/common/agentsVoice.js';
+import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../memories/browser/memorySettings.js';
 
 export interface SettingsGroupDescriptor {
 	readonly id: string;
@@ -103,6 +105,7 @@ export const SettingsNavigation = [
 							'workbench.activityBar.autoHide',
 							'workbench.activityBar.badges',
 							'workbench.activityBar.compact',
+							'sessions.showApplicationBadge',
 							'workbench.sideBar.location',
 							'security.workspace.trust.banner',
 							'workbench.panel.defaultLocation',
@@ -216,7 +219,7 @@ export const SettingsNavigation = [
 						id: 'chatgpt',
 						label: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.label' }, 'ChatGPT'),
 						description: localize({ bundle: 'ash.settings', key: 'browser.chatgpt.description' }, 'Configure ChatGPT in this window.'),
-						settings: ['sessions.chatgpt.optimizeScrolling'],
+						settings: ['sessions.chatgpt.defaultBackend', 'sessions.chatgpt.optimizeScrolling'],
 					},
 				],
 			},
@@ -381,7 +384,7 @@ export const SettingsNavigation = [
 						id: 'file-opening',
 						label: localize('settings.editor.fileOpening.label', 'File opening'),
 						description: localize('settings.editor.fileOpening.description', 'Choose how files open and how opening failures are reported.'),
-						settings: ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation', 'workbench.editor.defaultNewDocumentEditor'],
+						settings: ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation', 'workbench.editor.defaultNewDocumentEditor', 'sessions.docs.editor'],
 					},
 					{
 						id: 'files',
@@ -645,6 +648,8 @@ export const SettingsNavigation = [
 							'chat.disableAIFeatures',
 							'chat.requestQueuing.defaultAction',
 							'chat.tools.autoExpandFailures',
+							'chat.notifyWindowOnConfirmation',
+							'chat.notifyWindowOnResponseReceived',
 							'sessions.automations.notifyOnSuccess',
 							'task.allowAutomaticTasks',
 						],
@@ -705,13 +710,25 @@ export const SettingsNavigation = [
 				description: '',
 				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion', 'commit', 'commit message'],
 				presentation: 'general',
-				groups: [],
+				groups: [{
+					id: 'agent-voice-model',
+					label: localize('agentsVoice.model.title', 'Voice model'),
+					description: '',
+					settings: [AgentsVoiceSettingId.Model],
+				}],
 			},
 			{
 				id: 'teams',
 				label: localize({ bundle: 'ash.settings', key: 'categories.teams.label' }, 'Teams'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.teams.description' }, 'Compose reusable multi-agent teams with explicit members, roles, and coordination.'),
 				keywords: ['multi-agent', 'team mode', 'members', 'roles', 'coordination'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: MEMORY_SETTINGS_CATEGORY,
+				label: memorySettingsTitle(),
+				description: '',
 				presentation: 'general',
 				groups: [],
 			},

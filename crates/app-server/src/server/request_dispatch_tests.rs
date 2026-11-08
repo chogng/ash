@@ -105,7 +105,7 @@ fn stalled_extension_packages_queries_leave_state_changes_available() {
                 Arc::clone(&server),
                 &connection,
                 json!({"jsonrpc":"2.0", "id":4, "method":"session/create", "params":{
-                    "commandId":"catalog-independent-session", "title":"ready", "executionTarget":null,
+                    "commandId":"catalog-independent-session", "title":"ready", "kind":"code", "executionTarget":null,
                 }}).to_string(),
                 move |response| {
                     completed.send(response).unwrap();
@@ -617,7 +617,7 @@ fn jsonl_keeps_a_mutation_response_before_its_causal_notifications() {
     client.send(
         3,
         "session/create",
-        json!({"commandId":"causal-session", "title":"causal", "executionTarget":null}),
+        json!({"commandId":"causal-session", "title":"causal", "kind":"code", "executionTarget":null}),
     );
     let response = client.read();
     assert_eq!(response["id"], 3);
@@ -719,7 +719,7 @@ fn response_backpressure_releases_resources_used_by_other_connections() {
             let requests = RequestDispatcher::start(scope).unwrap();
             requests.dispatch(Arc::clone(&serving), &connection,
                 json!({"jsonrpc":"2.0", "id":2, "method":"session/create", "params":{
-                    "commandId":"slow-writer-session", "title":"slow writer", "executionTarget":null,
+                    "commandId":"slow-writer-session", "title":"slow writer", "kind":"code", "executionTarget":null,
                 }}).to_string(),
             move |response| {
                 started.send(serde_json::from_str::<Value>(&response).unwrap()).unwrap();

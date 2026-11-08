@@ -41,6 +41,17 @@ import { browserEnvironment } from '../../../../../editor/test/browser/testEdito
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
+import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
+import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
+import { getChatInputAccessibilityHelp } from '../../browser/actions/chatAccessibilityHelp.js';
+import { ChatCopyActionRendering } from '../../browser/actions/chatCopyActions.js';
+import { agentHostTurnDirectory } from '../../../../../sessions/common/agentHostSessionWorkspace.js';
+import type { Turn } from '../../../../services/chat/common/chatService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -101,6 +112,96 @@ test('Chat exposes explicit file references as streamed destinations complete', 
 		{ resource: URI.parse('file:///workspace/src/main.ts') },
 		{ selection: new Range(12, 1, 12, 1) },
 	]);
+});
+
+test('Chat opens explicit and plain-text file references at the correct line in each Git worktree', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-chat-references-'));
+	try {
+		const repository = join(root, 'repository');
+		const git = (...args: string[]) => execFileSync('git', ['-C', repository, ...args], { stdio: 'pipe' });
+		await mkdir(join(repository, 'src'), { recursive: true });
+		await writeFile(join(repository, 'src/suite.rs'), 'first line\nsecond line\nthird line\n');
+		git('init');
+		git('add', '.');
+		git('-c', 'commit.gpgsign=false', '-c', 'user.name=Ash Test', '-c', 'user.email=ash@example.invalid', 'commit', '-m', 'Seed test repository');
+		const first = join(root, 'first');
+		const second = join(root, 'second');
+		git('worktree', 'add', '--detach', first);
+		git('worktree', 'add', '--detach', second);
+		await mkdir(join(second, 'other'));
+		await writeFile(join(second, 'other/suite.rs'), 'another match');
+		await writeFile(join(second, 'src/last.rs'), 'last search match');
+		await writeFile(join(first, 'src/suite.rs'), 'first checkout\nsecond line\nthird line\n');
+		await writeFile(join(second, 'src/suite.rs'), 'second checkout\nsecond line\nthird line\n');
+
+		using resources = new DisposableStore();
+		const workbench = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(workbench.createChild());
+		const files = resources.add(new FileService());
+		resources.add(files.registerProvider('file', resources.add(new DiskFileSystemProvider([URI.file(first), URI.file(second)]))));
+		services.registerInstance(IFileService, files);
+		services.registerInstance(IFileSearchService, new BrowserFileSearchService(files));
+		const openEditor = mock.fn<IEditorService['openEditor']>(async () => { });
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {
+			onDidRequestLink: (target: string) => { void openChatMarkdownLink(target, undefined, { openEditor }); },
+		});
+		const entries: ThreadTranscriptEntry[] = [
+			{
+				type: 'item', entryId: 'first', turnId: 'one', transient: false, item: {
+					type: 'agentMessage', itemId: 'first', turnId: 'one',
+					text: '[first](src/suite.rs#L2) and `src/suite.rs:3` or suite.rs:2.',
+				}
+			},
+			{
+				type: 'item', entryId: 'second', turnId: 'two', transient: false, item: {
+					type: 'agentMessage', itemId: 'second', turnId: 'two',
+					text: '[second](src/suite.rs#L3), [missing](missing/suite.rs#L2), `suite.rs`, `Command::output()`, and last.rs.',
+				}
+			},
+		];
+		const turns = [
+			{ turnId: 'one', directory: { type: 'local', root: first } },
+			{ turnId: 'two', directory: { type: 'local', root: second } },
+		] as const;
+		const zero = { reported: 0, complete: true };
+		const history: Turn[] = turns.map(turn => ({
+			...turn, status: 'completed', mode: 'agent', approvalMode: 'manual', items: [],
+			usage: { modelInvocations: 0, inputTokens: zero, outputTokens: zero, cachedInputTokens: zero, cacheWriteInputTokens: zero, cacheReadInputTokens: zero, reasoningTokens: zero },
+		}));
+		const replies = chatTranscriptListItems(entries, 'two', history, {
+			sessionId: 'session', threadId: 'thread',
+			directoryForTurn: turn => agentHostTurnDirectory('session', turn.directory),
+		});
+		widget.render(replies.map(reply => ({ ...reply, transient: true })));
+		assert.equal(widget.element.querySelector('a[href^="file:"]'), null);
+		widget.render(replies);
+
+		const ready = new DeferredPromise<void>();
+		const resolved = () => {
+			if (widget.element.querySelectorAll('a[href^="file:"]').length === 5) void ready.complete();
+		};
+		const observer = new document.defaultView!.MutationObserver(resolved);
+		observer.observe(widget.element, { subtree: true, childList: true, attributes: true });
+		try { resolved(); await ready.p; }
+		finally { observer.disconnect(); }
+
+		const firstReply = widget.element.querySelector('[data-item-id="first"]')!;
+		const secondReply = widget.element.querySelector('[data-item-id="second"]')!;
+		assert.deepEqual([...firstReply.querySelectorAll('a[href]')].map(anchor => anchor.textContent), ['first', 'src/suite.rs:3', 'suite.rs:2']);
+		assert.deepEqual([...secondReply.querySelectorAll('a[href]')].map(anchor => anchor.textContent), ['second', 'last.rs']);
+		assert.deepEqual([...secondReply.querySelectorAll('code')].map(code => code.textContent), ['suite.rs', 'Command::output()']);
+		assert.equal(secondReply.querySelector('a:not([href])')?.textContent, 'missing');
+		secondReply.querySelector<HTMLAnchorElement>('a[href]')!.click();
+		for (const anchor of firstReply.querySelectorAll<HTMLAnchorElement>('a[href]')) anchor.click();
+		assert.deepEqual(openEditor.mock.calls.map(call => call.arguments), [
+			[{ resource: URI.file(join(second, 'src/suite.rs')) }, { selection: new Range(3, 1, 3, 1) }],
+			[{ resource: URI.file(join(first, 'src/suite.rs')) }, { selection: new Range(2, 1, 2, 1) }],
+			[{ resource: URI.file(join(first, 'src/suite.rs')) }, { selection: new Range(3, 1, 3, 1) }],
+			[{ resource: URI.file(join(first, 'src/suite.rs')) }, { selection: new Range(2, 1, 2, 1) }],
+		]);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });
 
 test('Workbench and Cowork tips use injected Markdown opening and preserve dismissal', () => {
@@ -318,6 +419,18 @@ test('streaming tool content preserves disclosure focus, failure state and resto
 	assert.equal(disclosure.isConnected, false);
 });
 
+test('Skill activity uses the Chinese locale', () => {
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	try {
+		const items = chatTranscriptListItems([
+			{ type: 'skillLoad', entryId: 'one', turnId: 'turn', skill: { name: 'review', source: 'project', reason: 'explicit' } },
+			{ type: 'skillLoad', entryId: 'two', turnId: 'turn', skill: { name: 'design', source: 'built-in', reason: 'automatic' } },
+		]);
+		assert.deepEqual(items.map(item => [item.label, item.text]), [['已加载 Skill · review', '手动指定'], ['已加载 Skill · design', '自动选中']]);
+		assert.match(getChatInputAccessibilityHelp('', false, false), /查看已加载的 Skill/u);
+	} finally { resetNlsResolver(); }
+});
+
 test('tool invocation summaries and sections use the Chinese locale', () => {
 	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 	try {
@@ -328,6 +441,7 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 		assert.equal(widget.element.querySelector('summary')!.textContent, 'read · 等待结果');
 		assert.match(widget.element.textContent!, /输入\n\{\}/);
 		assert.equal(widget.element.querySelector('[role="log"]')!.getAttribute('aria-label'), '聊天记录');
+		assert.match(getChatInputAccessibilityHelp('', false, false), /按 Tab 聚焦回复中的文件链接，按 Enter 打开文件并跳到引用的行/u);
 	} finally { resetNlsResolver(); }
 });
 
@@ -435,21 +549,26 @@ test('streamed memory references retain their buttons, code editor and focus as 
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestMemoryReference: (value: string) => opened.push(value) });
 	document.body.append(widget.element);
 	resources.add(toDisposable(() => widget.element.remove()));
-	const text = 'memory:first\n\n```ts\nconst a = 1;\n```';
+	const reference = (memoryId: string, namespace?: 'code') => `memory:${Buffer.from(JSON.stringify({
+		namespace, memoryId, scope: { type: 'profile' }, revision: 1, startByte: 0, endByte: 1,
+	})).toString('base64url')}`;
+	const firstReference = reference('first', 'code');
+	const secondReference = reference('second', 'code');
+	const text = [reference('old'), firstReference, '```ts\nconst a = 1;\n```'].join('\n\n');
 	widget.render([{ id: 'reply', type: 'agentMessage', text, transient: true }]);
 	const code = widget.element.querySelector('.ash-chat-code-block')!;
 	const button = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 1')!;
 	button.focus();
-	widget.render([{ id: 'reply', type: 'agentMessage', text: text + '\n\nmemory:second', transient: false }]);
+	widget.render([{ id: 'reply', type: 'agentMessage', text: text + '\n\n' + secondReference, transient: false }]);
 	assert.equal(widget.element.querySelector('.ash-chat-code-block'), code);
 	assert.equal(document.activeElement, button);
 	button.click();
 	const second = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 2')!;
 	second.click();
-	assert.deepEqual(opened, ['memory:first', 'memory:second']);
+	assert.deepEqual(opened, [firstReference, secondReference]);
 	widget.render([]);
 	button.click();
-	assert.deepEqual(opened, ['memory:first', 'memory:second']);
+	assert.deepEqual(opened, [firstReference, secondReference]);
 });
 
 
@@ -549,6 +668,7 @@ test('a saved pull request context opens the original PR above the first message
 });
 
 suite('Chat message copy ownership', () => {
+	suiteSetup(() => { getWindows(); });
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('the actual row command copies current raw text and releases feedback after removal', async () => {
 		using resources = new DisposableStore();
@@ -560,17 +680,31 @@ suite('Chat message copy ownership', () => {
 		}());
 		parent.registerInstance(IClipboardService, clipboard);
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources, parent)));
+		resources.add(services.createInstance(ChatCopyActionRendering));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
-		document.body.append(widget.element); widget.setVisible(true);
+		document.body.append(widget.element);
+		resources.add(toDisposable(() => widget.element.remove()));
+		widget.setVisible(true);
 		widget.render([{ id: 'response', type: 'agentMessage', text: '**first**', transient: true }]);
 		widget.render([{ id: 'response', type: 'agentMessage', text: '**first** and second\n\n[link](https://example.com)', transient: false }]);
-		const button = widget.element.querySelector<HTMLButtonElement>('.ash-chat-message-actions button')!;
-		button.click(); assert.equal(await entered.p, '**first** and second\n\n[link](https://example.com)');
-		button.click(); assert.equal(writes, 1);
-		widget.render([]); await completed.complete(); await Promise.resolve();
-		assert.equal(button.isConnected, false); assert.equal(widget.element.querySelectorAll('.ash-chat-message-actions').length, 0);
-		button.click(); assert.equal(writes, 1);
-		widget.element.remove();
+		const actions = widget.element.querySelector('.ash-chat-message-actions')!;
+		const button = actions.querySelector<HTMLButtonElement>('button[aria-label="Copy message"]')!;
+		const feedback = actions.querySelector('[role="status"]');
+		assert.ok(feedback);
+		try {
+			button.click();
+			assert.equal(await entered.p, '**first** and second\n\n[link](https://example.com)');
+			assert.equal(button.getAttribute('aria-busy'), 'true');
+			button.click();
+			assert.equal(writes, 1);
+		} finally {
+			widget.render([]);
+			await completed.complete();
+		}
+		assert.equal(feedback.isConnected, false);
+		assert.equal(button.isConnected, false);
+		button.click();
+		assert.equal(writes, 1);
 	});
 });
 
@@ -610,6 +744,56 @@ suite('chatRenderer browser component', () => {
 		{ id: 'media', type: 'agentMessage', text: 'Delayed media.', content: [image], attachmentSource: source, transient: false },
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({ id: `reading-${index}`, type: 'agentMessage', text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'), transient: false })),
 	];
+
+	test('Skill loads stay in the activity and appear once in the completed reply toolbar', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const skillEntries: ThreadTranscriptEntry[] = [
+			{ type: 'skillLoad', entryId: 'review-load', turnId: 'skill-turn', skill: { name: 'review', source: 'project', reason: 'explicit' } },
+			{ type: 'skillLoad', entryId: 'design-load', turnId: 'skill-turn', skill: { name: 'design', source: 'built-in', reason: 'automatic' } },
+		];
+		const replies: ThreadTranscriptEntry[] = ['partial', 'final'].map(id => ({
+			type: 'item', entryId: id, turnId: 'skill-turn', transient: false,
+			item: { type: 'agentMessage', itemId: id, turnId: 'skill-turn', text: id },
+		}));
+		const zero = { reported: 0, complete: true };
+		const turn: Turn = {
+			turnId: 'skill-turn', status: 'running', mode: 'agent', approvalMode: 'manual', items: [],
+			usage: { modelInvocations: 0, inputTokens: zero, outputTokens: zero, cachedInputTokens: zero, cacheWriteInputTokens: zero, reasoningTokens: zero },
+		};
+		const source = { sessionId: 'session', threadId: 'thread' };
+		const entries = [...skillEntries, ...replies];
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), chatTranscriptListItems(entries, turn.turnId, [turn], source));
+		const activity = page.getByText('Loaded Skill · review · Manually selected', { exact: true });
+		const trigger = page.getByRole('button', { name: 'View loaded Skills (2)', exact: true });
+		await expect(activity).toBeVisible();
+		await expect(trigger).toHaveCount(0);
+
+		const completed = chatTranscriptListItems(entries, turn.turnId, [{ ...turn, status: 'completed' }], source);
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), completed);
+		await expect(trigger).toHaveCount(1);
+		await expect(trigger.getByText('2', { exact: true })).toBeVisible();
+		const footer = page.locator('[data-item-id="final"] .ash-chat-message-actions');
+		await expect(footer.getByRole('button', { name: 'View loaded Skills (2)', exact: true })).toBeVisible();
+		const buttons = await footer.getByRole('button').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')));
+		const index = buttons.indexOf('View loaded Skills (2)');
+		assert.equal(buttons[index - 1], 'Copy Conversation Link');
+		assert.equal(buttons[index + 1], 'More Actions');
+		await trigger.focus();
+		await page.keyboard.press('Enter');
+		const details = page.getByRole('dialog', { name: 'Skills loaded in this turn' });
+		await expect(details.getByRole('listitem')).toHaveText(['review · Manually selected', 'design · Automatically selected']);
+		await page.keyboard.press('Escape');
+		await expect(details).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+
+		await page.evaluate(items => {
+			window.ashChatTranscriptIntegration.renderItems([]);
+			window.ashChatTranscriptIntegration.renderItems(items);
+		}, completed);
+		await expect(activity).toBeVisible();
+		await expect(trigger).toBeVisible();
+	});
 
 	for (const cowork of [false, true]) {
 		for (const theme of ['light', 'dark', 'hc', 'hcLight'] as const) {

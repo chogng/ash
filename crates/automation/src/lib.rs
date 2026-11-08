@@ -10,6 +10,7 @@ pub use runtime::now;
 pub use schedule::next_occurrence;
 pub use schedule::preview_occurrences;
 pub use schedule::validate_definition;
+pub use store::AutomationScope;
 pub use store::AutomationStore;
 pub use store::AutomationWrite;
 
@@ -27,6 +28,8 @@ pub enum AutomationError {
     CommandConflict,
     #[error("automation storage: {0}")]
     Storage(#[from] rusqlite::Error),
+    #[error("automation storage initialization: {0}")]
+    StorageInitialization(String),
     #[error("automation record: {0}")]
     Record(#[from] serde_json::Error),
     #[error("automation storage lock is poisoned")]

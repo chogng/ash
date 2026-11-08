@@ -1,4 +1,5 @@
 import '../../../../../contrib/chat/browser/chat.shared.contribution.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../../../../contrib/chat/browser/agentSessions/sessionSummaryHoverService.js';
 import { createCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -80,6 +81,7 @@ services.registerInstance(ITelemetryService, NullTelemetryService);
 services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 services.registerSingleton(IDataChannelService, () => new DataChannelService());
 services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
+services.registerSingleton(ISessionSummaryHoverService, () => services.createInstance(SessionSummaryHoverService));
 const bridge = resources.add(services.createInstance(MainThreadDataChannels, 1_000));
 await bridge.start();
 const editorServices = createCodeEditorServices(resources, services);

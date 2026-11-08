@@ -13,6 +13,20 @@ import { captureTerminalAttachment } from '../../../terminal/browser/chatTermina
 import { ITerminalService, type ITerminalView } from '../../../terminal/browser/terminal.js';
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
+import { TerminalChatCommandId } from '../../../terminal/terminalContribChatExports.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { isObject } from '../../../../../base/common/types.js';
+
+CommandsRegistry.register(TerminalChatCommandId.RevealAgentCommand, (accessor, target, takeInput) => {
+	if (!isObject(target) || !('sessionId' in target) || typeof target.sessionId !== 'string'
+		|| !('threadId' in target) || typeof target.threadId !== 'string'
+		|| !('toolCallId' in target) || typeof target.toolCallId !== 'string'
+		|| !('commandSessionId' in target) || typeof target.commandSessionId !== 'string'
+		|| typeof takeInput !== 'boolean') throw new TypeError('Invalid Agent command terminal target');
+	const terminals = accessor.get(ITerminalService);
+	if (!terminals.revealAgentCommand) throw new Error('Agent command terminals are unavailable');
+	return terminals.revealAgentCommand({ sessionId: target.sessionId, threadId: target.threadId, toolCallId: target.toolCallId, commandSessionId: target.commandSessionId }, takeInput);
+});
 
 /** The session's existing composer owns the draft, attachments and later submission. */
 registerAction2(class TerminalChatStartAction extends Action2 {

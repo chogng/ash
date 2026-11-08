@@ -19,7 +19,7 @@ import { createAppServerResourceApi, readAppServerResource } from './appServerAp
 import { Event } from '../../../base/common/event.js';
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agent.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
-import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
+import { AgentThreadHistoryAnchorError, AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
 	ContentPart as ContentPartDto,
@@ -304,7 +304,7 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 			return {
 				...toSessionResult(result, remoteHost),
 				threadSnapshots: result.threadProjections.map((snapshot) => {
-					const thread = toThread(snapshot.thread);
+					const thread = toThread(snapshot.thread, remoteHost);
 					return {
 						thread,
 						directory: toExecutionTarget(snapshot.directory, remoteHost),
@@ -558,9 +558,16 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 			}
 		},
 		read: async (params) => {
-			const result = await appServerRequest(connection, 'session/thread/read', params);
-			const thread = toThread(result.thread);
-			return { thread, directory: toExecutionTarget(result.directory, remoteHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
+			try {
+				const result = await appServerRequest(connection, 'session/thread/read', params);
+				const thread = toThread(result.thread, remoteHost);
+				return { thread, directory: toExecutionTarget(result.directory, remoteHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
+			} catch (error) {
+				if (params.history?.type === 'before' && error instanceof AppServerRemoteError && error.errorName === 'InvalidParams') {
+					throw new AgentThreadHistoryAnchorError(error.message, { cause: error });
+				}
+				throw error;
+			}
 		},
 		configureAdvisor: async (params) => {
 			const result = await appServerRequest(
@@ -579,7 +586,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		},
 		subscribe: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/subscribe', params);
-			const thread = toThread(result.thread);
+			const thread = toThread(result.thread, remoteHost);
 			return {
 				thread,
 				directory: toExecutionTarget(result.directory, remoteHost),
@@ -749,7 +756,7 @@ function turnInteractionResolveResult(result: SessionRequestResult): TurnInterac
 	return result.value;
 }
 
-function toThread(thread: ThreadDto): Thread {
+function toThread(thread: ThreadDto, remoteHost?: string | { readonly authority: string; }): Thread {
 	return {
 		agentId: thread.agentId,
 		origin:
@@ -779,6 +786,7 @@ function toThread(thread: ThreadDto): Thread {
 		},
 		turns: thread.turns.map((turn) => ({
 			turnId: turn.turnId,
+			directory: toExecutionTarget(turn.directory, remoteHost),
 			kind: turn.kind,
 			status: turn.status,
 			mode: turn.mode,
@@ -827,6 +835,7 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 						reason: request.request.reason,
 						allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined,
 						command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command,
+						sessionCommandPrefix: request.request.sessionCommandPrefix ? { ...request.request.sessionCommandPrefix, arguments: [...request.request.sessionCommandPrefix.arguments] } : request.request.sessionCommandPrefix,
 						sandboxDenial: request.request.sandboxDenial ? structuredClone(request.request.sandboxDenial) : request.request.sandboxDenial,
 						riskAssessment: request.request.riskAssessment ? { riskLevel: request.request.riskAssessment.riskLevel, reason: request.request.riskAssessment.reason } : request.request.riskAssessment,
 						capabilities: request.request.capabilities.map(capability => ({ ...capability })),
@@ -931,6 +940,11 @@ function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): Th
 function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscriptEntry {
 	switch (entry.type) {
 		case 'voiceTranscript': return { type: 'voiceTranscript', entryId: entry.entryId, transcript: { itemId: entry.transcript.itemId, voiceSessionId: entry.transcript.voiceSessionId, mediaEpoch: entry.transcript.mediaEpoch, speaker: entry.transcript.speaker, text: entry.transcript.text, startMs: entry.transcript.startMs, endMs: entry.transcript.endMs, afterItemId: entry.transcript.afterItemId } };
+		case 'skillLoad':
+			return {
+				type: 'skillLoad', entryId: entry.entryId, turnId: entry.turnId,
+				skill: { name: entry.skill.id.name, source: entry.skill.id.source, reason: entry.skill.reason },
+			};
 		case 'hookRun':
 			return {
 				type: 'hookRun',
@@ -1068,7 +1082,7 @@ function toSessionResult(result: SessionResultDto, remoteHost?: string | { reado
 function toAgentSession(session: SessionDto, remoteHost?: string | { readonly authority: string; }): AgentSession {
 	return {
 		sessionId: session.sessionId,
-		...(session.surface ? { surface: session.surface } : {}),
+		kind: session.kind,
 		...(session.source ? { source: session.source } : {}),
 		title: session.title,
 		status: session.status,

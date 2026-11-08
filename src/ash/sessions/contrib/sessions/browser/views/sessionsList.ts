@@ -1,72 +1,94 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { CodeConversationPageContext, SessionsMenuActiveConversationContext } from '../../../../common/contextkeys.js';
+import { CodeConversationPageContext, SessionsMenuActiveConversationContext, SessionsMenuCanMoveConversationContext, SessionsMenuCanSetFolderContext, SessionsMenuConversationPinnedContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { COPY_PATH_COMMAND_ID } from '../../../../../workbench/contrib/files/browser/fileConstants.js';
+import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
-import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
+import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE, pickProjectAppearance } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
-import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
+import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
+import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
-import { AbstractDisposable, Disposable, DisposableMap, type DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { MOVE_CHAT_TO_SESSION_ACTION_ID } from '../sessionsActions.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { Event } from '../../../../../base/common/event.js';
+import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { getFlatContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
 import { getSessionsListEntries, sessionSortTime } from './sessionsListFilters.js';
-import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization } from './sessionsListActions.js';
+import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization, type SessionListProjectOrganization } from './sessionsListActions.js';
 import { SessionsListSearch } from './sessionsListSearch.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { OPEN_SESSION_COMPARISON_COMMAND_ID } from '../../../../services/sessions/common/sessionComparison.js';
 import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
-import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import { sessionExecutionWorkspace, type IChat, type ISession, type SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
-import { autorun, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
+import { autorun, derived, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
 import { IMenuService, SubmenuItemAction, type MenuId } from '../../../../../platform/actions/common/actions.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { WebAppServerUnavailableError } from '../../../../../platform/agentHost/browser/disconnectedAppServer.js';
+import { ILogService } from '../../../../../platform/log/common/log.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../../platform/contextview/browser/contextView.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
+import { IProjectsService } from '../../../projects/browser/projectsService.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
-import { defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
-import type { SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogRow } from './sessionsCatalogList.js';
-import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
-import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectAppearance, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
+import { DeferredPromise, raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
-import { createSessionItemActions } from '../../../../browser/agentSessionsModel.js';
+import { createSessionItemActions, getSessionWorkspaceMenuState } from '../../../../browser/agentSessionsModel.js';
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
-import { createSessionSummaryHover, getSessionSummaryHoverData } from '../sessionHoverContent.js';
+import { createSessionPreviewHover, loadSessionHoverBranch } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
 import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
 import { DragAndDropDataKind } from '../../../../../base/browser/ui/dnd/dnd.js';
 import { ObjectTreeElementCollapseState, type TreeDragAndDrop, type TreeDragData } from '../../../../../base/browser/ui/tree/tree.js';
 import type { URI } from '../../../../../base/common/uri.js';
+import { IBlockedSessionsIndicatorService, type IBlockedSession } from '../blockedSessionsIndicatorModel.js';
+
+const attentionSection = 'attention';
+const codeFolderProjectMigrationKey = 'sessions.code.folderProjectsMigrated';
+const createCodeProjectAction = 'sessions.list.createCodeProject';
+
+type ProjectMenuRow = Pick<SessionListItem, 'domNode' | 'button' | 'getMenuTrigger' | 'setMenuVisible'>;
 
 interface SessionBucket {
 	readonly id: string;
@@ -91,6 +113,7 @@ const codeManagementIcons: typeof managementIcons = {
 };
 
 export type SessionsListPresentation = 'chat' | 'code'
+	| { readonly createProject: () => Promise<void>; }
 	| { readonly openCommand: string; readonly activeContext: string; }
 	| { readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility; };
 
@@ -212,15 +235,19 @@ export class SessionsList extends DomWidget {
 	private readonly repositoryGroups = new Map<string, SessionBucket | undefined>();
 	private readonly repositoryLookup = new MutableDisposable<CancellationTokenSource>();
 	private projectLoad = 0;
+	private migratingCodeFolderProjects = false;
 	private projectsFailed = false;
 	private projectsLoading = false;
+	private readonly projectLoadNotice = this._register(new MutableDisposable());
 	private readonly empty: HTMLParagraphElement;
-	private readonly projectError: HTMLButtonElement;
 	private readonly catalog: SessionsCatalogListInput | undefined;
+	private readonly menuContext: IScopedContextKeyService | undefined;
+	private readonly attention: IObservable<ReadonlyMap<string, IBlockedSession>>;
 	private readonly catalogViewport: HTMLElement | null | undefined;
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
 	private readonly catalogMenu = this._register(new MutableDisposable());
-	private readonly catalogProjects = new Map<string, { readonly load: () => void; readonly anchor?: HTMLElement; }>();
+	private readonly projectRename = this._register(new MutableDisposable());
+	private readonly catalogProjects = new Map<string, { readonly load?: () => void; readonly anchor?: HTMLElement; }>();
 	private readonly catalogPaging = this._register(new RunOnceScheduler(() => {
 		if (!this.domNode.isConnected || !this.domNode.clientHeight) return;
 		const viewport = this.catalogViewport;
@@ -231,7 +258,7 @@ export class SessionsList extends DomWidget {
 		for (const [key, project] of this.catalogProjects) {
 			const id = `section:${key}`;
 			const anchor = project.anchor ? SessionsListTree.id(project.anchor) : id;
-			if (this.tree.isCollapsed(id) === false && this.tree.getRelativeTop(anchor) !== null) project.load();
+			if (project.load && this.tree.isCollapsed(id) === false && this.tree.getRelativeTop(anchor) !== null) project.load();
 		}
 	}, 0));
 
@@ -247,10 +274,15 @@ export class SessionsList extends DomWidget {
 		@ICommandService private readonly commands: ICommandService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@ICustomViewService private readonly customViews: ICustomViewService,
-		@IMenuService menus: IMenuService,
+		@IMenuService private readonly menus: IMenuService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
+		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@ILogService private readonly logService: ILogService,
+		@IProjectsService private readonly projectPreferences: IProjectsService,
 		@IContextKeyService private readonly contextKeys?: IContextKeyService,
 		@IHoverService private readonly hoverService?: IHoverService,
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
@@ -260,8 +292,12 @@ export class SessionsList extends DomWidget {
 		super();
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
-		const mode = this.mode = typeof presentation === 'string' ? presentation : contributed ? 'code' : 'chat';
+		const code = typeof presentation !== 'string' && 'createProject' in presentation ? presentation : undefined;
+		const mode = this.mode = typeof presentation === 'string' ? presentation : code ? 'code' : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
+		const showAttention = observableFromEvent(this, listModel.onDidChange, () => !this.entry && listModel.showAttentionGroup);
+		this.attention = derived(reader => new Map(showAttention.read(reader)
+			? indicator.blockedSessions.read(reader).map(alert => [alert.session.sessionId, alert] as const) : []));
 		const nativeLoading = observableFromEvent(this, sessionService.onDidChange, () => sessionService.state === 'loading' && sessionService.sessions.length > 0);
 		this.loading = nativeLoading.map((loading, reader) => loading || !!this.catalog?.snapshot.read(reader).loading);
 		const ownerDocument = container.ownerDocument;
@@ -272,7 +308,7 @@ export class SessionsList extends DomWidget {
 		this.domNode.dataset.mode = mode;
 		const config = configuration ?? this._register(new InMemoryConfigurationService());
 		// Embedded Sessions shares Chat's viewport with the conversation history.
-		this.tree = this._register(new SessionsListTree(this.domNode, title, config, mode, this.entry ? 'external' : 'managed', {
+		this.tree = this._register(new SessionsListTree(this.domNode, title, config, mode === 'code' || !!contributed, this.entry ? 'external' : 'managed', {
 			organization: element => this.getOrganization(element),
 			reference: element => {
 				const target = this.items.get(element.dataset.item ?? '')?.target;
@@ -280,6 +316,7 @@ export class SessionsList extends DomWidget {
 			},
 			canReorder: element => !!element.dataset.sectionOrderId,
 			reorder: (source, target) => {
+				if (target.dataset.parentSection === attentionSection) return undefined;
 				const attribute = source.dataset.rowOrderId ? 'rowOrderId' : 'sectionOrderId';
 				const id = target.dataset[attribute];
 				if (source.dataset[attribute] && id && this.parentOf(source) === this.parentOf(target)) {
@@ -301,7 +338,7 @@ export class SessionsList extends DomWidget {
 			this.tree.element.classList.add('ash-chat-navigation-list');
 			this.catalogViewport = this.list.querySelector(':scope > .ash-scrollbar-viewport');
 		}
-		if (mode === 'code') {
+		if (mode === 'code' || contributed) {
 			this._register(this.tree.onDidChangeSelection(({ browserEvent }) => {
 				// The active conversation owns selection. Tree input can still move focus.
 				if (browserEvent) this.syncTreeSelection();
@@ -317,17 +354,14 @@ export class SessionsList extends DomWidget {
 			const row = [...this.list.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => !button.closest('[hidden]'));
 			row?.focus();
 		}));
-		if (!this.entry) this._register(listModel.registerTree(this.catalog ? 'shared' : mode, () => this.readTree()));
-		if (this.entry && contextKeys) {
-			const keys = new Set([this.entry.activeContext]);
+		if (!this.entry) this._register(listModel.registerTree(mode, () => this.readTree()));
+		const activeContext = this.entry?.activeContext ?? (mode === 'code' ? CodeConversationPageContext.key : undefined);
+		if (activeContext && contextKeys) {
+			const keys = new Set([activeContext]);
 			this._register(contextKeys.onDidChangeContext(event => { if (event.affectsSome(keys)) this.render(); }));
 		}
 		this.empty = h(ownerDocument, 'p');
 		this.empty.className = 'ash-sessions-empty';
-		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
-		this.projectError.type = 'button';
-		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
-		this._register(addDisposableListener(this.projectError, 'click', () => { void this.loadProjects(); }));
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.list, 'keydown', event => {
@@ -344,7 +378,10 @@ export class SessionsList extends DomWidget {
 			if (row) this.tree.reveal(SessionsListTree.id(row));
 			button?.focus({ preventScroll: !!row });
 		}, true));
-		this._register(sessionService.onDidChange(() => this.render()));
+		this._register(sessionService.onDidChange(() => {
+			if (this.shouldMigrateCodeFolderProjects() && !this.projectsFailed) void this.loadProjects();
+			else this.render();
+		}));
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key.startsWith(`sessions.list.${mode}.collapsed.`)
 				|| event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:')) this.render();
@@ -366,10 +403,19 @@ export class SessionsList extends DomWidget {
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
-		const menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
+		const menuContext = this.menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
+		const createProjectLabel = localize('sessions.activity.createProject', 'Create project');
+		const createProject: IAction | undefined = code ? {
+			id: createCodeProjectAction,
+			label: createProjectLabel,
+			tooltip: createProjectLabel,
+			icon: Lxicon.add,
+			enabled: true,
+			run: code.createProject,
+		} : undefined;
 		this.createListToolbar = (container, disposables) => createSessionsListToolbar(
-			container, disposables, menus, contextMenus, notifications, menuContext,
-			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions),
+			container, disposables, menus, contextMenus, menuContext,
+			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions), createProject,
 		);
 		if (contributed) {
 			const { accessibility, catalog } = contributed;
@@ -382,12 +428,6 @@ export class SessionsList extends DomWidget {
 			this._register(this.tree.onDidScroll(() => this.catalogPaging.schedule()));
 			this._register(addDisposableListener(this.list, 'focusin', () => this.catalogPaging.schedule()));
 			this._register(observeResize(this.domNode, () => this.catalogPaging.schedule()));
-			if (contextKeys) {
-				const keys = new Set([CodeConversationPageContext.key]);
-				this._register(contextKeys.onDidChangeContext(event => {
-					if (event.affectsSome(keys)) this.render();
-				}));
-			}
 			this._register(autorun(reader => {
 				catalog.snapshot.read(reader);
 				this.render();
@@ -395,11 +435,15 @@ export class SessionsList extends DomWidget {
 		}
 		this._register(autorun(reader => {
 			customViews.activeCustomView.read(reader);
+			this.attention.read(reader);
+			if (!this.catalog) this.projectPreferences.state.read(reader);
 			this.render();
 		}));
 		this.render();
-		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
-		void this.loadProjects();
+		if (!this.catalog) {
+			this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
+			void this.loadProjects();
+		}
 	}
 
 	private async openRow(open: (options: Parameters<ISessionsService['openSession']>[2]) => Promise<void>): Promise<void> {
@@ -407,7 +451,7 @@ export class SessionsList extends DomWidget {
 			if (this.entry && !this.contextKeys?.getValue(this.entry.activeContext)) {
 				await this.commands.executeCommand(this.entry.openCommand);
 			}
-			if (!this.isDisposed) await open(this.catalog ? { reveal: 'code' } : undefined);
+			if (!this.isDisposed) await open(this.mode === 'code' ? { reveal: 'code' } : undefined);
 		} catch (error) {
 			if (!this.isDisposed) this.notifications.error(String(error));
 		}
@@ -430,21 +474,19 @@ export class SessionsList extends DomWidget {
 			]),
 			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sessionSortActions(model, this.mode)),
 			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
-				choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
-					model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
-				new Separator(),
-				choice('sessions.list.toggleAutomationSessions', localize('sessions.list.showAutomationSessions', 'Show Automation Sessions'),
+				...(!this.entry ? [choice('sessions.list.showAttentionGroup', localize('sessions.list.needsAttention', 'Needs Attention'),
+					model.showAttentionGroup, () => model.setShowAttentionGroup(!model.showAttentionGroup))] : []),
+				...(!this.catalog ? [
+					choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
+						model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
+					new Separator(),
+				] : []),
+				choice('sessions.list.toggleAutomationSessions', localize('sessions.list.showAutomationSessions', 'Show Task Run Conversations'),
 					automation === 'always', () => model.setAutomationSessionsMode(automation === 'always' ? 'never' : 'always')),
-				choice('sessions.list.showAutomationSessionsAfterReply', localize('sessions.list.showAutomationSessionsAfterReply', 'Show Automation Sessions After Reply'),
+				choice('sessions.list.showAutomationSessionsAfterReply', localize('sessions.list.showAutomationSessionsAfterReply', 'Show Task Run Conversations After Reply'),
 					automation === 'afterReply', () => model.setAutomationSessionsMode(automation === 'afterReply' ? 'never' : 'afterReply')),
 			]),
-		], [{
-			id: 'sessions.list.search',
-			label: localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar'),
-			tooltip: '',
-			enabled: true,
-			run: () => this.search.open(),
-		}], [...contributed]);
+		], [...contributed]);
 	}
 
 	focus(): void {
@@ -459,7 +501,7 @@ export class SessionsList extends DomWidget {
 		return { top: this.tree.scrollTop, focus: section ? `section:${section[0]}` : item?.[0] };
 	}
 
-	public closeIconPickers(): void {
+	public closePopups(): void {
 		this.catalogMenu.clear();
 		for (const [, item] of this.items) { item.leadingIcon?.closePicker(); }
 	}
@@ -474,21 +516,110 @@ export class SessionsList extends DomWidget {
 	}
 
 	private async loadProjects(): Promise<void> {
+		// The migration itself publishes Project changes. Refresh once its writes finish.
+		if (this.migratingCodeFolderProjects) return;
 		const generation = ++this.projectLoad;
+		const migrate = this.shouldMigrateCodeFolderProjects();
+		this.migratingCodeFolderProjects = migrate;
 		this.projectsLoading = true;
 		this.render();
 		try {
-			const summaries = await this.projectService.list(this.mode);
-			const projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id, this.mode)));
+			let projects: readonly Project[];
+			if (migrate) {
+				await this.migrateCodeFolderProjects();
+				projects = await readCodeProjects(this.projectService);
+			} else {
+				const summaries = await this.projectService.list(this.mode);
+				projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id, this.mode)));
+			}
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projects = projects.filter(project => !project.archived);
 			this.projectsFailed = false;
-		} catch {
+			this.projectLoadNotice.clear();
+		} catch (error) {
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projectsFailed = true;
+			const cause = error instanceof Error ? error.cause ?? error : error;
+			// A browser host without App Server support has nothing to retry.
+			if (!(cause instanceof WebAppServerUnavailableError)) {
+				this.logService.error('sessions.projects', `Could not load ${this.mode} projects`, cause instanceof Error ? cause : toErrorMessage(cause));
+				this.notifyProjectLoadFailure();
+			}
+		} finally {
+			if (migrate) this.migratingCodeFolderProjects = false;
 		}
 		this.projectsLoading = false;
 		this.render();
+		// Recovery can arrive while this load still owns the migration lock.
+		if (migrate && !this.projectsFailed && this.shouldMigrateCodeFolderProjects()) void this.loadProjects();
+	}
+
+	private notifyProjectLoadFailure(): void {
+		if (this.projectLoadNotice.value) return;
+		const notice = this.notifications.notify({
+			severity: Severity.Error,
+			message: localize('sessions.list.projectsLoadFailed', 'Could not load projects.'),
+			actions: {
+				primary: [{
+					id: `sessions.list.retryProjects.${this.mode}`,
+					label: localize('sessions.list.retryProjects', 'Retry'),
+					tooltip: '',
+					enabled: true,
+					keepOpen: true,
+					run: async () => {
+						if (!this.isDisposed && !this.projectsLoading) await this.loadProjects();
+					},
+				}],
+			},
+		});
+		this.projectLoadNotice.value = toDisposable(() => notice.close());
+		Event.once(notice.onDidClose)(() => this.projectLoadNotice.clear());
+	}
+
+	private shouldMigrateCodeFolderProjects(): boolean {
+		return this.mode === 'code' && this.sessionService.state === 'ready' && this.sessionService.primaryCatalogReady
+			&& !this.storage.getBoolean(codeFolderProjectMigrationKey, StorageScope.PROFILE, false);
+	}
+
+	private async migrateCodeFolderProjects(): Promise<void> {
+		const projects = await readCodeProjects(this.projectService);
+		if (this.isDisposed || !this.shouldMigrateCodeFolderProjects()) return;
+		const organized = new Set([...projects.flatMap(project => project.sessionIds), ...this.groups.groups.flatMap(group => group.sessionIds)]);
+		const folders = new Map<string, { readonly resource: URI; readonly sessionIds: string[]; }>();
+		for (const session of this.sessionService.sessions) {
+			const resource = unassignedCodeFolder(session, organized);
+			if (!resource) continue;
+			const key = workspaceFolderKey(resource);
+			let entry = folders.get(key);
+			if (!entry) folders.set(key, entry = { resource, sessionIds: [] });
+			entry.sessionIds.push(session.sessionId);
+		}
+		for (const [key, { resource, sessionIds }] of folders) {
+			if (this.isDisposed || !this.shouldMigrateCodeFolderProjects()) return;
+			const matching = projects.filter(project => projectFolders(project).some(folder => workspaceFolderKey(folder) === key));
+			if (matching.length && matching.every(project => project.archived)) continue;
+			let project = matching.find(project => !project.archived) ?? await projectForFolder(this.projectService, projects, resource);
+			for (const id of sessionIds) {
+				if (project.sessionIds.includes(id)) continue;
+				try {
+					project = await this.projectService.addSession(project, id);
+				} catch (error) {
+					const current = (await readCodeProjects(this.projectService)).find(candidate => candidate.id === project.id);
+					// Another window may have removed this project, including one replayed by the creation command.
+					if (!current || current.archived) break;
+					if (current.sessionIds.includes(id)) {
+						project = current;
+						continue;
+					}
+					if (current.revision === project.revision) throw error;
+					project = await this.projectService.addSession(current, id);
+				}
+			}
+		}
+		// A removed project or membership stays removed on subsequent opens.
+		if (!this.isDisposed && this.shouldMigrateCodeFolderProjects()) {
+			this.storage.store(codeFolderProjectMigrationKey, true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}
 	}
 
 	private getOrganization(element: HTMLElement): SessionListOrganization | undefined {
@@ -514,27 +645,71 @@ export class SessionsList extends DomWidget {
 		this.catalogMenu.value = toDisposable(() => controller.abort());
 		try {
 			const focus = () => this.tree.focusRow(item.domNode);
-			const actions = await row.getActions(controller.signal, focus);
+			const actions = [...await row.getActions(controller.signal, focus)];
 			if (controller.signal.aborted || !item.domNode.isConnected) return;
-			const button = item.moreButton;
-			item.setMenuVisible(true);
-			this.contextMenus.showContextMenu({
-				getAnchor: () => anchor, getActions: () => actions,
-				autoSelectFirstItem: !!button?.matches(':focus-visible') || anchor === item.domNode.querySelector('.ash-sessions-list-item'),
-				onHide: cancelled => {
-					item.setMenuVisible(false);
-					if (cancelled && button?.isConnected) button.focus({ preventScroll: true });
-				},
-			});
+			const project = row.organization()?.project;
+			if (project) {
+				const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
+				actions.splice(separator < 0 ? actions.length : separator, 0, ...this.projectActions(item, project));
+			}
+			this.showConversationMenu(item, anchor, actions, row.sessionId ? { sessionId: row.sessionId } : { catalogId: row.id }, row.pinned);
 		} catch (error) {
 			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
 		}
 	}
 
+	private projectActions(item: SessionListItem, project: SessionListProjectOrganization): readonly IAction[] {
+		return sessionListProjectActions(this.mode, project, async run => {
+			try {
+				await run();
+			} catch (error) {
+				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
+			} finally {
+				if (!this.isDisposed) this.tree.focusRow(item.domNode);
+			}
+		}, async () => {
+			const name = (await this.quickInput.input({
+				title: localize('sessions.list.newProject', 'New project'),
+				validateInput: async value => {
+					if (!value.trim()) return localize('sessions.list.projectNameRequired', 'Enter a project name.');
+					if (value.trim().length > 200) return localize('sessions.list.projectNameTooLong', 'Use at most {0} characters for the project name.', 200);
+					return undefined;
+				},
+			}))?.trim();
+			return this.isDisposed ? undefined : name;
+		});
+	}
+
+	private showRowMenu(item: SessionListItem, anchor: ContextMenuAnchor,
+		delegate: Omit<IContextMenuMenuDelegate, 'getAnchor' | 'autoSelectFirstItem'>): void {
+		const trigger = item.getMenuTrigger(anchor);
+		this.contextMenus.showContextMenu({
+			...delegate,
+			getAnchor: () => anchor,
+			autoSelectFirstItem: anchor === trigger || !!trigger?.matches(':focus-visible'),
+			getActions: () => {
+				item.setMenuVisible(true);
+				return (delegate.getActions?.() ?? []).map(action => action.id === 'agentSession.archive' ? {
+					...action,
+					run: () => this.feedback.archive(item.domNode, () => action.run()),
+				} : action);
+			},
+			onHide: (cancelled, reason) => {
+				item.setMenuVisible(false);
+				delegate.onHide?.(cancelled, reason);
+				if (reason === ContextViewHideReason.OutsidePointer) {
+					item.dismissMenuFromPointer();
+				} else if (cancelled && trigger?.isConnected) {
+					trigger.focus({ preventScroll: true });
+				}
+			},
+		});
+	}
+
 	private moveOrderedItem(element: HTMLElement, attribute: 'rowOrderId' | 'sectionOrderId', targetId: string): void {
 		const parent = this.parentOf(element);
 		const id = element.dataset[attribute];
-		if (!id) return;
+		if (!id || parent?.element.dataset.section === attentionSection) return;
 		const ids = this.orderedSiblingIds(parent, attribute);
 		if (attribute === 'rowOrderId') {
 			const section = parent?.element.dataset.section ?? '';
@@ -559,7 +734,7 @@ export class SessionsList extends DomWidget {
 		const attribute = kind === 'row' ? 'rowOrderId' : 'sectionOrderId';
 		const id = element.dataset[attribute];
 		const parent = this.parentOf(element);
-		if (!id) {
+		if (!id || parent?.element.dataset.section === attentionSection) {
 			return [];
 		}
 		const ids = this.orderedSiblingIds(parent, attribute);
@@ -580,22 +755,180 @@ export class SessionsList extends DomWidget {
 	private showSectionMenu(section: SessionListSection, group: SessionGroup, anchor: ContextMenuAnchor): void {
 		const actions = this.orderActions(section.domNode, 'section');
 		if (group.kind !== 'comparison') {
-			const appearanceAction = (property: 'icon' | 'color', label: string): IAction => ({
-				id: `${CHANGE_SESSION_GROUP_APPEARANCE}.${property}`,
-				label,
-				tooltip: '',
-				enabled: true,
-				run: () => this.commands.executeCommand(CHANGE_SESSION_GROUP_APPEARANCE, group.sectionId, property)
-					.catch(error => this.notifications.error(String(error))),
-			});
-			actions.push(
-				appearanceAction('icon', localize('sessions.list.changeGroupIcon', 'Change group icon')),
-				appearanceAction('color', localize('sessions.list.changeGroupColor', 'Change group color')),
-			);
+			actions.push(...this.appearanceActions(CHANGE_SESSION_GROUP_APPEARANCE,
+				field => this.commands.executeCommand(CHANGE_SESSION_GROUP_APPEARANCE, group.sectionId, field),
+				localize('sessions.list.changeGroupIcon', 'Change group icon'),
+				localize('sessions.list.changeGroupColor', 'Change group color')));
 		}
 		if (actions.length) {
 			this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
 		}
+	}
+
+	private showLocalProjectMenu(title: string, project: ProjectSummary, row: ProjectMenuRow, anchor: ContextMenuAnchor): void {
+		this.showProjectMenu(project.id, title, field => this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), {
+			rename: async (name, signal) => {
+				const current = await this.projectService.read(project.id, this.mode);
+				signal.throwIfAborted();
+				await this.projectService.update(current, name, current.description, current.materials);
+			},
+			archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, this.mode),
+			remove: { removesContents: false, run: () => this.projectService.remove(project) },
+		}, row, anchor);
+	}
+
+	private showWorkspaceMenu(resource: URI, anchor: ContextMenuAnchor): void {
+		const label = localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path');
+		const actions: IAction[] = [{
+			id: COPY_PATH_COMMAND_ID, label, tooltip: label, icon: Lxicon.copy, enabled: true,
+			run: () => this.commands.executeCommand(COPY_PATH_COMMAND_ID, resource),
+		}];
+		this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
+	}
+
+	private showProjectMenu(projectId: string, title: string, change: ((field: 'icon' | 'color') => Promise<void>) | undefined,
+		operations: SessionsCatalogProjectOperations, row: ProjectMenuRow, anchor: ContextMenuAnchor): void {
+		if (!this.menuContext) return;
+		const { rename, archive, remove } = operations;
+		const trigger = row.getMenuTrigger(anchor);
+		const pinned = this.projectPreferences.isPinned(projectId);
+		const runRemoval = async (operation: () => Promise<boolean | void>): Promise<void> => {
+			if (this.isDisposed) return;
+			const completed = await operation();
+			if (completed !== false && !this.isDisposed) this.focus();
+		};
+		showSidebarProjectMenu(this.contextMenus, this.menuContext, this.mode, {
+			projectId,
+			actions: {
+				pin: pinned ? undefined : () => this.setProjectPinned(projectId, true),
+				unpin: pinned ? () => this.setProjectPinned(projectId, false) : undefined,
+				rename: rename && (() => this.renameProject(title, row.domNode, trigger ?? row.button, rename)),
+				icon: change && (() => change('icon')),
+				color: change && (() => change('color')),
+				archive: archive && (() => runRemoval(archive)),
+				remove: remove && (async () => {
+					if (!await confirmProjectDelete(this.dialogs, title, remove.removesContents)) return;
+					await runRemoval(async () => {
+						await remove.run();
+						if (this.projectPreferences.isPinned(projectId)) this.projectPreferences.togglePinned(projectId);
+					});
+				}),
+			},
+		}, {
+			getAnchor: () => {
+				row.setMenuVisible(true);
+				return anchor;
+			},
+			onHide: () => row.setMenuVisible(false),
+		});
+	}
+
+	private setProjectPinned(projectId: string, pinned: boolean): void {
+		if (this.isDisposed) return;
+		if (this.projectPreferences.isPinned(projectId) !== pinned) this.projectPreferences.togglePinned(projectId);
+		this.tree.setSectionCollapsed(pinned ? 'pinned' : 'projects', false);
+		const row = this.tree.getVisibleElements().find(element => element.dataset.projectId === projectId);
+		if (row) this.tree.focusRow(row);
+	}
+
+	private async renameProject(title: string, anchor: HTMLElement, trigger: HTMLElement, rename: NonNullable<SessionsCatalogProjectOperations['rename']>): Promise<void> {
+		if (this.isDisposed || !anchor.isConnected) return;
+		const controller = new AbortController();
+		const lifetime = new DisposableStore();
+		lifetime.add(toDisposable(() => controller.abort()));
+		this.projectRename.value = lifetime;
+		try {
+			const name = await this.promptProjectName(title, anchor, trigger, lifetime);
+			if (controller.signal.aborted || !name || name === title) return;
+			await rename(name, controller.signal);
+			if (!controller.signal.aborted) status(localize('sessions.list.projectRenamed', 'Project renamed to {0}.', name));
+		} catch (error) {
+			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
+		} finally {
+			if (this.projectRename.value === lifetime) this.projectRename.clear();
+		}
+	}
+
+	private promptProjectName(title: string, anchor: HTMLElement, trigger: HTMLElement, lifetime: DisposableStore): Promise<string | undefined> {
+		const document = anchor.ownerDocument;
+		const heading = localize('sessions.list.renameProject', 'Rename project');
+		const form = h(document, 'form', {
+			className: 'ash-sessions-project-rename',
+			attributes: { role: 'dialog', 'aria-label': heading },
+		});
+		const view = lifetime.add(new ContextView(this.domNode));
+		const header = h(document, 'header', { className: 'ash-sessions-project-rename-header' });
+		header.append(h(document, 'h2', { attributes: { title: heading } }, heading));
+		const close = localize('sessions.list.closeProjectRename', 'Close rename dialog');
+		lifetime.add(new Button(header, {
+			...defaultButtonStyles,
+			label: close,
+			title: close,
+			icon: Lxicon.dialogClose,
+			iconOnly: true,
+			onClick: () => view.hide(),
+		}));
+		form.append(header);
+		const input = lifetime.add(new InputBox(form, {
+			ariaLabel: localize('sessions.list.projectName', 'Project name'),
+			inputBoxStyles: defaultInputBoxStyles,
+			presentation: 'field',
+		}));
+		input.value = title;
+		const actions = h(document, 'div', { className: 'ash-sessions-project-rename-actions' });
+		form.append(actions);
+		const result = new DeferredPromise<string | undefined>();
+		lifetime.add(new Button(actions, {
+			...defaultButtonStyles,
+			size: 'small',
+			label: localize('sessions.list.cancelProjectRename', 'Cancel'),
+			onClick: () => view.hide(),
+		}));
+		lifetime.add(new Button(actions, {
+			...defaultButtonStyles,
+			presentation: 'primary',
+			size: 'small',
+			label: localize('sessions.list.rename', 'Rename'),
+			type: 'submit',
+		}));
+		lifetime.add(input.onDidChange(() => input.showValidation('')));
+		lifetime.add(addDisposableListener(form, 'submit', event => {
+			event.preventDefault();
+			const name = input.value.trim();
+			if (!name) {
+				input.showValidation(localize('sessions.list.projectNameRequired', 'Enter a project name.'));
+				input.focus();
+				return;
+			}
+			void result.complete(name);
+			view.hide();
+		}));
+		trigger.focus({ preventScroll: true });
+		if (view.show({
+			anchor,
+			content: form,
+			presentation: 'dialog',
+			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			gap: 8,
+			focusRestore: ContextViewFocusRestore.Previous,
+			onHide: () => { if (!result.isSettled) void result.complete(undefined); },
+		})) {
+			input.focus();
+			input.select();
+		} else if (!result.isSettled) {
+			void result.complete(undefined);
+		}
+		return result.p;
+	}
+
+	private appearanceActions(id: string, change: (field: 'icon' | 'color') => Promise<void>, iconLabel: string, colorLabel: string): IAction[] {
+		return ([['icon', iconLabel], ['color', colorLabel]] as const).map(([field, label]) => ({
+			id: `${id}.${field}`,
+			label,
+			tooltip: '',
+			enabled: true,
+			run: () => change(field).catch(error => this.notifications.error(toErrorMessage(error))),
+		}));
 	}
 
 	private automationVisibilityActions(selection: SessionsViewSelection): IAction[] {
@@ -624,55 +957,60 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showItemMenu(selection: SessionsViewSelection, item: SessionListItem, anchor: ContextMenuAnchor): void {
-		const sessionActions: IAction[] = [];
-		if (selection.kind === 'session') {
-			const { session, threadId } = selection.active;
-			if (threadId === session.sessionId && this.sessionService.canChangeDirectory?.(session.sessionId)) {
-				sessionActions.push({
-					id: 'agentSession.changeDirectory',
-					label: localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Session Folder…'),
-					tooltip: '',
-					enabled: true,
-					run: () => this.commands.executeCommand('agentSession.changeDirectory', session.sessionId),
-				});
-			}
-			if (this.sessionService.getChatMoveDestinations?.(session.sessionId, threadId).length) {
-				sessionActions.push({
-					id: MOVE_CHAT_TO_SESSION_ACTION_ID,
-					label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
-					tooltip: '',
-					enabled: true,
-					run: () => this.commands.executeCommand(MOVE_CHAT_TO_SESSION_ACTION_ID, { sessionId: session.sessionId, threadId }),
-				});
-			}
+		this.catalogMenu.clear();
+		const actions = this.orderActions(item.domNode, 'row');
+		if (selection.kind === 'untitled') {
+			this.showConversationMenu(item, anchor, [...actions, ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
+				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
+				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }))]);
+			return;
 		}
+		const { session, threadId } = selection.active;
 		const project = this.getOrganization(item.domNode)?.project;
-		if (project && (project.current || project.destinations.length)) {
-			sessionActions.push(...sessionListProjectActions(project, project.destinations, async run => {
-				try {
-					await run();
-					if (!this.isDisposed) this.tree.focusRow(item.domNode);
-				} catch (error) { this.notifications.error(toErrorMessage(error)); }
-			}));
-		}
+		if (project) actions.push(...this.projectActions(item, project));
+		actions.push(...this.automationVisibilityActions(selection));
+		this.showConversationMenu(item, anchor, actions, { sessionId: session.sessionId, threadId }, this.listModel.isSessionPinned(session));
+	}
+
+	private showConversationMenu(item: SessionListItem, anchor: ContextMenuAnchor, actions: IAction[],
+		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; }, pinned = false): void {
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
-		if (context) SessionsMenuActiveConversationContext.bindTo(context).set(this.mode === 'code' && selection.kind === 'session' && selection.active.session.status === 'active');
-		item.setMenuVisible(true);
-		this.contextMenus.showContextMenu({
-			menuId: Menus.SidebarSessionContext,
-			menuActionOptions: { arg: selection },
-			contextKeyService: context,
-			getAnchor: () => anchor,
-			getActions: () => [...this.orderActions(item.domNode, 'row'), ...sessionActions, ...this.automationVisibilityActions(selection), ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
-				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
-					...action,
-					run: () => this.feedback.archive(item.domNode, () => action.run()),
-				})],
+		const workspace = this.mode === 'code' && target && 'sessionId' in target && target.threadId
+			? getSessionWorkspaceMenuState(target.sessionId, target.threadId, this.sessionService)
+			: undefined;
+		if (context && target && 'sessionId' in target) {
+			const { sessionId, threadId } = target;
+			SessionsMenuActiveConversationContext.bindTo(context).set(true);
+			SessionsMenuConversationPinnedContext.bindTo(context).set(pinned);
+			if (this.mode === 'code' && threadId) {
+				SessionsMenuCanSetFolderContext.bindTo(context).set(!!workspace);
+				SessionsMenuWorkspaceIdleContext.bindTo(context).set(workspace?.enabled === true);
+				SessionsMenuCanMoveConversationContext.bindTo(context).set(!!this.sessionService.getChatMoveDestinations?.(sessionId, threadId).length);
+			}
+		}
+		const menu = this.mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
+		this.showRowMenu(item, anchor, {
+			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context)).map(action => {
+				if (action.id === 'agentSession.changeDirectory' && workspace) {
+					return { ...action, label: workspace.label, tooltip: workspace.label, badge: workspace.busyBadge, run: () => action.run() };
+				}
+				if (action.id === 'agentSession.delete') return { ...action, class: 'ash-session-delete-action', run: () => action.run() };
+				if (action.id === 'sessions.list.togglePin') return {
+					...action, run: async () => {
+						const id = await action.run();
+						if (typeof id === 'string' && !this.isDisposed) {
+							if (this.catalog) {
+								// A pinned Chat conversation keeps its row inside the project.
+								if (item.domNode.isConnected) this.tree.focusRow(item.domNode);
+							} else this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${id}` });
+						}
+					}
+				};
+				return action;
+			})),
 			onHide: () => {
 				if (this.rowMenuContext.value === context) this.rowMenuContext.clear();
-				item.setMenuVisible(false);
 			},
 		});
 	}
@@ -704,27 +1042,50 @@ export class SessionsList extends DomWidget {
 		this.repositoryGroups.clear();
 	}
 
-	private repositoryKey(session: ISession): string {
+	private repositoryKey(session: SessionGroupingContext): string {
 		return JSON.stringify([session.sessionId, session.workspace?.authorityId, session.workspace?.root]);
 	}
 
-	private async loadRepositoryGroups(sessions: readonly ISession[]): Promise<void> {
+	private repositoryGroupingContext(session: SessionGroupingContext, catalog: ReadonlyMap<string, ISession>): SessionGroupingContext {
+		const owner = catalog.get(session.sessionId);
+		return owner ? { ...session, workspace: sessionExecutionWorkspace(owner) } : session;
+	}
+
+	private async loadRepositoryGroups(sessions: readonly SessionGroupingContext[], catalog: ReadonlyMap<string, ISession>): Promise<void> {
 		const scopes = this.providerScopes;
 		if (!scopes || this.repositoryLookup.value) {
 			return;
 		}
-		const missing = sessions.filter(session => session.workspace && !this.repositoryGroups.has(this.repositoryKey(session)));
+		const needsDirectory = (session: SessionGroupingContext): boolean => catalog.get(session.sessionId)?.chats.some(chat =>
+			chat.origin.type === 'root' && chat.status === 'active' && chat.workspace === undefined) ?? false;
+		const missing = sessions.filter(session => {
+			const context = this.repositoryGroupingContext(session, catalog);
+			return (context.workspace || needsDirectory(session)) && !this.repositoryGroups.has(this.repositoryKey(context));
+		});
 		if (!missing.length) {
 			return;
 		}
 		const lookup = this.repositoryLookup.value = new CancellationTokenSource();
 		const token = lookup.token;
 		await Promise.resolve();
+		if (missing.some(needsDirectory)) {
+			// Catalog rows can arrive before their Thread directories. Use the hydrated
+			// checkout when it is available, even for rows supplied by a separate sidebar.
+			await raceCancellationError(this.sessionService.whenDirectoriesReady(), token).catch(() => undefined);
+			catalog = new Map(this.sessionService.sessions.map(session => [session.sessionId, session]));
+		}
 		for (const session of missing) {
 			if (token.isCancellationRequested || this.isDisposed) {
 				return;
 			}
-			const workspace = session.workspace!;
+			const context = this.repositoryGroupingContext(session, catalog);
+			const workspace = context.workspace;
+			const key = this.repositoryKey(context);
+			if (this.repositoryGroups.has(key)) continue;
+			if (!workspace) {
+				this.repositoryGroups.set(key, undefined);
+				continue;
+			}
 			let bucket: SessionBucket | undefined;
 			try {
 				const scope = scopes.getScope(session.sessionId);
@@ -749,34 +1110,44 @@ export class SessionsList extends DomWidget {
 			if (token.isCancellationRequested || this.isDisposed) {
 				return;
 			}
-			this.repositoryGroups.set(this.repositoryKey(session), bucket);
+			this.repositoryGroups.set(key, bucket);
 		}
 		this.repositoryLookup.clear();
 		this.render();
 	}
 
-	private sessionBucket(session: ISession, grouping: Exclude<SessionGrouping, 'none'>, projects: ReadonlyMap<string, Project>): SessionBucket {
+	private sessionBucket(session: SessionGroupingContext | undefined, grouping: Exclude<SessionGrouping, 'none'>, projects: ReadonlyMap<string, Project>): SessionBucket {
 		switch (grouping) {
 			case 'projects': {
-				const project = projects.get(session.sessionId);
+				const project = session && projects.get(session.sessionId);
 				return project ? { id: project.id, label: project.name } : { id: '', label: localize('sessions.list.noProjectGroup', 'No Project') };
 			}
 			case 'repository':
-				return this.repositoryGroups.get(this.repositoryKey(session)) ?? { id: '', label: localize('sessions.list.noRepositoryGroup', 'No Repository Information') };
+				return (session && this.repositoryGroups.get(this.repositoryKey(session))) ?? { id: '', label: localize('sessions.list.noRepositoryGroup', 'No Repository Information') };
 			case 'status':
-				return { id: session.management?.status ?? '', label: sessionManagementLabel(session.management) ?? localize('sessions.list.unknownStatusGroup', 'Unknown Status') };
+				return { id: session?.management?.status ?? '', label: sessionManagementLabel(session?.management) ?? localize('sessions.list.unknownStatusGroup', 'Unknown Status') };
 			case 'environment': {
-				const workspace = session.workspace;
+				const workspace = session?.workspace;
 				if (workspace?.runtime) {
 					const runtime = workspace.runtime;
 					return { id: JSON.stringify([runtime.providerId, runtime.hostAuthority, runtime.workspace]), label: runtime.workspace };
 				}
 				if (workspace) {
-					return { id: workspace.authorityId, label: workspace.authorityId === 'local' ? localize('sessions.list.localEnvironmentGroup', 'Local') : session.providerLabel || workspace.authorityId };
+					return { id: workspace.authorityId, label: workspace.authorityId === 'local' ? localize('sessions.list.localEnvironmentGroup', 'Local') : session?.providerLabel || workspace.authorityId };
 				}
 				return { id: '', label: localize('sessions.list.noEnvironmentGroup', 'No Environment') };
 			}
 		}
+	}
+
+	private updateSessionPreview(item: SessionListItem, session: ISession, chat: IChat, projectName: string | undefined): void {
+		const scopes = this.providerScopes;
+		const { sessionId } = session;
+		const { threadId } = chat;
+		item.updatePreview(this.hoverService, projectName, chat.updatedAt, scopes && {
+			key: JSON.stringify([sessionId, threadId, session.providerId, session.workspace, chat.workspace === undefined, chat.workspace]),
+			load: token => loadSessionHoverBranch(this.sessionService, scopes, sessionId, threadId, token),
+		});
 	}
 
 	private render(): void {
@@ -786,13 +1157,16 @@ export class SessionsList extends DomWidget {
 		const present = new Set<string>();
 		const activeSections = new Set<string>();
 		const pinned: HTMLElement[] = [];
+		const attentionRows: HTMLElement[] = [];
+		const alerts = this.attention.get();
+		const attentionLabel = alerts.size ? localize('sessions.list.needsAttention', 'Needs Attention') : '';
 		const recent: HTMLElement[] = [];
 		const remaining = new Map<string, HTMLElement>();
 		const childrenByRow = new Map<HTMLElement, readonly HTMLElement[]>();
-		const sort = this.catalog && this.listModel.getSort(this.mode);
+		const sort = this.listModel.getSort(this.mode);
+		const grouping = this.listModel.grouping;
 		const sortKeys = new Map<HTMLElement, string | number>();
 		const sortRows = (rows: readonly HTMLElement[]): readonly HTMLElement[] => {
-			if (!sort) return rows;
 			const sign = sort.direction === 'ascending' ? 1 : -1;
 			const sortable = rows.filter(row => sortKeys.has(row)).sort((left, right) => {
 				const a = sortKeys.get(left)!;
@@ -804,8 +1178,8 @@ export class SessionsList extends DomWidget {
 		};
 		this.catalogRows.clear();
 		this.catalogProjects.clear();
-		const activeSelection = this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
-			|| this.catalog && !this.contextKeys?.getValue(CodeConversationPageContext.key)
+		const activeSelection = this.catalog || this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
+			|| !this.entry && this.mode === 'code' && this.contextKeys?.getValue(CodeConversationPageContext.key) === false
 			? undefined : this.viewService.activeSelection;
 		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
 		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
@@ -828,59 +1202,105 @@ export class SessionsList extends DomWidget {
 			}
 			return item;
 		};
-		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section', open?: () => void, group?: SessionGroup): HTMLElement => {
+		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section',
+			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: SessionsCatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly workspace?: URI; readonly catalogProjectId?: string; }): HTMLElement => {
 			activeSections.add(key);
-			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind,
+			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind, this.mode, this.contextMenus,
 				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
-			childrenByRow.set(section.domNode, reorderChildren(sortRows(children), ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
+			const sorted = sortRows(children);
+			childrenByRow.set(section.domNode, key === attentionSection ? sorted
+				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
+			const { open, group, project, projectAppearance, projectOperations, workspace, catalogProjectId } = options ?? {};
+			const appearance = project ?? projectAppearance ?? group;
 			section.update(title, {
 				open,
 				actionLabel: open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : undefined,
-				icon: group?.icon ? getRegisteredIcon(group.icon, ownerDocument) : undefined,
-				color: group?.color ? `var(${colorCssVariable(group.color)})` : undefined,
+				icon: appearance?.icon ? getRegisteredIcon(appearance.icon, ownerDocument) : undefined,
+				color: appearance?.color ? `var(${colorCssVariable(appearance.color)})` : undefined,
 			});
 			if (group) {
 				section.domNode.dataset.sectionOrderId = key;
 				section.domNode.dataset.groupDropTarget = String(group.kind !== 'comparison');
 				section.setContextMenu(anchor => this.showSectionMenu(section, group, anchor));
 			}
+			if (workspace) {
+				section.setContextMenu(anchor => this.showWorkspaceMenu(workspace, anchor));
+			}
+			if (kind === 'project') {
+				if (project) {
+					section.setContextMenu(anchor => this.showLocalProjectMenu(title, project, section, anchor));
+				} else if (catalogProjectId) {
+					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, projectAppearance && (field =>
+						pickProjectAppearance(this.quickInput, field, projectAppearance[field], value => projectAppearance.set(field, value))), projectOperations ?? {}, section, anchor));
+				} else {
+					section.setContextMenu(undefined);
+				}
+			}
 			return section.domNode;
 		};
 		const projectRows: HTMLElement[] = [];
 		const contributedGroups = new Map<string, readonly HTMLElement[]>();
+		const contributedRecent: [HTMLElement, SessionGroupingContext | undefined][] = [];
 		const external = this.catalog?.snapshot.get();
-		const externalRow = (row: SessionsCatalogRow, project?: string): HTMLElement => {
+		const externalRow = (row: SessionsCatalogRow, project?: string, alert?: IBlockedSession): HTMLElement => {
 			const key = project ? JSON.stringify([row.id, project]) : row.id;
 			this.catalogRows.set(key, row);
 			const item = itemFor(key, 'conversation');
-			item.updateCatalogRow(row);
+			item.updateCatalogRow(row, alert?.threadId);
+			item.target = alert && { sessionId: alert.session.sessionId, threadId: alert.threadId };
 			item.setContextMenu(anchor => void this.showCatalogMenu(row, item, anchor));
 			if (project) item.domNode.dataset.parentProject = `project:${project}`;
-			const value = sort?.field === 'name' ? row.title : sort?.field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
+			const value = sort.field === 'name' ? row.title : sort.field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
 			if (value !== undefined) sortKeys.set(item.domNode, value);
 			return item.domNode;
 		};
+		const placedAlerts = new Set<string>();
+		const catalogRowsFor = (rows: readonly SessionsCatalogRow[], sectionKey: string, project?: { readonly key: string; readonly title: string; }): HTMLElement[] => {
+			const children: HTMLElement[] = [];
+			for (const row of rows) {
+				const alert = sectionKey !== 'pinned' && !row.pinned && !row.disabled && row.sessionId ? alerts.get(row.sessionId) : undefined;
+				if (!this.search.matches(row.title, project?.title, alert && attentionLabel)) continue;
+				if (!alert) {
+					const node = externalRow(row, project?.key);
+					if (!project && sectionKey === 'recent' && grouping !== 'none') contributedRecent.push([node, row.groupingContext]);
+					children.push(node);
+				} else if (!placedAlerts.has(alert.session.sessionId)) {
+					placedAlerts.add(alert.session.sessionId);
+					attentionRows.push(externalRow(row, project?.key, alert));
+				}
+			}
+			return children;
+		};
 		for (const section of external?.sections ?? []) {
-			const rows = section.rows.filter(row => this.search.matches(row.title)).map(row => externalRow(row));
+			const rows = catalogRowsFor(section.rows, section.key);
 			if (section.key === 'pinned') pinned.push(...rows);
-			else if (section.key === 'recent') recent.push(...rows);
+			else if (section.key === 'recent') {
+				if (grouping === 'none') recent.push(...rows);
+			}
 			else contributedGroups.set(section.key, rows);
 			for (const project of section.projects) {
-				const children = project.rows.filter(row => this.search.matches(row.title, project.title)).map(row => externalRow(row, project.key));
+				const children = catalogRowsFor(project.rows, section.key, project);
 				if (!children.length && !this.search.matches(project.title)) continue;
 				const key = `catalog-project:${project.key}`;
 				if (project.onExpand) this.catalogProjects.set(key, { load: project.onExpand });
 				else if (project.loadMore) this.catalogProjects.set(key, { load: project.loadMore, anchor: children.at(-1) });
+				// Keep the project expandable while its first page is in flight.
+				else if (project.loading) this.catalogProjects.set(key, {});
 				const action = project.history ?? (project.loadMore && {
 					label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moreProjectConversations' }, 'Load more conversations'), action: project.loadMore,
 				});
 				if (action) {
 					const item = itemFor(`${key}:history`, 'project');
-					item.update(action.label, false, () => action.action?.());
-					item.setDisabled(!action.action, false);
+					item.update(action.label, false, action.action);
 					children.push(item.domNode);
 				}
-				const node = sectionFor(key, project.title, children, 'project');
+				const node = sectionFor(key, project.title, children, 'project', {
+					project: project.localProject, catalogProjectId: project.key, projectAppearance: project.appearance,
+					projectOperations: project.operations && {
+						...project.operations,
+						archive: project.operations.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog')),
+					},
+				});
 				node.dataset.catalogProject = 'true';
 				node.dataset.projectId = project.key;
 				node.dataset.item = `project:${project.key}`;
@@ -893,7 +1313,8 @@ export class SessionsList extends DomWidget {
 		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
 		const nestedDrafts = new Map<string, HTMLElement[]>();
 		const projectDrafts = new Map<string, HTMLElement[]>();
-		for (const session of this.sessionService.untitledSessions) {
+		for (const session of this.catalog ? [] : this.sessionService.untitledSessions) {
+			if (session.kind === 'chat') continue;
 			let draft: ReturnType<typeof readNewChatDraftState>;
 			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
 			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
@@ -916,42 +1337,51 @@ export class SessionsList extends DomWidget {
 				recent.push(item.domNode);
 			}
 		}
-		const catalog = getSessionsListEntries(this.sessionService.sessions.filter(session => session.surface !== 'chat'), this.listModel, this.mode,
+		const catalog = getSessionsListEntries(this.catalog ? [] : this.sessionService.sessions.filter(session => session.kind === 'code'), this.listModel,
 			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
 		for (const session of catalog) {
+			const isPinned = this.listModel.isSessionPinned(session);
+			const alert = isPinned ? undefined : alerts.get(session.sessionId);
 			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const activeChats = session.chats.filter(chat => chat.status === 'active');
 			const thread = activeChats.find(chat => chat.threadId === session.sessionId)
 				?? activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
 			if (!thread) continue;
+			const workspace = session.workspace;
+			const projectName = projectNames.get(session.sessionId)
+				?? (workspace ? basename(sessionWorkspaceUri(workspace)) || workspace.root : undefined);
 			const requests = this.github.getSessionPullRequests(session.sessionId);
-			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId), projectNames.get(session.sessionId),
+			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId), projectNames.get(session.sessionId), alert && attentionLabel,
 			...requests.map(getPullRequestLabel)];
 			const matchesSession = this.search.matches(thread.title, ...fields);
 			const nested = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn'
 				&& (matchesSession || this.search.matches(chat.title, chat.workspace?.root, ...fields)));
 			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
 			const item = itemFor(`session:${session.sessionId}`, 'conversation', restingIcon ?? Lxicon.cowork);
-			if (sort) sortKeys.set(item.domNode, sort.field === 'name' ? session.title : sessionSortTime(session, sort.field));
-			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
-			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(options => this.viewService.openSession(session.sessionId, thread.threadId, options)), session.management);
+			sortKeys.set(item.domNode, sort.field === 'name' ? session.title : sessionSortTime(session, sort.field));
+			const target = { sessionId: session.sessionId, threadId: alert?.threadId ?? thread.threadId };
+			item.target = target;
+			const open = () => this.openRow(options => this.viewService.openSession(target.sessionId, target.threadId, options));
+			const management = alert?.reason === 'input' ? activeChats.find(chat => chat.threadId === alert.threadId)?.management ?? session.management : session.management;
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, open, management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
-			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
+			this.updateSessionPreview(item, session, thread, projectName);
 			const children = nested.map(chat => {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, 'conversation', restingIcon ?? Lxicon.chatSession);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.openRow(options => this.viewService.openSession(session.sessionId, chat.threadId, options)), chat.management);
-				child.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat));
+				this.updateSessionPreview(child, session, chat, projectName);
 				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
 				return child.domNode;
 			});
 			childrenByRow.set(item.domNode, [...children, ...(nestedDrafts.get(session.sessionId) ?? [])]);
 			item.domNode.dataset.rowOrderId = session.sessionId;
-			if (this.listModel.isSessionPinned(session)) pinned.push(item.domNode);
+			if (isPinned) pinned.push(item.domNode);
+			else if (alert) attentionRows.push(item.domNode);
 			else remaining.set(session.sessionId, item.domNode);
 		}
 		const projects = projectRows;
@@ -968,57 +1398,64 @@ export class SessionsList extends DomWidget {
 			const drafts = projectDrafts.get(project.id) ?? [];
 			if (!members.length && !drafts.length && !this.search.matches(project.name)) continue;
 			const key = `project:${project.id}`;
+			const destination = this.projectPreferences.isPinned(project.id) ? pinned : projects;
 			if (this.mode === 'code') {
-				const section = sectionFor(key, project.name, [...members, ...drafts], 'project');
+				const section = sectionFor(key, project.name, [...members, ...drafts], 'project', { project });
 				section.dataset.projectId = project.id;
-				projects.push(section);
+				destination.push(section);
 			} else {
-				const item = itemFor(key, 'project', Lxicon.projects);
+				const item = itemFor(key, 'project');
 				item.domNode.dataset.projectId = project.id;
 				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
-				projects.push(item.domNode);
+				item.updateProjectAppearance(project);
+				item.setContextMenu(anchor => this.showLocalProjectMenu(project.name, project, item, anchor));
+				destination.push(item.domNode);
 			}
 		}
-		if (this.projectsFailed && !this.search.hasQuery) projects.push(this.projectError);
+		const catalogIds = new Set(catalog.map(session => session.sessionId));
 		for (const group of this.groups.groups) {
+			const contributed = contributedGroups.get(`group:${group.sectionId}`);
+			if (this.catalog ? !contributed : group.sessionIds.length && !group.sessionIds.some(id => catalogIds.has(id))) continue;
 			if (group.kind === 'comparison' && !this.listModel.showComparisonGroups) {
 				continue;
 			}
-			const members = [...contributedGroups.get(`group:${group.sectionId}`) ?? []];
+			const members = [...contributed ?? []];
 			for (const id of group.sessionIds) {
 				const item = remaining.get(id);
 				if (item) { members.push(item); remaining.delete(id); }
 			}
 			if (this.search.hasQuery && !members.length && !this.search.matches(group.name)) continue;
-			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code' ? 'subgroup' : 'section',
-				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined, group));
+			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code' ? 'subgroup' : 'section', {
+				open: group.kind === 'comparison' ? () => {
+					void this.commands.executeCommand(OPEN_SESSION_COMPARISON_COMMAND_ID, group.sectionId).catch(error => this.notifications.error(String(error)));
+				} : undefined,
+				group,
+			}));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
-		const grouping = this.listModel.grouping;
-		if (this.mode === 'code' && (grouping === 'none' || grouping === 'projects')) {
+		const groupCodeWorkspaces = this.mode === 'code' && (grouping === 'none' || grouping === 'projects');
+		if (groupCodeWorkspaces) {
 			// Saved sessions can have a creation workspace without a Code project membership.
 			// Use the Session workspace so managed checkouts of the same folder stay together.
-			const workspaces = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
+			const workspaces = new Map<string, { readonly label: string; readonly resource: URI; readonly rows: HTMLElement[]; }>();
 			for (const session of catalog) {
 				const row = remaining.get(session.sessionId);
 				if (!row || !session.workspace) continue;
 				const resource = sessionWorkspaceUri(session.workspace);
-				const path = resource.toEncodedComponents().path.replace(/\/+$/u, '') || '/';
-				const key = extUriBiasedIgnorePathCase.getComparisonKey(resource.withEncodedPath(path));
+				const key = workspaceFolderKey(resource);
 				let workspace = workspaces.get(key);
 				if (!workspace) {
-					workspace = { label: basename(resource) || session.workspace.root, rows: [] };
+					workspace = { label: basename(resource) || session.workspace.root, resource, rows: [] };
 					workspaces.set(key, workspace);
 				}
 				workspace.rows.push(row);
 				remaining.delete(session.sessionId);
 			}
 			for (const [key, workspace] of [...workspaces].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
-				projects.push(sectionFor(`workspace:${key}`, workspace.label, workspace.rows, 'project'));
+				orderedRecent.push(sectionFor(`workspace:${key}`, workspace.label, workspace.rows, 'subgroup', { workspace: workspace.resource }));
 			}
-			hasProjectConversations ||= workspaces.size > 0;
 		}
-		if (grouping === 'none') {
+		if (grouping === 'none' || groupCodeWorkspaces) {
 			orderedRecent.push(...remaining.values());
 		} else {
 			const projectsBySession = new Map<string, Project>();
@@ -1031,25 +1468,29 @@ export class SessionsList extends DomWidget {
 					}
 				}
 			}
-			const ungrouped = catalog.filter(session => remaining.has(session.sessionId));
-			if (grouping === 'repository') {
-				void this.loadRepositoryGroups(ungrouped);
+			const ungrouped = contributedRecent;
+			for (const session of catalog) {
+				const row = remaining.get(session.sessionId);
+				if (row) ungrouped.push([row, session]);
 			}
+			const repositoryCatalog = grouping === 'repository' ? new Map(this.sessionService.sessions.map(session => [session.sessionId, session])) : undefined;
+			if (repositoryCatalog) void this.loadRepositoryGroups(ungrouped.flatMap(([, session]) => session ? [session] : []), repositoryCatalog);
 			const buckets = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
-			for (const session of ungrouped) {
-				const { id, label } = this.sessionBucket(session, grouping, projectsBySession);
+			for (const [row, session] of ungrouped) {
+				const context = repositoryCatalog && session ? this.repositoryGroupingContext(session, repositoryCatalog) : session;
+				const { id, label } = this.sessionBucket(context, grouping, projectsBySession);
 				let bucket = buckets.get(id);
 				if (!bucket) {
 					bucket = { label, rows: [] };
 					buckets.set(id, bucket);
 				}
-				bucket.rows.push(remaining.get(session.sessionId)!);
+				bucket.rows.push(row);
 			}
 			for (const [id, bucket] of [...buckets].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
 				orderedRecent.push(sectionFor(`grouping:${grouping}:${id}`, bucket.label, bucket.rows, 'subgroup'));
 			}
 		}
-		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0 && !hasProjectConversations;
+		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && attentionRows.length === 0 && chatGroups.length === 0 && !hasProjectConversations;
 		const loading = this.sessionService.state === 'loading' || external?.loading;
 		this.tree.element.setAttribute('aria-busy', String(loading || this.projectsLoading));
 		const emptyStatus = loading ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error
@@ -1057,10 +1498,12 @@ export class SessionsList extends DomWidget {
 		if (showEmpty && emptyStatus) { this.empty.textContent = emptyStatus; }
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
+		if (attentionRows.length) ordered.push(sectionFor(attentionSection, attentionLabel, attentionRows));
 		ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
 		if (orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
-			ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), orderedRecent));
+			const label = this.mode === 'chat' && !this.catalog ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents');
+			ordered.push(sectionFor('recent', label, orderedRecent));
 		}
 		if (showEmpty && emptyStatus) ordered.push(this.empty);
 		// Keep filtered rows available so closing search can restore the original focus target.
@@ -1073,7 +1516,7 @@ export class SessionsList extends DomWidget {
 			const children: ObjectTreeElement<HTMLElement>[] = [];
 			const rowChildren = childrenByRow.get(element) ?? [];
 			const projectSection = key === 'projects' || element.dataset.projectId !== undefined;
-			const collapsible = key !== undefined && (element.dataset.catalogProject === 'true' || !projectSection || rowChildren.length > 0);
+			const collapsible = key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key));
 			let collapsed: ObjectTreeElementCollapseState | undefined;
 			if (key !== undefined && collapsible) {
 				const saved = this.storage.getBoolean(this.collapseKey(key), StorageScope.PROFILE, element.dataset.catalogProject === 'true');
@@ -1098,33 +1541,15 @@ export class SessionsList extends DomWidget {
 		};
 		this.tree.setChildren(ordered.map(element => project(element)));
 		if (this.catalog) this.catalogPaging.schedule();
-		if (this.mode === 'code') this.syncTreeSelection();
+		if (this.mode === 'code' || this.catalog) this.syncTreeSelection();
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 		else if (focusedRow && !focusedRow.isConnected && this.tree.model.has(SessionsListTree.id(focusedRow))) this.tree.focusRow(focusedRow, true);
+		else if (focusedRow?.dataset.section === attentionSection && !attentionRows.length) this.focus();
 	}
 
 	private syncTreeSelection(): void {
 		const current = this.tree.getVisibleElements().find(element => element.classList.contains('selected'));
 		this.tree.setSelection(current ? [SessionsListTree.id(current)] : []);
-	}
-
-	private async openComparison(sessionIds: readonly string[]): Promise<void> {
-		for (const id of sessionIds) {
-			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === id && candidate.status === 'active');
-			const thread = session?.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root')
-				?? session?.chats.find(candidate => candidate.status === 'active');
-			if (!thread) continue;
-			const revision = this.viewService.navigationRevision;
-			try {
-				await this.viewService.openThread(id, thread.threadId, { sideBySide: true });
-			} catch (error) {
-				this.notifications.error(String(error));
-				if (this.viewService.navigationRevision !== revision + 1) break;
-				continue;
-			}
-			const active = this.viewService.activeSelection;
-			if (active?.kind !== 'session' || active.active.session.sessionId !== id || active.active.threadId !== thread.threadId) break;
-		}
 	}
 
 }
@@ -1144,14 +1569,19 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 
 /** Shared Projects header controls for the conversation catalogs. */
 function createSessionsListToolbar(container: HTMLElement, disposables: DisposableStore, menus: IMenuService,
-	contextMenus: IContextMenuService, notifications: INotificationService, contextKeys: IContextKeyService | undefined,
-	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[]): MenuWorkbenchToolBar {
+	contextMenus: IContextMenuService, contextKeys: IContextKeyService | undefined,
+	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[],
+	createProject: IAction | undefined): MenuWorkbenchToolBar {
 	const toolbar = disposables.add(new MenuWorkbenchToolBar(container, menus, contextMenus, menuId, {
 		ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
 		contextKeyService: contextKeys,
+		leadingActions: createProject && [createProject],
 		// The popup reads list state even when the submenu has no registered commands.
 		menuOptions: { preserveEmptySubmenus: true },
 		actionViewItemProvider: (action, options) => {
+			if (action === createProject) {
+				return new CreateProjectActionViewItem(action, { ...options, iconOnly: true });
+			}
 			if (!(action instanceof SubmenuItemAction) || action.item.submenu !== submenu) {
 				return undefined;
 			}
@@ -1163,17 +1593,13 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 						...delegate,
 						getMenuClassName: () => 'ash-sessions-list-menu',
 						submenuClassName: 'ash-sessions-list-menu',
+						iconPlacement: 'trailing',
 						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
 					}),
 				},
 				{ ...options, iconOnly: true },
 			);
 		},
-	}));
-	disposables.add(toolbar.actionRunner.onDidRun(({ action, error }) => {
-		if (action.id === 'sessionsViewPane.createGroup' && error !== undefined) {
-			notifications.error(toErrorMessage(error));
-		}
 	}));
 	toolbar.element.classList.add('ash-sessions-list-more');
 	// Toolbar inputs stay within the header without activating tree rows.
@@ -1186,10 +1612,24 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 	return toolbar;
 }
 
+class CreateProjectActionViewItem extends ButtonActionViewItem {
+	override render(container: HTMLElement): void {
+		super.render(container);
+		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
+	}
+}
+
+function rowMoreAction(run: () => void, project: boolean): IAction {
+	const label = project
+		? localize('sessions.list.projectActions', 'More project actions')
+		: localize('sessions.list.more', 'More actions');
+	return { id: 'sessions.list.more', label, tooltip: label, icon: Lxicon.ellipsis, enabled: true, run };
+}
+
 class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLElement;
 	target: { readonly sessionId: string; readonly threadId: string; } | undefined;
-	private readonly button: HTMLButtonElement;
+	readonly button: HTMLButtonElement;
 	private readonly actions: WorkbenchToolBar;
 	private readonly moreAction: IAction;
 	private readonly row: SessionListRowRenderer;
@@ -1197,13 +1637,14 @@ class SessionListItem extends AbstractDisposable {
 	private readonly statusAnnouncement: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
-	private readonly summaryHover = new MutableDisposable<IManagedHover>();
-	private summaryText: string | undefined;
+	private readonly previewHover = new MutableDisposable<IManagedHover>();
+	private previewKey: string | undefined;
 	private open: () => void = () => { };
 	private readonly clickListener;
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 	private catalogRow: SessionsCatalogRow | undefined;
+	private projectIcon: HTMLSpanElement | undefined;
 
 	describe(children: readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
 		const id = this.domNode.dataset.item!;
@@ -1225,11 +1666,8 @@ class SessionListItem extends AbstractDisposable {
 		this.actions = new WorkbenchToolBar(this.domNode, contextMenus, {
 			ariaLabel: localize('sessions.list.actions', 'Chat actions'),
 		});
-		this.moreAction = {
-			id: 'sessions.list.more', label: localize('sessions.list.more', 'More actions'),
-			tooltip: localize('sessions.list.more', 'More actions'), icon: Lxicon.ellipsis, enabled: true,
-			run: () => this.contextMenu?.(this.actions.element),
-		};
+		this.moreAction = rowMoreAction(() => this.contextMenu?.(this.actions.element), kind === 'project');
+		if (kind === 'project') this.domNode.classList.add('ash-sessions-list-project-row');
 		this.actions.element.classList.add('ash-sessions-list-actions');
 		this.actions.element.hidden = true;
 		this.statusAnnouncement = h(ownerDocument, 'span', {
@@ -1254,7 +1692,13 @@ class SessionListItem extends AbstractDisposable {
 		};
 		this.contextListeners = [
 			addDisposableListener(this.domNode, 'contextmenu', showMenu),
+			addDisposableListener(this.domNode, 'focusout', event => {
+				if (!isNode(event.relatedTarget) || !this.domNode.contains(event.relatedTarget)) {
+					this.domNode.classList.remove('menu-dismissed-by-pointer');
+				}
+			}),
 			addDisposableListener(this.domNode, 'keydown', event => {
+				this.domNode.classList.remove('menu-dismissed-by-pointer');
 				if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) showMenu(event);
 			}),
 		];
@@ -1264,6 +1708,9 @@ class SessionListItem extends AbstractDisposable {
 		this.contextMenu = menu;
 		if (!this.moreButton) this.actions.setActions([this.moreAction]);
 		this.moreButton?.setAttribute('aria-haspopup', 'menu');
+		if (this.domNode.dataset.projectId && !this.domNode.classList.contains('menu-visible')) {
+			this.moreButton?.setAttribute('aria-expanded', 'false');
+		}
 		this.actions.element.hidden = false;
 		if (this.catalogRow) this.setDisabled(!!this.catalogRow.disabled, !!this.catalogRow.actionsDisabled);
 	}
@@ -1273,8 +1720,19 @@ class SessionListItem extends AbstractDisposable {
 		this.moreButton?.setAttribute('aria-expanded', String(visible));
 	}
 
+	dismissMenuFromPointer(): void {
+		// The shield can return focus to More without a new browser focus modality.
+		this.domNode.classList.toggle('menu-dismissed-by-pointer', this.domNode.matches(':focus-within'));
+	}
+
 	get moreButton(): HTMLButtonElement | null {
 		return this.actions.element.querySelector('[data-action-id="sessions.list.more"] button');
+	}
+
+	getMenuTrigger(anchor: ContextMenuAnchor): HTMLButtonElement | undefined {
+		if (anchor === this.button) return this.button;
+		const more = this.moreButton;
+		return more && (more.matches(':focus') || !!this.domNode.dataset.projectId && anchor === this.actions.element) ? more : undefined;
 	}
 
 	setDisabled(disabled: boolean, actionsDisabled: boolean): void {
@@ -1284,10 +1742,10 @@ class SessionListItem extends AbstractDisposable {
 		}
 	}
 
-	updateCatalogRow(entry: SessionsCatalogRow): void {
+	updateCatalogRow(entry: SessionsCatalogRow, threadId?: string): void {
 		const previous = this.catalogRow;
 		this.catalogRow = entry;
-		this.update(entry.title, entry.selected, entry.open);
+		this.update(entry.title, entry.selected, () => entry.open(threadId));
 		this.domNode.classList.add('ash-chat-navigation-row');
 		this.button.classList.add('ash-chat-navigation-item');
 		const icon = entry.iconId && getRegisteredIcon(entry.iconId, this.domNode.ownerDocument);
@@ -1311,6 +1769,16 @@ class SessionListItem extends AbstractDisposable {
 		} else if (previous?.setPinned && !entry.setPinned) {
 			this.actions.setActions([this.moreAction]);
 		}
+	}
+
+	updateProjectAppearance(project: ProjectSummary): void {
+		const icon = (project.icon && getRegisteredIcon(project.icon, this.button.ownerDocument)) || Lxicon.projects;
+		if (this.projectIcon?.dataset.ashIconId !== icon.id) {
+			this.projectIcon?.remove();
+			this.projectIcon = appendIcon(icon, this.button);
+			this.button.prepend(this.projectIcon);
+		}
+		this.projectIcon!.style.color = project.color ? `var(${colorCssVariable(project.color)})` : '';
 	}
 
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {
@@ -1342,28 +1810,40 @@ class SessionListItem extends AbstractDisposable {
 
 	private updateDescription(): void {
 		const parts = [this.row.title, this.managementDescription, this.pullRequestDescription].filter(Boolean);
-		if (!this.summaryHover.value) this.button.title = parts.join('\n');
+		if (!this.previewHover.value) this.button.title = parts.join('\n');
 		this.button.setAttribute('aria-label', parts.join('. '));
 	}
 
-	updateSummary(hoverService: IHoverService | undefined, metadata: readonly string[]): void {
+	updatePreview(
+		hoverService: IHoverService | undefined,
+		projectName: string | undefined,
+		updatedAt: Date | undefined,
+		branchSource?: { readonly key: string; readonly load: (token: CancellationToken) => Promise<string | undefined>; },
+	): void {
 		if (!hoverService) return;
 		const title = this.row.title;
-		const details = [this.managementDescription, ...metadata, this.pullRequestDescription].filter((value): value is string => !!value);
-		const summaryText = JSON.stringify([title, details]);
-		if (this.summaryText === summaryText) return;
-		this.summaryText = summaryText;
-		const content = createSessionSummaryHover(this.button.ownerDocument, title, details);
-		if (this.summaryHover.value) {
-			this.summaryHover.value.update(content);
+		const timestamp = updatedAt?.getTime() ?? NaN;
+		const key = JSON.stringify([title, projectName, timestamp, branchSource?.key]);
+		if (this.previewKey === key) return;
+		this.previewKey = key;
+		const content = createSessionPreviewHover(this.button.ownerDocument, { title, projectName, timestamp, loadBranch: branchSource?.load });
+		if (this.previewHover.value) {
+			this.previewHover.value.update(content);
 		} else {
 			this.button.removeAttribute('title');
-			this.summaryHover.value = hoverService.setupHover({ target: this.button, content, groupId: 'sessions-list' });
+			this.previewHover.value = hoverService.setupHover({
+				target: this.button,
+				anchor: this.domNode,
+				content,
+				anchorAlignment: AnchorAlignment.Left,
+				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+				anchorPosition: AnchorPosition.Below,
+			});
 		}
 	}
 
 	protected override disposeCore(): void {
-		this.summaryHover.dispose();
+		this.previewHover.dispose();
 		this.leadingIcon?.dispose();
 		this.clickListener.dispose();
 		this.actions.dispose();
@@ -1382,15 +1862,19 @@ class SessionListSection extends Disposable {
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
 	private readonly appearanceIcon: HTMLElement;
+	private readonly actions: WorkbenchToolBar | undefined;
 	private spinner: HTMLSpanElement | undefined;
 	private open: (() => void) | undefined;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
+	private projectIcon: Icon | undefined;
+	private collapsed = true;
 
 	private get subgroup(): boolean { return this.kind !== 'section'; }
 	get title(): string { return this.label.textContent ?? ''; }
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
-	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, toggle: (collapsed?: boolean) => void,
+	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code', contextMenus: IContextMenuService,
+		toggle: (collapsed?: boolean) => void,
 		createToolbar?: (container: HTMLElement, disposables: DisposableStore) => MenuWorkbenchToolBar) {
 		super();
 		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
@@ -1410,41 +1894,82 @@ class SessionListSection extends Disposable {
 			this.domNode.classList.add('ash-sessions-list-section-with-actions');
 			this.toolbar = createToolbar(this.domNode, this._store);
 		}
-		this._register(addDisposableListener(this.button, 'click', event => { event.stopPropagation(); if (this.open) this.open(); else toggle(); }));
-		this._register(addDisposableListener(this.button, 'contextmenu', event => {
+		if (kind === 'project') {
+			this.domNode.classList.add('ash-sessions-list-project-row');
+			this.actions = this._register(new WorkbenchToolBar(this.domNode, contextMenus, {
+				ariaLabel: localize('sessions.list.projectActions', 'More project actions'),
+			}));
+			this.actions.element.classList.add('ash-sessions-list-actions');
+			this.actions.element.hidden = true;
+			// The toolbar owns activation. A tree click would return focus to the row and dismiss the menu.
+			this._register(addDisposableListener(this.actions.element, 'click', event => event.stopPropagation()));
+			this.actions.setActions([rowMoreAction(() => {
+				if (this.moreButton) this.contextMenu?.(this.moreButton);
+			}, true)]);
+			this.moreButton?.setAttribute('aria-haspopup', 'menu');
+			this.moreButton?.setAttribute('aria-expanded', 'false');
+		}
+		this._register(addDisposableListener(this.button, 'click', event => {
+			event.stopPropagation();
+			if (this.open) this.open();
+			else if (this.button.hasAttribute('aria-expanded')) toggle();
+		}));
+		this._register(addDisposableListener(this.domNode, 'contextmenu', event => {
 			if (!this.contextMenu) return;
 			event.preventDefault();
+			event.stopPropagation();
 			this.contextMenu({ x: event.clientX, y: event.clientY, targetWindow: getWindow(this.button) });
 		}));
-		this._register(addDisposableListener(this.button, 'keydown', event => {
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.key === 'Enter' || event.key === ' ') {
+				event.stopPropagation();
+				return;
+			}
 			if (this.contextMenu && (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey)) {
 				event.preventDefault();
 				event.stopPropagation();
-				this.contextMenu(this.button);
-				return;
+				const more = this.moreButton;
+				this.contextMenu(more && event.target === more ? more : this.button);
 			}
-			if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); return; }
-			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		}));
+		this._register(addDisposableListener(this.button, 'keydown', event => {
+			if (!this.button.hasAttribute('aria-expanded') || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
 			event.preventDefault();
 			event.stopPropagation();
 			toggle(event.key === 'ArrowLeft');
 		}));
 	}
 
-	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
+	setContextMenu(menu: ((anchor: ContextMenuAnchor) => void) | undefined): void {
 		this.contextMenu = menu;
-		this.button.setAttribute('aria-haspopup', 'menu');
+		if (this.actions) this.actions.element.hidden = !menu;
+		if (menu) this.button.setAttribute('aria-haspopup', 'menu');
+		else this.button.removeAttribute('aria-haspopup');
+	}
+
+	private get moreButton(): HTMLButtonElement | null | undefined {
+		return this.actions?.element.querySelector('[data-action-id="sessions.list.more"] button');
+	}
+
+	getMenuTrigger(anchor: ContextMenuAnchor): HTMLButtonElement | undefined {
+		if (anchor === this.button) return this.button;
+		const more = this.moreButton;
+		return more && (anchor === more || more.matches(':focus')) ? more : undefined;
+	}
+
+	setMenuVisible(visible: boolean): void {
+		this.domNode.classList.toggle('menu-visible', visible);
+		this.moreButton?.setAttribute('aria-expanded', String(visible));
 	}
 
 	setLoading(loading: boolean): void {
 		this.button.setAttribute('aria-busy', String(loading));
+		this.icon.classList.toggle('loading', loading);
 		if (loading) {
 			this.spinner ??= createLoadingSpinner(this.button.ownerDocument);
-			this.icon.remove();
-			this.label.before(this.spinner);
+			if (!this.spinner.parentElement) this.icon.append(this.spinner);
 		} else {
 			this.spinner?.remove();
-			if (!this.icon.parentElement) this.label.before(this.icon);
 		}
 	}
 
@@ -1456,6 +1981,12 @@ class SessionListSection extends Disposable {
 		else this.button.removeAttribute('aria-label');
 		const customIcon = options?.icon;
 		const color = options?.color ?? '';
+		if (this.kind === 'project') {
+			this.projectIcon = customIcon;
+			this.icon.style.color = color;
+			this.renderIcon();
+			return;
+		}
 		this.icon.style.color = customIcon ? '' : color;
 		if (customIcon) {
 			if (this.appearanceIcon.firstElementChild?.getAttribute('data-ash-icon-id') !== customIcon.id) {
@@ -1470,7 +2001,8 @@ class SessionListSection extends Disposable {
 	}
 
 	renderCollapse(collapsed: boolean, collapsible: boolean): void {
-		if (!collapsible) {
+		this.collapsed = collapsed;
+		if (!collapsible && !(this.kind === 'project' && this.contextMenu)) {
 			if (this.label.parentElement !== this.heading) {
 				this.heading.classList.add('ash-sessions-list-section-static');
 				this.heading.replaceChildren(...(this.subgroup ? [this.icon, this.label] : [this.label]));
@@ -1482,14 +2014,28 @@ class SessionListSection extends Disposable {
 				this.heading.replaceChildren(this.button);
 				this.heading.classList.remove('ash-sessions-list-section-static');
 			}
-			this.button.setAttribute('aria-expanded', String(!collapsed));
 		}
-		const chevron = collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
-		const icon = this.subgroup ? (collapsed ? Lxicon.folder : Lxicon.folderOpened) : chevron;
-		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
-			this.icon.replaceChildren();
+		if (collapsible) this.button.setAttribute('aria-expanded', String(!collapsed));
+		else this.button.removeAttribute('aria-expanded');
+		this.renderIcon();
+	}
+
+	private renderIcon(): void {
+		const chevron = this.collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		let icon = chevron;
+		if (this.kind === 'project' && this.mode === 'chat') {
+			icon = this.collapsed ? Lxicon.projects : Lxicon.projectsFilled;
+		} else if (this.subgroup) {
+			icon = this.collapsed ? Lxicon.folder : Lxicon.folderOpened;
+		}
+		icon = this.projectIcon ?? icon;
+		const showChevron = this.kind === 'project' && this.button.hasAttribute('aria-expanded');
+		const glyphs = this.icon.querySelectorAll(':scope > .ash-icon');
+		if (glyphs[0]?.getAttribute('data-ash-icon-id') !== icon.id
+			|| glyphs[1]?.getAttribute('data-ash-icon-id') !== (showChevron ? chevron.id : undefined)) {
+			for (const glyph of glyphs) glyph.remove();
 			appendIcon(icon, this.icon);
-			if (this.kind === 'project') {
+			if (showChevron) {
 				appendIcon(chevron, this.icon).classList.add('ash-sessions-list-project-chevron');
 			}
 		}
@@ -1506,7 +2052,6 @@ class SessionListRowRenderer extends Disposable {
 	readonly button: HTMLButtonElement;
 	private readonly titleText: HTMLSpanElement;
 	private readonly titleViewport: HTMLSpanElement;
-	private readonly titleResize = this._register(new MutableDisposable());
 
 	constructor(document: Document, titleBehavior: 'static' | 'scrollOnHover', leading?: HTMLElement) {
 		super();
@@ -1516,17 +2061,7 @@ class SessionListRowRenderer extends Disposable {
 		this.titleText = titleBehavior === 'scrollOnHover' ? h(document, 'span') : this.titleViewport;
 		if (titleBehavior === 'scrollOnHover') {
 			this.titleViewport.append(this.titleText);
-			this._register(addDisposableListener(this.element, 'pointerenter', event => {
-				if (event.pointerType === 'touch') {
-					return;
-				}
-				this.updateTitleOverflow();
-				this.titleResize.value = observeResize(this.titleViewport, () => this.updateTitleOverflow());
-			}));
-			this._register(addDisposableListener(this.element, 'pointerleave', () => {
-				this.titleResize.clear();
-				this.titleViewport.classList.remove('title-overflows');
-			}));
+			this._register(observeResize(this.titleViewport, () => this.updateTitleOverflow()));
 		}
 		this.button.append(this.titleViewport);
 		if (leading) {
@@ -1551,7 +2086,7 @@ class SessionListRowRenderer extends Disposable {
 			return;
 		}
 		this.titleText.textContent = title;
-		if (this.titleResize.value) {
+		if (this.titleText !== this.titleViewport && this.titleViewport.isConnected) {
 			this.updateTitleOverflow();
 		}
 	}
@@ -1574,12 +2109,12 @@ class SessionListRowRenderer extends Disposable {
 
 /** Shared tree renderer for the retained controls supplied by each session sidebar. */
 class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
-	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService, mode: 'chat' | 'code', scrolling: 'external' | 'managed', dragOptions?: SessionsListDragOptions) {
+	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService, highlightRows: boolean, scrolling: 'external' | 'managed', dragOptions?: SessionsListDragOptions) {
 		const dnd = dragOptions && new SessionsListDragAndDrop(container.ownerDocument, dragOptions);
 		super(container, {
 			configurationService,
 			ariaLabel: title,
-			styles: mode === 'code' ? {
+			styles: highlightRows ? {
 				...defaultListStyles,
 				listHoverBackground: 'var(--ash-sessions-sidebar-hover-background)',
 				listActiveSelectionBackground: 'var(--ash-sessions-sidebar-selection-background)',
@@ -1615,6 +2150,23 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 		if (dnd) this._register(dnd);
 		this.element.classList.add('ash-sessions-list-tree');
 		this.element.tabIndex = -1;
+		// Move real focus between the nested row buttons when navigating the hierarchy.
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			const button = event.target;
+			if (!isHTMLElement(button) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+			let target: HTMLElement | undefined;
+			if (event.key === 'ArrowRight' && button.matches('.ash-sessions-list-section-toggle[aria-expanded="true"]')) {
+				const section = button.closest<HTMLElement>('[data-section]')!;
+				target = this.model.getNode(SessionsListTree.id(section))?.children[0]?.element;
+			} else if (event.key === 'ArrowLeft' && button.matches('.ash-sessions-list-item')) {
+				const row = button.closest<HTMLElement>('[data-item]')!;
+				target = this.model.getParent(SessionsListTree.id(row))?.element;
+			}
+			if (!target) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.focusRow(target);
+		}, true));
 	}
 
 	static id(element: HTMLElement): string {

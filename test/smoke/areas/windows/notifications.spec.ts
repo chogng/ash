@@ -9,6 +9,7 @@ import type { PlaywrightApplication } from '../../../automation/playwrightDriver
 import type { Workbench } from '../../../automation/workbench.js';
 import { expect, test } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, resolveContextMenuStyle } from '../../../../src/ash/platform/window/common/window.js';
 
@@ -408,9 +409,11 @@ test('Sessions startup notification copies through its window clipboard after re
 	try {
 		const page = await workbench.openAgentsWindow(target.kind);
 		const clipboard = await notificationClipboard(application, page);
-		await page.getByRole('button', { name: 'Show Notification Center', exact: true }).click();
-		const row = page.locator('.ash-notifications-center [data-notification-id]').filter({ hasText: 'Could not load keybindings.json' });
-		await expect(row).toHaveCount(1);
+		await new QuickAccess(page).runCommand('notifications.showList');
+		const center = page.getByRole('region', { name: 'Notification Center', exact: true });
+		await expect(center).toHaveCSS('border-radius', '12px');
+		const row = center.locator('[data-notification-id]').filter({ hasText: 'Could not load keybindings.json' }).first();
+		await expect(row).toBeVisible();
 		const message = await row.locator('.ash-notification-message').textContent();
 		await new Menus(page).select(application, async () => { await row.focus(); await row.press('Shift+F10'); }, ['Copy Text']);
 		await expect.poll(() => clipboard.read()).toBe(message);
