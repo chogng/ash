@@ -85,8 +85,10 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		this.storageMessage = h(this.document, 'p');
 		this.storageMessage.className = 'ash-models-settings-empty';
 		this.storageMessage.setAttribute('role', 'status');
-		this.storageStatus.append(this.storageMessage);
-		this.storageRetry = this._register(new Button(this.storageStatus, {
+		const storageActions = h(this.document, 'div');
+		storageActions.className = 'ash-settings-section-actions';
+		this.storageStatus.append(this.storageMessage, storageActions);
+		this.storageRetry = this._register(new Button(storageActions, {
 			...defaultButtonStyles,
 			label: localize('credentials.storage.retry', 'Retry credential storage'),
 			presentation: 'secondary',
@@ -102,13 +104,13 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			});
 			this.modelsWidget.render();
 		}));
-		this.storageAuthorize = this._register(new Button(this.storageStatus, {
+		this.storageAuthorize = this._register(new Button(storageActions, {
 			...defaultButtonStyles,
 			label: localize('credentials.storage.authorize', 'Authorize system keyring'),
 			presentation: 'secondary',
 		}));
 		this._register(this.storageAuthorize.onDidClick(() => void this.changeStorage('authorize')));
-		this.storageModeButton = this._register(new Button(this.storageStatus, {
+		this.storageModeButton = this._register(new Button(storageActions, {
 			...defaultButtonStyles,
 			label: localize('credentials.storage.useFile', 'Use file storage'),
 			presentation: 'secondary',

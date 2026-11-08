@@ -1,7 +1,8 @@
 [
   {
     "id": "dictation-fixture-5mb",
-    "recommended_language": "cmn",
+    "recommended_languages": ["cmn"],
+    "download_size_bytes": 5000000,
     "base_url": "http://127.0.0.1:39718/dictation-fixture-5mb",
     "paraformer": {
       "vocab_size": 8404,
@@ -36,7 +37,8 @@
   },
   {
     "id": "dictation-fixture-8mb",
-    "recommended_language": "cmn",
+    "recommended_languages": ["cmn"],
+    "download_size_bytes": 8000000,
     "base_url": "http://127.0.0.1:39718/dictation-fixture-8mb",
     "paraformer": {
       "vocab_size": 8404,

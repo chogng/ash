@@ -31,6 +31,7 @@ export function createWorkbenchDialogOptions({ shouldConfirmDiscard, ...options 
 
 export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'detailElement' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
 	readonly messageAsTitle?: boolean;
+	readonly useFormForDestructiveConfirmations?: boolean;
 }
 
 /** Maps queued domain requests to the service-independent Dialog widget. */
@@ -47,11 +48,17 @@ export class BrowserDialogHandler implements IDialogHandler {
 			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
 			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
 			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
+			const destructiveForm = this.presentation?.useFormForDestructiveConfirmations && request.kind === 'confirmation' && request.destructive;
 			const title = this.presentation?.messageAsTitle ? request.message : request.title ?? defaultTitle(request);
 			const options = createWorkbenchDialogOptions({
 				...this.presentation,
+				...(destructiveForm && {
+					layout: 'form',
+					extraClasses: [...(this.presentation?.extraClasses ?? []), 'ash-dialog-destructive-confirmation'],
+					buttonOptions: [{ presentation: 'danger' }, { presentation: 'secondary' }],
+				}),
 				cancelId,
-				type: this.presentation?.messageAsTitle ? 'none' : request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
+				type: destructiveForm || this.presentation?.messageAsTitle ? 'none' : request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
 				detail: request.detail,
 				inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
 				checkboxLabel: request.checkbox?.label,

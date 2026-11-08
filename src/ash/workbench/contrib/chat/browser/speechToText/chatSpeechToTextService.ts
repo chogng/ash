@@ -67,8 +67,6 @@ export interface IChatSpeechToTextService {
 	readonly isPreparingModel: boolean;
 	readonly onDidChangeDownloadingModel: Event<boolean>;
 	readonly isDownloadingModel: boolean;
-	readonly onDidChangeModelDownloadProgress: Event<void>;
-	readonly modelDownloadProgress: number | undefined;
 	start(window: Window & typeof globalThis, surface?: ChatDictationSurface): Promise<void>;
 	stopAndTranscribe(options?: IChatSpeechToTextStopOptions): Promise<string | undefined>;
 	cancel(): Promise<void>;
@@ -107,7 +105,7 @@ interface Recording {
 	finalizedText: string;
 	cancelled: boolean;
 	started: boolean;
-	download?: { readonly total: number | undefined; readonly files: Map<string, number>; progress?: number; };
+	waitingForLocalModel?: boolean;
 	error?: string;
 	liveText: string;
 	preserveLiveTranscript?: boolean;
@@ -126,11 +124,8 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 	public readonly onDidChangePreparingModel = this.preparing.event;
 	private readonly downloading = this._register(new Emitter<boolean>());
 	public readonly onDidChangeDownloadingModel = this.downloading.event;
-	private readonly progress = this._register(new Emitter<void>());
-	public readonly onDidChangeModelDownloadProgress = this.progress.event;
 	public isPreparingModel = false;
 	public isDownloadingModel = false;
-	public get modelDownloadProgress(): number | undefined { return this.recording?.download?.progress; }
 	public currentBackend = '';
 	public get showTranscriptWhileDictating(): boolean { return this.configuration.getValue<boolean>('dictation.showTranscript') ?? true; }
 	private recording: Recording | undefined;
@@ -174,11 +169,6 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 				return;
 			}
 			const downloading = status.state === LocalTranscriptionModelState.Downloading;
-			const download = this.recording.download;
-			if (downloading && download && status.file && status.downloadedBytes !== undefined) {
-				download.files.set(status.file, status.downloadedBytes);
-				if (download.total) download.progress = Math.min(1, [...download.files.values()].reduce((sum, bytes) => sum + bytes, 0) / download.total);
-			}
 			this.setPreparation(downloading || status.state === LocalTranscriptionModelState.Loading, downloading);
 		}));
 		const inProgress = ChatSpeechToTextInProgress.bindTo(contextKeys);
@@ -193,7 +183,6 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		this.isPreparingModel = preparing;
 		if (downloadingChanged) this.downloading.fire(downloading);
 		if (preparingChanged) this.preparing.fire(preparing);
-		this.progress.fire();
 	}
 
 	public async start(window: Window & typeof globalThis, surface: ChatDictationSurface = 'chat'): Promise<void> {
@@ -256,7 +245,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 					const firstUse = !model.available;
 					let ready = firstUse ? new DeferredPromise<void>() : undefined;
 					if (firstUse) {
-						recording.download = { total: model.downloadSizeBytes, files: new Map() };
+						recording.waitingForLocalModel = true;
 						this.setPreparation(true, false);
 						if (recording.cancelled || this.recording !== recording || this.isDisposed) throw canceled();
 					}
@@ -434,7 +423,7 @@ export class ChatSpeechToTextService extends Disposable implements IChatSpeechTo
 		const recording = this.recording;
 		if (!recording) return Promise.resolve(undefined);
 		if (recording.stopping) return recording.stopping;
-		if (recording.download && !recording.started && !recording.cancelled) return this.cancel().then(() => undefined);
+		if (recording.waitingForLocalModel && !recording.started && !recording.cancelled) return this.cancel().then(() => undefined);
 		recording.preserveLiveTranscript = options?.preserveLiveTranscript;
 		// Reserve stop before notifying state listeners, which may request it again.
 		recording.stopping = Promise.resolve().then(() => this.stopRecording(recording));

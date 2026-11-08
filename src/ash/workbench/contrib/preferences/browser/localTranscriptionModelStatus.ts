@@ -44,24 +44,30 @@ export class LocalTranscriptionModelStatus extends Disposable {
 	}
 }
 
-function modelDownloadProgress({ status, downloadSizeBytes }: ILocalTranscriptionModelSnapshot): number | undefined {
+export function modelDownloadProgress({ status, downloadSizeBytes }: ILocalTranscriptionModelSnapshot): number | undefined {
 	if (status?.state === DictationModelState.Downloading && status.packageDownloadedBytes !== undefined && downloadSizeBytes) {
 		return Math.min(1, status.packageDownloadedBytes / downloadSizeBytes);
 	}
 	return undefined;
 }
 
-export function modelProgressText(snapshot: ILocalTranscriptionModelSnapshot): string {
-	const status = snapshot.status;
-	switch (status?.state) {
+export function modelPreparationText(state: DictationModelState.Checking | DictationModelState.Downloading | DictationModelState.Loading, progress?: number): string {
+	switch (state) {
 		case DictationModelState.Checking: return localize('dictation.model.checking', 'Checking model files…');
-		case DictationModelState.Downloading: {
-			const progress = modelDownloadProgress(snapshot);
+		case DictationModelState.Downloading:
 			return progress === undefined
 				? localize('dictation.model.downloading', 'Downloading…')
 				: localize('dictation.model.downloadingPercent', 'Downloading {0}%', Math.floor(progress * 100));
-		}
 		case DictationModelState.Loading: return localize('dictation.model.loading', 'Loading model…');
+	}
+}
+
+export function modelProgressText(snapshot: ILocalTranscriptionModelSnapshot): string {
+	const status = snapshot.status;
+	switch (status?.state) {
+		case DictationModelState.Checking:
+		case DictationModelState.Downloading:
+		case DictationModelState.Loading: return modelPreparationText(status.state, modelDownloadProgress(snapshot));
 		case DictationModelState.Ready: return localize('dictation.model.ready', 'Model verified and ready to use.');
 		case DictationModelState.Cancelled: return localize('dictation.model.cancelled', 'Model preparation cancelled.');
 		case DictationModelState.Error: return localize('dictation.model.failed', 'Model preparation failed: {0}', status.error);

@@ -57,7 +57,7 @@ function modelSnapshot(status: DictationModelStatus) {
 		available: status.available,
 		sizeBytes: status.sizeBytes,
 		downloadSizeBytes: status.downloadSizeBytes ?? undefined,
-		recommendedLanguage: status.recommendedLanguage ?? undefined,
+		recommendedLanguages: status.recommendedLanguages,
 		status: status.stage ? modelStatus(status.stage) : undefined,
 	};
 }

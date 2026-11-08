@@ -165,7 +165,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 					const focused = document.activeElement as HTMLElement;
 					if (!this.visible || !this.controls.domNode.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.DictationModels, { type },
-						() => type === AccessibleViewType.Help ? localize('dictation.models.help', 'Local dictation models\nUse the Dictation models selector to switch between installed models. Use Tab to reach model actions. Install shows preparation progress while the model downloads. Cancel stops preparation. Uninstall requires confirmation and shows when removal is in progress. Preparation continues after Settings closes.') : this.controls.getAccessibleContent(),
+						() => type === AccessibleViewType.Help ? localize('dictation.models.help', 'Local dictation models\nUse the Dictation models selector to switch between installed models. Use Tab to reach model actions. The Install button shows progress during preparation. Hover over it or focus it with the keyboard to reveal Cancel. Activate Cancel to stop preparation. Uninstall requires confirmation and shows when removal is in progress. Preparation continues after Settings closes.') : this.controls.getAccessibleContent(),
 						() => focused.focus(), AccessibilityVerbositySettingId.DictationModels);
 				},
 			}));

@@ -132,8 +132,8 @@ pub struct DictationModelStatus {
     /// Expected download size, when Ash can fetch the model package.
     #[ts(type = "number | null")]
     pub download_size_bytes: Option<u64>,
-    /// BCP 47 language tag recommended by the built-in package.
-    pub recommended_language: Option<String>,
+    /// Ordered BCP 47 tags for languages recommended by the model catalog.
+    pub recommended_languages: Vec<String>,
     /// Last process-owned preparation stage, including its terminal result.
     pub stage: Option<DictationModelStage>,
 }

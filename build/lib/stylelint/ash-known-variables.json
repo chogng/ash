@@ -367,6 +367,7 @@
 		"--ash-dialog-style-dialog-border",
 		"--ash-dialog-style-dialog-foreground",
 		"--ash-dialog-style-dialog-shadow",
+		"--ash-dictation-download-progress",
 		"--ash-diff-center-width",
 		"--ash-diff-header-height",
 		"--ash-diff-original-line-numbers-left",

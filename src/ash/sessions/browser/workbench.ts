@@ -734,7 +734,7 @@ export abstract class Workbench extends Disposable {
 		const systemOutput = this._register(new SystemOutputService(output, options.api.appServer, logger, services.get(ILoggerService).files));
 		this._register(logger.registerSink(systemOutput, true));
 		if (!services.has(IStatusbarService)) services.registerInstance(IStatusbarService, this._register(new StatusbarService()));
-		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode)));
+		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode, { useFormForDestructiveConfirmations: true })));
 
 		let sessionsPart: SessionsPart | undefined;
 		const layout = this.layoutService = this._register(services.createInstance(layoutConstructor, this.domNode, {

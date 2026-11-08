@@ -34,7 +34,7 @@ export interface ILocalTranscriptionModelSnapshot {
 	readonly available: boolean;
 	readonly sizeBytes: number;
 	readonly downloadSizeBytes?: number;
-	readonly recommendedLanguage?: string;
+	readonly recommendedLanguages?: readonly string[];
 	readonly status?: IDictationModelStatus;
 }
 

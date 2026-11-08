@@ -14,7 +14,6 @@ import { IChatSlashCommandService } from '../../../common/participants/chatSlash
 import { IChatService, type QueuedMessage } from '../../../../../services/chat/common/chatService.js';
 import type { IChatWidget } from '../../chat.js';
 import { InputBox } from '../../../../../../base/browser/ui/inputbox/inputbox.js';
-import { ProgressBar } from '../../../../../../base/browser/ui/progressbar/progressbar.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../../../base/browser/ui/dialog/dialog.js';
 import { defaultInputBoxStyles, defaultCheckboxStyles, defaultDialogStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
@@ -31,7 +30,7 @@ import { IContextKeyService } from '../../../../../../platform/contextkey/browse
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import type { IChatWidgetModel } from '../chatWidget.js';
 import type { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
-import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../../base/common/event.js';
 import { IImageEditorService } from '../../../../../services/imageEditor/common/imageEditorService.js';
 import { convertBufferToScreenshotVariable } from '../../attachments/chatScreenshotContext.js';
@@ -612,37 +611,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 
 		this.dictationSession = this._register(instantiationService.createInstance(DictationInput, this.input, this.dictationPreview, () => this.visible, () => this.delegate.openModelSettings('dictation'), 'chat'));
-		const modelPreparation = h(ownerDocument, 'div', { className: 'ash-chat-model-preparation' });
-		modelPreparation.hidden = true;
-		const preparationLabel = h(ownerDocument, 'span');
-		const progressLabel = localize('dictation.model.progress', 'Voice model preparation');
-		modelPreparation.append(preparationLabel);
-		const progressBar = this._register(new ProgressBar(modelPreparation, defaultProgressBarStyles));
-		progressBar.element.setAttribute('aria-label', progressLabel);
-		const cancelPreparation = this._register(new Button(modelPreparation, {
-			...defaultButtonStyles, label: localize('dictation.cancelDownload', 'Cancel download'), size: 'small', presentation: 'quiet',
-		}));
-		this._register(cancelPreparation.onDidClick(() => {
-			void this.dictationSession.cancel().then(
-				() => announceStatus(localize('dictation.model.cancelled', 'Model preparation cancelled.')),
-				error => this.publishDictationError(error),
-			);
-		}));
-		const renderModelPreparation = (): void => {
-			const visible = this.dictationSession.isPreparingLocalModel;
-			if (!visible && modelPreparation.contains(ownerDocument.activeElement)) this.focus();
-			modelPreparation.hidden = !visible;
-			if (!visible) return;
-			const label = this.dictationSession.preparationLabel;
-			preparationLabel.textContent = localize('dictation.prepareBeforeRecording', '{0} Recording starts when the model is ready.', label);
-			progressBar.value = this.speechToText.isDownloadingModel ? this.speechToText.modelDownloadProgress : undefined;
-		};
-		this._register(this.speechToText.onDidChangeModelDownloadProgress(renderModelPreparation));
 		this._register(this.voiceInputMode.voiceAvailable.onDidChange(() => this.renderToolbarActions()));
 		this._register(this.voiceInputMode.dictationAvailable.onDidChange(() => this.renderToolbarActions()));
 		let previousPreparationLabel: string | undefined;
 		const announceDictationPreparation = (): void => {
-			const label = this.dictationSession.isPreparingLocalModel ? preparationLabel.textContent ?? undefined : this.dictationSession.preparationLabel;
+			const label = this.dictationSession.preparationLabel;
 			if (label && label !== previousPreparationLabel && this.visible) announceStatus(label);
 			previousPreparationLabel = label;
 		};
@@ -654,7 +627,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			}
 			if (!this.speechToText.isBusy) this.measuringDictation = false;
 			if (this.dictationSession.isStarting) this.inputNotifications.deleteNotification(this.notificationId('dictation'));
-			renderModelPreparation();
 			announceDictationPreparation();
 			this.renderStatus(); this.renderToolbarActions();
 		}));
@@ -663,7 +635,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		const onDidChangeDictationPreparation = Event.any(this.speechToText.onDidChangePreparingModel, this.speechToText.onDidChangeDownloadingModel);
 		this._register(onDidChangeDictationPreparation(() => {
-			renderModelPreparation();
 			announceDictationPreparation();
 			this.renderStatus();
 			this.renderToolbarActions();
@@ -675,7 +646,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (error) { this.publishDictationError(error); }
 		}));
 		if (!this.secondaryToolbarContainer) this.element.append(this.status);
-		this.element.append(modelPreparation, this.dictationPreview, this.interaction, this.changesPill.domNode, this.inputContainer);
+		this.element.append(this.dictationPreview, this.interaction, this.changesPill.domNode, this.inputContainer);
 		if (this.canvasPills) { this.element.insertBefore(this.canvasPills.domNode, this.changesPill.domNode); }
 		if (this.inputFooter) this.element.append(this.inputFooter);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
@@ -2437,7 +2408,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (state.status !== undefined) return state.status;
 		if (state.inputBlocked && state.phase !== 'loading') return '';
 		const preparation = this.dictationSession.preparationLabel;
-		if (preparation) return this.dictationSession.showButton || this.dictationSession.isPreparingLocalModel ? '' : preparation;
+		if (preparation) return this.dictationSession.showButton ? '' : preparation;
 		if (this.dictationSession.isStarting) return localize('chat.input.dictationStarting', 'Starting dictation…');
 		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');

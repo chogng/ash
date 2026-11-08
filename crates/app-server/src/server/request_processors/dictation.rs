@@ -395,7 +395,8 @@ impl<'a> DictationRequestProcessor<'a> {
             available,
             size_bytes,
             download_size_bytes: download.map(|(size, _)| size),
-            recommended_language: download.map(|(_, language)| language.to_owned()),
+            recommended_languages: download
+                .map_or_else(Vec::new, |(_, languages)| languages.to_vec()),
             stage,
         })
     }

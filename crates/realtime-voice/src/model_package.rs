@@ -54,6 +54,28 @@ pub(crate) static BUILTIN_MODELS: LazyLock<Vec<BuiltinModel>> = LazyLock::new(||
             "duplicate dictation model ID: {}",
             model.id
         );
+        assert_eq!(
+            model.download_size_bytes,
+            model.file_bytes(),
+            "dictation model download size does not match its files: {}",
+            model.id
+        );
+        let mut languages = HashSet::new();
+        for language in &model.recommended_languages {
+            let mut subtags = language.split('-');
+            let primary = subtags.next().unwrap_or_default();
+            assert!(
+                (2..=8).contains(&primary.len())
+                    && primary.bytes().all(|byte| byte.is_ascii_alphabetic())
+                    && subtags.all(|part| {
+                        !part.is_empty()
+                            && part.len() <= 8
+                            && part.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                    })
+                    && languages.insert(language.to_ascii_lowercase()),
+                "invalid or duplicate dictation language tag: {language}"
+            );
+        }
     }
     models
 });
@@ -62,7 +84,8 @@ pub(crate) static BUILTIN_MODELS: LazyLock<Vec<BuiltinModel>> = LazyLock::new(||
 #[serde(deny_unknown_fields)]
 pub(crate) struct BuiltinModel {
     pub id: String,
-    pub recommended_language: String,
+    pub recommended_languages: Vec<String>,
+    pub download_size_bytes: u64,
     base_url: String,
     paraformer: ParaformerMetadata,
     files: DownloadFiles,
@@ -106,11 +129,11 @@ impl BuiltinModel {
         ]
     }
 
-    pub(crate) fn download_size_bytes(&self) -> u64 {
+    fn file_bytes(&self) -> u64 {
         self.downloads()
             .iter()
-            .map(|(file, _)| file.size_bytes)
-            .sum()
+            .try_fold(0u64, |total, (file, _)| total.checked_add(file.size_bytes))
+            .expect("dictation model download size overflow")
     }
 }
 

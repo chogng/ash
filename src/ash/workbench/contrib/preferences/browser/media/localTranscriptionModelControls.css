@@ -67,8 +67,16 @@
 		var(--ash-settings-itemSeparator);
 }
 
-.ash-local-transcription-model-table tbody tr:is(:hover, :focus-within) {
-	background: var(--ash-settings-rowHoverBackground);
+.ash-local-transcription-model-language-tag {
+	padding-inline: var(--ash-spacing-size40);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-list-hoverBackground);
+	color: var(--ash-foreground);
+}
+
+.ash-local-transcription-model-language-tag
+	+ .ash-local-transcription-model-language-tag {
+	margin-inline-start: var(--ash-spacing-size40);
 }
 
 .ash-local-transcription-model-actions {
@@ -78,14 +86,113 @@
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-button.ash-local-transcription-model-install-progress:disabled {
+.ash-button.ash-local-transcription-model-action {
 	min-width: 0;
 	max-width: 100%;
-	opacity: 1;
 }
 
-.ash-local-transcription-model-install-progress .ash-button-label {
+.ash-local-transcription-model-action .ash-button-label {
 	white-space: normal;
+}
+
+.ash-button.ash-local-transcription-model-install-progress {
+	--ash-dictation-download-progress: 0%;
+	display: inline-grid;
+	grid-template-columns: minmax(0, 1fr);
+	position: relative;
+	isolation: isolate;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-local-transcription-model-install-progress::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	/* Match the hovered microphone, where both the button and its split-action slot paint the toolbar hover color. */
+	background:
+		linear-gradient(
+			var(--ash-toolbar-hoverBackground),
+			var(--ash-toolbar-hoverBackground)
+		),
+		linear-gradient(
+			var(--ash-toolbar-hoverBackground),
+			var(--ash-toolbar-hoverBackground)
+		),
+		var(--ash-editor-background);
+	clip-path: inset(0 calc(100% - var(--ash-dictation-download-progress)) 0 0);
+	pointer-events: none;
+}
+
+.ash-high-contrast .ash-local-transcription-model-install-progress::before {
+	inset-block-start: auto;
+	height: var(--ash-strokeThickness);
+	background: currentColor;
+}
+
+.ash-local-transcription-model-cancel-label,
+.ash-local-transcription-model-width-samples {
+	display: none;
+}
+
+.ash-local-transcription-model-install-progress
+	> :is(
+		.ash-button-content,
+		.ash-local-transcription-model-cancel-label,
+		.ash-local-transcription-model-width-samples
+	) {
+	grid-area: 1 / 1;
+	justify-self: center;
+}
+
+.ash-local-transcription-model-install-progress
+	> .ash-local-transcription-model-width-samples {
+	display: grid;
+	block-size: 0;
+	visibility: hidden;
+}
+
+.ash-local-transcription-model-width-samples > span {
+	grid-area: 1 / 1;
+}
+
+.ash-local-transcription-model-install-progress
+	> .ash-local-transcription-model-cancel-label {
+	display: block;
+	visibility: hidden;
+}
+
+.ash-local-transcription-model-install-progress:enabled:is(
+		:focus-visible,
+		:hover:not(.awaiting-pointer-exit)
+	)
+	> .ash-button-content {
+	visibility: hidden;
+}
+
+.ash-local-transcription-model-install-progress:enabled:is(
+		:focus-visible,
+		:hover:not(.awaiting-pointer-exit)
+	)
+	> .ash-local-transcription-model-cancel-label {
+	visibility: visible;
+}
+
+.ash-button-danger.ash-local-transcription-model-action:not(:enabled:hover) {
+	background: color-mix(
+		in srgb,
+		var(--ash-error-foreground) 10%,
+		transparent
+	);
+}
+
+.ash-high-contrast
+	.ash-button-danger.ash-local-transcription-model-action:not(
+		:enabled:hover
+	) {
+	background: transparent;
 }
 
 .ash-local-transcription-model-status {

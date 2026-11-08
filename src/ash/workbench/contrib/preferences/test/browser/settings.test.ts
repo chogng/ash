@@ -4376,7 +4376,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	const installed: string[] = [];
 	services.registerInstance(ILocalTranscriptionModelService, {
 		isSupported: true,
-		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, downloadSizeBytes: 1024 * 1024, recommendedLanguage: 'cmn', status: modelStatus }),
+		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, downloadSizeBytes: 1024 * 1024, recommendedLanguages: ['cmn'], status: modelStatus }),
 		listModels: async () => [],
 		onDidChangeModels: changed.event,
 		cancelModel: async () => {

@@ -356,7 +356,7 @@
 		)
 	)
 	:where(.ash-sessions-window)
-	.ash-dialog-close-confirmation
+	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
 	:is(.ash-button-secondary, .ash-button-danger) {
 	border-color: transparent;
 }
@@ -368,7 +368,7 @@
 		)
 	)
 	:where(.ash-sessions-window)
-	.ash-dialog-close-confirmation
+	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
 	.ash-button-secondary {
 	background: color-mix(in srgb, var(--ash-foreground) 6%, transparent);
 }
@@ -380,7 +380,7 @@
 		)
 	)
 	:where(.ash-sessions-window)
-	.ash-dialog-close-confirmation
+	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
 	.ash-button-danger {
 	background: color-mix(
 		in srgb,

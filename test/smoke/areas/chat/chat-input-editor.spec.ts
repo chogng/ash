@@ -81,7 +81,6 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await expect(chat).toHaveClass(/empty/u);
-	await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
 	const { surfaceHeight, surfaceCount, ...layout } = await chat.evaluate(element => {
 		const list = element.querySelector<HTMLElement>('.ash-chat-list-widget');
 		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -202,7 +201,6 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		}
 		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		const composer = chat.locator('.ash-chat-input-container');
-		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
 		await expect(composer).toHaveCSS('height', '84px');
 		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
@@ -214,7 +212,6 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await page.keyboard.press('Enter');
 		const voice = page.getByRole('dialog', { name: 'Ash Settings' });
 		await expect(voice.getByRole('group', { name: 'Local dictation models' })).toBeVisible();
-		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
 		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
 		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(voice.locator('[data-model-id="ash-playwright-missing-model"]')).toBeVisible();
@@ -233,7 +230,6 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await voice.locator('.ash-modal-editor-close').click();
 		await expect(chat.locator('.ash-chat-input-part [role="status"]').filter({ hasText: 'Could not read dictation model package' })).toHaveCount(0);
 		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
-		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
 		await expect(composer).toHaveCSS('height', '84px');
 		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
 		await button.focus();

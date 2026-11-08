@@ -443,7 +443,7 @@ suite('Builtin dictation ownership', () => {
 		assert.equal(await fixture.speech.stopAndTranscribe({ preserveLiveTranscript: true }), 'long live transcript');
 	});
 
-	test('model preparation events remain indeterminate until inference is ready and reset on cancellation', async () => {
+	test('model preparation events track downloading and reset when inference is ready', async () => {
 		using owner = new DisposableStore();
 		const local = new LocalCapture();
 		const ready = new DeferredPromise<void>(); local.pending = ready.p;
@@ -454,7 +454,7 @@ suite('Builtin dictation ownership', () => {
 		const starting = fixture.speech.start(captureWindow);
 		local.modelStatus.fire({ state: LocalTranscriptionModelState.Downloading });
 		assert.equal(fixture.speech.isPreparingModel, true);
-		assert.equal(fixture.speech.modelDownloadProgress, undefined);
+		assert.equal(fixture.speech.isDownloadingModel, true);
 		local.modelStatus.fire({ state: LocalTranscriptionModelState.Ready });
 		await ready.complete(); await starting;
 		await fixture.speech.cancel();

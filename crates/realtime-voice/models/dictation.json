@@ -1,7 +1,8 @@
 [
   {
     "id": "paraformer-large-online-ec6a3c64",
-    "recommended_language": "cmn",
+    "recommended_languages": ["cmn"],
+    "download_size_bytes": 238322681,
     "base_url": "https://modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx/resolve/master",
     "paraformer": {
       "vocab_size": 8404,

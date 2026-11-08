@@ -17,7 +17,8 @@ const secondModelId = 'dictation-fixture-8mb';
 let models, row, secondRow, modelRoot;
 const installButton = () => row.getByRole('button', { name: '安装', exact: true });
 const uninstallButton = () => row.getByRole('button', { name: '卸载', exact: true });
-const downloadProgress = modelRow => modelRow.getByRole('button', { name: /^正在下载 [1-9]\d?%$/u });
+const cancelButton = modelRow => modelRow.getByRole('button', { name: '取消', exact: true });
+const downloadProgress = modelRow => cancelButton(modelRow).getByText(/^正在下载 [1-9]\d?%$/u);
 const marker = (id = modelId) => join(modelRoot, id, 'dictation-model.json');
 
 export default {
@@ -56,14 +57,49 @@ export default {
 			},
 		},
 		{
-			id: 'CANCEL',
-			title: 'Retry after HTTP 503 and cancel the transfer',
+			id: 'PROGRESS',
+			title: 'Retry after HTTP 503 and inspect the progress fill',
 			async run() {
 				await installButton().click();
 				await expect(row).toContainText('HTTP 503', { timeout: 10000 });
 				await installButton().click();
 				await expect(downloadProgress(row)).toBeVisible({ timeout: 12000 });
-				await row.getByRole('button', { name: '取消', exact: true }).click();
+				await expect(row.getByRole('button')).toHaveCount(1);
+				const measure = () => cancelButton(row).evaluate(button => {
+					const label = button.querySelector('.ash-button-label').textContent;
+					const { clipPath } = getComputedStyle(button, '::before');
+					return {
+						percent: Number(label.match(/(\d+)%/u)[1]),
+						right: parseFloat(clipPath.match(/inset\(0px ([\d.]+)%/u)[1]),
+					};
+				});
+				const first = await measure();
+				await expect.poll(async () => (await measure()).percent, { timeout: 12000 }).toBeGreaterThan(first.percent);
+				const next = await measure();
+				expect(next.right).toBeLessThan(first.right);
+				expect(Math.floor(100 - next.right + 0.001)).toBe(next.percent);
+				return 'The button fill advanced from the left in step with the translated byte percentage.';
+			},
+		},
+		{
+			id: 'HOVER',
+			title: 'Reveal Cancel on the same button',
+			async run() {
+				const cancel = cancelButton(row);
+				const before = await cancel.boundingBox();
+				await row.getByRole('rowheader').hover();
+				await cancel.hover();
+				await expect(cancel.getByText('取消', { exact: true })).toBeVisible();
+				await expect(downloadProgress(row)).toBeHidden();
+				expect(await cancel.boundingBox()).toEqual(before);
+				return 'Hover reveals Cancel without changing the action button geometry.';
+			},
+		},
+		{
+			id: 'CANCEL',
+			title: 'Cancel the transfer',
+			async run() {
+				await cancelButton(row).click();
 				await expect(installButton()).toBeEnabled();
 				expect(existsSync(marker())).toBe(false);
 				expect(existsSync(join(modelRoot, `.${modelId}.installing`))).toBe(false);
@@ -83,6 +119,7 @@ export default {
 				expect(existsSync(marker())).toBe(false);
 				expect(existsSync(marker(secondModelId))).toBe(false);
 				await expect(uninstallButton()).toBeEnabled({ timeout: 40000 });
+				await expect(uninstallButton()).toHaveCSS('background-color', /^color\(srgb .+ \/ 0\.1\)$/u);
 				expect(existsSync(marker())).toBe(true);
 				await expect(secondRow.getByRole('button', { name: '卸载', exact: true })).toBeEnabled({ timeout: 40000 });
 				expect(existsSync(marker(secondModelId))).toBe(true);

@@ -1,8 +1,9 @@
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/localTranscriptionModelControls.css';
-import { h } from '../../../../base/browser/dom.js';
-import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { setAriaAttribute, status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -11,16 +12,16 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { DictationConfiguration } from '../../chat/common/constants.js';
 import { ILocalTranscriptionModelService, isModelPreparing, preferredInstalledModel, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../platform/localTranscription/common/localTranscription.js';
-import { LocalTranscriptionModelStatus, modelProgressText } from './localTranscriptionModelStatus.js';
+import { LocalTranscriptionModelStatus, modelDownloadProgress, modelPreparationText, modelProgressText } from './localTranscriptionModelStatus.js';
 
 interface ModelRow extends IDisposable {
 	readonly element: HTMLElement;
 	readonly state: HTMLElement;
 	readonly language: HTMLTableCellElement;
+	readonly languageTags: HTMLElement;
 	readonly size: HTMLTableCellElement;
-	readonly primary: Button;
-	readonly cancel: Button;
-	readonly uninstall: Button;
+	readonly action: Button;
+	readonly cancelLabel: HTMLElement;
 	snapshot: ILocalTranscriptionModelSnapshot;
 }
 
@@ -73,12 +74,14 @@ export class LocalTranscriptionModelControls extends Disposable {
 			localize('dictation.model.column.name', 'Model'),
 			localize('dictation.model.column.languages', 'Best for'),
 			localize('dictation.model.column.downloadSize', 'Size'),
-			localize('dictation.model.column.actions', 'Actions'),
 		]) {
 			const column = h(document, 'th', label);
 			column.scope = 'col';
 			header.append(column);
 		}
+		const actionsLabel = localize('dictation.model.column.actions', 'Actions');
+		header.append(h(document, 'th', { attributes: { scope: 'col', 'aria-label': actionsLabel } },
+			h(document, 'span', { className: 'ash-local-transcription-model-actions-label', attributes: { 'aria-hidden': 'true' } }, actionsLabel)));
 		this.inventory = this.table.createTBody();
 		this.domNode.append(this.table);
 		this.status = this._register(new LocalTranscriptionModelStatus(this.domNode));
@@ -104,7 +107,8 @@ export class LocalTranscriptionModelControls extends Disposable {
 
 	public getAccessibleContent(): string {
 		return [localize('dictation.model.table', 'Local dictation models'), ...Array.from(this.rows, ([, { snapshot }]) => {
-			return [snapshot.model, this.modelSize(snapshot), this.modelState(snapshot), this.languageLabel(snapshot.recommendedLanguage)].filter(Boolean).join(' · ');
+			const languages = snapshot.recommendedLanguages?.map(language => this.languageLabel(language)).join(', ');
+			return [snapshot.model, this.modelSize(snapshot), this.modelState(snapshot), languages].filter(Boolean).join(' · ');
 		})].join('\n');
 	}
 
@@ -197,6 +201,11 @@ export class LocalTranscriptionModelControls extends Disposable {
 		state.className = 'ash-local-transcription-model-row-state';
 		modelCell.append(snapshot.model, state);
 		const language = h(document, 'td');
+		const languageTags = h(document, 'div', { className: 'ash-local-transcription-model-language-tags' });
+		language.append(languageTags);
+		resources.add(getHoverDelegate().setupDelayedHover(languageTags, () => ({
+			content: languageTags.scrollWidth > languageTags.clientWidth ? language.getAttribute('aria-label') ?? '' : '',
+		})));
 		const size = h(document, 'td');
 		const actions = h(document, 'div');
 		actions.className = 'ash-local-transcription-model-actions';
@@ -204,24 +213,39 @@ export class LocalTranscriptionModelControls extends Disposable {
 		actionCell.append(actions);
 		element.append(modelCell, language, size, actionCell);
 
-		const primary = resources.add(new Button(actions, { ...defaultButtonStyles, label: '', presentation: 'secondary' }));
-		const cancel = resources.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('dictation.model.cancel', 'Cancel'),
-			presentation: 'secondary',
-		}));
-		const uninstall = resources.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: '',
-			presentation: 'danger',
-		}));
-		const row: ModelRow = Object.assign(toDisposable(() => resources.dispose()), { element, state, language, size, primary, cancel, uninstall, snapshot });
-		resources.add(primary.onDidClick(() => {
+		const action = resources.add(new Button(actions, { ...defaultButtonStyles, label: '', supportShortLabel: true, presentation: 'secondary' }));
+		action.toggleClassName('ash-local-transcription-model-action', true);
+		const cancelLabel = h(document, 'span', {
+			className: 'ash-local-transcription-model-cancel-label',
+			attributes: { 'aria-hidden': 'true' },
+		}, localize('dictation.model.cancel', 'Cancel'));
+		// Let localized preparation labels size the button without exposing them as status text.
+		const widthSamples = h(document, 'span', {
+			className: 'ash-local-transcription-model-width-samples',
+			attributes: { 'aria-hidden': 'true' },
+		}, ...[
+			modelPreparationText(DictationModelState.Checking),
+			modelPreparationText(DictationModelState.Downloading),
+			modelPreparationText(DictationModelState.Downloading, 1),
+			modelPreparationText(DictationModelState.Loading),
+		].map(label => h(document, 'span', label)));
+		action.domNode.append(cancelLabel, widthSamples);
+		const row: ModelRow = Object.assign(toDisposable(() => resources.dispose()), { element, state, language, languageTags, size, action, cancelLabel, snapshot });
+		resources.add(addDisposableListener(action.domNode, 'pointerleave', () => action.toggleClassName('awaiting-pointer-exit', false)));
+		resources.add(action.onDidClick(event => {
 			const model = row.snapshot.model;
-			void this.perform(model, 'install', () => this.localTranscription.prepareModel(model, () => { }).completed);
+			if (isModelPreparing(row.snapshot.status) || this.pending.get(model) === 'install') {
+				if (event.pointerType !== 'mouse' || !action.domNode.classList.contains('awaiting-pointer-exit')) {
+					void this.cancelPreparation(model);
+				}
+			} else if (row.snapshot.available) {
+				void this.confirmUninstall(row);
+			} else {
+				// Let the initial click reveal progress even while the pointer is still over Install.
+				action.toggleClassName('awaiting-pointer-exit', event.pointerType === 'mouse');
+				void this.perform(model, 'install', () => this.localTranscription.prepareModel(model, () => { }).completed);
+			}
 		}));
-		resources.add(cancel.onDidClick(() => { void this.cancelPreparation(row.snapshot.model); }));
-		resources.add(uninstall.onDidClick(() => { void this.confirmUninstall(row); }));
 		return row;
 	}
 
@@ -231,24 +255,40 @@ export class LocalTranscriptionModelControls extends Disposable {
 		const available = this.localTranscription.isSupported;
 		const busy = this.pending.get(model.model);
 		const installing = preparing || busy === 'install';
-		const moveFocusToCancel = installing && row.primary.hasFocus();
-		const restoreActionFocus = !installing && row.cancel.hasFocus();
-		row.state.textContent = busy === 'uninstall' || installing ? '' : this.modelState(model);
-		row.language.textContent = this.languageLabel(model.recommendedLanguage) ?? '—';
+		const uninstalling = busy === 'uninstall';
+		const showUninstall = uninstalling || (!installing && model.available);
+		const modelState = this.modelState(model);
+		row.state.textContent = uninstalling || installing ? '' : modelState;
+		const languageLabels = model.recommendedLanguages?.map(language => this.languageLabel(language)) ?? [];
+		const languageText = languageLabels.join(', ') || '—';
+		if (row.language.getAttribute('aria-label') !== languageText) {
+			row.language.setAttribute('aria-label', languageText);
+			row.languageTags.replaceChildren(...(languageLabels.length
+				? languageLabels.map(label => h(row.language.ownerDocument, 'span', { className: 'ash-local-transcription-model-language-tag' }, label))
+				: ['—']));
+		}
 		row.size.textContent = this.modelSize(model);
 		// The selector shows the active model and the available actions indicate installation.
 		row.state.classList.toggle('ash-aria-live', model.status?.state !== DictationModelState.Error);
-		row.primary.hidden = !installing && model.available;
-		row.primary.label = installing ? this.modelState(model) : localize('dictation.model.install', 'Install');
-		row.primary.enabled = available && !installing && !busy && model.downloadSizeBytes !== undefined;
-		row.primary.toggleClassName('ash-local-transcription-model-install-progress', installing);
-		row.cancel.hidden = !installing;
-		row.cancel.enabled = available && installing;
-		row.uninstall.hidden = !model.available || installing;
-		row.uninstall.enabled = available && !busy;
-		row.uninstall.label = busy === 'uninstall' ? localize('dictation.model.uninstalling', 'Uninstalling…') : localize('dictation.model.uninstall', 'Uninstall');
-		if (moveFocusToCancel) row.cancel.focus();
-		if (restoreActionFocus) (model.available ? row.uninstall : row.primary).focus();
+		const progress = installing ? modelDownloadProgress(model) : undefined;
+		const label = installing || uninstalling ? modelState
+			: showUninstall ? localize('dictation.model.uninstall', 'Uninstall')
+				: localize('dictation.model.install', 'Install');
+		const action = row.action;
+		if (action.label !== label) action.label = label;
+		action.labelShort = progress === undefined ? '' : localize('dictation.model.compactPercent', '{0}%', Math.floor(progress * 100));
+		action.enabled = available && !uninstalling && (installing || showUninstall || model.downloadSizeBytes !== undefined);
+		action.presentation = showUninstall ? 'danger' : 'secondary';
+		action.toggleClassName('ash-local-transcription-model-install-progress', installing);
+		if (!installing) action.toggleClassName('awaiting-pointer-exit', false);
+		if (progress === undefined) action.domNode.style.removeProperty('--ash-dictation-download-progress');
+		else action.domNode.style.setProperty('--ash-dictation-download-progress', `${progress * 100}%`);
+		setAriaAttribute(action.domNode, 'label', installing ? row.cancelLabel.textContent : undefined);
+		if (installing) {
+			if (action.domNode.getAttribute('aria-description') !== modelState) action.domNode.setAttribute('aria-description', modelState);
+		} else {
+			action.domNode.removeAttribute('aria-description');
+		}
 	}
 
 	private async cancelPreparation(model: string): Promise<void> {
@@ -265,6 +305,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 				message: localize('dictation.model.uninstallDetail', 'Uninstall {0}?', model),
 				primaryButton: localize('dictation.model.uninstall', 'Uninstall'),
 				custom: true,
+				destructive: true,
 			});
 			if (result.confirmed && !this.isDisposed && this.visible && this.rows.get(model)?.snapshot.available) {
 				await this.perform(model, 'uninstall', () => this.localTranscription.deleteModel(model));
@@ -280,14 +321,13 @@ export class LocalTranscriptionModelControls extends Disposable {
 		return model.downloadSizeBytes === undefined ? '—' : localize('dictation.model.size', '{0} MiB', (model.downloadSizeBytes / (1024 * 1024)).toFixed(1));
 	}
 
-	private languageLabel(language: string | undefined): string | undefined {
-		if (!language) { return undefined; }
+	private languageLabel(language: string): string {
 		if (language === 'cmn') {
 			return localize('dictation.model.language.cmn', 'Mandarin Chinese');
 		}
 		try {
 			const locale = this.domNode.ownerDocument.documentElement.lang || 'en';
-			return new Intl.DisplayNames([locale], { type: 'language' }).of(language);
+			return new Intl.DisplayNames([locale], { type: 'language' }).of(language) ?? language;
 		} catch {
 			return language;
 		}
@@ -296,7 +336,7 @@ export class LocalTranscriptionModelControls extends Disposable {
 	private modelState(model: ILocalTranscriptionModelSnapshot): string {
 		if (this.pending.get(model.model) === 'uninstall') return localize('dictation.model.uninstalling', 'Uninstalling…');
 		if (isModelPreparing(model.status) || model.status?.state === DictationModelState.Error) return modelProgressText(model);
-		if (this.pending.get(model.model) === 'install') return localize('dictation.model.checking', 'Checking model files…');
+		if (this.pending.get(model.model) === 'install') return modelPreparationText(DictationModelState.Checking);
 		if (!model.available) return localize('dictation.model.notInstalled', 'Not installed');
 		return model.model === this.selectedModel ? localize('dictation.model.readyState', 'Ready') : localize('dictation.model.installedState', 'Installed');
 	}

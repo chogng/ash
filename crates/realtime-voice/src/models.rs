@@ -174,15 +174,15 @@ impl DictationModelManager {
         })
     }
 
-    /// Returns the transfer size in bytes and recommended language of a downloadable package.
-    pub fn download_info(model_id: &str) -> Option<(u64, &'static str)> {
+    /// Returns the transfer size in bytes and recommended languages of a downloadable package.
+    pub fn download_info(model_id: &str) -> Option<(u64, &'static [String])> {
         BUILTIN_MODELS
             .iter()
             .find(|model| model.id == model_id)
             .map(|model| {
                 (
-                    model.download_size_bytes(),
-                    model.recommended_language.as_str(),
+                    model.download_size_bytes,
+                    model.recommended_languages.as_slice(),
                 )
             })
     }

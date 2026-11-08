@@ -176,9 +176,61 @@
 	padding-inline-start: 0;
 }
 
+.ash-sessions-settings-page
+	.ash-local-transcription-model-table
+	:is(th, td):last-child {
+	/* Align the action buttons with the model selector above. */
+	padding-inline: var(--ash-spacing-size160) var(--ash-spacing-size80);
+	text-align: end;
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-actions-label {
+	display: none;
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-actions {
+	justify-content: flex-end;
+}
+
 .ash-sessions-settings-page .ash-local-transcription-model-table thead {
 	color: var(--ash-muted-foreground);
 	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-sessions-settings-page .ash-local-transcription-model-language-tags {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-sessions-settings-page .ash-button-secondary:not(:where(.icon-only)) {
+	--ash-button-secondaryBackground: var(--ash-button-hoverBackground);
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-settings-page
+	.ash-local-transcription-model-action.ash-button-danger {
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-settings-page
+	.ash-local-transcription-model-action.ash-button-danger:enabled:hover:not(
+		:active
+	):where(:not(.ash-high-contrast *)) {
+	background-color: color-mix(
+		in srgb,
+		var(--ash-error-foreground) 16%,
+		transparent
+	);
+}
+
+.ash-sessions-settings-page
+	.ash-button-secondary:hover:not(:active, :disabled, :where(.icon-only)) {
+	background: color-mix(
+		in srgb,
+		var(--ash-button-hoverBackground),
+		var(--ash-button-activeBackground)
+	);
 }
 
 .ash-sessions-settings-page
@@ -331,6 +383,36 @@
 	.ash-sessions-settings-page {
 		grid-column: 1;
 		grid-row: 2;
+	}
+}
+
+@container sessions-settings-page (min-width: 520px) {
+	.ash-sessions-settings-page .ash-local-transcription-model-table {
+		table-layout: auto;
+	}
+
+	.ash-sessions-settings-page
+		.ash-local-transcription-model-table
+		thead
+		th:first-child {
+		width: auto;
+	}
+
+	.ash-sessions-settings-page
+		.ash-local-transcription-model-table
+		th:is(:nth-child(2), :nth-child(3)) {
+		/* Keep these columns at their content width and give spare space to Model. */
+		width: 1%;
+	}
+
+	.ash-sessions-settings-page
+		.ash-local-transcription-model-table
+		:is(th, td):nth-child(3) {
+		white-space: nowrap;
+	}
+
+	.ash-sessions-settings-page .ash-local-transcription-model-language-tags {
+		max-inline-size: 30cqi;
 	}
 }
 

@@ -85,7 +85,7 @@ fn model_list_serializes_shared_preparation_and_download_metadata() {
                 "available": false,
                 "sizeBytes": 0,
                 "downloadSizeBytes": 2097152,
-                "recommendedLanguage": "cmn",
+                "recommendedLanguages": ["cmn", "en"],
                 "stage": {"type":"downloading","file":"decoder.onnx","downloadedBytes":262144,"packageDownloadedBytes":1048576}
             },
             {
@@ -93,7 +93,7 @@ fn model_list_serializes_shared_preparation_and_download_metadata() {
                 "available": true,
                 "sizeBytes": 1024,
                 "downloadSizeBytes": null,
-                "recommendedLanguage": null,
+                "recommendedLanguages": [],
                 "stage": null
             }
         ]

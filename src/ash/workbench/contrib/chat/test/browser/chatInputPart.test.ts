@@ -616,7 +616,7 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')?.disabled, false);
 });
 
-test('Chat shows first-use model download progress, supports cancellation and explains a failed retry in Chinese', async () => {
+test('Chat shows first-use model download on the mic button, supports cancellation and explains a failed retry in Chinese', async () => {
 	initializeTestLocalization('zh-CN');
 	try {
 		using modelStatus = new Emitter<ILocalTranscriptionModelStatus>();
@@ -637,33 +637,30 @@ test('Chat shows first-use model download progress, supports cancellation and ex
 			cancel: async () => { cancelled++; modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); },
 		});
 		const microphone = () => part.element.querySelector<HTMLButtonElement>('.ash-chat-input-mic-action')!;
-		const preparation = part.element.querySelector<HTMLElement>('.ash-chat-model-preparation')!;
-		const progress = preparation.querySelector('progress')!;
-		const cancel = preparation.querySelector('button')!;
 		edit(part, '保留草稿');
 		microphone().click();
 		await new Promise(resolve => setTimeout(resolve, 0));
-		assert.equal(preparation.hidden, false);
-		assert.match(preparation.textContent!, /正在下载听写模型… 模型就绪后开始录音。/u);
-		assert.equal(progress.value, 0.25);
-		assert.equal(cancel.textContent, '取消下载');
+		assert.equal(part.element.querySelector('.ash-chat-model-preparation'), null);
+		assert.equal(microphone().lastElementChild?.textContent, '正在下载听写模型…');
+		assert.match(microphone().getAttribute('aria-label') ?? '', /按下可取消/u);
+		assert.ok(microphone().querySelector('.ash-loading-spinner'));
 		assert.equal(microphone().classList.contains('ash-dictation-recording'), false);
 		modelStatus.fire({ state: LocalTranscriptionModelState.Checking });
 		modelStatus.fire({ state: LocalTranscriptionModelState.Downloading, file: 'decoder.onnx', downloadedBytes: 50 });
-		assert.equal(progress.value, 0.75);
-		cancel.click();
+		assert.equal(microphone().lastElementChild?.textContent, '正在下载听写模型…');
+		microphone().click();
 		await new Promise(resolve => setTimeout(resolve, 0));
 		assert.equal(cancelled, 1);
 		assert.equal(microphone().disabled, false);
-		assert.equal(preparation.hidden, true);
+		assert.equal(microphone().getAttribute('aria-label'), '听写');
 		assert.equal(part.element.querySelector('textarea')?.value, '保留草稿');
 
 		microphone().click();
 		await new Promise(resolve => setTimeout(resolve, 0));
-		assert.equal(progress.value, 0.25);
+		assert.ok(microphone().querySelector('.ash-loading-spinner'));
 		modelStatus.fire({ state: LocalTranscriptionModelState.Error, error: 'HTTP 503' });
 		await new Promise(resolve => setTimeout(resolve, 0));
-		assert.equal(preparation.hidden, true);
+		assert.equal(microphone().getAttribute('aria-label'), '听写');
 		assert.match(part.element.querySelector('.ash-chat-input-notification-message')?.textContent ?? '', /HTTP 503.*未录制音频.*可重试/u);
 		assert.equal(part.element.querySelector('.ash-dictation-onboarding'), null);
 		assert.equal(part.element.querySelector('textarea')?.value, '保留草稿');
@@ -698,7 +695,6 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 		pushAudio: async () => { }, start: async () => { starts++; }, stop: async () => '', cancel: async () => { },
 	});
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
-	assert.equal(part.element.querySelector<HTMLElement>('.ash-chat-model-preparation')?.hidden, true);
 	assert.equal(reads, 0);
 	edit(part, 'Text still works');
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
@@ -713,7 +709,6 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 	part.setVisible(false);
 	part.setVisible(true);
 	assert.equal(reads, 1);
-	assert.equal(part.element.querySelector<HTMLElement>('.ash-chat-model-preparation')?.hidden, true);
 	opened = new Promise<void>(resolve => { settingsOpened = resolve; });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')!.click();
 	await opened;

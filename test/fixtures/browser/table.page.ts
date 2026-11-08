@@ -106,7 +106,7 @@ declare global {
 			setCredentialStorageMode(mode: SecretStorageMode): void;
 			setCredentialStorageType(type: SecretStorageState['storageType']): void;
 			readonly credentialOperations: readonly string[];
-			progress(): void;
+			progress(percent: number): void;
 			finish(): void;
 			theme(name: string): void;
 			dispose(): void;
@@ -147,6 +147,7 @@ declare global {
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
 	const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(catalog.locale, catalog.bundles);
+	document.documentElement.lang = catalog.locale;
 }
 
 const resources = new DisposableStore();
@@ -211,8 +212,9 @@ services.registerInstance(ILanguageModelsService, {
 	setModelProviderApiKey: async () => { }, removeModelProviderApiKey: async () => { }, discoverProviderModels: async () => [],
 });
 const changed = resources.add(new Emitter<void>());
+const modelDownloadSizeBytes = 238_322_681;
 let models: ILocalTranscriptionModelSnapshot[] = [
-	{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, available: false, sizeBytes: 0, downloadSizeBytes: 238_322_681, recommendedLanguage: 'cmn' },
+	{ model: DEFAULT_LOCAL_TRANSCRIPTION_MODEL, available: false, sizeBytes: 0, downloadSizeBytes: modelDownloadSizeBytes, recommendedLanguages: ['cmn', 'en', 'zh'] },
 	{ model: 'imported-model', available: true, sizeBytes: 1024 * 1024 },
 ].filter(model => !new URLSearchParams(location.search).has('noInstalledModels') || !model.available);
 const operations: string[] = [];
@@ -510,7 +512,10 @@ window.ashTableIntegration = {
 	hideSecondInput: () => { secondInput.setVisible(false); secondInput.element.hidden = true; },
 	transcript: (text, final) => { if (extensionEmit) extensionEmit(text, final); else transcript?.(text, final); },
 	get draft() { return editor.value; },
-	progress: () => publish({ state: DictationModelState.Downloading, file: 'decoder.onnx', downloadedBytes: 1024 * 1024, packageDownloadedBytes: 64 * 1024 * 1024 }),
+	progress: percent => {
+		const downloadedBytes = Math.ceil(modelDownloadSizeBytes * percent / 100);
+		publish({ state: DictationModelState.Downloading, file: 'decoder.onnx', downloadedBytes, packageDownloadedBytes: downloadedBytes });
+	},
 	finish: () => {
 		models = models.map(model => model.model === DEFAULT_LOCAL_TRANSCRIPTION_MODEL ? { ...model, available: true, sizeBytes: 2 * 1024 * 1024, status: { state: DictationModelState.Ready } } : model);
 		changed.fire();

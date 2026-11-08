@@ -45,9 +45,6 @@ export class DictationInput extends Disposable {
 	public get showButton(): boolean { return this.configuration.getValue<boolean>('dictation.enabled') !== false && this.configuration.getValue<boolean>('dictation.showButton') !== false; }
 	public get isStarting(): boolean { return this.isActive && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
 	private get isAvailable(): boolean { return this.service.isConfigured; }
-	public get isPreparingLocalModel(): boolean {
-		return this.isStarting && this.service.currentBackend === 'local' && this.service.isPreparingModel;
-	}
 	public get preparationLabel(): string | undefined {
 		if (!this.isActive || !this.service.isPreparingModel) return undefined;
 		const stage = this.service.isDownloadingModel

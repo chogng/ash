@@ -37,12 +37,10 @@ class Recognition extends Disposable implements IChatSpeechToTextService {
 	readonly onDidUpdateTranscript = this.transcripts.event;
 	readonly onDidChangePreparingModel = Event.None;
 	readonly onDidChangeDownloadingModel = Event.None;
-	readonly onDidChangeModelDownloadProgress = Event.None;
 	readonly isConfigured = true;
 	showTranscriptWhileDictating = true;
 	readonly isPreparingModel = false;
 	readonly isDownloadingModel = false;
-	readonly modelDownloadProgress = undefined;
 	readonly analyserNode = undefined;
 	readonly currentBackend = 'test';
 	currentSurface: ChatDictationSurface = 'chat';
