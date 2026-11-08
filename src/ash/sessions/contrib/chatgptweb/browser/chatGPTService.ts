@@ -28,6 +28,11 @@ const catalogKey = 'sessions.chatgpt.catalog.v1';
 const historyFreshnessMs = 60_000;
 const recentFreshnessMs = 5 * 60_000;
 const sidebarFreshnessMs = 15 * 60_000;
+
+function isCachedTimestamp(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(new Date(value).getTime());
+}
+
 type HistoryValidation = Pick<ChatGPTHistory, 'parentId' | 'model' | 'thinkingEffort'> & { readonly validatedAt: number; };
 interface ProjectHistory {
 	readonly status: 'loading' | 'ready' | 'error';
@@ -1247,8 +1252,14 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				...(item.projectOnly === true ? { projectOnly: true } : {}),
 			}];
 		}) : [];
-		const projects = Array.isArray(value.projects) ? value.projects.flatMap(item =>
-			isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' ? [{ id: item.id, title: item.title }] : []) : [];
+		const projects = Array.isArray(value.projects) ? value.projects.flatMap(item => {
+			if (!isRecord(item) || typeof item.id !== 'string' || typeof item.title !== 'string') { return []; }
+			return [{
+				id: item.id, title: item.title,
+				...(isCachedTimestamp(item.createdAt) ? { createdAt: item.createdAt } : {}),
+				...(isCachedTimestamp(item.updatedAt) ? { updatedAt: item.updatedAt } : {}),
+			}];
+		}) : [];
 		const recent = value.recent;
 		const now = Date.now();
 		const restoredRecent = isRecord(recent)
@@ -1270,12 +1281,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				}
 			}
 		}
-		for (const key of ['projectsFetchedAt', 'pinsFetchedAt'] as const) {
-			const timestamp = value[key];
-			if (typeof timestamp === 'number' && Number.isSafeInteger(timestamp) && timestamp > 0 && timestamp <= now) {
-				this[key] = timestamp;
-			}
-		}
+		const freshAt = (timestamp: unknown) =>
+			typeof timestamp === 'number' && Number.isSafeInteger(timestamp) && timestamp > 0 && timestamp <= now ? timestamp : undefined;
+		// Older catalogs recorded projectsFetchedAt before project timestamps were decoded.
+		this.projectsFetchedAt = freshAt(value.projectMetadataFetchedAt);
+		this.pinsFetchedAt = freshAt(value.pinsFetchedAt);
 		this.update({ conversations: this.withLocalConversations(conversations), projects, ...(restoredRecent ? { hasMore: restoredRecent.hasMore } : {}) });
 	}
 
@@ -1295,7 +1305,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				...(this.recentFetchedAt !== undefined ? {
 					recent: { fetchedAt: this.recentFetchedAt, offset: this.recentOffset, hasMore, ids: this.native ? undefined : [...this.recentIds] },
 				} : {}),
-				projectsFetchedAt: this.projectsFetchedAt,
+				projectMetadataFetchedAt: this.projectsFetchedAt,
 				pinsFetchedAt: this.pinsFetchedAt,
 			}), StorageScope.PROFILE, StorageTarget.MACHINE);
 		}

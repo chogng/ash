@@ -77,12 +77,17 @@ suite('ChatGPT shared service', () => {
 			const values = new Map<string, string>();
 			const reads = { recent: 0, projects: 0, pins: 0, history: 0 };
 			let projectTitle = 'Project';
+			const createdAt = new Date(100_000);
+			const updatedAt = new Date(200_000);
 			let pinned = true;
 			let ids = ['one', 'two'];
 			const respond = async (path: string) => {
 				if (path.includes('/gizmos/snorlax/sidebar?')) {
 					reads.projects++;
-					return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: projectTitle } } }], cursor: null });
+					return Response.json({
+						items: [{ gizmo: { id: 'g-p-project', display: { name: projectTitle }, created_at: createdAt.toISOString(), updated_at: updatedAt.toISOString() } }],
+						cursor: null,
+					});
 				}
 				if (path.includes('/pins?')) {
 					reads.pins++;
@@ -112,7 +117,9 @@ suite('ChatGPT shared service', () => {
 			});
 			reopened.initialize();
 			await connected.p;
-			assert.equal(reopened.state.get().projects[0]?.title, 'Project');
+			assert.deepEqual(reopened.state.get().projects, [{
+				id: 'g-p-project', title: 'Project', createdAt: createdAt.getTime(), updatedAt: updatedAt.getTime(),
+			}]);
 			assert.equal(reopened.state.get().conversations.find(item => item.id === 'pin')?.pinned, true);
 			assert.deepEqual(reads, { recent: 1, projects: 1, pins: 1, history: 0 });
 			ids = ['new', ...ids];
@@ -146,6 +153,33 @@ suite('ChatGPT shared service', () => {
 			assert.deepEqual(reads, { recent: 4, projects: 3, pins: 3, history: historyReads + Number(!!native) });
 		});
 	}
+
+	test('refreshes the project list when a fresh legacy catalog lacks project timestamps', async () => {
+		const now = Date.now();
+		const updatedAt = new Date(now - 60_000);
+		const values = new Map([[`sessions.chatgpt.catalog.v1:${'a'.repeat(64)}`, JSON.stringify({
+			projects: [{ id: 'g-p-project', title: 'Project' }],
+			projectsFetchedAt: now,
+			pinsFetchedAt: now,
+		})]]);
+		let projectReads = 0;
+		using chat = fixture(async path => {
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				projectReads++;
+				return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: 'Project' }, updated_at: updatedAt.toISOString() } }], cursor: null });
+			}
+			assert.ok(!path.includes('/pins?'), 'Legacy pins still have a fresh cache');
+			return response(path);
+		}, { values });
+		const connected = new DeferredPromise<void>();
+		using ready = autorun(reader => {
+			if (chat.state.read(reader).connected) void connected.complete();
+		});
+		chat.initialize();
+		await connected.p;
+		assert.equal(projectReads, 1);
+		assert.equal(chat.state.get().projects[0]?.updatedAt, updatedAt.getTime());
+	});
 
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
 		const values = new Map<string, string>();

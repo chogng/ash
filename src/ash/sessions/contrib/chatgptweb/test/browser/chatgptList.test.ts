@@ -334,6 +334,37 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(detailReads).toBe(3);
 	});
 
+	test('Projects shows localized ChatGPT project times from the project list', async () => {
+		const { page } = browserTests;
+		const now = new Date('2026-11-08T12:00:00Z');
+		const updatedAt = '2026-11-05T12:00:00Z';
+		const createdAt = '2026-11-02T12:00:00Z';
+		await page.clock.install({ time: now });
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: {
+				items: [
+					{ gizmo: { gizmo: { id: 'g-p-updated', display: { name: 'Updated project' }, created_at: createdAt, updated_at: updatedAt } } },
+					{ gizmo: { id: 'g-p-created', display: { name: 'Created project' }, created_at: createdAt, updated_at: 'invalid' } },
+					{ gizmo: { id: 'g-p-unknown', display: { name: 'Undated project' } } },
+				],
+				cursor: null,
+			},
+		}));
+		await page.goto('/chatgptNavigation.html?projects&locale=zh-CN');
+		const catalog = page.locator('.ash-projects');
+		const updated = catalog.getByRole('button', { name: 'Updated project', exact: true });
+		const created = catalog.getByRole('button', { name: 'Created project', exact: true });
+		const undated = catalog.getByRole('button', { name: 'Undated project', exact: true });
+		await expect(updated.locator('time')).toHaveText('3天前');
+		await expect(updated.locator('time')).toHaveAttribute('datetime', new Date(updatedAt).toISOString());
+		await expect(updated).toHaveAccessibleDescription(/^更新于 /u);
+		await expect(created.locator('time')).toHaveText('6天前');
+		await expect(created).toHaveAccessibleDescription(/^创建于 /u);
+		await expect(undated).toBeVisible();
+		await expect(undated.locator('time')).toHaveCount(0);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Chat sorts its conversation rows from the empty Projects header (${locale})`, async () => {
 			const { page } = browserTests;

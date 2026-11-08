@@ -62,6 +62,9 @@ export interface ChatListProject {
 	/** Stable identity for membership and persisted expansion. */
 	readonly id: string;
 	readonly title: string;
+	/** Milliseconds since the Unix epoch, when supplied by the project owner. */
+	readonly createdAt?: number;
+	readonly updatedAt?: number;
 	readonly history: ProjectHistory;
 	readonly archived?: boolean;
 	readonly archive?: () => Promise<boolean>;

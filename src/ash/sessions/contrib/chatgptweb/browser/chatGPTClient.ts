@@ -17,7 +17,12 @@ export interface ChatGPTConversation {
 	/** This row was discovered outside the window's recent-history pagination. */
 	readonly projectOnly?: boolean;
 }
-export interface ChatGPTProject { readonly id: string; readonly title: string; }
+export interface ChatGPTProject {
+	readonly id: string;
+	readonly title: string;
+	readonly createdAt?: number;
+	readonly updatedAt?: number;
+}
 export type ChatGPTProjectCursor = { readonly kind: 'project'; readonly value: string; } | { readonly kind: 'recent'; readonly offset: number; };
 
 function conversationTimestamp(value: unknown): number | undefined {
@@ -31,6 +36,15 @@ function conversationTimestamps(item: Record<string, unknown>): Pick<ChatGPTConv
 	return {
 		...(createdAt === undefined ? {} : { createdAt }),
 		...(updatedAt === undefined ? {} : { updatedAt }),
+	};
+}
+
+function projectTimestamps(gizmo: Record<string, unknown>): Pick<ChatGPTProject, 'createdAt' | 'updatedAt'> {
+	const createdAt = typeof gizmo.created_at === 'string' ? Date.parse(gizmo.created_at) : NaN;
+	const updatedAt = typeof gizmo.updated_at === 'string' ? Date.parse(gizmo.updated_at) : NaN;
+	return {
+		...(Number.isFinite(createdAt) ? { createdAt } : {}),
+		...(Number.isFinite(updatedAt) ? { updatedAt } : {}),
 	};
 }
 
@@ -170,7 +184,7 @@ export class ChatGPTClient {
 				const gizmo = isRecord(item.gizmo.gizmo) ? item.gizmo.gizmo : item.gizmo;
 				if (!isRecord(gizmo.display) || typeof gizmo.id !== 'string'
 					|| typeof gizmo.display.name !== 'string' || (gizmo.gizmo_snorlax_type === 'locked_chats' || gizmo.is_archived === true)) { continue; }
-				projects.set(gizmo.id, { id: gizmo.id, title: gizmo.display.name });
+				projects.set(gizmo.id, { id: gizmo.id, title: gizmo.display.name, ...projectTimestamps(gizmo) });
 			}
 			cursor = value.cursor || undefined;
 			if (cursor && cursors.has(cursor)) { throw this.invalidResponse(); }
@@ -192,7 +206,7 @@ export class ChatGPTClient {
 		signal.throwIfAborted();
 		const gizmo = isRecord(value) && isRecord(value.gizmo) ? value.gizmo : undefined;
 		if (typeof gizmo?.id !== 'string' || !/^g-p-[A-Za-z0-9_-]{1,240}$/u.test(gizmo.id)) throw this.invalidResponse();
-		return { id: gizmo.id, title: name };
+		return { id: gizmo.id, title: name, ...projectTimestamps(gizmo) };
 	}
 
 	async projectDetails(id: string, signal: AbortSignal): Promise<{ name: string; description: string; emoji: string | null; theme: string | null; }> {

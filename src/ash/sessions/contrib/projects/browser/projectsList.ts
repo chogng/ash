@@ -4,6 +4,7 @@ import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/acti
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { IntervalTimer } from '../../../../base/common/async.js';
+import { formatTimeAgo } from '../../../../base/common/date.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Disposable, MutableDisposable, toDisposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -143,7 +144,6 @@ export class ProjectsList extends Disposable {
 			const card = h(document, 'button', {
 				className: 'ash-button ash-button-quiet ash-projects-card',
 				properties: { type: 'button' },
-				attributes: { 'aria-label': project.name },
 			});
 			card.dataset.projectControl = project.id;
 			const mark = h(document, 'span', {
@@ -152,26 +152,7 @@ export class ProjectsList extends Disposable {
 			});
 			appendIcon((project.icon && getRegisteredIcon(project.icon, document)) || Lxicon.projects, mark);
 			if (project.color) mark.style.color = `var(${colorCssVariable(project.color)})`;
-			const content = h(
-				document,
-				'span',
-				{ className: 'ash-projects-card-content' },
-				h(document, 'span', { className: 'ash-projects-card-name' }, project.name),
-			);
-			const timestamp = project.updatedAtMs ?? project.createdAtMs;
-			if (timestamp !== undefined) {
-				const date = new Date(timestamp);
-				const updatedAt = localize('projects.updatedAt', 'Updated {0}', date.toLocaleString(getNLSLanguage()));
-				const caption = h(document, 'time', {
-					className: 'ash-projects-card-caption',
-					properties: { dateTime: date.toISOString(), id: generateUuid() },
-					attributes: { 'aria-label': updatedAt },
-				});
-				card.setAttribute('aria-describedby', caption.id);
-				content.append(caption);
-				disposables.add(this.hover.setupDelayedHover(caption, { content: updatedAt }));
-			}
-			card.append(mark, content);
+			card.append(mark, this.renderCardContent(card, project.name, project.createdAtMs, project.updatedAtMs, disposables));
 			const actionsHost = this.renderCardActions(row, project.id, project.name, this.actions.getProjectActions(project), disposables);
 			disposables.add(this.hover.setupDelayedHover(card, { content: project.name }));
 			disposables.add(
@@ -192,7 +173,7 @@ export class ProjectsList extends Disposable {
 			card.dataset.conversationProject = '';
 			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
 			appendIcon(Lxicon.projects, mark);
-			card.append(mark, h(document, 'span', { className: 'ash-projects-card-name' }, project.title));
+			card.append(mark, this.renderCardContent(card, project.title, project.project?.createdAt, project.project?.updatedAt, disposables));
 			disposables.add(addDisposableListener(card, 'click', () => {
 				this.projects.openConversationProject(project.key);
 				this.options.openedProject();
@@ -205,6 +186,31 @@ export class ProjectsList extends Disposable {
 		if (this.options.isVisible() && list.querySelector('time')) {
 			this.relativeTimeUpdate.cancelAndSet(() => this.updateCardTimes(), 60_000, document.defaultView!);
 		}
+	}
+
+	private renderCardContent(card: HTMLButtonElement, title: string, createdAt: number | undefined, updatedAt: number | undefined, disposables: DisposableStore): HTMLElement {
+		const document = card.ownerDocument;
+		card.setAttribute('aria-label', title);
+		const content = h(document, 'span', { className: 'ash-projects-card-content' },
+			h(document, 'span', { className: 'ash-projects-card-name' }, title),
+		);
+		const timestamp = updatedAt ?? createdAt;
+		if (timestamp !== undefined) {
+			const date = new Date(timestamp);
+			const absoluteTime = date.toLocaleString(getNLSLanguage());
+			const description = updatedAt === undefined
+				? localize('projects.createdAt', 'Created {0}', absoluteTime)
+				: localize('projects.updatedAt', 'Updated {0}', absoluteTime);
+			const caption = h(document, 'time', {
+				className: 'ash-projects-card-caption',
+				properties: { dateTime: date.toISOString(), id: generateUuid() },
+				attributes: { 'aria-label': description },
+			});
+			card.setAttribute('aria-describedby', caption.id);
+			content.append(caption);
+			disposables.add(this.hover.setupDelayedHover(caption, { content: description }));
+		}
+		return content;
 	}
 
 	private renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string, content: DisposableStore): void {
@@ -337,20 +343,10 @@ export class ProjectsList extends Disposable {
 
 	private updateCardTimes(): void {
 		const now = Date.now();
-		const units = [
-			{ unit: 'year', milliseconds: 365 * 86_400_000 },
-			{ unit: 'month', milliseconds: 30 * 86_400_000 },
-			{ unit: 'day', milliseconds: 86_400_000 },
-			{ unit: 'hour', milliseconds: 3_600_000 },
-			{ unit: 'minute', milliseconds: 60_000 },
-		] as const;
 		// Refresh text in place so time passing never replaces cards or interrupts keyboard focus.
 		for (const caption of this.body.querySelectorAll<HTMLTimeElement>('time.ash-projects-card-caption')) {
-			const elapsed = Math.max(0, now - Date.parse(caption.dateTime));
-			const unit = units.find(candidate => elapsed >= candidate.milliseconds);
-			caption.textContent = unit
-				? this.relativeTime.format(-Math.floor(elapsed / unit.milliseconds), unit.unit)
-				: localize('projects.justNow', 'Just now');
+			caption.textContent = formatTimeAgo(Date.parse(caption.dateTime), now, this.relativeTime)
+				?? localize('projects.justNow', 'Just now');
 		}
 	}
 

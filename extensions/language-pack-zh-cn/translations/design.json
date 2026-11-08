@@ -767,6 +767,7 @@
     "projects.emptyDescription": "将资料与目标集中在同一个空间。",
     "projects.clearSearch": "清空搜索",
     "projects.justNow": "刚刚",
+    "projects.createdAt": "创建于 {0}",
     "projects.updatedAt": "更新于 {0}",
     "projects.goals": "项目目标",
     "projects.edit": "编辑详情",
