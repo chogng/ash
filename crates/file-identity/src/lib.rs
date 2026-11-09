@@ -92,6 +92,12 @@ pub fn common_application_data_dir() -> io::Result<std::path::PathBuf> {
     platform::common_application_data_dir()
 }
 
+/// Returns the normalized Windows name of the opened entry, including a link opened without following it.
+#[cfg(windows)]
+pub fn canonical_path_from_handle(file: &File) -> io::Result<PathBuf> {
+    platform::canonical_path(file)
+}
+
 /// Checks administrator/System ownership and denies effective write grants to other principals.
 /// The handle being inspected is also the handle the caller must use to read the authority file.
 #[cfg(windows)]
