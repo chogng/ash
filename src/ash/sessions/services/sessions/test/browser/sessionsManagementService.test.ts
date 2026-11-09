@@ -205,12 +205,48 @@ test('provider worktree choices stay on the conversation host and exclude other 
 	assert.deepEqual(await provider.getWorktrees(source, CancellationToken.None), [
 		{ label: 'review', target: { type: 'ssh', host: 'build', root: '/checkouts/review' } },
 	]);
-	const catalog = await provider.getWorktrees(source, CancellationToken.None, true);
+	const catalog = await provider.getWorktrees(source, CancellationToken.None, { includeOtherRepositories: true });
 	assert.deepEqual(catalog.map(checkout => checkout.repository), [
 		{ type: 'ssh', host: 'build', root: '/project' },
 		{ type: 'ssh', host: 'build', root: '/other-project' },
 	]);
 	assert.deepEqual(await provider.getWorktrees({ type: 'local', root: '/project' }, CancellationToken.None), []);
+});
+
+test('a selected local checkout is available before the window worktree catalog', async () => {
+	const source = { type: 'local' as const, root: '/project' };
+	const other = { type: 'local' as const, root: '/other-project' };
+	const catalog = new DeferredPromise<void>();
+	const selected = new DeferredPromise<readonly string[]>();
+	const reads: (string | undefined)[] = [];
+	const fake = sessionHost([]);
+	Object.assign(fake.host, {
+		localGit: {
+			async listWorktrees(_token: CancellationToken, sourcePath?: string) {
+				reads.push(sourcePath);
+				if (sourcePath === source.root) return [{ label: 'main', path: source.root, sourcePath }];
+				await catalog.p;
+				return [{ label: 'review', path: other.root, sourcePath: other.root }];
+			},
+		},
+	});
+	using provider = createProvider(fake);
+	await provider.list();
+	const result = provider.getWorktrees(source, CancellationToken.None, {
+		includeOtherRepositories: true,
+		onSourceWorktrees: worktrees => { void selected.complete(worktrees.map(worktree => worktree.label)); },
+	});
+	try {
+		assert.deepEqual(await selected.p, ['main']);
+		assert.deepEqual(reads, [source.root, undefined]);
+	} finally {
+		await catalog.complete();
+	}
+	assert.deepEqual(await result, [
+		{ label: 'review', target: other, repository: other },
+		{ label: 'main', target: source, repository: source },
+	]);
+	assert.deepEqual(reads, [source.root, undefined]);
 });
 
 test('container selection does not interpret a remote source URI as a local host directory', async () => {

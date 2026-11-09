@@ -19,7 +19,7 @@ import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { getSessionApplication } from '../../../../common/sessionApplication.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import type { ISessionCreateOptions } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { ISessionCreateOptions, ISessionWorktree, ISessionWorktreeQueryOptions } from '../../../../services/sessions/common/sessionsProvider.js';
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { devContainerSourcePath } from '../../remoteAgentHost/browser/devContainerSource.js';
 import { extUri } from '../../../../../base/common/resources.js';
@@ -233,13 +233,25 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
-	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories = false): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository?: SessionExecutionTarget; }[]> {
+	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken, options?: ISessionWorktreeQueryOptions): Promise<readonly ISessionWorktree[]> {
 		const source = buildAgentHostSessionWorkspace(workspace)!;
 		if (!this.ownsSourceAuthority(source.authorityId)) { return []; }
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
 		const git = this.rendererHost.localGit;
 		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
+		const toCheckout = (worktree: { readonly label: string; readonly path: string; readonly sourcePath: string; }): ISessionWorktree => ({
+			label: worktree.label,
+			target: { ...workspace, root: worktree.path },
+			...(options?.includeOtherRepositories ? { repository: { ...workspace, root: worktree.sourcePath } } : {}),
+		});
+		// The window catalog can be waiting on another repository's Git operations.
+		const publishSource = options?.onSourceWorktrees;
+		const sourceRead = workspace.type === 'local' && publishSource ? git.listWorktrees(token, workspace.root) : undefined;
+		void sourceRead?.then(worktrees => {
+			this.assertCurrentConnection(generation, epoch);
+			if (!token.isCancellationRequested && worktrees.length) publishSource?.(worktrees.map(toCheckout));
+		}).catch(() => { /* The full query handles catalog and source lookup errors. */ });
 		let worktrees = await git.listWorktrees(token).catch(error => {
 			if (workspace.type !== 'local') throw error;
 			this.assertCurrentConnection(generation, epoch);
@@ -248,17 +260,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		});
 		// A draft can select a trusted folder outside the window's repository catalog.
 		if (workspace.type === 'local' && !worktrees.some(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path))) {
-			worktrees = [...worktrees, ...await git.listWorktrees(token, workspace.root)];
+			worktrees = [...worktrees, ...await (sourceRead ?? git.listWorktrees(token, workspace.root))];
 		}
 		this.assertCurrentConnection(generation, epoch);
 		if (token.isCancellationRequested) { throw canceled(); }
 		const projectSources = new Set(worktrees.filter(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path)).map(worktree => worktree.sourcePath));
-		return worktrees.filter(worktree => includeOtherRepositories || projectSources.has(worktree.sourcePath))
-			.map(worktree => ({
-				label: worktree.label,
-				target: { ...workspace, root: worktree.path },
-				...(includeOtherRepositories ? { repository: { ...workspace, root: worktree.sourcePath } } : {}),
-			}));
+		return worktrees.filter(worktree => options?.includeOtherRepositories || projectSources.has(worktree.sourcePath)).map(toCheckout);
 	}
 
 	private ownsSourceAuthority(authority: string): boolean {

@@ -195,11 +195,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	services.registerInstance(IAgentVoiceService, undefined);
-	services.registerInstance(IProfileStorageService, {
-		_serviceBrand: undefined,
-		readOverview: async () => { throw new Error('Unexpected profile storage read'); },
-		cleanWorktree: async () => { throw new Error('Unexpected worktree cleanup'); },
-	});
 	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());

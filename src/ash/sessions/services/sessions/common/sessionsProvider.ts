@@ -7,6 +7,17 @@ import type { IAutomationStore } from '../../../../workbench/contrib/chat/common
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { SessionKind, SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
 
+export interface ISessionWorktree {
+	readonly label: string;
+	readonly target: SessionExecutionTarget;
+	readonly repository?: SessionExecutionTarget;
+}
+
+export interface ISessionWorktreeQueryOptions {
+	readonly includeOtherRepositories?: boolean;
+	readonly onSourceWorktrees?: (worktrees: readonly ISessionWorktree[]) => void;
+}
+
 export interface ISessionCreateOptions {
 	readonly kind?: SessionKind;
 	readonly automaticTitle?: true;
@@ -47,12 +58,8 @@ export interface ISessionsProvider extends IDisposable {
 	currentWorkspace(): SessionWorkspaceSelection;
 	/** Probes an inherited directory without prompting or changing its grant. */
 	canReuseWorkspace?(target: SessionExecutionTarget, devContainer?: boolean): Promise<boolean>;
-	/** Available checkouts on this provider's host, preserving execution authority. */
-	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories?: boolean): Promise<readonly {
-		readonly label: string;
-		readonly target: SessionExecutionTarget;
-		readonly repository?: SessionExecutionTarget;
-	}[]>;
+	/** Available checkouts on this provider's host. The selected source can be published before the full catalog. */
+	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken, options?: ISessionWorktreeQueryOptions): Promise<readonly ISessionWorktree[]>;
 	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
 	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread>;
 	forkChat?(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread>;

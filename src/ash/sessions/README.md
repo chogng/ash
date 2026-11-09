@@ -110,14 +110,20 @@ editor and draft policy to the shared input. File selection, paste,
 drop, attachment preparation and cancellation belong to the shared Workbench input.
 Its permission slot binds the current model to Workbench `PermissionPickerActionItem`, which owns
 the shared permission menu, keyboard interaction and popup lifetime.
-In Code, **Choose project** selects a Project and a folder for the new
-conversation. A Project without a folder prompts for one. Opening a local
-folder directly reuses its Project or creates one.
-The draft holds the selected Project ID and the workspace for execution.
-Sessions management links the durable conversation through `IProjectService`
-before the first request can run. Worktrees and Dev Containers change where the
-Agent runs while retaining the selected Project. The picker owns folder history,
-cancellation and focus restoration.
+
+In local Code, the Project is the unit of organization for conversations. A
+Project can contain several folders and needs at least one usable folder to
+start a conversation. **Choose project** lists saved Projects. Selecting a
+Project with one folder uses that folder directly. With several folders, choose
+the working folder from the Project's submenu. Selecting a Project that has no
+folders yet prompts for its first folder. **Open Folder** selects the Project
+that already contains the directory or creates a Project for it.
+
+The draft keeps the Project ID for conversation membership and the selected
+workspace for execution. Sessions management links the durable conversation to
+the Project through `IProjectService` before the first request can run. Worktrees
+and Dev Containers change where the Agent runs while retaining the selected
+Project. The picker owns folder history, cancellation and focus restoration.
 For an independent remote Agent host, folder selection stays on that host.
 The Workbench Welcome workspace picker has a separate delegate and presentation;
 it does not own the Sessions execution environment.

@@ -1805,7 +1805,7 @@
     "sessions.directory.wait": "空闲时可用",
     "sessions.directory.changeUnavailable": "此会话当前无法更改文件夹。",
     "sessions.directory.setHelp": "对于尚未绑定工作区的已保存对话，打开标题旁的“更多会话操作”，或在侧栏聚焦对话并按 Shift+F10。请等待当前任务和待处理的审批结束后，选择“设置工作区”。输入栏会显示已绑定的目录。",
-    "sessions.project.search": "搜索项目和文件夹",
+    "sessions.project.search": "搜索项目",
     "sessions.project.choose": "选择项目",
     "sessions.project.recent": "最近打开的项目",
     "sessions.project.label": "项目：{0}",

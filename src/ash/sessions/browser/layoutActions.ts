@@ -21,6 +21,7 @@ import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 const conversationCovered = new RawContextKey<boolean>('sessions.conversationCovered', false);
+const showSessionTools = ContextKeyExpr.and(sessionTools.isEqualTo(true), ContextKeyExpr.not(IsNewSessionContext.key));
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
 export function registerLayoutActions(
@@ -104,7 +105,7 @@ export function registerLayoutActions(
 				title: localize2({ bundle: 'ash', key: 'sessions.layout.sideChat' }, 'Side Chat'),
 				icon: Lxicon.chat,
 				precondition: sessionTools.isEqualTo(true),
-				menu: { id: Menus.TitleBarRightLayout, when: sessionTools.isEqualTo(true), group: '1_tools', order: 1 },
+				menu: { id: Menus.TitleBarRightLayout, when: showSessionTools, group: '1_tools', order: 1 },
 			});
 		}
 
@@ -127,7 +128,7 @@ export function registerLayoutActions(
 			icon: Lxicon.deviceMobile,
 			precondition: ContextKeyExpr.false(),
 		},
-		when: sessionTools.isEqualTo(true),
+		when: showSessionTools,
 		group: '1_tools',
 		order: 2,
 	}));

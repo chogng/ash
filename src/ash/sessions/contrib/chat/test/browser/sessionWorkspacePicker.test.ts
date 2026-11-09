@@ -29,10 +29,11 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessio
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
+import type { ISessionWorktreeQueryOptions } from '../../../../services/sessions/common/sessionsProvider.js';
 import { getSessionsChatAccessibilityHelp } from '../../browser/sessionsChatAccessibilityHelp.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 
-function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }, authorize: ISessionFolderAuthorizationService['authorize'] = async () => true, isTrusted: ISessionFolderAuthorizationService['isTrusted'] = async () => true, project?: Project) {
+function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly sourceWorktrees?: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }, authorize: ISessionFolderAuthorizationService['authorize'] = async () => true, isTrusted: ISessionFolderAuthorizationService['isTrusted'] = async () => true, project?: Project) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	lifetime.add(toDisposable(() => dom.window.close()));
@@ -95,8 +96,12 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	let worktreeRequests = 0;
 	const provider = {
 		isDevContainerWorkspaceAvailable: async () => gates?.container ?? false,
-		getWorktrees: async () => {
+		getWorktrees: async (source: SessionExecutionTarget, _token: unknown, options?: ISessionWorktreeQueryOptions) => {
 			worktreeRequests++;
+			if (gates?.sourceWorktrees) {
+				await gates.sourceWorktrees;
+				options?.onSourceWorktrees?.([{ label: 'main', target: source, repository: source }]);
+			}
 			await gates?.worktrees;
 			return worktrees ?? [{ label: 'main', target }, { label: 'review', target: { ...target, root: '/checkouts/review' } }];
 		},
@@ -172,7 +177,7 @@ test('Code setup shows recent projects in open order and selects a project for t
 test('Choose project authorizes its folder and binds only the current Code draft', async () => {
 	const resource = URI.file('/saved-project');
 	const grants: string[] = [];
-	using f = fixture(undefined, [], [], undefined, undefined, undefined, async root => {
+	using f = fixture(undefined, [], [{ folderUri: resource }], undefined, { name: 'Window folder', uri: URI.file('/window') }, undefined, async root => {
 		grants.push(root);
 		return true;
 	}, undefined, {
@@ -181,6 +186,9 @@ test('Choose project authorizes its folder and binds only the current Code draft
 	});
 	assert.match(f.button.textContent ?? '', /Choose project/);
 	await f.open();
+	assert.deepEqual(f.items.slice(0, 4).map(item => item.kind === ActionListItemKind.Separator ? null : item.label), [
+		'Saved Project', null, 'Clone Repository…', 'Open Folder…',
+	]);
 	await f.choose('Saved Project');
 	assert.deepEqual(grants, [resource.fsPath]);
 	assert.equal(f.drafts[0]!.projectId, 'saved');
@@ -194,6 +202,8 @@ test('Choose project authorizes its folder and binds only the current Code draft
 	const folderProject = f.projects.find(project => project.id === f.drafts[0]!.projectId);
 	assert.equal(folderProject?.materials[0]?.resource.fsPath, URI.file('/recent').fsPath);
 	await f.open();
+	assert.equal(f.labels.filter(label => label === 'recent').length, 1);
+	assert.equal(f.items.find(item => item.label === 'recent')?.checked, true);
 	await f.choose('Open Folder…');
 	assert.equal(f.drafts[0]!.projectId, folderProject?.id);
 	assert.equal(f.projects.length, 2);
@@ -235,9 +245,10 @@ test('Workspace picks an existing worktree for only its owning independent conve
 
 test('Worktree controls are present while loading and become ready independently', async () => {
 	const worktrees = new DeferredPromise<void>();
+	const sourceWorktrees = new DeferredPromise<void>();
 	const container = new DeferredPromise<boolean>();
 	const history = new DeferredPromise<void>();
-	using f = fixture(undefined, [], [], undefined, undefined, { worktrees: worktrees.p, container: container.p, history: history.p });
+	using f = fixture(undefined, [], [], undefined, undefined, { worktrees: worktrees.p, sourceWorktrees: sourceWorktrees.p, container: container.p, history: history.p });
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(f.worktreeRequests, 1);
 	await f.open();
@@ -246,11 +257,16 @@ test('Worktree controls are present while loading and become ready independently
 	assert.equal(f.items.at(-1)?.disabled, true);
 
 	const updated = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
-	await worktrees.complete();
+	await sourceWorktrees.complete();
 	await updated;
 	assert.deepEqual(f.labels.slice(-2), ['main', 'New worktree']);
 	assert.equal(f.items.at(-1)?.disabled, false);
+	assert.deepEqual(f.items.at(-2)?.submenu?.map(item => item.label), ['main']);
 	assert.ok(!f.labels.includes('Recent project'));
+	const catalogReady = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
+	await worktrees.complete();
+	await catalogReady;
+	assert.deepEqual(f.items.at(-2)?.submenu?.map(item => item.label), ['main', 'review']);
 	await container.complete(false);
 	await history.complete();
 });

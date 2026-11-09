@@ -48,7 +48,7 @@ suite('Sessions input stack browser layout', () => {
 		await expect(addMenu.getByRole('menuitem', { name: 'Search attachments' })).toBeVisible();
 		await expect(addMenu.getByText('Add to project', { exact: true })).toHaveCount(0);
 		await addMenu.getByRole('menuitem', { name: 'Choose project', exact: true }).click();
-		const projectSearch = page.getByRole('searchbox', { name: 'Search projects and folders' });
+		const projectSearch = page.getByRole('searchbox', { name: 'Search projects', exact: true });
 		await expect(projectSearch).toBeVisible();
 		await projectSearch.press('Escape');
 		await expect(stack.locator('.ash-session-chat-input-prs')).toBeHidden();

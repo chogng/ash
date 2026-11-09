@@ -6,7 +6,8 @@ import { projectFolders, projectForFolder, readCodeProjects } from './sessionWor
 import { URI } from '../../../../base/common/uri.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
-import { observableValue } from '../../../../base/common/observable.js';
+import { autorun, observableValue, type ISettableObservable } from '../../../../base/common/observable.js';
+import { raceCancellation } from '../../../../base/common/async.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { WorkspaceSelectionOrigin, type IWorkspaceSelectionSnapshot } from '../../../common/workspaceSelection.js';
@@ -52,8 +53,9 @@ type WorktreeCatalog = Awaited<ReturnType<NonNullable<IAgentHostSessionsProvider
 interface IWorkspaceWorktreeQuery {
 	readonly provider: IAgentHostSessionsProvider;
 	readonly sourceKey: string;
-	readonly result: Promise<WorktreeCatalog>;
-	worktrees?: WorktreeCatalog;
+	readonly result: Promise<void>;
+	readonly worktrees: ISettableObservable<WorktreeCatalog | undefined>;
+	complete?: boolean;
 	opened?: boolean;
 	error?: unknown;
 }
@@ -124,7 +126,12 @@ export class SessionWorkspacePicker extends Disposable {
 					run: () => this.openPicker(),
 				},
 				onDidChange: this.presentationChanged.event,
-				placeholder: localize({ bundle: 'ash.sessions', key: 'sessions.project.search' }, 'Search projects and folders'),
+				get placeholder() {
+					const draft = owner.draft;
+					return draft && owner.usesProjectPicker(draft, owner.workspaceSource(draft))
+						? localize({ bundle: 'ash.sessions', key: 'sessions.project.search' }, 'Search projects')
+						: localize('sessions.workspace.searchFolders', 'Search folders');
+				},
 			},
 		}));
 		this.host = this.picker.render(container);
@@ -151,6 +158,10 @@ export class SessionWorkspacePicker extends Disposable {
 
 	private usesLocalProjects(draft: IUntitledChatSession): boolean {
 		return this.isCode && (!draft.providerId || draft.providerId === LOCAL_AGENT_HOST_PROVIDER_ID);
+	}
+
+	private usesProjectPicker(draft: IUntitledChatSession, source: SessionExecutionTarget | undefined): boolean {
+		return this.usesLocalProjects(draft) && (!source || source.type === 'local');
 	}
 
 	private readSelectedProject(): void {
@@ -314,24 +325,38 @@ export class SessionWorkspacePicker extends Disposable {
 		const sourceKey = sessionWorkspaceUri(buildAgentHostSessionWorkspace(source)!).toString();
 		const previous = this.worktreeQuery;
 		const sameSource = previous?.provider === provider && previous.sourceKey === sourceKey;
-		if (sameSource && (!refresh || !previous.opened || previous.worktrees === undefined)) {
+		if (sameSource && (!refresh || !previous.complete || (!previous.opened && previous.error === undefined))) {
 			if (refresh) previous.opened = true;
 			return previous;
 		}
 
 		const cancellation = new CancellationTokenSource();
 		this.worktreeRequest.value = toDisposable(() => cancellation.dispose(true));
+		const worktrees = observableValue<WorktreeCatalog | undefined>(this, sameSource ? previous.worktrees.get() : undefined);
+		const publish = (result: WorktreeCatalog): void => {
+			if (!cancellation.token.isCancellationRequested && !structuralEquals(worktrees.get(), result)) {
+				worktrees.set(result, undefined);
+			}
+		};
 		const query: IWorkspaceWorktreeQuery = {
-			provider, sourceKey, opened: refresh, worktrees: sameSource ? previous.worktrees : undefined,
-			result: Promise.resolve().then(() => {
-				if (cancellation.token.isCancellationRequested) return [];
-				return provider.getWorktrees!(source, cancellation.token, true);
-			}).catch(error => {
-				if (!cancellation.token.isCancellationRequested && !isCancellationError(error)) query.error = error;
-				return [];
-			}).then(worktrees => {
-				query.worktrees = worktrees;
-				return worktrees;
+			provider, sourceKey, opened: refresh, worktrees,
+			result: Promise.resolve().then(async () => {
+				if (cancellation.token.isCancellationRequested) return;
+				try {
+					const result = await provider.getWorktrees!(source, cancellation.token, {
+						includeOtherRepositories: true,
+						onSourceWorktrees: result => {
+							// Keep other repositories' checkout metadata while refreshing a warm menu.
+							if (!query.complete && !worktrees.get()?.length) publish(result);
+						},
+					});
+					publish(result);
+				} catch (error) {
+					if (!cancellation.token.isCancellationRequested) query.error = error;
+					if (worktrees.get() === undefined) publish([]);
+				} finally {
+					query.complete = true;
+				}
 			}),
 		};
 		return this.worktreeQuery = query;
@@ -343,8 +368,7 @@ export class SessionWorkspacePicker extends Disposable {
 		this.pending.clear();
 		this.pickerDraft = draft;
 		const source = this.workspaceSource(draft);
-		const projectCatalog = this.usesLocalProjects(draft)
-			&& (!source || source.type === 'local') ? readCodeProjects(this.projects) : undefined;
+		const projectCatalog = this.usesProjectPicker(draft, source) ? readCodeProjects(this.projects) : undefined;
 		let projectActions: IWorkspacePickerAction[] = [];
 		const worktreeQuery = this.prepareWorktrees(draft, true);
 		const isCurrent = (): boolean => !this.isDisposed && this.visible && this.enabled
@@ -377,7 +401,7 @@ export class SessionWorkspacePicker extends Disposable {
 		if ((!draft.providerId || draft.providerId === LOCAL_AGENT_HOST_PROVIDER_ID) && (!source || source.type === 'local')) {
 			actions.push(toAction({ label: localize('sessions.workspace.cloneRepository', 'Clone Repository…'), mode: 'clone' }));
 		}
-		let allWorktrees = worktreeQuery?.worktrees;
+		let allWorktrees = worktreeQuery?.worktrees.get();
 		let hasContainer = false;
 		const workspace = this.workspace.getWorkspace();
 		const folders = selectionFromWorkspace(workspace);
@@ -472,8 +496,7 @@ export class SessionWorkspacePicker extends Disposable {
 				}).map(folder => folderAction(folder, true)),
 			];
 			return Separator.join(
-				projectActions,
-				[...folderActions, ...environmentItems.map(toAction)],
+				[...projectActions, ...folderActions, ...environmentItems.map(toAction)],
 				[...actions, openFolder],
 				worktreeActions,
 			);
@@ -506,22 +529,28 @@ export class SessionWorkspacePicker extends Disposable {
 						};
 					});
 					update();
-				}, () => { /* Folder and worktree choices can load independently of the project catalog. */ }),
-				worktreeQuery?.result.then(result => {
-					if (!token.isCancellationRequested && isCurrent() && worktreeQuery.error !== undefined) this.notifications.error(getErrorMessage(worktreeQuery.error));
-					if (structuralEquals(allWorktrees, result)) return;
-					allWorktrees = result;
-					update();
-				}),
+				}, () => { /* Commands and worktrees remain available while the project catalog is unavailable. */ }),
+				worktreeQuery && (async () => {
+					using subscription = autorun(reader => {
+						const result = worktreeQuery.worktrees.read(reader);
+						if (result === allWorktrees) return;
+						allWorktrees = result;
+						update();
+					});
+					await raceCancellation(worktreeQuery.result, token);
+					if (!token.isCancellationRequested && isCurrent() && worktreeQuery.error !== undefined && !isCancellationError(worktreeQuery.error)) {
+						this.notifications.error(getErrorMessage(worktreeQuery.error));
+					}
+				})(),
 				Promise.resolve(source && provider?.isDevContainerWorkspaceAvailable?.(sessionWorkspaceUri(buildAgentHostSessionWorkspace(source)!), token))
 					.then(available => { if (available) { hasContainer = true; update(); } }, error => {
 						if (!token.isCancellationRequested && !isCancellationError(error)) this.notifications.error(error);
 					}),
-				this.trustedFolders(windowFolders).then(result => {
+				!projectCatalog && this.trustedFolders(windowFolders).then(result => {
 					candidates = result;
 					if (candidates.length) update();
 				}),
-				this.picker.getRecentFolders(windowFolders, accepts).catch(() => []).then(async history => {
+				!projectCatalog && this.picker.getRecentFolders(windowFolders, accepts).catch(() => []).then(async history => {
 					if (token.isCancellationRequested || !isCurrent()) return;
 					const known = new Set([...windowFolders, ...history].map(({ target }) => folderUri(target).toString()));
 					const sessionFolders = this.workspaceFallback.getWorkspaces(draft.providerId, known, accepts);
@@ -708,8 +737,8 @@ export class WorkspacePicker extends Disposable {
 				showRowTooltips: true,
 				showFilter: true,
 				focusFilterOnOpen: true,
-				filterPlaceholder: trigger.placeholder,
-				ariaLabel: trigger.placeholder,
+				get filterPlaceholder() { return trigger.placeholder; },
+				get ariaLabel() { return trigger.placeholder; },
 			},
 		}, trigger.actionWidget));
 		dropdown.element.classList.add('ash-sessions-workspace-picker');

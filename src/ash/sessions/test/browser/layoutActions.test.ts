@@ -65,15 +65,16 @@ test('Sessions layout commands update menu state from their owners and release w
 	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
+	let activeSelection: ISessionsService['activeSelection'];
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
 		markVisibleThreadViewed() { },
-		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
+		getSelection() { return { visibleSelections: [], activeSelection }; },
 		async openThread() { },
 		onDidChange: changed.event,
 		visibleSelections: [],
-		activeSelection: undefined,
+		get activeSelection() { return activeSelection; },
 		get canNavigateBack() { return historyIndex === 1; },
 		get canNavigateForward() { return historyIndex === 0; },
 		recentSessions: [],
@@ -100,6 +101,15 @@ test('Sessions layout commands update menu state from their owners and release w
 			['ash.sessions.openIOSSimulator', Lxicon.deviceMobile, false],
 		]);
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		activeSelection = {
+			kind: 'untitled',
+			session: { untitledSessionId: 'new', title: 'New', model: undefined, agent: undefined, workspace: { type: 'current' } },
+		};
+		changed.fire();
+		assert.deepEqual(layoutMenu.getActions().flatMap(([, actions]) => actions).map(action => action.id), ['ash.sessions.togglePanel']);
+		activeSelection = undefined;
+		changed.fire();
+		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), true);
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);

@@ -24,7 +24,7 @@
 	pointer-events: none;
 }
 
-.ash-sessions-titlebar-code:not(.has-page-content)::before {
+.ash-sessions-titlebar-code:not(.has-page-content, .is-new-session)::before {
 	/* The Code title bar spans the conversation and tools below it. */
 	content: "";
 	position: absolute;

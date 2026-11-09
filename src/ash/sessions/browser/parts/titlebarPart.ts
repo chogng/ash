@@ -23,7 +23,7 @@ import { Menus } from '../menus.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
+import { IsNewSessionContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../base/common/observable.js';
 import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
@@ -103,6 +103,14 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		this._register(autorun(reader => {
 			this.domNode.classList.toggle('ash-sessions-titlebar-code', activeMode.read(reader) === 'code');
 		}));
+		const draftKeys = new Set([IsNewSessionContext.key]);
+		const updateDraftState = (): void => {
+			this.domNode.classList.toggle('is-new-session', contextKeys.getValue(IsNewSessionContext.key) === true);
+		};
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(draftKeys)) updateDraftState();
+		}));
+		updateDraftState();
 		const modeHost = h(container.ownerDocument, 'div');
 		modeHost.className = 'ash-sessions-workspace-mode';
 		left.append(modeHost);
