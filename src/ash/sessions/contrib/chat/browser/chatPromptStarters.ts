@@ -2,7 +2,6 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
 import { localize } from '../../../../nls.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -109,10 +108,8 @@ export class ChatPromptStarters extends Disposable {
 				this.closeCategory(true);
 			}
 		}));
-		const editor = this.input.inputEditor;
-		const placeholder = editor?.getOption(EditorOption.placeholder) ?? '';
-		const preview = (text: string) => editor?.updateOptions({ placeholder: text });
-		this.panel.add(toDisposable(() => preview(placeholder)));
+		const preview = (text?: string) => this.input.setPlaceholderPreview(text);
+		this.panel.add(toDisposable(() => preview()));
 		let firstPrompt: Button | undefined;
 		for (const prompt of category.prompts) {
 			const button = this.panel.add(new Button(panel, {
@@ -126,10 +123,10 @@ export class ChatPromptStarters extends Disposable {
 			button.domNode.setAttribute('aria-description', prompt.text);
 			this.panel.add(addDisposableListener(button.domNode, 'mouseenter', () => preview(prompt.text)));
 			this.panel.add(addDisposableListener(button.domNode, 'mouseleave', () => {
-				if (document.activeElement !== button.domNode) preview(placeholder);
+				if (document.activeElement !== button.domNode) preview();
 			}));
 			this.panel.add(addDisposableListener(button.domNode, 'focus', () => preview(prompt.text)));
-			this.panel.add(addDisposableListener(button.domNode, 'blur', () => preview(placeholder)));
+			this.panel.add(addDisposableListener(button.domNode, 'blur', () => preview()));
 			firstPrompt ??= button;
 		}
 		firstPrompt?.domNode.focus();

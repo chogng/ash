@@ -97,6 +97,7 @@ class FakeChatInputEditor extends Disposable implements IChatInputEditor {
 	getSelection() { return { anchor: this.value.length, active: this.value.length }; }
 	setSelection(_selection: { readonly anchor: number; readonly active: number; }): void { }
 	setReadOnly(_readOnly: boolean): void { }
+	setPlaceholder(_placeholder?: string): void { }
 	isAtHistoryBoundary(_direction: 'previous' | 'next'): boolean { return true; }
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());

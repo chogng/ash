@@ -82,6 +82,7 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly voice?: {
 		readonly isAvailable: boolean;
 		readonly isActive: boolean;
+		readonly isConnecting: boolean;
 		readonly isConnected: boolean;
 		start(window: Window & typeof globalThis): Promise<void>;
 		stop(): Promise<void>;
@@ -311,6 +312,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			voiceConversation: modelVoice ? {
 				get isAvailable() { return modelVoice.isAvailable && !model.inputState.aiDisabled; },
 				get isActive() { return modelVoice.isActive; },
+				get isConnecting() { return modelVoice.isConnecting; },
 				get isConnected() { return modelVoice.isConnected; },
 				toggle: () => this.runVoice(() => modelVoice.isActive ? modelVoice.stop() : modelVoice.start(ownerDocument.defaultView!)),
 				interrupt: () => this.runVoice(() => modelVoice.stop()),

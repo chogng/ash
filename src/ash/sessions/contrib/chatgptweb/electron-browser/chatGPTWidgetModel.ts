@@ -151,6 +151,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return {
 			get isAvailable() { return thisModel.voiceAvailable; },
 			get isActive() { return thisModel.backend.state.get().voice !== 'idle'; },
+			get isConnecting() { return thisModel.backend.state.get().voice === 'connecting'; },
 			get isConnected() { return thisModel.backend.state.get().voice === 'connected'; },
 			start: window => this.backend.startVoice(window),
 			stop: () => this.backend.stopVoice(),
@@ -182,13 +183,11 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			canInterrupt: state.sending,
 			interruptKind: 'reply',
 			error: state.error || undefined,
-			// The destination row shows loading; an empty status suppresses the composer's fallback text.
-			status: state.voice === 'connecting' ? localize('sessions.chatgpt.voiceConnecting', 'Connecting voice…')
-				: state.voice === 'connected' ? localize('sessions.chatgpt.voiceConnected', 'Voice conversation is active')
-					: state.voice === 'stopping' ? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…')
-						: loading ? ''
-							: state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…')
-								: state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : pendingCreationStatus(state),
+			// The destination row shows loading, and the composer announces voice connection changes.
+			status: state.voice === 'stopping' ? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…')
+				: loading || voice ? ''
+					: state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…')
+						: state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : pendingCreationStatus(state),
 			queuedMessages: 0,
 			approvalMode: 'manual',
 			models: this.pickerEntries.get(),

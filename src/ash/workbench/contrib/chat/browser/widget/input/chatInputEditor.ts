@@ -50,6 +50,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	private height = CHAT_INPUT_MIN_HEIGHT;
 	private readonly minimumHeight: number;
 	private readonly maximumHeight: number;
+	private readonly defaultPlaceholder: string;
 	private readonly tabFocusMode: boolean;
 	private readonly inlineAttachments: ChatInlineAttachments;
 
@@ -61,6 +62,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		super();
 		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
 		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_DEFAULT_MAX_HEIGHT;
+		this.defaultPlaceholder = options.placeholder;
 		this.tabFocusMode = options.tabFocusMode ?? false;
 		this.height = this.minimumHeight;
 		this.element = h(options.container.ownerDocument, 'div');
@@ -185,6 +187,10 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		if (this.editor.getOption(EditorOption.readOnly) === readOnly) return;
 		this.editor.updateOptions({ readOnly });
 		this.editor.controller.element.setAttribute('aria-disabled', String(readOnly));
+	}
+
+	setPlaceholder(placeholder = this.defaultPlaceholder): void {
+		if (this.editor.getOption(EditorOption.placeholder) !== placeholder) this.editor.updateOptions({ placeholder });
 	}
 
 	public insertText(text: string): void {

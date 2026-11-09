@@ -140,6 +140,7 @@ import { IKeybindingService } from '../../../../../../platform/keybinding/common
 interface ChatInputToolbarState {
 	readonly voiceAvailable: boolean;
 	readonly voiceActive: boolean;
+	readonly voiceConnecting: boolean;
 	readonly voiceConnected: boolean;
 	readonly mode: ChatInputMode;
 	readonly canSubmit: boolean;
@@ -339,7 +340,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly slashCommands: SlashCommandCatalog;
 	private readonly skills = new SkillSelectorCatalog();
 	private state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
-	private toolbarState: ChatInputToolbarState = { voiceAvailable: false, voiceActive: false, voiceConnected: false, mode: 'agent', canSubmit: false, hasInput: false, canInterrupt: false, inputKind: 'message', models: [], isAutomaticModel: false, canSelectAgent: false };
+	private toolbarState: ChatInputToolbarState = { voiceAvailable: false, voiceActive: false, voiceConnecting: false, voiceConnected: false, mode: 'agent', canSubmit: false, hasInput: false, canInterrupt: false, inputKind: 'message', models: [], isAutomaticModel: false, canSelectAgent: false };
+	private placeholderPreview: string | undefined;
 	private serverSlashCommands: ChatInputState['slashCommands'] = [];
 	private skillSelectors: ChatInputState['skillSelectors'] = [];
 	private get mode(): ChatInputMode { return this.state.mode; }
@@ -1654,6 +1656,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const state: ChatInputToolbarState = {
 			voiceAvailable: !this.state.aiDisabled && this.delegate.voiceConversation?.isAvailable === true,
 			voiceActive: this.delegate.voiceConversation?.isActive === true,
+			voiceConnecting: this.delegate.voiceConversation?.isConnecting === true,
 			voiceConnected: this.delegate.voiceConversation?.isConnected === true,
 			mode: this.mode,
 			canSubmit: canSubmitIntent && !this.submitting && !this.isSubmissionBlocked(localCommand) && !(input.kind === 'command' && input.binding.origin === 'client' && this.state.canInterrupt && !input.binding.executeDuringRequest),
@@ -1674,6 +1677,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (
 			state.voiceAvailable === this.toolbarState.voiceAvailable &&
 			state.voiceActive === this.toolbarState.voiceActive &&
+			state.voiceConnecting === this.toolbarState.voiceConnecting &&
 			state.voiceConnected === this.toolbarState.voiceConnected &&
 			state.mode === this.toolbarState.mode &&
 			state.canSubmit === this.toolbarState.canSubmit &&
@@ -1696,6 +1700,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		else if (state.voiceActive && !this.toolbarState.voiceActive) announceStatus(localize('chat.voice.connecting', 'Connecting voice conversation.'));
 		else if (!state.voiceActive && this.toolbarState.voiceActive) announceStatus(localize('chat.voice.stopped', 'Voice conversation stopped.'));
 		this.toolbarState = state;
+		this.updatePlaceholder();
 		this.executeContext.bufferChangeEvents(() => {
 			this.queueContextKeys.hasText.set(state.hasInput && state.inputKind === 'message');
 			this.queueContextKeys.running.set(state.canInterrupt);
@@ -1703,6 +1708,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.queueContextKeys.progress.set(this.state.inputBlocked === true);
 		});
 		this.renderToolbarActions();
+	}
+
+	public setPlaceholderPreview(placeholder: string | undefined): void {
+		this.placeholderPreview = placeholder;
+		this.updatePlaceholder();
+	}
+
+	private updatePlaceholder(): void {
+		const inlineVoice = this.inlineActionsToolbar && this.delegate.voiceConversation?.isConnecting !== undefined;
+		this.input.setPlaceholder(inlineVoice && this.toolbarState.voiceConnecting ? localize('chat.voice.connectingPlaceholder', 'Connecting…')
+			: inlineVoice && this.toolbarState.voiceConnected ? localize('chat.voice.listeningPlaceholder', 'Listening…')
+				: this.placeholderPreview);
 	}
 
 	/** Reapply host-owned controls when the presentation changes without a model update. */
@@ -1801,9 +1818,20 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const label = this.state.interruptKind === 'reply' ? localize('chat.input.stopReply', 'Stop') : localize('chat.input.stopTask', 'Stop task');
 			trailingActions.push(new ChatInputAction('ash.chat.input.interrupt', label, label, this.inlineActionsToolbar ? Lxicon.stopCircle : Lxicon.close, true, this.inlineActionsToolbar ? 'mic' : 'interrupt', () => void this.interrupt()));
 		}
-		if (this.delegate.voiceConversation?.isActive) {
+		if (voice?.isActive) {
 			if (this.inlineActionsToolbar) {
-				if (!this.toolbarState.canInterrupt) trailingActions.push(new ChatInputAction('ash.chat.input.voiceStop', localize('chat.voice.stop', 'Stop voice conversation'), localize('chat.voice.stop', 'Stop voice conversation'), Lxicon.stopCircle, true, 'mic', () => this.delegate.voiceConversation?.toggle()));
+				if (!this.toolbarState.canInterrupt) {
+					const stop = () => voice.toggle();
+					if (voice.isConnecting !== undefined && (this.toolbarState.voiceConnecting || this.toolbarState.voiceConnected)) {
+						const connecting = this.toolbarState.voiceConnecting;
+						const label = connecting ? localize('chat.voice.cancel', 'Cancel') : localize('chat.voice.stopLabel', 'Stop');
+						const tooltip = connecting ? localize('chat.voice.cancelConnection', 'Cancel voice connection') : localize('chat.voice.stop', 'Stop voice conversation');
+						trailingActions.push(new ChatInputAction('ash.chat.input.voiceStop', label, tooltip, undefined, true, 'voice-session', stop));
+					} else {
+						const label = localize('chat.voice.stop', 'Stop voice conversation');
+						trailingActions.push(new ChatInputAction('ash.chat.input.voiceStop', label, label, Lxicon.primitiveSquareFilled, true, 'voice', stop));
+					}
+				}
 			} else {
 				if (this.toolbarState.hasInput && !segmentedVoice) trailingActions.push(new ChatInputAction('ash.chat.input.voiceStop', localize('chat.voice.stop', 'Stop voice conversation'), localize('chat.voice.stop', 'Stop voice conversation'), Lxicon.voiceMode, true, 'voice', () => this.delegate.voiceConversation?.toggle()));
 				trailingActions.push(new ChatInputAction('ash.chat.input.voiceInterrupt', localize('chat.voice.interrupt', 'Interrupt voice reply'), localize('chat.voice.interrupt', 'Interrupt voice reply'), Lxicon.close, this.toolbarState.voiceConnected, 'voice', () => this.delegate.voiceConversation?.interrupt()));

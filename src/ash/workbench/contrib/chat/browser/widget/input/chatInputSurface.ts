@@ -1,6 +1,7 @@
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import type { ActionViewItemProvider } from '../../../../../../base/browser/ui/actionbar/actionbar.js';
 import { ButtonActionViewItem } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { setAriaAttribute } from '../../../../../../base/browser/ui/aria/aria.js';
 import type { IAction } from '../../../../../../base/common/actions.js';
 import type { Icon } from '../../../../../../base/common/icon.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -68,7 +69,7 @@ export class ChatInputSurface<T extends IChatInputEditor> extends Disposable {
 	}
 }
 
-type ChatInputToolbarPresentation = 'attach' | 'mode' | 'model' | 'mic' | 'dictation-cancel' | 'dictation-finish' | 'voice' | 'send' | 'interrupt';
+type ChatInputToolbarPresentation = 'attach' | 'mode' | 'model' | 'mic' | 'dictation-cancel' | 'dictation-finish' | 'voice' | 'voice-session' | 'send' | 'interrupt';
 
 export class ChatInputAction implements IAction {
 	constructor(
@@ -100,5 +101,12 @@ export class ChatInputButtonViewItem extends ButtonActionViewItem {
 		this.button.toggleClassName('ash-chat-input-action', true);
 		this.button.toggleClassName(`ash-chat-input-${presentation}-action`, true);
 		this.button.toggleClassName('disabled', !this.action.enabled);
+		if (presentation === 'voice-session') {
+			const document = container.ownerDocument;
+			const dots = h(document, 'span', { className: 'ash-chat-input-voice-connecting-dots', attributes: { 'aria-hidden': 'true' } });
+			dots.append(h(document, 'span'), h(document, 'span'), h(document, 'span'));
+			this.button.domNode.prepend(dots);
+			setAriaAttribute(this.button.domNode, 'label', this.action.tooltip);
+		}
 	}
 }

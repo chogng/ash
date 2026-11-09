@@ -247,6 +247,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private voiceController: AbortController | undefined;
 	private voiceMedia: ChatGPTVoiceSession | undefined;
 	private voiceMessageId: string | undefined;
+	private pendingVoiceConversationId: string | undefined;
 	private voiceCreatedConversation = false;
 	private voiceStopping: Promise<void> | undefined;
 	private operation: AbortController | undefined;
@@ -775,16 +776,23 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			if (controller.signal.aborted || this.voiceController !== controller) { return; }
 			const media = this.voiceMedia = new ChatGPTVoiceSession(window, update => {
 				if (this.voiceController !== controller || controller.signal.aborted) { return; }
-				if (update.conversationId && update.conversationId !== this.model.get().conversationId) {
-					this.update({ conversationId: update.conversationId }); this.rememberConversation(update.conversationId);
-				}
 				if (update.parentId) { this.voiceMessageId = update.parentId; }
+				const current = this.model.get();
+				let transcript = current.voiceTranscript;
 				const message = update.message;
 				if (message?.text.trim() && !message.activity) {
 					this.voiceMessageId = message.id;
-					const transcript = this.model.get().voiceTranscript;
 					const item = { id: message.id, text: message.text.slice(0, 65536), role: message.role };
-					this.update({ voiceTranscript: (transcript.some(previous => previous.id === item.id) ? transcript.map(previous => previous.id === item.id ? item : previous) : [...transcript, item]).slice(-64) });
+					transcript = (transcript.some(previous => previous.id === item.id) ? transcript.map(previous => previous.id === item.id ? item : previous) : [...transcript, item]).slice(-64);
+				}
+				// A new voice room can report its ID before the user submits an utterance.
+				const voiceId = update.conversationId ?? this.pendingVoiceConversationId;
+				const awaitingFirstMessage = this.voiceCreatedConversation && !transcript.length;
+				this.pendingVoiceConversationId = awaitingFirstMessage ? voiceId : undefined;
+				const conversationId = (awaitingFirstMessage ? undefined : voiceId) ?? current.conversationId;
+				if (conversationId !== current.conversationId || transcript !== current.voiceTranscript) {
+					this.update({ conversationId, voiceTranscript: transcript });
+					if (conversationId !== current.conversationId) this.rememberConversation(conversationId);
 				}
 			}, error => {
 				if (this.voiceController !== controller) { return; }
@@ -812,7 +820,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.voiceController = undefined;
 		controller.abort();
 		this.voiceMedia?.dispose(); this.voiceMedia = undefined;
-		const id = this.model.get().conversationId;
+		const id = this.pendingVoiceConversationId ?? this.model.get().conversationId;
+		this.pendingVoiceConversationId = undefined;
 		const messageId = this.voiceMessageId;
 		if (!refresh || this.isDisposed) { this.update({ voice: 'idle', voiceTranscript: [] }); return; }
 		if (!messageId && this.voiceCreatedConversation) {
