@@ -2179,7 +2179,6 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles.ash?.['dictation.modelLoadTiming.title'], '本地听写模型加载时机');
 	assert.equal(chinese?.bundles.ash?.['dictation.cloudModel.title'], '转写模型');
 	assert.equal(chinese?.bundles.ash?.['dictation.subscription.title'], 'ChatGPT 听写');
-	assert.equal(chinese?.bundles.ash?.['dictation.voiceMode.title'], '语音模式');
 	assert.equal(
 		defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)),
 		false,
@@ -3930,8 +3929,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="dictation"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id]'), null);
 	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
-	assert.equal(root.querySelector('[data-settings-tree-group-id="voice-mode"] .ash-settings-tree-group-title')?.textContent, 'Voice Mode');
+	assert.equal(root.querySelector('[data-settings-tree-group-id="voice-mode"]'), null);
+	assert.equal(root.querySelector('[data-settings-item-id="dictation.voiceMode.status"]'), null);
 	assert.match(root.querySelector('[data-configuration-key="agents.voice.model"]')?.textContent ?? '', /GPT-Live 1/);
+	assert.ok(root.querySelector('[data-configuration-key="agents.voice.showButton"][role="switch"]'));
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
 	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
 	const dictationSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input')!;

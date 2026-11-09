@@ -672,7 +672,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await preferences.open({ section: 'dictation' });
 		assert.equal(categoryButton('dictation').textContent, '语音');
 		assert.equal(window.document.querySelector('[data-settings-tree-group-id="dictation"]'), null);
-		assert.equal(window.document.querySelector('[data-settings-tree-group-id="voice-mode"] .ash-settings-tree-group-title')?.textContent, '语音模式');
+		assert.equal(window.document.querySelector('[data-settings-tree-group-id="voice-mode"]'), null);
+		assert.equal(window.document.querySelector('[data-settings-item-id="dictation.voiceMode.status"]'), null);
+		assert.equal(window.document.querySelector('[data-configuration-key="agents.voice.model"] [role="combobox"]')?.getAttribute('aria-label'), '语音模型');
+		assert.equal(window.document.querySelector('[data-configuration-key="agents.voice.showButton"][role="switch"]')?.getAttribute('aria-label'), '显示语音对话按钮');
 		assert.ok(window.document.querySelector('[data-configuration-key="dictation.backend"]'));
 		const microphone = window.document.querySelector<HTMLButtonElement>('[data-settings-item-id="dictation.inputDevice"] [role="combobox"]')!;
 		assert.equal(microphone.getAttribute('aria-label'), '麦克风');
