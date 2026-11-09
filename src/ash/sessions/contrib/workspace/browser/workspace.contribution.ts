@@ -1,3 +1,4 @@
+import './media/workspaceTrustDialog.css';
 import { BrowserDialogHandler } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -65,6 +66,7 @@ export function createSessionFolderTrustRequestService(
 		detail.append(path);
 		const handler = new BrowserDialogHandler(container, {
 			messageAsTitle: true,
+			layout: 'form',
 			extraClasses: ['ash-sessions-directory-permission-dialog'],
 			detailElement: detail,
 			disableCloseButton: true,

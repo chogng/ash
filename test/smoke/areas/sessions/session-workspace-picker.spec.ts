@@ -38,7 +38,11 @@ test('Independent conversation workspace choices preserve drafts and defer workt
 	await expect(worktree).toHaveAttribute('aria-checked', 'false');
 	await page.getByRole('menuitem', { name: 'main', exact: true }).press('ArrowRight');
 	await page.getByRole('menuitemradio', { name: 'picker-review', exact: true }).click();
-	await page.getByRole('button', { name: 'Trust and Open', exact: true }).click();
+	const trustDialog = page.getByRole('dialog', { name: 'Trust this workspace?', exact: true });
+	const trustAndOpen = trustDialog.getByRole('button', { name: 'Trust and Open', exact: true });
+	await expect(trustDialog.getByRole('button', { name: 'Cancel', exact: true })).toHaveCSS('border-radius', '8px');
+	await expect(trustAndOpen).toHaveCSS('border-radius', '8px');
+	await trustAndOpen.click();
 	await expect.poll(() => workspace().getAttribute('aria-label')).toContain(checkout);
 	await page.locator(`.ash-sessions-list [data-item="untitled:${id}"] .ash-sessions-list-item`).click();
 	await workspace().press('Enter');
