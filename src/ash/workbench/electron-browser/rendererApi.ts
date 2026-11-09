@@ -32,6 +32,7 @@ import type { IAddress } from '../../platform/remote/common/remoteAgentConnectio
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
 import { AppServerSymphonyService } from '../../platform/symphony/browser/appServerSymphonyService.js';
 import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/native/common/nativeHost.js';
+import { REQUEST_MICROPHONE_ACCESS_CHANNEL } from '../../platform/native/common/native.js';
 import { AppServerBackupService } from '../../platform/backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../platform/call/browser/appServerCallService.js';
 import { AppServerAgentVoiceService } from '../../platform/agentHost/browser/appServerAgentService.js';
@@ -313,7 +314,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			// Device ownership stays on this computer when the workspace connection is remote.
 			if (localClient.capabilities?.contracts.channels?.version === 1) { backend = { ...backend, channels: resources.add(new AppServerChannelService(localClient)) }; }
 			if (localClient.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(localClient)) }; }
-			if (remoteConnection.kind === 'local' && client.capabilities?.contracts.voiceConversation?.version === 1) { backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client)) }; }
+			if (remoteConnection.kind === 'local' && AppServerAgentVoiceService.isSupported(client)) {
+				backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client, () => invoke<boolean>(REQUEST_MICROPHONE_ACCESS_CHANNEL))) };
+			}
 			backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(localClient) };
 			if (client.capabilities?.contracts.symphony?.version === 1) { backend = { ...backend, symphony: resources.add(new AppServerSymphonyService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }

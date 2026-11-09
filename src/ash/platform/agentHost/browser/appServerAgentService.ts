@@ -8,6 +8,7 @@ import type { QueuedMessage as QueuedMessageDto, InputItem } from '../../../../.
 import type { QueuedMessage, AgentInput, SessionCreateParams } from '../common/agent.js';
 import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
+import { isMacintosh } from '../../../base/common/platform.js';
 import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
 import type { IAgentHostInputCompletionService, IAgentVoiceService } from '../common/agentService.js';
 import type { AgentVoiceSource, AgentVoiceSelection, AgentVoiceSessionState, AgentVoiceTaskRequest, AgentVoiceConnectionChoice } from '../common/agent.js';
@@ -1150,9 +1151,10 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 	private inputQueue: Promise<void> = Promise.resolve();
 	private inputCounter = 0;
 	private hold: { readonly id: string; readonly resourceId: string; readonly epoch: number; renew?: ReturnType<typeof setInterval>; } | undefined;
-	public get isAvailable(): boolean { return !this.isDisposed && this.client.state === 'ready' && this.client.capabilities?.contracts.voiceConversation?.version === 2; }
+	public static isSupported(client: AppServerProtocolClient): boolean { return client.capabilities?.contracts.voiceConversation?.version === 2; }
+	public get isAvailable(): boolean { return !this.isDisposed && this.client.state === 'ready' && AppServerAgentVoiceService.isSupported(this.client); }
 
-	constructor(private readonly client: AppServerProtocolClient) {
+	constructor(private readonly client: AppServerProtocolClient, private readonly requestHostMicrophoneAccess?: () => Promise<boolean>) {
 		super();
 		this._register(client.onNotification(notification => {
 			if (notification.method === 'voice/changed') this.accept(notification.params);
@@ -1165,6 +1167,14 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 			if (state !== 'ready') { this.clearHold(); this.resource = undefined; this.source = undefined; this.current = undefined; }
 			this.changed.fire();
 		}));
+	}
+
+	public async requestMicrophoneAccess(): Promise<void> {
+		if (this.requestHostMicrophoneAccess && !await this.requestHostMicrophoneAccess()) {
+			throw new Error(isMacintosh
+				? localize('chat.voice.microphoneDeniedMac', 'Microphone access was denied. In System Settings, open Privacy & Security, select Microphone, and enable access for Ash. Then try again.')
+				: localize('chat.voice.microphoneDenied', 'Microphone access was denied. Allow Ash to use the microphone in your system settings, then try again.'));
+		}
 	}
 
 	public async getOptions(): Promise<readonly AgentVoiceConnectionChoice[]> {

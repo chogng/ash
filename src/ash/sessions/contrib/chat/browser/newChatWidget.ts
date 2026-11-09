@@ -135,7 +135,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this.composer = this._register(composer);
 		this.codePresentation = codePresentation;
 		const shown = observableFromEvent(this, this.onDidChangeVisibility, () => this.visible);
-		const draftId = observableFromEvent(this, model.onDidChange, () => model.untitledSessionId);
+		const draftId = observableFromEvent(this, model.onDidChange, () => model.welcomeDraftId);
 		const welcome = this._register(instantiationService.createInstance(ChatWelcomeTitle, (reader: IReader) => {
 			const id = chatPresentation.read(reader) && draftId.read(reader);
 			return id ? { id, revision: 0 } : undefined;

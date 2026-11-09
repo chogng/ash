@@ -11,6 +11,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { equals } from '../../../../base/common/objects.js';
+import { isMacintosh, isNative } from '../../../../base/common/platform.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { isUuid } from '../../../../base/common/uuid.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -798,7 +799,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				if (this.voiceController !== controller) { return; }
 				// Even a failed room may have committed turns; reload its continuation node.
 				void this.endVoice(true);
-				if (error !== undefined) { this.update({ error: this.errorText(error) }); }
+				if (error !== undefined) { this.notifications.error(this.errorText(error)); }
 			});
 			media.unlockAudio();
 			await media.connect((sdp, signal) => this.client.voice({ sdp, conversationId: state.conversationId, parentId: state.parentId, language: getNLSLanguage() }, signal), controller.signal);
@@ -806,7 +807,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		} catch (error) {
 			if (this.voiceController === controller && !controller.signal.aborted) {
 				await this.endVoice(!!this.voiceMessageId);
-				this.update({ error: this.errorText(error) });
+				if (error instanceof DOMException && error.name === 'NotAllowedError') {
+					this.notifications.warn(isNative && isMacintosh
+						? localize('sessions.chatgpt.voicePermissionDeniedMac', 'Microphone access was denied. In System Settings, open Privacy & Security, select Microphone, and enable access for Ash. Then try again.')
+						: localize('sessions.chatgpt.voicePermissionDenied', 'Microphone access was denied. Allow microphone access in your system or browser settings, then try again.'));
+				} else {
+					this.notifications.error(this.errorText(error));
+				}
 			}
 		}
 	}
@@ -841,11 +848,14 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 						this.bindLocalTimeline(this.draftKey(), history.id);
 						this.restoreHistory(history);
 						this.rememberHistory(history, { projectId: move?.projectId });
-						if (move?.error) this.update({ error: move.error });
+						if (move?.error) this.notifications.error(move.error);
 					}
 				}
 			} catch (error) {
-				if (generation === this.generation) { this.update({ error: this.errorText(error), uncertain: !!messageId }); }
+				if (generation === this.generation) {
+					this.update({ uncertain: !!messageId });
+					this.notifications.error(this.errorText(error));
+				}
 			} finally {
 				if (generation === this.generation) { this.update({ voice: 'idle', busy: false, loading: undefined, voiceTranscript: [] }); }
 			}

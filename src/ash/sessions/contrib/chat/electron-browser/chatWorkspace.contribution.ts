@@ -139,7 +139,8 @@ class NativeReplyEditorModel extends ChatWidgetModel implements IReplyChatEditor
 
 	readWelcomeDraft(reader: IReader) {
 		const reference = this.view.chatSelection.read(reader);
-		return reference?.kind === 'draft' ? { id: reference.id, revision: 0 } : undefined;
+		const id = reference?.kind === 'draft' ? reference.id : reference?.threadId === this.threadId ? this.welcomeDraftId : undefined;
+		return id ? { id, revision: 0 } : undefined;
 	}
 }
 

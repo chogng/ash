@@ -36,7 +36,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 	private pendingTasks: AgentVoiceTaskRequest[] = [];
 	private preparing: AbortController | undefined;
 
-	constructor(private readonly dispatch: (request: AgentVoiceTaskRequest, signal: AbortSignal) => Promise<void>, private readonly onError: (error: unknown) => void, private readonly prepare: (() => Promise<AgentVoiceSource>) | undefined,
+	constructor(private readonly dispatch: (request: AgentVoiceTaskRequest, signal: AbortSignal) => Promise<void>, private readonly onError: (error: unknown) => void, private readonly prepare: ((signal: AbortSignal) => Promise<AgentVoiceSource>) | undefined,
 		@IAgentVoiceService private readonly voice: IAgentVoiceService | undefined,
 		@IConfigurationService private readonly configuration?: IConfigurationService,
 	) {
@@ -45,6 +45,9 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			this._register(voice.onDidChange(() => {
 				const owned = this.resource !== undefined && voice.state?.resourceId === this.resource;
 				if (owned && this.connectedPreviously && voice.state?.state === 'failed' && voice.state.error) onError(new Error(voice.state.error));
+				else if (this.connectedPreviously && !this.stopping && !voice.isAvailable) {
+					onError(new Error(localize('chat.voice.connectionLost', 'The voice connection was lost.')));
+				}
 				this.connectedPreviously = owned && voice.state?.state === 'connected';
 				if (!voice.isAvailable || !this.stopping && owned && voice.state && ['ended', 'failed'].includes(voice.state.state)) {
 					this.controller?.abort(); this.controller = undefined; this.active = undefined; this.resource = undefined; this.pendingTasks = [];
@@ -64,6 +67,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 
 	public get isAvailable(): boolean { return !this.isDisposed && !this.stopping && (!!this.target || !!this.prepare) && this.voice?.isAvailable === true && (!this.voice.state || ['ended', 'failed'].includes(this.voice.state.state) || this.voice.state.resourceId === this.resource); }
 	public get isActive(): boolean { return !!this.controller && (!this.resource || !!this.stopping || this.voice?.state?.resourceId === this.resource && !['ended', 'failed'].includes(this.voice.state.state)); }
+	public get isConnecting(): boolean { return this.isActive && !this.stopping && !this.isConnected; }
 	public get isConnected(): boolean { return this.isActive && this.voice?.state?.state === 'connected' && this.voice.state.resourceId === this.resource && sameSource(this.voice.state, this.active); }
 	public get isMuted(): boolean { return this.voice?.state?.muted ?? false; }
 	public get inputMode(): AgentVoiceSessionState['inputMode'] { return this.voice?.state?.inputMode ?? 'openMic'; }
@@ -102,9 +106,11 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			const model = connection.models.find(candidate => candidate.modelId === connection.defaultModel);
 			const selection = select ? await select(eligible, controller.signal) : { connectionId: connection.connectionId, modelId: connection.defaultModel, ...(model ? { voice: model.defaultVoice } : {}) };
 			if (!selection || controller.signal.aborted || this.isDisposed || originalIdentity !== this.targetIdentity) throw canceled();
+			await this.voice.requestMicrophoneAccess?.();
+			if (controller.signal.aborted || this.isDisposed || originalIdentity !== this.targetIdentity) throw canceled();
 			this.preparing = controller;
 			let target: AgentVoiceSource;
-			try { target = originalTarget ?? await this.prepare!(); } finally { if (this.preparing === controller) this.preparing = undefined; }
+			try { target = originalTarget ?? await this.prepare!(controller.signal); } finally { if (this.preparing === controller) this.preparing = undefined; }
 			if (controller.signal.aborted || this.isDisposed || !sameSource(target, this.target)) throw canceled();
 			this.active = target;
 			starting = this.voice.start(target, selection, controller.signal);
@@ -114,7 +120,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			this.resource = status.resourceId; this.epoch = status.mediaEpoch; this.connectedPreviously = status.state === 'connected'; this.handled.clear();
 			const pending = this.pendingTasks; this.pendingTasks = [];
 			for (const request of pending) this.acceptTask(request);
-		} catch (error) { if (this.controller === controller) { this.controller = undefined; this.active = undefined; this.resource = undefined; this.pendingTasks = []; } throw error; }
+		} catch (error) { if (this.controller === controller) { this.controller = undefined; this.active = undefined; this.resource = undefined; this.pendingTasks = []; } throw controller.signal.aborted ? canceled() : error; }
 		finally { if (this.starting === starting) this.starting = undefined; this.changed.fire(); }
 	}
 

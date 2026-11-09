@@ -142,6 +142,7 @@ interface ChatInputToolbarState {
 	readonly voiceActive: boolean;
 	readonly voiceConnecting: boolean;
 	readonly voiceConnected: boolean;
+	readonly voiceConnectedPlaceholder?: string;
 	readonly mode: ChatInputMode;
 	readonly canSubmit: boolean;
 	readonly hasInput: boolean;
@@ -920,6 +921,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
 	get composerForm(): HTMLElement { return this.inputContainer; }
+	get usesInlineVoiceControls(): boolean { return this.inlineActionsToolbar !== undefined; }
 	get composerFooter(): HTMLElement | undefined { return this.inputFooter; }
 
 	public useResponsiveFooter(getLeadingPickers: () => readonly IChatInputPickerResponsiveLayoutItem[]): void {
@@ -1658,6 +1660,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			voiceActive: this.delegate.voiceConversation?.isActive === true,
 			voiceConnecting: this.delegate.voiceConversation?.isConnecting === true,
 			voiceConnected: this.delegate.voiceConversation?.isConnected === true,
+			voiceConnectedPlaceholder: this.delegate.voiceConversation?.connectedPlaceholder,
 			mode: this.mode,
 			canSubmit: canSubmitIntent && !this.submitting && !this.isSubmissionBlocked(localCommand) && !(input.kind === 'command' && input.binding.origin === 'client' && this.state.canInterrupt && !input.binding.executeDuringRequest),
 			hasInput: canSubmitIntent,
@@ -1679,6 +1682,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			state.voiceActive === this.toolbarState.voiceActive &&
 			state.voiceConnecting === this.toolbarState.voiceConnecting &&
 			state.voiceConnected === this.toolbarState.voiceConnected &&
+			state.voiceConnectedPlaceholder === this.toolbarState.voiceConnectedPlaceholder &&
 			state.mode === this.toolbarState.mode &&
 			state.canSubmit === this.toolbarState.canSubmit &&
 			state.hasInput === this.toolbarState.hasInput &&
@@ -1718,7 +1722,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private updatePlaceholder(): void {
 		const inlineVoice = this.inlineActionsToolbar && this.delegate.voiceConversation?.isConnecting !== undefined;
 		this.input.setPlaceholder(inlineVoice && this.toolbarState.voiceConnecting ? localize('chat.voice.connectingPlaceholder', 'Connecting…')
-			: inlineVoice && this.toolbarState.voiceConnected ? localize('chat.voice.listeningPlaceholder', 'Listening…')
+			: inlineVoice && this.toolbarState.voiceConnected ? this.toolbarState.voiceConnectedPlaceholder ?? localize('chat.voice.listeningPlaceholder', 'Listening…')
 				: this.placeholderPreview);
 	}
 

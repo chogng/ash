@@ -937,7 +937,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 						window.addEventListener('pagehide', () => { void context.close(); }, { once: true });
 					});
 					await editor.getByRole('button', { name: locale === 'en' ? 'Voice conversation' : '语音对话', exact: true }).click();
-					await expect(editor.locator('.ash-chat-input-notification-message')).toContainText('404');
+					await expect(page.locator('.ash-notification-message:visible').filter({ hasText: '404' })).toBeVisible();
+					await expect(editor.locator('.ash-chat-input-notification-message')).toBeHidden();
 					await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop voice conversation' : '停止语音对话', exact: true })).toHaveCount(0);
 				}
 				await composer.waitForEditorFocus(); await composer.waitForTypeInEditor(`Follow up after ${mode}`);

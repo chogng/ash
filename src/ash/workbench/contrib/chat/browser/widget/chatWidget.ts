@@ -94,7 +94,7 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly historyStatus?: IChatSessionHistoryStatus;
 	readonly olderHistory?: { readonly loading: boolean; readonly error?: string; };
 	loadOlderHistory?(): Promise<void>;
-	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	prepareConversation?(signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
 	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string>;
 	reportRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
@@ -173,8 +173,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			if (signal.aborted || this.isDisposed || this.model.sessionId !== request.sessionId || this.model.threadId !== request.threadId) throw canceled();
 			// The original composer/model owns mode, queue, steering and approval. Speech remains low-trust context.
 			await this.model.send(localize('chat.voice.task.submit', 'Handle the request I just spoke.'), this.model.inputState.mode, undefined, [{ name: localize('chat.voice.task.context', 'Voice request'), content: request.transcript }], { commandId: request.commandId, source: { sessionId: request.sessionId, threadId: request.threadId }, signal });
-		}, (error: unknown) => notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))), this.model.prepareConversation ? async () => {
-			const source = await this.model.prepareConversation!();
+		}, (error: unknown) => this.reportVoiceError(error), this.model.prepareConversation ? async (signal: AbortSignal) => {
+			const source = await this.model.prepareConversation!(signal);
 			if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw canceled();
 			return source;
 		} : undefined));
@@ -319,7 +319,14 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			} : voiceClient && {
 				get isAvailable() { return voiceClient.isAvailable && !model.inputState.aiDisabled; },
 				get isActive() { return voiceClient.isActive; },
+				get isConnecting() { return voiceClient.isConnecting; },
 				get isConnected() { return voiceClient.isConnected; },
+				get connectedPlaceholder() {
+					if (!voiceClient.isConnected) return undefined;
+					if (voiceClient.isMuted) return localize('agentsVoice.mutedStatus', 'Microphone muted');
+					if (voiceClient.inputMode === 'pushToTalk' && !voiceClient.isListening) return localize('agentsVoice.readyPtt', 'Press and hold to speak');
+					return undefined;
+				},
 				toggle: () => this.runVoice(() => {
 					if (voiceClient.isActive) return voiceClient.disconnect();
 					return this.startVoiceConversation();
@@ -372,7 +379,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		if (model.prepareConversation || model.sessionId) this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
-		this.voiceWidget = voiceClient && this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
+		const inlineVoice = this.input instanceof ChatInputPart && this.input.usesInlineVoiceControls;
+		this.voiceWidget = voiceClient && !inlineVoice ? this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
 			openSession: () => this.input.focus(),
 			toggleMute: () => { void this.runVoice(() => voiceClient.setMuted(!voiceClient.isMuted)); },
 			toggleInputMode: () => { void this.runVoice(() => voiceClient.setInputMode(voiceClient.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk')); },
@@ -382,7 +390,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			stopPlayback: () => { void this.runVoice(() => voiceClient.stopSpeaking()); },
 			closeWindow: () => this.input.focus(),
 			showSessionsPicker: () => this.input.focus(),
-		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
+		}, { showClose: false, showOnboarding: false, inputBoxLayout: true })) : undefined;
 		this.welcome = new ChatViewWelcomePart(ownerDocument);
 		if (viewOptions?.welcomeTitle) this._register(autorun(reader => {
 			viewOptions.welcomeTitle!.read(reader);
@@ -534,9 +542,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	public cancelEditing(): boolean { return this.listWidget.cancelEditing(); }
 
+	private reportVoiceError(error: unknown): void {
+		if (!this.isDisposed && !isCancellationError(error)) {
+			this.notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', error instanceof Error ? error.message : String(error)));
+		}
+	}
+
 	private async runVoice(operation: () => Promise<void>): Promise<void> {
 		try { await operation(); }
-		catch (error) { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))); }
+		catch (error) { this.reportVoiceError(error); }
 	}
 
 
@@ -631,8 +645,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.syncIdentity();
 		const voice = this.voiceSessionController;
 		const voiceWidget = this.voiceWidget;
+		voice?.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
 		if (voice && voiceWidget) {
-			voice.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
 			const focused = this.element.ownerDocument.activeElement;
 			if (!voice.isActive && voiceWidget.element.contains(focused)) this.input.focus();
 			voiceWidget.element.hidden = !voice.isActive;
@@ -740,7 +754,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const welcomeTitle = this.viewOptions?.welcomeTitle?.get();
 		const showWelcome = this.viewOptions?.showWelcome !== false && !hasConversation && !input.aiDisabled
 			&& (welcomeTitle === undefined ? this.model.untitledSessionId !== undefined && !input.inputBlocked : !!welcomeTitle)
-			&& !this.voiceSessionController?.isActive;
+			&& (!this.voiceWidget || !this.voiceSessionController?.isActive);
 		this.welcome.render(showWelcome ? {
 			title: welcomeTitle ?? (input.mode === 'ask'
 				? localize('chat.welcome.ask', 'Ask about your code')

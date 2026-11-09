@@ -605,6 +605,20 @@ voiceTest('ChatGPT can stop pending voice negotiation and rejects a late or inva
 	const placeholder = page.locator('.ash-chat-input-editor .stanza-editor-placeholder-text');
 	await expect(voice).toBeEnabled();
 	await expect(placeholder).toHaveText('Describe a task or ask a question');
+	await page.evaluate(() => {
+		const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+		navigator.mediaDevices.getUserMedia = async () => {
+			navigator.mediaDevices.getUserMedia = capture;
+			throw new DOMException('Permission denied', 'NotAllowedError');
+		};
+	});
+	const notifications = () => page.evaluate(() => window.ashChatGPTIntegration.notifications().map(item => item.message));
+	await voice.click();
+	await expect.poll(notifications).toContain('Microphone access was denied. Allow microphone access in your system or browser settings, then try again.');
+	await expect(voice).toBeEnabled();
+	await expect(placeholder).toHaveText('Describe a task or ask a question');
+	await expect(page.locator('.ash-chat-input-notification-message')).toBeHidden();
+	expect(requests).toBe(0);
 	await voice.click();
 	await expect.poll(() => requests).toBe(1);
 	await expect(placeholder).toHaveText('Connecting…');
@@ -625,7 +639,8 @@ voiceTest('ChatGPT can stop pending voice negotiation and rejects a late or inva
 	await voice.click();
 	await expect.poll(() => requests).toBe(2);
 	await release();
-	await expect(page.locator('.ash-chatgpt-widget')).toContainText('unsupported response');
+	await expect.poll(notifications).toEqual(expect.arrayContaining([expect.stringContaining('unsupported response')]));
+	await expect(page.locator('.ash-chat-input-notification-message')).toBeHidden();
 	await expect(voice).toBeEnabled();
 });
 

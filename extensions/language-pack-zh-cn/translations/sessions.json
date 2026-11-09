@@ -424,6 +424,8 @@
     "sessions.chatgpt.voiceStopping": "正在结束并保存语音会话…",
     "sessions.chatgpt.voiceDisconnected": "ChatGPT 语音连接已结束。",
     "sessions.chatgpt.voiceMicrophoneMissing": "没有可用的麦克风音轨。",
+    "sessions.chatgpt.voicePermissionDeniedMac": "麦克风权限被拒绝。请在「系统设置」的「隐私与安全性」中选择「麦克风」，为 Ash 开启权限后重试。",
+    "sessions.chatgpt.voicePermissionDenied": "麦克风权限被拒绝。请在系统或浏览器设置中允许使用麦克风，然后重试。",
     "sessions.chatgpt.voiceHistoryPending": "语音会话尚未保存完成，请刷新后再发送消息。",
     "sessions.chatgpt.historyOffline": "ChatGPT 当前离线，仍可查看已加载的会话。",
     "sessions.chatgpt.historyRateLimited": "ChatGPT 暂时限制了历史请求，请稍后重试。",

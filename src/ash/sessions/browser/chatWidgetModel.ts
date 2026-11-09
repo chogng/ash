@@ -74,6 +74,7 @@ export class ChatWidgetModel extends Disposable {
 	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
 	private _composerGeneration = 0;
 	private materializingComposer: { readonly untitledSessionId: string; readonly generation: number; readonly threadId: ThreadId; } | undefined;
+	private voiceDraft: { readonly id: string; readonly generation: number; } | undefined;
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
 	private historyBoundary: ThreadHistoryBoundary | undefined;
@@ -365,6 +366,10 @@ export class ChatWidgetModel extends Disposable {
 
 	get untitledSessionId(): string | undefined {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : undefined;
+	}
+
+	get welcomeDraftId(): string | undefined {
+		return this.untitledSessionId ?? (this.voiceDraft?.generation === this.composerGeneration && !this.items.length ? this.voiceDraft.id : undefined);
 	}
 
 	get threadId(): ThreadId | undefined {
@@ -832,7 +837,7 @@ export class ChatWidgetModel extends Disposable {
 		const operation = this.captureOperation({ signal });
 		await this.awaitOperationPreparation(this.initialize(), operation);
 		this.requireCurrentOperation(operation);
-		const active = await this.ensureActiveSession(signal);
+		const active = await this.ensureActiveSession(signal, true);
 		if (this.isDisposed || signal?.aborted || operation.generation !== this.composerGeneration || active.threadId !== this.threadId || active.session.sessionId !== this.sessionId) throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
 	}
@@ -1707,7 +1712,7 @@ export class ChatWidgetModel extends Disposable {
 		if (!this.isCurrentOperation(operation)) throw canceled();
 	}
 
-	private async ensureActiveSession(signal?: AbortSignal): Promise<IActiveSessionThread> {
+	private async ensureActiveSession(signal?: AbortSignal, forVoice = false): Promise<IActiveSessionThread> {
 		this.assertWorkspaceSelected();
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
@@ -1716,6 +1721,8 @@ export class ChatWidgetModel extends Disposable {
 			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal),
 			isCurrent: () => !this.isDisposed && this.composerGeneration === generation,
 			adopt: created => {
+				// Voice needs a durable Thread before listening, even though the composer is still empty.
+				if (forVoice) this.voiceDraft = { id: untitledSession.untitledSessionId, generation };
 				// Catalog notifications may create a durable pane before the create response.
 				const composer = untitledSession.kind === 'chat' || this.sessionService.activeUntitledSession?.untitledSessionId === untitledSession.untitledSessionId
 					? { untitledSessionId: untitledSession.untitledSessionId, generation, threadId: created.threadId }
