@@ -5,7 +5,7 @@
 [[multiple_versions]]
 name = "base64"
 versions = ["0.13.1", "0.21.7", "0.22.1", "0.23.1"]
-reason = "0.13 via spm_precompiled; 0.21 via LiveKit signaling and pbjson; 0.22 via application APIs and rtc-stun; 0.23 via rtc-shared -> rcgen -> pem 4."
+reason = "0.13 via spm_precompiled; 0.21 via LiveKit signaling and pbjson; 0.22 via application APIs and rtc-stun; 0.23 via rmcp and rtc-shared -> rcgen -> pem 4."
 
 [[multiple_versions]]
 name = "bit-vec"
@@ -165,7 +165,7 @@ reason = "Current upstream API families: 2.11.1 via keyring, rustls-native-certs
 [[multiple_versions]]
 name = "sha2"
 versions = ["0.10.9", "0.11.0"]
-reason = "Current upstream API families: 0.10.9 via ash-action-policy, ash-agent-roles, ash-app-server and other importers; 0.11.0 via ed25519-dalek, rust-embed-utils. Review the introducing packages together before changing this set."
+reason = "Current upstream API families: 0.10.9 via ash-action-policy, ash-agent-roles, ash-app-server and other importers; 0.11.0 via ed25519-dalek, rmcp, rust-embed-utils. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "shlex"

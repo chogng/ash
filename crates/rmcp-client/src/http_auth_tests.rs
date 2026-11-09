@@ -1,8 +1,10 @@
 use super::*;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
 
 #[derive(Default)]
 struct Credential {
@@ -15,6 +17,59 @@ impl HttpCredentialProvider for Credential {
             return Ok("fresh".into());
         }
         Ok("old".into())
+    }
+}
+
+#[tokio::test]
+async fn managed_http_rejects_oversized_responses_before_reading_the_body() {
+    for (status, max_size) in [("200 OK", 16 * 1024 * 1024), ("400 Bad Request", 64 * 1024)] {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let uri = format!("http://{}/mcp", listener.local_addr().unwrap()).into();
+        let server = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut reader = BufReader::new(socket);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                assert_ne!(reader.read_line(&mut line).await.unwrap(), 0);
+                if line == "\r\n" {
+                    break;
+                }
+            }
+            let headers = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+                max_size + 1
+            );
+            reader
+                .get_mut()
+                .write_all(headers.as_bytes())
+                .await
+                .unwrap();
+            std::future::pending::<()>().await;
+        });
+        let client = AuthenticatedClient {
+            client: ash_http_client::ReqwestHttpClient::sdk_client_builder()
+                .unwrap()
+                .build()
+                .unwrap(),
+            credentials: Some(Arc::new(Credential::default())),
+        };
+        let message =
+            serde_json::from_value(serde_json::json!({"jsonrpc":"2.0","id":1,"method":"ping"}))
+                .unwrap();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.post_message(uri, message, None, None, HashMap::new()),
+        )
+        .await;
+        server.abort();
+        assert!(
+            matches!(
+                result,
+                Ok(Err(StreamableHttpError::ResponseBodyTooLarge { max_size: actual })) if actual == max_size
+            ),
+            "{result:?}"
+        );
     }
 }
 
