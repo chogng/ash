@@ -1,18 +1,20 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { autorun, transaction, type IReader } from '../../../../base/common/observable.js';
+import { localize } from '../../../../nls.js';
+import { autorun, observableFromEvent, observableValue, transaction, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { canOpenThreadInCode, type IUntitledChatSession, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../common/session.js';
+import { canOpenThreadInCode, type IUntitledChatSession, type ModelRef, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
 import { ClosedItemHistory } from './closedItemHistory.js';
 import { SessionsRecencyHistory, type SessionRecencyEntry } from './sessionsRecencyHistory.js';
 import { SessionsNavigation } from './sessionNavigation.js';
-import { loadSessionGridState, saveSessionGridState, storedReference, type ISessionGridState } from './sessionGridState.js';
+import { loadChatSelection, loadSessionGridState, saveChatSelection, saveSessionGridState, storedReference, type ISessionGridState, type SessionsChatModelPreference, type StoredChatSelection } from './sessionGridState.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { VisibleSessions, referenceForSelection, referenceKey, type SessionSlotPlacement, type SessionsSelection, type SessionsViewReference, type SessionsViewSelection } from './visibleSessions.js';
 
 export type { SessionsSelection, SessionsViewSelection } from './visibleSessions.js';
@@ -32,6 +34,12 @@ export interface ISessionsService {
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
 	readonly recentSessions: readonly SessionRecencyEntry[];
+	readonly chatSelection: IObservable<StoredChatSelection | undefined>;
+	getChatSelection(reader?: IReader): SessionsViewSelection | undefined;
+	restoreChatSelection(): Promise<void>;
+	openChatDraft(model?: ModelRef, prepare?: (draftId: string) => void): void;
+	selectChatThread(sessionId: SessionId, threadId: ThreadId): void;
+	setChatModelPreference(preference: SessionsChatModelPreference): void;
 	getLastViewedAt(entry: SessionRecencyEntry, reader?: IReader): number | undefined;
 	markVisibleThreadViewed(entry: SessionRecencyEntry): void;
 	initialize(): Promise<void>;
@@ -69,6 +77,9 @@ export class SessionsService extends Disposable implements ISessionsService {
 	private _navigationRevision = 0;
 	private initialized = false;
 	private readonly storedState: ISessionGridState | undefined;
+	private readonly compactSelection = observableValue<StoredChatSelection | undefined>(this, undefined);
+	readonly chatSelection: IObservable<StoredChatSelection | undefined> = this.compactSelection;
+	private readonly chatCatalog;
 
 	private readonly threadOpenFinished = this._register(new Emitter<{
 		readonly outcome: 'opened' | 'superseded' | 'cancelled' | 'failed';
@@ -91,6 +102,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const storedState = loadSessionGridState(storage);
 		super();
 		this.sessionService = sessionService;
+		this.compactSelection.set(loadChatSelection(storage), undefined);
+		this.chatCatalog = observableFromEvent(this, sessionService.onDidChange, () => ({
+			sessions: sessionService.sessions, drafts: sessionService.untitledSessions,
+		}));
 		this.recency = new SessionsRecencyHistory(storage);
 		this.storedState = storedState;
 		this._register(storage.onWillSaveState(() => this.saveState()));
@@ -128,6 +143,76 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	getSelection(reader?: IReader): SessionsSelection {
 		return this.slots.read(reader);
+	}
+
+	getChatSelection(reader?: IReader): SessionsViewSelection | undefined {
+		const reference = this.chatSelection.read(reader);
+		const { sessions, drafts } = this.chatCatalog.read(reader);
+		if (reference?.kind === 'draft') {
+			const session = drafts.find(draft => draft.untitledSessionId === reference.id);
+			return session ? { kind: 'untitled', session } : undefined;
+		}
+		if (reference?.kind === 'thread') {
+			const session = sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.kind === 'chat'
+				&& candidate.backendSessionId === undefined && candidate.status === 'active');
+			if (session?.chats.some(chat => chat.threadId === reference.threadId && chat.status === 'active')) {
+				return { kind: 'session', active: { session, threadId: reference.threadId } };
+			}
+		}
+		return undefined;
+	}
+
+	async restoreChatSelection(): Promise<void> {
+		const reference = this.chatSelection.get();
+		if (reference?.kind === 'thread') {
+			await this.sessionService.initialize();
+			if (this.isDisposed || this.chatSelection.get() !== reference || this.getChatSelection()) return;
+			if (!this.sessionService.primaryCatalogReady) {
+				throw new Error(this.sessionService.error ?? localize('sessions.chat.ashHistoryUnavailable', 'This Ash Chat conversation is unavailable.'));
+			}
+		}
+		if (this.getChatSelection()) return;
+		if (reference?.kind === 'draft') {
+			const stored = this.storedState?.drafts.find(draft => draft.untitledSessionId === reference.id && draft.kind === 'chat');
+			this.sessionService.restoreUntitledSession(stored ?? {
+				untitledSessionId: reference.id, title: '', kind: 'chat', providerId: LOCAL_AGENT_HOST_PROVIDER_ID,
+				workspace: { type: 'current' }, model: reference.model, reasoningEffortSelection: reference.effort, agent: undefined,
+			});
+		} else {
+			this.openChatDraft();
+		}
+	}
+
+	openChatDraft(model?: ModelRef, prepare?: (draftId: string) => void): void {
+		const draft = this.sessionService.createUntitledSession('', { type: 'current' }, LOCAL_AGENT_HOST_PROVIDER_ID, false, undefined, { kind: 'chat' });
+		try {
+			if (model) this.sessionService.setUntitledSessionModel(draft.untitledSessionId, model);
+			prepare?.(draft.untitledSessionId);
+			this.setChatSelection({ kind: 'draft', id: draft.untitledSessionId, model });
+		} catch (error) {
+			this.sessionService.discardUntitledSession(draft.untitledSessionId);
+			throw error;
+		}
+	}
+
+	selectChatThread(sessionId: SessionId, threadId: ThreadId): void {
+		const current = this.chatSelection.get();
+		if (current?.kind === 'thread' && current.sessionId === sessionId && current.threadId === threadId) return;
+		this.setChatSelection({ kind: 'thread', sessionId, threadId });
+	}
+
+	setChatModelPreference(preference: SessionsChatModelPreference): void {
+		const current = this.chatSelection.get();
+		if (current) this.setChatSelection({ ...current, model: preference.model, effort: preference.effort });
+	}
+
+	private setChatSelection(selection: StoredChatSelection): void {
+		const previous = this.chatSelection.get();
+		saveChatSelection(this.storage, selection);
+		this.compactSelection.set(selection, undefined);
+		if (previous?.kind === 'draft' && (selection.kind !== 'draft' || selection.id !== previous.id)) {
+			this.sessionService.discardUntitledSession(previous.id);
+		}
 	}
 
 	setWorkspaceMode(mode: 'chat' | 'code'): void {
@@ -271,6 +356,9 @@ export class SessionsService extends Disposable implements ISessionsService {
 	async openNextSession(): Promise<void> { this.navigation.goForward(); }
 
 	private syncFromSessionService(): void {
+		const chat = this.chatSelection.get();
+		const promoted = chat?.kind === 'draft' ? this.sessionService.materializedSessions.get().get(chat.id) : undefined;
+		if (promoted) this.setChatSelection({ kind: 'thread', sessionId: promoted.sessionId, threadId: promoted.threadId, model: chat?.model, effort: chat?.effort });
 		if (this.sessionService.sessions.length && !this.storage.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false)) {
 			this.storage.store(WELCOME_COMPLETE_KEY, true, StorageScope.PROFILE, StorageTarget.USER);
 		}

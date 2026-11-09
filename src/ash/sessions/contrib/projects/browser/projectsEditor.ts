@@ -13,12 +13,12 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import type { Project } from '../../../../platform/projects/common/projectService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { getProjectSessionRows, groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup, type ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
+import { getProjectSessionRows, groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ProjectChatInput } from './projectChatInput.js';
-import { IProjectDialogService } from './projectDialogService.js';
+import { IProjectDialogService, type ChatProjectEdit } from './projectDialogService.js';
 import { ProjectMaterials } from './projectMaterials.js';
 import type { ProjectTitleBarContent } from './projectTitleBarWidget.js';
 import { ProjectsActions } from './projectsActions.js';
@@ -99,7 +99,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('sessionsProjectsFocused', true);
 		const main = h(document, 'div', { className: 'ash-projects-main' });
 		this.projectActions = this._register(this.instantiationService.createInstance(ProjectsActions, {
-			showDialog: (project?: Project, conversation?: ConversationProjectEditor) => this.showProjectDialog(project, conversation),
+			showDialog: (edit?: ChatProjectEdit) => this.showProjectDialog(edit),
 			focusList: () => {
 				if (!this.projectList.focusCard()) this.projectsView.focusCreate();
 			},
@@ -153,10 +153,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.projectActions.createProject();
 	}
 
-	private showProjectDialog(project?: Project, conversation?: ConversationProjectEditor): void {
+	private showProjectDialog(edit?: ChatProjectEdit): void {
 		this.projectDialogs.showChatProjectDialog(this.domNode, () => {
 			if (!this.isDisposed && this.isVisible()) this.focus();
-		}, project, conversation);
+		}, edit);
 	}
 
 	public toggleArchivedProjects(): void {
@@ -291,7 +291,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			{
 				label: localize('projects.edit', 'Edit details'),
 				icon: Lxicon.edit,
-				onClick: () => this.showProjectDialog(project),
+				onClick: () => this.showProjectDialog({ project }),
 			},
 			'edit',
 		);

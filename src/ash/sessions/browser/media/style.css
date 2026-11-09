@@ -286,11 +286,17 @@
 	border-color: var(--ash-contrastBorder, transparent);
 }
 
-.ash-sessions-window .ash-button-quiet:where(:not(:disabled):hover) {
+.ash-sessions-window .ash-button-quiet:where(:not(:disabled):hover),
+.ash-sessions-window
+	:where(.ash-dialog-form .ash-dialog-close)
+	.ash-action-label:where(:not(:disabled):hover) {
 	background: var(--ash-button-hoverBackground);
 }
 
-.ash-sessions-window .ash-button-quiet:where(:not(:disabled):active) {
+.ash-sessions-window .ash-button-quiet:where(:not(:disabled):active),
+.ash-sessions-window
+	:where(.ash-dialog-form .ash-dialog-close)
+	.ash-action-label:where(:not(:disabled):active) {
 	background: var(--ash-button-activeBackground);
 }
 

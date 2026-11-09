@@ -4,7 +4,7 @@
 
 | 路径              | 数据与操作的归属                                                                                                                                                          |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ash 原生 Chat     | Ash 的 [`AshChatWidgetModel`](../chat/browser/ashChatWidgetModel.ts) 使用原生会话服务，由 Ash 管理 Session、Thread、Turn 和原生模型选择。                                 |
+| Ash 原生 Chat     | Ash 的 [共享会话模型](../../browser/chatWidgetModel.ts) 使用 Sessions 服务，由 Ash 管理 Session、Thread、Turn 和原生模型选择。                                            |
 | ChatGPT Web       | [`ChatGPTService`](browser/chatGPTService.ts) 提供 ChatGPT 会话、模型和操作。[适配器的界面模型](electron-browser/chatGPTWidgetModel.ts) 将这些数据投影到 Ash 的聊天界面。 |
 | ChatGPT（实验性） | 从「新建」的上下文菜单或命令面板打开。使用独立的 Codex 登录连接、会话缓存和草稿。历史使用桌面分页接口，发送走 Sentinel 校验。                                             |
 

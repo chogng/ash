@@ -4,7 +4,7 @@ import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { autorun, derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -25,13 +25,11 @@ import { shareChatGPTConversation } from './chatGPTShare.js';
 import type { ChatGPTConversation } from '../browser/chatGPTClient.js';
 import { IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
-const conversationIconPrefix = 'sessions.chatgpt.icon:';
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';
-const projectAppearancePrefix = 'sessions.chatgpt.projectAppearance:';
 
-function conversationIconKey(id: string, scope: string | undefined): string | undefined {
-	if (id.startsWith('local:')) return `${conversationIconPrefix}${id}`;
-	if (scope && !id.startsWith('pending:')) return `${conversationIconPrefix}${scope}:${id}`;
+function conversationPreferenceKey(id: string, scope: string | undefined): string | undefined {
+	if (id.startsWith('local:')) return id;
+	if (scope && !id.startsWith('pending:')) return `${scope}:${id}`;
 	return undefined;
 }
 
@@ -39,9 +37,11 @@ function projectArchiveKey(id: string, scope: string | undefined): string | unde
 	return scope && `${projectArchivePrefix}${scope}:${id}`;
 }
 
-/** Projects ChatGPT's data into Ash's sidebar, including window selection and local row preferences. */
+/** Projects ChatGPT's data into Ash's sidebar, including window selection and scoped preference identities. */
 export class ChatGPTList extends Disposable implements ChatListSource {
 	readonly snapshot;
+	private readonly retiredPreferences = this._register(new Emitter<{ readonly key: string; readonly replacementKey?: string; }>());
+	readonly onDidRetirePreferenceIdentity = this.retiredPreferences.event;
 	private readonly nativeSelected;
 	private readonly loadingStatus: ISessionStatusIcon = {
 		label: localize('sessions.loadingConversation', 'Loading conversation…'),
@@ -71,23 +71,13 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 	) {
 		super();
 		const preferencesChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE
-				&& (event.key.startsWith(conversationIconPrefix) || event.key.startsWith(projectArchivePrefix)
-					|| event.key.startsWith(projectAppearancePrefix))) listener(event);
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith(projectArchivePrefix)) listener(event);
 		}));
 		this._register(chat.onDidRetireConversationIdentity(({ id, replacementId }) => {
 			const scope = chat.state.get().catalogScope;
-			const key = conversationIconKey(id, scope);
-			if (!key) return;
-			if (replacementId) {
-				const replacement = conversationIconKey(replacementId, scope);
-				const icon = storage.get(key, StorageScope.PROFILE);
-				if (!replacement || !icon) return;
-				if (!storage.get(replacement, StorageScope.PROFILE)) {
-					storage.store(replacement, icon, StorageScope.PROFILE, StorageTarget.MACHINE);
-				}
-			}
-			storage.remove(key, StorageScope.PROFILE);
+			const key = conversationPreferenceKey(id, scope);
+			const replacementKey = replacementId && conversationPreferenceKey(replacementId, scope);
+			if (key && (!replacementId || replacementKey)) this.retiredPreferences.fire({ key, replacementKey });
 		}));
 		// The provider catalog stays visible when the user leaves its editor for Code.
 		this.nativeSelected = observableFromEvent(this,
@@ -120,11 +110,10 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				const key = projectArchiveKey(project.id, state.catalogScope);
 				return !key || !this.storage.getBoolean(key, StorageScope.PROFILE, false);
 			});
-			const destinations = visibleProjects(state.projects);
+			const destinations = visibleProjects(state.projects).map(({ id, title }) => ({ id, title }));
 			const entries = state.conversations.map((conversation): ChatListEntry => {
 				const { id, title, pinned, projectId } = conversation;
 				const selected = id === current;
-				const iconKey = conversationIconKey(id, state.catalogScope);
 				// Custom GPT conversations also have gizmo IDs, but are not project members.
 				const currentProject = projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined;
 				const catalogId = this.conversationCatalogId(id);
@@ -143,13 +132,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					disabled: state.managing || state.sending && (showSelection || !selected),
 					actionsDisabled: state.busy || state.sending,
 					defaultIcon: id.startsWith('local:') ? Lxicon.cowork : Lxicon.chatSession,
-					iconId: iconKey ? storage.get(iconKey, StorageScope.PROFILE) : undefined,
-					setIcon: iconKey ? value => {
-						const current = chat.state.get();
-						if (conversationIconKey(id, current.catalogScope) !== iconKey || !current.conversations.some(item => item.id === id)
-							|| value && !getLxiconDefinition(value.id)) return;
-						storage.store(iconKey, value?.id, StorageScope.PROFILE, StorageTarget.MACHINE);
-					} : undefined,
+					preferenceKey: conversationPreferenceKey(id, state.catalogScope),
 					open: signal => this.open(id, signal),
 					archive: canArchive ? async () => chat.state.get().catalogScope === state.catalogScope && await chat.archive(id) : undefined,
 					setPinned: id.startsWith('pending:') ? undefined : pinned => chat.setPinned(id, pinned),
@@ -172,7 +155,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			});
 			return {
 				entries,
-				projects: state.projects.map(project => {
+				projects: state.projects.map((project): ChatListProject => {
 					const isCurrentAccount = () => this.chat.state.get().catalogScope === state.catalogScope;
 					const archiveKey = projectArchiveKey(project.id, state.catalogScope);
 					const setArchived = archiveKey ? (archived: boolean) => {
@@ -181,9 +164,12 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 						else storage.remove(archiveKey, StorageScope.PROFILE);
 					} : undefined;
 					return {
-						...project,
+						id: project.id,
+						title: project.title,
+						createdAt: project.createdAt,
+						updatedAt: project.updatedAt,
 						history: this.projectHistory(project.id, state),
-						appearance: this.projectAppearance(project.id, state.catalogScope),
+						preferenceKey: state.catalogScope && `${state.catalogScope}:${project.id}`,
 						archived: archiveKey ? storage.getBoolean(archiveKey, StorageScope.PROFILE, false) : undefined,
 						restore: setArchived ? () => setArchived(false) : undefined,
 						archive: setArchived && state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.voice === 'idle'
@@ -204,25 +190,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				loading: state.loading?.kind === 'history',
 			};
 		});
-	}
-
-	private projectAppearance(projectId: string, scope: string | undefined): ChatListProject['appearance'] {
-		if (!scope) return undefined;
-		const key = (field: 'icon' | 'color') => `${projectAppearancePrefix}${field}:${scope}:${projectId}`;
-		const read = (field: 'icon' | 'color') => {
-			const value = this.storage.get(key(field), StorageScope.PROFILE);
-			return value && /^[a-zA-Z0-9][a-zA-Z0-9.-]{0,127}$/u.test(value) ? value : undefined;
-		};
-		return {
-			icon: read('icon'),
-			color: read('color'),
-			set: (field, value) => {
-				const current = this.chat.state.get();
-				if (current.catalogScope === scope && current.projects.some(project => project.id === projectId)) {
-					this.storage.store(key(field), value, StorageScope.PROFILE, StorageTarget.MACHINE);
-				}
-			},
-		};
 	}
 
 	private projectHistory(projectId: string, state: ChatGPTState): ChatListProject['history'] {
@@ -343,6 +310,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 export class ChatGPTNativeList extends Disposable implements ChatListSource {
 	private readonly delegate: ChatGPTList;
 	readonly snapshot;
+	readonly onDidRetirePreferenceIdentity;
 
 	constructor(
 		@IChatGPTNativeService chat: IChatGPTService,
@@ -352,6 +320,7 @@ export class ChatGPTNativeList extends Disposable implements ChatListSource {
 		const scope = this._register(instantiation.createChild(new ServiceCollection([IChatGPTService, chat])));
 		this.delegate = this._register(scope.createInstance(ChatGPTList));
 		this.snapshot = this.delegate.snapshot;
+		this.onDidRetirePreferenceIdentity = this.delegate.onDidRetirePreferenceIdentity;
 	}
 
 	attach(window: Window & typeof globalThis, isVisible: () => boolean): DisposableStore {

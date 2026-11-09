@@ -304,6 +304,7 @@ test.describe('Unified Chat sidebar', () => {
 			const workspaceActions = page.getByRole('menuitem', { name: /^(设置工作区…|更换工作区…|解除工作区)$/ });
 			const folder = join(testWorkspace.directory, 'initial-workspace');
 			await mkdir(folder);
+			const canonicalFolder = await realpath(folder);
 			const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 			try {
 				await application.evaluate(({ dialog }, directory) => {
@@ -314,7 +315,7 @@ test.describe('Unified Chat sidebar', () => {
 				await page.getByRole('menuitem', { name: '设置工作区…', exact: true }).click();
 				await page.getByRole('button', { name: '信任并打开', exact: true }).click();
 				await expect(workspace).toBeVisible();
-				await expect(workspace).toHaveText(basename(folder));
+				await expect(workspace).toHaveAttribute('title', canonicalFolder);
 			} finally {
 				await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, originalDialog);
 				await originalDialog.dispose();
@@ -337,7 +338,7 @@ test.describe('Unified Chat sidebar', () => {
 			await expect(code).toContainText('Follow up from Code');
 			const saved = (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session;
 			expect(saved?.kind).toBe('chat');
-			expect(saved?.executionTarget).toEqual({ type: 'local', root: await realpath(folder) });
+			expect(saved?.executionTarget).toEqual({ type: 'local', root: canonicalFolder });
 			expect(saved?.threads.map(thread => thread.threadId)).toEqual([threadId]);
 			expect(modelRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
 			const titleMenu = page.locator('.ash-sessions-titlebar-menu');
@@ -628,19 +629,21 @@ test.describe('Unified Chat sidebar', () => {
 		await page.keyboard.press('Escape');
 		await ashComposer.input.focus();
 		await ashComposer.waitForEditorFocus();
-		await ashComposer.waitForTypeInEditor('Follow up with Ash');
+		await ashComposer.waitForTypeInEditor('/compact Follow up with Ash');
 		await page.keyboard.press('Enter');
+		await expect(ash).toContainText('/compact Follow up with Ash');
 		await expect(ash.locator('.ash-chat-item-agentMessage')).toHaveCount(2);
 		await expect.poll(() => ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
 		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(1);
 
+		await ashTitle.focus();
 		await ashRow.getByRole('button', { name: '置顶聊天', exact: true }).press('Enter');
 		await expect(ashRow).toHaveAttribute('data-parent-section', 'pinned');
 		await expect(ashTitle).toBeFocused();
 		await page.keyboard.press('Alt+F1');
 		const help = page.locator('.ash-accessible-view-content');
 		await expect(help).toHaveValue(/ChatGPT 和 Ash 对话共用窗口侧栏/u);
-		await expect(help).toHaveValue(/Ash 会话的更多菜单提供重命名、归档和删除/u);
+		await expect(help).toHaveValue(/Ash 对话的菜单也可以置顶或取消置顶/u);
 		await page.keyboard.press('Escape');
 		await expect(ashTitle).toBeFocused();
 		await chatGPTRow.click();

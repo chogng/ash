@@ -8,6 +8,12 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 export type ProjectSortOrder = 'updated' | 'created' | 'name';
 
 const sortOrderStorageKey = 'sessions.projects.sortOrder';
+// Preserve the existing profile keys when reading and writing catalog project preferences.
+const catalogAppearancePrefix = 'sessions.chatgpt.projectAppearance:';
+
+export interface CatalogProjectAppearance extends ProjectAppearance {
+	save(draft: ProjectAppearance): void;
+}
 
 export interface ProjectsState {
 	readonly projects: readonly ProjectSummary[];
@@ -36,6 +42,7 @@ export interface IProjectsService {
 	archive(project: ProjectSummary): Promise<boolean>;
 	restore(project: ProjectSummary): Promise<boolean>;
 	remove(project: ProjectSummary): Promise<boolean>;
+	getCatalogProjectAppearance(key: string): CatalogProjectAppearance;
 	isPinned(id: string): boolean;
 	togglePinned(id: string): void;
 	getProjects(): readonly ProjectSummary[];
@@ -56,7 +63,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope !== StorageScope.PROFILE) { return; }
 			if (event.key === sortOrderStorageKey) { this.patch({ sortOrder: this.readSortOrder() }); }
-			else if (event.key.startsWith('sessions.projects.pinned.')) { this.patch({}); }
+			else if (event.key.startsWith('sessions.projects.pinned.') || event.key.startsWith(catalogAppearancePrefix)) { this.patch({}); }
 		}));
 		this._register(projects.onDidChange(() => {
 			if (this.state.get().busy) { this.reloadRequested = true; }
@@ -72,6 +79,22 @@ export class ProjectsService extends Disposable implements IProjectsService {
 	public setQuery(query: string): void { this.patch({ query }); }
 	public setSortOrder(sortOrder: ProjectSortOrder): void {
 		this.storage.store(sortOrderStorageKey, sortOrder, StorageScope.PROFILE, StorageTarget.USER);
+	}
+	public getCatalogProjectAppearance(key: string): CatalogProjectAppearance {
+		const storageKey = (field: keyof ProjectAppearance) => `${catalogAppearancePrefix}${field}:${key}`;
+		const read = (field: keyof ProjectAppearance): string | undefined => {
+			const value = this.storage.get(storageKey(field), StorageScope.PROFILE);
+			return value && /^[a-zA-Z0-9][a-zA-Z0-9.-]{0,127}$/u.test(value) ? value : undefined;
+		};
+		const saved = { icon: read('icon'), color: read('color') };
+		return {
+			...saved,
+			save: draft => {
+				for (const field of ['icon', 'color'] as const) {
+					if (draft[field] !== saved[field]) this.storage.store(storageKey(field), draft[field], StorageScope.PROFILE, StorageTarget.MACHINE);
+				}
+			},
+		};
 	}
 	public isPinned(id: string): boolean { return this.storage.getBoolean(`sessions.projects.pinned.${id}`, StorageScope.PROFILE, false); }
 	public togglePinned(id: string): void {

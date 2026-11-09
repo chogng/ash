@@ -18,13 +18,13 @@ or execution service through requests scoped to the owning conversation.
 
 Chat owns history, drafts, and replies through its conversation sources. Code owns its Session and Thread catalog, turns, execution context, approvals, and workspace changes. Desktop navigation aggregates the catalogs in one sidebar and dispatches row actions to the owner of the target record. Each conversation keeps its original identity when the shell or execution directory changes. A user-initiated handoff passes selected draft content or an owner-qualified reference.
 
-On Desktop, the ChatGPT Web source owns its conversation records. Native Ash Chat
-creates its root Threads, reads its catalog and validates saved selections and
-links through the local App Server domain service. The shared connection retains
-its catalog subscription while either consumer needs it. Native Chat preserves
-its existing selection, draft and conversation identities. The domain exposes the
-creation category as `kind`. Sessions without a recorded kind remain accessible
-through Code.
+On Desktop, the ChatGPT Web adapter exposes its conversation records through the
+shared chat list contract. Native Chat and Code share the Sessions management
+service for App Server catalog reads, drafts, and Session creation. The Sessions
+view service restores the compact Chat slot independently of the Code grid.
+Both use the shared Chat model to bind Threads and submit turns. Native Chat
+lists local Sessions whose `kind` is `chat`. Sessions without a recorded kind
+remain accessible through Code.
 
 A saved local root conversation can bind or clear its execution directory while
 idle. The directory command preserves its Session and Thread identities and

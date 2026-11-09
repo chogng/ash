@@ -71,7 +71,7 @@ export class SessionLeadingIcon extends Disposable {
 		const picker = this.instantiation.createInstance(IconPicker);
 		this.picker.value = picker;
 		try {
-			const icon = await picker.pickIcons(anchor);
+			const icon = await picker.pickIcons(undefined, anchor);
 			if (icon !== undefined && this.picker.value === picker && anchor.isConnected) {
 				onPick(icon ?? undefined);
 			}

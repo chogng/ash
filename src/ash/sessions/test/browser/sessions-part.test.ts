@@ -149,6 +149,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
 		async initialize() { },
 		async refresh() { },
+		async readCatalog(sessionId) { return catalog.find(session => session.sessionId === sessionId); },
 		async listAgents() { return []; },
 		async prepareThread() { },
 		async openThread() { },

@@ -97,6 +97,21 @@ suite('Projects browsing', () => {
 		}
 	});
 
+	test('catalog appearance preserves saved account preferences and concurrent changes to other fields', () => {
+		using fixture = new ProjectsFixture();
+		const appearance = (account: string) => fixture.projectsView.getCatalogProjectAppearance(`${account}:project`);
+		fixture.storage.store('sessions.chatgpt.projectAppearance:icon:account:project', 'clockface', StorageScope.PROFILE, StorageTarget.MACHINE);
+		assert.equal(appearance('account').icon, 'clockface');
+		assert.equal(appearance('other-account').icon, undefined);
+
+		const draft = appearance('account');
+		appearance('account').save({ icon: 'clockface', color: 'terminal.ansiRed' });
+		draft.save({ icon: 'chat' });
+		assert.equal(appearance('account').icon, 'chat');
+		assert.equal(appearance('account').color, 'terminal.ansiRed');
+		assert.equal(appearance('other-account').color, undefined);
+	});
+
 	test('pinning is profile state shared by retained views and sorts pinned projects first', async () => {
 		using fixture = new ProjectsFixture();
 		await fixture.projectsView.create('a', 'Alpha', '', []);

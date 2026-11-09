@@ -14,9 +14,3 @@
 	font-size: var(--ash-fontSize-body1);
 	font-weight: var(--ash-fontWeight-semiBold);
 }
-
-.ash-icon-picker-footer {
-	display: flex;
-	justify-content: flex-end;
-	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
-}

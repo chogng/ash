@@ -1,0 +1,5 @@
+.ash-icon-select-reset {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
+}

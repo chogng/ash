@@ -70,7 +70,10 @@
 	display: none;
 }
 
-.ash-projects-dialog.ash-code-project-dialog {
+.ash-projects-dialog:is(
+	.ash-code-project-dialog,
+	.ash-project-appearance-dialog
+) {
 	height: fit-content;
 }
 

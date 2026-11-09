@@ -7,9 +7,10 @@ import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IProjectService, type Project, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
-import { groupChatList, IChatListCatalog, type ChatListGroup, type ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
-import type { SessionsCatalogProjectOperations } from '../../sessions/browser/views/sessionsCatalogList.js';
+import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { groupChatList, IChatListCatalog, type ChatListGroup } from '../../chat/browser/chatListModel.js';
+import type { ConversationProjectEditor, SessionsCatalogProjectOperations } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { ChatProjectEdit } from './projectDialogService.js';
 import { IProjectsService, type ProjectSortOrder } from './projectsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { type MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
@@ -24,6 +25,7 @@ const sidebarProjectActions = [
 	{ key: 'pin', group: '1_edit', order: 0, icon: Lxicon.pin, title: localize('sessions.list.pinProject', 'Pin') },
 	{ key: 'unpin', group: '1_edit', order: 0, icon: Lxicon.pinFilled, title: localize('sessions.list.unpinProject', 'Unpin') },
 	{ key: 'rename', group: '1_edit', order: 1, icon: Lxicon.edit, title: localize('sessions.list.rename', 'Rename') },
+	{ key: 'edit', group: '2_appearance', order: 1, icon: Lxicon.gear, title: localize({ bundle: 'ash.menu', key: 'edit' }, 'Edit') },
 	{ key: 'icon', group: '2_appearance', order: 1, title: localize('sessions.list.changeProjectIcon', 'Change Icon...') },
 	{ key: 'color', group: '2_appearance', order: 2, title: localize('sessions.list.changeProjectColor', 'Change Color...') },
 	{ key: 'archive', group: '3_remove', order: 1, icon: Lxicon.archive, title: localize('projects.archive', 'Archive') },
@@ -128,7 +130,7 @@ async function finishProjectArchive(title: string, archive: () => Promise<boolea
 }
 
 interface ProjectsActionOptions {
-	readonly showDialog: (project?: Project, conversation?: ConversationProjectEditor) => void;
+	readonly showDialog: (edit?: ChatProjectEdit) => void;
 	readonly focusList: () => void;
 	readonly isVisible: () => boolean;
 }
@@ -180,6 +182,14 @@ export class ProjectsActions extends Disposable {
 			enabled: true,
 			run: () => this.editConversationProject(editor),
 		}] : [];
+		const key = project.project?.preferenceKey;
+		if (key) {
+			const label = localize({ bundle: 'ash.menu', key: 'edit' }, 'Edit');
+			editActions.unshift({
+				id: 'projects.editAppearance', label, tooltip: label, icon: Lxicon.gear, enabled: true,
+				run: () => this.options.showDialog({ title: project.title, appearance: this.projects.getCatalogProjectAppearance(key) }),
+			});
+		}
 		const archive = project.project?.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog'));
 		const remove = project.project?.remove;
 		return [...editActions, ...getProjectRemovalActions(this.dialogs, project.title, { archive, remove }, operation => this.runRemoval(operation), !this.projects.state.get().busy)];
@@ -221,7 +231,7 @@ export class ProjectsActions extends Disposable {
 			action('projects.edit', localize('projects.edit', 'Edit details'), Lxicon.edit, async () => {
 				const current = await this.projects.readProject(project.id);
 				if (current && !this.isDisposed && this.options.isVisible()) {
-					this.options.showDialog(current);
+					this.options.showDialog({ project: current });
 				}
 			}),
 			...getProjectRemovalActions(this.dialogs, project.name, {
@@ -245,7 +255,7 @@ export class ProjectsActions extends Disposable {
 		this.readConversationProject.value = toDisposable(() => controller.abort());
 		try {
 			const editor = await read(controller.signal);
-			if (!controller.signal.aborted && this.options.isVisible()) this.options.showDialog(undefined, editor);
+			if (!controller.signal.aborted && this.options.isVisible()) this.options.showDialog({ conversation: editor });
 		} catch (error) {
 			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
 		}

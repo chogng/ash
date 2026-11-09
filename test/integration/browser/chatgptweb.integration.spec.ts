@@ -421,8 +421,14 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 });
 
-test('Work rows use the same leading action and persist an independent icon', async ({ page }) => {
+test('Chat and Work row icons persist independently without a provider write', async ({ page }) => {
 	await mockChatGPTRequests(page);
+	const writes: string[] = [];
+	page.on('request', request => {
+		if (new URL(request.url()).pathname.includes('/service/backend-api/conversation') && request.method() !== 'GET') {
+			writes.push(request.method());
+		}
+	});
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&workRow');
 	const trigger = page.getByRole('button', { name: '更换「Synthetic Work」的图标' });
 	const picker = page.getByRole('dialog', { name: '更换图标', exact: true });
@@ -432,7 +438,20 @@ test('Work rows use the same leading action and persist an independent icon', as
 	await picker.getByRole('option', { name: 'folder', exact: true }).click();
 	await page.reload();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
-	await expect(page.getByRole('button', { name: '更换「Synthetic conversation」的图标' }).locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+	const chat = page.getByRole('button', { name: '更换「Synthetic conversation」的图标' });
+	await expect(chat.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+	await chat.click();
+	await picker.getByRole('combobox', { name: '搜索图标' }).fill('clockface');
+	await picker.getByRole('option', { name: 'clockface', exact: true }).click();
+	await page.reload();
+	await expect(chat.locator('[data-ash-icon-id="clockface"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+	await chat.click();
+	await picker.getByRole('button', { name: '恢复默认图标' }).click();
+	await page.reload();
+	await expect(chat.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+	expect(writes).toEqual([]);
 });
 
 test('ChatGPT dictation inserts text at the cursor and cancels on navigation without sending', async ({ page }) => {

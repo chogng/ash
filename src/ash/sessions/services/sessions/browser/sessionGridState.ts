@@ -3,11 +3,44 @@ import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
-import { isModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
+import { isModelReasoningEffort, type ModelRef, type ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
 import type { IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
 import { visibilityKey, type SessionsViewReference } from './visibleSessions.js';
 
 const storageKey = 'sessions.viewState';
+const chatSelectionKey = 'sessions.chat.ashSelection';
+
+export interface SessionsChatModelPreference {
+	readonly model?: ModelRef;
+	readonly effort?: ModelReasoningEffort;
+}
+
+export type StoredChatSelection = (
+	| { readonly kind: 'draft'; readonly id: string; }
+	| { readonly kind: 'thread'; readonly sessionId: string; readonly threadId: string; }
+) & SessionsChatModelPreference;
+
+/** Preserve the compact editor's existing draft and thread identities across upgrades. */
+export function loadChatSelection(storage: IStorageService): StoredChatSelection | undefined {
+	let value: unknown;
+	try { value = JSON.parse(storage.get(chatSelectionKey, StorageScope.WORKSPACE) ?? 'null'); }
+	catch { return undefined; }
+	if (!isRecord(value)) return undefined;
+	const model = isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model)
+		? { provider: value.model.provider, model: value.model.model }
+		: undefined;
+	const effort = model && isModelReasoningEffort(value.effort) ? value.effort : undefined;
+	const preferences = { ...(model && { model }), ...(effort && { effort }) };
+	if (value.kind === 'draft' && nonEmptyString(value.id)) return { kind: 'draft', id: value.id, ...preferences };
+	if (value.kind === 'thread' && nonEmptyString(value.sessionId) && nonEmptyString(value.threadId)) {
+		return { kind: 'thread', sessionId: value.sessionId, threadId: value.threadId, ...preferences };
+	}
+	return undefined;
+}
+
+export function saveChatSelection(storage: IStorageService, selection: StoredChatSelection): void {
+	storage.store(chatSelectionKey, JSON.stringify(selection), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+}
 
 export function loadSessionGridState(storage: IStorageService): ISessionGridState | undefined {
 	const raw = storage.get(storageKey, StorageScope.WORKSPACE);

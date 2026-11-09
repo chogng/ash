@@ -23,10 +23,47 @@ import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWor
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../../../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 
 type SessionDto = Omit<BackendSession, 'executionTarget'> & Pick<import('../../../../../platform/agentHost/common/agent.js').AgentSession, 'executionTarget'>;
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('native Chat retries a saved draft through the shared catalog without changing Code selection', async () => {
+	const chat = { ...session('saved-chat', 'saved-root'), kind: 'chat' } as const;
+	const fake = sessionHost([session('code', 'code-root'), chat]);
+	const requests: Parameters<IAgentSessionService['create']>[0][] = [];
+	const released: string[] = [];
+	fake.host.session.create = async request => {
+		requests.push(request);
+		if (requests.length === 1) throw new Error('Lost creation response');
+		return { session: chat, agentTree: { roots: [] } };
+	};
+	fake.host.session.unsubscribe = async ({ sessionId }) => { released.push(sessionId); };
+	using management = createManagement(fake);
+	await management.initialize();
+	const revision = management.navigationRevision;
+	assert.equal(management.active?.session.sessionId, 'code');
+	management.restoreUntitledSession({
+		untitledSessionId: 'saved-draft', title: '', kind: 'chat', workspace: { type: 'current' },
+		providerId: LOCAL_AGENT_HOST_PROVIDER_ID, model: undefined, agent: undefined,
+	});
+	await assert.rejects(management.materializeUntitledSession('saved-draft'), /Lost creation response/);
+	const result = await management.materializeUntitledSession('saved-draft');
+	assert.equal(result.session.sessionId, 'saved-chat');
+	assert.equal(result.threadId, 'saved-root');
+	assert.equal(result.session.agentTree, undefined);
+	management.promoteUntitledSession('saved-draft', result);
+	assert.deepEqual(requests.map(({ commandId, title, kind, executionTarget, agent }) => ({ commandId, title, kind, executionTarget, agent })),
+		Array.from({ length: 2 }, () => ({ commandId: 'desktop-session-saved-draft', title: '', kind: 'chat', executionTarget: null, agent: { type: 'default' } })));
+	assert.equal(management.active?.session.sessionId, 'code');
+	assert.equal(management.active?.threadId, 'code-root');
+	assert.equal(management.navigationRevision, revision);
+	assert.deepEqual(released, ['saved-chat']);
+	assert.equal(management.sessions.filter(entry => entry.sessionId === 'saved-chat').length, 1);
+	assert.equal((await management.readCatalog('saved-chat'))?.kind, 'chat');
+	assert.equal((await management.readCatalog('code'))?.kind, 'code');
+});
 
 test('refresh reloads the catalog while retaining the selected unsent draft', async () => {
 	const fake = sessionHost([session('first', 'first-root')]);
@@ -580,6 +617,10 @@ test('catalog timing preserves each chat timestamp and omits unknown activity', 
 		{ createdAt: 50, updatedAt: 200 },
 		{ createdAt: 25, updatedAt: undefined },
 	]);
+	const current = fake.sessions[0]!;
+	fake.sessions[0] = { ...current, threads: [{ ...current.threads[0]!, lastActivityAtUnixMs: 400 }, ...current.threads.slice(1)] };
+	fake.emit({ method: 'session/changed', params: { sessionId: current.sessionId, agentTreeChanged: false } });
+	await waitFor(() => service.sessions[0]?.chats[0]?.updatedAt?.getTime() === 400);
 });
 
 for (const selected of [true, false]) {

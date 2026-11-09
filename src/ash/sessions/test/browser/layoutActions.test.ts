@@ -1,3 +1,4 @@
+import { constObservable } from '../../../base/common/observable.js';
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
 import { DesktopEditorParts } from '../../browser/parts/desktopEditorParts.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
@@ -67,6 +68,8 @@ test('Sessions layout commands update menu state from their owners and release w
 	let historyIndex = 1;
 	let activeSelection: ISessionsService['activeSelection'];
 	const sessions: ISessionsService = {
+		chatSelection: constObservable(undefined), getChatSelection: () => undefined, async restoreChatSelection() { },
+		openChatDraft() { }, selectChatThread() { }, setChatModelPreference() { },
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
 		markVisibleThreadViewed() { },

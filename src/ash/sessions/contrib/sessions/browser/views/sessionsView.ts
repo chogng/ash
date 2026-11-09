@@ -58,7 +58,14 @@ export class SessionsView extends ViewPane {
 		if (typeof presentation !== 'string' && 'input' in presentation) {
 			const input = this._register(instantiation.createInstance(presentation.input));
 			input.attach(getWindow(this.element), () => this.isBodyVisible());
-			presentation = { catalog: input, accessibility: presentation.accessibility };
+			this._register(toDisposable(() => this.projectDialogs.close(this.element)));
+			presentation = {
+				catalog: input,
+				accessibility: presentation.accessibility,
+				editProject: (title, appearance, restoreFocus) => {
+					if (this.isBodyVisible()) this.projectDialogs.showChatProjectDialog(this.element, restoreFocus, { title, appearance });
+				},
+			};
 		}
 		if (presentation === 'code') {
 			presentation = { createProject: () => this.projectDialogs.showCodeProjectDialog(this.element) };

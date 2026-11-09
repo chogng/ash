@@ -47,8 +47,8 @@ export interface ISessionsListModelService {
 	isSessionPinned(session: SessionListIdentity): boolean;
 	pinSession(session: SessionListIdentity): void;
 	unpinSession(session: SessionListIdentity): void;
-	getRowIcon(rowId: string): string | undefined;
-	setRowIcon(rowId: string, iconId: string | undefined): void;
+	getRowIcon(rowId: string, scope?: 'catalog'): string | undefined;
+	setRowIcon(rowId: string, iconId: string | undefined, scope?: 'catalog'): void;
 	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable;
 	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined;
 }
@@ -66,6 +66,8 @@ const attentionGroupKey = 'sessions.list.showAttentionGroup';
 const manualOrderPrefix = 'sessions.list.manualOrder.';
 const pinnedSessionPrefix = 'sessions.list.pinned.';
 const rowIconPrefix = 'sessions.list.rowIcon.';
+// Preserve existing catalog conversation icons in their original profile namespace.
+const catalogRowIconPrefix = 'sessions.chatgpt.icon:';
 
 /** Owns profile-local list filters, pins, and manual row order. */
 export class SessionsListModelService implements ISessionsListModelService {
@@ -90,7 +92,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key === groupingKey || event.key === comparisonGroupsKey
 				|| event.key === attentionGroupKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
-				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix))) {
+				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix) || event.key.startsWith(catalogRowIconPrefix))) {
 				listener.call(thisArgs);
 			}
 		}, undefined, disposables);
@@ -236,13 +238,13 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.storage.store(pinnedSessionPrefix + session.sessionId, true, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
-	getRowIcon(rowId: string): string | undefined {
-		return this.storage.get(rowIconPrefix + rowId, StorageScope.PROFILE);
+	getRowIcon(rowId: string, scope?: 'catalog'): string | undefined {
+		return this.storage.get((scope === 'catalog' ? catalogRowIconPrefix : rowIconPrefix) + rowId, StorageScope.PROFILE);
 	}
 
-	setRowIcon(rowId: string, iconId: string | undefined): void {
+	setRowIcon(rowId: string, iconId: string | undefined, scope?: 'catalog'): void {
 		if (iconId !== undefined && !getLxiconDefinition(iconId)) { return; }
-		this.storage.store(rowIconPrefix + rowId, iconId, StorageScope.PROFILE, StorageTarget.MACHINE);
+		this.storage.store((scope === 'catalog' ? catalogRowIconPrefix : rowIconPrefix) + rowId, iconId, StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
 	unpinSession(session: SessionListIdentity): void {

@@ -46,7 +46,7 @@ export const SESSIONS_EDITOR_WORD_WRAP = registerEditorPreference('sessions.edit
 	() => localize({ bundle: 'ash.workbench', key: 'sessions.editor.wordWrap' }, 'Editor Word Wrap'),
 	() => localize({ bundle: 'ash.workbench', key: 'sessions.editor.wordWrap.description' }, 'Control line wrapping in Agents Window file editors.'), wordWrapLabels);
 
-export const SESSIONS_CHATGPT_DEFAULT_BACKEND = 'sessions.chatgpt.defaultBackend';
+export const SESSIONS_GENERAL_SETTINGS_TAG = 'sessionsGeneral';
 
 export type SessionsActivityBarLocation = Exclude<ActivityBarPosition, ActivityBarPosition.HIDDEN>;
 

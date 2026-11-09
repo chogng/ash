@@ -20,6 +20,8 @@ export interface ISessionWorktreeQueryOptions {
 
 export interface ISessionCreateOptions {
 	readonly kind?: SessionKind;
+	/** The caller binds directly to the new thread and needs only its catalog record. */
+	readonly catalogOnly?: true;
 	readonly automaticTitle?: true;
 	readonly devContainer?: boolean;
 	readonly branchName?: string;

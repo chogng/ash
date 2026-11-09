@@ -27,6 +27,8 @@ import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/brows
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
+import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
+import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ProjectTitleBarContent } from '../../projects/browser/projectTitleBarWidget.js';
 import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
@@ -44,6 +46,13 @@ export interface IReplyChatEditorModel extends IChatWidgetModel {
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined;
 }
 
+/** Supplies model options that can open a draft in another conversation source. */
+export interface ChatDraftModelSource {
+	readonly models: IObservable<readonly ModelCatalogEntry[]>;
+	initialize(): void;
+	selectModel(model: ModelRef, source: IReplyChatEditorModel): Promise<void>;
+}
+
 export interface ReplyChatEditorOptions {
 	readonly id: string;
 	readonly scheme: string;
@@ -55,6 +64,8 @@ export interface ReplyChatEditorOptions {
 	readonly scopedServices?: (accessor: ServicesAccessor) => ServiceCollection;
 	readonly persistentDraftScope?: string;
 	readonly useWorkbenchModelManagement?: true;
+	readonly explicitModelSelection?: true;
+	readonly literalServerCommands?: true;
 	readonly advanceWelcomePhrase?: false;
 	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>, model: IReplyChatEditorModel) => IDisposable & {
 		getAttachMenuAction?(): IAction | undefined;
@@ -143,7 +154,12 @@ export class ReplyChatEditor extends EditorPane {
 				this.opener, this.editors, undefined,
 				(container: HTMLElement, delegate: ChatInputDelegate) => {
 					let draftPicker: ReturnType<NonNullable<ReplyChatEditorOptions['createDraftPicker']>> | undefined;
-					const input = instantiation.createInstance(ChatInputPart, container, delegate,
+					const inputDelegate = {
+						...delegate,
+						selectAutomaticModel: this.options.explicitModelSelection ? undefined : delegate.selectAutomaticModel,
+						executeServerCommand: this.options.literalServerCommands ? undefined : delegate.executeServerCommand,
+					};
+					const input = instantiation.createInstance(ChatInputPart, container, inputDelegate,
 						this.menus, this.contextViews, this.accessibleViews, this.notifications, {
 						create: (options: ChatInputEditorOptions) => instantiation.createInstance(ChatInputEditor, {
 							...options,

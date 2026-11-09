@@ -54,7 +54,7 @@ import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
-import { SESSIONS_CHATGPT_DEFAULT_BACKEND, SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SessionsConfiguration } from '../../../common/configuration.js';
+import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SESSIONS_GENERAL_SETTINGS_TAG, SessionsConfiguration } from '../../../common/configuration.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../common/chatLayout.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import '../../../common/sessionConfig.js';
@@ -601,7 +601,7 @@ export class SessionsPreferences extends Disposable {
 			...[SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP].map(id => defaults.get(id)),
 		];
 		const generalSettings: readonly ISetting[] = [
-			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING || setting.id === ChatConfiguration.TipsEnabled || setting.id === SESSIONS_CHATGPT_DEFAULT_BACKEND),
+			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING || setting.id === ChatConfiguration.TipsEnabled || setting.tags?.includes(SESSIONS_GENERAL_SETTINGS_TAG)),
 			displayLanguageSetting(defaults.get(LocalizationConfiguration.locale), this.localeService, this.languagePackService, this.localizationService, this.configurationService),
 		];
 		const designSettings: readonly ISetting[] = [

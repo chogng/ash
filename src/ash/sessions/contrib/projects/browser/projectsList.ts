@@ -113,7 +113,10 @@ export class ProjectsList extends Disposable {
 			card.dataset.projectControl = project.key;
 			card.dataset.conversationProject = '';
 			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
-			appendIcon(Lxicon.projects, mark);
+			const key = project.project?.preferenceKey;
+			const appearance = key ? this.projects.getCatalogProjectAppearance(key) : undefined;
+			appendIcon((appearance?.icon && getRegisteredIcon(appearance.icon, document)) || Lxicon.projects, mark);
+			if (appearance?.color) mark.style.color = `var(${colorCssVariable(appearance.color)})`;
 			card.append(mark, this.renderCardContent(card, project.title, project.project?.updatedAt, disposables, project.project?.createdAt));
 			disposables.add(addDisposableListener(card, 'click', () => {
 				this.projects.openConversationProject(project.key);

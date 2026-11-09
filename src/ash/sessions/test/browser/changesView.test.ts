@@ -1,3 +1,4 @@
+import { constObservable } from '../../../base/common/observable.js';
 import { IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService } from '../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { IChangesViewService } from '../../contrib/changes/common/changesViewService.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -88,6 +89,8 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
 		let selection = selected('old');
 		const sessions: ISessionsService = {
+			chatSelection: constObservable(undefined), getChatSelection: () => undefined, async restoreChatSelection() { },
+			openChatDraft() { }, selectChatThread() { }, setChatModelPreference() { },
 			navigationRevision: 0,
 			getLastViewedAt: () => undefined,
 			markVisibleThreadViewed() { },

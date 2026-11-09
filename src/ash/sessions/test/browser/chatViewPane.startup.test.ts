@@ -173,6 +173,7 @@ class PendingSessionService implements ISessionsManagementService {
 
 	initialize(): Promise<void> { return this.pendingInitialization; }
 	refresh(): Promise<void> { return this.initialize(); }
+	async readCatalog(): Promise<ISession | undefined> { return undefined; }
 	listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return Promise.resolve([]); }
 	async prepareThread(): Promise<void> { throw new Error('Unexpected thread preparation'); }
 	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }

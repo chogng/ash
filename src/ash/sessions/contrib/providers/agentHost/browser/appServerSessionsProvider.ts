@@ -375,7 +375,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
 		}
 		this.assertCurrentConnection(generation, epoch);
+		const hadDetails = this.subscribed.has(created.session.sessionId) || this.subscriptions.has(created.session.sessionId);
 		this.subscribed.add(created.session.sessionId);
+		if (options?.kind === 'chat' && created.session.kind !== 'chat') {
+			await this.unsubscribe(created.session.sessionId);
+			throw new Error(localize('sessions.create.chatSurfaceUnavailable', 'This host cannot create an Ash Chat conversation.'));
+		}
 		// session/create already starts the root Thread atomically. A second createThread
 		// would add an unrelated peer chat and leave the root empty on every first send.
 		const root = created.session.threads.find(thread => thread.status === 'active' && !thread.parentThreadId && !thread.forkedFromId);
@@ -388,6 +393,11 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 				if (token.isCancellationRequested) throw canceled();
 				this.assertCurrentConnection(generation, epoch);
 				await this.sessionApi.addWorkspaceFolder!(created.session.sessionId, folder.root);
+			}
+			if (options?.catalogOnly && !hadDetails) {
+				await this.unsubscribe(created.session.sessionId);
+				this.assertCurrentConnection(generation, epoch);
+				return { session: toSession(created.session), threadId: root.threadId };
 			}
 			const session = await this.subscribe(toSession(created.session));
 			this.assertCurrentConnection(generation, epoch);

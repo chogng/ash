@@ -145,7 +145,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return projectSession(session, provider.id, provider.label, this.defaultProviderId);
 	}
 
-	private async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
+	async readCatalog(sessionId: SessionId, previous?: ISession): Promise<ISession | undefined> {
 		const provider = this.owner(sessionId);
 		const result = await provider.readCatalog(parseSessionIdentity(sessionId, this.defaultProviderId).backendSessionId, previous && backendSession(previous, this.defaultProviderId));
 		this.assertCurrentProvider(provider);
@@ -482,6 +482,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				const active = await this.createSession(session.title, workspace, session.agent, session.creationId ?? untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
 					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, kind: session.kind,
+					catalogOnly: session.kind === 'chat' ? true : undefined,
 				}, session.forkSource);
 				if (project && !project.sessionIds.includes(active.session.sessionId)) {
 					// The same draft creation ID recovers this Session if linking needs a retry.
@@ -526,7 +527,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (wasActive) this._activeUntitledSessionId = undefined;
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		this.materializedSessions.set(new Map([...this.materializedSessions.get(), [untitledSessionId, { sessionId: active.session.sessionId, threadId: active.threadId, ...(nested ? { sideThread: true as const } : {}) }]]));
-		if (wasActive || !this._active && !this.activeUntitledSession) this._active = active;
+		if (wasActive || active.session.kind !== 'chat' && !this._active && !this.activeUntitledSession) this._active = active;
 		if (this.pendingCreations === 0) this.setState('ready');
 		else this._onDidChange.fire();
 	}
@@ -908,6 +909,8 @@ function sameSession(left: ISession | undefined, right: ISession | undefined): b
 	if (left.nextApprovalMode !== right.nextApprovalMode || !sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];
-		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.recap === chat.recap && next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
+		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.recap === chat.recap
+			&& next.createdAt?.getTime() === chat.createdAt?.getTime() && next.updatedAt?.getTime() === chat.updatedAt?.getTime()
+			&& next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
 	});
 }

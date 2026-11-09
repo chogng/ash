@@ -24,7 +24,9 @@ The desktop host presents those records in Ash's [Sessions view](contrib/session
 search and `ReplyChatEditor`. The desktop Chat list model combines catalog
 records and supplies ordered sections and row operations. The view owns
 rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
-host's contracts. In an eligible new Chat draft, selecting an Ash model asks the
+host's contracts. The [catalog project ownership contract](SESSIONS_LIST.md#catalog-project-ownership)
+defines which actions reach a provider.
+In an eligible new Chat draft, selecting an Ash model asks the
 adapter for the current unsent text after model validation. The host opens an
 independent Ash Chat draft without sending a message. Its first send creates a
 Chat-owned Thread through the shared App Server.
