@@ -12,7 +12,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
-import { getDictationMicrophoneChoices, readDictationInputDevices, readDictationPreparation } from '../speechToText/dictationInput.js';
+import { readDictationMicrophones, readDictationPreparation } from '../speechToText/dictationInput.js';
 import { activeDictationEditor, cancelDictation, isDictating, onDidChangeDictationEditor, startDictation, stopDictation } from '../speechToText/dictationSession.js';
 import { IChatWidgetService, type IChatWidget } from '../chat.js';
 import { SELECT_MICROPHONE_COMMAND } from '../speechToText/micButtonMenuActions.js';
@@ -161,13 +161,13 @@ class SelectDictationMicrophoneAction extends Action2 {
 		const configuration = accessor.get(IConfigurationService);
 		const service = accessor.get(IChatSpeechToTextService);
 		const quickInput = accessor.get(IQuickInputService);
-		const { inputDevices } = await readDictationInputDevices(target);
+		const { choices, selectedDeviceId } = await readDictationMicrophones(target, configuration);
 		const lifetime = new DisposableStore();
 		const picker = lifetime.add(quickInput.createQuickPick<IQuickPickItem & { deviceId: string; }>());
 		picker.placeholder = picker.ariaLabel = localize('dictation.selectMicrophone', 'Select microphone');
-		const items = getDictationMicrophoneChoices(inputDevices).map(({ id, label }) => ({ label, deviceId: id }));
+		const items = choices.filter(choice => !choice.disconnected).map(({ id, label }) => ({ label, deviceId: id }));
 		picker.items = items;
-		picker.activeItems = items.filter(item => item.deviceId === configuration.getValue(DictationConfiguration.inputDevice));
+		picker.activeItems = items.filter(item => item.deviceId === selectedDeviceId);
 		await new Promise<void>((resolve, reject) => {
 			let accepted = false;
 			lifetime.add(picker.onDidHide(() => { if (!accepted) resolve(); }));

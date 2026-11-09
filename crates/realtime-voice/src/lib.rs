@@ -61,10 +61,11 @@ pub struct CloudDictationRequest {
     pub prompt: Option<String>,
 }
 
-/// Subscription authority is admitted before capture and rechecked before upload and delivery.
+/// Subscription authority is admitted before capture and rechecked during streaming and delivery.
 #[cfg(feature = "cloud")]
 pub struct SubscriptionDictationRequest {
     pub dictation: Arc<model_provider::ChatGptDictation>,
+    pub connector: WebSocketConnector,
     pub audio_host: PathBuf,
     pub input_device: Option<String>,
     pub language: Option<String>,

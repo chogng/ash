@@ -3,7 +3,6 @@ import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
-import { AgentsVoiceSettingId } from '../../agentsVoice/common/agentsVoice.js';
 import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../memories/browser/memorySettings.js';
 
 export interface SettingsGroupDescriptor {
@@ -582,7 +581,7 @@ export const SettingsNavigation = [
 						id: 'dictation',
 						label: localize('settings.dictation.group', 'Voice input'),
 						description: localize('settings.dictation.groupDescription', 'Choose how voice input is transcribed.'),
-						settings: ['dictation.*', 'agents.voice.showButton'],
+						settings: ['dictation.*', 'agents.voice.*'],
 					},
 				],
 			},
@@ -710,12 +709,7 @@ export const SettingsNavigation = [
 				description: '',
 				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion', 'commit', 'commit message'],
 				presentation: 'general',
-				groups: [{
-					id: 'agent-voice-model',
-					label: localize('agentsVoice.model.title', 'Voice model'),
-					description: '',
-					settings: [AgentsVoiceSettingId.Model],
-				}],
+				groups: [],
 			},
 			{
 				id: 'teams',

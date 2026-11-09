@@ -1,3 +1,5 @@
+import { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
+import '../../../agentsVoice/browser/agentsVoice.contribution.js';
 import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatWidgetService } from '../../../chat/browser/chat.js';
 import { ChatWidgetService } from '../../../chat/browser/widget/chatWidgetService.js';
@@ -2176,8 +2178,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles.ash?.['settings.dictation.group'], '语音输入');
 	assert.equal(chinese?.bundles.ash?.['dictation.modelLoadTiming.title'], '本地听写模型加载时机');
 	assert.equal(chinese?.bundles.ash?.['dictation.cloudModel.title'], '转写模型');
-	assert.equal(chinese?.bundles.ash?.['dictation.subscription.title'], 'Codex 订阅听写');
-	assert.equal(chinese?.bundles.ash?.['dictation.subscription.manage'], '管理 Codex 账号');
+	assert.equal(chinese?.bundles.ash?.['dictation.subscription.title'], 'ChatGPT 听写');
+	assert.equal(chinese?.bundles.ash?.['dictation.voiceMode.title'], '语音模式');
 	assert.equal(
 		defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)),
 		false,
@@ -3071,6 +3073,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IAppServerHookApi, hooksBackend);
 	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	services.registerInstance(IAgentVoiceService, undefined);
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
 	services.registerInstance(IExtensionService, disposables.add(new TestExtensionService()));
@@ -3927,6 +3930,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="dictation"]'), null);
 	assert.equal(root.querySelector('[data-settings-target-id]'), null);
 	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
+	assert.equal(root.querySelector('[data-settings-tree-group-id="voice-mode"] .ash-settings-tree-group-title')?.textContent, 'Voice Mode');
+	assert.match(root.querySelector('[data-configuration-key="agents.voice.model"]')?.textContent ?? '', /GPT-Live 1/);
 	await configuration.updateValue(LocalizationConfiguration.locale, 'zh-CN');
 	assert.equal(root.querySelector('[data-settings-tree-group-id="dictation"] .ash-settings-tree-group-title')?.textContent, 'Voice input');
 	const dictationSearch = root.querySelector<HTMLInputElement>('.ash-settings-search input')!;
@@ -3941,13 +3946,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelector('[role="group"][aria-label="Local dictation models"]'));
 	await configuration.updateValue('dictation.backend', 'codex');
 	const subscription = root.querySelector('[data-settings-item-id="dictation.subscription"]');
-	assert.match(subscription?.textContent ?? '', /Codex subscription dictation/);
-	assert.match(subscription?.textContent ?? '', /Use your Codex login from Models/);
-	assert.match(subscription?.textContent ?? '', /stop to transcribe and insert the text/);
-	assert.equal(subscription?.querySelector('button')?.textContent, 'Manage Codex account');
+	assert.match(subscription?.textContent ?? '', /ChatGPT dictation/);
+	assert.match(subscription?.textContent ?? '', /Uses your Codex login from Models/);
+	assert.match(subscription?.textContent ?? '', /transcribe while you speak/);
+	await nextTurn();
+	assert.match(subscription?.querySelector('[role="status"]')?.textContent ?? '', /Unavailable.*Models/);
 	assert.equal(root.querySelector('[data-settings-item-id="dictation.cloudModel"]'), null);
 	assert.equal(subscription?.getAttribute('role'), 'group');
-	assert.equal(ownerDocument.getElementById(subscription?.getAttribute('aria-labelledby') ?? '')?.textContent, 'Codex subscription dictation');
+	assert.equal(ownerDocument.getElementById(subscription?.getAttribute('aria-labelledby') ?? '')?.textContent, 'ChatGPT dictation');
 	assert.match(ownerDocument.getElementById(subscription?.getAttribute('aria-describedby') ?? '')?.textContent ?? '', /Codex login from Models/);
 	await configuration.updateValue('dictation.backend', 'cloud');
 	assert.match(root.querySelector('[data-settings-item-id="dictation.cloudModel"]')?.textContent ?? '', /gpt-live-transcribe/);

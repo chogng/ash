@@ -23,7 +23,7 @@ import { ISpeechService } from '../../../speech/common/speechService.js';
 import { DictationConfiguration } from '../../common/constants.js';
 import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
 import { showDictationMicFeedback } from './dictationMicFeedback.js';
-import { getDictationMicrophoneChoices, readDictationOptions, type DictationMenuOptions } from './dictationInput.js';
+import { readDictationOptions, type DictationMenuOptions } from './dictationInput.js';
 import { addMicButtonContextMenuListener, getDictationContextMenuActions, SELECT_MICROPHONE_COMMAND } from './micButtonMenuActions.js';
 
 /** The toolbar item stays navigable when only its settings action is available. */
@@ -117,9 +117,7 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		if (options) actions.unshift(...this.inputChoices(window, options), new Separator());
 		const level = { id: 'dictation.inputLevel', label: '', tooltip: '', enabled: false, run() { } };
 		actions.unshift(level);
-		const deviceId = options?.hasMicrophone
-			? this.configuration.getValue<string>(DictationConfiguration.inputDevice) ?? ''
-			: undefined;
+		const deviceId = options?.microphones.hasMicrophone ? options.microphones.selectedDeviceId : undefined;
 		this.contextMenus.showContextMenu({
 			...delegate,
 			getActions: () => actions,
@@ -133,12 +131,11 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 	}
 
 	private inputChoices(window: Window & typeof globalThis, options: DictationMenuOptions): IAction[] {
-		const currentDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice) ?? '';
+		const { choices, selectedDeviceId, hasMicrophone } = options.microphones;
 		const actions: IAction[] = [];
-		if (options.hasMicrophone) {
-			const devices = getDictationMicrophoneChoices(options.inputDevices, currentDevice, options.systemMicrophoneName);
-			actions.push(...devices.map(({ id, label, disconnected }, index) => ({
-				id: `dictation.microphone.${index}`, label, tooltip: label, enabled: !disconnected, checked: currentDevice === id,
+		if (hasMicrophone) {
+			actions.push(...choices.map(({ id, label, disconnected }, index) => ({
+				id: `dictation.microphone.${index}`, label, tooltip: label, enabled: !disconnected, checked: selectedDeviceId === id,
 				run: async () => {
 					if (disconnected) return;
 					await this.configuration.updateValue(DictationConfiguration.inputDevice, id);

@@ -1,3 +1,6 @@
+import { IProfileStorageService } from '../../../platform/storage/common/profileStorageService.js';
+import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import '../../../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { IMemoriesService } from '../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IMemorySettingsNavigation, MemorySettingsNavigation, OPEN_MEMORIES_COMMAND_ID } from '../../../workbench/contrib/memories/browser/memorySettings.js';
@@ -189,6 +192,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	services.registerInstance(IAgentVoiceService, undefined);
+	services.registerInstance(IProfileStorageService, {
+		_serviceBrand: undefined,
+		readOverview: async () => { throw new Error('Unexpected profile storage read'); },
+		cleanWorktree: async () => { throw new Error('Unexpected worktree cleanup'); },
+	});
 	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
@@ -623,6 +632,16 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await configuration.updateValue('accessibility.verbosity.designCanvas', false);
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	Object.defineProperty(window.navigator, 'mediaDevices', {
+		configurable: true,
+		value: Object.assign(new window.EventTarget(), {
+			enumerateDevices: async () => [
+				{ deviceId: 'default', kind: 'audioinput', label: '默认 - MacBook Pro麦克风' },
+				{ deviceId: 'iphone', kind: 'audioinput', label: '“iPhone”的麦克风' },
+				{ deviceId: 'macbook', kind: 'audioinput', label: 'MacBook Pro麦克风' },
+			],
+		}),
+	});
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
@@ -645,10 +664,17 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await preferences.open({ section: 'dictation' });
 		assert.equal(categoryButton('dictation').textContent, '语音');
 		assert.equal(window.document.querySelector('[data-settings-tree-group-id="dictation"]'), null);
+		assert.equal(window.document.querySelector('[data-settings-tree-group-id="voice-mode"] .ash-settings-tree-group-title')?.textContent, '语音模式');
 		assert.ok(window.document.querySelector('[data-configuration-key="dictation.backend"]'));
-		const microphone = window.document.querySelector('[data-settings-item-id="dictation.inputDevice"] [role="combobox"]');
-		assert.equal(microphone?.getAttribute('aria-label'), '麦克风');
-		assert.equal(microphone?.textContent, '跟随系统');
+		const microphone = window.document.querySelector<HTMLButtonElement>('[data-settings-item-id="dictation.inputDevice"] [role="combobox"]')!;
+		assert.equal(microphone.getAttribute('aria-label'), '麦克风');
+		assert.equal(microphone.textContent, 'MacBook Pro 的麦克风（系统默认）');
+		microphone.click();
+		const microphoneOptions = [...window.document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]')];
+		assert.deepEqual(microphoneOptions.map(option => option.textContent), ['MacBook Pro 的麦克风（系统默认）', '“iPhone”的麦克风', 'MacBook Pro 的麦克风']);
+		microphoneOptions[1].click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(configuration.getValue('dictation.inputDevice'), 'iphone');
 		assert.equal(window.document.querySelector('[data-settings-item-id="dictation.language"]'), null);
 		assert.equal(window.document.querySelector('[data-settings-item-id="accessibility.verbosity.dictationModels"]'), null);
 		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');

@@ -32,6 +32,8 @@ ash-http-client = { workspace = true }
 ash-login = { workspace = true }
 ash-keyring-store = { workspace = true }
 ash-secrets = { workspace = true }
+ash-websocket-client = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

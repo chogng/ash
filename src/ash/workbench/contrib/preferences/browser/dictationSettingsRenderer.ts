@@ -3,7 +3,7 @@ import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platfor
 import { ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../speech/common/speechService.js';
 import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../platform/dictation/common/dictation.js';
-import { getDictationMicrophoneChoices, readDictationInputDevices } from '../../chat/browser/speechToText/dictationInput.js';
+import { readDictationMicrophones } from '../../chat/browser/speechToText/dictationInput.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import './media/dictationSettingsRenderer.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -27,6 +27,8 @@ import {
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
+import { IAgentVoiceService } from '../../../../platform/agentHost/common/agentService.js';
+import { AgentsVoiceSettingId } from '../../agentsVoice/common/agentsVoice.js';
 import { IChatSpeechToTextService } from '../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -51,7 +53,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 /** Shared dictation content; each settings host owns navigation, search and setting widgets. */
 export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | SettingsSectionReference> {
 	public readonly categoryId = 'voice-input';
-	public override get settingIds(): readonly string[] { return Object.values(DictationConfiguration); }
+	public override get settingIds(): readonly string[] { return [...Object.values(DictationConfiguration), AgentsVoiceSettingId.Model, AgentsVoiceSettingId.ShowButton]; }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly controls: LocalTranscriptionModelControls;
@@ -61,6 +63,9 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 	private readonly subscriptionTitle: string;
 	private readonly subscriptionDescription: string;
 	private readonly connectionStatus: HTMLElement;
+	private readonly subscriptionStatus: HTMLElement;
+	private readonly voiceMode: HTMLElement;
+	private readonly voiceModeStatus: HTMLElement;
 	private readonly window: Window & typeof globalThis;
 	private readonly microphone: { readonly row: HTMLElement; readonly select: SelectBox; readonly title: string; };
 	private readonly language: { readonly row: HTMLElement; readonly select: SelectBox; readonly title: string; };
@@ -82,6 +87,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
 		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IAgentVoiceService private readonly voice: IAgentVoiceService | undefined,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -100,7 +106,6 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		};
 		this.microphone = createSelectRow(DictationConfiguration.inputDevice, localize({ bundle: 'ash', key: 'dictation.microphone' }, 'Microphone'));
 		this.language = createSelectRow(DictationConfiguration.language, localize({ bundle: 'ash', key: 'dictation.language' }, 'Transcription language'));
-		this.setMicrophoneOptions([]);
 		const mediaDevices = this.window.navigator.mediaDevices;
 		if (mediaDevices) this._register(addDisposableListener(mediaDevices, 'devicechange', () => this.updateVisibility()));
 		const updateHint = (): void => {
@@ -119,8 +124,8 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 			presentation: 'secondary',
 		}));
 		this._register(connections.onDidClick(() => { void preferences.openSettings({ section: 'models' }); }));
-		this.subscriptionTitle = localize('dictation.subscription.title', 'Codex subscription dictation');
-		this.subscriptionDescription = localize('dictation.subscription.description', 'Use your Codex login from Models. Record up to 3 minutes, then stop to transcribe and insert the text. No separate API key is needed.');
+		this.subscriptionTitle = localize('dictation.subscription.title', 'ChatGPT dictation');
+		this.subscriptionDescription = localize('dictation.subscription.description', 'Uses your Codex login from Models to transcribe while you speak. Stop to review the final text.');
 		this.subscription = h(document, 'div');
 		this.subscription.className = 'ash-dictation-subscription';
 		this.subscription.setAttribute('role', 'group');
@@ -130,20 +135,27 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		description.id = `${title.id}-description`;
 		this.subscription.setAttribute('aria-labelledby', title.id);
 		this.subscription.setAttribute('aria-describedby', description.id);
-		this.subscription.append(title, description);
-		const account = this._register(new Button(this.subscription, {
-			...defaultButtonStyles,
-			label: localize('dictation.subscription.manage', 'Manage Codex account'),
-			presentation: 'secondary',
-		}));
-		this._register(account.onDidClick(() => { void preferences.openSettings({ section: 'models' }); }));
+		this.subscriptionStatus = h(document, 'p');
+		this.subscriptionStatus.setAttribute('role', 'status');
+		this.subscription.append(title, description, this.subscriptionStatus);
+		this.voiceMode = h(document, 'div');
+		this.voiceMode.className = 'ash-dictation-cloud-connection';
+		this.voiceModeStatus = h(document, 'p');
+		this.voiceModeStatus.setAttribute('role', 'status');
+		this.voiceMode.append(this.voiceModeStatus);
+		if (voice) {
+			this._register(voice.onDidChange(() => this.updateVisibility()));
+		}
+		if (backend) {
+			this._register(backend.onDidChangeConnection(() => this.updateVisibility()));
+		}
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.DictationModels)) { updateHint(); }
 			if (event.affectsConfiguration(DictationConfiguration.backend) || event.affectsConfiguration(DictationConfiguration.cloudProvider)) {
 				this.updateVisibility();
 				this.changed.fire();
 			}
-			if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language)) { this.updateVisibility(); }
+			if (event.affectsConfiguration(DictationConfiguration.inputDevice) || event.affectsConfiguration(DictationConfiguration.language) || event.affectsConfiguration(AgentsVoiceSettingId.Model)) { this.updateVisibility(); }
 		}));
 		this._register(speech.onDidChangeState(() => this.updateVisibility()));
 		this._register(speechProviders.onDidChangeHasSpeechProvider(() => {
@@ -237,10 +249,30 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 			});
 		}
 		const items = children.map(node => ({ ...node, element: { ...node.element, keywords: [...node.element.keywords ?? [], 'dictation', 'speech', localize('sessions.settings.dictation', 'Dictation'), localize('settings.dictation.group', 'Voice input')] } }));
-		return this.options.showGroupHeader ? [{
+		const voiceMode: SettingsTreeNode<ISetting | SettingsSectionReference> = {
+			element: {
+				kind: 'group', id: 'voice-mode', title: localize('dictation.voiceMode.title', 'Voice Mode'),
+				description: localize('dictation.voiceMode.description', 'Talk with Ash in a two-way voice conversation.'),
+			},
+			children: [
+				...([AgentsVoiceSettingId.Model, AgentsVoiceSettingId.ShowButton]
+					.filter(id => settings.all.some(setting => setting.id === id))
+					.map(settingNode)),
+				{
+					element: {
+						kind: 'item', id: 'dictation.voiceMode.status',
+						title: localize('dictation.voiceMode.status', 'Voice model availability'),
+						description: '',
+						value: this.retainElement('dictation.voiceMode.status', this.voiceMode),
+					},
+				},
+			],
+		};
+		const dictation: SettingsTreeNode<ISetting | SettingsSectionReference> = {
 			element: { kind: 'group', id: 'dictation', title: localize('settings.dictation.group', 'Voice input'), description: localize('dictation.settings.description', 'Choose local or cloud transcription and manage local dictation models.') },
 			children: items,
-		}] : items;
+		};
+		return [...(this.options.showGroupHeader ? [dictation] : items), voiceMode];
 	}
 
 	public setVisible(visible: boolean): void {
@@ -255,7 +287,12 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		const cloud = backend.type === 'cloud';
 		this.cloudModel.textContent = backend.type === 'cloud' ? backend.modelId : '';
 		this.controls.setVisible(this.visible && backend.type === 'local');
-		if (this.visible && cloud) { void this.readConnection(version); }
+		if (this.visible && (cloud || backend.type === 'codex')) {
+			void this.readConnection(backend, version);
+		}
+		if (this.visible) {
+			void this.readVoiceMode(version);
+		}
 		if (this.visible && !this.speechProviders.hasSpeechProvider) { void this.readMicrophones(version); }
 		if (this.visible) { void this.readLanguages(backend, version); }
 	}
@@ -277,17 +314,15 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		}
 	}
 
-	private setMicrophoneOptions(devices: Awaited<ReturnType<typeof readDictationInputDevices>>['inputDevices']): void {
-		const configuredDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
-		this.microphone.select.setOptions(getDictationMicrophoneChoices(devices, configuredDevice).map(({ id, label }) => ({ value: id, label })));
-		this.microphone.select.value = configuredDevice;
-	}
-
 	private async readMicrophones(version: number): Promise<void> {
 		try {
-			const { inputDevices } = await readDictationInputDevices(this.window);
-			if (!this.isDisposed && version === this.requestVersion) this.setMicrophoneOptions(inputDevices);
-		} catch (error) { if (!this.isDisposed && version === this.requestVersion) { this.notifications.error(String(error)); } }
+			const { choices, selectedDeviceId } = await readDictationMicrophones(this.window, this.configuration);
+			if (this.isDisposed || version !== this.requestVersion) return;
+			this.microphone.select.setOptions(choices.map(({ id, label }) => ({ value: id, label })));
+			this.microphone.select.value = selectedDeviceId;
+		} catch (error) {
+			if (!this.isDisposed && version === this.requestVersion) this.notifications.error(String(error));
+		}
 	}
 
 	private async readLanguages(backend: DictationBackend, version: number): Promise<void> {
@@ -311,17 +346,43 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		} catch (error) { if (!this.isDisposed && version === this.requestVersion) { this.notifications.error(String(error)); } }
 	}
 
-	private async readConnection(version: number): Promise<void> {
+	private async readConnection(backend: DictationBackend, version: number): Promise<void> {
+		const status = backend.type === 'codex' ? this.subscriptionStatus : this.connectionStatus;
 		try {
 			const providers = await this.chat.listModelProviders();
 			if (version !== this.requestVersion || this.isDisposed) { return; }
-			const connection = this.configuration.getValue(DictationConfiguration.cloudProvider) === 'xai' ? 'xai' : 'openai';
+			if (backend.type === 'codex') {
+				status.textContent = this.backend?.isConnected && providers.some(provider => provider.connection === 'chatgpt-subscription' && provider.ready)
+					? localize('dictation.subscription.available', 'Available with your Codex login.')
+					: localize('dictation.subscription.unavailable', 'Unavailable. Check your Codex login in Models.');
+				return;
+			}
+			const connection = backend.type === 'cloud' && backend.provider === 'xai' ? 'xai' : 'openai';
 			const provider = providers.find(provider => provider.connection === connection);
-			this.connectionStatus.textContent = provider?.apiKeyConfigured
+			status.textContent = provider?.apiKeyConfigured
 				? localize('dictation.connections.configured', 'API key configured. This connection is shared with chat.')
 				: localize('dictation.connections.missing', 'This cloud API service requires an API key. Configure it in Models.');
 		} catch {
-			if (version === this.requestVersion && !this.isDisposed) { this.connectionStatus.textContent = localize('dictation.connections.failed', 'Could not read the dictation connection.'); }
+			if (version === this.requestVersion && !this.isDisposed) { status.textContent = localize('dictation.connections.failed', 'Could not read the dictation connection.'); }
 		}
 	}
+
+	private async readVoiceMode(version: number): Promise<void> {
+		let available = false;
+		try {
+			if (this.voice?.isAvailable) {
+				const model = this.configuration.getValue<string>(AgentsVoiceSettingId.Model);
+				const connections = await this.voice.getOptions();
+				available = connections.some(connection => connection.models.some(choice => choice.modelId === model));
+			}
+		} catch {
+			// Provider failures leave the connection unavailable until Models refreshes.
+		}
+		if (version === this.requestVersion && !this.isDisposed) {
+			this.voiceModeStatus.textContent = available
+				? localize('dictation.voiceMode.available', 'Voice model available.')
+				: localize('dictation.voiceMode.unavailable', 'Voice model unavailable. Check API connections in Models.');
+		}
+	}
+
 }

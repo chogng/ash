@@ -570,11 +570,11 @@ configurationRegistry.registerConfiguration<'local' | 'cloud' | 'codex'>({
 	setting: {
 		valueType: 'select',
 		title: localize({ bundle: 'ash', key: 'dictation.backend.title' }, 'Dictation service'),
-		description: localize({ bundle: 'ash', key: 'dictation.backend.description' }, 'Choose local transcription, a cloud API, or your Codex subscription for voice input.'),
+		description: localize({ bundle: 'ash', key: 'dictation.backend.description' }, 'Choose local transcription, a cloud API, or ChatGPT for voice input.'),
 		options: [
 			{ value: 'local', label: localize({ bundle: 'ash', key: 'dictation.backend.local' }, 'Local') },
 			{ value: 'cloud', label: localize({ bundle: 'ash', key: 'dictation.backend.cloud' }, 'Cloud') },
-			{ value: 'codex', label: localize({ bundle: 'ash', key: 'dictation.backend.codex' }, 'Codex subscription') },
+			{ value: 'codex', label: localize({ bundle: 'ash', key: 'dictation.backend.codex' }, 'ChatGPT') },
 		],
 	},
 });
