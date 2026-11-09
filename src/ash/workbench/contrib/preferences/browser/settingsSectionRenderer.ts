@@ -40,14 +40,17 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	private readonly fields = new Map<string, SettingsSectionField>();
 	private isVisible = false;
 	private pendingFocus: HTMLElement | undefined;
+	private readonly generalRows: boolean;
 
-	constructor(container: HTMLElement, private readonly model: SettingsSectionModel, providerId: AccessibleViewProviderId, verbosity: AccessibilityVerbositySettingId,
+	constructor(host: HTMLElement | { readonly container: HTMLElement; readonly rowPresentation: 'general'; }, private readonly model: SettingsSectionModel, providerId: AccessibleViewProviderId, verbosity: AccessibilityVerbositySettingId,
 		@IContextViewService private readonly contextView: IContextViewService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 	) {
 		super();
+		const { container, rowPresentation } = isHTMLElement(host) ? { container: host, rowPresentation: undefined } : host;
+		this.generalRows = rowPresentation === 'general';
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div'); this.domNode.className = 'ash-settings-section';
 		if (model.itemId) { this.domNode.dataset.settingsItemId = model.itemId; }
@@ -146,22 +149,25 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			this.fields.set(field.id, field);
 			let control = this.controls.get(field.id);
 			if (!control) {
+				const standalone = this.model.groupId === null;
+				const generalRow = this.generalRows && standalone;
 				let container = this.fieldsDomNode;
 				let copy = container;
-				if (this.model.groupId === null && field.kind !== 'status' && field.kind !== 'action') {
+				if (standalone && field.kind !== 'status' && field.kind !== 'action') {
 					container = h(this.domNode.ownerDocument, 'div');
-					container.className = 'ash-settings-field-row';
+					container.className = generalRow ? 'ash-configuration-setting' : 'ash-settings-field-row';
+					if (generalRow && field.kind === 'boolean') container.classList.add('ash-configuration-toggle-setting');
 					copy = h(this.domNode.ownerDocument, 'div');
-					copy.className = 'ash-settings-field-copy';
+					copy.className = generalRow ? 'ash-configuration-setting-copy' : 'ash-settings-field-copy';
 					container.append(copy);
 					this.fieldsDomNode.append(container);
+					if (generalRow || field.description) container.setAttribute('role', 'group');
 					if (field.description) {
-						const description = h(this.domNode.ownerDocument, 'p');
-						description.className = 'ash-settings-field-description';
+						const description = h(this.domNode.ownerDocument, generalRow ? 'span' : 'p');
+						description.className = generalRow ? 'ash-configuration-setting-description' : 'ash-settings-field-description';
 						description.textContent = field.description;
 						description.id = `settingsFieldDescription-${generateUuid()}`;
 						copy.append(description);
-						container.setAttribute('role', 'group');
 						container.setAttribute('aria-describedby', description.id);
 					}
 				}
@@ -191,7 +197,6 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					// value different from the model is a user edit, otherwise a read dirties the draft.
 					this._register(input.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'text' && current.value !== value) { current.setValue(value); } })); control = input;
 				} else if (field.kind === 'boolean') {
-					const standalone = this.model.groupId === null;
 					const toggle = this._register(new Switch(container, {
 						...defaultToggleStyles,
 						label: standalone ? undefined : field.label,
@@ -207,7 +212,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
 					control = toggle;
 				} else if (field.kind === 'select') {
-					const label = h(this.domNode.ownerDocument, 'p');
+					const label = h(this.domNode.ownerDocument, generalRow ? 'span' : 'p');
 					label.textContent = field.label;
 					if (copy === container) {
 						copy.append(label);
@@ -215,8 +220,10 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 						copy.prepend(label);
 					}
 					const select = this._register(new SelectBox(container, {
-						options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView
+						options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView,
+						presentation: generalRow ? 'field' : undefined,
 					}, defaultSelectBoxStyles));
+					if (generalRow) select.element.classList.add('ash-general-setting-control');
 					this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
 				} else {
 					if (!this.actionsDomNode.isConnected) { this.fieldsDomNode.append(this.actionsDomNode); }
@@ -228,6 +235,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					this._register(button.onDidClick(() => { const current = this.fields.get(field.id); if (current?.kind === 'action' && current.enabled) { void current.run(); } })); control = button;
 				}
 				if (copy !== container && copy.firstElementChild) {
+					if (generalRow) copy.firstElementChild.classList.add('ash-configuration-setting-title');
 					copy.firstElementChild.id = `settingsFieldLabel-${generateUuid()}`;
 					container.setAttribute('aria-labelledby', copy.firstElementChild.id);
 				}
