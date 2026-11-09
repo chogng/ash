@@ -365,7 +365,10 @@
     "inbox": "E16A",
     "personalization": "E16B",
     "bot": "E16C",
-    "primitive-square-filled": "E16D"
+    "primitive-square-filled": "E16D",
+    "deepseek": "E16E",
+    "gemini": "E16F",
+    "grok": "E170"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -454,6 +457,7 @@
     "debug-pause": "4ff5ba33d3a86ab23dc9e9cfc0385375e63bcbdaba09dd8ef19a95d819572cd3",
     "debug-start": "5190fd05105dadd496d1615a320b90fd31253163d58dd8815fb1bcd9308aa5f9",
     "debug": "b2b4d76d8e0563383343f0fa3d71eba6d171a88aa4e0142c3195756f7a47209e",
+    "deepseek": "c4eb717d5810507f5810c24c9df12a61d9a8855b83be66a503c3e3630eed55e3",
     "design": "35cf4c5e0f6bf79e639b9ed3ff418b9a11d8f5f391d8851b504807c0d2efd95d",
     "device-mobile": "b109ab7d94ccf20f3e08e73e755715385a6124ee42175f0e873ed89e43977132",
     "diagnostics": "2ca117f19cd1bcd7fde7282cec6d274075b9f6058e449cb8d9657437341303a0",
@@ -504,6 +508,7 @@
     "fork": "549f20def24fd380b0eea4af2e59af666c72d331150e4bbd79bcbd7f2f453566",
     "frame": "8bca307ca4fd327ea57bd6ea7ab47e60179a69dbfb269f7dc8a9d59f0366da97",
     "gear": "17973f7afcfa59fe1592288effdbeff2b7e3535d54efac1673e9ab2f5c148f17",
+    "gemini": "a4a9c19fc1cc35f60ab898a327295cfa9e1fb8c5f8d0d174d69261a8185e8543",
     "git-branch-changes": "389ac80a32de2becf2841957b9a792765faadd09ab10cb5e987d444257ced977",
     "git-branch": "a465ba6646be63269f318da5187edd12420bf83528ca55db96f9cf730ef64822",
     "git-commit": "0865f04d5673007ca9f265a7b5d40f9dc5b2d0b98dcf7c3b15dfe0e9d207e1a8",
@@ -519,6 +524,7 @@
     "github": "123388e994eab2995a612e8388af330a5d10578e3686c391a3053c6a1986012c",
     "global": "b0436b33687597a8758c5a155925d1c687dfdffff570acc8a2399fe6d53c4845",
     "go-to-file": "f9df6182b5b57d3403cde2c1702b800a40213ce97083639cb3277dd64b5eb2cd",
+    "grok": "2b539a3fa35bec33fe2c137e4ea82cce6ef8738ad92ecc62f6390fcedbd8a3f2",
     "h1": "37d28a8fa7bb1e1002b5db8d8054b04f17e54ebef7f75c90ab1cd3861ac6d89c",
     "h2": "4442a5fb5382967756641a0c3bcd18223ce4cd01a5dc1105dc7268f6aea2aecc",
     "h3": "f84dcb1c7dca8f5205cb7dfef53ae175f22b13e17a527bf9699bd74bac9bd02c",
@@ -706,7 +712,9 @@
   "color": {
     "claude": "Brand color",
     "csv-green": "File type color",
+    "deepseek": "Source solid colors or opacity",
     "docx-blue": "File type color",
+    "gemini": "Source solid colors or opacity",
     "inspect": "Fixed white fill with black outlines",
     "layout-panel-off": "Fixed color/opacity",
     "layout-sidebar-left-off": "Fixed color/opacity",
