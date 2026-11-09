@@ -444,6 +444,7 @@ daemon 不运行独立 updater，也不能绕过内容寻址 artifact 与 active
 展开大小限制为 4 GiB；缓存路径由 catalog 摘要寻址，命中也重新检查整个 archive。新文件只有在
 长度、摘要、entry、package metadata 和展开大小全部通过后才从同目录临时文件原子发布。
 
+Linux 和 macOS 主机需要 `flock` 或 Perl，以便为同一 runtime 的安装加锁。
 本机随后校验受信发布记录给出的压缩大小、展开大小和 SHA-256，并拒绝非规范路径、重复 entry、链接
 或特殊文件。远端只接收 stdin bytes，不联网下载，再次校验压缩大小和 SHA-256，最后从 staging
 提交到：
