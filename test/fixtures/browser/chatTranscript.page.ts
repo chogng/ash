@@ -1399,7 +1399,7 @@ window.ashChatTranscriptIntegration = {
 		const windows = resources.add(scope.createInstance(BrowserAuxiliaryWindowService, window, document.body));
 		const auxiliary = await windows.open({ title: 'Borrowed conversation', width: 640, height: 480 });
 		await auxiliary.whenStylesHaveLoaded;
-		const shell = resources.add(scope.createInstance(ChatAuxiliaryWindow, auxiliary, 'Borrowed conversation'));
+		const shell = resources.add(scope.createInstance(ChatAuxiliaryWindow, auxiliary, 'Borrowed conversation', undefined));
 		const content = document.createElement('section');
 		content.className = 'ash-chat';
 		content.dataset.testChatWindow = 'true';
