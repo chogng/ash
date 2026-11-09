@@ -193,8 +193,7 @@ export interface ChatInputPartOptions {
 	readonly accessibilityHelp?: () => string;
 	/** Lets the host adapt status text using its conversation and attachment policy. */
 	readonly statusText?: (state: ChatInputState, contexts: readonly ChatContextAttachment[], defaultText: string) => string;
-	/** Opens a fresh conversation through a model route supplied by the host. */
-	/** Host-owned permission policy presented immediately after the mode picker. */
+	/** Host-owned permission policy presented after the model picker. */
 	readonly primaryPermissionPicker?: {
 		readonly action: IAction;
 		readonly onDidChange: Event<void>;
@@ -925,7 +924,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!this.inputFooter) return;
 		this.pickerResponsiveLayout.setFooter(this.inputFooter, () => [
 			getLeadingPickers(),
-			[this.modePickerActionItem, this.permissionWidget, this.modelPickerActionItem].flatMap(item => item && !item.isDisposed ? [item] : []),
+			[this.modePickerActionItem, this.modelPickerActionItem, this.permissionWidget].flatMap(item => item && !item.isDisposed ? [item] : []),
 		], () => this.options.modePicker === 'visible');
 	}
 
@@ -1813,8 +1812,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
 		const additionalActions = this.additionalActions.filter(action => action.id !== 'ash.chat.input.attach').map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
 		if (!this.secondaryToolbarContainer && !this.attachmentToolbar) additionalActions.unshift(this.attachAction);
-		const modeActions: IAction[] = modeAction ? [modeAction] : [];
-		if (this.options.primaryPermissionPicker) modeActions.push(this.options.primaryPermissionPicker.action);
+		const commandInput = this.toolbarState.inputKind === 'command';
+		const pickerActions: IAction[] = modeAction ? [modeAction] : [];
+		if (!commandInput) pickerActions.push(this.modelAction);
+		if (this.options.primaryPermissionPicker) pickerActions.push(this.options.primaryPermissionPicker.action);
 		const dictationActions: IAction[] = [];
 		if (segmentedVoice) {
 			dictationActions.push(new ChatInputAction(
@@ -1833,7 +1834,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		} else if (this.dictationSession.showButton) {
 			dictationActions.push(new DictationToolbarAction(micAction));
 		}
-		const inputActions = this.toolbarState.inputKind === 'command' ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.inlineActionsToolbar ? [] : dictationActions)];
+		const inputActions = commandInput ? pickerActions : [...additionalActions, ...pickerActions, ...(this.inlineActionsToolbar ? [] : dictationActions)];
 		this.attachmentToolbar?.setActions([this.attachAction]);
 		const showInlineDictation = recording || trailingActions.length === 0
 			|| executionActions.length === 0 && !this.toolbarState.canInterrupt && !voice?.isActive;
