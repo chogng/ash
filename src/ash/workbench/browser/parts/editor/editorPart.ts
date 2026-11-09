@@ -1053,9 +1053,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			},
 		} satisfies EditorGroupOptions);
 		const listeners = new DisposableStore();
-		listeners.add(addDisposableListener(group.domNode, 'keydown', event => {
+		const moveGroupFromHeader = (event: KeyboardEvent) => {
 			if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey ||
-				!(event.target instanceof group.domNode.ownerDocument.defaultView!.Element) || !event.target.closest('.ash-editor-title-control')) return;
+				!(event.target instanceof group.domNode.ownerDocument.defaultView!.Element) ||
+				!(group.headerElement.contains(event.target) || event.target.closest('.ash-editor-title-control'))) return;
 			const direction = ({ ArrowLeft: GroupDirection.LEFT, ArrowRight: GroupDirection.RIGHT, ArrowUp: GroupDirection.UP, ArrowDown: GroupDirection.DOWN } as Record<string, GroupDirection | undefined>)[event.key];
 			if (direction === undefined) return;
 			const neighbor = this.findGroup({ direction }, group);
@@ -1063,6 +1064,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			event.preventDefault();
 			event.stopPropagation();
 			this.moveGroup(group, neighbor.id, direction);
+		};
+		listeners.add(addDisposableListener(group.domNode, 'keydown', moveGroupFromHeader));
+		listeners.add(addDisposableListener(group.headerElement, 'keydown', event => {
+			if (!group.domNode.contains(group.headerElement)) moveGroupFromHeader(event);
 		}));
 		listeners.add(group.onDidChangeEditors(event => {
 			this.handleEditorGroupChange(event);

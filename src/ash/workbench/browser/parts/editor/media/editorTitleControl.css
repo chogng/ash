@@ -80,6 +80,12 @@
 	display: none;
 }
 
+.ash-editor-title-control.ash-editor-title-header-hosted:not(
+		.ash-editor-title-with-breadcrumbs
+	) {
+	display: none;
+}
+
 .ash-editor-tabs-and-actions.ash-editor-group-header {
 	align-items: start;
 	padding-inline: var(--ash-spacing-size40);

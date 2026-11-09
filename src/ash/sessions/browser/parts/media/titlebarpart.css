@@ -24,6 +24,18 @@
 	pointer-events: none;
 }
 
+.ash-sessions-titlebar-code:not(.has-page-content)::before {
+	/* The Code title bar spans the conversation and tools below it. */
+	content: "";
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: var(--ash-sessions-sidebar-width, 0px);
+	border-bottom: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	pointer-events: none;
+}
+
 .ash-sessions-titlebar > .ash-workbench-part-content {
 	display: flex;
 	width: 100%;
@@ -58,6 +70,7 @@
 
 .ash-sessions-titlebar-right {
 	display: flex;
+	flex: none;
 	align-items: center;
 	margin-left: auto;
 	-webkit-app-region: no-drag;
@@ -66,6 +79,38 @@
 .ash-sessions-titlebar-right > .ash-toolbar:empty {
 	/* An empty toolbar must not leave its sibling spacing at the window edge. */
 	display: none;
+}
+
+.ash-sessions-titlebar-tool-headers:not([hidden]) {
+	box-sizing: border-box;
+	display: flex;
+	flex: 0 0 auto;
+	min-width: 0;
+	align-self: stretch;
+	border-left: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	overflow: auto hidden;
+	scrollbar-width: none;
+}
+
+.ash-workbench[data-runtime="electron"] .ash-sessions-titlebar-tool-headers {
+	-webkit-app-region: drag;
+}
+
+.ash-sessions-titlebar-tool-headers .ash-tab,
+.ash-sessions-titlebar-tool-headers .ash-toolbar,
+.ash-sessions-titlebar-tool-headers .ash-scrollbar-track.ash-scrollbar-visible,
+.ash-sessions-titlebar-tool-headers .ash-scrollbar-track.active {
+	-webkit-app-region: no-drag;
+}
+
+.ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-right {
+	padding-right: var(--ash-spacing-size40);
+}
+
+.ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-session-content {
+	box-sizing: border-box;
+	min-width: var(--ash-spacing-size320);
 }
 
 .ash-sessions-titlebar-page-content,
@@ -105,8 +150,7 @@
 	-webkit-app-region: no-drag;
 }
 
-.ash-sessions-titlebar-page-content:not([hidden])
-	+ .ash-sessions-titlebar-session-content {
+.ash-sessions-titlebar.has-page-content .ash-sessions-titlebar-session-content {
 	display: none;
 }
 

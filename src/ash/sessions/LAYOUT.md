@@ -219,9 +219,11 @@ All non-phone Agents windows use the desktop detail layout. Phone viewports use 
 
 `DesktopWorkbenchLayout` composes the window's outer Parts. Within its editor region, `DesktopEditorArea` owns the tool Grid for Files, Changes, Browser (Preview), Terminal and Side Chat. Each tool card has exactly one independent `EditorPart`. `DesktopEditorParts` coordinates the Parts. Each Part owns one or more `EditorGroup`s and their internal split layout. Each group owns its title toolbar and tabs and displays its active editor in an `EditorPane`. A Side Chat tab renders a `SessionSideChatEditor` in its group. In layout discussions, a _tool pane_ means the whole tool card that the tool Grid moves.
 
+In split Code windows the conversation and tool divider continues into the window title bar. The conversation title and window tool controls occupy the conversation side. Visible groups mount their existing title rows in visual tool order on the other side, scrolling horizontally when needed. The groups retain their tabs, commands, focus and drag ownership. Breadcrumbs remain with the editor body. When the split is unavailable or too narrow for the title bar controls, groups mount their title rows in their own card again.
+
 Changes starts with one group and hides the tab strip while keeping the group's title toolbar. Splitting a Changes group adds another group inside the same card, with its own title toolbar. Diff View commands use that group as their context and update the Agents window's shared diff preference. Maximize Tool acts on the whole card in the outer tool Grid.
 
-Ordinary title dragging moves groups within a tool; Alt-drag moves a whole tool card. Alt+Shift+Arrow first moves a group beside its local neighbor, then moves the tool at a group-grid boundary. Tool and group separators retain their own geometry.
+The desktop window title bar reserves pointer interaction for editor tabs and controls, and dragging the surrounding title area moves the window. In an inline card header, dragging the title moves groups within a tool and Alt-drag moves the whole tool card. Alt+Shift+Arrow first moves a group beside its local neighbor, then moves the tool at a group-grid boundary. Tool and group separators retain their own geometry.
 
 ### Tool placement strategy
 

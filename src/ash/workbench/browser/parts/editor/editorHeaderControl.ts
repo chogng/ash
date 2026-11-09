@@ -80,6 +80,7 @@ export class EditorHeaderControl extends Disposable {
 			// Retained group controls share the tab row, including when only Details is visible.
 			this.headerRow = tabsRow;
 			tabsRow.classList.add('ash-editor-group-header');
+			titleContainer.classList.add('ash-editor-title-with-group-header');
 		}
 		const actionRow = this.headerRow ?? tabsRow;
 		if (actions) {

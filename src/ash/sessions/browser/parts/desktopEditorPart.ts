@@ -13,7 +13,6 @@ import type { IResourceEditorInput, IEditorPane } from '../../../workbench/commo
 import type { IEditorGroupView, IEditorGroupViewOptions } from '../../../workbench/browser/parts/editor/editor.js';
 import type { EditorGroupView } from '../../../workbench/browser/parts/editor/editorGroupView.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
-import { EditorHeaderControl } from '../../../workbench/browser/parts/editor/editorHeaderControl.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { Menus } from '../menus.js';
 import { EditorPart } from './editorPart.js';
@@ -80,8 +79,8 @@ export class DesktopMainEditorPart extends EditorPart {
 			this._register(part.onDidRequestVisibility(visible => visible ? this.showDetails() : this.hideDetails()));
 			this.detailsSash = this._register(new Sash(this.domNode, {
 				getVerticalSashLeft: () => this.detailsDimension.width - this.detailsWidth,
-				getVerticalSashTop: () => EditorHeaderControl.HEIGHT,
-				getVerticalSashHeight: () => Math.max(0, this.detailsDimension.height - EditorHeaderControl.HEIGHT),
+				getVerticalSashTop: () => this.getTabsHeight(),
+				getVerticalSashHeight: () => Math.max(0, this.detailsDimension.height - this.getTabsHeight()),
 			}, { orientation: Orientation.VERTICAL }));
 			let startWidth = 0;
 			this._register(this.detailsSash.onDidStart(() => { startWidth = this.detailsWidth; }));
@@ -151,9 +150,10 @@ export class DesktopMainEditorPart extends EditorPart {
 			const contentVisible = this.showEditors && this.fileGroups.some(group => !!group.activeInput);
 			this.detailsWidth = !visible ? 0 : contentVisible
 				? Math.min(Math.max(part.minimumWidth, this.preferredDetailsWidth), Math.max(0, this.detailsDimension.width - 160)) : this.detailsDimension.width;
-			const height = Math.max(0, this.detailsDimension.height - EditorHeaderControl.HEIGHT);
+			const top = this.getTabsHeight();
+			const height = Math.max(0, this.detailsDimension.height - top);
 			Object.assign(part.domNode.style, {
-				top: EditorHeaderControl.HEIGHT + 'px', right: '0px', width: this.detailsWidth + 'px', height: height + 'px',
+				top: top + 'px', right: '0px', width: this.detailsWidth + 'px', height: height + 'px',
 			});
 			part.setVisible(visible);
 			part.layout({ width: this.detailsWidth, height });

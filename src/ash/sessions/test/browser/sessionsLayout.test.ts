@@ -1020,6 +1020,81 @@ suite('sessions browser component', () => {
 		}
 	});
 
+	test('Code window actions and card headers follow opposite sides of the tool divider', async function () {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/sessions.html?multiHost');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const titleMenu = titlebar.locator('.ash-sessions-titlebar-menu');
+		const tools = titlebar.getByRole('toolbar', { name: 'Code layout', exact: true });
+		const toolHeaders = titlebar.locator('.ash-sessions-titlebar-tool-headers');
+		const filesHeader = toolHeaders.locator('[data-editor-tool="files"] > .ash-editor-group-header');
+		const editor = page.locator('[data-part="editor"]');
+		const conversation = page.locator('[data-part="sessions"]');
+		await expect(titleMenu).toBeVisible();
+		await tools.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
+		await expect(editor).toBeVisible();
+		await expect(filesHeader).toBeVisible();
+		await expect(filesHeader.locator('.ash-sessions-tool-header-label')).toBeVisible();
+		await expect(editor.locator('.ash-editor-group-header:visible')).toHaveCount(0);
+
+		const sash = conversation.locator('xpath=../../..').locator(':scope > .ash-sash-vertical[aria-disabled="false"]:not(.ash-primary-sidebar-sash)').first();
+		const header = (await titlebar.boundingBox())!;
+		const split = (await sash.boundingBox())!;
+		const toolArea = (await editor.boundingBox())!;
+		const actionBar = (await tools.boundingBox())!;
+		const menu = (await titleMenu.boundingBox())!;
+		expect(split.y).toBe(header.y + header.height);
+		expect(toolArea.y).toBe(split.y);
+		expect(split.x + split.width / 2).toBeCloseTo(toolArea.x, 0);
+		expect(await sash.evaluate(element => parseFloat(getComputedStyle(element, '::after').top))).toBeCloseTo(split.height / 2, 0);
+		expect(menu.x + menu.width).toBeLessThan(actionBar.x);
+		expect(actionBar.x + actionBar.width).toBeLessThan(toolArea.x);
+		expect((await toolHeaders.boundingBox())!.x).toBeCloseTo(toolArea.x, 0);
+		expect((await filesHeader.boundingBox())!.y).toBe(header.y);
+
+		await sash.press('ArrowLeft');
+		await expect.poll(async () => (await editor.boundingBox())!.width).toBeGreaterThan(toolArea.width);
+		await expect.poll(async () => (await tools.boundingBox())!.x).toBeLessThan(actionBar.x);
+		expect((await toolHeaders.boundingBox())!.x).toBeCloseTo((await editor.boundingBox())!.x, 0);
+		expect(await titleMenu.boundingBox()).toEqual(menu);
+
+		await tools.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
+		const changesHeader = toolHeaders.locator('[data-editor-tool="changes"] > .ash-editor-group-header');
+		await expect(changesHeader).toBeVisible();
+		await expect(filesHeader).toBeVisible();
+		await expect(editor.locator('.ash-editor-group-header:visible')).toHaveCount(0);
+		const changesLabel = changesHeader.locator('.ash-sessions-tool-header-label');
+		await expect(changesLabel).toHaveText('Changes');
+		await expect(changesLabel).toBeVisible();
+		await expect(changesHeader).not.toHaveAttribute('draggable', 'true');
+		await expect(changesHeader).not.toHaveCSS('-webkit-app-region', 'no-drag');
+		await expect(changesHeader.locator('.ash-editor-header-layout > .ash-toolbar')).toHaveCSS('-webkit-app-region', 'no-drag');
+		await filesHeader.locator('[data-action-id="ash.sessions.hideTool"] button').focus();
+		// A mouse activation need not focus the clicked toolbar before running its command.
+		await changesHeader.locator('[data-action-id="ash.sessions.hideTool"] button').evaluate((button: HTMLButtonElement) => button.click());
+		await expect(changesHeader).toHaveCount(0);
+		await expect(filesHeader).toBeVisible();
+
+		await titlebar.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
+		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+		const dividerX = (await editor.boundingBox())!.x;
+		const dragY = header.y + header.height + 80;
+		await page.mouse.move(dividerX, dragY);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(90, dragY, { steps: 8 });
+		} finally {
+			await page.mouse.up();
+		}
+		await expect(toolHeaders).toBeHidden();
+		await expect(editor.locator('[data-editor-tool="files"] .ash-editor-group-header:visible')).toHaveCount(1);
+	});
+
 	test('Sessions titlebar colors resolve under light and dark themes', async function () {
 		const { page } = browserTests;
 		for (const [id, color] of [['ash-dark', '#1e1e1e'], ['ash-light', '#ffffff']]) {

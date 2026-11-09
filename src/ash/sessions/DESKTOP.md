@@ -27,7 +27,7 @@ Toolbar selected states derive from the owning editor group, navigation or infor
 | Toggle details                       | Show or hide the Files Part navigation.                                                                                                 |
 | Open a file                          | Reveal its editor through IEditorService in the current session's groups.                                                               |
 | Hide editor / Show editor            | Hide or restore document content beside Files while retaining its navigation.                                                           |
-| Drag a group title                   | Move or merge groups within the tool Part. Alt-drag moves the complete tool workspace in the outer Grid.                                |
+| Drag an inline group title           | Move or merge groups within the tool Part. Alt-drag moves the complete tool workspace in the outer Grid.                                |
 | Drag a tab                           | Move one editor or split at a group edge through the shared editor transfer lifecycle.                                                  |
 | Alt+Shift+Arrow on a header action   | Move the group beside its local neighbor; at the boundary move the tool Part beside a neighboring tool.                                 |
 | Resize group separators              | Update the editor Grid through pointer or keyboard input.                                                                               |

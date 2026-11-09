@@ -136,6 +136,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	readonly onDidChange: Event<void> = this.sizeChangeEmitter.event;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly titleControl: EditorTitleControl;
+	private readonly headerContext = this._register(new MutableDisposable<IDisposable>());
+	get headerElement(): HTMLElement { return this.titleControl.headerElement; }
 	private readonly watermark: EditorGroupWatermark | undefined;
 	private readonly panes: EditorPanes;
 	private readonly registry: IEditorPaneRegistry;
@@ -179,7 +181,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private dimension: IDimension = Dimension.Zero;
 	private contentRightInset = 0;
 	private contentVisible = true;
-	private titleVisible = true;
 	private openSequence = 0;
 	private pendingOpenSequence: number | undefined;
 	private readonly onDidFinishOpenEditor: EditorGroupOptions['onDidFinishOpenEditor'];
@@ -308,13 +309,13 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
 		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
-		// Tabs keep their own drag payload. Empty title space moves the retained group,
-		// including every pane, rather than reopening each editor in another host.
+		// The inline title moves the retained group. Tabs handle their own drag,
+		// including when the window hosts the tab row outside this title.
 		if (options.dragAndDrop) {
 			const title = this.titleControl.domNode;
 			title.draggable = true;
 			this._register(addDisposableListener(title, 'dragstart', event => {
-				if (!(event.target instanceof title.ownerDocument.defaultView!.Element) || event.target.closest('.ash-tab, [role="tab"], button, input, a')) return;
+				if (!(event.target instanceof ownerDocument.defaultView!.Element) || event.target.closest('.ash-tab, [role="tab"], button, input, a')) return;
 				if (!this.activeInput) { event.preventDefault(); return; }
 				options.onDidActivate?.();
 				options.dragAndDrop!.startGroup(this);
@@ -333,8 +334,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			));
 		}
 		if (options.onDidActivate) {
-			this._register(addDisposableListener(this.domNode, 'focusin', () => {
-				options.onDidActivate?.();
+			this._register(addDisposableListener(this.domNode, 'focusin', options.onDidActivate));
+			this._register(addDisposableListener(this.headerElement, 'focusin', () => {
+				if (!this.domNode.contains(this.headerElement)) options.onDidActivate?.();
 			}));
 		}
 		this._register(this.titleControl.onDidChangeHeight(() => {
@@ -925,25 +927,26 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.groupDimension = dimension;
 		this.dimension = new Dimension(
 			Math.max(0, dimension.width - this.contentRightInset),
-			Math.max(0, dimension.height - (this.titleVisible ? this.titleControl.height : 0)),
+			Math.max(0, dimension.height - this.titleControl.height),
 		);
 		this.panes.layout(this.dimension);
 		this.watermark?.layout(this.dimension.height);
 	}
 
 	public get titleHeight(): { readonly offset: number; readonly total: number; } {
-		const height = this.titleVisible ? this.titleControl.height : 0;
 		// Details begins below the tabs; breadcrumbs occupy only the editor column.
-		return { offset: this.titleVisible ? this.titleControl.tabsHeight : 0, total: height };
+		return { offset: this.titleControl.tabsHeight, total: this.titleControl.height };
 	}
 
 	public setTitleVisible(visible: boolean): void {
-		if (this.titleVisible === visible) return;
-		this.titleVisible = visible;
-		// Restore the editor's own title policy when leaving a window presentation mode.
-		if (visible) this.renderChrome();
-		else this.titleControl.domNode.hidden = true;
-		this.layout(this.groupDimension);
+		if (this.titleControl.setVisible(visible)) this.layout(this.groupDimension);
+	}
+
+	public setHeaderHost(host: HTMLElement | undefined): void {
+		// Bind while the header is still inside its group so detached controls inherit its context.
+		if (host && !this.headerContext.value) this.headerContext.value = this.scopedContextKeyService?.createScoped(this.headerElement);
+		this.titleControl.setHeaderHost(host);
+		if (!host) this.headerContext.clear();
 	}
 
 	public setContentRightInset(inset: number): void {
@@ -1036,8 +1039,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			hasExternalChange: entry.hasExternalChange,
 			closeActionTooltip,
 		})), this.activeInput, this.activePane, this.model.selectedEditorIds);
-		// Label and editor-state updates must respect the group's explicit presentation policy.
-		if (!this.titleVisible) { this.titleControl.domNode.hidden = true; }
 		const input = this.activeInput;
 		this.titleControl.setEditorTypes(input ? this.registry.getEditorPanesForInput(input) : [], async id => {
 			if (input && this.inputs.includes(input)) await this.openEditor(input, { preferredEditorId: id, pinned: true });

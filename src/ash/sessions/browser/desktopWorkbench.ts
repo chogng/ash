@@ -1,4 +1,4 @@
-import { Orientation, type IBoundarySashes } from '../../base/browser/ui/sash/sash.js';
+import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import { Dimension, h, type IDimension } from '../../base/browser/dom.js';
 import type { IPositionedRectangle } from '../../base/browser/geometry.js';
@@ -287,7 +287,6 @@ const conversationSlotMinimumWidth = 100;
 const conversationContentMinimumWidth = 320;
 
 class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
-	private boundarySashes: IBoundarySashes = {};
 	private conversationCanOverflow = false;
 	constructor(
 		partId: SessionsPartId,
@@ -333,20 +332,6 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 	public override layout(bounds: IPositionedRectangle): void {
 		// Page changes resize the Grid several times; sash drags still lay out Parts immediately.
 		if (!this.isLayoutDeferred()) super.layout(bounds);
-		this.updateFeedbackOffsets();
-	}
-
-	public override setBoundarySashes(sashes: IBoundarySashes): void {
-		super.setBoundarySashes(sashes);
-		this.boundarySashes = sashes;
-		this.updateFeedbackOffsets();
-	}
-
-	private updateFeedbackOffsets(): void {
-		// Outer boundaries continue through the titlebar, above the body Grid's drag area.
-		const offset = -this.titlebar.minimumHeight / 2;
-		this.boundarySashes.left?.setFeedbackOffset(offset);
-		this.boundarySashes.right?.setFeedbackOffset(offset);
 	}
 }
 

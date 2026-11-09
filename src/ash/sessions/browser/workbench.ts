@@ -7,6 +7,7 @@ import { ISymphonyBackendService } from '../../platform/symphony/common/symphony
 import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
+import { observeResize } from '../../base/browser/observer.js';
 import { IAgentSessionActionsService, IAgentSessionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
 import { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
@@ -1138,6 +1139,14 @@ export abstract class Workbench extends Disposable {
 			['customview', customViewPart],
 		]);
 		layout.createWorkbenchLayout(parts);
+		const layoutToolHeaders = () => {
+			const dock = contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && editorArea.hasToolCards
+				&& layout.isPartVisible('sessions') && layout.isPartVisible('editor');
+			const start = dock ? editorArea.domNode.getBoundingClientRect().left : undefined;
+			editorArea.setTitlebarHost(titlebar.setToolHeaderStart(start));
+		};
+		this._register(layout.onDidLayoutMainContainer(layoutToolHeaders));
+		this._register(observeResize([editorArea.domNode, titlebar.domNode], layoutToolHeaders, { box: 'border-box' }));
 		if (browsers) {
 			const browserVisible = contextKeys.createKey<boolean>('sessions.browserVisible', false);
 			const updateBrowserContext = (): void => browserVisible.set(editors.visibleEditors.some(input => input.resource.scheme === BrowserViewUri.scheme));
