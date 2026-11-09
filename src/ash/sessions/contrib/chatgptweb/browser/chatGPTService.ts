@@ -2,6 +2,7 @@ import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from '.
 import { ChatCoworkTasks } from '../../cowork/browser/chatCoworkTasks.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../workbench/services/chat/common/chatService.js';
+import { formatChatMessageTime } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatReplyError } from '../../../common/chatReplyBackend.js';
 import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
@@ -965,7 +966,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public getAccessibleContent(): string {
 		const state = this.model.get();
 		const messages = state.messages.filter(message => !message.activity).map(message => {
-			return `${message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'}\n${message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text}\n${message.resources?.map(resource => resource.name).join('\n') ?? ''}`;
+			return [message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
+			message.timestamp === undefined ? undefined : formatChatMessageTime(message.timestamp),
+			message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text,
+			message.resources?.map(resource => resource.name).join('\n')].filter(Boolean).join('\n');
 		});
 		const cowork = state.coworkTasks.map(task => [task.prompt, coworkTaskStatus(task), task.error ?? task.readError,
 		...task.thread?.turns.flatMap(turn => turn.items.flatMap(item => item.type === 'agentMessage' || item.type === 'plan' ? [item.text]
@@ -1970,7 +1974,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				if (event.message) {
 					const message = event.message;
 					const index = messages.findIndex(item => item.id === message.id);
-					messages = index < 0 ? [...messages, message] : messages.map((item, i) => i === index ? message : item);
+					// A later stream snapshot may omit the time already sent for this message.
+					messages = index < 0 ? [...messages, message] : messages.map((item, i) => i === index
+						? { ...message, timestamp: message.timestamp ?? item.timestamp }
+						: item);
 				}
 				this.update({ messages, conversationId: event.conversationId ?? current.conversationId, parentId: event.message?.id ?? current.parentId });
 				if (event.conversationId) { this.rememberConversation(event.conversationId); }

@@ -22,6 +22,7 @@ export interface ChatTimeline {
 function isMessage(value: unknown): value is ChatReplyMessage {
 	return isRecord(value) && typeof value.id === 'string' && (value.role === 'user' || value.role === 'assistant')
 		&& typeof value.text === 'string'
+		&& (value.timestamp === undefined || typeof value.timestamp === 'number' && Number.isFinite(new Date(value.timestamp).getTime()))
 		&& (value.references === undefined || Array.isArray(value.references) && value.references.every(item => isRecord(item)
 			&& typeof item.id === 'string' && typeof item.url === 'string' && typeof item.title === 'string' && typeof item.snippet === 'string'))
 		&& (value.resources === undefined || Array.isArray(value.resources) && value.resources.every(item => isRecord(item)

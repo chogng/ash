@@ -12,6 +12,7 @@ import { readUserSettings, writeUserSettings } from '../../../automation/setting
 import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
 import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import shareWorker from '../../../../services/chat-share/worker.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
@@ -36,13 +37,14 @@ async function installService(application: ElectronApplication, holdInitializati
 		const now = Date.now;
 		const uploadedFiles: Record<string, string> = {};
 		const initializing = new Set<() => void>();
-		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
+		const message = (id: string, role: string, text: string, create_time?: number) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] }, create_time });
 		const live: Record<string, { parent: string | null; message: ReturnType<typeof message>; }> = {};
 		let head: string | null = null;
 		let userId = '';
+		let liveTitle = 'Live fixture';
 		const chunk = (text: string) => {
 			const id = `reply-live-${sends}`;
-			live[id] = { parent: userId, message: message(id, 'assistant', text) }; head = id;
+			live[id] = { parent: userId, message: message(id, 'assistant', text, 1_794_245_520 + (sends - 1) * 60) }; head = id;
 			return new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-live', message: live[id]!.message })}\n\n`);
 		};
 		globalThis.ashNativeFixture = {
@@ -141,7 +143,22 @@ async function installService(application: ElectronApplication, holdInitializati
 						page_info: { has_previous_page: false },
 					});
 				}
-				if (url.pathname.endsWith('/conversation/fixture-live')) { return Response.json({ title: 'Live fixture', current_node: head, mapping: live }); }
+				if (url.pathname.endsWith('/conversation/fixture-live')) {
+					if (init?.method === 'PATCH' && typeof JSON.parse(String(init.body)).is_starred === 'boolean') return Response.json({ success: true });
+					return Response.json({ title: liveTitle, current_node: head, mapping: live });
+				}
+				if (url.pathname.endsWith('/conversation/id/fixture-live/rename') && init?.method === 'POST') {
+					liveTitle = JSON.parse(String(init.body)).title;
+					return Response.json({ success: true });
+				}
+				if (url.pathname.endsWith('/conversation/id/fixture-live') && init?.method === 'DELETE') {
+					return Response.json({ success: true });
+				}
+				if (url.pathname.endsWith('/share/v2/create') && init?.method === 'POST') {
+					const body = JSON.parse(String(init.body));
+					if (body.conversation_id !== 'fixture-live' || body.current_node_id !== head) return Response.json({ error: 'Wrong share target' }, { status: 400 });
+					return Response.json({ share_url: 'https://chatgpt.com/share/fixture-live' });
+				}
 				if (url.pathname.includes('/conversation/history-')) {
 					const first = url.pathname.endsWith('history-one');
 					return Response.json({
@@ -170,6 +187,39 @@ async function installService(application: ElectronApplication, holdInitializati
 }
 
 const ashFixtureModel = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
+
+async function createConversationShareServer() {
+	const records = new Map<string, string>();
+	const environment = {
+		SHARES: {
+			async put(key: string, value: string) { records.set(key, value); },
+			async get(key: string) {
+				const value = records.get(key);
+				return value ? { uploaded: new Date(), json: async () => JSON.parse(value) } : null;
+			},
+		},
+		PUBLISH_LIMIT: { limit: async () => ({ success: true }) },
+	};
+	const server = createServer(async (request, response) => {
+		try {
+			const chunks: Buffer[] = [];
+			for await (const chunk of request) chunks.push(Buffer.from(chunk));
+			const result = await shareWorker.fetch(new Request(new URL(request.url!, origin), {
+				method: request.method,
+				headers: new Headers(request.headers as Record<string, string>),
+				body: request.method === 'POST' ? new Uint8Array(Buffer.concat(chunks)) : undefined,
+			}), environment);
+			response.writeHead(result.status, Object.fromEntries(result.headers)).end(Buffer.from(await result.arrayBuffer()));
+		} catch {
+			response.writeHead(500).end();
+		}
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	const address = server.address();
+	if (!address || typeof address === 'string') throw new Error('Ash share fixture has no port');
+	const origin = `http://127.0.0.1:${address.port}`;
+	return { origin, records, [Symbol.asyncDispose]: () => server[Symbol.asyncDispose]() };
+}
 
 function createAshModelServer(ashRequests: string[]) {
 	return createServer(async (request, response) => {
@@ -521,10 +571,30 @@ test.describe('Unified Chat sidebar', () => {
 	test('opens and continues ChatGPT and Ash conversations from the same list', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
+		await application.evaluate(({ clipboard }) => {
+			clipboard.writeText = async text => { Reflect.set(globalThis, 'ashTitleShareClipboard', text); };
+		});
+		const copied = () => application.evaluate(() => Reflect.get(globalThis, 'ashTitleShareClipboard') as string | undefined);
 		const ashRequests: string[] = [];
 		await using catalog = createAshModelServer(ashRequests);
 		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		await using shareService = await createConversationShareServer();
+		const settings = await readUserSettings(workbench.page);
+		await writeUserSettings(workbench.page, JSON.stringify({
+			...JSON.parse(settings.content), 'sessions.chat.shareServiceUrl': shareService.origin,
+		}), settings.revision);
 		const page = await workbench.openAgentsWindow(target.kind);
+		const titlebar = page.locator('.ash-sessions-titlebar-widget');
+		const share = titlebar.getByRole('button', { name: '分享', exact: true });
+		const more = titlebar.getByRole('button', { name: '更多会话操作', exact: true });
+		const rename = async (title: string): Promise<void> => {
+			await titlebar.getByRole('button', { name: /^重命名会话/u }).press('Enter');
+			const input = titlebar.getByRole('textbox', { name: '会话名称', exact: true });
+			await expect(input).toBeFocused();
+			await input.fill(title);
+			await input.press('Enter');
+			await expect(titlebar.getByRole('button', { name: `重命名会话（${title}）` })).toBeFocused();
+		};
 		const sidebar = page.locator('.ash-chat-navigation');
 		const editor = page.locator('.ash-chatgpt-widget');
 		const chatGPTComposer = new Editor(editor);
@@ -551,6 +621,7 @@ test.describe('Unified Chat sidebar', () => {
 		const modelButton = editor.locator('.ash-chat-input-model-action');
 		const webWelcome = editor.getByRole('heading', { level: 2 });
 		await expect(webWelcome).toBeVisible();
+		await expect(titlebar).toBeHidden();
 		const welcome = await webWelcome.innerText();
 		await expect(modelButton).toHaveText('Fixture model');
 		await expect(modelButton).toBeEnabled();
@@ -587,14 +658,27 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(codeTools).toHaveCount(0);
 		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
 		await ashComposer.waitForEditorFocus();
+		const sentAfter = Date.now();
 		await page.keyboard.press('Enter');
 		await expect(ash).toContainText('Answer from Ash');
+		const ashRequestTime = ash.locator('.ash-chat-item-userMessage time').first();
+		const ashReplyTime = ash.locator('.ash-chat-item-agentMessage time').first();
+		await expect(ashRequestTime).toBeVisible();
+		await expect(ashReplyTime).toBeVisible();
+		const requestDateTime = (await ashRequestTime.getAttribute('datetime'))!;
+		const replyDateTime = (await ashReplyTime.getAttribute('datetime'))!;
+		expect(Date.parse(requestDateTime)).toBeGreaterThanOrEqual(sentAfter);
+		expect(Date.parse(replyDateTime)).toBeGreaterThanOrEqual(Date.parse(requestDateTime));
+		expect(Date.parse(replyDateTime)).toBeLessThanOrEqual(Date.now());
 		const ashSessionId = await ash.getAttribute('data-session-id');
 		expect(ashSessionId).toBeTruthy();
 		const ashRow = sidebar.locator(`[data-item="ash:${ashSessionId}"]`);
 		const ashTitle = ashRow.locator('.ash-sessions-list-item');
 		await expect(ashTitle).toHaveAttribute('aria-current', 'page');
 		await expect(ashRow).toHaveAttribute('data-parent-section', 'recent');
+		await rename('Ash title from the title bar');
+		await expect(ashTitle).toContainText('Ash title from the title bar');
+		await expect(share).toHaveClass(/\bash-button-primary\b/u);
 
 		let expectedSends = 0;
 		const sendChatGPT = async (text: string, whileStreaming?: () => Promise<void>): Promise<void> => {
@@ -616,6 +700,27 @@ test.describe('Unified Chat sidebar', () => {
 		const chatGPTRow = sidebar.locator('[data-item="chatgpt:fixture-live"] .ash-sessions-list-item');
 		await expect(chatGPTRow).toHaveAttribute('aria-current', 'page');
 		await expect(ashTitle).not.toHaveAttribute('aria-current', 'page');
+		await rename('ChatGPT title from the title bar');
+		await expect(chatGPTRow).toContainText('ChatGPT title from the title bar');
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: '置顶', exact: true }).press('Enter');
+		await expect(sidebar.locator('[data-item="chatgpt:fixture-live"]')).toHaveAttribute('data-parent-section', 'pinned');
+		await more.press('Enter');
+		await expect(page.getByRole('menuitem', { name: '取消置顶', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await share.press('Enter');
+		const confirmation = page.getByRole('dialog');
+		await expect(confirmation).toContainText('ChatGPT title from the title bar');
+		await confirmation.getByRole('button', { name: '分享', exact: true }).click();
+		await expect.poll(copied).toBe('https://chatgpt.com/share/fixture-live');
+		await expect(share).toBeFocused();
+		const titleBounds = (await titlebar.locator('.ash-sessions-titlebar-title').boundingBox())!;
+		const shareBounds = (await share.boundingBox())!;
+		const bar = page.locator('.ash-sessions-titlebar');
+		const barBounds = (await bar.boundingBox())!;
+		expect(titleBounds.x + titleBounds.width).toBeLessThan(shareBounds.x);
+		expect(barBounds.x + barBounds.width - shareBounds.x - shareBounds.width).toBeLessThan(40);
+		await test.info().attach('chat-conversation-title-bar', { body: await bar.screenshot(), contentType: 'image/png' });
 
 		await ashTitle.press('Enter');
 		await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
@@ -623,6 +728,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(chatGPTRow).not.toHaveAttribute('aria-current', 'page');
 		await expect(ash).toHaveAttribute('data-session-id', ashSessionId!);
 		await expect(ash).toContainText('First Ash message');
+		await expect(titlebar.getByRole('button', { name: '重命名会话（Ash title from the title bar）' })).toBeVisible();
 		await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await expect(picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true })).toBeVisible();
 		await expect(picker.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toHaveCount(0);
@@ -636,6 +742,30 @@ test.describe('Unified Chat sidebar', () => {
 		await expect.poll(() => ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
 		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(1);
 
+		await share.press('Enter');
+		const nativeShare = page.getByRole('dialog');
+		await expect(nativeShare).toContainText(shareService.origin);
+		expect(shareService.records.size).toBe(0);
+		await nativeShare.getByRole('button', { name: '分享', exact: true }).click();
+		await expect.poll(copied).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/s\/[a-f0-9-]{36}$/u);
+		const link = (await copied())!;
+		const readerPage = application.waitForEvent('window');
+		const reader = await application.evaluateHandle(({ BrowserWindow }, url) => {
+			const window = new BrowserWindow({ show: false, webPreferences: { partition: 'conversation-share-reader', sandbox: true } });
+			void window.loadURL(url);
+			return window;
+		}, link);
+		try {
+			const sharedPage = await readerPage;
+			await sharedPage.waitForURL(link);
+			await expect(sharedPage.getByRole('heading', { name: 'Ash title from the title bar' })).toBeVisible();
+			await expect(sharedPage.locator('article')).toHaveCount(4);
+			await expect(sharedPage.locator('main')).toContainText(/First Ash message[\s\S]*Answer from Ash[\s\S]*Follow up with Ash[\s\S]*Answer from Ash/u);
+		} finally {
+			await reader.evaluate(window => window.destroy());
+			await reader.dispose();
+		}
+
 		await ashTitle.focus();
 		await ashRow.getByRole('button', { name: '置顶聊天', exact: true }).press('Enter');
 		await expect(ashRow).toHaveAttribute('data-parent-section', 'pinned');
@@ -646,10 +776,21 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(help).toHaveValue(/Ash 对话的菜单也可以置顶或取消置顶/u);
 		await page.keyboard.press('Escape');
 		await expect(ashTitle).toBeFocused();
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: '取消置顶', exact: true }).press('Enter');
+		await expect(ashRow).toHaveAttribute('data-parent-section', 'recent');
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: '置顶', exact: true }).press('Enter');
+		await expect(ashRow).toHaveAttribute('data-parent-section', 'pinned');
 		await chatGPTRow.click();
 		await expect(chatGPTRow).toHaveAttribute('aria-current', 'page');
 		await expect(ashTitle).not.toHaveAttribute('aria-current', 'page');
 		await expect(editor).toContainText('First ChatGPT message');
+		const chatGPTReplyTime = editor.locator('.ash-chat-item-agentMessage time').first();
+		await expect(chatGPTReplyTime).toBeVisible();
+		await expect(chatGPTReplyTime).toHaveAttribute('datetime', '2026-11-09T17:32:00.000Z');
+		await expect(chatGPTReplyTime).toHaveText(/2026年11月/);
+		await test.info().attach('chatgpt-reply-time', { body: await editor.screenshot(), contentType: 'image/png' });
 		const chatGPTInput = editor.getByRole('textbox', { name: '询问 ChatGPT', exact: true });
 		await chatGPTInput.press('Alt+F2');
 		await expect(help).toHaveValue(/First ChatGPT message[\s\S]*First chunk, second chunk, complete/u);
@@ -663,6 +804,10 @@ test.describe('Unified Chat sidebar', () => {
 		});
 		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(2);
 		expect(ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: '删除对话', exact: true }).press('Enter');
+		await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+		await expect(chatGPTRow).toHaveCount(0);
 
 		await ashTitle.click();
 		await codeMode.click();
@@ -675,7 +820,13 @@ test.describe('Unified Chat sidebar', () => {
 			const restoredChat = restored.locator('.ash-native-chat-widget .ash-chat');
 			await expect(restoredChat).toHaveAttribute('data-session-id', ashSessionId!);
 			await expect(restoredChat).toContainText('Follow up with Ash');
+			await expect(restoredChat.locator('.ash-chat-item-userMessage time').first()).toHaveAttribute('datetime', requestDateTime);
+			await expect(restoredChat.locator('.ash-chat-item-agentMessage time').first()).toHaveAttribute('datetime', replyDateTime);
 			await expect(restoredChat.locator('.ash-chat-input-model-action')).toHaveText(ashFixtureModel.model);
+			await restored.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: '更多会话操作' }).press('Enter');
+			await restored.getByRole('menuitem', { name: '删除对话', exact: true }).press('Enter');
+			await restored.getByRole('dialog').getByRole('button', { name: '永久删除', exact: true }).click();
+			await expect(restored.locator(`[data-item="ash:${ashSessionId}"]`)).toHaveCount(0);
 			const window = await application.browserWindow(restored);
 			const closed = restored.waitForEvent('close');
 			await window.evaluate(window => window.close());

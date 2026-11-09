@@ -3484,6 +3484,7 @@ fn thread_history_replay_uses_bounded_ranges_and_a_fixed_tail() {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             durable_sequence: event.sequence,
+            recorded_at_unix_ms: event.message_timestamp(),
             stream_cursor: None,
             update: ash_protocol::ThreadUpdate::Committed { event: event.event },
         })
@@ -3543,6 +3544,26 @@ fn thread_history_window_selects_before_cloning_the_execution_snapshot() {
     assert_eq!(page.thread.sequence, expected.sequence);
     assert!(page.has_older_turns);
     assert_eq!(store.full_reads.load(Ordering::Relaxed), 0);
+
+    let metadata = reader.read_transcript_metadata(&page.thread).unwrap();
+    let recorded_times = store
+        .inner
+        .events()
+        .into_iter()
+        .filter_map(|record| {
+            let timestamp = record.message_timestamp()?;
+            let ThreadEvent::ItemCompleted { item, .. } = record.event else {
+                unreachable!()
+            };
+            Some((item.item_id().clone(), timestamp))
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(metadata.message_times.len(), 4);
+    for item in page.thread.turns.iter().flat_map(|turn| &turn.items) {
+        if let Some(timestamp) = recorded_times.get(item.item_id()) {
+            assert_eq!(metadata.message_times.get(item.item_id()), Some(timestamp));
+        }
+    }
 }
 
 #[test]
@@ -3682,10 +3703,13 @@ fn voice_transcripts_merge_in_the_original_thread_without_starting_or_steering_a
     assert_eq!(after.items, before.items);
     assert_eq!(after.commands, before.commands);
     assert_eq!(after.voice_transcripts.len(), 3);
+    let mut first_history = after.public_thread();
+    first_history.sequence = first.sequence;
     assert_eq!(
         controller
-            .read_voice_transcripts(&thread, first.sequence)
-            .unwrap()[0]
+            .read_transcript_metadata(&first_history)
+            .unwrap()
+            .voice_transcripts[0]
             .text,
         "Review "
     );

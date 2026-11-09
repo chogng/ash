@@ -911,6 +911,7 @@ export type ThreadTranscriptEntry =
 		readonly turnId: string;
 		readonly item: ThreadItem;
 		readonly transient: boolean;
+		readonly timestamp?: number;
 	}
 	| { readonly type: 'turnPlan'; readonly entryId: string; readonly turnId: string; readonly plan: PlanUpdate; }
 	| { readonly type: 'turnError'; readonly entryId: string; readonly turnId: string; readonly error: TurnError; }

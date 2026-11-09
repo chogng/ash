@@ -161,6 +161,7 @@ fn streaming_commit_deadlines_are_serviced_during_continuous_input_and_completio
                     entry_id: "stream-item".into(),
                     turn_id: turn_id.clone(),
                     transient: true,
+                    timestamp: None,
                     item: ThreadItem::AgentMessage {
                         phase: None,
                         item_id: ItemId::new("item").unwrap(),

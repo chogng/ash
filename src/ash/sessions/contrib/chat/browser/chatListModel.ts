@@ -33,6 +33,7 @@ import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
 
 import { sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
+import { NativeConversationShare } from './nativeConversationShare.js';
 
 export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
@@ -55,7 +56,10 @@ export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque profile identity for catalog conversation preferences. */
 	readonly preferenceKey?: string;
 	readonly open: (signal: AbortSignal, threadId?: string) => Promise<void>;
+	readonly rename?: (title: string) => Promise<void>;
+	readonly share?: () => Promise<void>;
 	readonly archive?: () => Promise<boolean>;
+	readonly remove?: () => Promise<void>;
 	readonly getActions?: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
 }
 
@@ -139,8 +143,10 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 		@ISessionsSearchService search: ISessionsSearchService,
 		@ISessionsManagementService management: ISessionsManagementService,
 		@ISessionsService view: ISessionsService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		const sharing = instantiation.createInstance(NativeConversationShare);
 		const context = new Set([ASH_CHAT_SELECTED_CONTEXT]);
 		const visible = observableFromEvent(this, listener => contextKeys.onDidChangeContext(event => {
 			if (event.affectsSome(context)) listener(event);
@@ -166,16 +172,18 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 					?? chats.find(chat => chat.origin.type === 'root') ?? chats[0];
 				if (!thread) continue;
 				const id = session.sessionId;
+				const title = session.title || localize('sessions.list.untitled', 'Untitled Session');
+				const selectedThreadId = selectedId === id && active?.kind === 'thread' ? active.threadId : undefined;
 				const isPinned = list.isSessionPinned(session);
 				rows.push({
 					id: `ash:${id}`,
-					title: session.title || localize('sessions.list.untitled', 'Untitled Session'),
+					title,
 					sessionId: id,
 					groupingContext: { sessionId: id, workspace: session.workspace ?? undefined, management: session.management },
 					createdAt: thread.createdAt?.getTime(),
 					updatedAt: (thread.updatedAt ?? thread.createdAt)?.getTime(),
 					selected: selectedId === id,
-					selectedThreadId: selectedId === id && active?.kind === 'thread' ? active.threadId : undefined,
+					selectedThreadId,
 					status: session.management?.status === 'working' ? working : undefined,
 					defaultIcon: Lxicon.chatSession,
 					pinned: isPinned,
@@ -186,6 +194,9 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 						if (signal.aborted) return;
 						view.selectChatThread(id, threadId);
 					},
+					rename: title => management.renameSession(id, title),
+					remove: () => commands.executeCommand('agentSession.delete', id),
+					share: () => sharing.share(id, selectedThreadId ?? thread.threadId, title),
 					getActions: () => {
 						const saved = management.sessions.find(session => session.sessionId === id);
 						const savedThread = saved?.chats.find(chat => chat.threadId === thread.threadId);

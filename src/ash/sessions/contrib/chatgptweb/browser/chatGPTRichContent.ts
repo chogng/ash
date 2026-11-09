@@ -1,6 +1,8 @@
 import { Marked, type MarkedExtension, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
 import { renderAsPlaintext, renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
@@ -21,7 +23,13 @@ const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas']);
 // This is routing to the shared HTML renderer, not a second HTML implementation.
 const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'svg', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
 const hiddenTags = new Set(['cite']);
-const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
+const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
+const iconAliases = new Map([
+	['arrow-down-up', Lxicon.sort.id],
+	['minus', Lxicon.remove.id],
+	['plus', Lxicon.add.id],
+	['x', Lxicon.close.id],
+]);
 const escapeHTML = htmlAttributeEncodeValue;
 const fallbackText = (): string => localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT');
 
@@ -178,7 +186,7 @@ function classes(tag: RichTag): string {
 	const variants: ReadonlyArray<readonly [string, readonly string[]]> = [
 		['radius', ['sm', 'md', 'lg']], ['padding', ['0', '1', '2', '3', '4']], ['gap', ['0', '1', '2', '3', '4']],
 		['align', ['start', 'center', 'end', 'stretch']], ['justify', ['start', 'center', 'end']],
-		['background', ['surface', 'surface-secondary']], ['color', ['secondary']], ['size', ['xs', 'sm', 'lg']],
+		['background', ['surface', 'surface-secondary']], ['color', tag.name === 'icon' ? ['secondary', 'success', 'danger'] : ['secondary']], ['size', ['xs', 'sm', 'lg']],
 	];
 	for (const [name, allowed] of variants) {
 		const value = values.get(name);
@@ -238,10 +246,11 @@ function referenceMarkup(ids: readonly string[], references: readonly ChatReplyR
 	return `<details class="ash-chat-citation"><summary>${selected.map(reference => `[${references.indexOf(reference) + 1}]`).join(' ')}</summary>${selected.map(reference => `<div><a href="${escapeHTML(reference.url)}">${escapeHTML(reference.title)}</a><p>${escapeHTML(reference.snippet)}</p></div>`).join('')}</details>`;
 }
 
-function createRichContentExtension(references: readonly ChatReplyReference[] = [], collectResource?: (resource: ChatReplyResource) => void, conversationId?: string): MarkedExtension {
+function createRichContentExtension(references: readonly ChatReplyReference[] = [], presentation?: { collectResource(resource: ChatReplyResource): void; conversationId?: string; }): MarkedExtension {
+	const conversationId = presentation?.conversationId;
 	const fallback = (): string => `<a href="https://chatgpt.com/${conversationId ? `c/${encodeURIComponent(conversationId)}` : ''}">${escapeHTML(fallbackText())}</a>`;
 	const resourceMarkup = (resource: ChatReplyResource): string => {
-		collectResource?.(resource);
+		presentation?.collectResource(resource);
 		return escapeHTML(resource.name).replace(/\$/gu, '&#36;').replace(/\\/gu, '&#92;');
 	};
 	return {
@@ -309,12 +318,17 @@ function createRichContentExtension(references: readonly ChatReplyReference[] = 
 				const body = typeof token.literal === 'string' ? escapeHTML(token.literal).replace(/&amp;(?=(?:#\d+|#x[\da-f]+|[a-z]+);)/giu, '&') : token.inline ? this.parser.parseInline(token.tokens as Token[]) : this.parser.parse(token.tokens as Token[]);
 				if (tag.name === 'icon') {
 					const name = attributes(tag).get('name') ?? '';
-					return `<span class="${classes(tag)}">${escapeHTML(iconText.get(name) ?? (description(tag) || name)) || fallback()}</span>`;
+					const text = escapeHTML(iconText.get(name) ?? (description(tag) || name)) || fallback();
+					const iconId = iconAliases.get(name) ?? name;
+					const content = presentation && getLxiconDefinition(iconId)
+						? `$(${iconId})<span class="ash-chat-rich-icon-text">${text}</span>`
+						: text;
+					return `<span class="${classes(tag)}">${content}</span>`;
 				}
 				if (['box', 'row', 'text'].includes(tag.name)) { return `<${element} class="${classes(tag)}">${body || fallback()}</${element}>`; }
 				const label = escapeHTML(description(tag));
 				const data = componentData(tag);
-				const chart = tag.name === 'chart' && data && collectResource ? chartDocument(description(tag), data) : undefined;
+				const chart = tag.name === 'chart' && data && presentation ? chartDocument(description(tag), data) : undefined;
 				if (chart) return resourceMarkup({ uri: `data:text/html;charset=utf-8,${encodeURIComponent(chart)}`, name: description(tag) || localize('sessions.chatgpt.chart', 'Chart'), kind: 'html' });
 				// Unknown web cards still have usable disclosure and readable data; no
 				// arbitrary JSX or component expressions are evaluated in the Workbench.
@@ -373,7 +387,7 @@ function createRichContentExtension(references: readonly ChatReplyReference[] = 
 /** Decode the wire syntax before the shared Chat renderer consumes the response. */
 export function decodeChatGPTReply(text: string, references?: readonly ChatReplyReference[], conversationId?: string): { readonly text: string; readonly resources: readonly ChatReplyResource[]; } {
 	const resources: ChatReplyResource[] = [];
-	const decoder = new Marked(createRichContentExtension(references, resource => resources.push(resource), conversationId));
+	const decoder = new Marked(createRichContentExtension(references, { collectResource: resource => resources.push(resource), conversationId }));
 	const parser = new decoder.Parser(decoder.defaults);
 	const decode = (source: string, tokens: readonly Token[], inline: boolean): string => {
 		let cursor = 0;

@@ -60,6 +60,7 @@ fn entry(id: &str, text: &str, transient: bool) -> ThreadTranscriptEntry {
             text: text.into(),
         },
         transient,
+        timestamp: None,
     }
 }
 
@@ -97,6 +98,7 @@ fn inline_user_echo_committed_before_turn_start_is_not_drawn_again() {
             text: "rebase".into(),
         },
         transient: false,
+        timestamp: None,
     };
     // Transcript notifications and the start-request completion use independent queues.
     app.update(ThreadEvent::TranscriptUpdateReceived(Box::new(

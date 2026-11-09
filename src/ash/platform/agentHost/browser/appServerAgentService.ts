@@ -959,7 +959,8 @@ function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscr
 				entryId: entry.entryId,
 				turnId: entry.turnId,
 				item: toThreadItem(entry.item),
-				transient: entry.transient
+				transient: entry.transient,
+				timestamp: entry.timestamp != null && Number.isFinite(new Date(entry.timestamp).getTime()) ? entry.timestamp : undefined,
 			};
 		case 'turnPlan':
 			return {

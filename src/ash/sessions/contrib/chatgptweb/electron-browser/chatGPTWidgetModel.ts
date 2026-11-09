@@ -344,6 +344,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 					id: itemId,
 					type: message.role === 'user' ? 'userMessage' : 'agentMessage',
 					text,
+					timestamp: message.timestamp,
 					markdown: decoded && { supportHtml: true },
 					label: message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 					resources,

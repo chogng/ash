@@ -1,3 +1,4 @@
+use ash_protocol::ItemId;
 use ash_protocol::PlanUpdate;
 use ash_protocol::SessionId;
 use ash_protocol::StableTurnError;
@@ -11,6 +12,7 @@ use ash_protocol::TurnId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use ts_rs::TS;
 
 /// One complete, render-neutral entry in a Thread transcript.
@@ -40,6 +42,9 @@ pub enum ThreadTranscriptEntry {
         turn_id: TurnId,
         item: ThreadItem,
         transient: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable, type = "number")]
+        timestamp: Option<u64>,
     },
     TurnPlan {
         entry_id: String,
@@ -112,6 +117,19 @@ pub struct ThreadTranscriptSnapshot {
 }
 
 impl ThreadTranscriptSnapshot {
+    /// Projects original message times into a bounded history page.
+    pub fn with_message_times(mut self, times: &BTreeMap<ItemId, u64>) -> Self {
+        for entry in &mut self.entries {
+            if let ThreadTranscriptEntry::Item {
+                item, timestamp, ..
+            } = entry
+            {
+                *timestamp = times.get(item.item_id()).copied();
+            }
+        }
+        self
+    }
+
     /// Adds only speech belonging to visible history anchors, preserving each span's stable identity.
     pub fn with_voice_transcripts(mut self, transcripts: &[ash_protocol::VoiceTranscript]) -> Self {
         for transcript in transcripts.iter().rev() {
@@ -156,6 +174,7 @@ impl ThreadTranscriptSnapshot {
                         turn_id: turn.turn_id.clone(),
                         item: item.clone(),
                         transient: false,
+                        timestamp: None,
                     });
                 }
                 append_loads(Some(item.item_id()), &mut entries);

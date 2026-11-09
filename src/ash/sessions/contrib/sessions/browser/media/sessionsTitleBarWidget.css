@@ -13,6 +13,15 @@
 	min-width: 0;
 }
 
+.ash-sessions-titlebar-widget.ash-sessions-titlebar-chat {
+	flex: 1;
+}
+
+.ash-sessions-titlebar-share {
+	flex-shrink: 0;
+	margin-inline-start: auto;
+}
+
 .ash-sessions-titlebar-widget .ash-button.ash-sessions-titlebar-menu {
 	flex-shrink: 0;
 	box-sizing: border-box;

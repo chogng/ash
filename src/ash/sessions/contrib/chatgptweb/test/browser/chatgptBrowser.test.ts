@@ -23,6 +23,56 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe(text);
 	}
 
+	test('renders colored status icons from ChatGPT history', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page, '| 状态 |\n| --- |\n| <icon name="check" color="success" inline/> 允许 |\n| <icon name="x" color="danger" inline/> 禁止 |');
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
+		await page.locator('#navigation').getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		const table = page.locator('#editor').getByRole('table');
+		const allowed = table.getByRole('cell', { name: '✓ 允许', exact: true });
+		const denied = table.getByRole('cell', { name: '× 禁止', exact: true });
+		await expect(allowed).toBeVisible();
+		await expect(denied).toBeVisible();
+		const check = allowed.locator('[data-ash-icon-id="check"]');
+		const cross = denied.locator('[data-ash-icon-id="close"]');
+		await expect(check).toBeVisible();
+		await expect(cross).toBeVisible();
+		await expect(check).toHaveCSS('color', 'rgb(16, 124, 16)');
+		await expect(cross).toHaveCSS('color', 'rgb(161, 38, 13)');
+	});
+
+	test('shows the original time beside each dated history message in the current language', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		const messages = [
+			{ id: 'older', author: { role: 'assistant' }, content: { parts: ['Older reply without a timestamp'] } },
+			{ id: 'question', author: { role: 'user' }, content: { parts: ['Dated question'] }, create_time: 1_794_245_400 },
+			{ id: 'answer', author: { role: 'assistant' }, content: { parts: ['Dated answer'] }, create_time: 1_794_245_520.125 },
+		];
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
+			json: {
+				title: 'Synthetic conversation', current_node: 'answer',
+				mapping: Object.fromEntries(messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }])),
+			},
+		}));
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		const rows = page.locator('.ash-chat-transcript');
+		for (const [body, dateTime] of [
+			['Dated question', '2026-11-09T17:30:00.000Z'],
+			['Dated answer', '2026-11-09T17:32:00.125Z'],
+		]) {
+			const row = rows.locator('.ash-chat-item').filter({ hasText: body });
+			const time = row.locator('.ash-chat-message-actions > [role="toolbar"] + time');
+			await expect(time).toBeVisible();
+			await expect(time).toHaveAttribute('datetime', dateTime);
+			await expect(time).toHaveText(/2026年11月/);
+		}
+		const older = rows.locator('.ash-chat-item-agentMessage').filter({ hasText: 'Older reply without a timestamp' });
+		await expect(older).toBeVisible();
+		await expect(older.locator('time')).toBeHidden();
+	});
+
 	test('Chat starters preview in an empty draft and insert only when chosen', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
@@ -1184,6 +1234,12 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		const answer = page.locator('.ash-chat-item-agentMessage').filter({ hasText: 'Repository answer' });
 		await expect(answer).toBeVisible();
 		await expect(answer.getByRole('button', { name: 'Open conversation in ChatGPT' })).toHaveCount(0);
+		await expect(answer.locator('time')).toBeHidden();
+		await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', content: { parts: ['Repository answer'] }, create_time: 1_794_245_520.125 });
+		await expect(answer.locator('time')).toHaveAttribute('datetime', '2026-11-09T17:32:00.125Z');
+		await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', content: { parts: ['Repository answer, continued'] } });
+		await expect(answer).toContainText('continued');
+		await expect(answer.locator('time')).toHaveAttribute('datetime', '2026-11-09T17:32:00.125Z');
 		await expect(page.locator('.ash-chat-item-agentMessage')).toHaveCount(2);
 		await page.evaluate(() => Reflect.get(globalThis, 'endExecution')());
 		await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);

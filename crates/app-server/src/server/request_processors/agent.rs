@@ -1604,14 +1604,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             &params.thread_id,
             params.history,
         )?;
-        let voice_transcripts = self
+        let metadata = self
             .context
             .agent_runtime()
-            .read_voice_transcripts(&thread.thread_id, thread.sequence)
+            .read_transcript_metadata(&thread)
             .map_err(core_error)?;
-        let transcript =
-            self.updates
-                .thread_transcript_snapshot(&thread, include_transient, &voice_transcripts);
+        let transcript = self
+            .updates
+            .thread_transcript_snapshot(&thread, include_transient, &metadata.voice_transcripts)
+            .with_message_times(&metadata.message_times);
         result(&SessionThreadReadResult {
             directory: self.context.thread_directory(&params.thread_id)?,
             thread,
@@ -1695,14 +1696,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         if params.after_sequence > sequence {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let voice_transcripts = self
+        let metadata = self
             .context
             .agent_runtime()
-            .read_voice_transcripts(&thread.thread_id, thread.sequence)
+            .read_transcript_metadata(&thread)
             .map_err(core_error)?;
-        let transcript =
-            self.updates
-                .thread_transcript_snapshot(&thread, include_transient, &voice_transcripts);
+        let transcript = self
+            .updates
+            .thread_transcript_snapshot(&thread, include_transient, &metadata.voice_transcripts)
+            .with_message_times(&metadata.message_times);
         let replay_after = if bounded_history {
             params.after_sequence.max(thread.sequence)
         } else {

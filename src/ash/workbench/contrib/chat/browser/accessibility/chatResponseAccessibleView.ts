@@ -6,7 +6,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import type { IAccessibleViewImplementation } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { ChatToolCallBinding } from '../../../../../platform/agentHost/common/agent.js';
 import type { ChatContentPart } from '../../../../services/chat/common/chatService.js';
-import { formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
+import { formatChatMessageTime, formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
 import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
 
@@ -41,6 +41,7 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 
 	private messageText(item: IChatListItem): string {
 		const sections = [this.labels.getAriaLabel(item)];
+		if (item.timestamp !== undefined) sections.push(formatChatMessageTime(item.timestamp));
 		const invocation = item.toolInvocation;
 		if (invocation) {
 			const { call, output, result, stopped, waitingFor, executionStarted } = invocation;

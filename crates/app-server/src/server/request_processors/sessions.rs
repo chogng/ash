@@ -856,18 +856,17 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                     .agent_runtime()
                     .thread_updates_after(&thread.thread_id, 0)
                     .map_err(core_error)?;
-                let voice_transcripts = self
+                let metadata = self
                     .context
                     .agent_runtime()
-                    .read_voice_transcripts(&thread.thread_id, thread.sequence)
+                    .read_transcript_metadata(&thread)
                     .map_err(core_error)?;
                 Ok(SessionThreadProjection {
                     directory: self.context.thread_directory(&thread.thread_id)?,
-                    transcript: self.updates.thread_transcript_snapshot(
-                        &thread,
-                        true,
-                        &voice_transcripts,
-                    ),
+                    transcript: self
+                        .updates
+                        .thread_transcript_snapshot(&thread, true, &metadata.voice_transcripts)
+                        .with_message_times(&metadata.message_times),
                     thread,
                     updates,
                 })

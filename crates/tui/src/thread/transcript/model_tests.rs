@@ -60,6 +60,7 @@ fn tool_call_output_and_result_form_one_exec_cell() {
                 binding: Some(activity_binding(ToolActivity::Run)),
             },
             transient: false,
+            timestamp: None,
         },
         ThreadTranscriptEntry::ToolOutput {
             entry_id: "output-entry".into(),
@@ -80,6 +81,7 @@ fn tool_call_output_and_result_form_one_exec_cell() {
                 is_error: false,
             },
             transient: false,
+            timestamp: None,
         },
     ]));
 
@@ -164,6 +166,7 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
             binding: Some(activity_binding(activity)),
         },
         transient: false,
+        timestamp: None,
     };
     let result = |name: &str, text: &str, is_error: bool| ThreadTranscriptEntry::Item {
         entry_id: format!("result-{name}"),
@@ -177,6 +180,7 @@ fn grouped_history_failure_names_the_failed_call_and_command_completion_stays_ne
             is_error,
         },
         transient: false,
+        timestamp: None,
     };
     let mut model = TranscriptModel::default();
     model.replace(snapshot(vec![
@@ -258,6 +262,7 @@ fn expansion_is_derived_without_changing_cell_lifecycle() {
             binding: None,
         },
         transient: true,
+        timestamp: None,
     }]));
     let mut expanded = BTreeSet::new();
     let cell_id = TranscriptCellId::for_tool_call(&tool_call_id);
@@ -285,6 +290,7 @@ fn exec_cell_identity_is_derived_from_the_first_tool_call_across_resync() {
             binding: None,
         },
         transient: false,
+        timestamp: None,
     }];
     let mut model = TranscriptModel::default();
     model.replace(snapshot(entries.clone()));
@@ -308,6 +314,7 @@ fn reinstalling_a_cell_advances_its_render_revision() {
             text: "streamed answer".into(),
         },
         transient: false,
+        timestamp: None,
     }];
     let mut model = TranscriptModel::default();
     model.replace(snapshot(entries.clone()));
@@ -484,6 +491,7 @@ fn attachment_only_receipt_confirms_the_local_submission() {
             url: "https://example.com/image.png".into(),
         },
         transient: false,
+        timestamp: None,
     };
     model.replace(snapshot(vec![entry]));
     assert_eq!(model.cells().len(), 1);
@@ -549,6 +557,7 @@ fn tool_call(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
         entry_id: format!("call-{name}"),
         turn_id: turn.clone(),
         transient: false,
+        timestamp: None,
         item: ThreadItem::ToolCall {
             item_id: item_id(&format!("item-{name}")),
             turn_id: turn.clone(),
@@ -613,6 +622,7 @@ fn tool_result(name: &str, turn: &TurnId) -> ThreadTranscriptEntry {
         entry_id: format!("result-{name}"),
         turn_id: turn.clone(),
         transient: false,
+        timestamp: None,
         item: ThreadItem::ToolResult {
             item_id: item_id(&format!("result-item-{name}")),
             turn_id: turn.clone(),
@@ -658,6 +668,7 @@ fn message(entry: &str, turn: &TurnId, role: MessageRole, text: &str) -> ThreadT
         turn_id: turn.clone(),
         item,
         transient: false,
+        timestamp: None,
     }
 }
 
@@ -698,6 +709,7 @@ fn audio_history_is_a_user_message_with_a_visible_duration() {
         entry_id: "audio-entry".into(),
         turn_id: turn_id("turn"),
         transient: false,
+        timestamp: None,
         item: ThreadItem::UserAudioAttachment {
             client_id: None,
             item_id: item_id("audio"),
@@ -724,6 +736,7 @@ fn absent_reasoning_stays_hidden_until_a_public_summary_arrives() {
         entry_id: "reasoning".into(),
         turn_id: turn.clone(),
         transient: true,
+        timestamp: None,
         item: ThreadItem::Reasoning {
             item_id: item_id("reasoning"),
             turn_id: turn.clone(),

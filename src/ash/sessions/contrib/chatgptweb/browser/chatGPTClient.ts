@@ -721,7 +721,12 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(addReference);
 		}
 	}
-	return { id: value.id, role: value.author.role as 'user' | 'assistant', text, ...(resources.length ? { resources } : {}), ...(references.length ? { references } : {}) };
+	const timestamp = conversationTimestamp(value.create_time);
+	return {
+		id: value.id, role: value.author.role as 'user' | 'assistant', text,
+		...(timestamp !== undefined && Number.isFinite(new Date(timestamp).getTime()) ? { timestamp } : {}),
+		...(resources.length ? { resources } : {}), ...(references.length ? { references } : {})
+	};
 }
 
 /** SSE framing is independent of HTTP chunks; delta paths are restricted to ordinary JSON properties. */

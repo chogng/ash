@@ -40,6 +40,7 @@ export function registerChatGPTAccessibility(focusContext: string, contentServic
 						+ '\n\n' + localize('sessions.chatgpt.offlineHelp', 'While offline, Send in a new chat saves its first text message on this device. Delete removes a conversation from the sidebar. Ash syncs these changes when the connection returns. A saved chat is read-only until ChatGPT confirms it.')
 						+ '\n\n' + localize('sessions.chat.coworkHelp', 'Use the same input to ask questions or describe work to do. Clear text requests for actions or deliverables may run with Cowork. Progress and results appear in the conversation. Select Open Cowork task when the task needs input.'))
 					+ '\n\n' + localize('sessions.chatgpt.codeModelsHelp', 'In a new Chat without attachments, the model list also includes available Ash models. Selecting one opens an Ash Chat draft with your unsent text.')
+					+ '\n\n' + localize('sessions.titlebar.chatGPTHelp', 'For a saved chat, focus its title and press Enter to rename it. Use More Sessions Actions beside the title to pin, archive, or delete it. Share at the right of the title bar asks for confirmation before creating and copying a link to the entire conversation.')
 					: content.getAccessibleContent(), () => focused?.focus(), AccessibilityVerbositySettingId.ChatGPT);
 			},
 		});

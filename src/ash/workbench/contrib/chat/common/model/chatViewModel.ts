@@ -3,6 +3,14 @@ import type { IChatToolInvocation } from '../chatService/chatService.js';
 import type { IChatHookPart, ChatContentPart, LoadedTurnSkill, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
 import { isChatResponseFeedbackTarget, type ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
+import { Lazy } from '../../../../../base/common/lazy.js';
+import { safeIntl } from '../../../../../base/common/date.js';
+
+const messageTimeFormatter = new Lazy(() => safeIntl.DateTimeFormat(getNLSLanguage(), { dateStyle: 'medium', timeStyle: 'short' }).value);
+
+export function formatChatMessageTime(timestamp: number): string {
+	return messageTimeFormatter.value.format(timestamp);
+}
 
 /** Both Chat presentations describe the same backend-owned goal without translating user content. */
 export function formatChatGoal(goal: ThreadGoal): string {
@@ -65,6 +73,8 @@ export interface IChatListItem {
 	readonly hookPart?: IChatHookPart;
 	readonly toolInvocation?: IChatToolInvocation;
 	readonly text: string;
+	/** Unix milliseconds supplied by the owner of a sent message. */
+	readonly timestamp?: number;
 	/** Exact Core-accepted context body, independent of any current composer draft. */
 	readonly contextText?: string;
 	readonly contextSourceUrl?: string;
@@ -308,7 +318,7 @@ export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: Tr
 			text: formatLoadedSkillReason(entry.skill.reason),
 		};
 		case 'hookRun': return chatHookListItem(entry);
-		case 'item': return { ...chatListItem(entry.item, entry.transient), id: entry.entryId };
+		case 'item': return { ...chatListItem(entry.item, entry.transient), id: entry.entryId, timestamp: entry.timestamp };
 		case 'turnPlan': return { ...chatPlanUpdateListItem(entry.turnId, entry.plan), id: entry.entryId };
 		case 'turnError': {
 			const presentation = turnErrorPresentation(entry.turnId, entry.error);

@@ -38,6 +38,13 @@ use ash_protocol::TurnId;
 use ash_protocol::TurnInstructions;
 use ash_protocol::TurnKind;
 use ash_protocol::UserInput;
+use std::collections::BTreeMap;
+
+/// Durable metadata for the messages visible in a Thread history snapshot.
+pub struct ThreadTranscriptMetadata {
+    pub voice_transcripts: Vec<ash_protocol::VoiceTranscript>,
+    pub message_times: BTreeMap<ash_protocol::ItemId, u64>,
+}
 
 /// Resolved product inputs for a read-only inspection; no execution identity is created.
 pub struct ContextInspectionRequest<'a> {
@@ -149,12 +156,11 @@ pub trait AgentRuntime {
     ) -> Result<ContextInspection, CoreError>;
 
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError>;
-    /// Returns speech facts from the same immutable journal boundary as a Thread history read.
-    fn read_voice_transcripts(
+    /// Reads transcript metadata at the same immutable journal boundary as the Thread.
+    fn read_transcript_metadata(
         &self,
-        thread_id: &ThreadId,
-        sequence: u64,
-    ) -> Result<Vec<ash_protocol::VoiceTranscript>, CoreError>;
+        thread: &ash_protocol::Thread,
+    ) -> Result<ThreadTranscriptMetadata, CoreError>;
     fn read_thread_history(
         &self,
         thread_id: &ThreadId,

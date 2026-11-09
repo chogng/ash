@@ -807,6 +807,7 @@ fn live_update_uses_a_separate_stream_cursor_from_durable_sequence() {
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
         durable_sequence: 4,
+        recorded_at_unix_ms: None,
         stream_cursor: Some(StreamCursor {
             stream_instance_id: StreamInstanceId::new("stream_1").expect("test ID is non-empty"),
             sequence: 9,
@@ -1665,6 +1666,7 @@ fn tool_result_review_is_a_redacted_disclosure_decision() {
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
         durable_sequence: 3,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: event.clone(),

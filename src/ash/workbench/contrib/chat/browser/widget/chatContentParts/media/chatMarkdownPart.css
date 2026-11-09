@@ -244,6 +244,20 @@
 .ash-chat-rich-icon {
 	font-size: var(--ash-lxiconFontSize-large);
 }
+.ash-chat-rich-icon.color-success {
+	color: var(--ash-success-foreground);
+}
+.ash-chat-rich-icon.color-danger {
+	color: var(--ash-error-foreground);
+}
+.ash-chat-rich-icon > .ash-icon-label-inline-icon + .ash-chat-rich-icon-text {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
 .ash-chat-rich-fallback {
 	display: inline-block;
 	margin: 4px;

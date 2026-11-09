@@ -117,6 +117,7 @@ impl ToolInvoker for BrokerToolInvoker {
             session_id: snapshot.session_id,
             thread_id,
             durable_sequence: snapshot.sequence,
+            recorded_at_unix_ms: None,
             stream_cursor: Some(StreamCursor {
                 stream_instance_id: self.stream_instance_id.clone(),
                 sequence,

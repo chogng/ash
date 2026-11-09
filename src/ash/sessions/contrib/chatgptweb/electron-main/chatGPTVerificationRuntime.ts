@@ -5,7 +5,7 @@ import { Disposable, toDisposable, type IDisposable } from '../../../../base/com
 
 export interface IChatGPTVerificationRuntime extends IDisposable {
 	readonly isDisposed: boolean;
-	readonly session: Pick<Session, 'fetch'>;
+	readonly session: Pick<Session, 'fetch' | 'getUserAgent'>;
 	readonly verificationPhase?: 'navigation' | 'install' | 'proof';
 	readonly verificationRequests?: readonly VerificationRequest[];
 	prepareHeaders(script: string, signal: AbortSignal): Promise<unknown>;

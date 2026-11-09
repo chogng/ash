@@ -134,6 +134,21 @@ pub struct StoredEvent {
     pub thread_created_kind_encoding: ThreadCreatedKindEncoding,
 }
 
+impl StoredEvent {
+    /// Time of a durable user message or assistant reply, from the original journal record.
+    pub fn message_timestamp(&self) -> Option<u64> {
+        match &self.event {
+            ThreadEvent::ItemCompleted {
+                item:
+                    ash_protocol::ThreadItem::UserMessage { .. }
+                    | ash_protocol::ThreadItem::AgentMessage { .. },
+                ..
+            } => u64::try_from(self.recorded_at.0).ok(),
+            _ => None,
+        }
+    }
+}
+
 impl Serialize for StoredEvent {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

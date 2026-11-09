@@ -111,13 +111,23 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				return !key || !this.storage.getBoolean(key, StorageScope.PROFILE, false);
 			});
 			const destinations = visibleProjects(state.projects).map(({ id, title }) => ({ id, title }));
+			const currentAccount = () => chat.state.get().catalogScope === state.catalogScope;
 			const entries = state.conversations.map((conversation): ChatListEntry => {
 				const { id, title, pinned, projectId } = conversation;
 				const selected = id === current;
 				// Custom GPT conversations also have gizmo IDs, but are not project members.
 				const currentProject = projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined;
 				const catalogId = this.conversationCatalogId(id);
-				const canArchive = !id.startsWith('pending:') && (conversation.local || state.connected && state.networkAvailable);
+				const canManage = !id.startsWith('pending:') && (conversation.local || state.connected && state.networkAvailable);
+				const rename = canManage ? async (name: string) => {
+					if (currentAccount()) await chat.rename(id, name);
+				} : undefined;
+				const share = canManage && !conversation.local ? async () => {
+					if (currentAccount()) await shareChatGPTConversation(chat, this.dialogs, this.clipboard, id, title);
+				} : undefined;
+				const remove = async () => {
+					if (currentAccount()) await this.deleteConversation(conversation, currentAccount);
+				};
 				return {
 					id: catalogId,
 					externalConversationId: conversation.local || id.startsWith('pending:') ? undefined : chatGPTProjectConversationId(state.catalogScope, id),
@@ -135,8 +145,9 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					defaultIcon: id.startsWith('local:') ? Lxicon.cowork : Lxicon.chatSession,
 					preferenceKey: conversationPreferenceKey(id, state.catalogScope),
 					open: signal => this.open(id, signal),
-					archive: canArchive ? async () => chat.state.get().catalogScope === state.catalogScope && await chat.archive(id) : undefined,
-					setPinned: id.startsWith('pending:') ? undefined : pinned => chat.setPinned(id, pinned),
+					rename, share, remove,
+					archive: canManage ? async () => currentAccount() && await chat.archive(id) : undefined,
+					setPinned: !id.startsWith('pending:') ? async pinned => { if (currentAccount()) await chat.setPinned(id, pinned); } : undefined,
 					project: !conversation.local && !id.startsWith('pending:') && (!projectId || currentProject) && state.connected && state.networkAvailable ? {
 						current: currentProject,
 						destinations,
@@ -151,7 +162,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 							await this.chat.moveToProject(id, destination ?? null);
 						},
 					} : undefined,
-					getActions: (_signal, restoreFocus) => this.getActions(conversation, restoreFocus),
+					getActions: (_signal, restoreFocus) => this.getActions(conversation, rename, share, remove, restoreFocus),
 				};
 			});
 			return {
@@ -272,38 +283,31 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return `${this.chat.native ? 'chatgpt-native' : 'chatgpt'}:${id}`;
 	}
 
-	private getActions(conversation: ChatGPTConversation, restoreFocus: () => void): readonly IAction[] {
-		const state = this.chat.state.get();
-		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, () => this.deleteConversation(conversation)), class: 'ash-session-delete-action' };
-		if (conversation.id.startsWith('pending:') || !conversation.local && (!state.connected || !state.networkAvailable)) {
-			return [remove];
-		}
+	private getActions(conversation: ChatGPTConversation, rename: ChatListEntry['rename'], share: ChatListEntry['share'], removeConversation: () => Promise<void>, restoreFocus: () => void): readonly IAction[] {
+		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, removeConversation), class: 'ash-session-delete-action' };
+		if (!rename) return [remove];
 		const actions = [this.action('rename', localize('sessions.chatgpt.rename', 'Rename'), Lxicon.edit, async () => {
-			await this.rename(conversation);
+			const title = await this.quickInput.input({
+				title: localize('sessions.chatgpt.rename', 'Rename'), value: conversation.title,
+				validateInput: async value => value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
+			});
+			if (title !== undefined) await rename(title);
 			restoreFocus();
 		})];
-		if (!conversation.local) {
-			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, () => shareChatGPTConversation(this.chat, this.dialogs, this.clipboard, conversation.id, conversation.title)));
+		if (share) {
+			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, share));
 		}
 		actions.push(new Separator(), remove);
 		return actions;
 	}
 
-	private async rename(conversation: ChatGPTConversation): Promise<void> {
-		const title = await this.quickInput.input({
-			title: localize('sessions.chatgpt.rename', 'Rename'), value: conversation.title,
-			validateInput: async value => value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
-		});
-		if (title !== undefined) { await this.chat.rename(conversation.id, title); }
-	}
-
-	private async deleteConversation(conversation: ChatGPTConversation): Promise<void> {
+	private async deleteConversation(conversation: ChatGPTConversation, currentAccount: () => boolean): Promise<void> {
 		const result = await this.dialogs.confirm({
 			message: localize('sessions.chatgpt.deleteConfirm', 'Delete “{0}”?', conversation.title),
 			detail: localize('sessions.chatgpt.deleteDetail', 'This chat will be permanently deleted.'),
 			primaryButton: localize('sessions.chatgpt.delete', 'Delete'),
 		});
-		if (result.confirmed) { await this.chat.deleteConversation(conversation.id); }
+		if (result.confirmed && currentAccount()) { await this.chat.deleteConversation(conversation.id); }
 	}
 
 }

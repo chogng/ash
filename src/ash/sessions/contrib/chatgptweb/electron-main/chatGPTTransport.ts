@@ -247,6 +247,10 @@ export class ChatGPTTransport extends Disposable {
 		const send = (credentials: Headers): Promise<Response> => {
 			const headers = new Headers(init.headers);
 			for (const [name, value] of credentials) { headers.set(name, value); }
+			if (init.method === 'GET' && (conversationPath(url.pathname) || nativeHistoryPath(url.pathname))) {
+				// ChatGPT drops rich reply markup from history for the Electron UA.
+				headers.set('User-Agent', runtime.session.getUserAgent().replace(/ Electron\/[^\s]+/gu, ''));
+			}
 			return runtime.session.fetch(url.href, { ...init, headers });
 		};
 		let response = await send(authorization.headers);

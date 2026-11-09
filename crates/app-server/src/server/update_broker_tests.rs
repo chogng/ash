@@ -450,6 +450,7 @@ fn committed_subagent_updates_invalidate_the_catalog_without_a_session_subscript
             session_id,
             thread_id: child_thread_id.clone(),
             durable_sequence: 1,
+            recorded_at_unix_ms: None,
             stream_cursor: None,
             update: ThreadUpdate::Committed {
                 event: ThreadEvent::TurnStarted {
@@ -472,6 +473,7 @@ fn committed_subagent_updates_invalidate_the_catalog_without_a_session_subscript
             session_id: SessionId::new("session_1").unwrap(),
             thread_id: child_thread_id.clone(),
             durable_sequence: 2,
+            recorded_at_unix_ms: None,
             stream_cursor: None,
             update: ThreadUpdate::Committed {
                 event: ThreadEvent::TurnCancelling {
@@ -491,6 +493,7 @@ fn committed_subagent_updates_invalidate_the_catalog_without_a_session_subscript
             session_id: SessionId::new("session_1").unwrap(),
             thread_id: child_thread_id.clone(),
             durable_sequence: 3,
+            recorded_at_unix_ms: None,
             stream_cursor: None,
             update: ThreadUpdate::Committed {
                 event: ThreadEvent::TurnSteered {
@@ -517,6 +520,7 @@ fn thread_update_publishes_backend_assembled_transcript_entry() {
         session_id,
         thread_id,
         durable_sequence: 0,
+        recorded_at_unix_ms: None,
         stream_cursor: Some(StreamCursor {
             stream_instance_id: StreamInstanceId::new("stream_1").unwrap(),
             sequence: 1,
@@ -624,6 +628,7 @@ fn transcript_accumulator_survives_turn_boundaries() {
         session_id: session_id.clone(),
         thread_id: thread_id.clone(),
         durable_sequence: 1,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::TurnCompleted {
@@ -659,6 +664,7 @@ fn transient_thread_update(
         session_id: session_id.clone(),
         thread_id: thread_id.clone(),
         durable_sequence: 0,
+        recorded_at_unix_ms: None,
         stream_cursor: Some(StreamCursor {
             stream_instance_id: StreamInstanceId::new("stream_1").unwrap(),
             sequence,
@@ -1182,6 +1188,7 @@ fn thread_update(
         session_id: session_id.clone(),
         thread_id: thread_id.clone(),
         durable_sequence: sequence,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadArchived {

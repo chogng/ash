@@ -169,16 +169,19 @@ fn deltas_emit_complete_upserts_and_committed_item_replaces_transient() {
     );
     let committed = apply(
         &mut accumulator,
-        durable(
-            1,
-            ThreadEvent::ItemCompleted {
-                checkpoint_after_sequence: None,
-                workspace_checkpoint: None,
-                thread_id: thread_id(),
-                turn_id: turn_id(),
-                item: agent_item("item-1", "hello"),
-            },
-        ),
+        ThreadUpdateEnvelope {
+            recorded_at_unix_ms: Some(1_794_245_520_125),
+            ..durable(
+                1,
+                ThreadEvent::ItemCompleted {
+                    checkpoint_after_sequence: None,
+                    workspace_checkpoint: None,
+                    thread_id: thread_id(),
+                    turn_id: turn_id(),
+                    item: agent_item("item-1", "hello"),
+                },
+            )
+        },
     );
 
     assert_eq!(entry_text(&first), "hel");
@@ -195,6 +198,7 @@ fn deltas_emit_complete_upserts_and_committed_item_replaces_transient() {
         ThreadTranscriptChange::Upsert {
             entry: ThreadTranscriptEntry::Item {
                 transient: false,
+                timestamp: Some(1_794_245_520_125),
                 ..
             }
         }
@@ -619,6 +623,7 @@ fn reconnect_snapshot_keeps_streamed_entries_unique_and_in_first_seen_order() {
                     phase: Some(ash_protocol::MessagePhase::FinalAnswer),
                 },
                 transient: true,
+                timestamp: None,
             },
             ThreadTranscriptEntry::ToolOutput {
                 entry_id: "tool-output:turn-1:call-1:stdout".into(),
@@ -834,6 +839,7 @@ fn transient_for_stream(
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence: 0,
+        recorded_at_unix_ms: None,
         stream_cursor: Some(StreamCursor {
             stream_instance_id: StreamInstanceId::new(stream_id).unwrap(),
             sequence,
@@ -847,6 +853,7 @@ fn durable(sequence: u64, event: ThreadEvent) -> ThreadUpdateEnvelope {
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence: sequence,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed { event },
     }
@@ -953,6 +960,7 @@ fn hook_completion_replaces_its_running_transcript_entry_and_replays_stably() {
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence: sequence,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::HookRunUpdated {
@@ -999,6 +1007,7 @@ fn voice_transcripts_have_no_execution_owner_and_keep_their_original_snapshot_an
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed { event },
     };

@@ -12,6 +12,10 @@
 
 - [ ] **测量** · Ash 已用隔离测试验证缓存复用、过期刷新和 429 恢复。现有浏览器连接读不到已登录 Edge 标签页的 DevTools Network，缺真实网页的请求次数、状态码和耗时。可访问 Network 后保持缓存开启，分别采样一次普通刷新和一次切回聚焦，单独记录 `/backend-api/conversations` 的请求，与 Ash 模拟结果对照。用模拟响应验证 429。
 
+## Ash Chat · 公网分享
+
+- [ ] **验收 · 部署只读分享服务** · Ash 桌面已能通过本地 Worker 生成链接，独立浏览器可读到整段消息快照。默认公网地址仍返回 404，当前缺少目标 Cloudflare 账号的 Worker 和 R2 部署授权。取得授权后按 [分享服务部署说明](services/chat-share/README.md#deployment) 配置私有存储桶及过期规则，再用合成对话验证公网链接。
+
 ## Desktop Chat · App Server 调试与采样
 
 - [ ] **macOS 实机验收** · 用同一个本地 Ash 桌面窗口和带调试符号的 Rust App Server 验证断点、分离和 CPU 调用栈。

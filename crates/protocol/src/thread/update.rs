@@ -83,6 +83,10 @@ pub struct ThreadUpdateEnvelope {
     pub thread_id: ThreadId,
     #[ts(type = "number")]
     pub durable_sequence: u64,
+    /// Original journal time for committed user and assistant messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable, type = "number")]
+    pub recorded_at_unix_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub stream_cursor: Option<StreamCursor>,

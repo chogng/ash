@@ -31,6 +31,8 @@ export interface ChatReplyMessage {
 	readonly id: string;
 	readonly role: 'user' | 'assistant';
 	readonly text: string;
+	/** Message time in Unix milliseconds. Older history may omit it. */
+	readonly timestamp?: number;
 	readonly resources?: readonly ChatReplyResource[];
 	readonly references?: readonly ChatReplyReference[];
 	/** Execution content stays in the conversation record, separate from answer Markdown. */

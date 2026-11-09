@@ -185,6 +185,7 @@ fn upsert_agent(text: &str, transient: bool) -> ThreadTranscriptChange {
                 text: text.into(),
             },
             transient,
+            timestamp: None,
         },
     }
 }
