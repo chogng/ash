@@ -1,6 +1,7 @@
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { GitHubDiffSide } from '../../../src/ash/platform/github/common/githubService.js';
 import { IAgentConnection } from '../../../src/ash/platform/agentHost/common/agentService.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -44,12 +45,16 @@ export function installMultiHostSessionsFixture(): {
 	showAttentionDraft(): void;
 	pauseNextRename(): void;
 	rejectPausedRename(): void;
+	completeRequiredCheck(): void;
+	requiredCheckReads(): number;
 	calls: { host: string; method: string; sessionId: string; threadId: string; }[];
 	submissions: Submission[];
 } {
 	const calls: { host: string; method: string; sessionId: string; threadId: string; }[] = [];
 	const submissions: Submission[] = [];
 	let pausedRename: DeferredPromise<void> | undefined;
+	let completeRequiredCheck = () => { };
+	let requiredCheckReads = 0;
 	let services: InstantiationService;
 	const registrations = new Map<string, { dispose(): void; }>();
 	const params = new URL(location.href).searchParams;
@@ -117,6 +122,18 @@ export function installMultiHostSessionsFixture(): {
 				child.registerInstance(IPromptsService, { onDidChangeSkills: Event.None, onDidChangeHooks: Event.None, findAgentSkills: async () => skills, getHooks: async () => [], dispose() { }, [Symbol.dispose]() { } } as unknown as IPromptsService);
 				child.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 				const automation = name === 'Host A' && new URL(location.href).searchParams.has('search') ? globalThis.ashWebWorkbenchHost?.api.automation : undefined;
+				const mergeReady = name === 'Host B' && params.has('inboxMergeReady');
+				const pullRequestEvents = name === 'Host B' && params.has('inboxPullRequestEvents');
+				const pullRequestNumbers = pullRequestEvents ? [7, 8] : mergeReady ? [7] : [];
+				const pullRequestsChanged = mergeReady ? lifetime.add(new Emitter<string>()) : undefined;
+				let checkReported = false;
+				if (pullRequestsChanged) {
+					completeRequiredCheck = () => {
+						checkReported = true;
+						pullRequestsChanged.fire('same');
+					};
+				}
+				const repository = { host: 'github.com', owner: 'team', name: 'repo' };
 				child.registerInstance(IAgentConnection, {
 					...host,
 					appServer: { ...host.appServer, getConnectionState: async () => 'ready' },
@@ -143,7 +160,37 @@ export function installMultiHostSessionsFixture(): {
 							sandboxPolicy: { profile: ':readOnly', fileSystem: 'readOnly', network: 'denied', hostRead: 'grantedRoots', managedConstraints: true, pathRuleCount: 0 },
 						}),
 					},
-					github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] },
+					github: {
+						...host.github,
+						listAccounts: async () => pullRequestNumbers.length ? [{ id: 'github', host: repository.host, login: 'owner', status: 'ready', credentialRevision: 1n }] : [],
+						listSessionPullRequests: async () => pullRequestNumbers.map(number => ({ repository, number, isArtifact: true })),
+						listSessionIssues: async () => [],
+						...(pullRequestNumbers.length ? {
+							readPullRequest: async (_repository, number) => ({
+								number, title: 'Fixture PR', body: '', url: `https://github.com/team/repo/pull/${number}`,
+								state: number === 8 ? 'closed' : 'open', draft: false,
+								mergedAt: number === 8 ? '2026-10-06T11:00:00Z' : null, mergeable: true, headCommit: 'a'.repeat(40),
+								headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', autoMerge: false,
+							}),
+							onDidChangeSessionPullRequests: pullRequestsChanged?.event ?? Event.None,
+							readPullRequestChecks: async () => {
+								requiredCheckReads++;
+								return pullRequestEvents
+									? { status: 'failure', latestCheckAtUnixMs: Date.parse('2026-10-06T10:30:00Z') }
+									: { status: checkReported ? 'success' : 'pending' };
+							},
+							listReviewThreads: async () => ({
+								threads: pullRequestEvents ? [{
+									id: 'thread', path: 'file.ts', line: 1, side: GitHubDiffSide.Right, resolved: false, outdated: false, canResolve: true,
+									comments: { comments: [{
+										id: 'comment', body: 'Please fix this.', url: 'https://github.com/team/repo/pull/7',
+										author: 'copilot-pull-request-reviewer[bot]', createdAt: '2026-10-06T10:00:00Z', canUpdate: false, canDelete: false,
+									}], nextCursor: null },
+								}] : [],
+								nextCursor: null,
+							}),
+						} : {}),
+					},
 				});
 				const automations = automation ? lifetime.add(child.createInstance(AgentHostAutomationStore, name, observableValue<'connected'>('searchFixtureConnection', 'connected'))) : undefined;
 				const title = comparisonPreview && name !== 'Judge' ? `Attempt ${name === 'Host A' ? 1 : 2} · ${name}` : `Task from ${name}`;
@@ -177,9 +224,10 @@ export function installMultiHostSessionsFixture(): {
 					const repliedAt = Date.now() - 1000;
 					session = {
 						...session,
-						chats: session.chats.map(thread => thread.threadId === 'side'
-							? { ...thread, management: { status: 'completed', statusChangedAtUnixMs: repliedAt } }
-							: thread),
+						chats: session.chats.map(thread => ({
+							...thread,
+							management: { status: 'completed', statusChangedAtUnixMs: repliedAt },
+						})),
 					};
 					services.get(IStorageService).store('sessions.codeReview.' + JSON.stringify([sessionId, sessionId]), JSON.stringify({
 						batches: [{
@@ -190,7 +238,8 @@ export function installMultiHostSessionsFixture(): {
 					}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				} else if (params.has('inbox')) {
 					const status = name === 'Host A' ? 'completed' : 'needsInput';
-					const management = { status, statusChangedAtUnixMs: Date.now() - 1000 } as const;
+					const age = params.has('inboxActions') && name === 'Host A' ? 500 : 1000;
+					const management = { status, statusChangedAtUnixMs: Date.now() - age } as const;
 					session = botsInbox
 						? { ...session, chats: session.chats.map(thread => thread.threadId === 'same' ? { ...thread, management } : thread) }
 						: { ...session, management };
@@ -286,5 +335,7 @@ export function installMultiHostSessionsFixture(): {
 		openLink: (name, sideBySide, threadId = 'same') => services.get(IOpenerService).open(
 			buildOpenSessionLinkUri('same', threadId, sessionProviderAuthority(name, 'local-agent-host')), { openToSide: sideBySide }),
 		disconnect: name => registrations.get(name)?.dispose(),
+		completeRequiredCheck: () => completeRequiredCheck(),
+		requiredCheckReads: () => requiredCheckReads,
 	};
 }

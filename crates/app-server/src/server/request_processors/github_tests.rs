@@ -25,7 +25,8 @@ fn review_threads_map_nullable_lines_and_reply_pagination_to_the_frontend_contra
         "id":"thread", "path":"a.rs", "line":null, "diffSide":"LEFT", "isResolved":false,
         "isOutdated":true, "viewerCanResolve":false, "comments":{"nodes":[{
             "id":"comment", "body":"Review", "url":"https://github.com/team/repo/pull/7",
-            "author":null, "viewerCanUpdate":false, "viewerCanDelete":false
+            "author":null, "createdAt":"2026-10-06T10:00:00Z", "updatedAt":"2026-10-06T11:00:00Z",
+            "viewerCanUpdate":false, "viewerCanDelete":false
         }], "pageInfo":{"hasNextPage":true,"endCursor":"next"}}
     }))
     .unwrap();
@@ -35,6 +36,14 @@ fn review_threads_map_nullable_lines_and_reply_pagination_to_the_frontend_contra
     assert!(dto.outdated);
     assert_eq!(dto.comments.next_cursor.as_deref(), Some("next"));
     assert_eq!(dto.comments.comments[0].author, None);
+    assert_eq!(
+        dto.comments.comments[0].created_at.as_deref(),
+        Some("2026-10-06T10:00:00Z")
+    );
+    assert_eq!(
+        dto.comments.comments[0].updated_at.as_deref(),
+        Some("2026-10-06T11:00:00Z")
+    );
     assert!(next_review_cursor(true, None).is_err());
     assert!(next_review_cursor(true, Some(String::new())).is_err());
     assert_eq!(
@@ -200,6 +209,23 @@ impl github::GitHubProvider for CiProvider {
     ) -> github::Result<github::GitHubResponse> {
         assert_eq!(authorization.unwrap().grant_id, "captured-grant");
         match request {
+            github::GitHubRequest::PullRequestChecks {
+                repository,
+                number,
+                head_commit,
+            } => {
+                assert_eq!(
+                    (repository.owner.as_str(), repository.name.as_str(), number),
+                    ("team", "repo", 7)
+                );
+                assert_eq!(head_commit, "a".repeat(40));
+                Ok(github::GitHubResponse::PullRequestChecks(
+                    github::PullRequestChecks {
+                        status: github::PullRequestChecksStatus::Failure,
+                        latest_check_at_unix_ms: Some(1_791_280_800_000),
+                    },
+                ))
+            }
             github::GitHubRequest::CheckDetails {
                 repository,
                 number,
@@ -252,6 +278,22 @@ fn ci_requests_cross_the_real_domain_provider_and_return_generated_dto_fields() 
         .build()
         .unwrap();
     runtime.block_on(async {
+        let checks_params = serde_json::json!({
+            "operationId": "required-ci", "accountId": "42", "repository": params["repository"],
+            "number": 7, "headCommit": "a".repeat(40),
+        });
+        let checks = processor
+            .request(
+                ClientMethod::GitHubPullRequestChecks,
+                &checks_params,
+                &source.token(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            checks,
+            serde_json::json!({"status":"failure","latestCheckAtUnixMs":1_791_280_800_000_i64})
+        );
         let mut details_params = params.clone();
         details_params["page"] = 2.into();
         let details = processor

@@ -560,6 +560,12 @@ pub struct GitHubReviewComment {
     pub body: String,
     pub url: String,
     pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub created_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub updated_at: Option<String>,
     pub can_update: bool,
     pub can_delete: bool,
 }
@@ -677,6 +683,37 @@ pub struct GitHubChecksResult {
     pub statuses: Vec<GitHubCommitStatus>,
     pub checks: Vec<GitHubCheckRun>,
     pub next_page: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestChecksParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub head_commit: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubPullRequestChecksStatus {
+    Pending,
+    Success,
+    Failure,
+    Neutral,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestChecksResult {
+    pub status: GitHubPullRequestChecksStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub latest_check_at_unix_ms: Option<i64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

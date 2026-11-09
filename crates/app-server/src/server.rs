@@ -3627,6 +3627,7 @@ impl AppServer {
                 | ClientMethod::GitHubCheckLog
                 | ClientMethod::GitHubCheckRerun
                 | ClientMethod::GitHubChecks
+                | ClientMethod::GitHubPullRequestChecks
                 | ClientMethod::GitHubLabelsList
                 | ClientMethod::GitHubLabelCreate
                 | ClientMethod::GitHubLabelUpdate

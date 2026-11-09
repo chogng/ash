@@ -199,6 +199,11 @@ pub enum GitHubRequest {
         commit: String,
         page: u32,
     },
+    PullRequestChecks {
+        repository: Repository,
+        number: u64,
+        head_commit: String,
+    },
     CheckDetails {
         repository: Repository,
         number: u64,
@@ -374,6 +379,7 @@ impl GitHubRequest {
             | Self::MergeOptions { .. }
             | Self::FindPullRequest { .. }
             | Self::Checks { .. }
+            | Self::PullRequestChecks { .. }
             | Self::CheckDetails { .. }
             | Self::CheckLog { .. }
             | Self::PullRequest { .. }
@@ -436,6 +442,7 @@ pub enum GitHubResponse {
     MergeOptions(MergeOptions),
     FindPullRequest(Option<PullRequest>),
     Checks(CheckStatus),
+    PullRequestChecks(PullRequestChecks),
     CheckDetails(CheckDetails),
     CheckLog(String),
     RerunCheck(()),

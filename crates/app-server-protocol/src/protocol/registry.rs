@@ -1655,6 +1655,10 @@ use crate::protocol::github::GitHubLabelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubLabelsResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestChecksParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubPullRequestChecksResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryResult;
 
 #[cfg(any(test, feature = "export"))]
@@ -5526,6 +5530,7 @@ client_methods! {
     GitHubCheckLog => "github/check/log" { params: GitHubCheckParams, response: GitHubCheckLogResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubCheckRerun => "github/check/rerun" { params: GitHubCheckParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubChecks => "github/checks" { params: GitHubChecksParams, response: GitHubChecksResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubPullRequestChecks => "github/pullRequest/checks" { params: GitHubPullRequestChecksParams, response: GitHubPullRequestChecksResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubLabelsList => "github/labels/list" { params: GitHubRepositoryParams, response: GitHubLabelsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubLabelCreate => "github/label/create" { params: GitHubLabelParams, response: GitHubLabel, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubLabelUpdate => "github/label/update" { params: GitHubLabelParams, response: GitHubLabel, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -6542,6 +6547,9 @@ typescript_bindings! {
     crate::protocol::github::GitHubCommitStatus,
     crate::protocol::github::GitHubCheckRun,
     crate::protocol::github::GitHubChecksResult,
+    crate::protocol::github::GitHubPullRequestChecksParams,
+    crate::protocol::github::GitHubPullRequestChecksResult,
+    crate::protocol::github::GitHubPullRequestChecksStatus,
     crate::protocol::github::GitHubRepositoryResult,
     crate::protocol::github::GitHubLabel,
     crate::protocol::github::GitHubLabelsResult,

@@ -765,6 +765,26 @@ impl GitHub {
             )),
         }
     }
+    pub async fn pull_request_checks(
+        &self,
+        repository: &Repository,
+        number: u64,
+        head_commit: &str,
+    ) -> Result<PullRequestChecks> {
+        match self
+            .invoke(GitHubRequest::PullRequestChecks {
+                repository: repository.clone(),
+                number,
+                head_commit: head_commit.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::PullRequestChecks(status) => Ok(status),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
     pub async fn check_details(
         &self,
         repository: &Repository,

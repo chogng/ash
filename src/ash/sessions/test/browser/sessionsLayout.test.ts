@@ -870,7 +870,12 @@ suite('sessions browser component', () => {
 		await expect(inbox).toBeFocused();
 
 		await code.click();
-		await expect(inbox).toHaveAccessibleName('收件箱，2 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，2 个会话需要关注');
+		await sidebarToggle.click();
+		await expect(footer).toBeHidden();
+		await sidebarToggle.click();
+		await expect(inbox).toBeVisible();
+		await expect(inbox).toHaveAccessibleName('收件箱，2 个会话需要关注');
 		await expect(inbox.locator('.ash-sessions-inbox-dot')).toBeVisible();
 		const accounts = page.locator('.ash-sessions-sidebar-accounts button');
 		const accountBounds = (await accounts.boundingBox())!;
@@ -892,16 +897,16 @@ suite('sessions browser component', () => {
 		await page.keyboard.press('Shift+Tab');
 		await page.keyboard.press('Enter');
 		await expect(panel).toBeHidden();
-		await expect(inbox).toHaveAccessibleName('收件箱，2 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，2 个会话需要关注');
 
 		await inbox.press('Enter');
 		await unread.press('Enter');
-		await expect(inbox).toHaveAccessibleName('收件箱，1 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
 		await expect(page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
 		await chat.click();
 		await expect(inbox).toHaveAccessibleName('收件箱');
 		await code.click();
-		await expect(inbox).toHaveAccessibleName('收件箱，1 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
 
 		await inbox.click();
 		const previousWidth = (await footer.boundingBox())!.width;
@@ -912,6 +917,54 @@ suite('sessions browser component', () => {
 		await expect(panel).toBeHidden();
 	});
 
+	test('Inbox waits for a background PR required check before showing it as ready to merge', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&inboxMergeReady&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const inbox = page.getByRole('button', { name: /^收件箱/u });
+		await inbox.press('Enter');
+		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const ready = panel.getByRole('button', { name: 'Task from Host B 可合并' });
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.requiredCheckReads())).toBeGreaterThan(0);
+		await expect(panel).toContainText('没有需要关注的会话。');
+		await expect(ready).toHaveCount(0);
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.completeRequiredCheck());
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
+		await expect(ready).toBeVisible();
+		await page.keyboard.press('Tab');
+		await expect(ready).toBeFocused();
+		await ready.press('Enter');
+		await expect(panel).toBeHidden();
+		await expect(page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
+	});
+
+	test('Inbox shows and dismisses independent PR notifications in the existing sidebar popover', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&inboxPullRequestEvents&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const inbox = page.getByRole('button', { name: '收件箱，1 个会话需要关注' });
+		await expect(inbox).toBeVisible();
+		await inbox.press('Enter');
+		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const review = panel.getByRole('button', { name: 'Task from Host B 待处理的 Copilot 审查评论' });
+		const failure = panel.getByRole('button', { name: 'Task from Host B CI 检查失败' });
+		const merged = panel.getByRole('button', { name: 'Task from Host B 拉取请求已合并' });
+		await expect(failure).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(review).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(merged).toBeFocused();
+		await failure.press('Shift+F10');
+		await page.getByRole('menuitem', { name: '关闭通知', exact: true }).click();
+		await expect(failure).toHaveCount(0);
+		await expect(review).toBeVisible();
+		await expect(merged).toBeVisible();
+		await merged.press('Enter');
+		await expect(panel).toBeHidden();
+	});
+
 	test('Inbox marks a review reply read when its visible Bots conversation receives focus', async () => {
 		const { page } = browserTests;
 		await page.goto('/sessions.html?multiHost&sideThreads&inbox&botsInbox');
@@ -919,23 +972,95 @@ suite('sessions browser component', () => {
 		const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
 		await code.click();
 		const inbox = page.getByRole('button', { name: /^Inbox/ });
-		await expect(inbox).toHaveAccessibleName('Inbox, items needing attention: 2');
+		const panel = page.getByRole('dialog', { name: 'Inbox', exact: true });
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 2');
+		await inbox.press('Enter');
+		await expect(panel.getByRole('button')).toHaveCount(3);
+		await page.keyboard.press('Escape');
 
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Bots', exact: true }).click();
 		const bots = page.locator('.ash-bots-page');
 		await expect(bots.getByRole('heading', { name: 'Follow-up chat' })).toBeVisible();
 		await expect(bots.getByText('I reviewed the change.', { exact: true })).toBeVisible();
-		await expect(inbox).toHaveAccessibleName('Inbox, items needing attention: 2');
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 2');
 
 		const conversation = bots.getByRole('textbox');
 		await conversation.focus();
 		await expect(conversation).toBeFocused();
-		await expect(inbox).toHaveAccessibleName('Inbox, items needing attention: 1');
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 2');
 		await page.locator('.ash-bots-sidebar').getByRole('button', { name: 'Back', exact: true }).click();
 		await inbox.press('Enter');
-		const panel = page.getByRole('dialog', { name: 'Inbox', exact: true });
 		await expect(panel.getByRole('button', { name: 'Task from Host B Needs your input' })).toBeVisible();
 		await expect(panel.getByRole('button', { name: /Follow-up chat/ })).toHaveCount(0);
+		await panel.getByRole('button', { name: 'Task from Host A Unread reply' }).press('Enter');
+		await expect(panel).toBeHidden();
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 1');
+	});
+
+	test('Inbox sorts and dismisses notifications from the sidebar popover', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&inbox&inboxActions&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const inbox = page.getByRole('button', { name: /^收件箱/u });
+		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const menu = page.getByRole('menu');
+		await new QuickAccess(page).runCommand('sessions.inboxNotifications.show');
+		await expect(panel.getByRole('button').first()).toHaveAccessibleName('Task from Host B 等待你的输入');
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await expect(menu).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(inbox).toBeFocused();
+		await inbox.press('Shift+F10');
+		await menu.getByText('按最近活动排序', { exact: true }).click();
+		const unread = panel.getByRole('button', { name: 'Task from Host A 未读回复' });
+		await expect(panel.getByRole('button').first()).toHaveAccessibleName('Task from Host A 未读回复');
+		await unread.press('Shift+F10');
+		await menu.getByText('关闭通知', { exact: true }).click();
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
+		await expect(panel.getByRole('button')).toHaveCount(1);
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await menu.getByText('已关闭的通知', { exact: true }).click();
+		const history = page.getByRole('dialog', { name: '已关闭的通知', exact: true });
+		const item = history.getByRole('button', { name: 'Task from Host A 未读回复' });
+		await expect(item).toBeFocused();
+		await item.press('Enter');
+		await expect(history).toBeHidden();
+		await expect(page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
+	});
+
+	test('Inbox applies hold and done to all notifications from the same Session', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&sideThreads&inbox&botsInbox');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const inbox = page.getByRole('button', { name: /^Inbox/ });
+		const panel = page.getByRole('dialog', { name: 'Inbox', exact: true });
+		const menu = page.getByRole('menu');
+		const followUp = panel.getByRole('button', { name: 'Follow-up chat Unread reply' });
+		await inbox.press('Enter');
+		await expect(panel.getByRole('button')).toHaveCount(3);
+		await followUp.press('Shift+F10');
+		await menu.getByText('Put Session on Hold', { exact: true }).click();
+		await expect(panel.getByRole('button')).toHaveCount(1);
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 1');
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await menu.getByText('Sessions on Hold', { exact: true }).click();
+		const held = page.getByRole('dialog', { name: 'Sessions on Hold', exact: true });
+		await held.getByRole('button', { name: 'Task from Host A Unread reply' }).press('Shift+F10');
+		await menu.getByText('Resume Session', { exact: true }).click();
+		await expect(panel.getByRole('button')).toHaveCount(3);
+		await followUp.press('Shift+F10');
+		await menu.getByText('Mark Session Done', { exact: true }).click();
+		await expect(panel.getByRole('button')).toHaveCount(1);
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await menu.getByText('Done Sessions', { exact: true }).click();
+		const done = page.getByRole('dialog', { name: 'Done Sessions', exact: true });
+		await expect(done.getByRole('button', { name: 'Task from Host A Unread reply' })).toBeFocused();
 	});
 
 	test('Activity Bar uses fixed sizes across positions and preserves account ownership', async function () {

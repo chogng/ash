@@ -260,6 +260,14 @@ pub(crate) async fn dispatch(client: &GitHub, request: GitHubRequest) -> Result<
             .checks(&repository, &commit, page)
             .await
             .map(GitHubResponse::Checks),
+        GitHubRequest::PullRequestChecks {
+            repository,
+            number,
+            head_commit,
+        } => client
+            .pull_request_checks(&repository, number, &head_commit)
+            .await
+            .map(GitHubResponse::PullRequestChecks),
         GitHubRequest::CheckDetails {
             repository,
             number,

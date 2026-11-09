@@ -1256,7 +1256,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
 		services.registerInstance(IApprovalEnvironmentService, undefined);
 		services.registerInstance(ISessionsGitHubService, {
-			onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], initialize() { },
+			onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], initialize() { },
 			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { },
 		});
 		const identity = `untitled:${draft.untitledSessionId}`;
@@ -1656,7 +1656,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 		editorServices.registerInstance(ISessionsGitHubService, {
 			onDidChange: Event.None,
-			getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
+			getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
 			initialize() { },
 			attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 			detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },

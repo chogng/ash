@@ -421,6 +421,21 @@ test('GitHub retains error categories independently of product issue reporting',
 	}
 });
 
+test('GitHub reads required CI for the exact PR head on the shared connection', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const headCommit = 'a'.repeat(40);
+	const status = connected.api.github.readPullRequestChecks({ ...githubRepository, accountId: '42' }, 7, headCommit);
+	const request = transport.requests.at(-1)!;
+	assert.equal(request.method, 'github/pullRequest/checks');
+	assert.deepEqual({ ...(request.params as object), operationId: 'generated' }, {
+		accountId: '42', repository: githubRepository, number: 7, headCommit, operationId: 'generated',
+	});
+	transport.respondAt(-1, { status: 'failure', latestCheckAtUnixMs: 10_000 });
+	assert.deepEqual(await status, { status: 'failure', latestCheckAtUnixMs: 10_000 });
+});
+
 test('GitHub cancels its original operation and releases cancellation listeners', async () => {
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
