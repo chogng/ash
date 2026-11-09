@@ -1792,11 +1792,16 @@ suite('sessions browser component', () => {
 		const folders = source.getByRole('listitem');
 		const names = folders.locator('.ash-code-project-folder-name');
 		await expect(names).toHaveText(['first']);
+		await expect(folders.first()).toHaveCSS('border-bottom-width', '0px');
 		await expect(names.first()).toHaveAttribute('title', '/workspace/first');
 		await expect(name).toHaveAttribute('placeholder', 'first');
 		await expect(submit).toBeEnabled();
 		await add.press('Enter');
 		await expect(names).toHaveText(['first', 'second']);
+		const folderList = source.getByRole('list');
+		await expect(folders.first()).toHaveCSS('border-bottom-width', '1px');
+		await expect(folders.first()).toHaveCSS('border-bottom-color', await folderList.evaluate(list => getComputedStyle(list).borderBottomColor));
+		await expect(folders.last()).toHaveCSS('border-bottom-width', '0px');
 		await expect(name).toHaveAttribute('placeholder', 'first');
 		const folderIcon = folders.first().locator('[data-ash-icon-id="folder"]');
 		await expect(folderIcon).toBeVisible();
@@ -1820,6 +1825,7 @@ suite('sessions browser component', () => {
 		await removeFirst.press('Enter');
 		await expect(add).toBeFocused();
 		await expect(names).toHaveText(['second']);
+		await expect(folders.first()).toHaveCSS('border-bottom-width', '0px');
 		await expect(name).toHaveAttribute('placeholder', 'second');
 		const expectedName = chinese ? 'New Code project' : 'second';
 		if (chinese) await name.fill(expectedName);

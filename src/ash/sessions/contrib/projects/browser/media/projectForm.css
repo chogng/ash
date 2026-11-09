@@ -220,10 +220,14 @@
 	list-style: none;
 	max-block-size: 160px;
 	overflow: auto;
-	border-block-end: var(--ash-strokeThickness) solid
-		var(--ash-input-border, var(--ash-widget-border));
 	margin-block-end: var(--ash-spacing-size40);
 	padding-block-end: var(--ash-spacing-size40);
+}
+
+.ash-code-project-folder-list,
+.ash-code-project-folder-list > li:not(:last-child) {
+	border-block-end: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
 }
 
 .ash-code-project-folder-list > li {
