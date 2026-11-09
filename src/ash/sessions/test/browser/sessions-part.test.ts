@@ -479,14 +479,14 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	viewService.activateSelection(viewService.activeSelection!);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), firstTip);
 	const configuration = paneServices.get(IConfigurationService);
-	firstTip.querySelector('button')!.focus();
+	firstTip.querySelector<HTMLButtonElement>('button[aria-label="Dismiss tip"]')!.focus();
 	await configuration.updateValue(ChatConfiguration.TipsEnabled, false);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
 	assert.ok(retainedInput?.querySelector('.ash-chat-input-container')?.contains(dom.window.document.activeElement));
 	await configuration.updateValue(ChatConfiguration.TipsEnabled, true);
 	const restoredTip = part.domNode.querySelector('.ash-chat-input-tip');
 	assert.ok(restoredTip);
-	restoredTip.querySelector('button')!.click();
+	restoredTip.querySelector<HTMLButtonElement>('button[aria-label="Dismiss tip"]')!.click();
 	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
 	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);

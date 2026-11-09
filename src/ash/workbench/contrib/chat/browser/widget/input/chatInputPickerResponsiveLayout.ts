@@ -31,7 +31,7 @@ export class ChatInputPickerResponsiveLayout extends Disposable {
 		this.resizeObserver.unobserve(this.toolbar);
 		this.resizeObserver.observe(element);
 		// Labels and visibility can change while the footer retains the same width.
-		const observer = new MutationObserver(() => this.relayout.schedule());
+		const observer = new element.ownerDocument.defaultView!.MutationObserver(() => this.relayout.schedule());
 		observer.observe(element, { subtree: true, childList: true, characterData: true, attributeFilter: ['hidden'] });
 		this._register(toDisposable(() => observer.disconnect()));
 		this.relayout.schedule();

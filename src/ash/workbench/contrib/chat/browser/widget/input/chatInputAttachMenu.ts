@@ -30,6 +30,10 @@ export interface ChatInputAttachMenuOptions {
 	readonly onSearchAttachments?: () => void;
 	readonly onAttachSkill?: (skill: SkillReference) => void;
 	readonly getSkills?: () => readonly SkillSelectorDefinition[];
+	/** Product-owned entries for this composer, alongside its attachment and Skill actions. */
+	readonly host?: {
+		readonly getWorkspaceAction?: () => IAction | undefined;
+	};
 	readonly onSelectProject?: (projectId: string) => void;
 	readonly focusInput?: () => void;
 	readonly onClose?: () => void;
@@ -184,8 +188,7 @@ export class ChatInputAttachMenu extends Disposable {
 	}
 
 	private buildMenuItems(): readonly MenuItemDef[] {
-		return [
-			// 1. Upload or add files
+		const attachments: MenuItemDef[] = [
 			{
 				id: 'upload',
 				label: localize('chat.attach.uploadOrAddFiles', 'Upload or add files'),
@@ -198,6 +201,30 @@ export class ChatInputAttachMenu extends Disposable {
 				icon: Lxicon.search,
 				run: this.options.onSearchAttachments,
 			}] : []),
+		];
+		const host = this.options.host;
+		const skillsItem: MenuItemDef = {
+			id: 'skills',
+			label: localize('chat.attach.skills', 'Skills'),
+			icon: Lxicon.skill,
+			getSubmenuItems: () => this.getSkillsSubmenuItems(!host),
+		};
+		if (host) {
+			const workspace = host.getWorkspaceAction?.();
+			if (workspace?.enabled) {
+				attachments.push({
+					id: workspace.id, label: workspace.label, icon: workspace.icon,
+					run: () => void workspace.run(),
+				});
+			}
+			const skills = this.options.getSkills?.() ?? [];
+			if (skills.length && this.options.onAttachSkill) {
+				attachments.push(skillsItem);
+			}
+			return attachments;
+		}
+		return [
+			...attachments,
 			// 2. Add to project
 			{
 				id: 'project',
@@ -208,12 +235,7 @@ export class ChatInputAttachMenu extends Disposable {
 			// Divider
 			{ id: 'divider', label: '' },
 			// 3. Skills
-			{
-				id: 'skills',
-				label: localize('chat.attach.skills', 'Skills'),
-				icon: Lxicon.skill,
-				getSubmenuItems: () => this.getSkillsSubmenuItems(),
-			},
+			skillsItem,
 			// 4. Add connector
 			{
 				id: 'connectors',
@@ -318,7 +340,7 @@ export class ChatInputAttachMenu extends Disposable {
 		return items;
 	}
 
-	private getSkillsSubmenuItems(): readonly SubmenuItemDef[] {
+	private getSkillsSubmenuItems(includeBrowse: boolean): readonly SubmenuItemDef[] {
 		const items: SubmenuItemDef[] = [];
 		const skills = this.options.getSkills?.() ?? [];
 
@@ -335,6 +357,7 @@ export class ChatInputAttachMenu extends Disposable {
 			});
 		}
 
+		if (!includeBrowse) return items;
 		if (items.length > 0) {
 			items.push({ id: 'skills-sep', label: '', isSeparator: true });
 		}

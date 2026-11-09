@@ -124,7 +124,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 							throw error;
 						}
 					},
-				}, model, chatPresentation);
+				}, model, chatPresentation, () => this.focusWorkspacePicker());
 				return composer.input;
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),

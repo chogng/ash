@@ -1,0 +1,39 @@
+.ash-chat-prompt-starters {
+	margin-block-start: var(--ash-spacing-size160);
+}
+
+.ash-chat-prompt-starters[hidden],
+.ash-chat-prompt-starter-categories[hidden] {
+	display: none;
+}
+
+.ash-chat-prompt-starter-categories {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-prompt-starter-panel {
+	display: flex;
+	flex-direction: column;
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-widgetBackground);
+}
+
+.ash-chat-prompt-starter-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-inline-start: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-prompt-starter-panel > .ash-button {
+	justify-content: flex-start;
+	min-width: 0;
+}

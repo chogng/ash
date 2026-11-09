@@ -2,7 +2,11 @@
 	display: flex;
 	align-items: flex-start;
 	gap: var(--ash-spacing-size80);
-	padding-inline: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-widgetBackground);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 }
@@ -17,10 +21,9 @@
 	margin: 0;
 }
 
-.ash-chat-input-tip > .ash-button {
+.ash-chat-input-tip-actions {
+	display: flex;
 	flex: 0 0 auto;
-	width: 24px;
-	height: 24px;
 }
 
 .ash-chat-input-tip:focus-visible {

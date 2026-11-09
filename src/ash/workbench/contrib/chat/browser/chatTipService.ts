@@ -1,7 +1,7 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
+import { TIP_CATALOG } from './chatTipCatalog.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { observableMemento, type ObservableMemento } from '../../../../platform/observable/common/observableMemento.js';
@@ -14,7 +14,7 @@ export interface IChatTip {
 export interface IChatTipService {
 	readonly onDidChangeTips: Event<void>;
 	registerTipProvider(provider: IChatTipProvider): IDisposable;
-	getWelcomeTip(): IChatTip | undefined;
+	getWelcomeTip(currentId?: string, offset?: -1 | 0 | 1): IChatTip | undefined;
 	dismissTip(id: string): void;
 }
 
@@ -26,7 +26,7 @@ export interface IChatTipProvider {
 
 export const IChatTipService = createServiceIdentifier<IChatTipService>('chatTipService');
 const DismissedTipStorageKey = 'chat.dismissedWelcomeTip';
-const AttachmentTipId = 'attach-files';
+const DismissedCatalogId = 'code-tip-catalog';
 
 /** Owns welcome-tip eligibility and the user's profile-scoped dismissal. */
 export class ChatTipService extends Disposable implements IChatTipService {
@@ -58,23 +58,26 @@ export class ChatTipService extends Disposable implements IChatTipService {
 		return registration;
 	}
 
-	public getWelcomeTip(): IChatTip | undefined {
+	public getWelcomeTip(currentId?: string, offset: -1 | 0 | 1 = 0): IChatTip | undefined {
+		const dismissed = this.dismissedTip.get();
+		if (dismissed === DismissedCatalogId) return undefined;
+		const tips: IChatTip[] = [];
 		for (const provider of this.providers) {
 			const tip = provider.provideTip();
-			if (tip) return tip;
+			if (tip) tips.push(tip);
 		}
-		if (this.dismissedTip.get() === AttachmentTipId) return undefined;
-		return {
-			id: AttachmentTipId,
-			content: new MarkdownString(localize('chat.tip.attachFiles', 'Tip: Attach text files or images with the + button. You can also paste or drop images into your message.')),
-		};
+		for (const tip of TIP_CATALOG) {
+			// Older profiles stored the ID of the single built-in attachment tip.
+			if (tip.id !== dismissed) tips.push({ id: tip.id, content: new MarkdownString(tip.message()) });
+		}
+		if (tips.length === 0) return undefined;
+		const currentIndex = tips.findIndex(tip => tip.id === currentId);
+		return currentIndex < 0 ? tips[0] : tips[(currentIndex + offset + tips.length) % tips.length];
 	}
 
 	public dismissTip(id: string): void {
-		if (id === AttachmentTipId) {
-			this.dismissedTip.set(AttachmentTipId);
-			return;
-		}
+		this.dismissedTip.set(DismissedCatalogId);
+		if (TIP_CATALOG.some(tip => tip.id === id)) return;
 		for (const provider of this.providers) provider.dismissTip(id);
 	}
 }

@@ -12,20 +12,37 @@ import type { IChatTip } from '../../chatTipService.js';
 /** Renders one tip; the presenter owns visibility and the service owns dismissal. */
 export class ChatTipContentPart extends DomWidget {
 	public readonly domNode: HTMLElement;
+	private readonly previous: Button | undefined;
+	private readonly next: Button | undefined;
 
 	public get element(): HTMLElement {
 		return this.domNode;
 	}
 
-	constructor(document: Document, tip: IChatTip, dismiss: () => void, @IMarkdownRendererService markdownRenderer: IMarkdownRendererService) {
+	constructor(document: Document, tip: IChatTip, dismiss: () => void, navigate: ((direction: -1 | 1) => void) | undefined, @IMarkdownRendererService markdownRenderer: IMarkdownRendererService) {
 		super();
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-chat-input-tip';
 		this.domNode.setAttribute('role', 'note');
 		const content = this._register(markdownRenderer.render(tip.content, { ownerDocument: document }));
 		this.domNode.append(content.element);
-		this._register(new Button(this.domNode, {
+		const actions = h(document, 'div', { className: 'ash-chat-input-tip-actions' });
+		this.domNode.append(actions);
+		if (navigate) {
+			const previous = localize('chat.tip.previous', 'Previous tip');
+			const next = localize('chat.tip.next', 'Next tip');
+			this.previous = this._register(new Button(actions, {
+				...defaultButtonStyles, size: 'small', label: previous, title: previous, icon: Lxicon.chevronLeft, iconOnly: true,
+				onClick: () => navigate(-1),
+			}));
+			this.next = this._register(new Button(actions, {
+				...defaultButtonStyles, size: 'small', label: next, title: next, icon: Lxicon.chevronRight, iconOnly: true,
+				onClick: () => navigate(1),
+			}));
+		}
+		this._register(new Button(actions, {
 			...defaultButtonStyles,
+			size: 'small',
 			label: localize('chat.tip.dismiss', 'Dismiss tip'),
 			ariaLabel: localize('chat.tip.dismiss', 'Dismiss tip'),
 			icon: Lxicon.close,
@@ -33,5 +50,9 @@ export class ChatTipContentPart extends DomWidget {
 			onClick: dismiss,
 		}));
 		this._register(toDisposable(() => this.domNode.remove()));
+	}
+
+	focusNavigation(direction: -1 | 1): void {
+		(direction === -1 ? this.previous : this.next)?.domNode.focus();
 	}
 }

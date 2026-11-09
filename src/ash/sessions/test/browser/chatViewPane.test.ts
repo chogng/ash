@@ -1266,7 +1266,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
 		};
 		const composerResources = resources.add(new DisposableStore());
-		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model, constObservable(false)));
+		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model, constObservable(false), undefined));
 		const input = composerResources.add(composer.input);
 		input.render(model.inputState);
 		return { input, model, storage, notices, identity, services, delegate, disposeInput: () => composerResources.dispose(), [Symbol.dispose]() { resources.dispose(); } };
@@ -1302,7 +1302,7 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 	using composer = surface === 'chat'
-		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false))
+		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false), undefined)
 		: undefined;
 	using input = composer?.input ?? fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
 	input.render(fixture.model.inputState);

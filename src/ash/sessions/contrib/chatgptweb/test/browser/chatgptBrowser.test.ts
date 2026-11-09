@@ -23,6 +23,50 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe(text);
 	}
 
+	test('Chat starters preview in an empty draft and insert only when chosen', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const categories = page.getByRole('group', { name: '开场建议', exact: true });
+		const write = categories.getByRole('button', { name: '写作', exact: true });
+		const email = page.getByRole('button', { name: '起草邮件', exact: true });
+		const chat = page.locator('.ash-chatgpt-widget > .ash-chat');
+		const welcome = chat.locator('.ash-chat-welcome h2');
+		const composer = chat.locator('.ash-sessions-chat-input-card');
+		const suggestions = page.getByRole('group', { name: '写作', exact: true });
+		for (const viewport of [{ width: 1200, height: 800 }, { width: 760, height: 480 }]) {
+			await page.setViewportSize(viewport);
+			await expect(welcome).toBeVisible();
+			await expect(write).toBeVisible();
+			const surface = (await chat.boundingBox())!;
+			const title = (await welcome.boundingBox())!;
+			const before = (await composer.boundingBox())!;
+			expect(title.y).toBeLessThan(surface.y + surface.height * 0.4);
+			expect(before.y).toBeLessThan(surface.y + surface.height * 0.55);
+
+			await write.press('Enter');
+			await expect(suggestions).toBeVisible();
+			const after = (await composer.boundingBox())!;
+			const panel = (await suggestions.boundingBox())!;
+			expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+			expect(panel.y).toBeGreaterThan(after.y + after.height);
+			expect(panel.y + panel.height).toBeLessThanOrEqual(surface.y + surface.height);
+			await email.press('Escape');
+		}
+		await write.press('Enter');
+		await expect(email).toBeFocused();
+		const prompt = '帮我起草一封邮件。先问我收件人是谁，以及我希望这封邮件达到什么目的。';
+		await expect(page.getByText(prompt, { exact: true })).toBeVisible();
+		await expectDraft(page, '');
+		await email.press('Escape');
+		await expect(write).toBeFocused();
+		await write.press('Enter');
+		await email.press('Enter');
+		await expectDraft(page, prompt);
+		await expect(page.locator('.ash-chat-prompt-starters')).toBeHidden();
+		await expect(page.getByRole('textbox', { name: '询问 ChatGPT', exact: true })).toBeFocused();
+	});
+
 	test('a project chat shows its project in the title bar only while visible', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
@@ -79,7 +123,11 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		const picker = page.locator('.ash-chatgpt-widget .ash-chat-input-footer > .ash-chat-input-workspace-slot button');
 		await expect(picker).toHaveAccessibleName('项目或文件夹');
 		await expect(picker).toBeEnabled();
-		await picker.press('Enter');
+		await page.locator('.ash-chatgpt-widget [data-action-id="ash.chat.input.attach"] button').press('Enter');
+		const addMenu = page.getByRole('menu', { name: '添加内容或上下文', exact: true });
+		await expect(addMenu.getByRole('menuitem')).toHaveCount(2);
+		await expect(addMenu.getByText('上传或添加文件', { exact: true })).toBeVisible();
+		await addMenu.getByRole('menuitem', { name: '项目或文件夹', exact: true }).press('Enter');
 		await page.getByText('选择文件夹…', { exact: true }).click();
 		await expect(picker).toHaveAccessibleName('项目或文件夹：fixture-folder');
 		await expect(picker).toBeFocused();

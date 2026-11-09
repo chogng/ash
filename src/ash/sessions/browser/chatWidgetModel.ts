@@ -218,15 +218,15 @@ export class ChatWidgetModel extends Disposable {
 		const agentSession = forkSource ? this.sessionService.sessions.find(session => session.sessionId === forkSource.sessionId) : active?.session;
 		const agentThreadId = forkSource?.threadId ?? active?.threadId;
 		const agentTree = agentSession?.agentTree;
-		const blockedMessage = this.modelUnavailableMessage ?? this.workspaceRequiredMessage;
+		const modelUnavailableMessage = this.modelUnavailableMessage;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
-			inputBlocked: blockedMessage !== undefined || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
-			status: blockedMessage,
+			inputBlocked: modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			status: modelUnavailableMessage,
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
@@ -253,16 +253,14 @@ export class ChatWidgetModel extends Disposable {
 		};
 	}
 
-	private get workspaceRequiredMessage(): string | undefined {
-		if (this.selection.kind === 'session' || this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return undefined;
+	private get requiresWorkspaceSelection(): boolean {
+		if (this.selection.kind === 'session' || this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return false;
 		const { forkSource } = this.selection.session;
 		if (forkSource) {
 			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === forkSource.sessionId);
-			if (session && chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === forkSource.threadId))) return undefined;
-		} else if (hasSelectedCodeWorkspace(this.selection.session)) {
-			return undefined;
+			return !session || !chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === forkSource.threadId));
 		}
-		return localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.');
+		return !hasSelectedCodeWorkspace(this.selection.session);
 	}
 
 	get error(): string | undefined {
@@ -1679,8 +1677,9 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private assertWorkspaceSelected(): void {
-		const message = this.workspaceRequiredMessage;
-		if (message) throw new Error(message);
+		if (this.requiresWorkspaceSelection) {
+			throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.'));
+		}
 	}
 
 	/** Keep this composer's choices when organization gives its draft a durable identity. */

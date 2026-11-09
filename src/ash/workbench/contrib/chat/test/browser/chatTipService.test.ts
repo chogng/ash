@@ -16,17 +16,22 @@ test('welcome tip dismissal persists once and follows other profile writers unti
 		let dismissals = 0;
 		using listener = tips.onDidChangeTips(() => dismissals++);
 		assert.equal(tips.getWelcomeTip()?.id, 'attach-files');
+		assert.equal(tips.getWelcomeTip('attach-files', 1)?.id, 'plan');
+		assert.equal(tips.getWelcomeTip('attach-files', -1)?.id, 'new-worktree');
 		tips.dismissTip('attach-files');
 		tips.dismissTip('attach-files');
-		assert.deepEqual({ tip: tips.getWelcomeTip(), dismissals, stored: storage.get('chat.dismissedWelcomeTip', StorageScope.PROFILE) }, { tip: undefined, dismissals: 1, stored: 'attach-files' });
+		assert.deepEqual({ tip: tips.getWelcomeTip(), dismissals, stored: storage.get('chat.dismissedWelcomeTip', StorageScope.PROFILE) }, { tip: undefined, dismissals: 1, stored: 'code-tip-catalog' });
 		storage.store('chat.dismissedWelcomeTip', 'other', StorageScope.WORKSPACE, StorageTarget.USER);
 		assert.equal(dismissals, 1);
 		storage.remove('chat.dismissedWelcomeTip', StorageScope.PROFILE);
 		assert.equal(tips.getWelcomeTip()?.id, 'attach-files');
 		assert.equal(dismissals, 2);
-		tips.dispose();
 		storage.store('chat.dismissedWelcomeTip', 'attach-files', StorageScope.PROFILE, StorageTarget.USER);
-		assert.equal(dismissals, 2);
+		assert.equal(tips.getWelcomeTip()?.id, 'plan');
+		assert.equal(dismissals, 3);
+		tips.dispose();
+		storage.store('chat.dismissedWelcomeTip', 'code-tip-catalog', StorageScope.PROFILE, StorageTarget.USER);
+		assert.equal(dismissals, 3);
 	} finally {
 		dom.window.close();
 	}

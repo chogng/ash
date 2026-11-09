@@ -90,6 +90,10 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 		}));
 	}
 
+	getAttachMenuAction(): IAction | undefined {
+		return this.element.closest('[hidden]') ? undefined : this.action;
+	}
+
 	private getActions(): readonly IAction[] {
 		const state = this.chat.state.get();
 		if (!canChoose(state)) return [];

@@ -87,7 +87,7 @@ import type { ChatAgent } from '../../../../../services/chat/common/chatService.
 import { isMacintosh } from '../../../../../../base/common/platform.js';
 import { pickFiles } from '../../../../../../base/browser/fileAccess.js';
 import { AttachContextAction } from '../../actions/chatContextActions.js';
-import { ChatInputAttachMenu } from './chatInputAttachMenu.js';
+import { ChatInputAttachMenu, type ChatInputAttachMenuOptions } from './chatInputAttachMenu.js';
 import { OpenWorkspacePickerAction } from '../../actions/chatExecuteActions.js';
 import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
@@ -204,6 +204,7 @@ export interface ChatInputPartOptions {
 	readonly draftStorage?: 'input' | 'host';
 	/** Allows a conversation host to store GitHub references beyond the current draft. */
 	readonly attachGitHubReference?: (kind: 'issue' | 'pullRequest', signal: AbortSignal) => Promise<boolean>;
+	readonly attachMenuHost?: ChatInputAttachMenuOptions['host'];
 }
 
 /** The product supplies its existing workspace draft store; the input owns snapshots and async writes. */
@@ -1306,6 +1307,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			},
 			onAttachSkill: (skill: SkillReference) => this.attachSkill(skill),
 			getSkills: () => this.state.skillSelectors,
+			host: this.options.attachMenuHost,
 			focusInput: () => this.focus(),
 		});
 		this.attachMenu.value.show();

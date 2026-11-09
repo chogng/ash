@@ -1,3 +1,4 @@
+import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { equals } from '../../../../../../base/common/objects.js';
 import { IChatTipService, type IChatTip } from '../../chatTipService.js';
@@ -18,6 +19,8 @@ export class ChatInputTipPresenter extends Disposable {
 	private readonly part = this._register(new MutableDisposable<DisposableStore>());
 	private currentPart: ChatTipContentPart | undefined;
 	private currentTip: IChatTip | undefined;
+	private selectedTipId: string | undefined;
+	private canNavigate = false;
 	private readonly claim = this._register(new MutableDisposable());
 	private leading = false;
 
@@ -41,14 +44,16 @@ export class ChatInputTipPresenter extends Disposable {
 
 	public update(): void {
 		const eligible = this.options.isEligible();
-		const tip = eligible ? this.tips.getWelcomeTip() : undefined;
+		const tip = eligible ? this.tips.getWelcomeTip(this.selectedTipId) : undefined;
 		if (!tip) {
 			if (eligible && this.currentPart?.domNode.contains(this.options.container.ownerDocument.activeElement)) this.options.focusInput();
+			this.selectedTipId = undefined;
 			this.claim.clear();
 			this.part.clear();
 			return;
 		}
-		if (this.currentTip?.id === tip.id && equals({ ...this.currentTip.content }, { ...tip.content })) return;
+		const canNavigate = this.tips.getWelcomeTip(tip.id, 1)?.id !== tip.id;
+		if (this.currentTip?.id === tip.id && this.canNavigate === canNavigate && equals({ ...this.currentTip.content }, { ...tip.content })) return;
 		if (!this.claim.value) {
 			this.claim.value = this.noticeHost.occupy(ChatInputNoticeLane.Tip, {
 				focusTarget: {
@@ -63,14 +68,29 @@ export class ChatInputTipPresenter extends Disposable {
 				},
 			});
 		}
+		this.renderTip(tip, canNavigate);
+	}
+
+	private renderTip(tip: IChatTip, canNavigate: boolean): void {
 		const hadFocus = this.currentPart?.domNode.contains(this.options.container.ownerDocument.activeElement);
 		const scope = new DisposableStore();
 		this.part.value = scope;
 		this.currentTip = tip;
+		this.canNavigate = canNavigate;
+		const navigation = canNavigate ? (direction: -1 | 1) => {
+			const next = this.tips.getWelcomeTip(tip.id, direction);
+			if (next) {
+				this.selectedTipId = next.id;
+				this.renderTip(next, canNavigate);
+				this.currentPart?.focusNavigation(direction);
+				status(this.currentPart?.domNode.querySelector('.ash-markdown')?.textContent ?? '');
+			}
+		} : undefined;
 		const parts = ChatTipContentPart.instantiateObservable(this.instantiation, scope, this.options.container.ownerDocument, tip, () => {
 			this.options.focusInput();
+			this.selectedTipId = undefined;
 			this.tips.dismissTip(tip.id);
-		});
+		}, navigation);
 		const render = (part: ChatTipContentPart): void => {
 			const previous = this.currentPart;
 			const replacingFocusedPart = previous?.domNode.contains(this.options.container.ownerDocument.activeElement);
