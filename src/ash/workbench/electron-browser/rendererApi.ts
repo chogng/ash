@@ -87,7 +87,8 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 	readonly workspaceStartupScheduled: Promise<void>;
 	/** Settles after the first directory binding, including a declined startup prompt. */
 	readonly workspaceDirectoriesReady: Promise<void>;
-	readonly startWorkspaceDirectories: () => void;
+	/** Releases the trust prompt once the window is ready. The callback handles an explicit startup decline. */
+	readonly startWorkspaceDirectories: (onTrustDeclined?: () => Promise<void>) => void;
 	readonly reloadWorkspaceDirectories: () => Promise<void>;
 }
 
@@ -155,7 +156,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const client = agentHost.client;
 		let backend: IWorkbenchHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
-		const workspaceWindowReady = new DeferredPromise<void>();
+		const workspaceWindowReady = new DeferredPromise<(() => Promise<void>) | undefined>();
 		const workspaceStartupScheduled = new DeferredPromise<void>();
 		const finishWorkspaceScheduling = (): void => {
 			if (workspaceStartupScheduled.isSettled) return;
@@ -163,7 +164,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			void workspaceStartupScheduled.complete();
 		};
 		resources.add(toDisposable(() => {
-			void workspaceWindowReady.complete();
+			void workspaceWindowReady.complete(undefined);
 			void workspaceStartupScheduled.complete();
 		}));
 		let workspaceDirectoriesReady = Promise.resolve();
@@ -186,7 +187,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			});
 			return attempt;
 		};
-		const restoreWorkspace = (retry = false, force = false): Promise<void> => {
+		const restoreWorkspace = ({ retry = false, force = false, startup = false } = {}): Promise<void> => {
 			// Terminals and reconnect listeners share one binding attempt per generation.
 			if (force || workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
 				let remoteHostLabel: string | undefined;
@@ -201,7 +202,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					async requestDirectoryPermissions(request, signal) {
 						finishWorkspaceScheduling();
 						// Only the prompt needs the window. Saved grants can bind during startup.
-						await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
+						const onStartupTrustDeclined = await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
 						if (resources.isDisposed) throw new CancellationError();
 						const setNeedsTrust = (value: boolean): void => {
 							if (workspaceInitialization !== attempt || attempt.generation !== client.generation || attempt.needsTrust === value) return;
@@ -213,9 +214,10 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						try {
 							const choice = await workspaceTrust.requestDirectoryPermissions(request, signal);
 							declined = choice === 'cancel' && !signal?.aborted;
+							if (startup && declined && workspaceInitialization === attempt) await onStartupTrustDeclined?.();
 							return choice;
 						} finally {
-							// An explicit decline leaves the workspace available to authorize later.
+							// A declined workspace stays available for retry until its context changes.
 							if (!declined) setNeedsTrust(false);
 						}
 					},
@@ -268,7 +270,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					// A ready carrier needs only its failed directory binding retried.
 					const bindingPending = workspaceInitialization?.generation === client.generation && workspaceInitialization.state !== 'ready';
 					if (connection.recovery.status !== 'idle' || !bindingPending) await connection.recovery.reconnect();
-					await restoreWorkspace(true);
+					await restoreWorkspace({ retry: true });
 				} finally {
 					if (permissions) { permissionRecoveries--; workspaceChanges.fire(); }
 				}
@@ -308,7 +310,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			resources.add(toDisposable(() => replacement.dispose()));
 			// Publish the pending binding before Workbench services read connection recovery state.
 			// The window releases the prompt after its shell and theme are ready.
-			workspaceDirectoriesReady = restoreWorkspace().catch(error => {
+			workspaceDirectoriesReady = restoreWorkspace({ startup: true }).catch(error => {
 				if (!isCancellationError(error)) throw error;
 			});
 			void workspaceDirectoriesReady.catch(() => undefined);
@@ -378,8 +380,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			workspace: workspaceApi,
 			workspaceStartupScheduled: workspaceStartupScheduled.p,
 			workspaceDirectoriesReady,
-			startWorkspaceDirectories: () => { void workspaceWindowReady.complete(); },
-			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace(false, true); },
+			startWorkspaceDirectories: onTrustDeclined => { void workspaceWindowReady.complete(onTrustDeclined); },
+			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace({ force: true }); },
 			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};
 	} catch (error) {

@@ -48,7 +48,7 @@ import { mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
-import { isCancellationError } from '../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lazy } from '../../base/common/lazy.js';
 import { assertDefined } from '../../base/common/types.js';
@@ -98,7 +98,7 @@ import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { DialogMainService, IDialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
-import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
+import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID, ScreenshotCommandId, ScreenshotShortcutId } from '../../workbench/contrib/chat/common/constants.js';
@@ -2244,6 +2244,24 @@ export class AshApplication extends Disposable {
 							invoke: () => restoreEntry,
 						},
 						{
+							channel: AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL,
+							validate: (value: unknown) => {
+								if (typeof value !== 'string' || !value || value.length > 32768) throw new TypeError('Invalid startup workspace identity');
+								return value;
+							},
+							invoke: (workspaceId: unknown) => {
+								const current = session.workspaceContext.getWorkspace();
+								if (current.id !== workspaceId || session.workspaceContext.getResolvedWorkspace().folders.length === 0) return;
+								const remoteAuthority = getWorkspaceRemoteAuthority(current);
+								session.workspaceContext.updateWorkspace({ ...createEmptyWorkspaceIdentifier(), ...(remoteAuthority ? { remoteAuthority } : {}) });
+							},
+						},
+						{
+							channel: AGENTS_WINDOW_READY_CHANNEL,
+							validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Agents readiness takes no arguments'); return undefined; },
+							invoke: () => this.windowsMainService.getWindowById(window.id)?.setReady(),
+						},
+						{
 							channel: AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,
 							validate: validateAgentsWindowHandoffTake,
 							invoke: () => this.windowsMainService.takeManagedWindowHandoff(AGENTS_WINDOW_KEY),
@@ -2295,24 +2313,42 @@ export class AshApplication extends Disposable {
 				this.windowSessionStateHandler.windowClosed({ kind: 'sessions', workspace: closedWorkspace });
 			},
 		);
-		await this.selectSessionsWorkspace(session, workspace, resolvedWorkspace);
-		if (!wasOpen) {
+		if (wasOpen) {
+			if (!await this.selectSessionsWorkspace(session, workspace, resolvedWorkspace)) {
+				if (handoff) throw new CancellationError();
+				return;
+			}
+		} else {
 			this.hasOpenedSessionsWindow = true;
 			this.windowSessionStateHandler.windowOpened();
 		}
 		if (handoff) {
-			const completed = this.windowsMainService.enqueueManagedWindowHandoff(AGENTS_WINDOW_KEY, handoff);
 			const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 			if (!window) throw new Error('Agents Window is unavailable for handoff');
+			if (!wasOpen && this.appServerStartupMode !== 'disabled') {
+				await this.windowsMainService.getWindowById(window.id)!.ready();
+				if (session.workspaceContext.getWorkspace().id !== workspace.id) throw new CancellationError();
+			}
+			const completed = this.windowsMainService.enqueueManagedWindowHandoff(AGENTS_WINDOW_KEY, handoff);
 			this.windowsMainService.getWindowById(window.id)?.send(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL);
 			await completed;
 		}
 	}
 
-	private async selectSessionsWorkspace(session: SessionsWindowRecord, workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace): Promise<void> {
-		if (session.workspaceContext.getWorkspace().id !== workspace.id) {
-			session.workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
+	private async selectSessionsWorkspace(session: SessionsWindowRecord, workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace): Promise<boolean> {
+		const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
+		if (!window) return false;
+		const host = this.windowsMainService.getWindowById(window.id)!;
+		if (this.appServerStartupMode !== 'disabled') await host.ready();
+		const current = session.workspaceContext.getWorkspace();
+		if (current.id === workspace.id) return true;
+		if (this.appServerStartupMode !== 'disabled' && resolvedWorkspace.folders.length > 0) {
+			const channel = this.mainProcessIpcServer.getChannel(AGENTS_WINDOW_WORKSPACE_CHANNEL, client => client.ctx === `window:${window.id}`);
+			if (await channel.call('authorize', serializeWorkspace(resolvedWorkspace)) !== true) return false;
+			if (!host.isReady || session.workspaceContext.getWorkspace() !== current) return false;
 		}
+		session.workspaceContext.updateWorkspace(workspace, resolvedWorkspace);
+		return true;
 	}
 
 	private resolveRendererEntry(kind: 'workbench' | 'sessions' | 'remoteRuntimeInstall' | 'imageView'): RendererEntry {
