@@ -87,8 +87,8 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 	readonly workspaceStartupScheduled: Promise<void>;
 	/** Settles after the first directory binding, including a declined startup prompt. */
 	readonly workspaceDirectoriesReady: Promise<void>;
-	/** Releases the trust prompt once the window is ready. The callback handles an explicit startup decline. */
-	readonly startWorkspaceDirectories: (onTrustDeclined?: () => Promise<void>) => void;
+	/** Releases any startup authorization decision once the window is ready. */
+	readonly startWorkspaceDirectories: (options?: WorkspaceStartupOptions) => void;
 	readonly reloadWorkspaceDirectories: () => Promise<void>;
 }
 
@@ -117,6 +117,11 @@ export class ElectronRendererLocalApi extends Disposable {
 		]);
 		void this.paths.catch(() => undefined);
 	}
+}
+
+interface WorkspaceStartupOptions {
+	readonly discardUntrustedWorkspace?: () => Promise<void>;
+	readonly onTrustDeclined?: () => Promise<void>;
 }
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
@@ -156,7 +161,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const client = agentHost.client;
 		let backend: IWorkbenchHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
-		const workspaceWindowReady = new DeferredPromise<(() => Promise<void>) | undefined>();
+		const workspaceWindowReady = new DeferredPromise<WorkspaceStartupOptions | undefined>();
 		const workspaceStartupScheduled = new DeferredPromise<void>();
 		const finishWorkspaceScheduling = (): void => {
 			if (workspaceStartupScheduled.isSettled) return;
@@ -202,7 +207,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					async requestDirectoryPermissions(request, signal) {
 						finishWorkspaceScheduling();
 						// Only the prompt needs the window. Saved grants can bind during startup.
-						const onStartupTrustDeclined = await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
+						const startupOptions = await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
 						if (resources.isDisposed) throw new CancellationError();
 						const setNeedsTrust = (value: boolean): void => {
 							if (workspaceInitialization !== attempt || attempt.generation !== client.generation || attempt.needsTrust === value) return;
@@ -214,7 +219,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						try {
 							const choice = await workspaceTrust.requestDirectoryPermissions(request, signal);
 							declined = choice === 'cancel' && !signal?.aborted;
-							if (startup && declined && workspaceInitialization === attempt) await onStartupTrustDeclined?.();
+							if (startup && declined && workspaceInitialization === attempt) await startupOptions?.onTrustDeclined?.();
 							return choice;
 						} finally {
 							// A declined workspace stays available for retry until its context changes.
@@ -222,7 +227,18 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						}
 					},
 				};
-				const attempt = trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel, onBindingQueued: finishWorkspaceScheduling }));
+				const attempt = trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, {
+					remoteHostLabel,
+					onBindingQueued: finishWorkspaceScheduling,
+					discardUntrustedWorkspace: startup ? async signal => {
+						finishWorkspaceScheduling();
+						const options = await raceCancellationError(workspaceWindowReady.p, signal);
+						if (resources.isDisposed || workspaceInitialization !== attempt) throw new CancellationError();
+						if (!options?.discardUntrustedWorkspace) return false;
+						await options.discardUntrustedWorkspace();
+						return true;
+					} : undefined,
+				}));
 				return attempt.promise;
 			}
 			return workspaceInitialization.promise;
@@ -380,7 +396,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			workspace: workspaceApi,
 			workspaceStartupScheduled: workspaceStartupScheduled.p,
 			workspaceDirectoriesReady,
-			startWorkspaceDirectories: onTrustDeclined => { void workspaceWindowReady.complete(onTrustDeclined); },
+			startWorkspaceDirectories: options => { void workspaceWindowReady.complete(options); },
 			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace({ force: true }); },
 			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};

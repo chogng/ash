@@ -43,7 +43,7 @@ import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
 import { getSessionsTitlebarBackground } from '../browser/parts/titlebarPart.js';
 import { registerTitleService } from '../services/title/electron-browser/titleService.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
-import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
+import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_STARTUP_INTENT_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
@@ -128,12 +128,15 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
 	let restoreEntry: boolean;
+	let promptForWorkspaceTrust: boolean;
 	try {
 		const windowId = await invoke<unknown>('ash:ipc:window-id');
 		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
-		const startupIntent = await invoke<unknown>(AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL);
-		if (typeof startupIntent !== 'boolean') { throw new TypeError('Invalid Agents startup intent'); }
-		restoreEntry = startupIntent;
+		const startupIntent = await invoke<{ restoreEntry?: unknown; promptForWorkspaceTrust?: unknown; } | undefined>(AGENTS_WINDOW_STARTUP_INTENT_CHANNEL);
+		if (typeof startupIntent?.restoreEntry !== 'boolean' || typeof startupIntent.promptForWorkspaceTrust !== 'boolean') {
+			throw new TypeError('Invalid Agents startup intent');
+		}
+		({ restoreEntry, promptForWorkspaceTrust } = startupIntent);
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
@@ -443,7 +446,10 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			void activeWorkbench.shutdown('pageHide').catch(error => console.error('Failed to shut down Sessions Workbench', error)).finally(() => sessions.dispose());
 		}, { once: true }));
 		await lifecycleService.initialize();
-		api.startWorkspaceDirectories(() => invoke<void>(AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, initialWorkspace.id));
+		const discardStartupWorkspace = () => invoke<void>(AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, initialWorkspace.id);
+		api.startWorkspaceDirectories(promptForWorkspaceTrust
+			? { onTrustDeclined: discardStartupWorkspace }
+			: { discardUntrustedWorkspace: discardStartupWorkspace });
 		await workbench.whenRestored;
 		await invoke<void>(AGENTS_WINDOW_READY_CHANNEL);
 		return sessions;

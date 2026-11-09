@@ -33,6 +33,8 @@ import { IBannerService } from '../../../services/banner/browser/bannerService.j
 import { ITerminalService } from '../../terminal/browser/terminal.js';
 import { IDebugService } from '../../debug/common/debug.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
 
 /** Owns the lifetime of the window’s active workspace trust prompt. */
 export class WorkspaceTrustPrompt extends Disposable {
@@ -218,6 +220,7 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContribution {
 	private generation = 0;
 	private dialog: IDialogHandle | undefined;
+	private readonly isSessionsWindow: boolean;
 
 	constructor(
 		@IWorkspaceTrustRequestService private readonly requests: IWorkspaceTrustRequestService,
@@ -228,11 +231,14 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 		@INotificationService private readonly notifications: INotificationService,
 		@ITerminalService private readonly terminals: ITerminalService,
 		@IDebugService private readonly debug: IDebugService,
+		@IContextKeyService contexts: IContextKeyService,
 	) {
 		super();
+		this.isSessionsWindow = contexts.getValue(IsSessionsWindowContext.key) === true;
 		this._register(requests.onDidInitiateWorkspaceTrustRequest(options => { void this.showRequest(options); }));
-		this._register(requests.onDidInitiateWorkspaceTrustRequestOnStartup(() => { void this.showRequest(); }));
 		this._register(workspace.onDidChangeWorkspace(() => { this.generation++; this.dialog?.item.cancel(); this.dialog = undefined; }));
+		if (this.isSessionsWindow) return;
+		this._register(requests.onDidInitiateWorkspaceTrustRequestOnStartup(() => { void this.showRequest(); }));
 		void management.workspaceTrustInitialized.then(async () => {
 			// A saved read-only decision has already been answered by the directory prompt.
 			if (this.isDisposed || !management.canSetWorkspaceTrust()) return;
@@ -258,7 +264,7 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 				},
 				{ label: localize('workspaceTrust.manage', 'Manage'), type: 'Manage' },
 			] as const;
-			const actions = buttons.filter(button => button.type !== 'Cancel');
+			const actions = buttons.filter(button => this.isSessionsWindow ? button.type === 'ContinueWithTrust' : button.type !== 'Cancel');
 			const paths = folders.map(folder => isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath).join('\n');
 			const hasRunningSessions = this.terminals.instances.some(instance => instance.state !== 'exited' && instance.state !== 'error')
 				|| this.debug.sessions.some(session => session.state !== 'terminated' && session.state !== 'error');
@@ -324,9 +330,10 @@ registerEditorPane({
 
 registerAction2(class extends Action2 {
 	constructor() {
-		super({ id: MANAGE_TRUST_COMMAND_ID, title: localize2('manageWorkspaceTrust', 'Manage Workspace Trust'), f1: true });
+		super({ id: MANAGE_TRUST_COMMAND_ID, title: localize2('manageWorkspaceTrust', 'Manage Workspace Trust'), f1: true, precondition: IsSessionsWindowContext.isEqualTo(false) });
 	}
 	override run(accessor: ServicesAccessor): Promise<void> {
+		if (accessor.get(IContextKeyService).getValue(IsSessionsWindowContext.key) === true) return Promise.resolve();
 		return accessor.get(IEditorService).openEditor(new WorkspaceTrustEditorInput(), {
 			pinned: true,
 			modal: { size: { width: 560, height: 360 } },

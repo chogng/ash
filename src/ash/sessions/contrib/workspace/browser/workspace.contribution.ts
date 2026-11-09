@@ -28,16 +28,13 @@ import {
 } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { IWorkspaceTrustManagementService, type DirectoryPermissionRequest, type IDirectoryPermissionRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
+import type { DirectoryPermissionRequest, IDirectoryPermissionRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import {
 	AppServerRecoveryAvailableContext,
 	ReconnectAppServerCommandId,
 } from '../../../../workbench/contrib/remote/browser/remoteActions.js';
-import { MANAGE_TRUST_COMMAND_ID } from '../../../../workbench/contrib/workspace/common/workspace.js';
 import { Menus } from '../../../browser/menus.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { WorkspaceFolderManagementContribution } from './workspaceFolderManagement.js';
 
@@ -107,18 +104,13 @@ const connectionRecoveryState = new RawContextKey<WorkspaceRecoveryState>(
 	'idle',
 );
 
-/** Window chrome projects connection and workspace permissions without reserving a notice row. */
+/** Window chrome shows connection recovery and explicit folder authorization retries. */
 class WorkspaceStatusContribution extends Disposable {
-	private readonly permissionEntry = this._register(new MutableDisposable<IDisposable>());
 	private readonly folderTrustEntry = this._register(new MutableDisposable<IDisposable>());
 	private readonly recoveryNotification = this._register(new MutableDisposable<IDisposable>());
-	private permissionGeneration = 0;
-	private workspaceId: string;
 	private recoveryStatus: WorkspaceRecoveryState | undefined;
 
 	constructor(
-		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService,
-		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IAppServerApi api: IAppServerApi,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ICommandService commands: ICommandService,
@@ -146,19 +138,6 @@ class WorkspaceStatusContribution extends Disposable {
 			retryScope.set(scope);
 			status(title);
 		}));
-		this.workspaceId = workspace.getWorkspace().id;
-		this._register(
-			trust.onDidChangeTrustedFolders(() => {
-				void this.refreshPermissions();
-			}),
-		);
-		this._register(
-			workspace.onDidChangeWorkspace(() => {
-				void this.refreshPermissions();
-			}),
-		);
-		void this.refreshPermissions();
-
 		const available = AppServerRecoveryAvailableContext.bindTo(contextKeys);
 		const connectionState = connectionRecoveryState.bindTo(contextKeys);
 		this._register(
@@ -277,45 +256,6 @@ class WorkspaceStatusContribution extends Disposable {
 		this._register(recovery.onDidChange(updateConnection));
 		updateConnection();
 	}
-
-	private async refreshPermissions(): Promise<void> {
-		const generation = ++this.permissionGeneration;
-		const workspace = this.workspace.getWorkspace();
-		if (workspace.id !== this.workspaceId) {
-			this.workspaceId = workspace.id;
-			this.permissionEntry.clear();
-		}
-		try {
-			await this.trust.workspaceTrustInitialized;
-			await this.trust.resolveWorkspaceTrust();
-			const info = await this.trust.getWorkspaceTrustInfo();
-			if (this.isDisposed || generation !== this.permissionGeneration) return;
-			this.permissionEntry.clear();
-			if (!info || info.isTrusted || workspace.folders.length === 0) return;
-			const name = workspace.folders.map(folder => folder.name).join(', ');
-			this.permissionEntry.value = MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
-				group: 'navigation',
-				order: 1,
-				when: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), noFolderTrustRetry),
-				command: {
-					id: MANAGE_TRUST_COMMAND_ID,
-					title: info.isReadOnly
-						? localize('sessions.workspaceStatus.readOnly', 'Read-only workspace: {0}', name)
-						: localize('sessions.workspaceStatus.restricted', 'Restricted workspace: {0}', name),
-					tooltip: localize(
-						'sessions.workspaceStatus.manage',
-						'Manage permissions for workspace: {0}',
-						workspace.folders.map(folder => folder.uri.toString(true)).join(', '),
-					),
-					icon: Lxicon.lock,
-				},
-			});
-		} catch (error) {
-			if (this.isDisposed || generation !== this.permissionGeneration) return;
-			this.permissionEntry.clear();
-			console.error('Failed to read workspace permission status', error);
-		}
-	}
 }
 
 registerWorkbenchContribution('sessions.contrib.workspaceStatus', WorkbenchPhase.BlockRestore, accessor =>
@@ -333,7 +273,7 @@ AccessibleViewRegistry.register({
 		const action = focused.closest<HTMLElement>('.ash-sessions-titlebar [data-action-id]');
 		if (
 			!action ||
-			![MANAGE_TRUST_COMMAND_ID, retryFolderTrustCommandId, ReconnectAppServerCommandId, 'workbench.action.reloadWindow'].includes(
+			![retryFolderTrustCommandId, ReconnectAppServerCommandId, 'workbench.action.reloadWindow'].includes(
 				action.dataset.actionId ?? '',
 			)
 		)
@@ -345,7 +285,7 @@ AccessibleViewRegistry.register({
 			() =>
 				localize(
 					'sessions.workspaceStatus.help',
-					"Agent window status\nThe title bar shows connection and workspace recovery. Use Tab and Shift+Tab to reach the status actions, and Enter or Space to activate them. Retry trust for a folder reopens the authorization prompt for the folder you chose. Trust this workspace retries authorization for the window workspace. Retry workspace restore tries to reopen the workspace. Reconnect Agent Host retries the connection without resending unfinished messages. Agent Host: Reconnect is also available in the Command Palette. Reload Agent Window is offered when the connection cannot be restored. In Code, Read-only workspace or Restricted workspace names this window's workspace. Activate it to open Workspace Trust and review or change that workspace's directory permissions. Other conversations and hosts keep their own permissions. Escape closes this help and returns focus.",
+					"Agent window status\nThe title bar shows connection and workspace recovery. Use Tab and Shift+Tab to reach the status actions, and Enter or Space to activate them. Retry trust for a folder reopens the authorization prompt for the folder you chose. Trust this workspace retries authorization for the window workspace. Retry workspace restore tries to reopen the workspace. Reconnect Agent Host retries the connection without resending unfinished messages. Agent Host: Reconnect is also available in the Command Palette. Reload Agent Window is offered when the connection cannot be restored. Escape closes this help and returns focus.",
 				),
 			() => {
 				if (focused.isConnected) focused.focus();

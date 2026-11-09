@@ -98,7 +98,7 @@ import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { DialogMainService, IDialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
-import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
+import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_STARTUP_INTENT_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID, ScreenshotCommandId, ScreenshotShortcutId } from '../../workbench/contrib/chat/common/constants.js';
@@ -122,7 +122,7 @@ import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntr
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from '../../platform/windows/electron-main/windowsMainService.js';
 import { LifecycleMainService, ILifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import { defaultWindowState, WorkspaceContextMainService, type IWindowState } from '../../platform/window/electron-main/window.js';
-import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from '../../platform/workspace/common/workspace.js';
+import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
 import { createEmptyWorkspaceIdentifier } from '../../platform/workspaces/node/workspaces.js';
 import { packagedRemoteRuntimeCatalogSource } from '../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js';
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from '../../platform/remote/electron-main/remoteRuntimeInstaller.js';
@@ -768,7 +768,7 @@ export class AshApplication extends Disposable {
 		}
 		const launch = await this.resolveWorkspace();
 		if (!app.isPackaged && process.env.ASH_DEV_AGENTS_WINDOW === '1') {
-			await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace));
+			await this.openSessionsWindow(launch.workspace, await workspaces.resolveWorkspace(launch.workspace), undefined, launch.explicit);
 			return;
 		}
 		// Explicit launch targets and app restarts retain their own window intent.
@@ -805,7 +805,16 @@ export class AshApplication extends Disposable {
 				if (entry.kind === 'workbench') {
 					await this.performOpenWorkspace(entry.workspace, workspaces, true, { windowSessionId: entry.windowSessionId, restoring: true });
 				} else {
-					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace, { restoring: true }));
+					let workspace = entry.workspace;
+					let resolvedWorkspace: IWorkspace;
+					try {
+						resolvedWorkspace = await workspaces.resolveWorkspace(workspace, { restoring: true });
+					} catch (error) {
+						console.warn('Could not restore the Agents workspace', error);
+						workspace = createEmptyWorkspaceIdentifier();
+						resolvedWorkspace = workspaceFromIdentifier(workspace);
+					}
+					await this.openSessionsWindow(workspace, resolvedWorkspace);
 				}
 			} catch (error) {
 				console.error('Failed to restore window', error);
@@ -967,7 +976,7 @@ export class AshApplication extends Disposable {
 		const workspace = launch.args.workspace
 			? await this.windowsMainService.resolveWorkspaceOpenTarget(launch.args.workspace, launch.cwd)
 			: active?.workspaceContext.getWorkspace() ?? createEmptyWorkspaceIdentifier();
-		await this.openSessionsWindow(workspace, await workspaces.resolveWorkspace(workspace));
+		await this.openSessionsWindow(workspace, await workspaces.resolveWorkspace(workspace), undefined, launch.args.workspace !== undefined);
 	}
 
 	private async handleProtocolUrl(uri: URI, options?: IOpenURLOptions): Promise<boolean> {
@@ -2096,14 +2105,19 @@ export class AshApplication extends Disposable {
 		return browserServices;
 	}
 
-	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff?: IOpenAgentsWindowOptions): Promise<void> {
-		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, handoff));
+	private openSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff?: IOpenAgentsWindowOptions, promptForWorkspaceTrust = handoff !== undefined): Promise<void> {
+		if (resolvedWorkspace.configuration && resolvedWorkspace.folders.length === 0) {
+			const remoteAuthority = getWorkspaceRemoteAuthority(resolvedWorkspace);
+			workspace = { ...createEmptyWorkspaceIdentifier(), ...(remoteAuthority ? { remoteAuthority } : {}) };
+			resolvedWorkspace = workspaceFromIdentifier(workspace);
+		}
+		const opening = this.sessionsWindowOpenQueue.then(() => this.performOpenSessionsWindow(workspace, resolvedWorkspace, handoff, promptForWorkspaceTrust));
 		this.sessionsWindowOpenQueue = opening.then(() => undefined, () => undefined);
 		return opening;
 	}
 
 	/** Opens the one Agents window and selects the requesting Workspace before a handoff. */
-	private async performOpenSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff?: IOpenAgentsWindowOptions): Promise<void> {
+	private async performOpenSessionsWindow(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace, handoff: IOpenAgentsWindowOptions | undefined, promptForWorkspaceTrust: boolean): Promise<void> {
 		const workspaces = this.workspaces;
 		if (!workspaces) throw new Error('Workspace service is not initialized');
 		let sessions = this.sessionsWindow.value;
@@ -2239,9 +2253,9 @@ export class AshApplication extends Disposable {
 						}),
 						...workspaceContextIpcRoutes(session.workspaceContext),
 						{
-							channel: AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL,
+							channel: AGENTS_WINDOW_STARTUP_INTENT_CHANNEL,
 							validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Agents startup intent takes no arguments'); return undefined; },
-							invoke: () => restoreEntry,
+							invoke: () => ({ restoreEntry, promptForWorkspaceTrust }),
 						},
 						{
 							channel: AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL,

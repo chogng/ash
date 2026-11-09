@@ -15,7 +15,12 @@ import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/re
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, hasDevelopmentPermissions, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
 
-export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi, options: { readonly remoteHostLabel?: string; readonly onBindingQueued?: () => void; } = {}): Promise<void> {
+interface WorkspaceDirectoryInitializationOptions {
+	readonly onBindingQueued?: () => void;
+	readonly discardUntrustedWorkspace?: (signal: AbortSignal) => Promise<boolean>;
+}
+
+export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi, options: WorkspaceDirectoryInitializationOptions & { readonly remoteHostLabel?: string; } = {}): Promise<void> {
 	const generation = client.generation;
 	const workspace = parseWorkspace(await workspaceApi.getWorkspace());
 	if (generation !== client.generation || client.state !== 'ready') throw canceled();
@@ -23,11 +28,11 @@ export async function initializeWorkspace(client: AppServerProtocolClient, works
 		id: folder.id,
 		path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath,
 		remoteHostLabel: options.remoteHostLabel,
-	})), options.onBindingQueued);
+	})), options);
 }
 
 /** Binds only these directories on this connection; a host label never affects authorization. */
-export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly remoteHostLabel?: string; }[], onBindingQueued?: () => void): Promise<void> {
+export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly remoteHostLabel?: string; }[], options: WorkspaceDirectoryInitializationOptions = {}): Promise<void> {
 	const generation = client.generation;
 	let retired = client.state !== 'ready';
 	const cancellation = new AbortController();
@@ -51,6 +56,13 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 				dirs.push({ id: folder.id, path, grant: { type: 'config' } });
 				continue;
 			}
+			const discardWorkspace = options.discardUntrustedWorkspace && await options.discardUntrustedWorkspace(cancellation.signal);
+			assertCurrent();
+			if (discardWorkspace) {
+				// A restored workspace is selected as a whole. Clear any roots collected before the missing grant.
+				dirs.length = 0;
+				break;
+			}
 			// The frontend prompt can outlive its connection; retiring setup must not wait for its answer.
 			const choice = await raceCancellationError(workspaceTrust.requestDirectoryPermissions({ path, remoteHostLabel: folder.remoteHostLabel }, cancellation.signal), cancellation.signal);
 			assertCurrent();
@@ -69,7 +81,7 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 		}
 		if (dirs.length || workspaceTrust.requiresDevelopmentTrust) {
 			const binding = client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs });
-			onBindingQueued?.();
+			options.onBindingQueued?.();
 			await binding;
 		}
 		assertCurrent();

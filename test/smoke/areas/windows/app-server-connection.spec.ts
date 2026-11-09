@@ -199,7 +199,7 @@ startElectronApplication();
 			page.on('pageerror', error => startupErrors.push(error.stack ?? error.message));
 			page.on('console', message => { if (message.type() === 'error') startupErrors.push(message.text()); });
 			if (workspaceFolder) {
-				await directoryPermissionPrompt(page).getByRole('button', { name: connectionWorkspace === 'restricted' ? 'Open in Restricted Mode' : 'Trust Folder', exact: true }).click();
+				await directoryPermissionPrompt(page).getByRole('button', { name: connectionSurface === 'agents' ? 'Trust and Open' : connectionWorkspace === 'restricted' ? 'Open in Restricted Mode' : 'Trust Folder', exact: true }).click();
 			}
 			try {
 				await new Workbench(page).waitForReady();
@@ -332,29 +332,29 @@ test.describe('Agents recovery actions', () => {
 			)
 			.toBe(true);
 		await expect(
-			titlebar.getByRole('button', { name: 'Reconnecting to the Agent Host…', exact: true }),
+			titlebar.getByRole('button', { name: 'Preparing the workspace…', exact: true }),
 		).toBeVisible();
 		const connection = await application.evaluate(() => {
 			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 			scenario.releaseWorkspaceRead();
 			return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
 		});
-		const reconnect = titlebar.getByRole('button', { name: 'Reconnect Agent Host', exact: true });
-		await expect(reconnect).toBeVisible();
+		const retry = titlebar.getByRole('button', { name: 'Retry workspace restore', exact: true });
+		await expect(retry).toBeVisible();
 		await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
 		expect({ titlebar: await titlebar.boundingBox(), sidebar: await sidebar.boundingBox() }).toEqual(before);
-		await reconnect.focus();
-		await reconnect.press('Alt+F1');
+		await retry.focus();
+		await retry.press('Alt+F1');
 		const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
 		await expect(help).toBeFocused();
 		await expect(help).toHaveValue(/Agent window status/);
 		await help.press('Escape');
-		await expect(reconnect).toBeFocused();
+		await expect(retry).toBeFocused();
 		await page.screenshot({ path: testInfo.outputPath('agents-connection-retry.png') });
-		await reconnect.press('Enter');
-		await expect(reconnect).toHaveCount(0);
+		await retry.press('Enter');
+		await expect(retry).toHaveCount(0);
 		await expect(
-			titlebar.getByRole('button', { name: 'Reconnecting to the Agent Host…', exact: true }),
+			titlebar.getByRole('button', { name: 'Preparing the workspace…', exact: true }),
 		).toHaveCount(0);
 		expect(
 			await application.evaluate(() => {
@@ -517,7 +517,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 	test.describe(`${surface} Workspace Trust`, () => {
 		test.use({ connectionSurface: surface, connectionWorkspace: 'restricted', electronWindowMode: 'inactive' });
 		if (surface === 'agents') {
-			test('Agents scopes permission status to Code without a banner or content offset', async ({
+			test('Agents has no Restricted Mode entry in Chat or Code', async ({
 				connectionHarness: { page },
 			}, testInfo) => {
 				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
@@ -543,14 +543,14 @@ for (const surface of ['workbench', 'agents'] as const) {
 					.locator('.ash-window-mode-control')
 					.getByRole('button', { name: 'Code', exact: true })
 					.click();
-				await expect(permissions).toHaveAttribute('aria-label', 'Restricted workspace: workspace');
+				await expect(permissions).toHaveCount(0);
 				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
 				expect(await titlebar.boundingBox()).toEqual(titlebarBounds);
 				for (const button of await titlebar.getByRole('button').all()) {
 					const bounds = (await button.boundingBox())!;
 					expect(Math.abs(bounds.y + bounds.height / 2 - titlebarBounds.height / 2)).toBeLessThanOrEqual(1);
 				}
-				await page.screenshot({ path: testInfo.outputPath('agents-scoped-workspace-permissions.png') });
+				await page.screenshot({ path: testInfo.outputPath('agents-workspace-without-restricted-mode.png') });
 			});
 		}
 		if (surface === 'workbench') {
@@ -558,7 +558,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 				const workbench = new Workbench(page);
 				const banner = page.locator('[data-part="banner"]');
 				await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
-				await workbench.quickaccess.open(join(workspaceFolder!, 'example.txt'));
+				await workbench.quickaccess.open('example.txt');
 				await workbench.quickaccess.select('example.txt');
 				const editor = workbench.editors.groupAt(0).editor;
 				await editor.waitForEditorFocus();
@@ -601,25 +601,14 @@ for (const surface of ['workbench', 'agents'] as const) {
 				await expect(dialog).toHaveCount(0);
 			});
 		}
+		if (surface === 'agents') return;
 		test('Workspace status manages the current permissions and refreshes effective trust', async ({
 			connectionHarness: { page, workspaceFolder },
 		}, testInfo) => {
 			const folder = URI.file(await realpath(workspaceFolder!)).fsPath;
-			const permissionStatus =
-				surface === 'agents'
-					? page.locator('[data-part="titlebar"]').getByRole('button', { name: /^Restricted workspace:/u })
-					: page.locator('[data-part="banner"]');
-			if (surface === 'agents') {
-				await page
-					.locator('.ash-window-mode-control')
-					.getByRole('button', { name: 'Code', exact: true })
-					.click();
-				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
-				await permissionStatus.click();
-			} else {
-				await expect(permissionStatus).toContainText('Restricted Mode is intended for safe code browsing');
-				await permissionStatus.getByRole('button', { name: 'Manage', exact: true }).click();
-			}
+			const permissionStatus = page.locator('[data-part="banner"]');
+			await expect(permissionStatus).toContainText('Restricted Mode is intended for safe code browsing');
+			await permissionStatus.getByRole('button', { name: 'Manage', exact: true }).click();
 			const editor = page.locator('.ash-workspace-trust-editor');
 			await expect(editor).toBeVisible();
 			const modal = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });

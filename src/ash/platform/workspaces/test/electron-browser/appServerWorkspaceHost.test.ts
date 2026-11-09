@@ -220,6 +220,24 @@ suite('workspace trust during directory opening', () => {
 		assert.deepEqual(writes, [grants[0], { dirs: [{ id: folder.id, path: folder.path, grant: { type: 'config' } }] }]);
 	});
 
+	test('discarding an untrusted restored workspace binds no roots and grants no permissions', async () => {
+		const grants: WorkspaceTrustPermission[][] = [];
+		const bindings: unknown[] = [];
+		const client = {
+			state: 'ready', generation: 1, onStateChange: Event.None,
+			request: async (_method: unknown, params: unknown) => { bindings.push(params); return { dirs: [] }; },
+		} as unknown as AppServerProtocolClient;
+		const trust = trustApi(new Map([['/trusted', DEVELOPMENT_DIR_PERMISSIONS], ['/restricted', RESTRICTED_DIR_PERMISSIONS]]), grants);
+		await host.initializeWorkspace(client, {
+			requiresDevelopmentTrust: true,
+			requestDirectoryPermissions: async () => assert.fail('Restoration must not show a prompt'),
+		}, trust, workspace(['/trusted', '/restricted']), {
+			discardUntrustedWorkspace: async () => true,
+		});
+		assert.deepEqual(bindings, [{ dirs: [] }]);
+		assert.deepEqual(grants, []);
+	});
+
 	test('cancelling a trust request does not create or persist a grant', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];
 		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('Unexpected environment write'); } } as unknown as AppServerProtocolClient;

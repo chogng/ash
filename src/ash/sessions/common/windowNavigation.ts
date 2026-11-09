@@ -1,5 +1,5 @@
 export const RETURN_TO_WORKBENCH_CHANNEL = 'ash:sessions:return-to-workbench';
-export const AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL = 'ash:sessions:restore-entry';
+export const AGENTS_WINDOW_STARTUP_INTENT_CHANNEL = 'ash:sessions:startup-intent';
 export const AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL = 'ash:sessions:discard-startup-workspace';
 export const AGENTS_WINDOW_READY_CHANNEL = 'ash:sessions:ready';
 export const AGENTS_WINDOW_WORKSPACE_CHANNEL = 'agentsWindowWorkspace';

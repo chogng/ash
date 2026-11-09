@@ -630,46 +630,54 @@ test('Desktop restores the Agents window after switching projects', { tag: ['@el
 	}
 });
 
-test('Agents discards a restored workspace when trust is cancelled', { tag: ['@electron-app-server'] }, async ({ }, testInfo) => {
-	test.setTimeout(90_000);
-	const userDataDirectory = testInfo.outputPath('user-data');
-	const folder = testInfo.outputPath('untrusted-project');
-	const statePath = join(userDataDirectory, 'state.json');
-	await Promise.all([folder, join(userDataDirectory, 'profile')].map(path => mkdir(path, { recursive: true })));
-	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"one"}');
-	await writeFile(statePath, JSON.stringify({
-		windowSession: {
-			version: 1,
-			active: 0,
-			windows: [{ kind: 'sessions', workspace: { id: 'untrusted-agents', uri: URI.file(folder).toString() } }],
-		},
-	}));
-	const options = { userDataDirectory, appServerMode: 'required' } as const;
-	let session = await launchElectronApplication(options);
-	try {
-		const agents = await session.application.firstWindow();
-		const trust = agents.getByRole('dialog', { name: 'Trust this workspace?', exact: true });
-		await expect(trust.getByText(URI.file(folder).fsPath, { exact: true })).toBeVisible();
-		await trust.getByRole('button', { name: 'Cancel', exact: true }).click();
-		await expect.poll(() => workspaceFolder(agents)).toBeUndefined();
-		await expect.poll(async () => {
-			const { windowSession } = JSON.parse(await readFile(statePath, 'utf8')) as {
-				windowSession: { windows: { kind: string; workspace: { id: string; }; }[]; };
-			};
-			return windowSession.windows.map(({ kind, workspace }) => ({ kind, keys: Object.keys(workspace) }));
-		}).toEqual([{ kind: 'sessions', keys: ['id'] }]);
-		await session.quit();
+for (const workspaceKind of ['untrusted folder', 'missing folder', 'folderless project'] as const) {
+	test(`Agents starts in Chat and drops a restored ${workspaceKind}`, { tag: ['@electron-app-server'] }, async ({ }, testInfo) => {
+		test.setTimeout(90_000);
+		const userDataDirectory = testInfo.outputPath('user-data');
+		const folder = testInfo.outputPath('project');
+		const configuration = testInfo.outputPath('empty.code-workspace');
+		const statePath = join(userDataDirectory, 'state.json');
+		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+		if (workspaceKind === 'untrusted folder') await mkdir(folder);
+		if (workspaceKind === 'folderless project') await writeFile(configuration, '{"folders":[]}');
+		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"one"}');
+		const workspace = workspaceKind === 'folderless project'
+			? { id: 'restored-agents', configPath: URI.file(configuration).toString() }
+			: { id: 'restored-agents', uri: URI.file(folder).toString() };
+		await writeFile(statePath, JSON.stringify({
+			windowSession: { version: 1, active: 0, windows: [{ kind: 'sessions', workspace }] },
+		}));
+		const options = { userDataDirectory, appServerMode: 'required' } as const;
+		let session = await launchElectronApplication(options);
+		const assertChatReady = async (agents: Page): Promise<void> => {
+			await expect(agents.locator('.ash-sessions-window')).toHaveAttribute('aria-busy', 'false');
+			await expect(agents.locator('.ash-window-mode-control button').first()).toHaveAttribute('aria-pressed', 'true');
+			await expect(agents.locator('.ash-sessions-directory-permission-dialog')).toHaveCount(0);
+			await expect(agents.locator('[data-part="titlebar"] .ash-icon-lock')).toHaveCount(0);
+			expect(await workspaceFolder(agents)).toBeUndefined();
+		};
+		try {
+			const agents = await session.application.firstWindow();
+			await assertChatReady(agents);
+			await expect.poll(async () => {
+				const { windowSession } = JSON.parse(await readFile(statePath, 'utf8')) as {
+					windowSession: { windows: { kind: string; workspace: { id: string; }; }[]; };
+				};
+				return windowSession.windows.map(({ kind, workspace }) => ({ kind, keys: Object.keys(workspace) }));
+			}).toEqual([{ kind: 'sessions', keys: ['id'] }]);
+			await agents.screenshot({ path: testInfo.outputPath('agents-chat-startup.png') });
+			await session.quit();
 
-		session = await launchElectronApplication(options);
-		const restored = await session.application.firstWindow();
-		await expect(restored.locator('.ash-sessions-window')).toHaveAttribute('aria-busy', 'false');
-		expect(await workspaceFolder(restored)).toBeUndefined();
-		await expect(restored.getByRole('dialog', { name: 'Trust this workspace?', exact: true })).toHaveCount(0);
-		await session.quit();
-	} finally {
-		await session.close();
-	}
-});
+			if (workspaceKind === 'untrusted folder') {
+				session = await launchElectronApplication(options);
+				await assertChatReady(await session.application.firstWindow());
+				await session.quit();
+			}
+		} finally {
+			await session.close();
+		}
+	});
+}
 
 test('Agents leaves its workspace intact when an explicit open is declined', { tag: ['@electron-app-server'] }, async ({ }, testInfo) => {
 	test.setTimeout(90_000);

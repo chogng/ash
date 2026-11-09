@@ -5,12 +5,14 @@ import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { DialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
+import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { DialogsModel, IDialogsModel, type IDialogViewItem } from '../../../../common/dialogs.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -24,11 +26,14 @@ function nextDialog(dialogs: DialogsModel): Promise<IDialogViewItem> {
 	return new Promise(resolve => Event.once(dialogs.onWillShowDialog)(resolve));
 }
 
-function fixture(uris: readonly URI[], options: { readonly running?: boolean; readonly saved?: boolean; } = {}) {
+function fixture(uris: readonly URI[], options: { readonly running?: boolean; readonly saved?: boolean; readonly agents?: boolean; } = {}) {
 	const resources = new DisposableStore();
 	const folders = uris.map((uri, index) => ({ id: String(index), name: String(index), uri, index }));
 	const workspace = resources.add(new TestWorkspaceService({ id: 'test', folders }));
 	const services = resources.add(new InstantiationService());
+	const contexts = resources.add(new ContextKeyService());
+	services.registerInstance(IContextKeyService, contexts);
+	IsSessionsWindowContext.bindTo(contexts).set(options.agents === true);
 	const dialogs = resources.add(new DialogsModel());
 	const saved = new DeferredPromise<boolean>();
 	const persisted = new DeferredPromise<void>();
@@ -119,6 +124,21 @@ test('Startup shows a prompt for a missing decision and respects a saved restric
 	assert.deepEqual(unanswered.dialogs.dialogs, []);
 	dialog.close({ button: DialogResult.Primary, buttonIndex: 0 });
 	assert.equal(unanswered.saved.isSettled, false);
+});
+
+test('Agents skips the shared startup prompt and only offers trust for an explicit request', async () => {
+	using f = fixture([URI.file('/project')], { agents: true, saved: false });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(f.dialogs.dialogs, []);
+
+	const shown = nextDialog(f.dialogs);
+	const result = f.requests.requestWorkspaceTrust();
+	const dialog = await shown;
+	assert.equal(dialog.request.kind, 'choice');
+	assert.deepEqual(dialog.request.buttons, ['Trust folder and continue']);
+	dialog.cancel();
+	assert.equal(await result, undefined);
+	assert.equal(f.saved.isSettled, false);
 });
 
 test('Continue without trust leaves an existing restricted decision in place', async () => {
