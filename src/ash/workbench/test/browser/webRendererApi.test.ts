@@ -329,8 +329,9 @@ test('instruction catalog uses the shared connection and exposes metadata withou
 	assert.equal(connected.api.instructions.isAvailable, true);
 	const catalog = connected.api.instructions.list('instruction-session');
 	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'instructions/list', params: { sessionId: 'instruction-session' } });
-	transport.respondAt(-1, { instructions: [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: null, scope: 'directory', load: 'onDemand', patterns: [] }], diagnostics: [] });
-	assert.deepEqual(await catalog, [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: undefined, scope: 'directory' }]);
+	const path = '/workspace/.ash/instructions/review.md';
+	transport.respondAt(-1, { instructions: [{ path, name: 'Review', description: null, scope: 'directory', load: 'onDemand', patterns: [] }], diagnostics: [] });
+	assert.deepEqual(await catalog, [{ path, resource: URI.file(path), name: 'Review', description: undefined, scope: 'directory' }]);
 });
 
 test('Terminal host adapts raw bytes and command exit codes at the protocol boundary', async () => {
