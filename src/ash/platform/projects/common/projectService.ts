@@ -30,6 +30,7 @@ export interface Project extends ProjectSummary {
 	readonly roots?: readonly URI[];
 	readonly materials: readonly ProjectMaterial[];
 	readonly sessionIds: readonly string[];
+	readonly externalConversationIds?: readonly string[];
 }
 
 export type ProjectScope = 'chat' | 'code';
@@ -44,6 +45,8 @@ export interface IProjectService {
 	addSession(project: Project, sessionId: string): Promise<Project>;
 	/** Changes one project membership. Other memberships of the Session are independent. */
 	moveSession(sessionId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void>;
+	/** Organizes an account-scoped provider conversation without creating an Ash Thread. */
+	moveExternalConversation(conversationId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
 	setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void>;
 	archive(project: ProjectSummary): Promise<Project>;

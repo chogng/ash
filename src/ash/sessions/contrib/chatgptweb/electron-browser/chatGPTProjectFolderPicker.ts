@@ -1,5 +1,8 @@
+import './chatGPTProjectFolderPicker.css';
 import { h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { streamToBuffer } from '../../../../base/common/buffer.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -14,8 +17,10 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { ChatInputPickerActionViewItem } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem.js';
-import { chatGPTAttachmentLimitMessage, chatGPTAttachmentLimits, IChatGPTService, isChatGPTNewDraft, type ChatGPTState } from '../browser/chatGPTService.js';
+import { IProjectsService } from '../../projects/browser/projectsService.js';
+import { chatGPTAttachmentLimitMessage, chatGPTAttachmentLimits, chatGPTProjectPreferenceKey, IChatGPTService, isChatGPTNewDraft, type ChatGPTState } from '../browser/chatGPTService.js';
 
 /** A Web draft can group the chat and choose an attachment source independently. */
 export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
@@ -28,6 +33,7 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 		@IFileDialogService private readonly dialogs: IFileDialogService,
 		@IFileService private readonly files: IFileService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IProjectsService private readonly projects: IProjectsService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		const label = localize('sessions.chatgpt.projectOrFolder', 'Project or folder');
@@ -35,19 +41,24 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 			id: 'sessions.chatgpt.projectOrFolder',
 			get icon() {
 				const state = chat.state.get();
-				if (!state.draftTarget?.projectId && state.draftTarget?.folder) {
+				if (state.draftTarget?.projectId || state.draftTarget?.ashProjectId) {
+					return undefined;
+				}
+				if (state.draftTarget?.folder) {
 					return Lxicon.folder;
 				}
 				return Lxicon.projects;
 			},
 			get label() {
 				const state = chat.state.get();
-				const project = state.projects.find(item => item.id === state.draftTarget?.projectId);
+				const projectName = state.draftTarget?.ashProjectId
+					? projects.state.get().projects.find(item => item.id === state.draftTarget?.ashProjectId)?.name
+					: state.projects.find(item => item.id === state.draftTarget?.projectId)?.title;
 				const folder = state.draftTarget?.folder;
 				const name = folder && (basename(folder) || folder.fsPath);
-				return project && name
-					? localize('sessions.chatgpt.projectAndFolder', '{0} · {1}', project.title, name)
-					: project?.title ?? name ?? label;
+				return projectName && name
+					? localize('sessions.chatgpt.projectAndFolder', '{0} · {1}', projectName, name)
+					: projectName ?? name ?? label;
 			},
 			get tooltip() {
 				return this.label === label ? label : localize('sessions.chatgpt.projectOrFolderSelected', 'Project or folder: {0}', this.label);
@@ -66,12 +77,28 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 				filterPlaceholder: localize('sessions.chatgpt.searchProjectOrFolder', 'Search'),
 			},
 		}, instantiation);
-		const host = h(footer.ownerDocument, 'div', { className: 'ash-chat-input-workspace-slot' });
+		const host = h(footer.ownerDocument, 'div', { className: 'ash-chat-input-workspace-slot ash-chatgpt-draft-target' });
 		footer.prepend(host);
 		host.hidden = true;
 		this._register(toDisposable(() => host.remove()));
 		this.render(host);
 		this.element.classList.add('ash-chat-input-workspace-picker');
+		const clearProject = localize('sessions.chatgpt.clearProject', 'Clear project');
+		const remove = this._register(new Button(host, {
+			label: '', ariaLabel: clearProject, title: clearProject, size: 'small',
+			onClick: () => {
+				if (!host.hidden && canChoose(chat.state.get())) {
+					this.choose({ projectId: undefined, ashProjectId: undefined });
+				}
+			},
+		}));
+		remove.domNode.classList.add('ash-chatgpt-project-remove');
+		const closeIcon = appendIcon(Lxicon.close, remove.domNode);
+		let projectIcon: HTMLElement | undefined;
+		host.prepend(remove.domNode);
+		// The picker can open before the sidebar has mounted.
+		const projectCatalog = projects.state.get();
+		if (!projectCatalog.loading && !projectCatalog.projects.length) void projects.reload();
 		let identity: string | undefined;
 		this._register(autorun(reader => {
 			const state = chat.state.read(reader);
@@ -84,43 +111,96 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 			identity = current;
 			host.hidden = !shown;
 			if (!shown) return;
+			const ashProject = projects.state.read(reader).projects.find(project => project.id === state.draftTarget?.ashProjectId);
+			const projectId = state.draftTarget?.projectId;
+			const hasProject = Boolean(projectId || state.draftTarget?.ashProjectId);
+			host.classList.toggle('has-project', hasProject);
+			remove.domNode.hidden = !hasProject;
+			if (hasProject) {
+				const key = projectId ? chatGPTProjectPreferenceKey(state.catalogScope, projectId) : undefined;
+				const appearance = this.resolveAppearance(ashProject ?? (key ? projects.getCatalogProjectAppearance(key) : undefined));
+				const icon = appearance.icon ?? Lxicon.projectsFilled;
+				if (!projectIcon || projectIcon.dataset.ashIconId !== icon.id) {
+					projectIcon?.remove();
+					projectIcon = appendIcon(icon, remove.domNode);
+					projectIcon.classList.add('ash-chatgpt-project-icon');
+					closeIcon.before(projectIcon);
+				}
+				projectIcon.style.color = appearance.color ?? '';
+			}
+			remove.enabled = canChoose(state);
 			this.updateEnabled();
 			this.setTabbable(shown);
 			this.refreshActionLabel();
 		}));
 	}
 
-	getAttachMenuAction(): IAction | undefined {
-		return this.element.closest('[hidden]') ? undefined : this.action;
+	getAttachMenuProjectActions(): readonly IAction[] | undefined {
+		const state = this.chat.state.get();
+		if (this.element.closest('[hidden]') || !canChoose(state)) return undefined;
+		return this.getProjectActions(state, this.draftGuard(state));
+	}
+
+	private draftGuard(state: ChatGPTState): () => boolean {
+		const revision = this.chat.newDraftRevision;
+		return () => {
+			const current = this.chat.state.get();
+			return !this.isDisposed && !this.element.closest('[hidden]') && canChoose(current)
+				&& current.localConversationId === state.localConversationId && this.chat.newDraftRevision === revision;
+		};
+	}
+
+	private choose(change: Parameters<IChatGPTService['setDraftTarget']>[0]): void {
+		this.chat.setDraftTarget(change);
+		status(this.action.tooltip);
+		this.focus();
+	}
+
+	private getProjectActions(state: ChatGPTState, isCurrent: () => boolean): IAction[] {
+		const chatGPTProjects = state.projects.map(project => {
+			const key = chatGPTProjectPreferenceKey(state.catalogScope, project.id);
+			const appearance = this.resolveAppearance(key ? this.projects.getCatalogProjectAppearance(key) : undefined);
+			return {
+				id: `project.${project.id}`, label: project.title, tooltip: project.title,
+				icon: appearance.icon ?? Lxicon.projects, iconColor: appearance.color,
+				enabled: true, checked: state.draftTarget?.projectId === project.id,
+				run: () => {
+					if (isCurrent()) this.choose({ projectId: project.id });
+				},
+			};
+		});
+		const ashProjects = this.projects.state.get().projects.filter(project => !project.archived).map(project => {
+			const appearance = this.resolveAppearance(project);
+			return {
+				id: `ash-project.${project.id}`, label: project.name, tooltip: project.name,
+				icon: appearance.icon ?? Lxicon.projects, iconColor: appearance.color,
+				enabled: true, checked: state.draftTarget?.ashProjectId === project.id,
+				run: () => {
+					if (isCurrent() && this.projects.state.get().projects.some(current => current.id === project.id && !current.archived)) {
+						this.choose({ ashProjectId: project.id });
+					}
+				},
+			};
+		});
+		return [...chatGPTProjects, ...ashProjects];
+	}
+
+	private resolveAppearance(appearance: { readonly icon?: string; readonly color?: string; } | undefined) {
+		return {
+			icon: appearance?.icon ? getRegisteredIcon(appearance.icon, this.element.ownerDocument) : undefined,
+			color: appearance?.color ? `var(${colorCssVariable(appearance.color)})` : undefined,
+		};
 	}
 
 	private getActions(): readonly IAction[] {
 		const state = this.chat.state.get();
 		if (!canChoose(state)) return [];
-		const revision = this.chat.newDraftRevision;
-		const isCurrent = () => {
-			const current = this.chat.state.get();
-			return !this.isDisposed && !this.element.closest('[hidden]') && canChoose(current)
-				&& current.localConversationId === state.localConversationId && this.chat.newDraftRevision === revision;
-		};
+		const isCurrent = this.draftGuard(state);
 		const choose = (change: Parameters<IChatGPTService['setDraftTarget']>[0]) => {
-			if (!isCurrent()) return;
-			this.chat.setDraftTarget(change);
-			status(this.action.tooltip);
-			this.focus();
+			if (isCurrent()) this.choose(change);
 		};
+		const projects = this.getProjectActions(state, isCurrent);
 		const folder = state.draftTarget?.folder;
-		const projects: IAction[] = state.projects.map(project => ({
-			id: `project.${project.id}`, label: project.title, tooltip: project.title, icon: Lxicon.projects,
-			enabled: true, checked: state.draftTarget?.projectId === project.id,
-			run: () => choose({ projectId: project.id }),
-		}));
-		if (state.draftTarget?.projectId) {
-			projects.push({
-				id: 'project.clear', label: localize('sessions.chatgpt.clearProject', 'Clear project'),
-				tooltip: '', enabled: true, run: () => choose({ projectId: undefined }),
-			});
-		}
 		const folders: IAction[] = [{
 			id: 'folder.choose', label: localize('sessions.chatgpt.chooseFolder', 'Choose folder…'),
 			tooltip: folder?.fsPath ?? '', icon: Lxicon.folder, enabled: true,

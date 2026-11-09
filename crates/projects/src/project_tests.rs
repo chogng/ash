@@ -189,6 +189,31 @@ fn project_roots_and_associations_remain_organizational_facts() {
     assert_eq!(project.roots.len(), 1);
     assert_eq!(project.session_ids.len(), 1);
     assert_eq!(project.revision, 3);
+    let reference = "external-conversation-fixture";
+    let linked = coordinator
+        .apply(request(
+            "link-external-conversation",
+            project.revision,
+            ProjectCommand::LinkExternalConversation {
+                conversation_id: reference.into(),
+            },
+        ))
+        .unwrap()
+        .project;
+    assert!(linked.external_conversation_ids.contains(reference));
+    assert_eq!(linked.session_ids, project.session_ids);
+    let unlinked = coordinator
+        .apply(request(
+            "unlink-external-conversation",
+            linked.revision,
+            ProjectCommand::UnlinkExternalConversation {
+                conversation_id: reference.into(),
+            },
+        ))
+        .unwrap()
+        .project;
+    assert!(unlinked.external_conversation_ids.is_empty());
+    assert_eq!(unlinked.session_ids, project.session_ids);
 }
 
 fn coordinator() -> ProjectCoordinator {

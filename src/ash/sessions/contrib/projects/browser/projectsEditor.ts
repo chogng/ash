@@ -139,8 +139,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const groups = this.projectGroups.read(reader);
 			const archived = this.showArchived.read(reader) && !id && !state.selectedId;
 			const selected = groups.find(group => group.key === id);
-			const projectChats = state.selected?.sessionIds.length
-				? getProjectSessionRows(snapshots.flatMap(snapshot => snapshot.entries), state.selected.sessionIds) : [];
+			const projectChats = state.selected
+				? getProjectSessionRows(snapshots.flatMap(snapshot => snapshot.entries), state.selected.sessionIds, state.selected.externalConversationIds) : [];
 			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined, projectChats);
 			const history = (selected ?? groups.find(group => group.key === state.selectedId))?.project?.history;
 			if (this.isVisible() && history?.state === 'idle') {

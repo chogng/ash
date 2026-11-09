@@ -34,6 +34,7 @@ fn project_root_picker_preselects_the_current_workspace() {
         color: None,
         roots: vec![root("a", &a), root("b", &b)],
         session_ids: Vec::new(),
+        external_conversation_ids: None,
     };
     let spec = root_choices(&project, &b).unwrap();
     let mut picker = ListSelection::new(spec.model, spec.actions);

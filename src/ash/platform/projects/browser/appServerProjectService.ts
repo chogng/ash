@@ -70,6 +70,28 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
+	public async moveExternalConversation(conversationId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void> {
+		if (fromProjectId === toProjectId) return;
+		try {
+			if (toProjectId) {
+				const destination = await this.read(toProjectId, 'chat');
+				if (!destination.externalConversationIds?.includes(conversationId)) {
+					await appServerRequest(this.connection, 'project/conversation/membership', {
+						commandId: generateUuid(), projectId: destination.id, expectedRevision: destination.revision, conversationId, membership: 'link',
+					});
+				}
+			}
+			if (fromProjectId) {
+				const source = await this.read(fromProjectId, 'chat');
+				if (source.externalConversationIds?.includes(conversationId)) {
+					await appServerRequest(this.connection, 'project/conversation/membership', {
+						commandId: generateUuid(), projectId: source.id, expectedRevision: source.revision, conversationId, membership: 'unlink',
+					});
+				}
+			}
+		} catch (error) { throw projectError(error); }
+	}
+
 	public async update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project> {
 		try {
 			return fromDto((await appServerRequest(this.connection, 'project/details/update', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, name, description, materials: toMaterials(materials) })).project);
@@ -109,7 +131,8 @@ function fromDto(project: ProjectDto): Project {
 		id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived',
 		createdAtMs: project.createdAtMs, updatedAtMs: project.updatedAtMs,
 		icon: project.icon, color: project.color,
-		description: project.description, sessionIds: project.sessionIds, sessionCount: project.sessionIds.length,
+		description: project.description, sessionIds: project.sessionIds, externalConversationIds: project.externalConversationIds,
+		sessionCount: project.sessionIds.length + (project.externalConversationIds?.length ?? 0),
 		roots: project.roots.map(root => URI.parse(root.path)),
 		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),
 	};

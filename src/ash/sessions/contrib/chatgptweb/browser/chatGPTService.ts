@@ -8,6 +8,7 @@ import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
 import { ChatGPTOutbox, type PendingChatGPTCreation } from './chatGPTOutbox.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
+import { StringSHA1 } from '../../../../base/common/hash.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { equals } from '../../../../base/common/objects.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -16,6 +17,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService, Severity, type INotificationActions, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
+import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ChatGPTAuthenticationError, IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTHistory } from './chatGPTClient.js';
@@ -67,7 +69,20 @@ interface ChatGPTDraft {
 
 interface ChatGPTDraftTarget {
 	readonly projectId?: string;
+	readonly ashProjectId?: string;
 	readonly folder?: URI;
+}
+
+export function chatGPTProjectPreferenceKey(scope: string | undefined, id: string): string | undefined {
+	return scope && `${scope}:${id}`;
+}
+
+/** The account scope keeps external conversation IDs distinct in the shared Ash catalog. */
+export function chatGPTProjectConversationId(scope: string | undefined, id: string): string | undefined {
+	if (!scope) return undefined;
+	const hash = new StringSHA1();
+	hash.update(JSON.stringify(['chatgpt', scope, id]));
+	return hash.digest();
 }
 
 export const chatGPTAttachmentLimits = { count: 10, fileBytes: 20 * 1024 * 1024, totalBytes: 50 * 1024 * 1024 };
@@ -717,7 +732,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const key = this.draftKey();
 		this.drafts.set(key, {
 			...this.drafts.get(key), text: state.draft, attachments: state.attachments,
-			target: { ...state.draftTarget, ...change },
+			target: {
+				...state.draftTarget, ...change,
+				...(change.projectId && { ashProjectId: undefined }),
+				...(change.ashProjectId && { projectId: undefined }),
+			},
 		});
 		this.update({});
 	}
@@ -805,8 +824,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			try {
 				if (id) {
 					const history = await this.client.voiceHistory(id, messageId, signal);
-					const projectId = this.voiceCreatedConversation ? this.drafts.get(this.draftKey())?.target?.projectId : undefined;
-					const move = projectId ? await this.assignNewConversationToProject(id, projectId, signal) : undefined;
+					const target = this.voiceCreatedConversation ? this.drafts.get(this.draftKey())?.target : undefined;
+					const move = await this.assignNewConversationToProject(id, target, signal);
 					if (generation === this.generation) {
 						if (this.voiceCreatedConversation) this.forgetDraft(this.draftKey());
 						this.bindConversation(history.id, this.draftKey());
@@ -1174,7 +1193,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.forgetRemoteConversation(history.id);
 			return;
 		}
-		const projectMove = entry.projectId && await this.assignNewConversationToProject(history.id, entry.projectId, signal);
+		const projectMove = await this.assignNewConversationToProject(history.id, entry, signal);
 		if (signal.aborted || this.outbox !== outbox || outbox.creation(entry.localId) !== entry) return;
 		const selected = this.model.get().localConversationId === entry.localId;
 		this.bindConversation(history.id, entry.localId);
@@ -1828,10 +1847,19 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	private async assignNewConversationToProject(id: string, projectId: string, signal: AbortSignal): Promise<{ projectId?: string; error?: string; }> {
+	private async assignNewConversationToProject(id: string, target: Pick<ChatGPTDraftTarget, 'projectId' | 'ashProjectId'> | undefined, signal: AbortSignal): Promise<{ projectId?: string; error?: string; } | undefined> {
 		try {
-			await this.client.updateConversation(id, { gizmo_id: projectId }, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
-			return { projectId };
+			if (target?.ashProjectId) {
+				const reference = chatGPTProjectConversationId(this.cacheScope, id);
+				const projects = this.instantiation?.getOptional(IProjectService);
+				if (!reference || !projects) throw new Error(localize({ bundle: 'ash', key: 'projects.requestFailed' }, 'Could not access projects. Check the connection and try again.'));
+				signal.throwIfAborted();
+				await projects.moveExternalConversation(reference, undefined, target.ashProjectId);
+			} else if (target?.projectId) {
+				await this.client.updateConversation(id, { gizmo_id: target.projectId }, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
+				return { projectId: target.projectId };
+			}
+			return undefined;
 		} catch (error) {
 			return { error: localize('sessions.chatgpt.newProjectMoveFailed', 'The message was sent, but the conversation could not be added to the project: {0}', this.errorText(error)) };
 		}
@@ -1890,10 +1918,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.isDisposed || state.pendingCreation || state.busy || state.sending || state.managing || state.voice !== 'idle') return;
 		this.refreshOperation?.abort();
 		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
-		const projectId = isChatGPTNewDraft(state) ? state.draftTarget?.projectId : undefined;
+		const target = isChatGPTNewDraft(state) ? state.draftTarget : undefined;
 		const creation = canQueueChatGPTCreation(state) ? {
 			localId: state.localConversationId, text, messageId: crypto.randomUUID(), parentId: state.parentId,
-			model: preset?.model, thinkingEffort: preset?.thinkingEffort, projectId,
+			model: preset?.model, thinkingEffort: preset?.thinkingEffort, projectId: target?.projectId, ashProjectId: target?.ashProjectId,
 		} : undefined;
 		if (creation && (!state.connected || !state.networkAvailable)) { await this.queueCreation(creation); return; }
 		if (!preset || !state.connected || !state.networkAvailable || state.uncertain || (!text && !state.attachments.length) || state.attachments.some(attachment => attachment.status !== 'ready') || !state.model) { return; }
@@ -1927,12 +1955,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				}
 				this.update({ messages, conversationId: event.conversationId ?? current.conversationId, parentId: event.message?.id ?? current.parentId });
 				if (event.conversationId) { this.rememberConversation(event.conversationId); }
-				if (event.conversationId && projectId && !projectMove) {
+				if (event.conversationId && (target?.projectId || target?.ashProjectId) && !projectMove) {
 					// The conversation can be organized as soon as the server assigns its ID.
 					// Keep consuming reply frames while the independent catalog write runs.
 					projectMove = {
 						id: event.conversationId,
-						result: this.assignNewConversationToProject(event.conversationId, projectId, this.management.signal),
+						result: this.assignNewConversationToProject(event.conversationId, target, this.management.signal),
 					};
 				}
 			}

@@ -4058,6 +4058,9 @@ impl AppServer {
             Some(ClientMethod::ProjectSessionUnlink) => self
                 .project_processor()
                 .project_session_unlink(connection, &request.params),
+            Some(ClientMethod::ProjectConversationMembership) => self
+                .project_processor()
+                .project_conversation_membership(connection, &request.params),
             Some(ClientMethod::ProjectArchive) => self
                 .project_processor()
                 .project_archive(connection, &request.params),

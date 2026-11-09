@@ -33,6 +33,7 @@ export interface ChatInputAttachMenuOptions {
 	/** Product-owned entries for this composer, alongside its attachment and Skill actions. */
 	readonly host?: {
 		readonly getWorkspaceAction?: () => IAction | undefined;
+		readonly getProjectActions?: () => readonly IAction[] | undefined;
 	};
 	readonly onSelectProject?: (projectId: string) => void;
 	readonly focusInput?: () => void;
@@ -53,8 +54,10 @@ interface SubmenuItemDef {
 	readonly id: string;
 	readonly label: string;
 	readonly icon?: Icon;
+	readonly iconColor?: string;
 	readonly isSeparator?: boolean;
 	readonly disabled?: boolean;
+	readonly checked?: boolean;
 	readonly run?: () => void;
 }
 
@@ -99,6 +102,7 @@ export class ChatInputAttachMenu extends Disposable {
 			ariaLabel: localize('chat.attach.menuLabel', 'Add content or context'),
 			buttonStyles: defaultButtonStyles,
 			iconPlacement: 'leading-with-trailing-check',
+			getCheckedActionsRepresentation: action => action.id.startsWith('project:') ? 'radio' : 'checkbox',
 			getKeyBinding: action => action.id === 'upload' ? uploadKeybinding : undefined,
 			openSubmenusImmediatelyOnHover: true,
 			tabLeavesSubmenu: true,
@@ -178,8 +182,10 @@ export class ChatInputAttachMenu extends Disposable {
 			id: item.id,
 			label: item.label,
 			icon: item.icon,
+			iconColor: item.iconColor,
 			tooltip: '',
 			enabled: !item.disabled,
+			checked: item.checked,
 			run: () => {
 				this.close();
 				item.run?.();
@@ -210,6 +216,22 @@ export class ChatInputAttachMenu extends Disposable {
 			getSubmenuItems: () => this.getSkillsSubmenuItems(!host),
 		};
 		if (host) {
+			const projects = host.getProjectActions?.();
+			if (projects) {
+				attachments.push({
+					id: 'project',
+					label: localize('chat.attach.addToProject', 'Add to project'),
+					icon: Lxicon.projects,
+					getSubmenuItems: () => projects.length
+						? projects.map(project => ({
+							id: `project:${project.id}`, label: project.label, icon: project.icon,
+							iconColor: project.iconColor,
+							checked: project.checked, disabled: !project.enabled,
+							run: () => void project.run(),
+						}))
+						: [{ id: 'no-projects', label: localize('chat.attach.noProjects', 'No projects'), disabled: true }],
+				});
+			}
 			const workspace = host.getWorkspaceAction?.();
 			if (workspace?.enabled) {
 				attachments.push({

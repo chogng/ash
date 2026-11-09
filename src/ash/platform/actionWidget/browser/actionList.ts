@@ -47,6 +47,7 @@ export interface IActionListItem<T> {
 	readonly label: string;
 	readonly disabled?: boolean;
 	readonly group?: { readonly title: string; readonly icon?: Icon; };
+	readonly iconColor?: string;
 	readonly checked?: boolean;
 	readonly standaloneToggle?: IActionListItemInlineToggle;
 	readonly canPreview?: boolean;
@@ -172,7 +173,9 @@ class ActionListAction extends ActionViewItem {
 			button.append(indicator);
 		}
 		if (icon) {
-			appendIcon(icon, button).classList.add('ash-action-widget-command-icon');
+			const commandIcon = appendIcon(icon, button);
+			commandIcon.classList.add('ash-action-widget-command-icon');
+			if (this.action.iconColor) commandIcon.style.color = this.action.iconColor;
 		} else if (trailingCheck) {
 			button.append(h(ownerDocument, 'span', { className: 'ash-action-widget-command-icon', attributes: { 'aria-hidden': 'true' } }));
 		}
@@ -447,6 +450,7 @@ export class ActionList<T> extends Disposable {
 				id, label: entry.label, tooltip: entry.label,
 				enabled: entry.kind === ActionListItemKind.Action && !isDisabled(entry),
 				icon: entry.group?.icon,
+				iconColor: entry.iconColor,
 				checked: entry.checked,
 				badge: entry.badge,
 				run: () => this.select(entry),

@@ -147,6 +147,7 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 			}
 			this.renderedIcon = action.icon;
 		}
+		if (this.actionIcon) this.actionIcon.style.color = action.iconColor ?? '';
 		if (this.renderedClass !== action.class) {
 			for (const name of this.renderedClass?.split(/\s+/).filter(Boolean) ?? []) this.button.domNode.classList.remove(name);
 			for (const name of action.class?.split(/\s+/).filter(Boolean) ?? []) this.button.domNode.classList.add(name);

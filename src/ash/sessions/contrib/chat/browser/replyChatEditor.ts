@@ -68,7 +68,7 @@ export interface ReplyChatEditorOptions {
 	readonly literalServerCommands?: true;
 	readonly advanceWelcomePhrase?: false;
 	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>, model: IReplyChatEditorModel) => IDisposable & {
-		getAttachMenuAction?(): IAction | undefined;
+		getAttachMenuProjectActions?(): readonly IAction[] | undefined;
 	};
 	readonly accessibility: {
 		readonly focusContext: string;
@@ -173,7 +173,7 @@ export class ReplyChatEditor extends EditorPane {
 						chatModelSlider: true, configureModelInMenu: true,
 						renderSecondaryToolbar: false, draftStorage: 'host',
 						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => draftPicker = createDraftPicker(instantiation, footer, this.shown, model)),
-						attachMenuHost: { getWorkspaceAction: () => draftPicker?.getAttachMenuAction?.() },
+						attachMenuHost: { getProjectActions: () => draftPicker?.getAttachMenuProjectActions?.() },
 						inputLabel: this.options.inputLabel(),
 						accessibilityHelp: getChatPromptStartersHelp,
 					});

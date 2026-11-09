@@ -9,6 +9,8 @@ export interface IAction {
 	readonly label: string;
 	readonly tooltip: string;
 	readonly icon?: Icon;
+	/** CSS foreground for the action glyph, independent of its label and checkmark. */
+	readonly iconColor?: string;
 	/** Marks an action whose effect can permanently remove or destroy data. */
 	readonly destructive?: boolean;
 	readonly class?: string;

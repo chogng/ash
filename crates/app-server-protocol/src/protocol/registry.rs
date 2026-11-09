@@ -2134,6 +2134,10 @@ use crate::protocol::projects::ProjectChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectCommandDispositionDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectConversationMembership;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectConversationMembershipParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectCreateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectDetailsUpdateParams;
@@ -4327,6 +4331,11 @@ client_methods! {
     },
     ProjectSessionUnlink => "project/session/unlink" {
         params: ProjectSessionMutationParams,
+        response: ProjectMutationResult,
+        serialization: GlobalExclusive,
+    },
+    ProjectConversationMembership => "project/conversation/membership" {
+        params: ProjectConversationMembershipParams,
         response: ProjectMutationResult,
         serialization: GlobalExclusive,
     },
@@ -7654,6 +7663,8 @@ typescript_bindings! {
     ProjectRootUpdateParams,
     ProjectRootRemoveParams,
     ProjectSessionMutationParams,
+    ProjectConversationMembership,
+    ProjectConversationMembershipParams,
     ProjectLifecycleParams,
     ProjectCommandDispositionDto,
     ProjectMutationResult,

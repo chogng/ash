@@ -40,6 +40,7 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly title: string;
 	/** Session catalog identity, when this row represents an Ash session. */
 	readonly sessionId?: string;
+	readonly externalConversationId?: string;
 	readonly groupingContext?: SessionGroupingContext;
 	/** Milliseconds since the Unix epoch, when supplied by the catalog. */
 	readonly createdAt?: number;
@@ -217,9 +218,11 @@ export interface ChatListGroup {
 	readonly project?: ChatListProject;
 }
 
-export function getProjectSessionRows(entries: readonly ChatListEntry[], sessionIds: readonly string[]): ChatListEntry[] {
+export function getProjectSessionRows(entries: readonly ChatListEntry[], sessionIds: readonly string[], externalConversationIds?: readonly string[]): ChatListEntry[] {
 	const members = new Set(sessionIds);
-	return entries.filter(entry => entry.sessionId !== undefined && members.has(entry.sessionId))
+	const external = new Set(externalConversationIds);
+	return entries.filter(entry => (entry.sessionId !== undefined && members.has(entry.sessionId))
+		|| (entry.externalConversationId !== undefined && external.has(entry.externalConversationId)))
 		.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
 }
 
@@ -248,6 +251,7 @@ export function groupChatList(snapshots: readonly ChatListSnapshot[], mode: 'cha
 interface ProjectMembership {
 	readonly revision: number;
 	sessionIds?: readonly string[];
+	externalConversationIds?: readonly string[];
 	failed?: boolean;
 }
 
@@ -286,7 +290,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			for (const project of projects) {
 				const membership = this.readMembership(project.id, project.revision, project.sessionCount);
 				const existing = projectGroups.get(project.id);
-				const rows = getProjectSessionRows(entries, membership?.sessionIds ?? []);
+				const rows = getProjectSessionRows(entries, membership?.sessionIds ?? [], membership?.externalConversationIds);
 				for (const row of rows) projectEntryIds.add(row.id);
 				projectGroups.set(project.id, { key: project.id, title: project.name, rows: [...rows, ...(existing?.rows ?? [])], project: existing?.project });
 			}
@@ -366,15 +370,18 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		if (current?.revision === revision) return current;
 
 		// Keep the last known membership until the new project revision is read.
-		const request: ProjectMembership = { revision, sessionIds: current?.sessionIds };
+		const request: ProjectMembership = { revision, sessionIds: current?.sessionIds, externalConversationIds: current?.externalConversationIds };
 		this.membership.set(id, request);
-		const finish = (sessionIds?: readonly string[]): void => {
+		const finish = (project?: { readonly sessionIds: readonly string[]; readonly externalConversationIds?: readonly string[]; }): void => {
 			if (this.isDisposed || this.membership.get(id) !== request) return;
-			request.failed = sessionIds === undefined;
-			request.sessionIds = sessionIds ?? request.sessionIds;
+			request.failed = project === undefined;
+			if (project) {
+				request.sessionIds = project.sessionIds;
+				request.externalConversationIds = project.externalConversationIds;
+			}
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		};
-		void this.projectService.read(id, 'chat').then(value => finish(value.sessionIds), () => finish());
+		void this.projectService.read(id, 'chat').then(finish, () => finish());
 		return request;
 	}
 
@@ -418,7 +425,29 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			const memberships = destinations.filter(project => this.membership.get(project.id)?.sessionIds?.includes(sessionId));
 			const current = parentProject ?? (memberships.length === 1 ? memberships[0]!.id : undefined);
 			return sessionProjectOrganization(this.projectService, sessionId, current, destinations);
-		} : () => entry.project;
+		} : () => {
+			const externalId = entry.externalConversationId;
+			if (!externalId) return entry.project;
+			const memberships = destinations.filter(item => this.membership.get(item.id)?.externalConversationIds?.includes(externalId));
+			const current = memberships.find(item => item.id === parentProject) ?? (memberships.length === 1 ? memberships[0] : undefined);
+			const ashDestinations = destinations.map(({ id, name }) => ({ id, title: name }));
+			if (!current) {
+				const remote = entry.project;
+				if (remote?.current || !ashDestinations.length) return remote;
+				return {
+					...remote,
+					destinations: [...ashDestinations, ...(remote?.destinations ?? [])],
+					move: (destination: string | undefined) => ashDestinations.some(item => item.id === destination)
+						? this.projectService.moveExternalConversation(externalId, undefined, destination)
+						: remote?.move(destination) ?? Promise.resolve(),
+				};
+			}
+			return {
+				current: current.id,
+				destinations: ashDestinations,
+				move: (destination: string | undefined) => this.projectService.moveExternalConversation(externalId, current.id, destination),
+			};
+		};
 		return {
 			id: entry.id,
 			sessionId,

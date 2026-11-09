@@ -46,6 +46,7 @@ pub(crate) fn apply(
                 color: color.clone(),
                 roots: BTreeMap::new(),
                 session_ids: BTreeSet::new(),
+                external_conversation_ids: BTreeSet::new(),
                 materials: materials.clone(),
             }
         }
@@ -92,6 +93,7 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
             project.status = ProjectStatus::Deleted;
             project.roots.clear();
             project.session_ids.clear();
+            project.external_conversation_ids.clear();
             project.materials.clear();
             return Ok(());
         }
@@ -160,6 +162,24 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
         ProjectCommand::UnlinkSession { session_id } => {
             if !project.session_ids.remove(session_id) {
                 return Err(ProjectError::NotFound(session_id.to_string()));
+            }
+        }
+        ProjectCommand::LinkExternalConversation { conversation_id } => {
+            if project.scope() != crate::ProjectScope::Chat {
+                return Err(ProjectError::InvalidTransition(
+                    "external conversations require a Chat Project".into(),
+                ));
+            }
+            if !project
+                .external_conversation_ids
+                .insert(conversation_id.clone())
+            {
+                return Err(ProjectError::AlreadyExists(conversation_id.clone()));
+            }
+        }
+        ProjectCommand::UnlinkExternalConversation { conversation_id } => {
+            if !project.external_conversation_ids.remove(conversation_id) {
+                return Err(ProjectError::NotFound(conversation_id.clone()));
             }
         }
         ProjectCommand::Archive => project.status = ProjectStatus::Archived,

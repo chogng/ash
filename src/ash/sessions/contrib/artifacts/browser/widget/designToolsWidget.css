@@ -58,6 +58,15 @@
 	border-radius: var(--ash-cornerRadius-xLarge);
 }
 
+/* Design menus stay dark even when the window uses the light theme. */
+[data-color-scheme="light"] .ash-context-view-menu:has(> .ash-design-menu) {
+	--ash-menu-check-foreground: color-mix(
+		in srgb,
+		var(--ash-accent-foreground) 60%,
+		var(--ash-sessions-design-chromeForeground)
+	);
+}
+
 [data-color-scheme="hcDark"] .ash-context-view-menu:has(> .ash-design-menu),
 [data-color-scheme="hcLight"] .ash-context-view-menu:has(> .ash-design-menu) {
 	--ash-border: var(--ash-contrastBorder);

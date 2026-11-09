@@ -23,7 +23,7 @@ import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 import type { ChatGPTConversation } from '../browser/chatGPTClient.js';
-import { IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
+import { chatGPTProjectConversationId, chatGPTProjectPreferenceKey, IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';
 
@@ -120,6 +120,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				const canArchive = !id.startsWith('pending:') && (conversation.local || state.connected && state.networkAvailable);
 				return {
 					id: catalogId,
+					externalConversationId: conversation.local || id.startsWith('pending:') ? undefined : chatGPTProjectConversationId(state.catalogScope, id),
 					title, pinned,
 					createdAt: conversation.createdAt,
 					updatedAt: conversation.updatedAt,
@@ -169,7 +170,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 						createdAt: project.createdAt,
 						updatedAt: project.updatedAt,
 						history: this.projectHistory(project.id, state),
-						preferenceKey: state.catalogScope && `${state.catalogScope}:${project.id}`,
+						preferenceKey: chatGPTProjectPreferenceKey(state.catalogScope, project.id),
 						archived: archiveKey ? storage.getBoolean(archiveKey, StorageScope.PROFILE, false) : undefined,
 						restore: setArchived ? () => setArchived(false) : undefined,
 						archive: setArchived && state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.voice === 'idle'

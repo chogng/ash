@@ -59,6 +59,7 @@
 
 .ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
 	.ash-sessions-window {
+	--ash-menu-check-foreground: var(--ash-accent-foreground);
 	--ash-sessions-sidebar-selection-background: var(
 		--ash-menu-hoverBackground
 	);

@@ -414,7 +414,7 @@
     "sessions.chatgpt.attachFromFolder": "从文件夹添加附件…",
     "sessions.chatgpt.clearFolder": "清除文件夹",
     "sessions.chatgpt.newProjectMoveFailed": "消息已发送，但无法将对话加入项目：{0}",
-    "sessions.chatgpt.projectOrFolderHelp": "在新对话中，打开「添加文件（+）」并选择「项目或文件夹」，也可按 Tab 聚焦输入框下方的「项目或文件夹」。按 Enter 或空格打开，用方向键浏览，按 Escape 返回。可以选择对话所属的项目、用于挑选附件的文件夹，或同时选择两者。选定文件夹后，使用「从文件夹添加附件」挑选要上传的文件。「清除项目」和「清除文件夹」各自独立。",
+    "sessions.chatgpt.projectOrFolderHelp": "在新对话中，打开「添加文件（+）」并选择「添加到项目」。按右方向键查看项目，然后按 Enter 选择。选中的项目显示在输入框下方。发送消息后，对话会加入该项目。按 Tab 聚焦「清除项目」，再按 Enter 将项目从当前草稿中移除。使用输入框下方的「项目或文件夹」选择附件文件夹，然后选择「从文件夹添加附件」。「清除项目」和「清除文件夹」各自独立。",
     "sessions.chatgpt.voicePlaybackBlocked": "音频播放被阻止，请再次点击按钮启动语音对话。",
     "sessions.chatgpt.uploadFailed": "文件上传失败（{0}）。",
     "sessions.chatgpt.uploadNotReady": "文件仍在处理中，请重试该附件。",

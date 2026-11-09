@@ -78,6 +78,9 @@ pub struct Project {
     pub color: Option<String>,
     pub roots: BTreeMap<DirId, ProjectRoot>,
     pub session_ids: BTreeSet<SessionId>,
+    /// Opaque references to conversations owned by an external provider.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub external_conversation_ids: BTreeSet<String>,
     #[serde(default)]
     pub materials: Vec<ProjectMaterial>,
 }
@@ -126,6 +129,18 @@ impl Project {
             ));
         }
         validate_text("Project name", &self.name)?;
+        for id in &self.external_conversation_ids {
+            if id.is_empty()
+                || id.len() > 512
+                || !id.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'.' | b'-' | b'_')
+                })
+            {
+                return Err(crate::ProjectError::InvalidInput(
+                    "invalid external conversation reference".into(),
+                ));
+            }
+        }
         for id in [&self.icon, &self.color].into_iter().flatten() {
             if id.len() > 128
                 || !id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)

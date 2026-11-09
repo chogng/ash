@@ -100,7 +100,12 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		let uploaded: string | null | undefined;
 		let projectMove: unknown;
 		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
-			json: { items: [{ gizmo: { id: 'g-project', display: { name: 'Research' } } }], cursor: null },
+			json: {
+				items: [
+					{ gizmo: { id: 'g-project', display: { name: 'Research' } } },
+					{ gizmo: { id: 'g-other', display: { name: 'Archive' } } },
+				], cursor: null
+			},
 		}));
 		await page.route('**/service/backend-api/files', route => route.fulfill({
 			json: { file_id: 'file-notes', upload_url: 'https://example.test/upload' },
@@ -119,17 +124,87 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			projectMove = route.request().postDataJSON();
 			return route.fulfill({ json: {} });
 		});
-		await page.goto('/chatgptNavigation.html?locale=zh-CN&folderPicker');
-		const picker = page.locator('.ash-chatgpt-widget .ash-chat-input-footer > .ash-chat-input-workspace-slot button');
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&folderPicker&theme=light');
+		const chip = page.locator('.ash-chatgpt-widget .ash-chatgpt-draft-target');
+		const picker = chip.locator('.ash-chat-input-workspace-picker');
+		const remove = chip.getByRole('button', { name: '清除项目', exact: true });
+		const filled = remove.locator('[data-ash-icon-id="projects-filled"]');
+		const close = remove.locator('[data-ash-icon-id="close"]');
 		await expect(picker).toHaveAccessibleName('项目或文件夹');
 		await expect(picker).toBeEnabled();
-		await page.locator('.ash-chatgpt-widget [data-action-id="ash.chat.input.attach"] button').press('Enter');
+		await expect(remove).toBeHidden();
+		const pickerLabel = picker.locator('.ash-button-label');
+		const unselectedIcon = picker.locator('[data-ash-icon-id="projects"]');
+		const [unselectedIconBounds, unselectedLabelBounds] = await Promise.all([
+			unselectedIcon.boundingBox(),
+			pickerLabel.boundingBox(),
+		]);
+		const attach = page.locator('.ash-chatgpt-widget [data-action-id="ash.chat.input.attach"] button');
+		await attach.press('Enter');
 		const addMenu = page.getByRole('menu', { name: '添加内容或上下文', exact: true });
-		await expect(addMenu.getByRole('menuitem')).toHaveCount(2);
-		await expect(addMenu.getByText('上传或添加文件', { exact: true })).toBeVisible();
-		await addMenu.getByRole('menuitem', { name: '项目或文件夹', exact: true }).press('Enter');
+		await expect(addMenu.getByRole('menuitem')).toHaveText([/上传或添加文件/, '添加到项目']);
+		const addToProject = addMenu.getByRole('menuitem', { name: '添加到项目', exact: true });
+		await addToProject.press('ArrowRight');
+		const projects = page.getByRole('menu', { name: '添加到项目', exact: true });
+		const research = projects.getByRole('menuitemradio', { name: 'Research', exact: true });
+		await expect(projects.getByRole('menuitemradio')).toHaveCount(2);
+		await research.press('Enter');
+		await expect(addMenu).toBeHidden();
+		await expect(picker).toHaveAccessibleName('项目或文件夹：Research');
+		await expect(picker).toBeFocused();
+		await expect(chip).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(filled).toBeVisible();
+		await expect(close).toBeHidden();
+		const [selectedIconBounds, selectedLabelBounds] = await Promise.all([
+			filled.boundingBox(),
+			pickerLabel.boundingBox(),
+		]);
+		expect([selectedIconBounds!.x, selectedLabelBounds!.x]).toEqual([unselectedIconBounds!.x, unselectedLabelBounds!.x]);
+		const removeBounds = (await remove.boundingBox())!;
+		expect(removeBounds.width).toBe(removeBounds.height);
+		await picker.hover();
+		await expect(picker).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(filled).toBeHidden();
+		await expect(close).toBeVisible();
+		await remove.hover();
+		await expect(remove).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await remove.click();
+		await expect(remove).toBeHidden();
+		await expect(picker).toHaveAccessibleName('项目或文件夹');
+		await attach.press('Enter');
+		await addToProject.hover();
+		await research.click();
+		await expect(picker).toHaveAccessibleName('项目或文件夹：Research');
+		await attach.press('Enter');
+		await addToProject.press('ArrowRight');
+		await expect(research).toHaveAttribute('aria-checked', 'true');
+		await expect(research.locator('.ash-menu-trailing-check .ash-icon-check')).toHaveCSS('color', 'rgb(0, 95, 184)');
+		await research.press('Enter');
+		const sidebarProject = page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Research', exact: true });
+		await sidebarProject.press('Shift+F10');
+		await page.getByRole('menuitem', { name: '编辑', exact: true }).click();
+		const appearanceEditor = page.getByRole('dialog', { name: '编辑项目外观', exact: true });
+		await appearanceEditor.getByRole('button', { name: '更改项目外观' }).press('Enter');
+		const appearancePicker = page.getByRole('dialog', { name: '更改项目外观', exact: true });
+		await appearancePicker.getByRole('combobox', { name: '搜索图标' }).fill('chat');
+		await appearancePicker.getByRole('option', { name: 'chat', exact: true }).click();
+		await appearancePicker.getByRole('button', { name: '红色', exact: true }).click();
+		await appearancePicker.getByRole('button', { name: '完成', exact: true }).click();
+		await appearanceEditor.getByRole('button', { name: '保存更改', exact: true }).click();
+		const chipIcon = remove.locator('[data-ash-icon-id="chat"]');
+		await expect(chipIcon).toBeVisible();
+		const sidebarIcon = sidebarProject.locator('[data-ash-icon-id="chat"]');
+		await expect(sidebarProject.locator('.ash-sessions-list-project-icon')).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
+		const iconColor = await sidebarIcon.evaluate(icon => getComputedStyle(icon).color);
+		await expect(chipIcon).toHaveCSS('color', iconColor);
+		await attach.press('Enter');
+		await addToProject.press('ArrowRight');
+		await expect(research.locator('[data-ash-icon-id="chat"]')).toHaveCSS('color', iconColor);
+		await research.press('Enter');
+		await picker.press('Enter');
+		await expect(page.getByRole('menuitem', { name: '清除项目', exact: true })).toHaveCount(0);
 		await page.getByText('选择文件夹…', { exact: true }).click();
-		await expect(picker).toHaveAccessibleName('项目或文件夹：fixture-folder');
+		await expect(picker).toHaveAccessibleName('项目或文件夹：Research · fixture-folder');
 		await expect(picker).toBeFocused();
 		expect(uploaded).toBeUndefined();
 		await picker.press('Enter');
@@ -146,10 +221,12 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(picker).toHaveAccessibleName('项目或文件夹：Research · fixture-folder');
 		await picker.press('Enter');
 		const selectedProject = page.getByRole('menuitemradio', { name: 'Research', checked: true });
-		const projectIcon = selectedProject.locator('.ash-menu-leading-slot .ash-icon-projects');
+		const projectIcon = selectedProject.locator('.ash-menu-leading-slot [data-ash-icon-id="chat"]');
 		const check = selectedProject.locator('.ash-menu-trailing-slot .ash-icon-check');
 		await expect(projectIcon).toBeVisible();
+		await expect(projectIcon).toHaveCSS('color', iconColor);
 		await expect(check).toBeVisible();
+		await expect(check).toHaveCSS('color', 'rgb(0, 95, 184)');
 		await expect(check.locator('..')).toHaveAttribute('aria-hidden', 'true');
 		const [iconBounds, labelBounds, checkBounds] = await Promise.all([
 			projectIcon.boundingBox(),
@@ -158,7 +235,14 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		]);
 		expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(labelBounds!.x);
 		expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(checkBounds!.x);
-		await page.getByText('清除项目', { exact: true }).click();
+		await selectedProject.press('Escape');
+		await page.mouse.move(0, 0);
+		await picker.press('Shift+Tab');
+		await expect(remove).toBeFocused();
+		await expect(close).toBeVisible();
+		await remove.press('Enter');
+		await expect(remove).toBeHidden();
+		await expect(picker).toBeFocused();
 		await expect(picker).toHaveAccessibleName('项目或文件夹：fixture-folder');
 		await picker.press('Enter');
 		await page.getByRole('menu').getByText('Research', { exact: true }).click();
@@ -173,6 +257,63 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await page.keyboard.press('Enter');
 		await expect.poll(() => projectMove).toEqual({ gizmo_id: 'g-project' });
 		await expect(picker).toBeHidden();
+	});
+
+	test('adds the current ChatGPT draft to an Ash project through the Ash project service', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: { items: [{ gizmo: { id: 'g-cloud', display: { name: 'Cloud project' } } }], cursor: null },
+		}));
+		await page.route('**/service/backend-api/f/conversation', route => route.fulfill({
+			contentType: 'text/event-stream',
+			body: 'data: {"conversation_id":"fixture-chat"}\n\ndata: [DONE]\n\n',
+		}));
+		let remoteProjectWrites = 0;
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => {
+			if (route.request().method() !== 'PATCH') return route.fallback();
+			remoteProjectWrites++;
+			return route.fulfill({ json: {} });
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&folderPicker&ashProjectPicker');
+		const sidebarProject = page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Local Ash project', exact: true });
+		const sidebarIcon = sidebarProject.locator('[data-ash-icon-id="chat"]');
+		await expect(sidebarIcon).toBeVisible();
+		const iconColor = await sidebarIcon.evaluate(icon => getComputedStyle(icon).color);
+		await fillMessage(page, 'Keep this ChatGPT draft');
+
+		await page.locator('.ash-chatgpt-widget [data-action-id="ash.chat.input.attach"] button').press('Enter');
+		const addMenu = page.getByRole('menu', { name: '添加内容或上下文', exact: true });
+		await addMenu.getByRole('menuitem', { name: '添加到项目', exact: true }).press('ArrowRight');
+		const submenu = page.getByRole('menu', { name: '添加到项目', exact: true });
+		const ashRow = submenu.getByRole('menuitemradio', { name: 'Local Ash project', exact: true });
+		await expect(ashRow.locator('[data-ash-icon-id="chat"]')).toHaveCSS('color', iconColor);
+		await expect(submenu.getByRole('menuitemradio', { name: 'Cloud project', exact: true })).toBeVisible();
+		await expect(submenu.getByRole('separator')).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+
+		await page.locator('.ash-chatgpt-widget .ash-chat-input-workspace-picker').press('Enter');
+		await expect(page.getByRole('menu', { name: '项目或文件夹', exact: true }).getByRole('separator')).toHaveCount(1);
+		await page.getByRole('searchbox', { name: '项目或文件夹' }).fill('Local Ash');
+		const result = page.getByRole('menuitemradio', { name: 'Local Ash project', exact: true });
+		await expect(result.locator('[data-ash-icon-id="chat"]')).toHaveCSS('color', iconColor);
+		await result.press('Enter');
+		const chip = page.locator('.ash-chatgpt-widget .ash-chatgpt-draft-target');
+		await expect(chip.locator('.ash-chat-input-workspace-picker')).toHaveText('Local Ash project');
+		await expect(chip.locator('[data-ash-icon-id="chat"]')).toHaveCSS('color', iconColor);
+		expect(await page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe('Keep this ChatGPT draft');
+		await page.locator('.ash-chatgpt-widget [data-action-id="ash.chat.input.attach"] button').press('Enter');
+		await addMenu.getByRole('menuitem', { name: '添加到项目', exact: true }).press('ArrowRight');
+		await expect(ashRow).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		await fillMessage(page, 'Keep this ChatGPT draft');
+		await page.keyboard.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-linked-conversation', /^[0-9a-f]{40}$/u);
+		expect(remoteProjectWrites).toBe(0);
+		await sidebarProject.press('ArrowRight');
+		await expect(page.locator('[data-parent-project="project:ash-project-fixture"]').getByRole('button').first()).toBeVisible();
 	});
 
 	test('ChatGPT reuses the left prompt timeline to navigate the visible conversation', async () => {

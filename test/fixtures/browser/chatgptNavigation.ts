@@ -9,7 +9,7 @@ import { Menus } from '../../../src/ash/sessions/browser/menus.js';
 import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
 import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
-import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
+import { IProjectService, type Project } from '../../../src/ash/platform/projects/common/projectService.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -81,7 +81,7 @@ import { BrowserContextViewService } from '../../../src/ash/platform/contextview
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { SessionsViewRegistry } from '../../../src/ash/sessions/common/views.js';
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { ISessionsSearchService } from '../../../src/ash/sessions/contrib/search/browser/searchService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { ISessionsService, type SessionsSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
@@ -216,7 +216,8 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[ISessionProviderScopeService, { onDidChangeScopes: Event.None, getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
 	[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModelCatalog: async () => [] } } as unknown as SessionProviderServices],
 	[IThemeService, theme],
-	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
+	// The project picker exercises the inherited styles of the production popup host.
+	[IContextViewService, resources.add(new BrowserContextViewService(parameters.has('folderPicker') ? sessionsRoot : document.body))],
 	[IVoiceCodeTranscriptionBackendService, dictation ? createTestDictationBackend(resources, dictation) : undefined],
 	[IPreferencesService, { openSettings: async () => undefined } as unknown as IPreferencesService],
 )));
@@ -299,7 +300,26 @@ window.ashChatGPTIntegration = {
 	},
 };
 services.registerInstance(ISessionsListModelService, new SessionsListModelService(storage));
-services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);
+let ashProject: Project = {
+	id: 'ash-project-fixture', name: 'Local Ash project', revision: 1,
+	archived: false, sessionCount: 0, description: '', materials: [], sessionIds: [],
+	icon: 'chat', color: 'terminal.ansiBlue',
+};
+const projectChanged = resources.add(new Emitter<void>());
+services.registerInstance(IProjectService, {
+	list: async () => parameters.has('ashProjectPicker') ? [ashProject] : [],
+	read: async (id: string) => {
+		if (parameters.has('ashProjectPicker') && id === ashProject.id) return ashProject;
+		throw new Error('Unknown fixture project');
+	},
+	moveExternalConversation: async (id: string, _from: string | undefined, to: string | undefined) => {
+		if (to !== ashProject.id) throw new Error('Unknown destination project');
+		ashProject = { ...ashProject, revision: ashProject.revision + 1, sessionCount: 1, externalConversationIds: [id] };
+		document.body.dataset.linkedConversation = id;
+		projectChanged.fire();
+	},
+	onDidChange: projectChanged.event,
+} as unknown as IProjectService);
 const groups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None, getOrder: (_mode, ids) => ids } as ISessionSectionOrderService);
