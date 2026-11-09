@@ -1807,21 +1807,37 @@ suite('sessions browser component', () => {
 		await expect(folderIcon).toBeVisible();
 		const folderIconBounds = (await folderIcon.boundingBox())!;
 		const folderNameBounds = (await names.first().boundingBox())!;
-		const lastFolderBounds = (await folders.last().boundingBox())!;
+		const addIconBounds = (await addIcon.boundingBox())!;
 		expect(folderIconBounds.x).toBeCloseTo(nameIconBounds.x);
 		expect(folderNameBounds.x).toBeCloseTo(nameTextX);
-		expect((await addIcon.boundingBox())!.x).toBeCloseTo(nameIconBounds.x);
+		expect(addIconBounds.x).toBeCloseTo(nameIconBounds.x);
 		expect((await addLabel.boundingBox())!.x).toBeCloseTo(nameTextX);
 		const removeFirst = source.getByRole('button', { name: chinese ? '移除 /workspace/first' : 'Remove /workspace/first' });
 		const populatedPanel = (await folderPanel.boundingBox())!;
 		const populatedAdd = (await add.boundingBox())!;
+		const firstFolderBounds = (await folders.first().boundingBox())!;
+		const lastFolderBounds = (await folders.last().boundingBox())!;
+		const lastFolderIcon = (await folders.last().locator('[data-ash-icon-id="folder"]').boundingBox())!;
 		const removeBounds = (await removeFirst.boundingBox())!;
-		expect(populatedAdd.y).toBeGreaterThan(lastFolderBounds.y + lastFolderBounds.height);
+		expect(populatedAdd.height).toBeCloseTo(lastFolderBounds.height);
+		expect(addIconBounds.y - lastFolderIcon.y).toBeCloseTo(lastFolderIcon.y - folderIconBounds.y);
 		expect(populatedAdd.x - populatedPanel.x).toBeCloseTo(panelInset);
 		expect(populatedPanel.y + populatedPanel.height - populatedAdd.y - populatedAdd.height).toBeCloseTo(panelInset);
-		expect(removeBounds.y - populatedPanel.y).toBeCloseTo(panelInset);
+		expect(firstFolderBounds.y - populatedPanel.y).toBeCloseTo(panelInset);
+		expect(removeBounds.y + removeBounds.height / 2).toBeCloseTo(folderIconBounds.y + folderIconBounds.height / 2);
 		expect(populatedPanel.x + populatedPanel.width - removeBounds.x - removeBounds.width).toBeCloseTo(panelInset);
 		await dialog.screenshot({ path: testInfo.outputPath(`code-project-folders-${locale}.png`) });
+		for (const folder of ['folder-3', 'folder-4', 'folder-5', 'folder-6']) {
+			await add.press('Enter');
+			await expect(names.last()).toHaveText(folder);
+		}
+		await expect(add).toBeInViewport();
+		expect(await folderList.evaluate(list => list.scrollHeight > list.clientHeight)).toBe(true);
+		for (const folder of ['folder-6', 'folder-5', 'folder-4', 'folder-3']) {
+			const path = `/workspace/${folder}`;
+			await source.getByRole('button', { name: chinese ? `移除 ${path}` : `Remove ${path}` }).click();
+		}
+		await expect(names).toHaveText(['first', 'second']);
 		await removeFirst.press('Enter');
 		await expect(add).toBeFocused();
 		await expect(names).toHaveText(['second']);

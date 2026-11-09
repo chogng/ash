@@ -184,7 +184,9 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 			if (options.title !== title || options.canSelectFiles || !options.canSelectFolders || options.availableFileSystems?.join() !== 'file') {
 				throw new Error('Expected a local folder picker');
 			}
-			return [URI.file(folder++ === 0 ? '/workspace/first' : '/workspace/second')];
+			const name = ['first', 'second'][folder] ?? `folder-${folder + 1}`;
+			folder++;
+			return [URI.file(`/workspace/${name}`)];
 		};
 	}
 	globalThis.ashWebWorkbenchHost = { api: {
