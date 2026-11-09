@@ -1,7 +1,8 @@
-import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 
@@ -12,7 +13,7 @@ export function detachedProcess(environment: NodeJS.ProcessEnv = process.env): b
 	return process.platform !== 'win32' && environment.ASH_DEV_PROCESS_SUPERVISED !== '1';
 }
 
-/** Checks OS liveness; an exited Windows process can retain a CIM entry while handles remain open. */
+/** Checks OS liveness; an exited Windows process can retain a table entry while handles remain open. */
 export function isProcessRunning(pid: number): boolean {
 	try { process.kill(pid, 0); return true; }
 	catch (error) {
@@ -64,6 +65,7 @@ export class ProcessRun {
 	private closing: Promise<void> | undefined;
 	private finishGrace: (() => void) | undefined;
 	private readonly owned = new Map<number, ProcessIdentity>();
+	private readonly windowsProcessTable = process.platform === 'win32' ? new WindowsProcessTable() : undefined;
 	private readonly registrations: Awaited<ReturnType<typeof registerRunResource>>[] = [];
 	public stopped = false;
 
@@ -150,7 +152,7 @@ export class ProcessRun {
 	}
 
 	private async rememberTree(): Promise<Map<number, ProcessIdentity>> {
-		const current = await processes();
+		const current = await processes(this.windowsProcessTable);
 		const roots = new Set<number>();
 		for (const child of this.children.keys()) {
 			if (child.pid && child.exitCode === null && child.signalCode === null && current.has(child.pid)) roots.add(child.pid);
@@ -187,11 +189,16 @@ export class ProcessRun {
 	}
 
 	private async cleanup(): Promise<void> {
+		try { await this.cleanupResources(); }
+		finally { await this.windowsProcessTable?.close(); }
+	}
+
+	private async cleanupResources(): Promise<void> {
 		const errors: unknown[] = [];
 		let current: Map<number, ProcessIdentity> | undefined;
 		try { current = await this.rememberTree(); } catch (error) { errors.push(error); }
 		const resources = await this.resources();
-		current ??= await processes();
+		current ??= await processes(this.windowsProcessTable);
 		const terminationErrors = new Map<number, unknown>();
 		if (process.platform !== 'win32') {
 			// Kill owned groups as well as the snapshot's PIDs: a renderer can fork
@@ -213,10 +220,17 @@ export class ProcessRun {
 				if ((error as NodeJS.ErrnoException).code !== 'ESRCH') terminationErrors.set(identity.pid, error);
 			}
 		}
+		if (this.windowsProcessTable && terminationErrors.size > 0) {
+			// taskkill can fail during system enumeration. The fallback checks the
+			// creation time on the same handle it uses to terminate the process.
+			const targets = [...terminationErrors.keys()].map(pid => current.get(pid)!);
+			try { await this.windowsProcessTable.terminate(targets); }
+			catch (error) { errors.push(error); }
+		}
 		// Confirm exit rather than equating delivery of a signal with termination.
 		const deadline = Date.now() + 5_000;
 		while (true) {
-			const remaining = await processes();
+			const remaining = await processes(this.windowsProcessTable);
 			const alive = [...this.owned.values()].filter(identity => remaining.get(identity.pid)?.started === identity.started);
 			if (!alive.length) break;
 			if (Date.now() >= deadline) {
@@ -239,16 +253,20 @@ export class ProcessRun {
 	}
 }
 
-async function processes(): Promise<Map<number, ProcessIdentity>> {
+async function processes(windowsProcessTable?: WindowsProcessTable): Promise<Map<number, ProcessIdentity>> {
 	if (process.platform === 'win32') {
-		// A PowerShell 7 runner's module path is incompatible with the built-in
-		// Windows PowerShell used here. Let that host discover its own CIM modules.
-		const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'));
-		const query = execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate | Where-Object { $_.CreationDate } | Select-Object ProcessId,ParentProcessId,@{n="Started";e={$_.CreationDate.ToUniversalTime().Ticks.ToString()}} | ConvertTo-Json -Compress'], { env: environment, windowsHide: true, timeout: 45_000, maxBuffer: 8 * 1024 * 1024 });
-		query.child.stdin?.end();
-		const { stdout } = await query;
-		const entries = JSON.parse(stdout) as { ProcessId: number; ParentProcessId: number; Started: string; }[];
-		return new Map(entries.filter(entry => isProcessRunning(entry.ProcessId)).map(entry => [entry.ProcessId, { pid: entry.ProcessId, parent: entry.ParentProcessId, started: entry.Started }]));
+		const table = windowsProcessTable ?? new WindowsProcessTable();
+		let rows: string[];
+		try { rows = await table.snapshot(); }
+		finally { if (!windowsProcessTable) await table.close(); }
+		const entries = new Map<number, ProcessIdentity>();
+		for (const line of rows) {
+			const match = line.match(/^(\d+)\t(\d+)\t(\d+)$/u);
+			if (!match) throw new Error('Invalid Windows process snapshot row');
+			const pid = Number(match[1]);
+			if (isProcessRunning(pid)) entries.set(pid, { pid, parent: Number(match[2]), started: match[3] });
+		}
+		return entries;
 	}
 	const { stdout } = await execute('ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='], { timeout: 5_000, maxBuffer: 8 * 1024 * 1024 });
 	const entries = new Map<number, ProcessIdentity>();
@@ -259,6 +277,220 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
 	}
 	return entries;
 }
+
+const commandTimeout = 45_000;
+
+interface WindowsProcessSession {
+	readonly child: ChildProcessWithoutNullStreams;
+	readonly lines: AsyncIterator<string>;
+	readonly exit: Promise<string>;
+}
+
+/** Reuses one native process table helper until the owning process run closes. */
+class WindowsProcessTable {
+	private session: WindowsProcessSession | undefined;
+	private pending: Promise<void> = Promise.resolve();
+
+	snapshot(): Promise<string[]> {
+		return this.execute('snapshot');
+	}
+
+	async terminate(targets: readonly { pid: number; started: string; }[]): Promise<void> {
+		await this.execute(targets.map(({ pid, started }) => `${pid}\t${started}`).join(';'));
+	}
+
+	async close(): Promise<void> {
+		await this.pending;
+		if (!this.session) return;
+		const { child, exit } = this.session;
+		const timeout = setTimeout(() => child.kill(), commandTimeout);
+		try {
+			child.stdin.end();
+			await exit;
+		} finally {
+			clearTimeout(timeout);
+		}
+	}
+
+	private execute(command: string): Promise<string[]> {
+		// All requests use one ordered stream, including concurrent unit workers.
+		const result = this.pending.then(() => this.request(command));
+		this.pending = result.then(() => undefined, () => undefined);
+		return result;
+	}
+
+	private async request(command: string): Promise<string[]> {
+		const { child, lines, exit } = this.session ??= startWindowsProcessSession();
+		const timeout = setTimeout(() => child.kill(), commandTimeout);
+		try {
+			child.stdin.write(command + '\n');
+			const rows: string[] = [];
+			for (let line = await lines.next(); !line.done; line = await lines.next()) {
+				if (line.value === '.') return rows;
+				rows.push(line.value);
+			}
+			throw new Error(`Windows process helper closed before completing its request (${await exit})`);
+		} catch (error) {
+			// Cleanup may need another snapshot after a failed command.
+			this.session = undefined;
+			child.kill();
+			await exit;
+			throw error;
+		} finally {
+			clearTimeout(timeout);
+		}
+	}
+}
+
+function startWindowsProcessSession(): WindowsProcessSession {
+	// Windows PowerShell needs its own module path when invoked from PowerShell 7.
+	const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== 'PSMODULEPATH'));
+	const command = Buffer.from(windowsProcessInterop, 'utf16le').toString('base64');
+	const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', command], { env, windowsHide: true });
+	let diagnostics = '';
+	child.stdin.on('error', () => { /* The process exit reports a broken pipe. */ });
+	child.on('error', error => { diagnostics += error.message; });
+	child.stderr.setEncoding('utf8').on('data', (chunk: string) => { diagnostics = (diagnostics + chunk).slice(-8192); });
+	const exit = new Promise<string>(resolve => {
+		child.once('close', (code, signal) => resolve(diagnostics.trim() || signal || `exit ${code}`));
+	});
+	const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })[Symbol.asyncIterator]();
+	return { child, lines, exit };
+}
+
+// Tool Help reports the original parent PID even after that parent exits. Read
+// creation times from process handles so this path works when WMI is unavailable.
+const windowsProcessInterop = String.raw`
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
+public static class AshProcessTable
+{
+    private const uint SnapshotProcesses = 0x00000002;
+    private const uint QueryLimitedInformation = 0x00001000;
+    private const uint TerminateAccess = 0x00000001;
+    private const int NoMoreFiles = 18;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ProcessEntry
+    {
+        public uint Size;
+        public uint Usage;
+        public uint Pid;
+        public UIntPtr DefaultHeap;
+        public uint Module;
+        public uint Threads;
+        public uint Parent;
+        public int BasePriority;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string Executable;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint pid);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool Process32First(IntPtr snapshot, ref ProcessEntry entry);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool Process32Next(IntPtr snapshot, ref ProcessEntry entry);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint pid);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool GetProcessTimes(IntPtr process, out long created, out long exited, out long kernel, out long user);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+    public static void Run()
+    {
+        string command;
+        while ((command = Console.ReadLine()) != null)
+        {
+            if (command == "snapshot")
+                Write();
+            else
+                foreach (string target in command.Split(';'))
+                {
+                    string[] fields = target.Split('\t');
+                    Terminate(uint.Parse(fields[0]), long.Parse(fields[1]));
+                }
+            Console.WriteLine(".");
+        }
+    }
+
+    private static void Write()
+    {
+        long snapshotStarted = DateTime.UtcNow.ToFileTimeUtc();
+        IntPtr snapshot = CreateToolhelp32Snapshot(SnapshotProcesses, 0);
+        if (snapshot == new IntPtr(-1))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+
+        try
+        {
+            var entry = new ProcessEntry { Size = (uint)Marshal.SizeOf(typeof(ProcessEntry)) };
+            if (!Process32First(snapshot, ref entry))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+
+            do { WriteEntry(entry, snapshotStarted); }
+            while (Process32Next(snapshot, ref entry));
+
+            int error = Marshal.GetLastWin32Error();
+            if (error != NoMoreFiles)
+                throw new Win32Exception(error);
+        }
+        finally { CloseHandle(snapshot); }
+    }
+
+    private static void WriteEntry(ProcessEntry entry, long snapshotStarted)
+    {
+        IntPtr process = OpenProcess(QueryLimitedInformation, false, entry.Pid);
+        if (process == IntPtr.Zero)
+            return;
+
+        try
+        {
+            long created = CreationTime(process);
+            // A PID can be reused between the snapshot and opening its handle.
+            if (created > 0 && created <= snapshotStarted)
+                Console.WriteLine("{0}\t{1}\t{2}", entry.Pid, entry.Parent, DateTime.FromFileTimeUtc(created).Ticks);
+        }
+        finally { CloseHandle(process); }
+    }
+
+    private static void Terminate(uint pid, long started)
+    {
+        IntPtr process = OpenProcess(QueryLimitedInformation | TerminateAccess, false, pid);
+        if (process == IntPtr.Zero)
+            return;
+
+        try
+        {
+            long created = CreationTime(process);
+            if (created > 0 && DateTime.FromFileTimeUtc(created).Ticks == started)
+                TerminateProcess(process, 1);
+        }
+        finally { CloseHandle(process); }
+    }
+
+    private static long CreationTime(IntPtr process)
+    {
+        long created, exited, kernel, user;
+        return GetProcessTimes(process, out created, out exited, out kernel, out user) ? created : 0;
+    }
+}
+'@
+[AshProcessTable]::Run()
+`;
 
 /**
  * Installs cancellation before any work starts and owns the cross-process registry.
