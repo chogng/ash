@@ -18,7 +18,7 @@ import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: 'accessibility.verbosity.memories', defaultValue: true,
 	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Memories accessibility verbosity must be boolean'); } return value; },
-	setting: { valueType: 'boolean', get title() { return localize({ bundle: 'ash.settings', key: 'memory.verbosityTitle' }, 'Memory settings accessibility help'); }, get description() { return localize({ bundle: 'ash.settings', key: 'memory.verbosityDescription' }, 'Announce how to open keyboard help when Memory settings receives focus.'); } },
+	setting: { valueType: 'boolean', get title() { return localize({ bundle: 'ash.settings', key: 'memory.verbosityTitle' }, 'Your Ash accessibility help'); }, get description() { return localize({ bundle: 'ash.settings', key: 'memory.verbosityDescription' }, 'Announce how to open keyboard help when Your Ash settings receive focus.'); } },
 });
 
 registerSingleton(IMemorySettingsNavigation, MemorySettingsNavigation, InstantiationType.Delayed);

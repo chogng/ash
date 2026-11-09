@@ -79,8 +79,7 @@
 				"--inspect-brk=127.0.0.1:9229",
 				"--remote-debugging-address=127.0.0.1",
 				"--remote-debugging-port=9222",
-				"--user-data-dir=${workspaceFolder}/.build/desktop/dev/debug-user-data",
-				"--folder=${workspaceFolder}"
+				"--user-data-dir=${workspaceFolder}/.build/desktop/dev/debug-user-data"
 			],
 			"autoAttachChildProcesses": false,
 			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],

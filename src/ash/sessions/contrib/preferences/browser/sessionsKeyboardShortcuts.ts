@@ -1,11 +1,16 @@
 import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 import { Keybinding, logicalKey, physicalKey, type KeybindingChord, type KeybindingModifiers, type ResolvedKeybinding } from '../../../../base/common/keybindings.js';
+import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
 import { localize } from '../../../../nls.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { ContextKeyExpr, type Context, type ContextKeyValue } from '../../../../platform/contextkey/common/contextkey.js';
 import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
+import { GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE } from '../../../../workbench/browser/parts/editor/diffEditorCommands.js';
+import { ActiveEditorContext, IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
+import { DIFF_EDITOR_ID } from '../../../../workbench/common/editor/diffEditorInput.js';
+import { BrowserViewEditorId } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { CONTEXT_DEBUG_STATE } from '../../../../workbench/contrib/debug/common/debug.js';
 import { NewSessionPickersAvailableContext } from '../../chat/browser/newChatPickerKeybinding.js';
 import { designCanvasShortcutKeys, designVectorShortcutKeys } from '../../artifacts/browser/designShortcutKeys.js';
 
@@ -14,7 +19,10 @@ interface Shortcut {
 	readonly bindings: readonly ResolvedKeybinding[];
 }
 
+export type ShortcutArea = 'general' | 'browser' | 'debug' | 'diff' | 'apps' | 'agent';
+
 interface ShortcutGroup {
+	readonly area: ShortcutArea;
 	readonly title: string;
 	readonly shortcuts: readonly Shortcut[];
 }
@@ -43,7 +51,7 @@ export function filterSessionsKeyboardShortcutGroups(groups: readonly ShortcutGr
 	};
 
 	return groups.map(group => ({
-		title: group.title,
+		...group,
 		shortcuts: group.shortcuts.filter(shortcut => {
 			const name = `${group.title} ${shortcut.title}`.toLocaleLowerCase();
 			return terms.every(term => name.includes(term)) || shortcut.bindings.some(matchesKeys);
@@ -61,7 +69,22 @@ interface Scope {
 	readonly values: Readonly<Record<string, ContextKeyValue>>;
 }
 
-type ShortcutGroupId = 'conversations' | 'newCode' | 'navigation' | 'terminal' | 'designCanvas' | 'designLayers' | 'designVector' | 'designText' | 'designPrototype';
+const groupAreas = {
+	conversations: 'agent',
+	newCode: 'agent',
+	navigation: 'general',
+	terminal: 'general',
+	browser: 'browser',
+	debug: 'debug',
+	diff: 'diff',
+	designCanvas: 'apps',
+	designLayers: 'apps',
+	designVector: 'apps',
+	designText: 'apps',
+	designPrototype: 'apps',
+} satisfies Record<string, ShortcutArea>;
+
+type ShortcutGroupId = keyof typeof groupAreas;
 
 const windowKey = IsSessionsWindowContext.key;
 const canvasKey = 'sessionsDesignCanvasActive';
@@ -84,16 +107,38 @@ const scopes: readonly Scope[] = [
 	{ group: 'navigation', keys: [windowKey], values: {} },
 ];
 
+// Include shared commands from these tools only when the Sessions renderer has
+// registered a binding that resolves in a representative tool context.
+const toolScopes = [
+	{
+		group: 'browser',
+		matches: (command: string) => command.startsWith('workbench.action.browser.'),
+		values: { [ActiveEditorContext.key]: BrowserViewEditorId, browserCanGoBack: true, browserCanGoForward: true, browserHasUrl: true, browserHasError: false },
+	},
+	{
+		group: 'debug',
+		matches: (command: string) => command.startsWith('workbench.action.debug.') || command.startsWith('editor.debug.'),
+		values: { [ActiveEditorContext.key]: undefined, [CONTEXT_DEBUG_STATE.key]: 'running', [EditorContextKeys.editorTextFocus.key]: true },
+	},
+	{
+		group: 'diff',
+		matches: (command: string) => command === GOTO_NEXT_CHANGE || command === GOTO_PREVIOUS_CHANGE,
+		values: { [ActiveEditorContext.key]: DIFF_EDITOR_ID },
+	},
+] as const;
+
 export function getSessionsKeyboardShortcutGroups(keybindings: IKeybindingService, context: Context): readonly ShortcutGroup[] {
-	const groups = new Map<ShortcutGroupId, Shortcut[]>([
-		['conversations', []], ['newCode', []], ['navigation', []], ['terminal', []],
-		['designCanvas', []], ['designLayers', []], ['designVector', []], ['designText', []], ['designPrototype', []],
-	]);
+	const groups = new Map<ShortcutGroupId, Shortcut[]>(
+		(Object.keys(groupAreas) as ShortcutGroupId[]).map(id => [id, []]),
+	);
 	const names: Record<ShortcutGroupId, string> = {
 		conversations: localize('sessions.shortcuts.conversations', 'Conversations'),
 		newCode: localize('sessions.shortcuts.newCodeConversation', 'New Code Conversation'),
 		navigation: localize('sessions.shortcuts.navigation', 'Navigation and Layout'),
 		terminal: localize('sessions.shortcuts.terminal', 'Terminal in Code'),
+		browser: localize('sessions.shortcuts.browser', 'Browser'),
+		debug: localize('sessions.shortcuts.debug', 'Debug'),
+		diff: localize('sessions.shortcuts.diff', 'Diff'),
 		designCanvas: localize('sessions.shortcuts.designCanvas', 'Design Canvas'),
 		designLayers: localize('sessions.shortcuts.designLayers', 'Design Layers'),
 		designVector: localize('sessions.shortcuts.designVector', 'Design Vector Editing'),
@@ -111,32 +156,48 @@ export function getSessionsKeyboardShortcutGroups(keybindings: IKeybindingServic
 		inside: overlay(context, { ...inactive, ...scope.values, [windowKey]: true }),
 		outside: overlay(context, { ...scope.values, ...inactive, [windowKey]: false }),
 	}));
-	const registered = new Map<string, { command: string; title: string; scope: Scope; inside: Context; outside: Context; keys: Set<string>; }>();
+	const tools = toolScopes.map(scope => ({ ...scope, inside: overlay(context, { ...inactive, ...scope.values, [windowKey]: true }) }));
+	const registered = new Map<string, { command: string; title: string; group: ShortcutGroupId; inside: Context; outside?: Context; keys: Set<string>; }>();
 	for (const { command, when, resolvedKeybinding } of keybindings.getKeybindings()) {
 		const name = command && commands.get(command)?.metadata?.description;
-		if (!command || !name || !when || !resolvedKeybinding || !ContextKeyExpr.requiresTruthyKeyFrom(when, agentKeys)) continue;
-		const keys = when.keys();
-		const match = windowContexts.find(({ scope }) => scope.keys.some(key => keys.has(key)));
-		if (!match || !when.evaluate(match.inside)) continue;
-		const { scope, inside, outside } = match;
-		const id = scope.group + '/' + command;
+		if (!command || !name || !resolvedKeybinding) continue;
+		const tool = tools.find(tool => tool.matches(command));
+		let group: ShortcutGroupId;
+		let inside: Context;
+		let outside: Context | undefined;
+		if (tool) {
+			({ group, inside } = tool);
+		} else {
+			if (!when || !ContextKeyExpr.requiresTruthyKeyFrom(when, agentKeys)) continue;
+			const keys = when.keys();
+			const match = windowContexts.find(({ scope }) => scope.keys.some(key => keys.has(key)));
+			if (!match || !when.evaluate(match.inside)) continue;
+			group = match.scope.group;
+			({ inside, outside } = match);
+		}
+		const id = group + '/' + command;
 		let row = registered.get(id);
 		if (!row) {
-			row = { command, title: typeof name === 'string' ? name : name.value, scope, inside, outside, keys: new Set() };
+			row = { command, title: typeof name === 'string' ? name : name.value, group, inside, outside, keys: new Set() };
 			registered.set(id, row);
 		}
 		row.keys.add(bindingId(resolvedKeybinding));
 	}
-	for (const { command, title, scope, inside, outside, keys } of registered.values()) {
-		const shared = new Set(keybindings.lookupKeybindings(command, outside).map(bindingId));
-		const bindings = keybindings.lookupKeybindings(command, inside).filter(binding => keys.has(bindingId(binding)) && !shared.has(bindingId(binding)));
-		if (bindings.length) groups.get(scope.group)!.push({ title, bindings });
+	for (const { command, title, group, inside, outside, keys } of registered.values()) {
+		const shared = new Set(outside && keybindings.lookupKeybindings(command, outside).map(bindingId));
+		// Match displayed registrations against effective bindings without listing
+		// the keyboard layout's extra dispatch variants.
+		const bindings = keybindings.lookupKeybindings(command, inside).filter(binding => {
+			const id = bindingId(binding);
+			return !shared.has(id) && keys.delete(id);
+		});
+		if (bindings.length) groups.get(group)!.push({ title, bindings });
 	}
 
 	for (const [group, title, chords] of widgetShortcuts()) {
 		groups.get(group)!.push({ title, bindings: chords.map(chord => keybindings.resolveKeybinding(Keybinding.single(chord))) });
 	}
-	return [...groups].filter(([, shortcuts]) => shortcuts.length).map(([id, shortcuts]) => ({ title: names[id], shortcuts }));
+	return [...groups].filter(([, shortcuts]) => shortcuts.length).map(([id, shortcuts]) => ({ area: groupAreas[id], title: names[id], shortcuts }));
 }
 
 function overlay(context: Context, values: Readonly<Record<string, ContextKeyValue>>): Context {

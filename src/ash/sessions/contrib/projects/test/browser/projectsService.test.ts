@@ -30,6 +30,7 @@ class ProjectsFixture extends Disposable {
 		this.services.registerInstance(IProjectService, {
 			addSession: async () => { throw new Error('Unexpected project membership change'); },
 			moveSession: async () => { throw new Error('Unexpected project membership transfer'); },
+			moveExternalConversation: async () => { throw new Error('Unexpected conversation membership transfer'); },
 			setAppearance: async () => { throw new Error('Unexpected project appearance update'); },
 			onDidChange: this.changed.event,
 			list: async () => this.pending ? this.pending.p : [...this.projects],
@@ -97,6 +98,21 @@ suite('Projects browsing', () => {
 		}
 	});
 
+	test('catalog appearance preserves saved account preferences and concurrent changes to other fields', () => {
+		using fixture = new ProjectsFixture();
+		const appearance = (account: string) => fixture.projectsView.getCatalogProjectAppearance(`${account}:project`);
+		fixture.storage.store('sessions.chatgpt.projectAppearance:icon:account:project', 'clockface', StorageScope.PROFILE, StorageTarget.MACHINE);
+		assert.equal(appearance('account').icon, 'clockface');
+		assert.equal(appearance('other-account').icon, undefined);
+
+		const draft = appearance('account');
+		appearance('account').save({ icon: 'clockface', color: 'terminal.ansiRed' });
+		draft.save({ icon: 'chat' });
+		assert.equal(appearance('account').icon, 'chat');
+		assert.equal(appearance('account').color, 'terminal.ansiRed');
+		assert.equal(appearance('other-account').color, undefined);
+	});
+
 	test('pinning is profile state shared by retained views and sorts pinned projects first', async () => {
 		using fixture = new ProjectsFixture();
 		await fixture.projectsView.create('a', 'Alpha', '', []);
@@ -154,7 +170,7 @@ suite('Projects browsing', () => {
 		await fixture.projectsView.create('a', 'Alpha', '', []);
 		await fixture.projectsView.create('m', 'Middle', '', []);
 		await fixture.projectsView.create('early', 'Early', '', []);
-		const times = { z: { createdAtMs: 100, updatedAtMs: 500 }, a: { createdAtMs: 200, updatedAtMs: 400 }, m: { createdAtMs: 300, updatedAtMs: 300 }, early: { createdAtMs: 50, updatedAtMs: 50 } };
+		const times = { z: { createdAtMs: 100, updatedAtMs: 500 }, a: { createdAtMs: 200, updatedAtMs: 400 }, m: { createdAtMs: 300, updatedAtMs: 300 }, early: { createdAtMs: undefined, updatedAtMs: undefined } };
 		fixture.projects = fixture.projects.map(project => ({ ...project, ...times[project.id as keyof typeof times] }));
 		await fixture.projectsView.reload();
 		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Zebra', 'Alpha', 'Middle', 'Early']);

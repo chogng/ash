@@ -1,25 +1,17 @@
-import '../../../browser/ui/filterTabs.css';
 import './searchPicker.css';
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { List } from '../../../../base/browser/ui/list/listWidget.js';
 import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
 import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/tabList.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { autorun, type IObservable } from '../../../../base/common/observable.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey, resolveKeybinding, ResolvedKeybinding } from '../../../../base/common/keybindings.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 import { localize } from '../../../../nls.js';
 import {
-	defaultButtonStyles,
-	defaultDialogStyles,
 	defaultListStyles,
-	defaultCheckboxStyles,
-	defaultInputBoxStyles,
 	defaultKeybindingLabelStyles,
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -29,11 +21,12 @@ import {
 	IAccessibleViewService,
 	AccessibilityVerbositySettingId,
 } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { SessionsSearchDialog } from '../../../browser/ui/sessionsSearchDialog.js';
 import { SessionsSearchModel, type SearchCategory, type SearchResult, type SearchTarget } from './searchModel.js';
 
 /** Product search owns its DOM and presentation; shared controls supply interaction primitives. */
 export class SessionsSearchPicker extends Disposable {
-	private readonly dialog: Dialog;
+	private readonly dialog: SessionsSearchDialog;
 	private readonly input: HTMLInputElement;
 	private readonly model: SessionsSearchModel;
 	private readonly results: List<SearchResult>;
@@ -52,43 +45,20 @@ export class SessionsSearchPicker extends Disposable {
 		const document = container.ownerDocument;
 		this.model = this._register(instantiation.createInstance(SessionsSearchModel, sourceResults));
 		const content = h(document, 'div', { className: 'ash-sessions-search' });
-		this.dialog = this._register(
-			new Dialog(container, localize('sessions.search.title', 'Search'), [], {
-				buttonStyles: defaultButtonStyles,
-				checkboxStyles: defaultCheckboxStyles,
-				inputBoxStyles: defaultInputBoxStyles,
-				dialogStyles: defaultDialogStyles,
-				extraClasses: ['ash-sessions-search-dialog'],
-				disableCloseButton: true,
-				disableDefaultAction: true,
-				renderBody: body => body.append(content),
-			}),
-		);
+		const title = localize('sessions.search.title', 'Search');
+		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsSearch);
+		this.dialog = this._register(new SessionsSearchDialog(container, content, {
+			title,
+			placeholder: title,
+			ariaLabel: hint ? localize('sessions.search.ariaLabel', 'Search. {0}', hint) : title,
+			className: 'ash-sessions-search-dialog',
+		}));
 		const scope = this._register(contextKeys.createScoped(content));
 		scope.createKey('sessionsSearchFocused', true);
-		const header = h(document, 'header', { className: 'ash-sessions-search-header' });
-		this.input = h(document, 'input');
-		this.input.type = 'search';
-		this.input.placeholder = localize('sessions.search.title', 'Search');
+		this.input = this.dialog.input;
 		this.input.setAttribute('role', 'combobox');
 		this.input.setAttribute('aria-autocomplete', 'list');
 		this.input.setAttribute('aria-expanded', 'true');
-		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsSearch);
-		this.input.setAttribute(
-			'aria-label',
-			hint ? localize('sessions.search.ariaLabel', 'Search. {0}', hint) : this.input.placeholder,
-		);
-		header.append(this.input);
-		this._register(
-			new Button(header, {
-				...defaultButtonStyles,
-				label: localize('sessions.search.close', 'Close'),
-				icon: Lxicon.close,
-				iconOnly: true,
-				presentation: 'quiet',
-				onClick: () => this.dialog.dispose(),
-			}),
-		);
 		const navigation = h(document, 'div', { className: 'ash-sessions-search-categories' });
 		const categories = this._register(
 			new TabList<SearchCategory>(navigation, {
@@ -208,7 +178,7 @@ export class SessionsSearchPicker extends Disposable {
 			item.append(label, shortcuts);
 			footer.append(item);
 		}
-		content.append(header, navigation, body, footer);
+		content.append(navigation, body, footer);
 		const updateActive = (): void => {
 			const row = this.results.row(this.results.activeIndex);
 			if (row) {
@@ -251,27 +221,6 @@ export class SessionsSearchPicker extends Disposable {
 					this.focus();
 				}
 			}),
-		);
-		this._register(
-			addDisposableListener(
-				getWindow(content),
-				'mousedown',
-				event => {
-					const target = event.target as HTMLElement | null;
-					if (!target?.classList?.contains('ash-sessions-search-dialog')) return;
-					const bounds = target.getBoundingClientRect();
-					if (
-						event.clientX < bounds.left ||
-						event.clientX > bounds.right ||
-						event.clientY < bounds.top ||
-						event.clientY > bounds.bottom
-					) {
-						event.preventDefault();
-						this.dialog.dispose();
-					}
-				},
-				true,
-			),
 		);
 		this._register(observeResize(resultsHost, () => this.results.layout(resultsHost.clientHeight)));
 		this._register(

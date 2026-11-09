@@ -22,8 +22,8 @@ fn project_root_picker_preselects_the_current_workspace() {
     std::fs::create_dir(&a).unwrap();
     std::fs::create_dir(&b).unwrap();
     let project = ProjectDto {
-        created_at_ms: 1,
-        updated_at_ms: 1,
+        created_at_ms: Some(1),
+        updated_at_ms: Some(1),
         materials: Vec::new(),
         project_id: ProjectId::new("project").unwrap(),
         revision: 1,
@@ -34,6 +34,7 @@ fn project_root_picker_preselects_the_current_workspace() {
         color: None,
         roots: vec![root("a", &a), root("b", &b)],
         session_ids: Vec::new(),
+        external_conversation_ids: None,
     };
     let spec = root_choices(&project, &b).unwrap();
     let mut picker = ListSelection::new(spec.model, spec.actions);

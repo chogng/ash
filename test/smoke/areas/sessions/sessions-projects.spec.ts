@@ -10,6 +10,30 @@ import { Editor } from '../../../automation/editor.js';
 import { Menus } from '../../../automation/menus.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
+test('Ash projects store opaque conversation memberships without creating sessions', { tag: ['@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
+	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+	try {
+		const { client } = connection;
+		const projectId = randomUUID();
+		const { project } = await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId, name: 'Conversation membership fixture', description: '', materials: [], scope: 'chat',
+		});
+		const conversationId = randomUUID();
+		const { project: linked } = await client.request(APP_SERVER_METHODS['project/conversation/membership'], {
+			commandId: randomUUID(), projectId, expectedRevision: project.revision, conversationId, membership: 'link',
+		});
+		const { project: saved } = await client.request(APP_SERVER_METHODS['project/read'], { projectId });
+		expect(saved.externalConversationIds).toEqual([conversationId]);
+		expect(saved.sessionIds).toEqual([]);
+		const { project: unlinked } = await client.request(APP_SERVER_METHODS['project/conversation/membership'], {
+			commandId: randomUUID(), projectId, expectedRevision: linked.revision, conversationId, membership: 'unlink',
+		});
+		expect(unlinked.externalConversationIds ?? []).toEqual([]);
+	} finally {
+		await connection.close();
+	}
+});
+
 test('sidebar project menus share actions and retain appearance across window reopen', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 	try {

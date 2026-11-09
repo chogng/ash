@@ -1,0 +1,28 @@
+.ash-sessions-directory-permission-dialog {
+	inline-size: 36rem;
+}
+
+.ash-sessions-directory-permission-dialog .ash-dialog-actions {
+	flex-wrap: wrap;
+	padding-block-start: var(--ash-spacing-size160);
+}
+
+.ash-sessions-directory-permission-dialog .ash-dialog-actions .ash-button {
+	min-inline-size: 0;
+}
+
+.ash-sessions-directory-permission-detail {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-sessions-directory-permission-path {
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: color-mix(in srgb, var(--ash-foreground) 7%, transparent);
+	color: var(--ash-foreground);
+	overflow-wrap: anywhere;
+}

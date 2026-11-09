@@ -206,7 +206,7 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		const turn = this.active;
 		this.active = undefined;
 		if (turn && this.backend) {
-			// Cancel bypasses queued audio and stop, including a pending subscription upload.
+			// Cancel bypasses queued audio and stop, including subscription finalization.
 			const backend = this.backend;
 			this.release = Promise.all([
 				backend.cancel(turn.resourceId).catch(() => undefined),

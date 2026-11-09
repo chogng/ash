@@ -135,6 +135,7 @@ export class ActionWidgetDropdown extends Disposable {
 			disabled: !action.enabled,
 			checked: action.checked,
 			group: { title: '', icon: action.icon },
+			iconColor: action.iconColor,
 		}));
 		this.showItems({
 			load: () => this.options.actionProvider

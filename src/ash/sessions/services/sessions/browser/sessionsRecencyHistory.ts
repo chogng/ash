@@ -1,3 +1,4 @@
+import { observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { SessionId, ThreadId } from '../common/session.js';
@@ -25,9 +26,13 @@ const limit = 100;
 /** Workspace-local MRU for durable conversations and custom views, independent of the window's traversal cursor. */
 export class SessionsRecencyHistory {
 	private history: readonly RecentVisit[];
+	private readonly viewedChanged;
 
 	constructor(private readonly storage: IStorageService) {
 		this.history = this.load();
+		this.viewedChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.WORKSPACE && event.key.startsWith(viewedPrefix)) listener(event);
+		}));
 	}
 
 	get entries(): readonly RecentVisit[] {
@@ -50,7 +55,8 @@ export class SessionsRecencyHistory {
 		}
 	}
 
-	getLastViewedAt(entry: SessionRecencyEntry): number | undefined {
+	getLastViewedAt(entry: SessionRecencyEntry, reader?: IReader): number | undefined {
+		this.viewedChanged.read(reader);
 		const timestamp = this.storage.getNumber(viewedPrefix + getRecencyEntryKey(entry), StorageScope.WORKSPACE);
 		return typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp > 0 ? timestamp : undefined;
 	}

@@ -71,6 +71,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         directory_configured: false,
         advisor: Default::default(),
         user_time_contexts: Default::default(),
+        message_times: Default::default(),
         history_sources: Default::default(),
         message_checkpoints: Default::default(),
         history_redo: Vec::new(),

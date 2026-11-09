@@ -73,6 +73,7 @@ fn subscribing_reads_every_history_page_before_installing_in_chronological_order
                 text: name.into(),
             },
             transient: false,
+            timestamp: None,
         };
         responses.push_back(
             serde_json::json!({
@@ -477,6 +478,7 @@ fn update(session_id: &str, thread_id: &str, durable_sequence: u64) -> ThreadUpd
         session_id: session_id.clone(),
         thread_id: thread_id.clone(),
         durable_sequence,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
@@ -512,6 +514,7 @@ fn transient_update(stream_id: &str, sequence: u64) -> ThreadUpdateEnvelope {
         session_id: SessionId::new("session-1").unwrap(),
         thread_id: ThreadId::new("thread-1").unwrap(),
         durable_sequence: 4,
+        recorded_at_unix_ms: None,
         stream_cursor: Some(StreamCursor {
             stream_instance_id: StreamInstanceId::new(stream_id).unwrap(),
             sequence,

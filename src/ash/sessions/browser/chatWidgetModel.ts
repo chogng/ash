@@ -74,6 +74,7 @@ export class ChatWidgetModel extends Disposable {
 	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
 	private _composerGeneration = 0;
 	private materializingComposer: { readonly untitledSessionId: string; readonly generation: number; readonly threadId: ThreadId; } | undefined;
+	private voiceDraft: { readonly id: string; readonly generation: number; } | undefined;
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
 	private historyBoundary: ThreadHistoryBoundary | undefined;
@@ -137,6 +138,9 @@ export class ChatWidgetModel extends Disposable {
 	readonly onDidChangeComposer: Event<void> = this._onDidChangeComposer.event;
 
 	get composerGeneration(): number { return this._composerGeneration; }
+
+	protected get useCodeModelDefaults(): boolean { return true; }
+	protected get commandInterpretation(): 'literal' | undefined { return undefined; }
 
 	/** Only the selected initiating draft can replace an incidental early catalog pane. */
 	get materializingUntitledSessionId(): string | undefined {
@@ -218,15 +222,15 @@ export class ChatWidgetModel extends Disposable {
 		const agentSession = forkSource ? this.sessionService.sessions.find(session => session.sessionId === forkSource.sessionId) : active?.session;
 		const agentThreadId = forkSource?.threadId ?? active?.threadId;
 		const agentTree = agentSession?.agentTree;
-		const blockedMessage = this.modelUnavailableMessage ?? this.workspaceRequiredMessage;
+		const modelUnavailableMessage = this.modelUnavailableMessage;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
-			inputBlocked: blockedMessage !== undefined || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
-			status: blockedMessage,
+			inputBlocked: modelUnavailableMessage !== undefined || this.requiresWorkspaceSelection || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			status: modelUnavailableMessage,
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
@@ -253,16 +257,14 @@ export class ChatWidgetModel extends Disposable {
 		};
 	}
 
-	private get workspaceRequiredMessage(): string | undefined {
-		if (this.selection.kind === 'session' || this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return undefined;
+	private get requiresWorkspaceSelection(): boolean {
+		if (this.selection.kind === 'session' || !this.isCodeConversation) return false;
 		const { forkSource } = this.selection.session;
 		if (forkSource) {
 			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === forkSource.sessionId);
-			if (session && chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === forkSource.threadId))) return undefined;
-		} else if (hasSelectedCodeWorkspace(this.selection.session)) {
-			return undefined;
+			return !session || !chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === forkSource.threadId));
 		}
-		return localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.');
+		return !hasSelectedCodeWorkspace(this.selection.session);
 	}
 
 	get error(): string | undefined {
@@ -364,6 +366,10 @@ export class ChatWidgetModel extends Disposable {
 
 	get untitledSessionId(): string | undefined {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : undefined;
+	}
+
+	get welcomeDraftId(): string | undefined {
+		return this.untitledSessionId ?? (this.voiceDraft?.generation === this.composerGeneration && !this.items.length ? this.voiceDraft.id : undefined);
 	}
 
 	get threadId(): ThreadId | undefined {
@@ -482,7 +488,7 @@ export class ChatWidgetModel extends Disposable {
 		return redo || queued.length ? [...transcript, ...(redo ? [redo] : []), ...queued] : transcript;
 	}
 
-	private get isCodeConversation(): boolean {
+	protected get isCodeConversation(): boolean {
 		return this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) === 'code';
 	}
 
@@ -606,6 +612,51 @@ export class ChatWidgetModel extends Disposable {
 		this._onDidChange.fire();
 		void this.loadModels();
 	}
+
+	/** A retained editor can rebind its single slot while a grid pane keeps one Session. */
+	protected bindSelection(selection: ChatWidgetSelection): void {
+		if (selection.kind === 'untitled' && selection.session.untitledSessionId === this.untitledSessionId) {
+			if (selection.session !== (this.selection.kind === 'untitled' && this.selection.session)) {
+				this.selection = selection;
+				this._onDidChange.fire();
+			}
+			return;
+		}
+		if (selection.kind === 'session' && selection.active.session.sessionId === this.sessionId && selection.active.threadId === this.threadId) {
+			if (selection.active.session !== this.session) void this.selectThread(selection.active);
+			return;
+		}
+		const previous = this.activeSession;
+		this._composerGeneration++;
+		this._onDidChangeComposer.fire();
+		this.generation++;
+		if (previous) void this.chatService.unsubscribeThread(previous.session.sessionId, previous.threadId, this);
+		this.selection = selection;
+		this.subscriptionThreadId = undefined;
+		this.subscriptionPromise = undefined;
+		this.initializePromise = undefined;
+		this.durableSequence = 0;
+		this.snapshotRequest = 0;
+		this._historyStatus.set(undefined);
+		this.resetThreadPresentation(false);
+		void this.initialize();
+	}
+
+	protected restoreThreadModel(model: ModelRef | undefined, effort: ModelReasoningEffort | undefined): void {
+		const id = this.threadId;
+		if (!id) return;
+		if (model) {
+			this.threadModelSelection.select(id, model);
+			this.selectedReasoningEfforts.set(id, { effort });
+		} else {
+			this.threadModelSelection.clear(id);
+			this.selectedReasoningEfforts.delete(id);
+		}
+		void this.refreshModelAvailability();
+		this._onDidChange.fire();
+	}
+
+	protected notifyModelChoicesChanged(): void { this._onDidChange.fire(); }
 
 	async selectModel(model: ModelRef): Promise<void> {
 		if (!this._models.some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
@@ -736,6 +787,7 @@ export class ChatWidgetModel extends Disposable {
 				signal: operation.signal,
 				commandId: options?.commandId,
 				source: options?.source,
+				...(this.commandInterpretation && { commandInterpretation: this.commandInterpretation }),
 				skills,
 			};
 			if (backgroundDraftId) {
@@ -785,7 +837,7 @@ export class ChatWidgetModel extends Disposable {
 		const operation = this.captureOperation({ signal });
 		await this.awaitOperationPreparation(this.initialize(), operation);
 		this.requireCurrentOperation(operation);
-		const active = await this.ensureActiveSession(signal);
+		const active = await this.ensureActiveSession(signal, true);
 		if (this.isDisposed || signal?.aborted || operation.generation !== this.composerGeneration || active.threadId !== this.threadId || active.session.sessionId !== this.sessionId) throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
 	}
@@ -998,7 +1050,8 @@ export class ChatWidgetModel extends Disposable {
 
 	private async loadCatalogs(): Promise<void> {
 		const generation = ++this.modelsGeneration;
-		const [models, slashCommands] = await Promise.allSettled([this.languageModels.listModelCatalog(), this.chatService.listSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
+		const slashCatalog = this.commandInterpretation === 'literal' ? [] : this.chatService.listSlashCommands();
+		const [models, slashCommands] = await Promise.allSettled([this.languageModels.listModelCatalog(), slashCatalog, this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
 		if (this.isDisposed) return;
 		if (generation === this.modelsGeneration && models.status === 'fulfilled') {
 			this.acceptModelCatalog(models.value);
@@ -1026,6 +1079,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async loadModelDefaults(): Promise<void> {
+		if (!this.useCodeModelDefaults) return;
 		try {
 			const defaults = await this.languageModels.readModelDefaults();
 			if (!this.isDisposed) this.defaults = defaults;
@@ -1085,7 +1139,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private applyDefaultNewChatModel(): void {
-		if (this.selection.kind !== 'untitled' || !this.modelCatalog.length) return;
+		if (!this.useCodeModelDefaults || this.selection.kind !== 'untitled' || !this.modelCatalog.length) return;
 		const draft = this.selection.session;
 		const workspace = codeConversationWorkspaceKey(draft.workspace) ?? null;
 		if (draft.modelDefaults?.workspace === workspace) return;
@@ -1114,7 +1168,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private rememberConversationModel(selection: CodeConversationModel): void {
-		this.storage.store(this.lastConversationModelKey, JSON.stringify(selection), StorageScope.PROFILE, StorageTarget.MACHINE);
+		if (this.useCodeModelDefaults) this.storage.store(this.lastConversationModelKey, JSON.stringify(selection), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
 	private refreshUntitledSelection(): void {
@@ -1127,6 +1181,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async loadSkillSelectors(): Promise<void> {
+		if (this.commandInterpretation === 'literal') return;
 		const generation = ++this.skillCatalogGeneration;
 		const sessionId = this.sessionId;
 		this.skillSelectorsLoading.set(true);
@@ -1165,15 +1220,7 @@ export class ChatWidgetModel extends Disposable {
 		}
 	}
 
-	private async performSubscribe(active: IActiveSessionThread): Promise<void> {
-		const started = performance.now();
-		let subscribedAt: number | undefined;
-		let reconciliationMs: number | undefined;
-		let outcome: SessionHistoryBindingDiagnostic['outcome'] = 'superseded';
-		const generation = ++this.generation;
-		const oldThreadId = this._thread?.threadId;
-		const request = ++this.readRequest;
-		const sameThread = oldThreadId === active.threadId;
+	private resetThreadPresentation(sameThread: boolean): void {
 		if (!sameThread) {
 			this._thread = undefined;
 			this.transcriptEntries = [];
@@ -1193,6 +1240,17 @@ export class ChatWidgetModel extends Disposable {
 		this.historyRedo.reset();
 		this.changeDetails.clear();
 		this.changesGeneration++;
+	}
+
+	private async performSubscribe(active: IActiveSessionThread): Promise<void> {
+		const started = performance.now();
+		let subscribedAt: number | undefined;
+		let reconciliationMs: number | undefined;
+		let outcome: SessionHistoryBindingDiagnostic['outcome'] = 'superseded';
+		const generation = ++this.generation;
+		const oldThreadId = this._thread?.threadId;
+		const request = ++this.readRequest;
+		this.resetThreadPresentation(oldThreadId === active.threadId);
 		this.setState('loading');
 		if (oldThreadId && oldThreadId !== active.threadId) {
 			void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId, this);
@@ -1654,7 +1712,7 @@ export class ChatWidgetModel extends Disposable {
 		if (!this.isCurrentOperation(operation)) throw canceled();
 	}
 
-	private async ensureActiveSession(signal?: AbortSignal): Promise<IActiveSessionThread> {
+	private async ensureActiveSession(signal?: AbortSignal, forVoice = false): Promise<IActiveSessionThread> {
 		this.assertWorkspaceSelected();
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
@@ -1663,8 +1721,10 @@ export class ChatWidgetModel extends Disposable {
 			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal),
 			isCurrent: () => !this.isDisposed && this.composerGeneration === generation,
 			adopt: created => {
+				// Voice needs a durable Thread before listening, even though the composer is still empty.
+				if (forVoice) this.voiceDraft = { id: untitledSession.untitledSessionId, generation };
 				// Catalog notifications may create a durable pane before the create response.
-				const composer = this.sessionService.activeUntitledSession?.untitledSessionId === untitledSession.untitledSessionId
+				const composer = untitledSession.kind === 'chat' || this.sessionService.activeUntitledSession?.untitledSessionId === untitledSession.untitledSessionId
 					? { untitledSessionId: untitledSession.untitledSessionId, generation, threadId: created.threadId }
 					: undefined;
 				this.materializingComposer = composer;
@@ -1679,8 +1739,9 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private assertWorkspaceSelected(): void {
-		const message = this.workspaceRequiredMessage;
-		if (message) throw new Error(message);
+		if (this.requiresWorkspaceSelection) {
+			throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.'));
+		}
 	}
 
 	/** Keep this composer's choices when organization gives its draft a durable identity. */

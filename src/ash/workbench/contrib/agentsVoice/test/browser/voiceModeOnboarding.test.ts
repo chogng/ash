@@ -10,15 +10,13 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
-import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../../test/common/testDictationServices.js';
+import { registerTestVoiceInputServices, createTestDictationBackend, installTestDictationAudio } from '../../../../test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
-import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../chat/browser/widget/input/chatInputNoticeHost.js';
 import { IChatInputNoticeHubService } from '../../../chat/browser/widget/input/chatInputNoticeHub.js';
-import { registerChatInputOnboardingHosts } from '../../../chat/browser/widget/input/chatInputOnboardingHosts.js';
 import { IVoiceModeOnboardingService } from '../../browser/voiceModeOnboarding.js';
 import { AgentsVoiceStorageKeys } from '../../common/agentsVoice.js';
 import { AgentsVoiceWidget } from '../../browser/agentsVoiceWidget.js';
@@ -36,31 +34,34 @@ function fixture() {
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(owner, { start: async () => ({ stop: async () => { }, cancel: async () => { } }) }));
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	registerTestDictationOnboarding(services, false);
+	registerTestVoiceInputServices(services, false);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	const voice = services.get(IVoiceModeOnboardingService);
-	const dictation = services.get(IDictationOnboardingService);
 	const storage = services.get(IStorageService);
 	const hub = services.get(IChatInputNoticeHubService);
 	const surface = () => {
 		const root = window.document.createElement('main');
 		const input = window.document.createElement('textarea');
 		const voiceSlot = window.document.createElement('div');
-		const dictationSlot = window.document.createElement('div');
-		root.append(voiceSlot, dictationSlot, input);
+		root.append(voiceSlot, input);
 		window.document.body.append(root);
 		root.getClientRects = () => [{ width: 300, height: 100 }] as unknown as DOMRectList;
 		const notices = owner.add(new ChatInputNoticeHost(() => input.focus()));
 		owner.add(hub.registerHost(notices, root));
-		const registration = owner.add(registerChatInputOnboardingHosts(notices, { voice: voiceSlot, dictation: dictationSlot }, root, () => input.focus(), voice, dictation));
+		const registration = owner.add(voice.registerHost({
+			container: voiceSlot,
+			focusRoot: root,
+			focus: () => input.focus(),
+			claimNotice: options => notices.occupy(ChatInputNoticeLane.Onboarding, options),
+		}));
 		return { root, input, notices, registration };
 	};
-	return { voice, dictation, storage, hub, surface, audio, window, services, dispose: () => owner.dispose(), [Symbol.dispose]: () => owner.dispose() };
+	return { voice, storage, hub, surface, audio, window, services, dispose: () => owner.dispose(), [Symbol.dispose]: () => owner.dispose() };
 }
 
-suite('Voice and dictation shared onboarding hosts', () => {
-	test('notifications defer voice creation; newer dictation yields back to the same voice card and shared focus target', () => {
+suite('Voice onboarding hosts', () => {
+	test('notifications defer voice creation and the voice card shares the notice focus target', () => {
 		using f = fixture();
 		const { root, input, notices } = f.surface();
 		input.focus();
@@ -73,12 +74,6 @@ suite('Voice and dictation shared onboarding hosts', () => {
 		assert.ok(voiceCard);
 		assert.equal(voiceCard.hidden, false);
 		assert.equal(f.storage.getBoolean(AgentsVoiceStorageKeys.IntroBannerShown, StorageScope.PROFILE, false), false);
-		f.dictation.show();
-		assert.equal(voiceCard.hidden, true);
-		const dictationCard = root.querySelector<HTMLElement>('.ash-dictation-onboarding')!;
-		dictationCard.dispatchEvent(new f.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-		assert.equal(root.querySelector('.ash-agents-voice-introduction'), voiceCard);
-		assert.equal(voiceCard.hidden, false);
 		input.focus();
 		assert.equal(f.hub.toggleNoticeFocus(), true);
 		assert.equal(f.window.document.activeElement, voiceCard);

@@ -10,6 +10,8 @@ import { localize } from '../../../nls.js';
 import { parseMemoryReference } from '../common/memoriesService.js';
 import type { IMemoriesService, Memory, MemoryConversationSource, MemoryNamespace, MemoryPage, MemoryPolicy, MemoryReference, MemoryScope, MemoryScopeEntry, MemorySummary, MemoryTurnSource } from '../common/memoriesService.js';
 
+const modelMemoryFeatures = { chat: 'chatMemories', code: 'memories' } as const;
+
 export class AppServerMemoriesService extends Disposable implements IMemoriesService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
@@ -28,12 +30,15 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 		this._register(client.onStateChange(() => { this.ownChanges.clear(); this.observedChanges.clear(); this.changed.fire(); }));
 	}
 
-	public async readModelMemoryEnabled(): Promise<boolean> {
+	public async readModelMemoryEnabled(): Promise<Readonly<Record<MemoryNamespace, boolean>>> {
 		const config = await this.client.request(APP_SERVER_METHODS['config/read'], {});
-		return config.features.some(feature => feature.feature === 'memories' && feature.enabled);
+		return {
+			chat: config.features.find(feature => feature.feature === modelMemoryFeatures.chat)?.enabled ?? true,
+			code: config.features.some(feature => feature.feature === modelMemoryFeatures.code && feature.enabled),
+		};
 	}
 
-	public async setModelMemoryEnabled(enabled: boolean): Promise<void> {
+	public async setModelMemoryEnabled(namespace: MemoryNamespace, enabled: boolean): Promise<void> {
 		const config = await this.client.request(APP_SERVER_METHODS['config/read'], {});
 		const overrides = Object.fromEntries(config.features
 			.filter(feature => feature.source === 'user')
@@ -41,7 +46,7 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 		await this.client.request(APP_SERVER_METHODS['config/update'], {
 			commandId: generateUuid(),
 			expectedRevision: config.revision,
-			features: { ...overrides, memories: enabled },
+			features: { ...overrides, [modelMemoryFeatures[namespace]]: enabled },
 		});
 	}
 

@@ -12,7 +12,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { IAccountService, AccountState } from '../../../../../platform/accounts/common/accountService.js';
-import { GitHubIssueState, type IGitHubService, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
+import { GitHubDiffSide, GitHubIssueState, type IGitHubService, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 // Fixtures expose the public repository-context command consumed by GitHub, independently of Git's runtime.
 interface GitRepository { id: string; label: string; path: string; root: URI; }
@@ -51,7 +51,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 		listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }],
 		listPullRequests: async (_repository, state) => ({ items: state === GitHubIssueState.Open ? [pullRequest] : [], nextPage: null }),
 		readPullRequest: async () => pullRequest,
-		readChecks: async () => ({ state: 'success', statuses: [], checks: [], nextPage: null }),
+		readPullRequestChecks: async () => ({ status: 'neutral' }),
 		listReviewThreads: async () => ({ threads: [], nextCursor: null }),
 		...overrides,
 	} as IGitHubService;
@@ -118,6 +118,80 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 }
 
 suite('Session GitHub associations', () => {
+	test('watching an unselected Session refreshes its PR checks and releases the demand', async () => {
+		using changed = new Emitter<string>();
+		let state: 'success' | 'pending' = 'pending';
+		let reads = 0;
+		using context = fixture({
+			onDidChangeSessionPullRequests: changed.event,
+			readPullRequestChecks: async (_repository, number, head) => {
+				assert.equal(number, pullRequest.number);
+				assert.equal(head, pullRequest.headCommit);
+				reads++;
+				return { status: state, latestCheckAtUnixMs: state === 'success' ? 10_000 : undefined };
+			},
+		});
+		context.select(undefined);
+		const loaded = context.nextChange();
+		using first = context.service.watchSessionPullRequests([session.sessionId]);
+		using second = context.service.watchSessionPullRequests([session.sessionId]);
+		await loaded;
+		const resolved = () => context.service.getSessionPullRequests(session.sessionId)[0];
+		assert.equal(resolved().checksPassed, false);
+		first.dispose();
+		state = 'success';
+		const refreshed = context.nextChange();
+		changed.fire(session.sessionId);
+		await refreshed;
+		assert.equal(resolved().checksPassed, true);
+		assert.equal(resolved().latestCheckAtUnixMs, 10_000);
+		assert.equal(reads, 2);
+		second.dispose();
+		const calls = mock.method(context.host.github, 'listSessionPullRequests');
+		changed.fire(session.sessionId);
+		await yieldEventLoop();
+		assert.equal(calls.mock.callCount(), 0);
+	});
+
+	test('projects unresolved Copilot review revisions across reply pages', async () => {
+		using changed = new Emitter<string>();
+		const reply = { id: 'reply', author: 'reviewer', body: 'Reply', url: pullRequest.url, canUpdate: false, canDelete: false };
+		const first = { ...reply, id: 'first', author: 'Copilot-Pull-Request-Reviewer[bot]', createdAt: '2026-10-06T10:00:00Z' };
+		const thread = { id: 'thread', path: 'file', line: 1, side: GitHubDiffSide.Right, resolved: false, outdated: false, canResolve: true };
+		let updatedAt = '2026-10-06T11:00:00Z';
+		let resolved = false;
+		using context = fixture({
+			onDidChangeSessionPullRequests: changed.event,
+			listReviewThreads: async () => ({
+				threads: [
+					{ ...thread, id: 'human', comments: { comments: [reply, first], nextCursor: null } },
+					{ ...thread, resolved, comments: { comments: [first], nextCursor: 'more' } },
+				],
+				nextCursor: null,
+			}),
+			readReviewThreadComments: async (_repository, number, id, cursor) => {
+				assert.deepEqual([number, id, cursor], [7, 'thread', 'more']);
+				return { comments: [{ ...reply, updatedAt }], nextCursor: null };
+			},
+		});
+		const [initial] = await context.load();
+		assert.equal(initial.copilotReview?.timestamp, Date.parse(updatedAt));
+		const refresh = async () => {
+			const result = context.nextChange();
+			changed.fire(session.sessionId);
+			await result;
+			return context.service.getSessionPullRequests(session.sessionId)[0];
+		};
+		updatedAt = '2026-10-06T12:00:00Z';
+		const edited = await refresh();
+		assert.equal(edited.copilotReview?.timestamp, Date.parse(updatedAt));
+		assert.notEqual(edited.copilotReview?.revision, initial.copilotReview?.revision);
+		resolved = true;
+		const remaining = await refresh();
+		assert.equal(remaining.copilotReview, undefined);
+		assert.equal(remaining.status.hasUnresolvedComments, true);
+	});
+
 	test('equal backend Session and repository IDs route through the owning host to the root Thread worktree', async () => {
 		const calls: string[] = [];
 		using context = fixture({ attachSessionPullRequest: async id => { calls.push(`primary:${id}`); } });
@@ -383,7 +457,7 @@ suite('Session GitHub associations', () => {
 		});
 		assert.deepEqual((await context.load()).map(request => request.uri.toString()), ['https://ghe.example/team/repo/pull/7']);
 	});
-	test('reads all pages before choosing the attention icon and preserves every reason', async () => {
+	test('uses PR-specific CI status when choosing the attention icon and preserves every reason', async () => {
 		const reads: string[] = [];
 		using context = fixture({
 			listPullRequests: async (_repository, _state, page, _token, options) => {
@@ -392,9 +466,10 @@ suite('Session GitHub associations', () => {
 				return { items: page === 1 ? [{ ...pullRequest, headRepository: 'other/repo' }] : [pullRequest], nextPage: page === 1 ? 2 : null };
 			},
 			readPullRequest: async () => ({ ...pullRequest, mergeable: false }),
-			readChecks: async (_repository, _commit, page) => {
-				reads.push(`checks:${page}`);
-				return { state: 'pending', statuses: [{ context: 'build', state: page === 1 ? 'pending' : 'failure', description: null, targetUrl: null }], checks: [], nextPage: page === 1 ? 2 : null };
+			readPullRequestChecks: async (_repository, number, commit) => {
+				reads.push(`checks:${number}`);
+				assert.equal(commit, pullRequest.headCommit);
+				return { status: 'failure' };
 			},
 			listReviewThreads: async (_repository, _number, cursor) => {
 				reads.push(`threads:${cursor}`);
@@ -403,14 +478,14 @@ suite('Session GitHub associations', () => {
 		});
 		const result = await context.load();
 		assert.deepEqual(result.map(request => ({ number: request.number, state: request.state, icon: request.icon.id, status: request.status })), [{ number: 7, state: 'open', icon: 'git-pull-request-error', status: { hasMergeConflicts: true, hasFailingChecks: true, hasUnresolvedComments: true } }]);
-		assert.deepEqual(reads.sort(), ['checks:1', 'checks:2', 'pulls:1', 'pulls:2', 'threads:null', 'threads:second']);
+		assert.deepEqual(reads.sort(), ['checks:7', 'pulls:1', 'pulls:2', 'threads:null', 'threads:second']);
 	});
 
 	test('a closed or merged branch PR is resolved when there is no open match', async () => {
 		using context = fixture({
 			listPullRequests: async (_repository, state) => ({ items: state === GitHubIssueState.Closed ? [pullRequest] : [], nextPage: null }),
 			readPullRequest: async () => ({ ...pullRequest, state: 'closed', mergedAt: '2026-10-06', mergeable: false }),
-			readChecks: async () => { throw new Error('Terminal PRs do not need checks'); },
+			readPullRequestChecks: async () => { throw new Error('Terminal PRs do not need checks'); },
 			listReviewThreads: async () => { throw new Error('Terminal PRs do not need review threads'); },
 		});
 		assert.deepEqual((await context.load()).map(request => [request.state, request.icon.id, request.status]), [['merged', 'git-pull-request-done', {}]]);

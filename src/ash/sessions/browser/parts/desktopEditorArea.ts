@@ -1,12 +1,15 @@
 import { addDisposableListener, Dimension, type IDimension } from '../../../base/browser/dom.js';
+import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { Direction, Orientation, SerializableGrid, Sizing, type ISerializableView, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
-import { MutableDisposable } from '../../../base/common/lifecycle.js';
+import { MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
+import { localize } from '../../../nls.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { Part } from '../../../workbench/browser/part.js';
 import { NoWorkbenchPartFrameInsets, WorkbenchPartView, type WorkbenchPartFrameInsets } from '../../../workbench/browser/workbenchPartView.js';
 import type { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';
+import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/desktopEditorArea.css';
 
@@ -25,13 +28,49 @@ export interface ToolSlot {
 }
 
 class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISerializableView {
+	readonly headerHost: HTMLElement;
+	private readonly hostedGroups = new Map<IEditorGroupView, HTMLElement>();
+
 	constructor(tool: DesktopEditorTool, private readonly editor: EditorPart, private readonly container: HTMLElement) {
 		super(tool, editor);
 		container.append(this.frame);
 		this.setFrameInsets(toolFrameInsets);
+		this.headerHost = container.ownerDocument.createElement('div');
+		this.headerHost.className = 'ash-sessions-tool-header-slot ash-sessions-tool-editor';
+		this.headerHost.dataset.editorTool = tool;
 	}
 	public override get element(): HTMLElement { return this.container; }
 	public focus(): void { this.editor.focus(); }
+
+	public updateHeaderHost(host: HTMLElement | undefined): void {
+		const groups = new Set(host ? this.editor.groups.filter(group => this.editor.isGroupVisible(group.id)) : []);
+		for (const [group, label] of this.hostedGroups) {
+			if (groups.has(group)) continue;
+			label.remove();
+			if (group.headerElement.parentElement === this.headerHost) group.setHeaderHost(undefined);
+			this.hostedGroups.delete(group);
+		}
+		if (!host || !groups.size) {
+			this.headerHost.remove();
+			return;
+		}
+		if (this.headerHost.parentElement !== host) host.append(this.headerHost);
+		let cursor = this.headerHost.firstElementChild;
+		for (const group of groups) {
+			let label = this.hostedGroups.get(group);
+			if (!label) {
+				label = this.headerHost.ownerDocument.createElement('span');
+				label.className = 'ash-sessions-tool-header-label';
+				group.headerElement.prepend(label);
+				this.hostedGroups.set(group, label);
+				group.setHeaderHost(this.headerHost);
+			}
+			const name = group.activeInput?.label ?? (this.partId === 'files' ? localize('sessions.files.title', 'Files') : '');
+			if (label.textContent !== name) label.textContent = name;
+			if (cursor && group.headerElement !== cursor) this.headerHost.insertBefore(group.headerElement, cursor);
+			cursor = group.headerElement.nextElementSibling;
+		}
+	}
 	public override setFrameInsets(insets: WorkbenchPartFrameInsets): void {
 		super.setFrameInsets(insets);
 		// The chat composer offsets its padding by the actual symmetric frame inset.
@@ -87,11 +126,17 @@ export class DesktopEditorArea extends Part {
 	private restoringPlacement: 'legacy' | 'saved' | undefined;
 	private manuallyArranged = false;
 	private updatingVisibility = false;
+	private titlebarHost: HTMLElement | undefined;
+	private readonly updateHeaders: AnimationFrameScheduler;
 
 	constructor(container: HTMLElement, @IThemeService theme: IThemeService, @IStorageService private readonly toolStorage: IStorageService) {
 		super(container, 'editor', theme, toolStorage);
 		this.titleDomNode.hidden = true;
 		this.domNode.classList.add('ash-desktop-editor-area');
+		this.updateHeaders = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => this.layoutHeaders()));
+		this._register(toDisposable(() => {
+			for (const view of this.views.values()) view.updateHeaderHost(undefined);
+		}));
 	}
 
 	public override get minimumWidth(): number { return Math.max(EDITOR_PART_MINIMUM_WIDTH, this.grid.value?.minimumWidth ?? 0); }
@@ -114,10 +159,13 @@ export class DesktopEditorArea extends Part {
 
 	public addTool(tool: DesktopEditorTool, part: EditorPart, container: HTMLElement): void {
 		const view = new ToolPartView(tool, part, container);
-		view.element.classList.add('ash-tool-editor-workspace');
+		view.element.classList.add('ash-tool-editor-workspace', 'ash-sessions-tool-editor');
 		view.element.dataset.editorTool = tool;
 		part.domNode.dataset.part = 'tool-editor';
 		this.views.set(tool, view);
+		this._register(part.onDidLayout(() => {
+			if (this.titlebarHost) this.updateHeaders.schedule();
+		}));
 		if (!this.grid.value) {
 			this.setGrid(new SerializableGrid(this.contentDomNode, { type: 'leaf', view, size: 600 }, { preserveSplitWeights: true }));
 		} else if (tool === 'chat') {
@@ -125,22 +173,27 @@ export class DesktopEditorArea extends Part {
 		} else {
 			this.grid.value.addView(view, Sizing.Invisible(300), [...this.views.values()][this.views.size - 2]!, Direction.Down);
 		}
-		this._register(addDisposableListener(view.element, 'keydown', event => {
+		const isHeader = (target: Element) => !!target.closest('.ash-editor-title-control, .ash-editor-group-header');
+		const moveToolFromHeader = (event: KeyboardEvent) => {
 			if (event.defaultPrevented || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey ||
-				!(event.target instanceof view.element.ownerDocument.defaultView!.Element) || !event.target.closest('.ash-editor-title-control')) { return; }
+				!(event.target instanceof view.element.ownerDocument.defaultView!.Element) || !isHeader(event.target)) { return; }
 			const direction = ({ ArrowLeft: Direction.Left, ArrowRight: Direction.Right, ArrowUp: Direction.Up, ArrowDown: Direction.Down } as Record<string, Direction | undefined>)[event.key];
 			if (direction === undefined) { return; }
 			const neighbor = this.grid.value!.getNeighborViews(view, direction).find(candidate => this.desired.has(candidate.partId));
 			if (!neighbor) { return; }
 			event.preventDefault();
 			this.moveTool(tool, neighbor.partId, direction);
-		}));
+		};
 		this._register(addDisposableListener(view.element, 'dragstart', event => {
-			if (!event.altKey || !(event.target instanceof view.element.ownerDocument.defaultView!.Element) || !event.target.closest('.ash-editor-title-control') || event.target.closest('[role="tab"], button, input, a')) { return; }
+			if (!event.altKey || !(event.target instanceof view.element.ownerDocument.defaultView!.Element) || !isHeader(event.target) || event.target.closest('[role="tab"], button, input, a')) { return; }
 			this.dragging = tool;
 			event.stopPropagation();
 			event.dataTransfer?.setData('application/vnd.ash.editor-tool', tool);
 		}, true));
+		this._register(addDisposableListener(view.element, 'dragend', () => { this.dragging = undefined; }));
+		for (const host of [view.element, view.headerHost]) {
+			this._register(addDisposableListener(host, 'keydown', moveToolFromHeader));
+		}
 		this._register(addDisposableListener(view.element, 'dragover', event => {
 			if (this.dragging && this.dragging !== tool) { event.preventDefault(); event.stopPropagation(); }
 		}));
@@ -154,7 +207,6 @@ export class DesktopEditorArea extends Part {
 			this.moveTool(this.dragging, tool, direction);
 			this.dragging = undefined;
 		}));
-		this._register(addDisposableListener(view.element, 'dragend', () => { this.dragging = undefined; }));
 	}
 
 	/** Read constraints from the saved topology while the window is showing a temporary arrangement. */
@@ -183,6 +235,36 @@ export class DesktopEditorArea extends Part {
 	}
 
 	public get hasTools(): boolean { return this.desired.size > 0; }
+	public get hasToolCards(): boolean {
+		return this.hasTools && !this.domNode.classList.contains('has-product-page');
+	}
+
+	public setTitlebarHost(host: HTMLElement | undefined): void {
+		if (this.titlebarHost === host) return;
+		this.titlebarHost = host;
+		this.domNode.classList.toggle('ash-desktop-editor-area-titlebar-docked', !!host);
+		this.updateHeaders.schedule();
+	}
+
+	private layoutHeaders(): void {
+		const host = this.titlebarHost;
+		const grid = this.grid.value;
+		const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
+		for (const [tool, view] of this.views) {
+			view.updateHeaderHost(host && this.isToolVisible(tool) ? host : undefined);
+		}
+		if (host && grid) {
+			// The title bar follows visual tool order even when the cards are stacked.
+			let cursor = host.firstElementChild;
+			for (const leaf of toolLeaves(grid.serialize())) {
+				const slot = this.views.get(leaf.data as DesktopEditorTool)!.headerHost;
+				if (slot.parentElement !== host) continue;
+				if (slot !== cursor) host.insertBefore(slot, cursor);
+				cursor = slot.nextElementSibling;
+			}
+		}
+		if (focused && host?.contains(focused) && focused !== focused.ownerDocument.activeElement) focused.focus({ preventScroll: true });
+	}
 
 	private get currentTool(): DesktopEditorTool | undefined {
 		return this.maximized?.tool ?? this.active ?? this.desired.values().next().value;
@@ -232,8 +314,9 @@ export class DesktopEditorArea extends Part {
 
 	public syncVisible(tools: readonly DesktopEditorTool[], active: DesktopEditorTool | undefined, productPage: boolean): void {
 		const files = this.views.get('files')!;
-		const frameChanged = files.element.classList.contains('ash-product-page-host') !== productPage;
+		const frameChanged = this.domNode.classList.contains('has-product-page') !== productPage;
 		files.element.classList.toggle('ash-product-page-host', productPage);
+		this.domNode.classList.toggle('has-product-page', productPage);
 		files.setFrameInsets(productPage ? NoWorkbenchPartFrameInsets : toolFrameInsets);
 		const place = !productPage;
 		if (active && !tools.includes(active)) active = undefined;
@@ -476,6 +559,7 @@ export class DesktopEditorArea extends Part {
 		this.manuallyArranged = true;
 		const focused = this.domNode.ownerDocument.activeElement;
 		this.grid.value!.moveView(this.views.get(tool)!, Sizing.Split, this.views.get(target)!, direction);
+		if (this.titlebarHost) this.updateHeaders.schedule();
 		if (focused instanceof this.domNode.ownerDocument.defaultView!.HTMLElement && focused.isConnected) { focused.focus(); }
 	}
 
@@ -560,5 +644,6 @@ export class DesktopEditorArea extends Part {
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.grid.value?.layout(dimension.width, dimension.height);
+		if (this.titlebarHost) this.updateHeaders.schedule();
 	}
 }

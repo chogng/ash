@@ -11,6 +11,11 @@ export class SessionModelSelection {
 		this.choices.set(new Map(this.choices.get()).set(threadId, model));
 	}
 
+	clear(threadId: ThreadId): void {
+		const choices = new Map(this.choices.get());
+		if (choices.delete(threadId)) this.choices.set(choices);
+	}
+
 	isAutomatic(threadId: ThreadId): boolean {
 		const choices = this.choices.get();
 		return choices.has(threadId) && choices.get(threadId) === undefined;

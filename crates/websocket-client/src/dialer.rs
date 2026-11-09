@@ -4,6 +4,7 @@ use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::OutboundProxyRoute;
 use ash_http_client::Timeout;
 use base64::Engine;
+use percent_encoding::percent_decode_str;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWrite;
@@ -48,7 +49,11 @@ pub(crate) async fn connect(
             let proxy = ProxyEndpoint::parse(proxy.url())?;
             let stream = connect_tcp(&proxy.host, proxy.port, network, tcp_no_delay).await?;
             let stream: Box<dyn AsyncIo> = if proxy.tls {
-                Box::new(network.connect_tls(&proxy.host, stream).await?)
+                Box::new(
+                    network
+                        .connect_tls(tls_server_name(&proxy.host), stream)
+                        .await?,
+                )
             } else {
                 Box::new(stream)
             };
@@ -57,7 +62,7 @@ pub(crate) async fn connect(
     };
 
     let stream: Box<dyn AsyncIo> = if target.scheme() == "wss" {
-        Box::new(network.connect_tls(host, stream).await?)
+        Box::new(network.connect_tls(tls_server_name(host), stream).await?)
     } else {
         stream
     };
@@ -98,18 +103,20 @@ impl ProxyEndpoint {
         let port = url.port_or_known_default().ok_or_else(|| {
             WebSocketClientError::InvalidConfiguration("proxy URL has no port".into())
         })?;
-        let authorization = if url.username().is_empty() {
+        let username = url.username();
+        let authorization = if username.is_empty() {
             None
         } else {
-            let credentials = Zeroizing::new(format!(
-                "{}:{}",
-                url.username(),
-                url.password().unwrap_or_default()
-            ));
-            Some(Zeroizing::new(format!(
-                "Basic {}",
-                base64::engine::general_purpose::STANDARD.encode(credentials.as_bytes())
-            )))
+            let password = url.password().unwrap_or_default();
+            let mut credentials =
+                Zeroizing::new(Vec::with_capacity(username.len() + 1 + password.len()));
+            credentials.extend(percent_decode_str(username));
+            credentials.push(b':');
+            credentials.extend(percent_decode_str(password));
+            let mut authorization = Zeroizing::new(String::from("Basic "));
+            base64::engine::general_purpose::STANDARD
+                .encode_string(credentials.as_slice(), &mut authorization);
+            Some(authorization)
         };
         Ok(Self {
             host: host.to_string(),
@@ -221,4 +228,11 @@ fn host_port(host: &str, port: u16) -> String {
     } else {
         format!("{host}:{port}")
     }
+}
+
+fn tls_server_name(host: &str) -> &str {
+    // IPv6 brackets belong to URL authorities. TLS parses the bare IP address.
+    host.strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host)
 }

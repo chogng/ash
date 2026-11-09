@@ -1,13 +1,12 @@
 import './iconPicker.css';
-import '../../../../base/browser/ui/button/button.css';
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
-import { IconSelectBox } from '../../../../base/browser/ui/icons/iconSelectBox.js';
+import { addDisposableListener, getActiveDocument, getWindow, h } from '../../../../base/browser/dom.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getAllLxicons } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { WorkbenchIconSelectBox } from './iconSelectBox.js';
 
 export class IconPicker extends Disposable {
 	constructor(@IQuickInputService private readonly quickInput: IQuickInputService) {
@@ -15,20 +14,22 @@ export class IconPicker extends Disposable {
 	}
 
 	/** Returns null on reset and undefined on dismissal. */
-	async pickIcons(anchor: HTMLElement): Promise<Icon | null | undefined> {
+	async pickIcons(title = localize('iconPicker.changeIcon', 'Change icon'), anchor?: HTMLElement): Promise<Icon | null | undefined> {
 		const resources = this._register(new DisposableStore());
 		try {
-			const document = anchor.ownerDocument;
-			const window = getWindow(anchor);
-			const title = localize('iconPicker.changeIcon', 'Change icon');
+			const document = anchor?.ownerDocument ?? getActiveDocument();
+			const window = getWindow(document);
 			const content = h(document, 'div', { className: 'ash-icon-picker', attributes: { role: 'dialog', 'aria-label': title } });
 			const heading = h(document, 'h2', { className: 'ash-icon-picker-title' }, title);
-			const grid = resources.add(new IconSelectBox({ icons: getAllLxicons(), inputBoxStyles: defaultInputBoxStyles, showIconInfo: true }, document));
-			const reset = h(document, 'button', { className: 'ash-button ash-button-secondary', attributes: { type: 'button' } });
-			reset.textContent = localize('iconPicker.resetIcon', 'Reset icon');
-			const footer = h(document, 'div', { className: 'ash-icon-picker-footer' }, reset);
-			content.append(heading, grid.domNode, footer);
+			content.append(heading);
+			// Let the widget restore focus before the grid removes the focused input.
 			const widget = resources.add(this.quickInput.createQuickWidget());
+			const grid = resources.add(new WorkbenchIconSelectBox({
+				icons: getAllLxicons(),
+				inputBoxStyles: defaultInputBoxStyles,
+				showIconInfo: true,
+				showResetButton: true,
+			}, content));
 			widget.anchor = anchor;
 			widget.anchorPosition = 'below';
 			widget.widget = content;
@@ -45,7 +46,7 @@ export class IconPicker extends Disposable {
 					selected = icon;
 					widget.hide();
 				}));
-				resources.add(addDisposableListener(reset, 'click', () => {
+				resources.add(grid.onDidReset(() => {
 					selected = null;
 					widget.hide();
 				}));

@@ -212,6 +212,7 @@ fn item(id: &str, text: &str, transient: bool) -> ThreadTranscriptEntry {
             text: text.to_owned(),
         },
         transient,
+        timestamp: None,
     }
 }
 

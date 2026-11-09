@@ -1,26 +1,38 @@
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import { Schemas } from '../../../../base/common/network.js';
+import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IMemoriesService, type Memory, type MemoryConversationSource, type MemoryNamespace, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary, type MemoryTurnSource } from '../../../../platform/memories/common/memoriesService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { FileKind, FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode, type IFileEntry } from '../../../../platform/files/common/files.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { defaultButtonStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { Button, type ButtonPresentation } from '../../../../base/browser/ui/button/button.js';
+import { SelectBox, type SelectOption } from '../../../../base/browser/ui/selectbox/selectbox.js';
+import { defaultButtonStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IMemorySettingsNavigation, MEMORIES_FOCUS_CONTEXT, type MemorySettingsNavigation } from './memorySettings.js';
+import '../../preferences/browser/media/settingsCard.css';
+import '../../preferences/browser/media/settingsWidgets.css';
 import './memories.css';
 
 export class MemoriesEditor extends Disposable {
 	public readonly element: HTMLElement;
-	private readonly context: HTMLSelectElement;
-	private readonly scope: HTMLSelectElement;
-	private readonly modelMemoryEnabled: Switch | undefined;
+	private readonly context: SelectBox;
+	private readonly scope: SelectBox;
+	private readonly modelMemoryEnabled: Record<MemoryNamespace, Switch>;
+	private modelMemoryLoaded = false;
 	private readonly reading: Switch;
 	private readonly saving: Switch;
 	private readonly search: HTMLInputElement;
@@ -55,14 +67,20 @@ export class MemoriesEditor extends Disposable {
 	private contextId = '';
 	private mutationId = generateUuid();
 
-	constructor(private readonly namespace: MemoryNamespace, container: HTMLElement, closeSettings: () => Promise<boolean | void>,
+	constructor(private readonly namespace: MemoryNamespace, container: HTMLElement, private readonly closeSettings: () => Promise<boolean | void>, private readonly revealEditor: (() => void | Promise<void>) | undefined,
 		@IMemoriesService private readonly memories: IMemoriesService,
 		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IContextViewService private readonly contextView: IContextViewService,
 		@IMemorySettingsNavigation navigation: MemorySettingsNavigation,
+		@IFileService private readonly files: IFileService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IWorkbenchEnvironmentService private readonly environment: IWorkbenchEnvironmentService,
+		@IEditorService private readonly editors: IEditorService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -93,7 +111,7 @@ export class MemoriesEditor extends Disposable {
 					if (!(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.Memories, { type },
 						() => type === AccessibleViewType.Help
-							? localize({ bundle: 'ash.settings', key: 'memory.help' }, 'Choose a conversation and memory scope. Reading and model saving have separate switches. Choose Manage, then use Tab to move through saved memories and Enter to open one. <keybinding:ash.memories.save> saves your changes. Closing the manager or Settings asks whether to discard unsaved changes. Escape closes this help and returns focus.')
+							? localize({ bundle: 'ash.settings', key: 'memory.help' }, 'Manage Instructions or AGENTS.md to create or open guidance files in the editor. Chats and Code have separate memory switches. Choose a conversation and scope to control reading and model saving for that scope. Choose Manage under Saved memories, then use Tab to move through memories and Enter to open one. <keybinding:ash.memories.save> saves memory changes. Closing the manager or Settings asks whether to discard unsaved memory changes. Escape closes this help and returns focus.')
 							: [this.status.textContent, this.titleInput.value, this.body.value].filter(Boolean).join('\n'),
 						() => { if (focused.isConnected) { focused.focus(); } }, verbosity);
 				},
@@ -107,22 +125,30 @@ export class MemoriesEditor extends Disposable {
 		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(verbosity)) { updateHint(); } }));
 		updateHint();
 		const intro = h(document, 'p');
-		intro.className = 'memories-description';
-		intro.textContent = localize({ bundle: 'ash.settings', key: 'memory.intro' }, 'Choose where Ash can use and save memories.');
+		intro.className = 'ash-configuration-setting-description memories-intro';
+		intro.textContent = localize({ bundle: 'ash.settings', key: 'memory.intro' }, 'Manage the instructions Ash follows and what it remembers.');
 		this.element.append(intro);
 
-		const permissions = h(document, 'div');
-		permissions.className = 'memories-group';
-		const selectors = h(document, 'div');
-		selectors.className = 'memories-scope';
-		permissions.append(selectors);
-		this.context = h(document, 'select');
-		this.field(selectors, localize({ bundle: 'ash.settings', key: 'memory.context' }, 'Conversation context'), this.context);
-		this.scope = h(document, 'select');
-		this.field(selectors, localize('memories.scope', 'Memory scope'), this.scope);
-		this.modelMemoryEnabled = namespace === 'code' ? this.switchRow(permissions,
-			localize({ bundle: 'ash.settings', key: 'memory.codeMemory' }, 'Code model memory'),
-			localize({ bundle: 'ash.settings', key: 'memory.codeMemoryDescription' }, 'Enable the Code model’s memory features.')) : undefined;
+		const instructions = h(document, 'div', { className: 'ash-settings-card' });
+		this.element.append(instructions);
+		this.addInstructionManager(instructions, 'instructions',
+			localize({ bundle: 'ash.settings', key: 'memory.instructions' }, 'Instructions'),
+			localize({ bundle: 'ash.settings', key: 'memory.instructionsDescription' }, 'Create or edit reusable instructions in your Ash profile and workspace.'));
+		this.addInstructionManager(instructions, 'agents',
+			'AGENTS.md',
+			localize({ bundle: 'ash.settings', key: 'memory.agentsDescription' }, 'Create or edit the guidance Ash loads from your profile or workspace root.'));
+
+		const permissions = h(document, 'div', { className: 'ash-settings-card' });
+		this.modelMemoryEnabled = {
+			chat: this.switchRow(permissions,
+				localize({ bundle: 'ash.settings', key: 'memory.chatMemory' }, 'Chats memory'),
+				localize({ bundle: 'ash.settings', key: 'memory.chatMemoryDescription' }, 'Allow Chats to use and save memories according to project permissions.')),
+			code: this.switchRow(permissions,
+				localize({ bundle: 'ash.settings', key: 'memory.codeMemory' }, 'Code memory'),
+				localize({ bundle: 'ash.settings', key: 'memory.codeMemoryDescription' }, 'Allow Code to use and save memories according to scope permissions.')),
+		};
+		this.context = this.selectRow(permissions, localize({ bundle: 'ash.settings', key: 'memory.context' }, 'Conversation context'));
+		this.scope = this.selectRow(permissions, localize('memories.scope', 'Memory scope'));
 		this.reading = this.switchRow(permissions,
 			localize({ bundle: 'ash.settings', key: 'memory.reading' }, 'Use saved memories'),
 			localize({ bundle: 'ash.settings', key: 'memory.readingDescription' }, 'Let Ash use saved memories from this scope in conversations.'));
@@ -132,7 +158,7 @@ export class MemoriesEditor extends Disposable {
 		this.element.append(permissions);
 
 		const saved = h(document, 'section');
-		saved.className = 'memories-group';
+		saved.className = 'ash-settings-card';
 		const overview = this.row(saved,
 			localize({ bundle: 'ash.settings', key: 'memory.savedMemories' }, 'Saved memories'),
 			localize({ bundle: 'ash.settings', key: 'memory.savedMemoriesDescription' }, 'See what Ash remembers in this scope and make changes.'));
@@ -154,6 +180,7 @@ export class MemoriesEditor extends Disposable {
 		manager.className = 'memories-manager';
 		manager.id = `memory-manager-${generateUuid()}`;
 		this.manage.domNode.setAttribute('aria-controls', manager.id);
+		this.manage.domNode.setAttribute('aria-label', localize({ bundle: 'ash.settings', key: 'memory.manageSaved' }, 'Manage saved memories'));
 		this.showManager(false);
 		saved.append(this.status, manager);
 		this.element.append(saved);
@@ -167,13 +194,13 @@ export class MemoriesEditor extends Disposable {
 		toolbar.append(actions);
 		this.button(actions, localize({ bundle: 'ash.settings', key: 'memory.searchAction' }, 'Search'), () => this.loadList());
 		this.create = this.button(actions, localize({ bundle: 'ash.settings', key: 'memory.new' }, 'New memory'), () => this.newMemory());
-		this.button(actions, localize({ bundle: 'ash.settings', key: 'memory.refresh' }, 'Refresh'), () => this.refresh(), 'quiet');
+		this.button(actions, localize({ bundle: 'ash.settings', key: 'memory.refresh' }, 'Refresh'), () => this.refresh());
 		const topics = h(document, 'h3');
 		topics.className = 'memories-heading';
 		topics.id = `memory-topics-${generateUuid()}`;
 		topics.textContent = localize({ bundle: 'ash.settings', key: 'memory.topics' }, 'Topics');
 		this.empty = h(document, 'p');
-		this.empty.className = 'memories-description';
+		this.empty.className = 'ash-configuration-setting-description memories-intro';
 		this.list = h(document, 'ul');
 		this.list.className = 'memories-topics';
 		this.list.setAttribute('aria-labelledby', topics.id);
@@ -198,11 +225,11 @@ export class MemoriesEditor extends Disposable {
 		detailActions.className = 'memories-actions';
 		detail.append(detailActions);
 		this.save = this.button(detailActions, localize('memories.saveAction', 'Save memory'), () => this.saveMemory(), 'primary');
-		this.remove = this.button(detailActions, localize({ bundle: 'ash.settings', key: 'memory.delete' }, 'Delete memory'), () => this.deleteMemory());
+		this.remove = this.button(detailActions, localize({ bundle: 'ash.settings', key: 'memory.delete' }, 'Delete memory'), () => this.deleteMemory(), 'danger');
 		this.openSource = this.button(detailActions, localize('memories.openSource', 'Open source conversation'), async () => {
 			const origin = this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin;
 			if (!origin || !await this.discardDraft()) { return; }
-			if (await closeSettings() === false) { return; }
+			if (await this.closeSettings() === false) { return; }
 			await this.sessions.openConversation(origin.sessionId, origin.threadId);
 		});
 		const utilities = h(document, 'div');
@@ -218,25 +245,33 @@ export class MemoriesEditor extends Disposable {
 		utilities.append(reference);
 		this.element.append(utilities);
 		this._register(new Button(utilities, {
-			...defaultButtonStyles, presentation: 'quiet',
+			...defaultButtonStyles, presentation: 'secondary',
 			label: localize({ bundle: 'ash.settings', key: 'memory.helpAction' }, 'Help'),
 			onClick: () => { accessibleView.show(AccessibleViewType.Help); },
 		}));
-		this._register(addDisposableListener(this.context, 'change', () => { void this.perform(async () => { if (!await this.discardDraft()) { this.context.value = this.contextId; return; } this.contextId = this.context.value; this.policy = undefined; this.clearDetail(); await this.refresh(); }); }));
-		this._register(addDisposableListener(this.scope, 'change', () => { void this.perform(() => this.selectScope()); }));
+		this._register(this.context.onDidSelect(({ value }) => {
+			void this.perform(async () => {
+				if (!await this.discardDraft()) { this.context.value = this.contextId; return; }
+				this.contextId = value;
+				this.policy = undefined;
+				this.clearDetail();
+				await this.refresh();
+			});
+		}));
+		this._register(this.scope.onDidSelect(() => { void this.perform(() => this.selectScope()); }));
 		this._register(addDisposableListener(this.list, 'click', event => {
 			const target = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-memory-id]');
 			if (target) { void this.perform(() => this.selectMemory(target.dataset.memoryId)); }
 		}));
-		const modelMemoryEnabled = this.modelMemoryEnabled;
-		if (modelMemoryEnabled) {
-			this._register(modelMemoryEnabled.onDidChange(() => {
+		for (const namespace of ['chat', 'code'] as const) {
+			const toggle = this.modelMemoryEnabled[namespace];
+			this._register(toggle.onDidChange(() => {
 				void this.perform(async () => {
-					const enabled = modelMemoryEnabled.checked;
+					const enabled = toggle.checked;
 					try {
-						await this.memories.setModelMemoryEnabled(enabled);
+						await this.memories.setModelMemoryEnabled(namespace, enabled);
 					} catch (error) {
-						modelMemoryEnabled.checked = await this.memories.readModelMemoryEnabled().catch(() => !enabled);
+						toggle.checked = await this.memories.readModelMemoryEnabled().then(state => state[namespace], () => !enabled);
 						throw error;
 					}
 				});
@@ -258,6 +293,11 @@ export class MemoriesEditor extends Disposable {
 		if (!this.policy) { void this.perform(() => this.refresh()); }
 	}
 
+	public hideSelects(): void {
+		this.context.hide();
+		this.scope.hide();
+	}
+
 	public async canClose(): Promise<boolean> {
 		if (!this.dirty) { return true; }
 		if (this.working) { return false; }
@@ -277,8 +317,8 @@ export class MemoriesEditor extends Disposable {
 			}
 			if (!await this.discardDraft() || this.isDisposed) { return; }
 			this.refreshContexts();
-			if (!Array.from(this.context.options).some(option => option.value === origin.threadId)) {
-				this.context.append(this.option(localize('memories.sourceConversation', 'Source conversation'), origin.threadId));
+			if (!this.context.options.some(option => option.value === origin.threadId)) {
+				this.context.setOptions([...this.context.options, { label: localize('memories.sourceConversation', 'Source conversation'), value: origin.threadId }]);
 			}
 			this.context.value = this.contextId = origin.threadId;
 			this.setScopes(projects, projects.length === 1 ? 0 : -1);
@@ -313,34 +353,32 @@ export class MemoriesEditor extends Disposable {
 	}
 
 	private refreshContexts(): void {
-		const document = this.element.ownerDocument;
 		const previous = this.context.value;
-		this.context.replaceChildren(this.option(this.namespace === 'code'
-			? localize('memories.personalContext', 'Personal memories')
-			: localize('memories.chooseChatConversation', 'Choose a project conversation'), ''));
+		const options = new Map<string, SelectOption>();
+		options.set('', {
+			value: '', label: this.namespace === 'code'
+				? localize('memories.personalContext', 'Personal memories')
+				: localize('memories.chooseChatConversation', 'Choose a project conversation')
+		});
 		for (const conversation of this.sessions.getConversations()) {
-			if (conversation.kind !== this.namespace) { continue; }
-			const option = h(document, 'option');
-			option.value = conversation.threadId;
-			option.textContent = conversation.title;
-			this.context.append(option);
+			if (conversation.kind !== this.namespace || options.has(conversation.threadId)) { continue; }
+			options.set(conversation.threadId, { value: conversation.threadId, label: conversation.title });
 		}
+		this.context.setOptions([...options.values()]);
 		const active = this.namespace === 'chat' ? this.sessions.getActiveConversation()?.threadId : undefined;
 		const candidate = previous || active || '';
-		this.context.value = this.contextId = Array.from(this.context.options).some(option => option.value === candidate)
-			? candidate : '';
+		this.context.value = this.contextId = options.has(candidate) ? candidate : '';
 	}
 	private isProjectScope(scope: MemoryPolicy['scope']): boolean {
 		return scope.type === (this.namespace === 'chat' ? 'chatProject' : 'project');
 	}
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
-		const [availableScopes, enabled] = await Promise.all([
+		const [availableScopes] = await Promise.all([
 			this.namespace === 'chat' && !this.context.value ? [] : this.memories.scopes(this.context.value || undefined),
-			this.modelMemoryEnabled ? this.memories.readModelMemoryEnabled() : false,
+			this.refreshModelMemory(),
 		]);
 		if (this.isDisposed || generation !== this.generation) { return; }
-		if (this.modelMemoryEnabled) { this.modelMemoryEnabled.checked = enabled; }
 		const scopes = this.draftOrigin || this.namespace === 'chat'
 			? availableScopes.filter(entry => this.isProjectScope(entry.policy.scope))
 			: availableScopes.filter(entry => entry.policy.scope.type !== 'chatProject');
@@ -357,12 +395,20 @@ export class MemoriesEditor extends Disposable {
 			}
 		}
 	}
+	private async refreshModelMemory(): Promise<void> {
+		const enabled = await this.memories.readModelMemoryEnabled();
+		if (this.isDisposed) { return; }
+		this.modelMemoryLoaded = true;
+		this.modelMemoryEnabled.chat.checked = enabled.chat;
+		this.modelMemoryEnabled.code.checked = enabled.code;
+	}
 	private setScopes(scopes: readonly MemoryScopeEntry[], index: number): void {
 		this.scopes = scopes;
-		this.scope.replaceChildren(...scopes.map((entry, index) => this.option(entry.label, String(index))));
+		const options = scopes.map((entry, index) => ({ label: entry.label, value: String(index) }));
 		if (index < 0) {
-			this.scope.prepend(this.option(localize('memories.chooseProject', 'Choose a project'), ''));
+			options.unshift({ label: localize('memories.chooseProject', 'Choose a project'), value: '' });
 		}
+		this.scope.setOptions(options);
 		this.scope.value = index < 0 ? '' : String(index);
 		this.policy = scopes[index]?.policy;
 		this.renderPolicy();
@@ -522,6 +568,126 @@ export class MemoriesEditor extends Disposable {
 		try { this.policy = await this.memories.setPolicy(this.policy, this.reading.checked, this.saving.checked); }
 		finally { if (!this.isDisposed) { this.renderPolicy(); } }
 	}
+	private addInstructionManager(group: HTMLElement, kind: 'instructions' | 'agents', title: string, description: string): void {
+		const document = this.element.ownerDocument;
+		const row = this.row(group, title, description);
+		const panel = h(document, 'div');
+		panel.className = 'memories-manager';
+		panel.id = `instruction-manager-${generateUuid()}`;
+		panel.hidden = true;
+		const actions = this._register(new DisposableStore());
+		const manage = this.button(row, localize({ bundle: 'ash.settings', key: 'memory.manage' }, 'Manage'), async () => {
+			if (panel.hidden) {
+				const workspace = this.workspace.getWorkspace();
+				const entries = await Promise.all(this.instructionScopes().map(async scope => {
+					const directory = kind === 'agents' ? scope.root : URI.joinPath(scope.root, ...(scope.profile ? ['instructions'] : ['.ash', 'instructions']));
+					return { scope, directory, files: await this.readInstructionFiles(kind, directory) };
+				}));
+				if (this.isDisposed || workspace !== this.workspace.getWorkspace()) { return; }
+				panel.replaceChildren();
+				actions.clear();
+				if (!entries.length) {
+					panel.textContent = localize({ bundle: 'ash.settings', key: 'memory.noInstructionScopes' }, 'Open a workspace folder to manage guidance files.');
+				}
+				for (const { scope, directory, files } of entries) {
+					const heading = h(document, 'h3');
+					heading.className = 'memories-heading';
+					heading.textContent = scope.label;
+					panel.append(heading);
+					if (!files) {
+						const message = h(document, 'p');
+						message.className = 'ash-configuration-setting-description memories-intro';
+						message.textContent = localize({ bundle: 'ash.settings', key: 'memory.instructionFilesUnavailable' }, 'This folder could not be read.');
+						panel.append(message);
+						continue;
+					}
+					const controls = h(document, 'div');
+					controls.className = 'memories-actions';
+					panel.append(controls);
+					for (const { name, resource } of files) {
+						const open = this.button(controls, name, () => this.openInstructionFile(resource), 'secondary', actions);
+						open.domNode.setAttribute('aria-label', localize({ bundle: 'ash.settings', key: 'memory.openScopedInstruction' }, 'Open {0} in {1}', name, scope.label));
+					}
+					if (kind === 'instructions' || files.length === 0) {
+						const label = kind === 'agents'
+							? localize({ bundle: 'ash.settings', key: 'memory.createAgents' }, 'Create AGENTS.md')
+							: localize({ bundle: 'ash.settings', key: 'memory.createInstruction' }, 'New instruction');
+						const create = this.button(controls, label, () => this.createInstructionFile(kind, label, scope.root, directory), 'secondary', actions);
+						create.domNode.setAttribute('aria-label', localize({ bundle: 'ash.settings', key: 'memory.createScopedInstruction' }, '{0} in {1}', label, scope.label));
+					}
+				}
+			}
+			panel.hidden = !panel.hidden;
+			manage.domNode.setAttribute('aria-expanded', String(!panel.hidden));
+		});
+		manage.domNode.setAttribute('aria-label', kind === 'agents'
+			? localize({ bundle: 'ash.settings', key: 'memory.manageAgents' }, 'Manage AGENTS.md')
+			: localize({ bundle: 'ash.settings', key: 'memory.manageInstructions' }, 'Manage Instructions'));
+		manage.domNode.setAttribute('aria-controls', panel.id);
+		manage.domNode.setAttribute('aria-expanded', 'false');
+		this._register(this.workspace.onDidChangeWorkspaceFolders(() => {
+			panel.hidden = true;
+			manage.domNode.setAttribute('aria-expanded', 'false');
+		}));
+		group.append(panel);
+	}
+
+	private async readInstructionFiles(kind: 'instructions' | 'agents', directory: URI): Promise<readonly Pick<IFileEntry, 'name' | 'resource'>[] | undefined> {
+		try {
+			if (kind === 'agents') {
+				const resource = URI.joinPath(directory, 'AGENTS.md');
+				const stat = await this.files.stat(resource);
+				return stat.kind === FileKind.File ? [{ name: 'AGENTS.md', resource }] : undefined;
+			}
+			const files = await this.files.readDirectory(directory);
+			return files.filter(file => file.kind === FileKind.File && file.name.endsWith('.md')).sort((a, b) => a.name.localeCompare(b.name));
+		} catch (error) {
+			return error instanceof Error && toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileNotFound ? [] : undefined;
+		}
+	}
+
+	private async createInstructionFile(kind: 'instructions' | 'agents', label: string, root: URI, directory: URI): Promise<void> {
+		let name = 'AGENTS.md';
+		if (kind === 'instructions') {
+			const result = await this.dialogs.input({
+				title: label,
+				message: localize({ bundle: 'ash.settings', key: 'memory.instructionName' }, 'Enter a name using lowercase letters, numbers, and hyphens.'),
+				inputs: [{ placeholder: 'writing-style' }],
+				primaryButton: localize({ bundle: 'ash.settings', key: 'memory.createFile' }, 'Create'),
+			});
+			if (!result.confirmed) { return; }
+			const value = result.values?.[0]?.trim() ?? '';
+			if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(value)) {
+				throw new Error(localize({ bundle: 'ash.settings', key: 'memory.invalidInstructionName' }, 'Enter 1 to 64 lowercase letters, numbers, or hyphens. Start and end with a letter or number.'));
+			}
+			name = `${value}.md`;
+		}
+		if (!await this.discardDraft() || this.isDisposed
+			|| !this.instructionScopes().some(scope => scope.root.toString() === root.toString())) { return; }
+		if (kind === 'instructions') { await this.files.createDirectory(directory); }
+		const resource = URI.joinPath(directory, name);
+		const starter = kind === 'instructions' ? '---\nload: global\n---\n\n' : '';
+		await this.files.writeFileBytes(resource, new TextEncoder().encode(starter), { create: true, overwrite: false });
+		await this.openInstructionFile(resource);
+	}
+
+	private instructionScopes(): readonly { readonly label: string; readonly root: URI; readonly profile: boolean; }[] {
+		const scopes = this.workspace.getWorkspace().folders.map(folder => ({ label: folder.name, root: folder.uri, profile: false }));
+		if (this.environment.userRoamingDataHome) {
+			scopes.unshift({ label: localize({ bundle: 'ash.settings', key: 'memory.instructionProfile' }, 'Ash profile'), root: URI.from({ scheme: Schemas.vscodeUserData, path: '/user' }), profile: true });
+		}
+		return scopes.filter(scope => this.files.hasProvider(scope.root));
+	}
+
+	private async openInstructionFile(resource: URI): Promise<void> {
+		if (!await this.discardDraft() || this.isDisposed || await this.closeSettings() === false) { return; }
+		try {
+			await this.editors.openEditor({ resource }, { pinned: true });
+			await this.revealEditor?.();
+		} catch (error) {
+			this.notifications.error(localize({ bundle: 'ash.settings', key: 'memory.openInstructionFailed' }, 'Could not open {0}: {1}', resource.path, String(error)));
+		}
+	}
 	private async discardDraft(): Promise<boolean> {
 		if (!this.dirty) { return true; }
 		const discard = await this.dialogs.confirm({
@@ -559,8 +725,10 @@ export class MemoriesEditor extends Disposable {
 		}
 	}
 	private applyEnabled(): void {
-		for (const control of this.element.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | HTMLSelectElement>('input, textarea, button, select')) {
-			if (control === this.reading.input || control === this.saving.input || control === this.modelMemoryEnabled?.input) { continue; }
+		for (const control of this.element.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>('input, textarea, button')) {
+			if (control === this.reading.input || control === this.saving.input
+				|| control === this.modelMemoryEnabled.chat.input || control === this.modelMemoryEnabled.code.input
+				|| this.context.element.contains(control) || this.scope.element.contains(control)) { continue; }
 			if (control instanceof HTMLTextAreaElement || control instanceof HTMLInputElement) {
 				control.disabled = false;
 				control.readOnly = this.working || (this.showingReference && (control === this.body || control === this.titleInput));
@@ -570,16 +738,14 @@ export class MemoriesEditor extends Disposable {
 		this.remove.enabled = !(this.working || !this.selected || this.showingReference);
 		this.next.enabled = !(this.working || !this.cursor);
 		this.next.domNode.hidden = !this.cursor;
-		this.scope.disabled = this.working || this.scopes.length === 0;
+		this.context.enabled = !this.working;
+		this.scope.enabled = !this.working && this.scopes.length > 0;
 		this.create.enabled = !(this.working || !this.policy);
-		if (this.modelMemoryEnabled) { this.modelMemoryEnabled.enabled = !this.working; }
+		this.modelMemoryEnabled.chat.enabled = this.modelMemoryEnabled.code.enabled = this.modelMemoryLoaded && !this.working;
 		this.reading.enabled = !(this.working || !this.policy);
 		this.saving.enabled = !(this.working || !this.policy);
 		this.openSource.enabled = !this.working;
 		this.openSource.domNode.hidden = !(this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin);
-	}
-	private option(label: string, value: string): HTMLOptionElement {
-		const option = h(this.element.ownerDocument, 'option'); option.textContent = label; option.value = value; return option;
 	}
 	private field(container: HTMLElement, text: string, control: HTMLElement): void {
 		const label = h(this.element.ownerDocument, 'label');
@@ -597,18 +763,12 @@ export class MemoriesEditor extends Disposable {
 		this.field(container, label, input);
 		return input;
 	}
-	private row(container: HTMLElement, title: string, description: string): HTMLElement {
+	private row(container: HTMLElement, title: string, description?: string): HTMLElement {
 		const document = container.ownerDocument;
-		const row = h(document, 'div');
-		row.className = 'memories-row';
-		const copy = h(document, 'div');
-		const label = h(document, 'div');
-		label.textContent = title;
-		label.className = 'memories-heading';
-		const hint = h(document, 'p');
-		hint.textContent = description;
-		hint.className = 'memories-description';
-		copy.append(label, hint);
+		const row = h(document, 'div', { className: 'ash-settings-field-row' });
+		const copy = h(document, 'div', { className: 'ash-settings-field-copy ash-configuration-setting-copy' });
+		copy.append(h(document, 'div', { className: 'ash-configuration-setting-title' }, title));
+		if (description) { copy.append(h(document, 'p', { className: 'ash-configuration-setting-description' }, description)); }
 		row.append(copy);
 		container.append(row);
 		return row;
@@ -616,15 +776,21 @@ export class MemoriesEditor extends Disposable {
 	private switchRow(container: HTMLElement, title: string, description: string): Switch {
 		const row = this.row(container, title, description);
 		const toggle = this._register(new Switch(row, { ...defaultToggleStyles, ariaLabel: title, disabled: true }));
-		const hint = row.querySelector('.memories-description')!;
+		const hint = row.querySelector('.ash-configuration-setting-description')!;
 		hint.id = `memory-description-${generateUuid()}`;
 		toggle.input.setAttribute('aria-describedby', hint.id);
 		return toggle;
 	}
-	private button(container: HTMLElement, label: string, action: () => Promise<void>, presentation: 'primary' | 'secondary' | 'quiet' = 'secondary'): Button {
-		return this._register(new Button(container, {
+	private selectRow(container: HTMLElement, title: string): SelectBox {
+		return this._register(new SelectBox(this.row(container, title), {
+			options: [], ariaLabel: title, contextViewProvider: this.contextView, presentation: 'field',
+		}, defaultSelectBoxStyles));
+	}
+	private button(container: HTMLElement, label: string, action: () => Promise<void>, presentation: ButtonPresentation = 'secondary', store?: DisposableStore): Button {
+		const button = new Button(container, {
 			...defaultButtonStyles, label, presentation,
 			onClick: () => { void this.perform(action); },
-		}));
+		});
+		return store ? store.add(button) : this._register(button);
 	}
 }

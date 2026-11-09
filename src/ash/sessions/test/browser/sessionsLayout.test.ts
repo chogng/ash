@@ -480,6 +480,23 @@ suite('sessions browser component', () => {
 		const { page, info } = browserTests;
 		const chinese = locale === 'zh-CN';
 		if (chinese) await page.goto('/sessions.html?catalog&locale=zh-CN');
+		const searchTrigger = page.locator('[data-action-id="sessions.search"] button');
+		await searchTrigger.press('Enter');
+		const sidebarSearch = page.locator('.ash-sessions-search-dialog');
+		const searchPresentation = (field: Locator) => field.evaluate(element => {
+			const style = getComputedStyle(element);
+			const dialog = element.closest('dialog')!.getBoundingClientRect();
+			const rect = element.getBoundingClientRect();
+			return {
+				top: rect.top - dialog.top, left: rect.left - dialog.left,
+				height: rect.height, border: style.border, background: style.backgroundColor, font: style.font,
+			};
+		});
+		const sidebarField = sidebarSearch.getByRole('combobox');
+		await expect(sidebarField).toBeFocused();
+		const presentation = await searchPresentation(sidebarField);
+		await sidebarField.press('Escape');
+		await expect(searchTrigger).toBeFocused();
 		const accounts = page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true });
 		const label = chinese ? '快捷键' : 'Keyboard Shortcuts';
 		await accounts.press('Enter');
@@ -503,15 +520,58 @@ suite('sessions browser component', () => {
 		await accounts.click();
 		await expectMenuInsets();
 		await page.screenshot({ path: info.outputPath('sessions-sidebar-account-menu.png') });
-		const menuItem = page.getByRole('menuitem', { name: label, exact: true });
+		const menuItem = page.getByRole('menuitem', { name: chinese ? '快捷键' : 'Shortcuts', exact: true });
 		await expect(menuItem.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'record-keys');
 		await menuItem.press('Enter');
 		const modal = page.getByRole('dialog', { name: chinese ? 'Agent 窗口快捷键' : 'Agent Window Keyboard Shortcuts' });
 		const shortcuts = modal.getByRole('region');
 		const search = modal.getByRole('searchbox', { name: chinese ? '搜索 Agent 窗口快捷键' : 'Search Agent Window shortcuts' });
 		await expect(search).toBeFocused();
-		await expect(shortcuts).toHaveCSS('overflow-y', 'auto');
+		expect(await searchPresentation(search)).toEqual(presentation);
+		await expect(modal.getByRole('button')).toHaveCount(1);
+		await search.press('Tab');
+		await expect(modal.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true })).toBeFocused();
+		await page.keyboard.press('Tab');
+		const tabs = modal.getByRole('tablist', { name: chinese ? '快捷键分类' : 'Shortcut categories' });
+		const all = tabs.getByRole('tab', { name: chinese ? '全部' : 'All', exact: true });
+		const general = tabs.getByRole('tab', { name: chinese ? '通用' : 'General', exact: true });
+		const diff = tabs.getByRole('tab', { name: chinese ? '差异' : 'Diff', exact: true });
+		const apps = tabs.getByRole('tab', { name: chinese ? '应用' : 'Apps', exact: true });
+		await expect(all).toBeFocused();
+		await expect(all).toHaveAttribute('aria-selected', 'true');
+		await all.press('ArrowRight');
+		await expect(general).toBeFocused();
+		await expect(all).toHaveAttribute('aria-selected', 'true');
+		await general.press('Enter');
+		await expect(modal.getByRole('tabpanel')).toHaveAccessibleName(chinese ? '通用' : 'General');
+		await expect(shortcuts.getByRole('heading')).toHaveCount(0);
+		const generalList = shortcuts.getByRole('list');
+		await expect(generalList).toHaveCount(1);
+		await expect(generalList.getByRole('listitem').filter({ hasText: chinese ? '切换终端' : 'Toggle terminal' })).toBeVisible();
+		await expect(generalList.getByRole('listitem').filter({ hasText: chinese ? '移动焦点所在的 Code 工具窗格' : 'Move a focused Code tool pane' })).toBeVisible();
+		await general.press('ArrowDown');
+		await expect(search).toBeFocused();
+		await search.fill(chinese ? '切换终端' : 'toggle terminal');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
+		await apps.click();
+		await expect(search).toHaveValue(chinese ? '切换终端' : 'toggle terminal');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(0);
+		await diff.click();
+		await search.fill(chinese ? '转到下一个更改' : 'go to next change');
+		await expect(shortcuts.getByRole('heading')).toHaveCount(0);
+		await expect(shortcuts.getByRole('listitem')).toHaveText(chinese ? /转到下一个更改/ : /Go to Next Change/);
+		await expect(shortcuts.getByRole('listitem').locator('kbd')).not.toHaveCount(0);
+		await search.fill(chinese ? '切换终端' : 'toggle terminal');
+		await all.click();
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
+		await search.press('Escape');
+		await all.focus();
+		await page.keyboard.press('Tab');
+		await expect(shortcuts).toBeFocused();
+		const scrollRail = shortcuts.locator('.ash-scrollbar-track-vertical');
+		await expect(scrollRail).toBeVisible();
 		const headings = shortcuts.getByRole('heading');
+		const headingCount = await headings.count();
 		const [left, right] = await Promise.all([headings.nth(0).boundingBox(), headings.nth(1).boundingBox()]);
 		expect(right!.x).toBeGreaterThan(left!.x);
 		expect(right!.y).toBe(left!.y);
@@ -549,6 +609,9 @@ suite('sessions browser component', () => {
 		await expect(shortcuts.getByText(chinese ? '保存' : 'Save', { exact: true })).toHaveCount(0);
 		await shortcuts.getByRole('heading', { name: chinese ? '设计原型预览' : 'Design Prototype Preview' }).scrollIntoViewIfNeeded();
 		await expect(search).toBeInViewport();
+		await expect(tabs).toBeInViewport();
+		const rightColumn = shortcuts.getByRole('heading', { name: chinese ? '设计图层' : 'Design Layers', exact: true }).locator('+ ul');
+		expect((await rightColumn.boundingBox())!.x + (await rightColumn.boundingBox())!.width).toBeLessThanOrEqual((await scrollRail.boundingBox())!.x);
 		await search.fill(chinese ? '切换终端' : 'toggle terminal');
 		await expect(shortcuts.getByRole('heading')).toHaveText(chinese ? 'Code 终端' : 'Terminal in Code');
 		await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
@@ -577,7 +640,7 @@ suite('sessions browser component', () => {
 		await search.press('Escape');
 		await expect(search).toBeFocused();
 		await expect(search).toHaveValue('');
-		await expect(shortcuts.getByRole('heading')).toHaveCount(9);
+		await expect(shortcuts.getByRole('heading')).toHaveCount(headingCount);
 		await page.keyboard.press('Escape');
 		await expect(modal).toHaveCount(0);
 		await expect(accounts).toBeFocused();
@@ -807,7 +870,12 @@ suite('sessions browser component', () => {
 		await expect(inbox).toBeFocused();
 
 		await code.click();
-		await expect(inbox).toHaveAccessibleName('收件箱，2 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，2 个会话需要关注');
+		await sidebarToggle.click();
+		await expect(footer).toBeHidden();
+		await sidebarToggle.click();
+		await expect(inbox).toBeVisible();
+		await expect(inbox).toHaveAccessibleName('收件箱，2 个会话需要关注');
 		await expect(inbox.locator('.ash-sessions-inbox-dot')).toBeVisible();
 		const accounts = page.locator('.ash-sessions-sidebar-accounts button');
 		const accountBounds = (await accounts.boundingBox())!;
@@ -829,16 +897,16 @@ suite('sessions browser component', () => {
 		await page.keyboard.press('Shift+Tab');
 		await page.keyboard.press('Enter');
 		await expect(panel).toBeHidden();
-		await expect(inbox).toHaveAccessibleName('收件箱，2 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，2 个会话需要关注');
 
 		await inbox.press('Enter');
 		await unread.press('Enter');
-		await expect(inbox).toHaveAccessibleName('收件箱，1 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
 		await expect(page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
 		await chat.click();
 		await expect(inbox).toHaveAccessibleName('收件箱');
 		await code.click();
-		await expect(inbox).toHaveAccessibleName('收件箱，1 项需要关注');
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
 
 		await inbox.click();
 		const previousWidth = (await footer.boundingBox())!.width;
@@ -847,6 +915,152 @@ suite('sessions browser component', () => {
 		await expectEvenInsets();
 		await inbox.click();
 		await expect(panel).toBeHidden();
+	});
+
+	test('Inbox waits for a background PR required check before showing it as ready to merge', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&inboxMergeReady&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const inbox = page.getByRole('button', { name: /^收件箱/u });
+		await inbox.press('Enter');
+		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const ready = panel.getByRole('button', { name: 'Task from Host B 可合并' });
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.requiredCheckReads())).toBeGreaterThan(0);
+		await expect(panel).toContainText('没有需要关注的会话。');
+		await expect(ready).toHaveCount(0);
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.completeRequiredCheck());
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
+		await expect(ready).toBeVisible();
+		await page.keyboard.press('Tab');
+		await expect(ready).toBeFocused();
+		await ready.press('Enter');
+		await expect(panel).toBeHidden();
+		await expect(page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
+	});
+
+	test('Inbox shows and dismisses independent PR notifications in the existing sidebar popover', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&inboxPullRequestEvents&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const inbox = page.getByRole('button', { name: '收件箱，1 个会话需要关注' });
+		await expect(inbox).toBeVisible();
+		await inbox.press('Enter');
+		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const review = panel.getByRole('button', { name: 'Task from Host B 待处理的 Copilot 审查评论' });
+		const failure = panel.getByRole('button', { name: 'Task from Host B CI 检查失败' });
+		const merged = panel.getByRole('button', { name: 'Task from Host B 拉取请求已合并' });
+		await expect(failure).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(review).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(merged).toBeFocused();
+		await failure.press('Shift+F10');
+		await page.getByRole('menuitem', { name: '关闭通知', exact: true }).click();
+		await expect(failure).toHaveCount(0);
+		await expect(review).toBeVisible();
+		await expect(merged).toBeVisible();
+		await merged.press('Enter');
+		await expect(panel).toBeHidden();
+	});
+
+	test('Inbox marks a review reply read when its visible Bots conversation receives focus', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&sideThreads&inbox&botsInbox');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+		await code.click();
+		const inbox = page.getByRole('button', { name: /^Inbox/ });
+		const panel = page.getByRole('dialog', { name: 'Inbox', exact: true });
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 2');
+		await inbox.press('Enter');
+		await expect(panel.getByRole('button')).toHaveCount(3);
+		await page.keyboard.press('Escape');
+
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Bots', exact: true }).click();
+		const bots = page.locator('.ash-bots-page');
+		await expect(bots.getByRole('heading', { name: 'Follow-up chat' })).toBeVisible();
+		await expect(bots.getByText('I reviewed the change.', { exact: true })).toBeVisible();
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 2');
+
+		const conversation = bots.getByRole('textbox');
+		await conversation.focus();
+		await expect(conversation).toBeFocused();
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 2');
+		await page.locator('.ash-bots-sidebar').getByRole('button', { name: 'Back', exact: true }).click();
+		await inbox.press('Enter');
+		await expect(panel.getByRole('button', { name: 'Task from Host B Needs your input' })).toBeVisible();
+		await expect(panel.getByRole('button', { name: /Follow-up chat/ })).toHaveCount(0);
+		await panel.getByRole('button', { name: 'Task from Host A Unread reply' }).press('Enter');
+		await expect(panel).toBeHidden();
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 1');
+	});
+
+	test('Inbox sorts and dismisses notifications from the sidebar popover', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&inbox&inboxActions&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		const inbox = page.getByRole('button', { name: /^收件箱/u });
+		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const menu = page.getByRole('menu');
+		await new QuickAccess(page).runCommand('sessions.inboxNotifications.show');
+		await expect(panel.getByRole('button').first()).toHaveAccessibleName('Task from Host B 等待你的输入');
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await expect(menu).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(inbox).toBeFocused();
+		await inbox.press('Shift+F10');
+		await menu.getByText('按最近活动排序', { exact: true }).click();
+		const unread = panel.getByRole('button', { name: 'Task from Host A 未读回复' });
+		await expect(panel.getByRole('button').first()).toHaveAccessibleName('Task from Host A 未读回复');
+		await unread.press('Shift+F10');
+		await menu.getByText('关闭通知', { exact: true }).click();
+		await expect(inbox).toHaveAccessibleName('收件箱，1 个会话需要关注');
+		await expect(panel.getByRole('button')).toHaveCount(1);
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await menu.getByText('已关闭的通知', { exact: true }).click();
+		const history = page.getByRole('dialog', { name: '已关闭的通知', exact: true });
+		const item = history.getByRole('button', { name: 'Task from Host A 未读回复' });
+		await expect(item).toBeFocused();
+		await item.press('Enter');
+		await expect(history).toBeHidden();
+		await expect(page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
+	});
+
+	test('Inbox applies hold and done to all notifications from the same Session', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&sideThreads&inbox&botsInbox');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const inbox = page.getByRole('button', { name: /^Inbox/ });
+		const panel = page.getByRole('dialog', { name: 'Inbox', exact: true });
+		const menu = page.getByRole('menu');
+		const followUp = panel.getByRole('button', { name: 'Follow-up chat Unread reply' });
+		await inbox.press('Enter');
+		await expect(panel.getByRole('button')).toHaveCount(3);
+		await followUp.press('Shift+F10');
+		await menu.getByText('Put Session on Hold', { exact: true }).click();
+		await expect(panel.getByRole('button')).toHaveCount(1);
+		await expect(inbox).toHaveAccessibleName('Inbox, sessions needing attention: 1');
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await menu.getByText('Sessions on Hold', { exact: true }).click();
+		const held = page.getByRole('dialog', { name: 'Sessions on Hold', exact: true });
+		await held.getByRole('button', { name: 'Task from Host A Unread reply' }).press('Shift+F10');
+		await menu.getByText('Resume Session', { exact: true }).click();
+		await expect(panel.getByRole('button')).toHaveCount(3);
+		await followUp.press('Shift+F10');
+		await menu.getByText('Mark Session Done', { exact: true }).click();
+		await expect(panel.getByRole('button')).toHaveCount(1);
+		await page.keyboard.press('Escape');
+		await inbox.press('Shift+F10');
+		await menu.getByText('Done Sessions', { exact: true }).click();
+		const done = page.getByRole('dialog', { name: 'Done Sessions', exact: true });
+		await expect(done.getByRole('button', { name: 'Task from Host A Unread reply' })).toBeFocused();
 	});
 
 	test('Activity Bar uses fixed sizes across positions and preserves account ownership', async function () {
@@ -992,6 +1206,81 @@ suite('sessions browser component', () => {
 				expect(modeBounds.x - forwardBounds.x - forwardBounds.width).toBeGreaterThanOrEqual(8);
 			}
 		}
+	});
+
+	test('Code window actions and card headers follow opposite sides of the tool divider', async function () {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/sessions.html?multiHost');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const titleMenu = titlebar.locator('.ash-sessions-titlebar-menu');
+		const tools = titlebar.getByRole('toolbar', { name: 'Code layout', exact: true });
+		const toolHeaders = titlebar.locator('.ash-sessions-titlebar-tool-headers');
+		const filesHeader = toolHeaders.locator('[data-editor-tool="files"] > .ash-editor-group-header');
+		const editor = page.locator('[data-part="editor"]');
+		const conversation = page.locator('[data-part="sessions"]');
+		await expect(titleMenu).toBeVisible();
+		await tools.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
+		await expect(editor).toBeVisible();
+		await expect(filesHeader).toBeVisible();
+		await expect(filesHeader.locator('.ash-sessions-tool-header-label')).toBeVisible();
+		await expect(editor.locator('.ash-editor-group-header:visible')).toHaveCount(0);
+
+		const sash = conversation.locator('xpath=../../..').locator(':scope > .ash-sash-vertical[aria-disabled="false"]:not(.ash-primary-sidebar-sash)').first();
+		const header = (await titlebar.boundingBox())!;
+		const split = (await sash.boundingBox())!;
+		const toolArea = (await editor.boundingBox())!;
+		const actionBar = (await tools.boundingBox())!;
+		const menu = (await titleMenu.boundingBox())!;
+		expect(split.y).toBe(header.y + header.height);
+		expect(toolArea.y).toBe(split.y);
+		expect(split.x + split.width / 2).toBeCloseTo(toolArea.x, 0);
+		expect(await sash.evaluate(element => parseFloat(getComputedStyle(element, '::after').top))).toBeCloseTo(split.height / 2, 0);
+		expect(menu.x + menu.width).toBeLessThan(actionBar.x);
+		expect(actionBar.x + actionBar.width).toBeLessThan(toolArea.x);
+		expect((await toolHeaders.boundingBox())!.x).toBeCloseTo(toolArea.x, 0);
+		expect((await filesHeader.boundingBox())!.y).toBe(header.y);
+
+		await sash.press('ArrowLeft');
+		await expect.poll(async () => (await editor.boundingBox())!.width).toBeGreaterThan(toolArea.width);
+		await expect.poll(async () => (await tools.boundingBox())!.x).toBeLessThan(actionBar.x);
+		expect((await toolHeaders.boundingBox())!.x).toBeCloseTo((await editor.boundingBox())!.x, 0);
+		expect(await titleMenu.boundingBox()).toEqual(menu);
+
+		await tools.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
+		const changesHeader = toolHeaders.locator('[data-editor-tool="changes"] > .ash-editor-group-header');
+		await expect(changesHeader).toBeVisible();
+		await expect(filesHeader).toBeVisible();
+		await expect(editor.locator('.ash-editor-group-header:visible')).toHaveCount(0);
+		const changesLabel = changesHeader.locator('.ash-sessions-tool-header-label');
+		await expect(changesLabel).toHaveText('Changes');
+		await expect(changesLabel).toBeVisible();
+		await expect(changesHeader).not.toHaveAttribute('draggable', 'true');
+		await expect(changesHeader).not.toHaveCSS('-webkit-app-region', 'no-drag');
+		await expect(changesHeader.locator('.ash-editor-header-layout > .ash-toolbar')).toHaveCSS('-webkit-app-region', 'no-drag');
+		await filesHeader.locator('[data-action-id="ash.sessions.hideTool"] button').focus();
+		// A mouse activation need not focus the clicked toolbar before running its command.
+		await changesHeader.locator('[data-action-id="ash.sessions.hideTool"] button').evaluate((button: HTMLButtonElement) => button.click());
+		await expect(changesHeader).toHaveCount(0);
+		await expect(filesHeader).toBeVisible();
+
+		await titlebar.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
+		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+		const dividerX = (await editor.boundingBox())!.x;
+		const dragY = header.y + header.height + 80;
+		await page.mouse.move(dividerX, dragY);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(90, dragY, { steps: 8 });
+		} finally {
+			await page.mouse.up();
+		}
+		await expect(toolHeaders).toBeHidden();
+		await expect(editor.locator('[data-editor-tool="files"] .ash-editor-group-header:visible')).toHaveCount(1);
 	});
 
 	test('Sessions titlebar colors resolve under light and dark themes', async function () {
@@ -1461,23 +1750,37 @@ suite('sessions browser component', () => {
 		const dialog = page.getByRole('dialog', { name: chinese ? '创建项目' : 'Create a project', exact: true });
 		const nameLabel = chinese ? '你正在做什么？' : 'What are you working on?';
 		const name = dialog.getByRole('textbox', { name: nameLabel, exact: true });
-		const add = dialog.getByRole('button', { name: chinese ? '添加源文件夹' : 'Add source folder', exact: true });
+		const appearanceLabel = chinese ? '更改项目外观' : 'Change project appearance';
+		const appearance = dialog.getByRole('button', { name: appearanceLabel });
+		const nameIcon = appearance.locator('[data-ash-icon-id="folder"]');
+		const add = dialog.getByRole('button', { name: chinese ? '添加文件夹' : 'Add folder', exact: true });
+		const addIcon = add.locator('[data-ash-icon-id="new-folder"]');
+		const addLabel = add.locator('.ash-button-label');
 		const source = dialog.getByRole('group', { name: chinese ? '源文件夹' : 'Source folders', exact: true });
+		const folderPanel = source.locator('.ash-code-project-folder-panel');
 		const submit = dialog.getByRole('button', { name: chinese ? '创建' : 'Create', exact: true });
 		await create.focus();
 		await create.press('Enter');
 		await expect(name).toBeFocused();
 		await expect(name).toHaveAttribute('placeholder', nameLabel);
 		await expect(dialog.getByRole('textbox')).toHaveCount(1);
-		await expect(source).toContainText(chinese ? '添加此电脑上的文件夹' : 'Add a folder on this computer');
+		await expect(add).toBeVisible();
 		await expect(submit).toBeDisabled();
 		const nameBounds = (await name.boundingBox())!;
 		const sourceBounds = (await source.boundingBox())!;
-		const addBounds = (await add.boundingBox())!;
 		const dialogBounds = (await dialog.boundingBox())!;
 		const submitBounds = (await submit.boundingBox())!;
 		expect(sourceBounds.y).toBeGreaterThan(nameBounds.y + nameBounds.height);
-		expect(addBounds.x + addBounds.width / 2).toBeCloseTo(sourceBounds.x + sourceBounds.width / 2, 0);
+		const nameIconBounds = (await nameIcon.boundingBox())!;
+		const nameTextX = nameBounds.x + await name.evaluate(input => parseFloat(getComputedStyle(input).paddingInlineStart));
+		expect((await addIcon.boundingBox())!.x).toBeCloseTo(nameIconBounds.x);
+		expect((await addLabel.boundingBox())!.x).toBeCloseTo(nameTextX);
+		const emptyPanel = (await folderPanel.boundingBox())!;
+		const emptyAdd = (await add.boundingBox())!;
+		const panelInset = emptyAdd.x - emptyPanel.x;
+		expect(emptyPanel.width - emptyAdd.width - panelInset).toBeCloseTo(panelInset);
+		expect(emptyAdd.y - emptyPanel.y).toBeCloseTo(panelInset);
+		expect(emptyPanel.y + emptyPanel.height - emptyAdd.y - emptyAdd.height).toBeCloseTo(panelInset);
 		expect(dialogBounds.y + dialogBounds.height - submitBounds.y - submitBounds.height).toBeLessThan(24);
 		await dialog.screenshot({ path: testInfo.outputPath(`code-project-${locale}.png`) });
 		await name.press('Escape');
@@ -1486,16 +1789,62 @@ suite('sessions browser component', () => {
 		await create.press('Enter');
 		await add.press('Enter');
 		await expect(add).toBeFocused();
-		const paths = source.getByRole('listitem').locator(':scope > span');
-		await expect(paths).toHaveText(['/workspace/first']);
+		const folders = source.getByRole('listitem');
+		const names = folders.locator('.ash-code-project-folder-name');
+		await expect(names).toHaveText(['first']);
+		await expect(folders.first()).toHaveCSS('border-bottom-width', '0px');
+		await expect(names.first()).toHaveAttribute('title', '/workspace/first');
+		await expect(name).toHaveAttribute('placeholder', 'first');
+		await expect(submit).toBeEnabled();
 		await add.press('Enter');
-		await expect(paths).toHaveText(['/workspace/first', '/workspace/second']);
-		await source.getByRole('button', { name: chinese ? '移除 /workspace/first' : 'Remove /workspace/first' }).press('Enter');
+		await expect(names).toHaveText(['first', 'second']);
+		const folderList = source.getByRole('list');
+		await expect(folders.first()).toHaveCSS('border-bottom-width', '1px');
+		await expect(folders.first()).toHaveCSS('border-bottom-color', await folderList.evaluate(list => getComputedStyle(list).borderBottomColor));
+		await expect(folders.last()).toHaveCSS('border-bottom-width', '0px');
+		await expect(name).toHaveAttribute('placeholder', 'first');
+		const folderIcon = folders.first().locator('[data-ash-icon-id="folder"]');
+		await expect(folderIcon).toBeVisible();
+		const folderIconBounds = (await folderIcon.boundingBox())!;
+		const folderNameBounds = (await names.first().boundingBox())!;
+		const addIconBounds = (await addIcon.boundingBox())!;
+		expect(folderIconBounds.x).toBeCloseTo(nameIconBounds.x);
+		expect(folderNameBounds.x).toBeCloseTo(nameTextX);
+		expect(addIconBounds.x).toBeCloseTo(nameIconBounds.x);
+		expect((await addLabel.boundingBox())!.x).toBeCloseTo(nameTextX);
+		const removeFirst = source.getByRole('button', { name: chinese ? '移除 /workspace/first' : 'Remove /workspace/first' });
+		const populatedPanel = (await folderPanel.boundingBox())!;
+		const populatedAdd = (await add.boundingBox())!;
+		const firstFolderBounds = (await folders.first().boundingBox())!;
+		const lastFolderBounds = (await folders.last().boundingBox())!;
+		const lastFolderIcon = (await folders.last().locator('[data-ash-icon-id="folder"]').boundingBox())!;
+		const removeBounds = (await removeFirst.boundingBox())!;
+		expect(populatedAdd.height).toBeCloseTo(lastFolderBounds.height);
+		expect(addIconBounds.y - lastFolderIcon.y).toBeCloseTo(lastFolderIcon.y - folderIconBounds.y);
+		expect(populatedAdd.x - populatedPanel.x).toBeCloseTo(panelInset);
+		expect(populatedPanel.y + populatedPanel.height - populatedAdd.y - populatedAdd.height).toBeCloseTo(panelInset);
+		expect(firstFolderBounds.y - populatedPanel.y).toBeCloseTo(panelInset);
+		expect(removeBounds.y + removeBounds.height / 2).toBeCloseTo(folderIconBounds.y + folderIconBounds.height / 2);
+		expect(populatedPanel.x + populatedPanel.width - removeBounds.x - removeBounds.width).toBeCloseTo(panelInset);
+		await dialog.screenshot({ path: testInfo.outputPath(`code-project-folders-${locale}.png`) });
+		for (const folder of ['folder-3', 'folder-4', 'folder-5', 'folder-6']) {
+			await add.press('Enter');
+			await expect(names.last()).toHaveText(folder);
+		}
+		await expect(add).toBeInViewport();
+		expect(await folderList.evaluate(list => list.scrollHeight > list.clientHeight)).toBe(true);
+		for (const folder of ['folder-6', 'folder-5', 'folder-4', 'folder-3']) {
+			const path = `/workspace/${folder}`;
+			await source.getByRole('button', { name: chinese ? `移除 ${path}` : `Remove ${path}` }).click();
+		}
+		await expect(names).toHaveText(['first', 'second']);
+		await removeFirst.press('Enter');
 		await expect(add).toBeFocused();
-		await expect(paths).toHaveText(['/workspace/second']);
-		await name.fill('New Code project');
-		const appearanceLabel = chinese ? '更改项目外观' : 'Change project appearance';
-		const appearance = dialog.getByRole('button', { name: appearanceLabel });
+		await expect(names).toHaveText(['second']);
+		await expect(folders.first()).toHaveCSS('border-bottom-width', '0px');
+		await expect(name).toHaveAttribute('placeholder', 'second');
+		const expectedName = chinese ? 'New Code project' : 'second';
+		if (chinese) await name.fill(expectedName);
 		await appearance.press('Enter');
 		const picker = page.getByRole('dialog', { name: appearanceLabel, exact: true });
 		const search = picker.getByRole('combobox', { name: chinese ? '搜索图标' : 'Search icons' });
@@ -1514,12 +1863,12 @@ suite('sessions browser component', () => {
 		await expect(appearance).toBeFocused();
 		await submit.click();
 		await expect(dialog.getByRole('alert')).toHaveText('Synthetic save failure');
-		await expect(name).toHaveValue('New Code project');
-		await expect(paths).toHaveText(['/workspace/second']);
+		await expect(name).toHaveValue(chinese ? expectedName : '');
+		await expect(names).toHaveText(['second']);
 		await submit.click();
 		await expect(dialog).toHaveCount(0);
 		await expect(create).toBeFocused();
-		const created = list.getByRole('button', { name: 'New Code project', exact: true });
+		const created = list.getByRole('button', { name: expectedName, exact: true });
 		await expect(created.locator('[data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
 	});
 
@@ -1601,6 +1950,50 @@ suite('sessions browser component', () => {
 		await discard.click();
 		await expect(dialog).toHaveCount(0);
 		await expect(create).toBeFocused();
+	});
+
+	test('Code tips stay above the composer without shifting the new conversation', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&catalog&search&projectPicker&environmentSetup&locale=en');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		const chat = page.locator('.ash-sessions-chat-slot.active .ash-chat');
+		const card = chat.locator('.ash-sessions-environment-card');
+		const form = chat.locator('form.ash-chat-input-container');
+		const tip = chat.locator('.ash-chat-input-tip');
+		await expect(card).toBeVisible();
+		await expect(tip).toBeVisible();
+
+		const cardBounds = (await card.boundingBox())!;
+		const formBounds = (await form.boundingBox())!;
+		const tipBounds = (await tip.boundingBox())!;
+		expect(tipBounds.y + tipBounds.height).toBeLessThan(formBounds.y);
+		expect(tipBounds.x).toBeCloseTo(formBounds.x);
+		expect(tipBounds.width).toBeCloseTo(formBounds.width);
+
+		const dismissTip = tip.getByRole('button', { name: 'Dismiss tip', exact: true });
+		const viewport = page.viewportSize()!;
+		await dismissTip.focus();
+		await page.setViewportSize({ width: 420, height: 270 });
+		await expect(tip).toBeHidden();
+		await expect(form.getByRole('textbox')).toBeFocused();
+		await card.getByRole('button', { name: 'Choose environment', exact: true }).click({ trial: true });
+		await page.setViewportSize(viewport);
+		await expect(tip).toBeVisible();
+
+		await expect(tip).toContainText('Attach text files');
+		await dismissTip.press('Enter');
+		await expect(tip).toBeHidden();
+		await expect(form.getByRole('textbox')).toBeFocused();
+		expect(await card.boundingBox()).toEqual(cardBounds);
+		expect(await form.boundingBox()).toEqual(formBounds);
+
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		await expect(tip).toContainText('Choose Plan');
+		expect((await tip.boundingBox())!.y + (await tip.boundingBox())!.height).toBeLessThan(formBounds.y);
+		expect(await card.boundingBox()).toEqual(cardBounds);
+		expect(await form.boundingBox()).toEqual(formBounds);
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Code opens and creates an environment from the new conversation (${locale})`, async () => {

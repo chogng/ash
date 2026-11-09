@@ -5,13 +5,14 @@ import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { readStorageEntries } from '../../../automation/storage.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 import { StorageScope } from '../../../../src/ash/platform/storage/common/storage.js';
 import type { ISessionGridState } from '../../../../src/ash/sessions/services/sessions/browser/sessionGridState.js';
 import { APP_SERVER_METHODS, APPROVAL_MODE_DEFINITIONS } from '../../../../.build/protocol/typescript/index.js';
 import { DEVELOPMENT_DIR_PERMISSIONS } from '../../../../src/ash/platform/workspace/common/workspaceTrust.js';
-import { connectProfile } from './sessionProfileFixture.js';
+import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 
 const run = promisify(execFile);
 test.use({ gitRepository: true, video: 'on' });
@@ -69,6 +70,12 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 		await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'workspace-default-model', expectedRevision: config.revision, model });
 		config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], { commandId: 'workspace-shell-policy', expectedRevision: config.revision, rule: { id: 'workspace-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'Writes only synthetic files in this isolated smoke profile.' } });
+		await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: 'workspace-first-send-project', projectId: 'workspace-first-send-project',
+			name: basename(cwd), description: '', scope: 'code',
+			materials: [{ kind: 'folder', name: basename(cwd), path: URI.file(cwd).toString() }],
+		});
+		await enableFixtureModel(workbench, model, 'en');
 		let page = await workbench.openAgentsWindow(target.kind);
 		const code = async () => page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await code();
@@ -89,8 +96,7 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			await new Editor(active()).waitForEditorFocus();
 			await page.keyboard.insertText(marker);
 			await workspace().press('Enter');
-			// The saved project and its matching local folder can both appear in the picker.
-			await page.getByRole('menuitemradio', { name: basename(cwd), exact: true }).first().click();
+			await page.getByRole('menuitemradio', { name: basename(cwd), exact: true }).first().click({ timeout: 10_000 });
 			await expect(workspace()).toHaveText(basename(cwd));
 			await workspace().press('Enter');
 			await expect(worktreeToggle()).toHaveAttribute('aria-checked', 'false');
@@ -120,12 +126,13 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			await expect(active()).toHaveAttribute('data-untitled-session-id', id);
 			await expectWorktreeEnabled();
 			await new Editor(active()).waitForEditorContents(text => text === marker);
-			await active().locator('.ash-chat-input-mode-action').click();
-			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).press('Enter');
-			await active().getByRole('button', { name: /^Permissions:/ }).click();
+			await expect(active().getByRole('button', { name: 'Mode: Agent', exact: true })).toBeVisible();
+			await active().getByRole('button', { name: /^Permissions:/ }).press('ArrowDown');
 			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
-			await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
-			await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: bypass.label.english, exact: true }).click();
+			await page.locator('.ash-chat-permission-menu').getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click({ timeout: 10_000 });
+			await page.getByRole('dialog').filter({ hasText: 'Skip most permission approvals?' })
+				.getByRole('button', { name: bypass.label.english, exact: true }).click({ timeout: 10_000 });
+			await expect(active().getByRole('button', { name: `Permissions: ${bypass.label.english}`, exact: true })).toBeVisible();
 			await new Editor(active()).input.press('Enter');
 			await expect(active()).toHaveAttribute('data-thread-id', /.+/u);
 			const sessionId = await active().getAttribute('data-session-id');
@@ -258,5 +265,53 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 		await connection?.close();
 		server.closeAllConnections();
 		await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+	}
+});
+
+test('Changes labels managed worktrees with their source repository and branch', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench, webAppServer }) => {
+	test.setTimeout(60_000);
+	const root = testWorkspace.directory;
+	const connection = await connectProfile(application, webAppServer, root, workbench.page);
+	try {
+		const { client } = connection;
+		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+		await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], {
+			commandId: 'label-shell-policy', expectedRevision: config.revision,
+			rule: { id: 'label-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'Writes a synthetic file in each fixture worktree.' },
+		});
+		const sessions = [];
+		for (const name of ['first', 'second']) {
+			const branch = `review/${name}`;
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: `label-session-${name}`, kind: 'code', title: `Worktree label ${name}`, agent: { type: 'default' },
+				executionTarget: { type: 'local', root }, branchName: branch,
+			});
+			const identity = { sessionId: session.sessionId, threadId: session.threads[0]!.threadId };
+			const { thread, directory } = await client.request(APP_SERVER_METHODS['session/thread/read'], identity);
+			if (directory?.type !== 'local') throw new Error('Expected a local worktree');
+			expect(directory.root).not.toBe(root);
+			await client.request(APP_SERVER_METHODS['session/request'], {
+				...identity, commandId: `label-write-${name}`,
+				request: {
+					type: 'startShellTurn', threadId: identity.threadId, expectedSequence: thread.sequence, approvalMode: 'bypassPermissions',
+					command: process.platform === 'win32' ? `echo checkout ${name}>main.ts` : `printf 'checkout ${name}\\n' > main.ts`, workingDirectory: '.'
+				},
+			});
+			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['turnChanges/list'], identity)).changeSets[0]?.captureState).toBe('sealed');
+			sessions.push({ ...identity, branch });
+		}
+
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		for (const session of sessions) {
+			await page.locator(`.ash-sessions-list [data-item="session:${session.sessionId}"] .ash-sessions-list-item`).click();
+			await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
+			const changes = page.locator('.ash-sessions-changes:visible');
+			await changes.getByRole('combobox', { name: 'Changes view mode' }).selectOption('tree');
+			await expect(changes.getByRole('treeitem', { name: `${basename(root)} (${session.branch})`, exact: true })).toBeVisible();
+			await expect(changes.getByRole('treeitem', { name: /main\.ts/u })).toBeVisible();
+		}
+	} finally {
+		await connection.close();
 	}
 });

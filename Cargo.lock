@@ -964,6 +964,7 @@ dependencies = [
  "ash-keyring-store",
  "ash-login",
  "ash-secrets",
+ "ash-websocket-client",
  "base64 0.22.1",
  "chrono",
  "dirs",
@@ -974,6 +975,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "tokio",
  "toml 0.9.12+spec-1.1.0",
  "url",
  "urlencoding",
@@ -1900,6 +1902,7 @@ dependencies = [
  "ash-login",
  "ash-secrets",
  "base64 0.22.1",
+ "chrono",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3788,7 +3791,11 @@ dependencies = [
  "ash-http-client",
  "base64 0.22.1",
  "futures",
+ "percent-encoding",
+ "rcgen",
+ "rustls",
  "tokio",
+ "tokio-rustls",
  "tokio-tungstenite 0.28.0",
  "url",
  "zeroize",
@@ -7631,9 +7638,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.38.1"
+version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6c19a05435c21ac299d71b6a9c13db3e3f47c520517d58990a462a1397a61db"
+checksum = "14a5f01b87b92705d07b433c06f96cbc764637d81a0bffb5734ce17cf0f9a2b3"
 dependencies = [
  "cc",
  "pkg-config",
@@ -10955,22 +10962,24 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "3.0.0-beta.3"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13a8472324b3d6c74f092cc5d07b2707b128196b020ed7c3c2d52bede542680"
+checksum = "d24a7e92f4bcaa36b97fa93c4fa7ca8f3e669eced949345b3462dba333c7f909"
 dependencies = [
- "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "futures",
  "http",
+ "indexmap",
+ "libc",
  "pastey",
  "pin-project-lite",
  "reqwest 0.13.4",
  "schemars",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "sse-stream",
  "thiserror 2.0.21",
  "tokio",
@@ -11305,9 +11314,9 @@ source = "git+https://github.com/dzbarsky/rules_rust?rev=b56cbaa8465e74127f1ea21
 
 [[package]]
 name = "rusqlite"
-version = "0.40.1"
+version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11438310b19e3109b6446c33d1ed5e889428cf2e278407bc7896bc4aaea43323"
+checksum = "da9bba6f3506135e120a6586df05be18b48d18896600646a4bec8f993d91a594"
 dependencies = [
  "bitflags 2.13.2",
  "fallible-iterator",

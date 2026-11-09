@@ -991,6 +991,8 @@ Turn、request ID 和当前 Thread sequence。该窗口只约束 Turn 数，单�
 | `turnError`  | 当前 Turn 的稳定错误                                                                                           |
 | `toolOutput` | 绑定 `toolCallId` 的临时 stdout 或 stderr 内容                                                                 |
 
+已提交的用户消息和 Agent 回复可以带 `timestamp`，值为消息原始日志记录的 Unix 毫秒。历史快照和实时 `upsert` 使用同一时间；没有原始时间的旧条目、临时流和工具条目省略该字段。客户端按本地时区显示。
+
 App Server 的 [`TranscriptAccumulator`](../crates/thread-transcript/src/accumulator.rs) 汇集内部增量，向客户端发送完整条目的 `upsert`、按 ID `remove` 或 `clearTransient`，而不是让各端自行拼接零散文字。`session/thread/transcript/update` 带 `sessionId`、`threadId`、`durableSequence` 和递增的 `revision`；`streamCursor` 只用于临时流的连续性。客户端按条目身份应用更新；修订号不连续时重新读取正文快照，不从可见文字推断消息、工具或执行状态。`Thread` 仍是已提交事实的权威来源，正文快照负责显示顺序和临时内容。
 
 工具执行产生的 `ToolCall`、`ToolResult` 是后端条目；`/status` 等本地斜杠命令是客户端操作，TUI 可在自己的正文中显示操作与结果，但不把它们伪装成持久化的 Thread 条目。当前三端都接入了后端语义条目，具体显示能力仍有差异：TypeScript 聊天列表和 Rust 桌面时间线主要以文字显示工具结果；TypeScript 服务虽保留工具结果的富内容字段，列表尚未逐种呈现这些内容。这是客户端显示范围，不改变后端的内容归属。

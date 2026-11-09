@@ -1,3 +1,4 @@
+import { constObservable } from '../../../base/common/observable.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
@@ -77,6 +78,8 @@ test('Sessions owns its New Session command and routes explicit provider choices
 	const onDidChange = new Emitter<void>();
 	const created: Array<string | undefined> = [];
 	const viewService: ISessionsService = {
+		chatSelection: constObservable(undefined), getChatSelection: () => undefined, async restoreChatSelection() { },
+		openChatDraft() { }, selectChatThread() { }, setChatModelPreference() { },
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
 		markVisibleThreadViewed() { },

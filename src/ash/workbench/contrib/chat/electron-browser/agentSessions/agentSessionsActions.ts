@@ -1,10 +1,12 @@
 import { localize2 } from '../../../../../nls.js';
 import './media/openInAgents.css';
+import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { Action2, MenuId } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ashTitlebarMark } from '../../../../browser/parts/titlebar/titlebarMark.js';
 import { INativeHostService } from '../../../../common/services.js';
 import { validateOpenAgentsWindow } from '../../../../../platform/native/common/nativeHost.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../common/constants.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IsAuxiliaryWindowContext } from '../../../../common/contextkeys.js';
@@ -43,8 +45,13 @@ export class OpenAgentsWindowTitleBarAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const navigation = accessor.get(IChatSessionNavigationService);
 		const host = accessor.get(INativeHostService);
-		const conversation = navigation.getActiveConversation();
-		const captured = await navigation.captureActiveDraft();
-		await continueChatInAgentsWindow(host, conversation, captured);
+		const notifications = accessor.get(INotificationService);
+		try {
+			const conversation = navigation.getActiveConversation();
+			const captured = await navigation.captureActiveDraft();
+			await continueChatInAgentsWindow(host, conversation, captured);
+		} catch (error) {
+			notifications.error(toErrorMessage(error));
+		}
 	}
 }

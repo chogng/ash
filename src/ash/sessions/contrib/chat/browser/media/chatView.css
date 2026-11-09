@@ -25,6 +25,30 @@
 	background: var(--ash-chat-transcript-surface);
 }
 
+.ash-reply-chat-editor > .ash-chat:has(> .ash-chat-welcome:not([hidden])) {
+	overflow-y: auto;
+}
+
+/* Anchor the welcome and composer while suggestions open. In a short window,
+ * the spacer gives up room before the page needs to scroll. */
+.ash-reply-chat-editor
+	> .ash-chat:has(> .ash-chat-welcome:not([hidden]))::before {
+	content: "";
+	flex: 0 1 26%;
+}
+
+.ash-reply-chat-editor > .ash-chat > .ash-chat-welcome:not([hidden]) {
+	flex: 0 0 auto;
+	overflow: visible;
+	padding-block-end: var(--ash-spacing-size320);
+}
+
+.ash-reply-chat-editor
+	> .ash-chat:has(> .ash-chat-welcome:not([hidden]))
+	> .ash-chat-input-part {
+	margin-block-start: 0;
+}
+
 .ash-session-side-chat-editor {
 	--ash-chat-transcript-overlap: var(--ash-spacing-size80);
 	display: flex;

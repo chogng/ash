@@ -12,14 +12,14 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../platfo
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { Menus } from '../../../browser/menus.js';
-import { SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../../common/configuration.js';
+import { SESSIONS_GENERAL_SETTINGS_TAG } from '../../../common/configuration.js';
 import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
 import { registerChatGPTResponseActions } from './chatGPTResponseActions.js';
 import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ElectronChatGPTNativeTransport, ElectronChatGPTTransport } from './electronChatGPTTransport.js';
-import { ChatGPTDraftModelSource, ChatGPTExperimentalContribution, experimentalChatGPTEditor, ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SHOW_CHATGPT_COMMAND, SHOW_PREFERRED_CHATGPT_COMMAND } from './chatGPTWeb.js';
+import { ChatGPTDraftModelSource, ChatGPTExperimentalContribution, experimentalChatGPTEditor, ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SESSIONS_CHATGPT_DEFAULT_BACKEND, SHOW_CHATGPT_COMMAND, SHOW_PREFERRED_CHATGPT_COMMAND } from './chatGPTWeb.js';
 import { ChatGPTNativeService, ChatGPTService, IChatGPTNativeService, IChatGPTService } from '../browser/chatGPTService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -39,6 +39,7 @@ export const chatGPTWorkspaceSource = {
 	draftModels: new SyncDescriptor(ChatGPTDraftModelSource),
 	accessibility: chatGPTReplyEditor.accessibility,
 	openCommand: SHOW_PREFERRED_CHATGPT_COMMAND,
+	createDraft: (commands: ICommandService, origin: unknown) => commands.executeCommand<void>(SHOW_PREFERRED_CHATGPT_COMMAND, origin, true),
 };
 
 registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
@@ -78,6 +79,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<'chatgpt' | 'chatgptweb'>({
 	key: SESSIONS_CHATGPT_DEFAULT_BACKEND,
+	tags: [SESSIONS_GENERAL_SETTINGS_TAG],
 	defaultValue: 'chatgpt',
 	scope: ConfigurationScope.APPLICATION,
 	parse(value: unknown) {

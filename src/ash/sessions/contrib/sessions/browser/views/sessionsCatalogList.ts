@@ -5,6 +5,7 @@ import type { AccessibilityVerbositySettingId } from '../../../../../platform/ac
 import type { ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
+import type { CatalogProjectAppearance } from '../../../projects/browser/projectsService.js';
 import type { SessionListOrganization } from './sessionsListActions.js';
 
 export type SessionGroupingContext = Pick<ISession, 'sessionId' | 'workspace' | 'management'> & Partial<Pick<ISession, 'providerLabel'>>;
@@ -43,17 +44,16 @@ export interface SessionsCatalogProject {
 	readonly rows: readonly SessionsCatalogRow[];
 	readonly loading: boolean;
 	readonly localProject?: ProjectSummary;
-	readonly appearance?: SessionsCatalogProjectAppearance;
+	readonly appearance?: CatalogProjectAppearance;
 	readonly operations?: SessionsCatalogProjectOperations;
 	readonly history?: { readonly label: string; readonly action: () => void; };
 	readonly onExpand?: () => void;
 	readonly loadMore?: () => void;
 }
 
-export interface SessionsCatalogProjectAppearance {
-	readonly icon?: string;
-	readonly color?: string;
-	set(field: 'icon' | 'color', value: string | undefined): void | Promise<void>;
+export interface ConversationProjectEditor {
+	readonly details: { readonly name: string; readonly description: string; };
+	save(details: ConversationProjectEditor['details']): Promise<void>;
 }
 
 export interface SessionsCatalogProjectOperations {

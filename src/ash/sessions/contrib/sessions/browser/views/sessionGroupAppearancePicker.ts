@@ -53,7 +53,7 @@ registerAction2(class ChangeProjectAppearanceAction extends Action2 {
 	}
 });
 
-export function pickProjectAppearance(input: IQuickInputService, field: 'icon' | 'color', current: string | undefined,
+function pickProjectAppearance(input: IQuickInputService, field: 'icon' | 'color', current: string | undefined,
 	apply: (value: string | undefined) => void | Promise<void>): Promise<void> {
 	return field === 'icon'
 		? pickIcon(input, current, localize('sessions.list.projectIconPicker', 'Change project icon'), apply)

@@ -726,7 +726,7 @@ test('Code keeps a directoryless draft editable and blocks sending and voice unt
 	setNlsMessages('zh-CN', messages);
 	try {
 		const message = '请先选择项目，再发送消息。';
-		assert.equal(model.inputState.status, message);
+		assert.equal(model.inputState.status, undefined);
 		assert.equal(model.inputState.inputBlocked, true);
 		await assert.rejects(model.send('Draft text'), { message });
 		await assert.rejects(model.prepareConversation(), { message });

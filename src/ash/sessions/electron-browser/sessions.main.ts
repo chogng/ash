@@ -31,7 +31,7 @@ import { DisposableStore, toDisposable, type IDisposable } from '../../base/comm
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { createElectronRendererApi } from '../../workbench/electron-browser/rendererApi.js';
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
-import { throwIfCancelled } from '../../base/common/cancellation.js';
+import { throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
 import { createAppServerWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
 import { ISessionFolderAuthorizationService } from '../common/sessionWorkspace.js';
@@ -40,12 +40,10 @@ import { BrowserContextMenuService } from '../../platform/contextview/browser/co
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from '../browser/workbench.js';
 import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
-import { isMacintosh } from '../../base/common/platform.js';
-import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
-import { Menus } from '../browser/menus.js';
-import { getSessionsTitlebarBackground, TitlebarPart } from '../browser/parts/titlebarPart.js';
-import { bindWindowControlTheme, bindWindowsTitlebarInsets } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
-import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
+import { getSessionsTitlebarBackground } from '../browser/parts/titlebarPart.js';
+import { registerTitleService } from '../services/title/electron-browser/titleService.js';
+import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
+import { AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, AGENTS_WINDOW_READY_CHANNEL, AGENTS_WINDOW_STARTUP_INTENT_CHANNEL, AGENTS_WINDOW_WORKSPACE_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
@@ -64,7 +62,8 @@ import { DesktopProfileStorageService } from '../../platform/storage/electron-br
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
-import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
+import { getWorkspaceRemoteAuthority, parseWorkspace } from '../../platform/workspace/common/workspace.js';
+import { getRemoteWorkspacePath } from '../../platform/remote/common/remote.js';
 import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
 import { NativeLogService } from '../../workbench/services/log/electron-browser/logService.js';
@@ -129,12 +128,15 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
 	let restoreEntry: boolean;
+	let promptForWorkspaceTrust: boolean;
 	try {
 		const windowId = await invoke<unknown>('ash:ipc:window-id');
 		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
-		const startupIntent = await invoke<unknown>(AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL);
-		if (typeof startupIntent !== 'boolean') { throw new TypeError('Invalid Agents startup intent'); }
-		restoreEntry = startupIntent;
+		const startupIntent = await invoke<{ restoreEntry?: unknown; promptForWorkspaceTrust?: unknown; } | undefined>(AGENTS_WINDOW_STARTUP_INTENT_CHANNEL);
+		if (typeof startupIntent?.restoreEntry !== 'boolean' || typeof startupIntent.promptForWorkspaceTrust !== 'boolean') {
+			throw new TypeError('Invalid Agents startup intent');
+		}
+		({ restoreEntry, promptForWorkspaceTrust } = startupIntent);
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
@@ -163,14 +165,14 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					const directory = await localTrust.readDirectory(path);
 					return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
 				},
-				authorize: (path, signal, host) => authorizeSessionFolder(
+				authorize: (path, signal, host, onTrustDeclined) => authorizeSessionFolder(
 					host?.api.workspaceTrust ?? localTrust,
 					listener => {
 						if (!host) return localClient.onStateChange(listener);
 						const subscription = host.api.appServer.onConnectionState(listener);
 						return toDisposable(() => subscription.dispose());
 					},
-					workspaceTrust.confirmFolderTrust, { path, remoteHostLabel: host?.label }, signal),
+					workspaceTrust.confirmFolderTrust, { path, remoteHostLabel: host?.label }, signal, { onTrustDeclined }),
 			});
 			return registerLocalTranscriptionService(transcriptionServices, localClient);
 		}], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, workspaceTrust, mainProcessService);
@@ -196,6 +198,34 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		let lifecycleService!: ElectronLifecycleService;
 		const workspaceContext = createWorkspaceContextApi();
 		const initialWorkspace = parseWorkspace(await workspaceContext.getWorkspace());
+		const workspaceAuthority = getWorkspaceRemoteAuthority(initialWorkspace);
+		mainProcessService.registerChannel(AGENTS_WINDOW_WORKSPACE_CHANNEL, {
+			listen: () => { throw new Error('Agents workspace authorization has no events'); },
+			call: async <T>(_context: string, command: string, value: unknown, token?: CancellationToken): Promise<T> => {
+				if (command !== 'authorize') throw new TypeError('Invalid Agents workspace operation');
+				const target = parseWorkspace(value);
+				// The renderer's workspace connection is selected when it starts.
+				if (getWorkspaceRemoteAuthority(target) !== workspaceAuthority) return false as T;
+				const controller = new AbortController();
+				using cancellation = token?.onCancellationRequested(() => controller.abort());
+				if (token) throwIfCancelled(token);
+				for (const { uri } of target.folders) {
+					const accepted = await authorizeSessionFolder(
+						api.workspaceTrust,
+						listener => {
+							const subscription = api.appServer.onConnectionState(listener);
+							return toDisposable(() => subscription.dispose());
+						},
+						workspaceTrust.confirmFolderTrust,
+						workspaceAuthority ? { path: getRemoteWorkspacePath(uri), remoteHostLabel: workspaceAuthority } : { path: uri.fsPath },
+						controller.signal,
+						{ explicitGrant: true },
+					);
+					if (!accepted) return false as T;
+				}
+				return true as T;
+			},
+		});
 		let workspace: typeof initialWorkspace = { id: initialWorkspace.id, folders: [] };
 		let workspaceSelection = selectionFromWorkspace(workspace);
 		let workspaceGeneration = 0;
@@ -365,6 +395,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				api,
 				workspaceSelection: () => workspaceSelection,
 				workspace: () => workspace,
+				bindLocalWorkspaceFolder: api.bindLocalWorkspaceFolder,
 				initialWorkspaceReady,
 				createFileDialogService: services => services.createInstance(FileDialogService),
 				createLifecycleService: services => {
@@ -404,20 +435,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					void colors.initialize().catch(onUnexpectedError);
 					return colors;
 				},
-				createTitlebarPart: (titlebarContainer, services) => {
-					if (isMacintosh) {
-						// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
-						sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
-					}
-					const titlebar = services.createInstance(
-						TitlebarPart,
-						titlebarContainer,
-						isMacintosh ? 'actions-only' : 'application-menu',
-					);
-					titlebar.domNode.classList.add('ash-electron-titlebar');
-					sessions.add(bindWindowsTitlebarInsets(titlebar.domNode));
-					return titlebar;
-				},
+				registerTitleService: (titlebarContainer, productName, services) =>
+					registerTitleService(titlebarContainer, productName, services, sessions),
 				container,
 			}),
 		);
@@ -428,8 +447,12 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			void activeWorkbench.shutdown('pageHide').catch(error => console.error('Failed to shut down Sessions Workbench', error)).finally(() => sessions.dispose());
 		}, { once: true }));
 		await lifecycleService.initialize();
-		api.startWorkspaceDirectories();
+		const discardStartupWorkspace = () => invoke<void>(AGENTS_WINDOW_DISCARD_STARTUP_WORKSPACE_CHANNEL, initialWorkspace.id);
+		api.startWorkspaceDirectories(promptForWorkspaceTrust
+			? { onTrustDeclined: discardStartupWorkspace }
+			: { discardUntrustedWorkspace: discardStartupWorkspace });
 		await workbench.whenRestored;
+		await invoke<void>(AGENTS_WINDOW_READY_CHANNEL);
 		return sessions;
 	} catch (error) {
 		sessions.dispose();
@@ -446,6 +469,7 @@ async function authorizeSessionFolder(
 	confirmFolderTrust: (request: DirectoryPermissionRequest, signal: AbortSignal) => Promise<boolean>,
 	request: DirectoryPermissionRequest,
 	signal: AbortSignal,
+	options?: { readonly onTrustDeclined?: () => void; readonly explicitGrant?: boolean; },
 ): Promise<boolean> {
 	const { path } = request;
 	const controller = new AbortController();
@@ -456,17 +480,21 @@ async function authorizeSessionFolder(
 	throwIfCancelled(signal);
 	const existing = await trust.readDirectory(path);
 	throwIfCancelled(controller.signal);
-	const permissions = existing.permissions ?? existing.inheritedWorkspacePermissions;
+	const permissions = existing.permissions ?? (options?.explicitGrant ? undefined : existing.inheritedWorkspacePermissions);
 	if (hasDevelopmentPermissions(permissions)) { return true; }
 
 	const confirmed = await confirmFolderTrust(request, controller.signal);
-	if (!confirmed) { return false; }
+	throwIfCancelled(controller.signal);
+	if (!confirmed) {
+		options?.onTrustDeclined?.();
+		return false;
+	}
 	const grant = await trust.createGrant(path, DEVELOPMENT_DIR_PERMISSIONS);
 	// A concurrent grant wins, and an alias must still identify the folder that was approved.
 	const current = await trust.readDirectory(path);
 	throwIfCancelled(controller.signal);
 	if (current.dir !== existing.dir) { return false; }
-	const currentPermissions = current.permissions ?? current.inheritedWorkspacePermissions;
+	const currentPermissions = current.permissions ?? (options?.explicitGrant ? undefined : current.inheritedWorkspacePermissions);
 	if (hasDevelopmentPermissions(currentPermissions)) { return true; }
 	if (!structuralEquals(currentPermissions, permissions)) { return false; }
 	await trust.persistGrant(path, grant);

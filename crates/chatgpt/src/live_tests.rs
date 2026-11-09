@@ -346,37 +346,65 @@ fn auth_digest(home: &std::path::Path) -> Option<[u8; 32]> {
 }
 
 #[test]
-#[ignore = "Uploads caller-provided synthetic WAV to the installed Codex dictation route; no microphone or auth writes"]
+#[ignore = "Sends caller-provided synthetic PCM to the ChatGPT dictation stream; no microphone or auth writes"]
 fn live_codex_subscription_dictation_transcribes_synthetic_audio() {
     let (language, marker) = match std::env::var("ASH_TEST_DICTATION_LANGUAGE").as_deref() {
         Ok("zh") => ("zh", "语音输入"),
         Ok("en") | Err(_) => ("en", "coding assistant"),
         Ok(_) => panic!("select en or zh for the synthetic dictation probe"),
     };
-    let path = std::env::var_os("ASH_TEST_DICTATION_WAV").expect("synthetic WAV required");
-    let audio = std::fs::read(path).expect("synthetic WAV must be readable");
-    assert!(
-        audio.len() <= 2 * 1024 * 1024
-            && audio.starts_with(b"RIFF")
-            && audio.get(8..12) == Some(b"WAVE")
-    );
+    let path = std::env::var_os("ASH_TEST_DICTATION_PCM").expect("synthetic PCM required");
+    let audio = std::fs::read(path).expect("synthetic PCM must be readable");
+    assert!(!audio.is_empty() && audio.len() <= 2 * 1024 * 1024 && audio.len() % 2 == 0);
+    let samples = audio
+        .chunks_exact(2)
+        .map(|sample| i16::from_le_bytes([sample[0], sample[1]]))
+        .collect::<Vec<_>>();
     let home = super::codex_home().unwrap();
     let before = auth_digest(&home);
     let client = Arc::new(AshClient::new(Arc::new(UreqHttpClient::new().unwrap())));
     let auth = ChatGptOAuth::with_client(
         home.clone(),
         Arc::new(MemorySecretStore::default()),
-        client.clone(),
+        client,
         super::ChatGptAuthManagement::Codex,
     );
     let dictation = super::ChatGptDictation::new(auth).expect("Codex dictation admission required");
-    let text = dictation
-        .transcribe(
-            &audio,
-            Some(language),
-            &ash_async_utils::CancellationSource::new().token(),
-        )
-        .expect("production Codex dictation must transcribe synthetic audio");
+    let network =
+        ash_http_client::OutboundNetworkSnapshot::new(ash_http_client::HttpClientConfig::new())
+            .unwrap();
+    let connector = ash_websocket_client::WebSocketConnector::new(network);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let text = runtime.block_on(async {
+        let mut stream = dictation
+            .connect(&connector, Some(language))
+            .await
+            .expect("stream must start");
+        tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            for chunk in samples.chunks(2400) {
+                stream
+                    .append_pcm(chunk)
+                    .await
+                    .expect("stream must accept synthetic audio");
+            }
+            stream
+                .finish_input()
+                .await
+                .expect("stream must accept close");
+            loop {
+                if let super::ChatGptDictationEvent::Finished(text) =
+                    stream.receive().await.expect("valid dictation event")
+                {
+                    break text;
+                }
+            }
+        })
+        .await
+        .expect("dictation stream must finish")
+    });
     assert_eq!(before, auth_digest(&home), "Codex auth changed");
     assert!(
         text.to_ascii_lowercase().contains(marker),

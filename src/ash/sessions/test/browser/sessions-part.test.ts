@@ -1,3 +1,4 @@
+import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { SharedChatInputComposerContribution } from '../../contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import { ISessionsChatViewStateService, SessionsChatViewStateService } from '../../contrib/chat/browser/chatViewStateService.js';
 import { createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
@@ -30,6 +31,8 @@ import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHo
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { createTestFileService, registerTestComponentServices, createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
+import { registerTestTitlebarServices } from '../../../workbench/test/common/testTitlebarServices.js';
+import { ITitleService } from '../../../workbench/services/title/browser/titleService.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
@@ -45,7 +48,7 @@ import { FileDialogService } from '../../../workbench/services/dialogs/browser/f
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
-import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices } from '../../../workbench/test/common/testDictationServices.js';
 import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
@@ -104,6 +107,7 @@ for (const [name, value] of Object.entries({
 }
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
+const { registerTitleService } = await import('../../services/title/browser/titleService.js');
 await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
@@ -145,6 +149,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
 		async initialize() { },
 		async refresh() { },
+		async readCatalog(sessionId) { return catalog.find(session => session.sessionId === sessionId); },
 		async listAgents() { return []; },
 		async prepareThread() { },
 		async openThread() { },
@@ -313,7 +318,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
-		getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
+		getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
 		initialize() { },
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
@@ -353,7 +358,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
-	registerTestDictationOnboarding(services);
+	registerTestVoiceInputServices(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
 	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({ untitledSessionId, title: 'New code session', workspace: { type: 'current' } }));
 	storage.store('sessions.viewState', JSON.stringify({
@@ -397,11 +402,19 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}()));
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
-	const paneServices = registerTestComponentServices(editorServices);
+	const paneServices = registerTestTitlebarServices(registerTestComponentServices(editorServices));
+	dom.window.document.title = 'Ash Sessions';
+	registerTitleService(dom.window.document.body, 'Ash', paneServices);
+	const titleService = paneServices.get(ITitleService);
+	const titlebar = dom.window.document.querySelector('.ash-sessions-titlebar');
+	assert.ok(titlebar);
+	assert.equal(dom.window.document.querySelectorAll('.ash-sessions-titlebar').length, 1);
+	assert.equal(dom.window.document.title, 'Ash Sessions');
 	paneServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	paneServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	paneServices.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
 	paneServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	paneServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
@@ -479,16 +492,16 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	viewService.activateSelection(viewService.activeSelection!);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), firstTip);
 	const configuration = paneServices.get(IConfigurationService);
-	firstTip.querySelector('button')!.focus();
+	firstTip.querySelector<HTMLButtonElement>('button[aria-label="Dismiss tip"]')!.focus();
 	await configuration.updateValue(ChatConfiguration.TipsEnabled, false);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
 	assert.ok(retainedInput?.querySelector('.ash-chat-input-container')?.contains(dom.window.document.activeElement));
 	await configuration.updateValue(ChatConfiguration.TipsEnabled, true);
 	const restoredTip = part.domNode.querySelector('.ash-chat-input-tip');
 	assert.ok(restoredTip);
-	restoredTip.querySelector('button')!.click();
+	restoredTip.querySelector<HTMLButtonElement>('button[aria-label="Dismiss tip"]')!.click();
 	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
-	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
+	assert.equal(services.get(IChatTipService).getWelcomeTip()?.id, 'plan');
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
 	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };
@@ -559,6 +572,10 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	};
 	await part.openInNewWindow(unavailable);
 	assert.ok(popup.window.document.querySelector('.ash-chat-auxiliary-content'));
+	const auxiliaryTitlebar = titleService.getPart(popup.window.document.body);
+	assert.notEqual(auxiliaryTitlebar, titleService.getPart(dom.window.document.body));
+	assert.equal(popup.window.document.title, session.title);
+	assert.ok(popup.window.document.querySelector('.ash-chat-auxiliary-titlebar [aria-label="Return to main window"]'));
 	publishActivity(100);
 	assert.equal(viewService.getLastViewedAt(entry), undefined);
 
@@ -572,6 +589,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	publishActivity(300);
 	assert.equal(viewService.getLastViewedAt(entry), 200);
 	popupClosed.fire();
+	assert.equal(popup.window.document.querySelector('.ash-chat-auxiliary-titlebar'), null);
+	assert.throws(() => titleService.getPart(popup.window.document.body), /no titlebar registered/);
 	const lastViewedAfterClose = viewService.getLastViewedAt(entry);
 	popupFocused = true;
 	publishActivity(Date.now() + 60_000);

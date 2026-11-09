@@ -133,7 +133,7 @@ fn gpt_6_1_sol_is_selectable_and_resolves_its_declared_metadata() {
         .resolve_static(&model, &ModelRequirements::agent())
         .unwrap();
     let info = resolved.entry().info();
-    assert_eq!(info.display_name, "GPT-6.1 Sol");
+    assert_eq!(info.display_name, "Sol 6.1");
     assert_eq!(info.context_window, ContextWindow::Known(872_000));
     assert_eq!(info.capabilities.tools, CapabilitySupport::Supported);
     assert_eq!(info.default_reasoning_effort, Some(ReasoningEffort::Medium));
@@ -664,6 +664,50 @@ async fn changed_provider_definitions_replace_seed_cache_and_keep_unaffected_dis
         1
     );
     assert_eq!(source.calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn curated_model_names_survive_live_discovery_and_cache_restore() {
+    let directory = tempfile::tempdir().unwrap();
+    let manager = || {
+        ModelsManager::new(ProviderConfigRegistry::builtin())
+            .with_disk_cache(directory.path().into())
+    };
+    let scope = dynamic_scope("openai", "subscription");
+    let discovered = |id, name: &str| {
+        DiscoveredModel::new(model_id(id)).with_metadata(ModelMetadataPatch {
+            display_name: Some(name.into()),
+            ..Default::default()
+        })
+    };
+    let live = manager()
+        .refresh(
+            scope.clone(),
+            Arc::new(QueueSource::new([Ok(modified(
+                &scope,
+                DiscoveryCoverage::Partial,
+                [
+                    discovered("gpt-6.1-sol", "GPT-6.1 Sol"),
+                    discovered("remote-only", "Provider model"),
+                ],
+            ))])),
+        )
+        .await
+        .unwrap();
+    let restored = manager().snapshot(&scope).unwrap();
+    for snapshot in [live, restored] {
+        for (id, name) in [
+            ("gpt-6.1-sol", "Sol 6.1"),
+            ("remote-only", "Provider model"),
+        ] {
+            let entry = snapshot
+                .entries()
+                .iter()
+                .find(|entry| entry.model().model == model_id(id))
+                .unwrap();
+            assert_eq!(entry.info().display_name, name);
+        }
+    }
 }
 
 #[tokio::test]

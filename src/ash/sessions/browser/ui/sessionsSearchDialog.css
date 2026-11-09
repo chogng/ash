@@ -1,0 +1,67 @@
+.ash-sessions-search-shell.ash-dialog {
+	max-height: calc(100vh - 64px);
+	border-radius: var(--ash-cornerRadius-xxLarge);
+	background: var(--ash-editor-background);
+}
+
+.ash-sessions-search-shell > .ash-dialog-header {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.ash-sessions-search-shell > .ash-dialog-body {
+	height: 100%;
+	padding: 0;
+}
+
+.ash-sessions-search-content {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	padding: var(--ash-spacing-size120);
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-sessions-search-header {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size160);
+	padding-bottom: var(--ash-spacing-size120);
+}
+
+.ash-sessions-search-header input {
+	flex: 1;
+	min-width: 0;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	outline: none;
+	color: var(--ash-foreground);
+	background: transparent;
+	font: inherit;
+}
+
+.ash-sessions-search-header input::placeholder {
+	color: var(--ash-input-placeholderForeground);
+}
+
+.ash-sessions-search-header input::-webkit-search-cancel-button {
+	display: none;
+}
+
+.ash-sessions-search-categories {
+	flex: 0 0 auto;
+	padding-bottom: var(--ash-spacing-size160);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+}

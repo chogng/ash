@@ -2,7 +2,8 @@ import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
-import { DisposableStore, Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { StringSHA1 } from '../../../../base/common/hash.js';
+import { DisposableStore, Disposable, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -18,7 +19,7 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { ISCMService } from '../../../../workbench/contrib/scm/common/scm.js';
 import type { GitRepositoryContext } from '../../../../platform/git/common/localGitService.js';
 type RepositoryIdentity = NonNullable<GitRepositoryContext['remotes'][number]['identity']>;
-import { getPullRequestChecksStatus, getPullRequestResourceStatus } from '../../../../workbench/contrib/github/browser/githubResourceHover.js';
+import { getPullRequestResourceStatus } from '../../../../workbench/contrib/github/browser/githubResourceHover.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { sessionExecutionWorkspace, type ISession, type SessionId } from '../../../services/sessions/common/session.js';
@@ -30,6 +31,7 @@ import type { IResolvedSessionPullRequest, IResolvedSessionIssue } from '../comm
 export interface IGitHubService {
 	readonly onDidChange: Event<void>;
 	getSessionPullRequests(sessionId: SessionId): readonly IResolvedSessionPullRequest[];
+	watchSessionPullRequests(sessionIds: readonly SessionId[]): IDisposable;
 	getSessionIssues(sessionId: SessionId, reader?: IReader): readonly IResolvedSessionIssue[];
 	attachIssue(sessionId: SessionId, url: string): Promise<void>;
 	detachIssue(sessionId: SessionId, reference: GitHubIssueReference): Promise<void>;
@@ -47,15 +49,17 @@ export class GitHubService extends Disposable implements IGitHubService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly requests = new Map<SessionId, { readonly directory: string; readonly values: readonly IResolvedSessionPullRequest[]; }>();
+	private readonly watched = new Map<SessionId, number>();
 	private readonly issues = observableValue<ReadonlyMap<SessionId, readonly IResolvedSessionIssue[]>>(this, new Map());
 	private readonly accountGenerations = new WeakMap<ISessionProviderScope, number>();
 	private readonly attachmentProviders = new WeakMap<CancellationTokenSource, ISessionProviderScope>();
 	private readonly attachments = this._register(new DisposableMap<CancellationTokenSource, CancellationTokenSource>());
 	private readonly branches = new Map<SessionId, ReadonlyMap<string, string>>();
 	private readonly operation = new MutableDisposable<CancellationTokenSource>();
-	private readonly refresh = this._register(new RunOnceScheduler(() => { void this.resolveSelection(); }, 60_000));
+	private readonly refresh = this._register(new RunOnceScheduler(() => { void this.refreshSessions(); }, 60_000));
 	private selectionKey: string | undefined;
 	private resolving = false;
+	private resolvingSession: SessionId | undefined;
 	private refreshQueued = false;
 	private observedScopes = new Set<ISessionProviderScope>();
 
@@ -95,8 +99,15 @@ export class GitHubService extends Disposable implements IGitHubService {
 			this.observedScopes = new Set(current);
 			for (const scope of current) {
 				const api = scope.services.host;
-				hostListeners.add(Event.any(api.github.onDidChangeSessionPullRequests, api.github.onDidChangeSessionIssues)(sessionId => {
-					if (this.sessions.activeSelection?.kind === 'session' && this.sessions.activeSelection.active.session.sessionId === scope.identity(sessionId)) {
+				hostListeners.add(api.github.onDidChangeSessionPullRequests(sessionId => {
+					const id = scope.identity(sessionId);
+					if (this.isSelected(id) || this.watched.has(id)) {
+						this.operation.value?.cancel();
+						this.refresh.schedule(0);
+					}
+				}));
+				hostListeners.add(api.github.onDidChangeSessionIssues(sessionId => {
+					if (this.isSelected(scope.identity(sessionId))) {
 						this.operation.value?.cancel();
 						this.refresh.schedule(0);
 					}
@@ -120,7 +131,9 @@ export class GitHubService extends Disposable implements IGitHubService {
 			try { scope.backendIdentity(id); return true; } catch { return false; }
 		};
 		const selected = this.sessions.activeSelection;
-		if (selected?.kind === 'session' && affected(selected.active.session.sessionId)) this.operation.value?.cancel();
+		const refresh = (selected?.kind === 'session' && affected(selected.active.session.sessionId))
+			|| [...this.watched.keys()].some(affected);
+		if (refresh) this.operation.value?.cancel();
 		if (scope) this.accountGenerations.set(scope, (this.accountGenerations.get(scope) ?? 0) + 1);
 		for (const [source] of this.attachments) {
 			if (!scope || this.attachmentProviders.get(source) === scope) source.cancel();
@@ -130,7 +143,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 		this.issues.set(issues, undefined);
 		for (const id of this.requests.keys()) if (affected(id)) { this.requests.delete(id); this.branches.delete(id); }
 		this.changed.fire();
-		if (selected?.kind === 'session' && affected(selected.active.session.sessionId)) this.refresh.schedule(0);
+		if (refresh) this.refresh.schedule(0);
 	}
 
 	private capture(sessionId: SessionId): SessionGitHubScope {
@@ -285,6 +298,26 @@ export class GitHubService extends Disposable implements IGitHubService {
 		return this.requests.get(sessionId)?.values ?? [];
 	}
 
+	public watchSessionPullRequests(sessionIds: readonly SessionId[]): IDisposable {
+		const ids = new Set(sessionIds);
+		for (const id of ids) this.watched.set(id, (this.watched.get(id) ?? 0) + 1);
+		if ([...ids].some(id => this.watched.get(id) === 1)) this.refresh.schedule(0);
+		return toDisposable(() => {
+			for (const id of ids) {
+				const remaining = (this.watched.get(id) ?? 1) - 1;
+				if (remaining) this.watched.set(id, remaining);
+				else this.watched.delete(id);
+			}
+			if (!this.watched.size && this.sessions.activeSelection?.kind !== 'session') {
+				this.operation.value?.cancel();
+				this.refresh.cancel();
+			} else if (this.resolvingSession && !this.watched.has(this.resolvingSession) && !this.isSelected(this.resolvingSession)) {
+				this.operation.value?.cancel();
+				this.refresh.schedule(0);
+			}
+		});
+	}
+
 	public getSessionIssues(sessionId: SessionId, reader?: IReader): readonly IResolvedSessionIssue[] {
 		return this.issues.read(reader).get(sessionId) ?? [];
 	}
@@ -355,19 +388,24 @@ export class GitHubService extends Disposable implements IGitHubService {
 		this.selectionKey = key;
 		this.operation.value?.cancel();
 		this.refresh.cancel();
-		if (key !== undefined) {
+		if (key !== undefined || this.watched.size) {
 			this.refresh.schedule(0);
 		}
 	}
 
 	private invalidateSelection(): void {
 		this.operation.value?.cancel();
-		if (this.sessions.activeSelection?.kind === 'session') {
+		if (this.sessions.activeSelection?.kind === 'session' || this.watched.size) {
 			this.refresh.schedule(100);
 		}
 	}
 
-	private async resolveSelection(): Promise<void> {
+	private isSelected(id: SessionId): boolean {
+		const selected = this.sessions.activeSelection;
+		return selected?.kind === 'session' && selected.active.session.sessionId === id;
+	}
+
+	private async refreshSessions(): Promise<void> {
 		// Cancellation retires transport requests asynchronously. Session notifications
 		// must coalesce until that retirement finishes, rather than opening another batch.
 		if (this.resolving) {
@@ -375,26 +413,53 @@ export class GitHubService extends Disposable implements IGitHubService {
 			return;
 		}
 		const selected = this.sessions.activeSelection;
-		if (selected?.kind !== 'session') {
+		const active = selected?.kind === 'session' ? selected.active.session : undefined;
+		if (!active && !this.watched.size) {
 			return;
 		}
-		const session = selected.active.session;
-		const workspace = sessionExecutionWorkspace(session);
-		const root = workspace ? sessionWorkspaceUri(workspace) : undefined;
 		const cancellation = new CancellationTokenSource();
 		this.operation.value?.cancel();
 		this.operation.value = cancellation;
 		const token = cancellation.token;
 		this.resolving = true;
+		const accounts = new Map<ISessionProviderScope, Promise<readonly GitHubAccount[]>>();
+		try {
+			if (active) await this.resolveSession(active, true, accounts, token);
+			for (const session of this.management.sessions) {
+				if (token.isCancellationRequested) break;
+				if (session.sessionId !== active?.sessionId && this.watched.has(session.sessionId)) {
+					await this.resolveSession(session, false, accounts, token);
+				}
+			}
+		} finally {
+			this.resolving = false;
+			this.resolvingSession = undefined;
+			if (!this.isDisposed && (this.sessions.activeSelection?.kind === 'session' || this.watched.size)) {
+				if (this.refreshQueued) this.refresh.schedule(0);
+				else if (!token.isCancellationRequested) this.refresh.schedule();
+			}
+			this.refreshQueued = false;
+		}
+	}
+
+	private async resolveSession(session: ISession, selected: boolean, accountsByProvider: Map<ISessionProviderScope, Promise<readonly GitHubAccount[]>>, token: CancellationToken): Promise<void> {
+		this.resolvingSession = session.sessionId;
+		const directory = directoryKey(session);
+		const workspace = sessionExecutionWorkspace(session);
+		const root = workspace ? sessionWorkspaceUri(workspace) : undefined;
 		let issueResolution: Promise<void> = Promise.resolve();
 		try {
 			const binding = this.capture(session.sessionId);
-			const accountsPromise = binding.github.listAccounts(token);
-			issueResolution = this.resolveSessionIssues(binding, session.sessionId, accountsPromise, token);
+			let accountsPromise = accountsByProvider.get(binding.provider);
+			if (!accountsPromise) {
+				accountsPromise = binding.github.listAccounts(token);
+				accountsByProvider.set(binding.provider, accountsPromise);
+			}
+			if (selected) issueResolution = this.resolveSessionIssues(binding, session.sessionId, accountsPromise, token);
 			const branches = new Map<string, string>();
 			const [accounts, references] = await Promise.all([accountsPromise, binding.github.listSessionPullRequests(binding.backendSessionId)]);
 			const hosts = new Set(accounts.filter(account => account.status === 'ready').map(account => account.host.toLowerCase()));
-			const contexts = root ? await binding.provider.services.host.localGit.readRepositoryContexts({ sessionId: binding.backendSessionId, path: workspace!.root }, token).catch(error => {
+			const contexts = root && hosts.size ? await binding.provider.services.host.localGit.readRepositoryContexts({ sessionId: binding.backendSessionId, path: workspace!.root }, token).catch(error => {
 				// Attached references remain useful without permission to inspect a working directory.
 				if (isCancellationError(error) || token.isCancellationRequested) throw error;
 				this.log.error('sessions.github', 'Unable to inspect session repositories', error);
@@ -435,7 +500,8 @@ export class GitHubService extends Disposable implements IGitHubService {
 					return account ? [this.resolveRepository(binding, identity, branch, identities, account.id, token, references)] : [];
 				}));
 			}));
-			if (token.isCancellationRequested || this.isDisposed) {
+			if (token.isCancellationRequested || this.isDisposed || (!selected && !this.management.sessions.some(candidate =>
+				candidate.sessionId === session.sessionId && this.watched.has(candidate.sessionId) && directoryKey(candidate) === directory))) {
 				return;
 			}
 			binding.assertCurrent();
@@ -443,24 +509,20 @@ export class GitHubService extends Disposable implements IGitHubService {
 			for (const request of recorded) {
 				if (request) { values.set(linkKey(request.uri.toString()), request); }
 			}
-			this.requests.set(session.sessionId, { directory: directoryKey(session), values: [...values.values()] });
+			this.requests.set(session.sessionId, { directory, values: [...values.values()] });
 			this.branches.set(session.sessionId, branches);
 			this.changed.fire();
 		} catch (error) {
 			if (!token.isCancellationRequested && !isCancellationError(error)) {
 				this.log.error('sessions.github', 'Unable to resolve session pull requests', error);
-			}
-		} finally {
-			try { await issueResolution; }
-			finally {
-				this.resolving = false;
-				if (!this.isDisposed && this.refreshQueued) {
-					this.refreshQueued = false;
-					this.refresh.schedule(0);
-				} else if (this.operation.value === cancellation && !this.isDisposed && !token.isCancellationRequested) {
-					this.refresh.schedule();
+				const entry = this.requests.get(session.sessionId);
+				if (entry?.values.some(request => request.checksPassed)) {
+					this.requests.set(session.sessionId, { ...entry, values: entry.values.map(request => ({ ...request, checksPassed: undefined })) });
+					this.changed.fire();
 				}
 			}
+		} finally {
+			await issueResolution;
 		}
 	}
 
@@ -569,12 +631,22 @@ export class GitHubService extends Disposable implements IGitHubService {
 		}
 		const state = getPullRequestResourceStatus(pullRequest).kind;
 		let status: IPullRequestIconStatus = {};
-		if (state === 'open') {
-			const [hasFailingChecks, hasUnresolvedComments] = await Promise.all([
-				this.readFailingChecks(binding, repository, pullRequest.headCommit, token),
-				this.readUnresolvedComments(binding, repository, pullRequest.number, token),
+		let checksPassed: boolean | undefined;
+		let latestCheckAtUnixMs: number | undefined;
+		let copilotReview: IResolvedSessionPullRequest['copilotReview'];
+		if (state === 'open' || state === 'draft') {
+			const [checks, comments] = await Promise.all([
+				binding.github.readPullRequestChecks(repository, pullRequest.number, pullRequest.headCommit, token).catch(error => {
+					if (token.isCancellationRequested || isCancellationError(error)) throw error;
+					this.log.error('sessions.github', 'Unable to read the checks required by this pull request', error);
+					return { status: 'pending', latestCheckAtUnixMs: undefined } as const;
+				}),
+				this.readReviewStatus(binding, repository, pullRequest.number, token),
 			]);
-			status = { hasMergeConflicts: pullRequest.mergeable === false, hasFailingChecks, hasUnresolvedComments };
+			checksPassed = checks.status === 'success';
+			latestCheckAtUnixMs = checks.latestCheckAtUnixMs;
+			copilotReview = comments.copilotReview;
+			status = { hasMergeConflicts: pullRequest.mergeable === false, hasFailingChecks: checks.status === 'failure', hasUnresolvedComments: comments.unresolved };
 		}
 		return {
 			uri: URI.parse(pullRequest.url),
@@ -583,35 +655,58 @@ export class GitHubService extends Disposable implements IGitHubService {
 			number: pullRequest.number,
 			title: pullRequest.title,
 			headCommit: pullRequest.headCommit,
+			mergedAt: parseGitHubTimestamp(pullRequest.mergedAt),
 			state,
 			status,
+			checksPassed,
+			latestCheckAtUnixMs,
+			copilotReview,
 			icon: computePullRequestIcon(state, status),
 		};
 	}
 
-	private async readFailingChecks(binding: SessionGitHubScope, repository: GitHubRepository, commit: string, token: CancellationToken): Promise<boolean> {
-		let page: number | null = 1;
-		while (page !== null && !token.isCancellationRequested) {
-			const result = await binding.github.readChecks(repository, commit, page, token);
-			if (getPullRequestChecksStatus(result) === 'failure') {
-				return true;
-			}
-			page = result.nextPage;
-		}
-		return false;
-	}
-
-	private async readUnresolvedComments(binding: SessionGitHubScope, repository: GitHubRepository, number: number, token: CancellationToken): Promise<boolean> {
+	private async readReviewStatus(binding: SessionGitHubScope, repository: GitHubRepository, number: number, token: CancellationToken): Promise<{ unresolved: boolean; copilotReview?: IResolvedSessionPullRequest['copilotReview']; }> {
+		let unresolved = false;
+		let timestamp: number | undefined;
+		const revisions: string[] = [];
 		let cursor: string | null = null;
 		do {
 			const result = await binding.github.listReviewThreads(repository, number, cursor, token);
-			if (result.threads.some(thread => !thread.resolved)) {
-				return true;
+			for (const thread of result.threads) {
+				if (thread.resolved) continue;
+				unresolved = true;
+				const login = thread.comments.comments[0]?.author?.toLowerCase().replace(/\[bot\]$/, '');
+				if (login !== 'copilot' && login !== 'copilot-pull-request-reviewer') continue;
+
+				const commentRevisions: string[] = [];
+				const cursors = new Set<string>();
+				let page = thread.comments;
+				while (!token.isCancellationRequested) {
+					for (const comment of page.comments) {
+						const date = comment.updatedAt ?? comment.createdAt;
+						const time = parseGitHubTimestamp(date);
+						if (time !== undefined && (timestamp === undefined || time > timestamp)) timestamp = time;
+						commentRevisions.push(JSON.stringify([comment.id, date ?? comment.body]));
+					}
+					if (page.nextCursor === null) break;
+					if (cursors.has(page.nextCursor)) throw new Error('GitHub returned a repeated review comment cursor');
+					cursors.add(page.nextCursor);
+					page = await binding.github.readReviewThreadComments(repository, number, thread.id, page.nextCursor, token);
+				}
+				revisions.push(JSON.stringify([thread.id, commentRevisions.sort()]));
 			}
 			cursor = result.nextCursor;
 		} while (cursor !== null && !token.isCancellationRequested);
-		return false;
+		if (!revisions.length) return { unresolved };
+		const digest = new StringSHA1();
+		digest.update(JSON.stringify(revisions.sort()));
+		return { unresolved, copilotReview: { revision: digest.digest(), timestamp } };
 	}
+}
+
+function parseGitHubTimestamp(value: string | null | undefined): number | undefined {
+	const timestamp = value ? Date.parse(value) : NaN;
+	return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
 interface SessionGitHubScope {

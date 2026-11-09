@@ -13,6 +13,16 @@
 	display: none;
 }
 
+:is(.ash-chat-input-dictation-cancel, .ash-chat-input-dictation-finish)
+	> .ash-button {
+	background: var(--ash-button-hoverBackground);
+}
+
+:is(.ash-chat-input-dictation-cancel, .ash-chat-input-dictation-finish)
+	> .ash-button:not(:disabled):hover {
+	background: var(--ash-list-hoverBackground);
+}
+
 .ash-dictation-level {
 	display: flex;
 	align-items: center;
@@ -21,20 +31,32 @@
 	color: var(--ash-description-foreground);
 }
 
-.ash-dictation-level > meter {
-	appearance: none;
+.ash-dictation-level-track {
+	position: relative;
 	flex: 1;
-	inline-size: 100%;
-	min-inline-size: 0;
-	block-size: var(--ash-spacing-size40);
-}
-
-.ash-dictation-level > meter::-webkit-meter-bar {
+	block-size: var(--ash-spacing-size60);
+	overflow: hidden;
 	background: var(--ash-button-hoverBackground);
-	border: none;
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-cornerRadius-circle);
 }
 
-.ash-dictation-level > meter::-webkit-meter-optimum-value {
-	background: var(--ash-description-foreground);
+.ash-dictation-level-track > meter {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	opacity: 0;
+}
+
+.ash-dictation-level-fill {
+	inline-size: 0;
+	block-size: 100%;
+	background: var(--ash-accent-background);
+	border-radius: inherit;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.ash-dictation-level-fill {
+		transition: inline-size 75ms ease-out;
+	}
 }

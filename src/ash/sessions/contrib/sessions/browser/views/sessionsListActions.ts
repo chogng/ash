@@ -57,7 +57,7 @@ export function sessionListProjectActions(
 	}] : [];
 	const destinations = Separator.join(create, targets);
 	const actions: IAction[] = [];
-	if (destinations.length) actions.push(new SubmenuAction('sessions.list.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), destinations, projectIcon));
+	if (destinations.length) actions.push(new SubmenuAction('sessions.list.moveToProject', localize('sessions.list.moveToProject', 'Move to project'), destinations, projectIcon));
 	if (project.current) actions.push({
 		id: 'sessions.list.removeFromProject', label: localize('sessions.list.removeFromProject', 'Remove from project'),
 		tooltip: '', enabled: true, run: () => run(() => project.move(undefined)),

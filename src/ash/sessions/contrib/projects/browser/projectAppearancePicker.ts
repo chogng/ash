@@ -18,10 +18,11 @@ export class ProjectAppearancePicker extends Disposable {
 	private readonly view: ContextView;
 	private readonly popup = this._register(new MutableDisposable<DisposableStore>());
 	private readonly button: Button;
-	private draft: ProjectAppearance = {};
+	private draft: ProjectAppearance;
 
-	constructor(container: HTMLElement, triggerContainer: HTMLElement, private readonly defaultIcon: Icon) {
+	constructor(container: HTMLElement, triggerContainer: HTMLElement, private readonly defaultIcon: Icon, initial: ProjectAppearance = {}) {
 		super();
+		this.draft = { icon: initial.icon, color: initial.color };
 		this.view = this._register(new ContextView(container));
 		const label = localize('projects.appearance', 'Change project appearance');
 		this.button = this._register(new Button(triggerContainer, {
@@ -32,6 +33,11 @@ export class ProjectAppearancePicker extends Disposable {
 		this.button.domNode.classList.add('ash-project-appearance-trigger');
 		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
+		this.updatePreview();
+	}
+
+	focus(): void {
+		this.button.focus();
 	}
 
 	get appearance(): ProjectAppearance {
@@ -62,7 +68,7 @@ export class ProjectAppearancePicker extends Disposable {
 		});
 		const swatches: readonly [string | undefined, string][] = [
 			[undefined, localize('sessions.list.groupAppearanceDefault', 'Default')],
-			...getAppearanceColors(),
+			...getAppearanceColors(this.draft.color),
 		];
 		const colorButtons = new Map<string | undefined, HTMLButtonElement>();
 		for (const [color, name] of swatches) {
@@ -90,7 +96,6 @@ export class ProjectAppearancePicker extends Disposable {
 		store.add(grid.onDidSelect(icon => {
 			this.draft = { ...this.draft, icon: icon.id === this.defaultIcon.id ? undefined : icon.id };
 			this.updatePreview();
-			grid.focus();
 		}));
 		const footer = h(document, 'div', { className: 'ash-project-appearance-footer' });
 		store.add(new Button(footer, {

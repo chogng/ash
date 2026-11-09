@@ -1010,7 +1010,7 @@ impl VoiceHost {
                             let recorded = tokio::task::spawn_blocking(move || {
                                 if session.cancellation.token().is_cancelled() { return Ok(()); }
                                 let receipt = threads.record_voice_transcript(&thread, ash_core::RecordVoiceTranscriptRequest { voice_session_id: session.spec.resource_id.clone(), media_epoch: session.status().media_epoch, speaker, text, start_ms, end_ms }).map_err(|error| error.to_string())?;
-                                updates.publish(ash_protocol::ThreadUpdateEnvelope { session_id: session.spec.session_id.clone(), thread_id: thread.clone(), durable_sequence: receipt.sequence, stream_cursor: None, update: ash_protocol::ThreadUpdate::Committed { event: ash_protocol::ThreadEvent::VoiceTranscriptRecorded { thread_id: thread, transcript: receipt.transcript } } });
+                                updates.publish(ash_protocol::ThreadUpdateEnvelope { session_id: session.spec.session_id.clone(), thread_id: thread.clone(), durable_sequence: receipt.sequence, recorded_at_unix_ms: None, stream_cursor: None, update: ash_protocol::ThreadUpdate::Committed { event: ash_protocol::ThreadEvent::VoiceTranscriptRecorded { thread_id: thread, transcript: receipt.transcript } } });
                                 Ok::<_, String>(())
                             }).await.map_err(|error| error.to_string()).and_then(|result| result);
                             if let Err(error) = recorded { break Err(error); }

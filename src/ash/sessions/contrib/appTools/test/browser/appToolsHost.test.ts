@@ -65,7 +65,13 @@ suite('appTools browser component', () => {
 		await page.goto('/appTools.html?leadingIcons&locale=zh-CN');
 		await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 		await trigger.press('Enter');
-		await picker.getByRole('button', { name: '恢复默认图标' }).click();
+		const reset = picker.getByRole('button', { name: '恢复默认图标' });
+		await reset.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+		await trigger.press('Enter');
+		await reset.click();
 		await expect(trigger.locator('[data-ash-icon-id="circle"]')).toBeVisible();
 	});
 

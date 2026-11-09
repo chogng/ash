@@ -264,7 +264,8 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 				const tips = fixture.startTip(dom.window as unknown as Window, true);
 				using commands = new CommandService(fixture.services);
 				await flush();
-				assert.match(tips.getWelcomeTip()?.content.value ?? '', /Enable/);
+				assert.match(tips.getWelcomeTip()?.content.value ?? '', /\[Enable .+\]\(command:sessions\.action\.enableOpenAgentsWindowSystemWideKeybinding\)/);
+				assert.doesNotMatch(tips.getWelcomeTip()?.content.value ?? '', /manageOpenAgentsWindowSystemWideKeybinding/);
 				const result = promiseWithResolvers<INativeSystemWideKeybindingResult>();
 				fixture.result = result.promise;
 				await commands.executeCommand('sessions.action.enableOpenAgentsWindowSystemWideKeybinding');
@@ -275,7 +276,8 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 				result.resolve({ failed: registered ? [] : ['ctrl+cmd+a'] });
 				await flush();
 				if (registered) {
-					assert.match(tips.getWelcomeTip()?.content.value ?? '', /enabled.*Manage shortcut/);
+					assert.match(tips.getWelcomeTip()?.content.value ?? '', /enabled/);
+					assert.doesNotMatch(tips.getWelcomeTip()?.content.value ?? '', /command:/);
 					await fixture.resource.updateKeybindings([]);
 					assert.match(tips.getWelcomeTip()?.content.value ?? '', /Enable/);
 				} else {

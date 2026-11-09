@@ -46,6 +46,7 @@ fn completed_streamed_mermaid_block_is_ready_before_rendering() {
                     text: "```mermaid\nflowchart LR\nA --> B".into(),
                 },
                 transient: false,
+                timestamp: None,
             }],
         },
     ));
@@ -72,6 +73,7 @@ fn completed_streamed_mermaid_block_is_ready_before_rendering() {
                         text: "```mermaid\nflowchart LR\nA --> B\n```".into(),
                     },
                     transient: false,
+                    timestamp: None,
                 },
             }],
         },

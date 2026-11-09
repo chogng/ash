@@ -22,6 +22,10 @@ texts.
 `resources/icons/comment-discussion.svg` under [CC BY 4.0](licenses/Codicons.txt).
 Ash normalizes the SVG and adjusts its Sessions outline for the icon font.
 
+[Lobe Icons](https://github.com/lobehub/lobe-icons) supplies the Gemini, Grok,
+and DeepSeek artwork under [MIT](licenses/LobeIcons.txt).
+Ash normalizes the SVGs for the icon font.
+
 The component-owned paths above are the canonical repository sources. Release packaging must copy their contents into the application license staging directory alongside this notice instead of maintaining duplicate source-controlled copies.
 
 Transitive dependencies and third-party material distributed by Electron or

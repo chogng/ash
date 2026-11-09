@@ -14,16 +14,20 @@ import { defaultButtonStyles } from '../../../../../platform/theme/browser/defau
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Event } from '../../../../../base/common/event.js';
+import type { ITitlebarPart } from '../../../../browser/parts/titlebar/titlebarPart.js';
 import { localize } from '../../../../../nls.js';
 
 /** Shared light Agent chrome; each opener retains ownership of its conversation tree. */
-export class ChatAuxiliaryWindow extends Disposable {
+export class ChatAuxiliaryWindow extends Disposable implements ITitlebarPart {
 	readonly header: HTMLElement;
 	readonly title: HTMLElement;
+	readonly onMenubarVisibilityChange = Event.None;
 
 	constructor(
 		readonly window: IAuxiliaryWindow,
 		title: string,
+		onDispose: (() => void) | undefined,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@INotificationService notifications: INotificationService,
 	) {
@@ -37,6 +41,7 @@ export class ChatAuxiliaryWindow extends Disposable {
 		this.header.append(this.title, toolbar);
 		window.container.append(this.header);
 		this._register(toDisposable(() => this.header.remove()));
+		if (onDispose) this._register(toDisposable(onDispose));
 		this._register(addDisposableListener<KeyboardEvent>(window.window, 'keydown', event => {
 			if (!isHTMLElement(event.target) || !window.container.contains(event.target)) return;
 			if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === 'F1' || event.key === 'F2')) {
@@ -73,6 +78,10 @@ export class ChatAuxiliaryWindow extends Disposable {
 			this._register(pin.onDidChange(update));
 		}
 	}
+
+	// Conversation titles are supplied by the opener and have no editor title template.
+	updateProperties(): void { }
+	registerVariables(): void { }
 
 	/** The opener retains the conversation; this host owns only its mount presentation. */
 	mount(element: HTMLElement): void {

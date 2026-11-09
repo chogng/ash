@@ -64,9 +64,11 @@ export class OpenAgentsWindowSystemWideKeybindingTip extends Disposable implemen
 			this.changed.fire();
 		}));
 		this._register(CommandsRegistry.register(enableCommand, () => this.enable()));
-		this._register(CommandsRegistry.register(manageCommand, accessor => accessor.get(IPreferencesService).openGlobalKeybindingSettings(false, {
-			query: `@command:${OPEN_AGENTS_WINDOW_COMMAND_ID}`,
-		})));
+		if (!offerRecommendedKey) {
+			this._register(CommandsRegistry.register(manageCommand, accessor => accessor.get(IPreferencesService).openGlobalKeybindingSettings(false, {
+				query: `@command:${OPEN_AGENTS_WINDOW_COMMAND_ID}`,
+			})));
+		}
 		this._register(tips.registerTipProvider(this));
 		this._register(instantiation.createInstance(OpenAgentsWindowSystemWideKeybindingContribution, this.onRegistration.bind(this)));
 	}
@@ -74,17 +76,15 @@ export class OpenAgentsWindowSystemWideKeybindingTip extends Disposable implemen
 	public provideTip(): IChatTip | undefined {
 		if (this.dismissed.get()) return undefined;
 		if (this.confirmation) {
-			const content = new MarkdownString('', { isTrusted: { enabledCommands: [manageCommand] } });
+			const content = new MarkdownString();
 			content.appendText(localize('openAgentsWindow.shortcutTipEnabled', 'Shortcut {0} enabled. Use it to open the Agents Window from any app while Ash is running.', this.label(this.confirmation)));
-			content.appendMarkdown(' ').appendLink(`command:${manageCommand}`, localize('openAgentsWindow.shortcutTipManage', 'Manage shortcut'));
 			return { id: tipId, content };
 		}
 		if (!this.awaitingRegistration && this.configuredShortcut()) return undefined;
 		if (this.offerRecommendedKey) {
-			const content = new MarkdownString('', { isTrusted: { enabledCommands: [enableCommand, manageCommand] } });
+			const content = new MarkdownString('', { isTrusted: { enabledCommands: [enableCommand] } });
 			content.appendLink(`command:${enableCommand}`, localize('openAgentsWindow.shortcutTipEnable', 'Enable {0}', this.label(recommendedMacKey)));
 			content.appendMarkdown(' ').appendText(localize('openAgentsWindow.shortcutTipPurpose', 'to open the Agents Window from any app while Ash is running.'));
-			content.appendMarkdown(' ').appendLink(`command:${manageCommand}`, localize('openAgentsWindow.shortcutTipManage', 'Manage shortcut'));
 			return { id: tipId, content };
 		}
 		const content = new MarkdownString('', { isTrusted: { enabledCommands: [manageCommand] } });
@@ -95,6 +95,10 @@ export class OpenAgentsWindowSystemWideKeybindingTip extends Disposable implemen
 
 	public dismissTip(id: string): void {
 		if (id === tipId) this.dismissed.set(true);
+	}
+
+	public clearDismissedTips(): void {
+		this.dismissed.set(false);
 	}
 
 	private readCandidates(): readonly INativeSystemWideKeybinding[] {

@@ -280,7 +280,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),
 			this._register(this.instantiationService.createInstance(MemorySettingsRenderer, settingsContent, () => 'code', async () => {
 				await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID));
-			})),
+			}, undefined)),
 			this._register(this.instantiationService.createInstance(NetworkSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings)),
 			...getSettingsSections().map(section => this._register(this.instantiationService.createInstance(

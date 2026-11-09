@@ -767,12 +767,11 @@ impl AgentRuntime for Runtime<'_> {
         self.threads.read_thread(thread_id).map(Into::into)
     }
 
-    fn read_voice_transcripts(
+    fn read_transcript_metadata(
         &self,
-        thread_id: &ThreadId,
-        sequence: u64,
-    ) -> Result<Vec<ash_protocol::VoiceTranscript>, CoreError> {
-        self.threads.read_voice_transcripts(thread_id, sequence)
+        thread: &ash_protocol::Thread,
+    ) -> Result<core_api::ThreadTranscriptMetadata, CoreError> {
+        self.threads.read_transcript_metadata(thread)
     }
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError> {
         self.threads

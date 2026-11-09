@@ -185,6 +185,7 @@ class Transport implements AppServerTransport {
 			case 'github/check/log': this.reply(request, { url: 'https://productionresults.blob.core.windows.net/logs?sig=fixture' }); break;
 			case 'github/check/rerun': this.reply(request, null); break;
 			case 'github/checks': this.reply(request, { state: 'pending', statuses: [], checks: Number(request.params.page) === 1 ? [{ id: 1, name: 'waiting', status: 'in_progress', conclusion: null, detailsUrl: null }] : [{ id: 2, name: 'build', status: 'completed', conclusion: this.failingChecks ? 'failure' : 'success', detailsUrl: null }], nextPage: Number(request.params.page) === 1 ? 2 : null }); break;
+			case 'github/pullRequest/checks': this.reply(request, { status: this.failingChecks ? 'failure' : 'pending' }); break;
 			case 'github/pullRequest/threads': this.reply(request, { threads: request.params.cursor === null ? [] : [{ id: 'review-thread', path: 'file.ts', line: null, side: 'RIGHT', resolved: !this.unresolvedComments, outdated: false, canResolve: true, comments: { comments: [], nextCursor: null } }], nextCursor: request.params.cursor === null ? 'second' : null }); break;
 			case 'github/cancel': this.reply(request, {}); break;
 			default: throw new Error(`Unexpected session PR request: ${request.method}`);

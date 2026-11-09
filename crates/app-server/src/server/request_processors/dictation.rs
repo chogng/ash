@@ -174,8 +174,14 @@ impl<'a> DictationRequestProcessor<'a> {
                 let dictation = runtime
                     .codex_dictation()
                     .map_err(|error| dictation_error(error.to_string()))?;
+                let network = ash_http_client::OutboundNetworkSnapshot::with_policy(
+                    ash_http_client::HttpClientConfig::new(),
+                    self.calls.network_policy(),
+                )
+                .map_err(|error| dictation_error(error.to_string()))?;
                 DictationRequest::Subscription(SubscriptionDictationRequest {
                     dictation: Arc::new(dictation),
+                    connector: ash_websocket_client::WebSocketConnector::new(network),
                     audio_host,
                     input_device: params.input_device,
                     language: params.language,

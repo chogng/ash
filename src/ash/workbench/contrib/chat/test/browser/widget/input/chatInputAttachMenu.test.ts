@@ -14,9 +14,9 @@ import { IProjectService } from '../../../../../../../platform/projects/common/p
 import { IConnectorService } from '../../../../../../../platform/connectors/common/connectorService.js';
 import { IPluginManagementService } from '../../../../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { setARIAContainer } from '../../../../../../../base/browser/ui/aria/aria.js';
-import { ChatInputAttachMenu } from '../../../../browser/widget/input/chatInputAttachMenu.js';
+import { ChatInputAttachMenu, type ChatInputAttachMenuOptions } from '../../../../browser/widget/input/chatInputAttachMenu.js';
 
-function createFixture(listConnectors?: IConnectorService['list']) {
+function createFixture(listConnectors?: IConnectorService['list'], host?: ChatInputAttachMenuOptions['host']) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body><div id="container" class="ash-sessions-window"><button id="attach-btn" aria-haspopup="menu"></button><input></div></body>', {
 		url: 'http://localhost/',
@@ -93,6 +93,7 @@ function createFixture(listConnectors?: IConnectorService['list']) {
 
 	const menu = resources.add(services.createInstance(ChatInputAttachMenu, {
 		anchor,
+		host,
 		focusInput: () => input.focus(),
 		onUploadFiles: () => { uploaded = true; },
 		onClose: () => { closed = true; },
@@ -236,15 +237,14 @@ suite('ChatInputAttachMenu', () => {
 		assert.equal(f.popup('Design system'), null);
 	});
 
-	test('Skills submenu attaches the selected skill', async () => {
-		using f = createFixture();
+	test('host Skills submenu attaches a skill from the current input catalog', async () => {
+		using f = createFixture(undefined, {});
 		f.menu.show();
 		menuItem(f.popup()!, 'Skills').click();
 		await new Promise<void>(resolve => setImmediate(resolve));
 
 		const submenu = f.popup('Skills')!;
-		assert.equal(submenu.querySelectorAll('button').length, 2);
-		assert.ok(menuItem(submenu, 'Browse skills…'));
+		assert.equal(submenu.querySelectorAll('button').length, 1);
 		menuItem(submenu, 'Unit Testing').click();
 		assert.deepEqual(f.attachedSkills, [{ name: 'Unit Testing' }]);
 		assert.equal(f.popup(), null);

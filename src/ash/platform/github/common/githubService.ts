@@ -151,7 +151,16 @@ export interface GitHubRepositoryTreeEntry { readonly path: string; readonly kin
 export interface GitHubRepositoryTree { readonly sha: string; readonly entries: readonly GitHubRepositoryTreeEntry[]; }
 export interface GitHubRepositoryBlob { readonly sha: string; readonly bytes: Uint8Array; }
 export type GitHubFileContent = { readonly kind: 'text'; readonly text: string; } | { readonly kind: 'binary' | 'tooLarge'; };
-export interface GitHubReviewComment { readonly id: string; readonly body: string; readonly url: string; readonly author: string | null; readonly canUpdate: boolean; readonly canDelete: boolean; }
+export interface GitHubReviewComment {
+	readonly id: string;
+	readonly body: string;
+	readonly url: string;
+	readonly author: string | null;
+	readonly createdAt?: string;
+	readonly updatedAt?: string;
+	readonly canUpdate: boolean;
+	readonly canDelete: boolean;
+}
 export interface GitHubReviewComments { readonly comments: readonly GitHubReviewComment[]; readonly nextCursor: string | null; }
 export interface GitHubReviewThread {
 	readonly id: string;
@@ -184,6 +193,11 @@ export interface GitHubCheckDetails { readonly title: string; readonly summary: 
 /** Captures both the PR head and its check; operations reject a moved PR. */
 export interface GitHubCheckTarget { readonly number: number; readonly commit: string; readonly checkId: number; }
 export interface GitHubChecks { readonly state: string; readonly statuses: readonly GitHubCommitStatus[]; readonly checks: readonly GitHubCheckRun[]; readonly nextPage: number | null; }
+export type GitHubPullRequestChecksStatus = 'pending' | 'success' | 'failure' | 'neutral';
+export interface GitHubPullRequestChecks {
+	readonly status: GitHubPullRequestChecksStatus;
+	readonly latestCheckAtUnixMs?: number;
+}
 export interface GitHubLabel { readonly name: string; readonly color: string; }
 
 /** GitHub business operations use the account grant owned by the backend login service. */
@@ -244,6 +258,8 @@ export interface IGitHubService {
 	readCheckLog(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<string>;
 	rerunCheck(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<void>;
 	readChecks(repository: GitHubRepository, commit: string, page: number, token?: CancellationToken): Promise<GitHubChecks>;
+	/** CI status for this PR head, including required checks that have not reported. */
+	readPullRequestChecks(repository: GitHubRepository, number: number, headCommit: string, token?: CancellationToken): Promise<GitHubPullRequestChecks>;
 	listLabels(repository: GitHubRepository, token?: CancellationToken): Promise<readonly GitHubLabel[]>;
 	createLabel(repository: GitHubRepository, label: GitHubLabel, token?: CancellationToken): Promise<GitHubLabel>;
 	updateLabelColor(repository: GitHubRepository, label: GitHubLabel, token?: CancellationToken): Promise<GitHubLabel>;

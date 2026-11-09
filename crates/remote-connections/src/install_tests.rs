@@ -1,5 +1,9 @@
 use std::fs;
 use std::fs::File;
+#[cfg(unix)]
+use std::io::BufRead;
+#[cfg(unix)]
+use std::io::BufReader;
 use std::num::NonZeroU64;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -376,6 +380,64 @@ fn generated_remote_script_commits_a_package_and_is_idempotent() {
             .unwrap()
             .contains(&executable_text)
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn generated_remote_script_rejects_a_contender_and_recovers_after_owner_exit() {
+    let directory = tempfile::tempdir().unwrap();
+    let artifact = package_artifact(directory.path(), PackageVariant::Canonical);
+    let install_root = directory.path().join("remote data");
+    let location = RemoteRuntimeInstallLocation::Absolute(
+        RemoteRuntimeInstallRoot::parse(install_root.to_string_lossy()).unwrap(),
+    );
+    let command = remote_runtime_install_command(&artifact, &location);
+    let lock = install_root
+        .join("runtimes")
+        .join(TARGET.target_triple())
+        .join(VERSION)
+        .join(format!("{}.install.lock", artifact.integrity().sha256()));
+
+    // Signal that the owner has acquired the lock, then block on its upload pipe.
+    let pause_upload = r#"exec 3>&1; cat() {
+        if [ "$#" -eq 0 ]; then printf 'upload-ready\n' >&3; read -r ignored;
+        else command cat "$@"; fi;
+    };"#;
+    let mut owner = Command::new("sh")
+        .args(["-c", &format!("{pause_upload} {command}")])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut ready = String::new();
+    let readiness = BufReader::new(owner.stdout.take().unwrap()).read_line(&mut ready);
+    let contender = Command::new("sh").args(["-c", &command]).output();
+
+    // SIGKILL bypasses shell cleanup. The inode remains available for the retry.
+    let _ = owner.kill();
+    owner.wait().unwrap();
+    readiness.unwrap();
+    assert_eq!(ready, "upload-ready\n");
+    let contender = contender.unwrap();
+    assert_eq!(contender.status.code(), Some(75));
+    assert_eq!(
+        contender.stdout,
+        b"__ASH_REMOTE_RUNTIME_INSTALL_ERROR__:install-in-progress\n"
+    );
+    assert_eq!(fs::metadata(&lock).unwrap().len(), 0);
+
+    let retry = Command::new("sh")
+        .args(["-c", &command])
+        .stdin(File::open(artifact.archive()).unwrap())
+        .output()
+        .unwrap();
+    assert!(retry.status.success(), "{retry:?}");
+    assert!(
+        retry
+            .stdout
+            .starts_with(b"__ASH_REMOTE_RUNTIME_INSTALLED__:")
+    );
+    assert!(lock.is_file());
 }
 
 #[derive(Clone, Copy)]

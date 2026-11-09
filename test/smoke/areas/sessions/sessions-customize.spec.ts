@@ -51,8 +51,8 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 		await advisorModel.click();
 		await expect(page.getByRole('menuitemradio', { name: 'Default', exact: true })).toHaveCount(0);
 		await expect(page.getByRole('menuitemradio', { name: 'Inherit from the parent', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true })).toHaveCount(0);
-		await page.getByRole('menuitemradio', { name: 'GPT-6.1 Sol', exact: true }).click();
+		await expect(page.getByRole('menuitemradio', { name: 'Sol 5.6', exact: true })).toHaveCount(0);
+		await page.getByRole('menuitemradio', { name: 'Sol 6.1', exact: true }).click();
 		await expect(workbenchSettings.locator('.ash-advisor-settings [role="status"]')).toHaveText('Advisor settings saved.');
 		if (!await workbenchEnable.isChecked()) { await workbenchEnable.press('Space'); }
 		await expect(workbenchEnable).toBeEnabled();
@@ -79,19 +79,19 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	await expect(advisorModel).toBeVisible();
 	await expect(advisorEnable).toBeVisible();
 	if (target.appServerMode === 'required') {
-		await expect(advisorModel).toHaveText('GPT-6.1 Sol');
+		await expect(advisorModel).toHaveText('Sol 6.1');
 		await expect(advisorEnable).toBeChecked();
 		await navigation.getByRole('button', { name: 'Models', exact: true }).click();
-		const visibility = settings.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true });
+		const visibility = settings.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true });
 		await expect(visibility).toBeChecked();
 		await expect(settings.locator('.ash-models-settings-api-row').filter({ has: page.getByRole('heading', { name: 'Meta', exact: true }) })).toBeVisible();
 		await visibility.press('Space');
 		await expect(visibility).not.toBeChecked();
 		await expect(visibility).toBeEnabled();
 		await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
-		await expect(advisorModel).toHaveText('GPT-6.1 Sol');
+		await expect(advisorModel).toHaveText('Sol 6.1');
 		await advisorModel.click();
-		await expect(page.getByRole('menuitemradio', { name: 'GPT-6.1 Sol', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('menuitemradio', { name: 'Sol 6.1', exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await navigation.getByRole('button', { name: 'Models', exact: true }).click();
 		await visibility.press('Space');
@@ -115,7 +115,7 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 		await expect(advisorEnable).toBeEnabled();
 		await expect(advisorEnable).not.toBeChecked();
 		await advisorEnable.press('Space');
-		await expect(advisorModel).toHaveText('GPT-6.1 Sol');
+		await expect(advisorModel).toHaveText('Sol 6.1');
 	}
 	await navigation.getByRole('button', { name: 'Customize', exact: true }).click();
 	const tabs = settings.getByRole('tablist', { name: 'Customize tabs' });

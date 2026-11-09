@@ -9,7 +9,6 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../../common/configuration.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -22,7 +21,7 @@ import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
-import type { ChatDraftModelSource } from '../../chat/browser/ashChatWidgetModel.js';
+import type { ChatDraftModelSource } from '../../chat/browser/replyChatEditor.js';
 import type { IReplyChatEditorModel, ReplyChatEditorOptions } from '../../chat/browser/replyChatEditor.js';
 import { chatGPTModelEntries, ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
 import { ChatGPTProjectFolderPicker } from './chatGPTProjectFolderPicker.js';
@@ -30,6 +29,7 @@ import { IChatGPTNativeService, IChatGPTService, isChatGPTNewDraft } from '../br
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 
+export const SESSIONS_CHATGPT_DEFAULT_BACKEND = 'sessions.chatgpt.defaultBackend';
 export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
 export const SHOW_CHATGPT_COMMAND = 'sessions.show.chatgpt';
 export const SHOW_PREFERRED_CHATGPT_COMMAND = 'sessions.show.preferredChatgpt';
@@ -166,8 +166,6 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 			const command = setting === 'chatgptweb' ? SHOW_CHATGPT_COMMAND : SHOW_EXPERIMENTAL_CHATGPT;
 			return accessor.get(ICommandService).executeCommand(command, source, create === true);
 		}));
-		this._register(CommandsRegistry.register('sessions.open.new', (accessor, source) =>
-			accessor.get(ICommandService).executeCommand(SHOW_PREFERRED_CHATGPT_COMMAND, source, true)));
 		// Saved window entries and existing keybindings from the experiment retain the same chat owner.
 		this._register(CommandsRegistry.register('sessions.chatgptNative.newChat', newChat));
 		for (const command of ['sessions.show.chatgptNative', 'sessions.open.chatgptNative']) {

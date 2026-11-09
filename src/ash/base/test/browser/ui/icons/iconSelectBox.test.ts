@@ -11,6 +11,19 @@ suite('IconSelectBox keyboard ownership', () => {
 		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
 	});
 
+	test('horizontal navigation edits the query while Enter still selects the active icon', async () => {
+		const picker = browser.page.locator('#icon-select-host');
+		const input = picker.getByRole('combobox', { name: 'Search icons' });
+		await input.fill('chev');
+		const activeIcon = await input.getAttribute('aria-activedescendant');
+		await input.press('Home');
+		await input.press('ArrowRight');
+		await expect.poll(() => input.evaluate((element: HTMLInputElement) => element.selectionStart)).toBe(1);
+		await expect(input).toHaveAttribute('aria-activedescendant', activeIcon!);
+		await input.press('Enter');
+		await expect(picker).toHaveAttribute('data-selected-icon', 'chevron-right');
+	});
+
 	test('modified navigation edits the search text without moving the active icon', async () => {
 		const picker = browser.page.locator('#icon-select-host');
 		const input = picker.getByRole('combobox', { name: 'Search icons' });

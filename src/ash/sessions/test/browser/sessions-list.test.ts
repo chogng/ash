@@ -349,7 +349,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	const executed: unknown[][] = [];
 	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const commands = { executeCommand: async (...args: unknown[]) => { executed.push(args); } } as ICommandService;
-	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')];
 	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
@@ -426,7 +426,7 @@ for (const mode of ['chat', 'code'] as const) {
 					openUntitledSession(id: string) { opened.push(id); },
 				} as unknown as ISessionsService;
 				const listModel = new SessionsListModelService(storage);
-				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
 				const assertRows = (...draftIds: string[]): void => {
 					const rows = [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item);
 					const draftRows = draftIds.map(id => `untitled:${id}`);
@@ -515,7 +515,7 @@ test('SessionsList updates passive status without changing row identity or selec
 			});
 		},
 	} as IHoverService;
-	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences, menuContexts, hoverService);
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences, menuContexts, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const viewport = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items > .ash-scrollbar-viewport')!;
@@ -616,7 +616,7 @@ test('The keyboard menu sets a workspace only for an unbound Session and targets
 		},
 	} as ICommandService;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view,
-		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
+		{ onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
 		emptyGroups, storage, emptyProjects, commands,
 		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences, menuContexts);
 	const row = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'Move me')!;
@@ -723,7 +723,7 @@ for (const outcome of ['confirmed', 'cancelled', 'failed', 'disposed'] as const)
 	const views = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
 	let menu: IContextMenuDelegate | undefined;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', sessions, views,
-		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
+		{ onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
 		emptyGroups, storage, emptyProjects, { executeCommand: () => pending.p } as unknown as ICommandService,
 		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
 	const row = list.domNode.querySelector<HTMLElement>('.ash-sessions-list-row')!;

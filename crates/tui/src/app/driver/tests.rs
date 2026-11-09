@@ -748,6 +748,7 @@ fn switch_mode_updates_the_composer_without_overwriting_the_next_message_choice(
         session_id: snapshot.session_id,
         thread_id: snapshot.thread_id.clone(),
         durable_sequence: snapshot.sequence + 1,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::TurnModeChanged {

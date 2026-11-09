@@ -164,7 +164,7 @@ fn saved_session_switches_directory_and_keeps_its_previous_working_copy() {
         selected_execution_target(&restarted, &remotes, &read).unwrap(),
         target
     );
-    let server = restarted.server_for(options(Some(root))).unwrap();
+    let server = restarted.server_for(options(Some(root.clone()))).unwrap();
     let mut connection = initialize(&server);
     let recovered = crate::tests::call(&server, &mut connection, read);
     assert_eq!(
@@ -241,21 +241,42 @@ fn saved_session_switches_directory_and_keeps_its_previous_working_copy() {
         selected_execution_target(&restarted, &remotes, &stale_clear).unwrap(),
         None
     );
-    let rebound = crate::tests::call(
-        &original,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":9,"method":"session/request","params":{
-                "sessionId":id,"commandId":"rebind","request":{"type":"changeDirectory","root":old.path()}
-            }
-        }),
+    let mut bind = serde_json::json!({
+        "jsonrpc":"2.0","id":9,"method":"session/request","params":{
+            "sessionId":id,"commandId":"rebind","request":{"type":"bindDirectory","root":old.path()}
+        }
+    });
+    let delayed_bind = serde_json::json!({
+        "jsonrpc":"2.0","id":10,"method":"session/request","params":{
+            "sessionId":id,"commandId":"late-bind","request":{"type":"bindDirectory","root":root}
+        }
+    });
+    // Both windows can select a destination while the Session is still unbound.
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &delayed_bind).unwrap(),
+        target
     );
+    let late_server = restarted.server_for(options(Some(root))).unwrap();
+    let mut late_connection = initialize(&late_server);
+    let rebound = crate::tests::call(&original, &mut connection, bind.clone());
     assert!(rebound.get("error").is_none(), "{rebound}");
+    bind["id"] = serde_json::json!(11);
+    let retried = crate::tests::call(&original, &mut connection, bind);
+    assert_eq!(retried["result"], rebound["result"], "{retried}");
+    let delayed = crate::tests::call(&late_server, &mut late_connection, delayed_bind);
+    assert_eq!(
+        delayed["error"]["message"], "CoreOperationFailed",
+        "{delayed}"
+    );
+    late_server.close_connection(late_connection);
     let rebound_route = selected_execution_target(&restarted, &remotes, &stale_clear).unwrap();
-    assert!(matches!(
+    let old_root = ash_file_access::Dir::open_local(old.path()).unwrap();
+    assert_eq!(
         rebound_route,
-        Some(SessionExecutionTarget::Local { .. })
-    ));
+        Some(SessionExecutionTarget::Local {
+            root: old_root.canonical_path().to_path_buf(),
+        })
+    );
     let stale = crate::tests::call(&profile, &mut profile_connection, stale_clear.clone());
     assert!(stale.get("error").is_some(), "{stale}");
     assert_eq!(

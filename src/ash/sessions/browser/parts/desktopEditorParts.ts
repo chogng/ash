@@ -283,7 +283,8 @@ export class DesktopEditorParts extends EditorParts {
 
 	public hideTool(groupId: number = this.activeGroup.id): void {
 		const part = this.owner(groupId);
-		const hadFocus = part.domNode.contains(part.domNode.ownerDocument.activeElement);
+		const focused = part.domNode.ownerDocument.activeElement;
+		const hadFocus = part.domNode.contains(focused) || part.groups.some(group => group.headerElement.contains(focused));
 		for (const group of part.groups) {
 			if (group.id !== this.pageGroupId && this.inWorkingSet(group.id)) { this.setGroupVisible(group.id, false); }
 		}

@@ -24,12 +24,27 @@ import { parseSessionIdentity } from '../../../services/sessions/common/sessionI
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
+import { IChatTipService } from '../../../../workbench/contrib/chat/browser/chatTipService.js';
 
 registerSingleton(ISessionsChatViewStateService, SessionsChatViewStateService, InstantiationType.Delayed);
 
 registerAction2(NewChatInSessionsWindowAction);
 registerAction2(NewSessionFromNavigationAction);
 registerAction2(NewSessionFolderQuickPickAction);
+
+registerAction2(class ResetDismissedTipsAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.chat.resetDismissedTips',
+			title: localize2('chat.tip.resetDismissed', 'Reset Dismissed Tips'),
+			f1: true,
+		});
+	}
+
+	run(accessor: ServicesAccessor): void {
+		accessor.get(IChatTipService).clearDismissedTips();
+	}
+});
 
 // The window's host-aware opener must take precedence over the ambient Workbench opener.
 registerWorkbenchContribution(OpenSessionLinkOpenerContribution.ID, WorkbenchPhase.BlockRestore,

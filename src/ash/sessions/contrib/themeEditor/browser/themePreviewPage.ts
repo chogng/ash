@@ -18,7 +18,7 @@ import {
 } from '../../../../workbench/contrib/themeEditor/browser/themePreviewHost.js';
 import { BrowserHostColorSchemeService } from '../../../../workbench/services/themes/browser/browserHostColorSchemeService.js';
 import { createSessionsWorkbench } from '../../../browser/workbenchFactory.js';
-import { TitlebarPart } from '../../../browser/parts/titlebarPart.js';
+import { registerTitleService } from '../../../services/title/browser/titleService.js';
 import {
 	IWorkingCopyBackupService,
 	InMemoryWorkingCopyBackupService,
@@ -65,8 +65,7 @@ const workbench = resources.add(
 		createLifecycleService: host.createLifecycleService,
 		createContextMenuService: services => services.createInstance(BrowserContextMenuService),
 		createHostColorSchemeService: () => new BrowserHostColorSchemeService(window),
-		createTitlebarPart: (container, services) =>
-			services.createInstance(TitlebarPart, container, 'application-menu'),
+		registerTitleService,
 		createFileDialogService: scope => {
 			services = scope;
 			host.restrictOpeners(scope);

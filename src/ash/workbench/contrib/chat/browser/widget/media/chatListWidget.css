@@ -342,6 +342,11 @@ article.ash-chat-user-message > pre {
 .ash-chat-user-message > .ash-chat-message-actions {
 	justify-content: flex-end;
 }
+.ash-chat-message-time {
+	margin-inline-start: var(--ash-spacing-size40);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+}
 .ash-chat-message-copy-status,
 .ash-chat-message-read-status {
 	min-width: 0;

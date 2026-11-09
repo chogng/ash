@@ -187,6 +187,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(ITitleService, titleService);
 	const shared = services.get(ITitleService);
 	const part = titleService.getPart(ownerDocument.body);
+	assert.ok(part instanceof BrowserTitlebarPart);
 	const { IsAuxiliaryWindowContext } = await import('../../../../../common/contextkeys.js');
 	resources.add(MenusRegistry.appendMenuItem(MenuId.TitleBarAdjacentCenter, {
 		command: { id: 'test.titlebar.mainAdjacent', title: 'Main adjacent action' },

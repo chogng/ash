@@ -51,8 +51,8 @@ export function parseMemoryReference(reference: string, namespace: MemoryNamespa
 
 export interface IMemoriesService {
 	readonly onDidChange: Event<void>;
-	readModelMemoryEnabled(): Promise<boolean>;
-	setModelMemoryEnabled(enabled: boolean): Promise<void>;
+	readModelMemoryEnabled(): Promise<Readonly<Record<MemoryNamespace, boolean>>>;
+	setModelMemoryEnabled(namespace: MemoryNamespace, enabled: boolean): Promise<void>;
 	scopes(threadId?: string): Promise<readonly MemoryScopeEntry[]>;
 	list(scope: MemoryScope, query?: string, cursor?: string): Promise<MemoryPage>;
 	read(memory: MemorySummary): Promise<Memory>;

@@ -342,6 +342,8 @@ pub struct ReviewComment {
     pub body: String,
     pub url: String,
     pub author: Option<ReviewAuthor>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
     pub viewer_can_update: bool,
     pub viewer_can_delete: bool,
 }
@@ -528,6 +530,25 @@ pub struct CheckStatus {
     pub statuses: Vec<CommitStatus>,
     pub checks: Vec<CheckRun>,
     pub next_page: Option<u32>,
+}
+
+/// CI status for a specific pull request head. Pending includes required contexts
+/// that have yet to report. Neutral means there were no applicable results.
+#[derive(Clone, Copy, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PullRequestChecksStatus {
+    Pending,
+    Success,
+    Failure,
+    Neutral,
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PullRequestChecks {
+    pub status: PullRequestChecksStatus,
+    /// Latest applicable check's completion time, or its start time if completion is unavailable.
+    pub latest_check_at_unix_ms: Option<i64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

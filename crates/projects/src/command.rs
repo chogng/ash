@@ -52,6 +52,12 @@ pub enum ProjectCommand {
     UnlinkSession {
         session_id: SessionId,
     },
+    LinkExternalConversation {
+        conversation_id: String,
+    },
+    UnlinkExternalConversation {
+        conversation_id: String,
+    },
     Archive,
     Restore,
     Delete,

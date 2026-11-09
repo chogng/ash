@@ -89,6 +89,7 @@ export class IconSelectBox extends Disposable {
 		this._register(addDisposableListener(this.grid, 'click', event => {
 			const item = (event.target as Element).closest<HTMLElement>('.ash-icon-select-item');
 			if (!item || !this.grid.contains(item)) return;
+			this.focus();
 			this.setSelection(Number(item.dataset.index));
 		}));
 		this.renderIcons('');
@@ -99,7 +100,12 @@ export class IconSelectBox extends Disposable {
 		this.domNode.style.height = `${dimension.height}px`;
 		this.numberOfElementsPerRow = Math.max(1, Math.floor((dimension.width - 24) / 40));
 		this.grid.style.gridTemplateColumns = `repeat(${this.numberOfElementsPerRow}, 36px)`;
-		this.scrollable.layout();
+		const focused = this.renderedIcons[this.focusedItemIndex];
+		if (focused) {
+			this.scrollable.reveal(focused.element);
+		} else {
+			this.scrollable.layout();
+		}
 	}
 
 	public getFocus(): number[] { return this.focusedItemIndex < 0 ? [] : [this.focusedItemIndex]; }
@@ -118,7 +124,11 @@ export class IconSelectBox extends Disposable {
 	public focusNext(): void { this.moveFocus(1); }
 	public focusPrevious(): void { this.moveFocus(-1); }
 	public focusNextRow(): void { this.moveFocus(this.numberOfElementsPerRow); }
-	public focusPreviousRow(): void { this.moveFocus(-this.numberOfElementsPerRow); }
+	public focusPreviousRow(): void {
+		if (this.focusedItemIndex >= this.numberOfElementsPerRow) {
+			this.moveFocus(-this.numberOfElementsPerRow);
+		}
+	}
 
 	public getFocusedIcon(): ThemeIcon {
 		const icon = this.renderedIcons[this.focusedItemIndex]?.icon;
@@ -192,14 +202,18 @@ export class IconSelectBox extends Disposable {
 
 	private moveFocus(delta: number): void {
 		if (this.renderedIcons.length === 0) return;
-		const count = this.renderedIcons.length;
-		const index = ((this.focusedItemIndex + delta) % count + count) % count;
+		const index = Math.max(0, Math.min(this.focusedItemIndex + delta, this.renderedIcons.length - 1));
 		this.focusIcon(index);
 	}
 
 	private handleKeyDown(event: KeyboardEvent): void {
 		// Text editing, host shortcuts and IME confirmation keep their native owners.
 		if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+			return;
+		}
+		// With a query, horizontal and boundary keys edit the text in the combobox.
+		if (this.inputBox.value && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+			event.stopPropagation();
 			return;
 		}
 		switch (event.key) {

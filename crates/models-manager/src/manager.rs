@@ -381,6 +381,7 @@ impl ModelsManager {
                     let catalog = cached.observation;
                     apply_discovery(
                         &mut state.records,
+                        &managed.definition.id,
                         &catalog,
                         crate::MetadataSource::PersistedObservation,
                     );
@@ -476,6 +477,7 @@ impl ModelsManager {
             CatalogDiscoveryOutcome::Modified(catalog) => {
                 apply_discovery(
                     &mut state.records,
+                    &managed.definition.id,
                     catalog,
                     crate::MetadataSource::ProviderLive,
                 );

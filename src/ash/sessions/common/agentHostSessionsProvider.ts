@@ -15,6 +15,6 @@ export function sshAgentHostProviderId(connection: RemoteConnectionDefinition): 
 /** The adapter owns connection state; Sessions consumers never inspect its transport. */
 export interface IAgentHostSessionsProvider extends ISessionsProvider {
 	readonly connectionStatus: IObservable<'connecting' | 'connected' | 'disconnected'>;
-	authorizeWorkspace?(target: SessionExecutionTarget, signal: AbortSignal): Promise<boolean>;
+	authorizeWorkspace?(target: SessionExecutionTarget, signal: AbortSignal, onTrustDeclined?: () => void): Promise<boolean>;
 	isDevContainerWorkspaceAvailable?(workspaceUri: URI, token?: CancellationToken): Promise<boolean>;
 }

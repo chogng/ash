@@ -77,7 +77,7 @@ function scopedChannel(transport: ChatGPTTransport, auth: Authentication): IServ
 	};
 }
 function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRuntime['prepareHeaders'] = async () => ({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-proof' })): IChatGPTVerificationRuntime {
-	return { isDisposed: false, session: { fetch: fetcher }, prepareHeaders, dispose() { }, [Symbol.dispose]() { this.dispose(); } };
+	return { isDisposed: false, session: { fetch: fetcher, getUserAgent: () => 'Ash/0.1.0 Chrome/152.0.0.0 Electron/44.0.0 Safari/537.36' }, prepareHeaders, dispose() { }, [Symbol.dispose]() { this.dispose(); } };
 }
 
 suite('ChatGPT transport', () => {
@@ -176,6 +176,25 @@ suite('ChatGPT transport', () => {
 			}
 			assert.equal(fetched, native);
 		}
+	}));
+
+	test('uses the Chromium user agent for conversation history reads only', async () => fixture(async auth => {
+		const agents: (string | null)[] = [];
+		using transport = new ChatGPTTransport({
+			authentication: auth, readVerificationScript: async () => '',
+			createRuntime: () => runtime(async (_url, init) => {
+				agents.push(new Headers(init?.headers).get('User-Agent'));
+				return Response.json({});
+			}),
+		}, new NullLoggerService());
+		const channel = scopedChannel(transport, auth);
+		for (const [path, method] of [['/conversation/thread', 'GET'], ['/conversation/thread', 'PATCH'], ['/conversations', 'GET']]) {
+			const id = randomUUID();
+			const request = { path: '/service/backend-api' + path, method, headers: {}, ...(method === 'PATCH' && { body: '{"is_archived":true}' }) };
+			assert.equal((await channel.call<ChatGPTResponse>('window', 'request', [id, request])).status, 200);
+			await channel.call('window', 'cancel', [id]);
+		}
+		assert.deepEqual(agents, ['Ash/0.1.0 Chrome/152.0.0.0 Safari/537.36', null, null]);
 	}));
 
 	for (const contentType of ['application/json', 'text/html']) {

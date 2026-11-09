@@ -131,6 +131,72 @@ suite('Chat transcript navigation', () => {
 		await expect(ruler).toHaveCount(0);
 	});
 
+	test('highlights the focused prompt, fans out the hovered marks, and scrolls the list independently', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN&promptTimeline');
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.renderItems(Array.from({ length: 18 }, (_, index) => ({
+				id: `prompt-${index}`, type: 'userMessage', text: `Prompt ${index + 1}`, transient: false,
+			})));
+		});
+		const gutter = page.locator('.ash-prompt-timeline-gutter');
+		const handle = gutter.getByLabel('显示提问', { exact: true });
+		const marks = gutter.locator('.ash-prompt-timeline-gutter-marks > span');
+		const viewport = page.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		await expect(marks.first()).toHaveClass('active');
+		const prompt = viewport.locator('[data-item-id="prompt-4"]');
+		await expect(prompt).toBeInViewport();
+		await prompt.evaluate(element => element.focus({ preventScroll: true }));
+		await expect(marks.nth(4)).toHaveClass('active');
+		await expect(gutter.locator('.ash-prompt-timeline-gutter-marks > .active')).toHaveCount(1);
+		const readStrokes = () => marks.evaluateAll(elements => elements.slice(0, 9).map(element => {
+			const stroke = getComputedStyle(element, '::before');
+			return { width: parseFloat(stroke.width), color: stroke.borderTopColor };
+		}));
+		const readWidths = async () => (await readStrokes()).map(stroke => stroke.width);
+		const restingWidths = Array<number>(9).fill(6);
+		for (const theme of ['light', 'dark', 'hc', 'hcLight'] as const) {
+			await page.evaluate(theme => window.ashChatTranscriptIntegration.setTheme(theme), theme);
+			const strokes = await readStrokes();
+			expect(strokes.map(stroke => stroke.width)).toEqual(restingWidths);
+			expect(strokes[4].color).not.toBe(strokes[0].color);
+		}
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setTheme('light'));
+		await marks.nth(4).hover();
+		await expect(handle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect.poll(readWidths).toEqual([6, 10, 16, 20, 24, 20, 16, 10, 6]);
+		await marks.nth(5).hover();
+		await expect.poll(readWidths).toEqual([6, 6, 10, 16, 20, 24, 20, 16, 10]);
+		await expect(marks.nth(4)).toHaveClass('active');
+		await page.mouse.move(0, 0);
+		await expect.poll(readWidths).toEqual(restingWidths);
+
+		await handle.focus();
+		await expect(marks.first()).toHaveClass('active');
+		await handle.press('Enter');
+		await expect(handle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const panel = gutter.locator('.ash-prompt-timeline-panel');
+		const first = panel.getByRole('button', { name: 'Prompt 1', exact: true });
+		await expect(first).toBeFocused();
+		expect(await panel.evaluate(element => getComputedStyle(element, '::-webkit-scrollbar').width)).toBe('8px');
+		await panel.hover();
+		await page.mouse.wheel(0, 240);
+		await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await first.press('Escape');
+		await expect(handle).toBeFocused();
+		await expect(handle).toHaveCSS('outline-style', 'solid');
+		await expect(panel).toBeHidden();
+
+		await marks.last().click();
+		const lastPrompt = viewport.locator('[data-item-id="prompt-17"]');
+		await expect(lastPrompt).toBeFocused();
+		await expect(lastPrompt).toBeInViewport();
+		await expect(marks.last()).toHaveClass('active');
+		await expect(panel).toBeHidden();
+	});
+
 	test('latest and remembered focus remain distinct, removed rows retire focus and hidden lists do not steal it', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
@@ -159,6 +225,7 @@ suite('Chat transcript navigation', () => {
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true))).toBe(true);
 		const help = page.getByRole('dialog').getByRole('textbox');
 		await expect(help).toHaveValue(/悬停在左侧时间线/u);
+		await expect(help).toHaveValue(/点击标记即可跳转到预览的提问/u);
 		await expect(help).toHaveValue(/固定在对话顶部[\s\S]*用户提问之间移动[\s\S]*聚焦待确认控件/u);
 		await expect(help).not.toHaveValue(/Use |<keybinding:/u);
 		await help.press('Escape');

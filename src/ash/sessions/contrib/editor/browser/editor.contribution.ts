@@ -148,15 +148,15 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			group: '9_layout',
 			order: 100001,
 		}));
-		this._register(CommandsRegistry.register('ash.sessions.toggleChangesFileList', arg => {
+		this._register(CommandsRegistry.register('ash.sessions.toggleChangesFileList', (_accessor, arg) => {
 			const pane = editor.groups.find(group => group.id === toolGroup(arg))?.activePane;
 			if (pane instanceof SessionChangesEditor) { pane.toggleFileList(); }
 		}));
-		this._register(CommandsRegistry.register('ash.sessions.hideTool', arg => run(async () => {
+		this._register(CommandsRegistry.register('ash.sessions.hideTool', (_accessor, arg) => run(async () => {
 			(editor as DesktopEditorParts).hideTool(toolGroup(arg));
 			if (editor.groups.every(group => !editor.isGroupVisible(group.id))) layout.hidePart('editor');
 		})));
-		this._register(CommandsRegistry.register('ash.sessions.maximizeTool', arg => run(async () => {
+		this._register(CommandsRegistry.register('ash.sessions.maximizeTool', (_accessor, arg) => run(async () => {
 			(editor as DesktopEditorParts).toggleMaximizeTool(toolGroup(arg));
 		})));
 		for (const [id, operation] of [

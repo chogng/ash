@@ -443,7 +443,6 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { ISpeechService } = await import('../../../speech/common/speechService.js');
 	const { IVoiceCodeTranscriptionBackendService } = await import('../../../../../platform/dictation/common/dictation.js');
 	const { SpeechService } = await import('../../../speech/browser/speechService.js');
-	const { IDictationOnboardingService, DictationOnboardingService } = await import('../../../chat/browser/speechToText/dictationOnboarding.js');
 	const { WorkbenchViewRegistry, IViewDescriptorService, ViewContainerLocation } = await import('../../../../common/views.js');
 	const { ViewDescriptorService } = await import('../../../../services/views/browser/viewDescriptorService.js');
 	const { SyncDescriptor } = await import('../../../../../platform/instantiation/common/descriptors.js');
@@ -496,7 +495,6 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(ILocalTranscriptionService, localTranscription);
 	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
 	services.registerInstance(ILogService, resources.add(new NullLoggerService()));
-	services.registerInstance(IDictationOnboardingService, resources.add(services.createInstance(DictationOnboardingService)));
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, source) => source });
 	const unhosted = resources.add(services.createInstance(TerminalViewPane, browserEnvironment.window.document.body, { id: 'test.terminalGeometry', title: 'Terminal' }));
 	assert.equal(unhosted.minimumSize, unhosted.minimumBodySize, 'A hidden Terminal header must not reserve body space');

@@ -16,14 +16,14 @@ export class MemorySettingsRenderer extends SettingsPageRenderer<SettingsSection
 	private editor: MemoriesEditor | undefined;
 	private visible = false;
 
-	constructor(container: HTMLElement, private readonly namespace: () => MemoryNamespace, private readonly closeSettings: () => Promise<boolean | void>,
+	constructor(container: HTMLElement, private readonly namespace: () => MemoryNamespace, private readonly closeSettings: () => Promise<boolean | void>, private readonly revealEditor: (() => void | Promise<void>) | undefined,
 		@IMemorySettingsNavigation private readonly navigation: MemorySettingsNavigation,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 		this.element = h(container.ownerDocument, 'div');
 		if (!CommandsRegistry.hasCommand(OPEN_MEMORIES_COMMAND_ID)) {
-			this.element.textContent = localize({ bundle: 'ash.settings', key: 'memory.unavailable' }, 'Memory management is unavailable in this window.');
+			this.element.textContent = localize({ bundle: 'ash.settings', key: 'memory.unavailable' }, 'Your Ash settings are unavailable in this window.');
 		}
 	}
 
@@ -33,7 +33,7 @@ export class MemorySettingsRenderer extends SettingsPageRenderer<SettingsSection
 
 	protected buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		const id = 'memory.manage';
-		const description = localize({ bundle: 'ash.settings', key: 'memory.description' }, 'Review, search, edit, or delete saved memories. Control memory reading and model saving for each scope.');
+		const description = localize({ bundle: 'ash.settings', key: 'memory.description' }, 'Manage Instructions, AGENTS.md, Chats and Code memory switches, and saved memories.');
 		return [{
 			element: {
 				kind: 'item', id, title: memorySettingsTitle(), description,
@@ -44,13 +44,17 @@ export class MemorySettingsRenderer extends SettingsPageRenderer<SettingsSection
 
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
-		if (!visible || !CommandsRegistry.hasCommand(OPEN_MEMORIES_COMMAND_ID)) { return; }
+		if (!visible) {
+			this.editor?.hideSelects();
+			return;
+		}
+		if (!CommandsRegistry.hasCommand(OPEN_MEMORIES_COMMAND_ID)) { return; }
 		// Settings can attach the result or show its dialog after building the page.
 		queueMicrotask(() => {
 			if (!this.visible || this.isDisposed || !this.element.isConnected) { return; }
 			const request = this.navigation.take();
 			if (!this.editor) {
-				this.editor = this._register(this.instantiation.createInstance(MemoriesEditor, this.namespace(), this.element, this.closeSettings));
+				this.editor = this._register(this.instantiation.createInstance(MemoriesEditor, this.namespace(), this.element, this.closeSettings, this.revealEditor));
 				this.editor.initialize();
 			}
 			if (request?.kind === 'draft') { void this.editor.openProjectDraft(request.origin, request.text); }

@@ -12,6 +12,10 @@
 
 - [ ] **测量** · Ash 已用隔离测试验证缓存复用、过期刷新和 429 恢复。现有浏览器连接读不到已登录 Edge 标签页的 DevTools Network，缺真实网页的请求次数、状态码和耗时。可访问 Network 后保持缓存开启，分别采样一次普通刷新和一次切回聚焦，单独记录 `/backend-api/conversations` 的请求，与 Ash 模拟结果对照。用模拟响应验证 429。
 
+## Ash Chat · 公网分享
+
+- [ ] **验收 · 部署只读分享服务** · Ash 桌面已能通过本地 Worker 生成链接，独立浏览器可读到整段消息快照。默认公网地址仍返回 404，当前缺少目标 Cloudflare 账号的 Worker 和 R2 部署授权。取得授权后按 [分享服务部署说明](services/chat-share/README.md#deployment) 配置私有存储桶及过期规则，再用合成对话验证公网链接。
+
 ## Desktop Chat · App Server 调试与采样
 
 - [ ] **macOS 实机验收** · 用同一个本地 Ash 桌面窗口和带调试符号的 Rust App Server 验证断点、分离和 CPU 调用栈。
@@ -320,6 +324,12 @@ Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electro
 | Sessions 跨客户端审阅与 provider changeset | 当前 read marker 只属于窗口并绑定 revision。需要跨客户端 reviewed-file、transient/provider changeset、隔离或反馈评论时，先确定共享领域契约和真实消费者，不因上游身份模型不同新增 facade。                                                                                                                                                                                                                  |
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |
 | 托管策略强制新鲜度门禁                     | 当前生产账户映射仅 `ChatDefaultModel`；未接入 `forceRemoteSettingsRefresh`、跨重启的刷新要求或执行端门禁。若纳入企业治理，先确定 Ash 管理来源、作用域、启动／重载要求及 App Server 执行 owner，再贯通 pending／blocked／satisfied、显式恢复和跨端校验；普通网络失败不自动升级为全产品 AI 禁用，Renderer 禁用输入不作为执行端强制保证。                                                                     |
+
+### Overview Ruler 分数缩放边缘绘制
+
+- [ ] **修复候选 · Overview Ruler 分数缩放边缘绘制**：`src/ash/editor/browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` 对装饰画布设置 `contain: strict`，位图宽高按逻辑尺寸乘像素比向下取整，CSS 仍保留原逻辑尺寸；该层背景承担遮住滚动轨道下方文字的职责。参考 [VS Code 分数缩放边缘绘制修复](https://github.com/microsoft/vscode/pull/346835)（2026-11-08 已合并 main，稳定版 [1.145.2](https://github.com/microsoft/vscode/releases/tag/1.145.2) 尚不包含），核实 paint containment 在分数缩放下裁掉末列设备像素的相同风险，并在现有 owner 内调整 containment；这是匹配到相同绘制前提的静态候选，尚未在 Ash 复现可见漏绘，不把上游截图当作 Ash 结果。
+  - 范围与风险：先限定装饰 Overview Ruler，不全局移除编辑器 containment、不顺带修改 Minimap 或另一种 `OverviewRuler`。保留尺寸隔离、画布背景／主题透明度、装饰 lane、光标、滚动条位置和点击行为；若 Ash 真实场景不复现且没有可观察收益，不仅为源码一致性改变绘制策略。
+  - 验收：扩展 `src/ash/editor/test/browser/codeEditorPresentation.test.ts` 的轨道对齐场景，在整数与分数 DPR／Electron 缩放组合中记录逻辑宽度、位图宽度、有效像素比及右缘像素；用长行横向滚动与静止／纵向滚动对照，确认默认实色主题下末列不透出正文且 lane／光标／边框未裁掉。覆盖亮暗与高对比主题、Minimap 关闭／左右布局及缩放后重绘，复用已有几何与主题测试；补真实 Desktop 观察并明确平台，不能用几何相等或改 CSS 属性代替像素验收。
 
 ### Minimap 相邻区段标题可读性
 

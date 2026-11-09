@@ -1,3 +1,4 @@
+import { constObservable } from '../../../base/common/observable.js';
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
 import { registerTestTitlebarServices } from '../../../workbench/test/common/testTitlebarServices.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -250,6 +251,8 @@ test('Sessions titlebar initializes localized actions and closes the application
 		hideContextMenu() { },
 	};
 	const sessions: ISessionsService = {
+		chatSelection: constObservable(undefined), getChatSelection: () => undefined, async restoreChatSelection() { },
+		openChatDraft() { }, selectChatThread() { }, setChatModelPreference() { },
 		navigationRevision: 0,
 		getLastViewedAt: () => undefined,
 		markVisibleThreadViewed() { },

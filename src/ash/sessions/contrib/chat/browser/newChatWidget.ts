@@ -1,5 +1,6 @@
 import { SessionBackgroundActivitiesControl } from './sessionBackgroundActivitiesControl.js';
 import { h } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -124,7 +125,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 							throw error;
 						}
 					},
-				}, model, chatPresentation);
+				}, model, chatPresentation, () => this.focusWorkspacePicker());
 				return composer.input;
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
@@ -134,7 +135,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this.composer = this._register(composer);
 		this.codePresentation = codePresentation;
 		const shown = observableFromEvent(this, this.onDidChangeVisibility, () => this.visible);
-		const draftId = observableFromEvent(this, model.onDidChange, () => model.untitledSessionId);
+		const draftId = observableFromEvent(this, model.onDidChange, () => model.welcomeDraftId);
 		const welcome = this._register(instantiationService.createInstance(ChatWelcomeTitle, (reader: IReader) => {
 			const id = chatPresentation.read(reader) && draftId.read(reader);
 			return id ? { id, revision: 0 } : undefined;
@@ -154,11 +155,14 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		parent.insertBefore(toolbar.element, inputContainer);
 		const activities = this._register(instantiationService.createInstance(SessionBackgroundActivitiesControl, parent, model));
 		parent.insertBefore(activities.element, inputContainer);
+		const tipAnchor = h(parent.ownerDocument, 'div', { className: 'ash-sessions-chat-tip-anchor' });
 		const tipContainer = h(parent.ownerDocument, 'div', { className: 'ash-sessions-chat-tip-slot' });
-		parent.insertBefore(tipContainer, inputContainer);
-		this._register(toDisposable(() => tipContainer.remove()));
+		tipAnchor.append(tipContainer);
+		parent.insertBefore(tipAnchor, inputContainer);
+		this._register(toDisposable(() => tipAnchor.remove()));
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
+			getSessionId: () => model.untitledSessionId,
 			isEligible: () => this.visible && configuration.getValue<boolean>(ChatConfiguration.TipsEnabled) !== false
 				&& !chatPresentation.get() && !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
 				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
@@ -178,6 +182,15 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			parent.before(this.environmentSetup);
 			this._register(toDisposable(() => this.environmentSetup?.remove()));
 			this.sessionControls = this._register(instantiationService.createInstance(ComposerSessionControls, footer, this.environmentSetup, model, () => this.saveState()));
+			const { setupCard } = this.sessionControls;
+			// Keep the tip measurable so it can return when the window has room again.
+			this._register(observeResize([this.environmentSetup, setupCard, tipContainer], () => {
+				const tip = tipContainer.getBoundingClientRect();
+				const card = setupCard.getBoundingClientRect();
+				const overlaps = tip.height > 0 && card.height > 0 && tip.top < card.bottom;
+				if (overlaps && tipContainer.contains(parent.ownerDocument.activeElement)) this.input.focus();
+				tipContainer.inert = overlaps;
+			}));
 		}
 		this.renderDraftNotice(parent);
 		parent.append(footer);

@@ -1,10 +1,9 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { localize } from '../../../../nls.js';
+import { TIP_CATALOG } from './chatTipCatalog.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { observableMemento, type ObservableMemento } from '../../../../platform/observable/common/observableMemento.js';
 
 export interface IChatTip {
 	readonly id: string;
@@ -12,38 +11,41 @@ export interface IChatTip {
 }
 
 export interface IChatTipService {
-	readonly onDidChangeTips: Event<void>;
+	readonly onDidChangeTips: Event<void | 'reset'>;
 	registerTipProvider(provider: IChatTipProvider): IDisposable;
-	getWelcomeTip(): IChatTip | undefined;
+	getWelcomeTip(currentId?: string, offset?: -1 | 0 | 1): IChatTip | undefined;
 	dismissTip(id: string): void;
+	clearDismissedTips(): void;
 }
 
 export interface IChatTipProvider {
 	readonly onDidChange: Event<void>;
 	provideTip(): IChatTip | undefined;
 	dismissTip(id: string): void;
+	clearDismissedTips?(): void;
 }
 
 export const IChatTipService = createServiceIdentifier<IChatTipService>('chatTipService');
-const DismissedTipStorageKey = 'chat.dismissedWelcomeTip';
-const AttachmentTipId = 'attach-files';
+const DismissedTipStoragePrefix = 'chat.dismissedCodeTip.';
+const DismissedTipMigrationKey = 'chat.codeTipDismissalsMigrated';
 
 /** Owns welcome-tip eligibility and the user's profile-scoped dismissal. */
 export class ChatTipService extends Disposable implements IChatTipService {
-	private readonly changed = this._register(new Emitter<void>());
+	private readonly changed = this._register(new Emitter<void | 'reset'>());
 	public readonly onDidChangeTips = this.changed.event;
 	private readonly providers = new Set<IChatTipProvider>();
-	private readonly dismissedTip: ObservableMemento<string>;
-
-	constructor(@IStorageService storage: IStorageService) {
+	constructor(@IStorageService private readonly storage: IStorageService) {
 		super();
-		this.dismissedTip = this._register(observableMemento({
-			key: DismissedTipStorageKey,
-			defaultValue: '',
-			toStorage: (value: string) => value,
-			fromStorage: (value: string) => value,
-		})(StorageScope.PROFILE, StorageTarget.USER, storage));
-		this._register(this.dismissedTip.onDidChange(() => this.changed.fire()));
+		if (!storage.getBoolean(DismissedTipMigrationKey, StorageScope.PROFILE, false)) {
+			// The old shared key could identify the attachment tip, but a catalog dismissal lost the tip ID.
+			if (storage.get('chat.dismissedWelcomeTip', StorageScope.PROFILE) === 'attach-files') {
+				storage.store(DismissedTipStoragePrefix + 'attach-files', true, StorageScope.PROFILE, StorageTarget.USER);
+			}
+			storage.store(DismissedTipMigrationKey, true, StorageScope.PROFILE, StorageTarget.USER);
+		}
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith(DismissedTipStoragePrefix)) this.changed.fire();
+		}));
 	}
 
 	public registerTipProvider(provider: IChatTipProvider): IDisposable {
@@ -58,23 +60,35 @@ export class ChatTipService extends Disposable implements IChatTipService {
 		return registration;
 	}
 
-	public getWelcomeTip(): IChatTip | undefined {
+	public getWelcomeTip(currentId?: string, offset: -1 | 0 | 1 = 0): IChatTip | undefined {
+		const tips: IChatTip[] = [];
 		for (const provider of this.providers) {
 			const tip = provider.provideTip();
-			if (tip) return tip;
+			if (tip) tips.push(tip);
 		}
-		if (this.dismissedTip.get() === AttachmentTipId) return undefined;
-		return {
-			id: AttachmentTipId,
-			content: new MarkdownString(localize('chat.tip.attachFiles', 'Tip: Attach text files or images with the + button. You can also paste or drop images into your message.')),
-		};
+		for (const tip of TIP_CATALOG) {
+			if (!this.storage.getBoolean(DismissedTipStoragePrefix + tip.id, StorageScope.PROFILE, false)) {
+				tips.push({ id: tip.id, content: new MarkdownString(tip.message()) });
+			}
+		}
+		if (tips.length === 0) return undefined;
+		const currentIndex = tips.findIndex(tip => tip.id === currentId);
+		return currentIndex < 0 ? tips[0] : tips[(currentIndex + offset + tips.length) % tips.length];
 	}
 
 	public dismissTip(id: string): void {
-		if (id === AttachmentTipId) {
-			this.dismissedTip.set(AttachmentTipId);
+		if (TIP_CATALOG.some(tip => tip.id === id)) {
+			this.storage.store(DismissedTipStoragePrefix + id, true, StorageScope.PROFILE, StorageTarget.USER);
 			return;
 		}
 		for (const provider of this.providers) provider.dismissTip(id);
+	}
+
+	public clearDismissedTips(): void {
+		for (const key of this.storage.keys(StorageScope.PROFILE, StorageTarget.USER)) {
+			if (key.startsWith(DismissedTipStoragePrefix)) this.storage.remove(key, StorageScope.PROFILE);
+		}
+		for (const provider of this.providers) provider.clearDismissedTips?.();
+		this.changed.fire('reset');
 	}
 }

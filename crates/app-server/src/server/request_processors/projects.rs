@@ -8,6 +8,8 @@ use ash_app_server_protocol::protocol::projects::ProjectAppearanceFieldDto;
 use ash_app_server_protocol::protocol::projects::ProjectAppearanceUpdateParams;
 use ash_app_server_protocol::protocol::projects::ProjectChanged;
 use ash_app_server_protocol::protocol::projects::ProjectCommandDispositionDto;
+use ash_app_server_protocol::protocol::projects::ProjectConversationMembership;
+use ash_app_server_protocol::protocol::projects::ProjectConversationMembershipParams;
 use ash_app_server_protocol::protocol::projects::ProjectCreateParams;
 use ash_app_server_protocol::protocol::projects::ProjectDetailsUpdateParams;
 use ash_app_server_protocol::protocol::projects::ProjectLifecycleParams;
@@ -299,6 +301,32 @@ impl<'a> ProjectRequestProcessor<'a> {
                 command: ProjectCommand::UnlinkSession {
                     session_id: params.session_id,
                 },
+            },
+        )
+    }
+
+    pub(super) fn project_conversation_membership(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ProjectConversationMembershipParams = decode(params)?;
+        let conversation_id = params.conversation_id;
+        let command = match params.membership {
+            ProjectConversationMembership::Link => {
+                ProjectCommand::LinkExternalConversation { conversation_id }
+            }
+            ProjectConversationMembership::Unlink => {
+                ProjectCommand::UnlinkExternalConversation { conversation_id }
+            }
+        };
+        self.apply_project(
+            connection,
+            ProjectCommandRequest {
+                command_id: params.command_id,
+                project_id: params.project_id,
+                expected_revision: params.expected_revision,
+                command,
             },
         )
     }

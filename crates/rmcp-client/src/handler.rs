@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use rmcp::ClientHandler;
 use rmcp::RoleClient;
 use rmcp::model::{
-    CancelledNotificationParam, ClientInfo, ElicitRequestParams, ElicitResult, ElicitationAction,
+    CancelledNotificationParam, ClientConfig, ElicitRequestParams, ElicitResult, ElicitationAction,
     ProgressNotificationParam, RequestId,
 };
 use rmcp::service::{NotificationContext, RequestContext};
@@ -109,18 +109,18 @@ impl McpClientHost for SessionHost {
 
 #[derive(Clone)]
 pub(crate) struct ClientRuntimeHandler {
-    info: ClientInfo,
+    info: ClientConfig,
     host: Arc<dyn McpClientHost>,
 }
 
 impl ClientRuntimeHandler {
-    pub(crate) fn new(info: ClientInfo, host: Arc<dyn McpClientHost>) -> Self {
+    pub(crate) fn new(info: ClientConfig, host: Arc<dyn McpClientHost>) -> Self {
         Self { info, host }
     }
 }
 
 impl ClientHandler for ClientRuntimeHandler {
-    fn get_info(&self) -> ClientInfo {
+    fn get_info(&self) -> ClientConfig {
         self.info.clone()
     }
 

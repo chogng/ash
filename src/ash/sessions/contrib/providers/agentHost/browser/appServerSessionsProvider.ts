@@ -19,7 +19,7 @@ import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { getSessionApplication } from '../../../../common/sessionApplication.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import type { ISessionCreateOptions } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { ISessionCreateOptions, ISessionWorktree, ISessionWorktreeQueryOptions } from '../../../../services/sessions/common/sessionsProvider.js';
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { devContainerSourcePath } from '../../remoteAgentHost/browser/devContainerSource.js';
 import { extUri } from '../../../../../base/common/resources.js';
@@ -29,7 +29,7 @@ export interface AppServerSessionsProviderHost {
 	readonly label?: string;
 	readonly workspace: () => SessionWorkspaceSelection;
 	readonly isWorkspaceTrusted?: (target: SessionExecutionTarget) => Promise<boolean>;
-	readonly authorizeWorkspace?: (target: SessionExecutionTarget, signal: AbortSignal) => Promise<boolean>;
+	readonly authorizeWorkspace?: (target: SessionExecutionTarget, signal: AbortSignal, onTrustDeclined?: () => void) => Promise<boolean>;
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
 
@@ -233,13 +233,25 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
-	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories = false): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository?: SessionExecutionTarget; }[]> {
+	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken, options?: ISessionWorktreeQueryOptions): Promise<readonly ISessionWorktree[]> {
 		const source = buildAgentHostSessionWorkspace(workspace)!;
 		if (!this.ownsSourceAuthority(source.authorityId)) { return []; }
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
 		const git = this.rendererHost.localGit;
 		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
+		const toCheckout = (worktree: { readonly label: string; readonly path: string; readonly sourcePath: string; }): ISessionWorktree => ({
+			label: worktree.label,
+			target: { ...workspace, root: worktree.path },
+			...(options?.includeOtherRepositories ? { repository: { ...workspace, root: worktree.sourcePath } } : {}),
+		});
+		// The window catalog can be waiting on another repository's Git operations.
+		const publishSource = options?.onSourceWorktrees;
+		const sourceRead = workspace.type === 'local' && publishSource ? git.listWorktrees(token, workspace.root) : undefined;
+		void sourceRead?.then(worktrees => {
+			this.assertCurrentConnection(generation, epoch);
+			if (!token.isCancellationRequested && worktrees.length) publishSource?.(worktrees.map(toCheckout));
+		}).catch(() => { /* The full query handles catalog and source lookup errors. */ });
 		let worktrees = await git.listWorktrees(token).catch(error => {
 			if (workspace.type !== 'local') throw error;
 			this.assertCurrentConnection(generation, epoch);
@@ -248,17 +260,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		});
 		// A draft can select a trusted folder outside the window's repository catalog.
 		if (workspace.type === 'local' && !worktrees.some(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path))) {
-			worktrees = [...worktrees, ...await git.listWorktrees(token, workspace.root)];
+			worktrees = [...worktrees, ...await (sourceRead ?? git.listWorktrees(token, workspace.root))];
 		}
 		this.assertCurrentConnection(generation, epoch);
 		if (token.isCancellationRequested) { throw canceled(); }
 		const projectSources = new Set(worktrees.filter(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path)).map(worktree => worktree.sourcePath));
-		return worktrees.filter(worktree => includeOtherRepositories || projectSources.has(worktree.sourcePath))
-			.map(worktree => ({
-				label: worktree.label,
-				target: { ...workspace, root: worktree.path },
-				...(includeOtherRepositories ? { repository: { ...workspace, root: worktree.sourcePath } } : {}),
-			}));
+		return worktrees.filter(worktree => options?.includeOtherRepositories || projectSources.has(worktree.sourcePath)).map(toCheckout);
 	}
 
 	private ownsSourceAuthority(authority: string): boolean {
@@ -268,10 +275,10 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return sources.some(source => buildAgentHostSessionWorkspace(source)?.authorityId === authority);
 	}
 
-	public async authorizeWorkspace(target: SessionExecutionTarget, signal: AbortSignal): Promise<boolean> {
+	public async authorizeWorkspace(target: SessionExecutionTarget, signal: AbortSignal, onTrustDeclined?: () => void): Promise<boolean> {
 		if (!this.host.authorizeWorkspace || target.type === 'provider') return true;
 		const source = buildAgentHostSessionWorkspace(target);
-		return !!source && this.ownsSourceAuthority(source.authorityId) && this.host.authorizeWorkspace(target, signal);
+		return !!source && this.ownsSourceAuthority(source.authorityId) && this.host.authorizeWorkspace(target, signal, onTrustDeclined);
 	}
 
 	public async canReuseWorkspace(target: SessionExecutionTarget, devContainer = false): Promise<boolean> {
@@ -368,7 +375,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
 		}
 		this.assertCurrentConnection(generation, epoch);
+		const hadDetails = this.subscribed.has(created.session.sessionId) || this.subscriptions.has(created.session.sessionId);
 		this.subscribed.add(created.session.sessionId);
+		if (options?.kind === 'chat' && created.session.kind !== 'chat') {
+			await this.unsubscribe(created.session.sessionId);
+			throw new Error(localize('sessions.create.chatSurfaceUnavailable', 'This host cannot create an Ash Chat conversation.'));
+		}
 		// session/create already starts the root Thread atomically. A second createThread
 		// would add an unrelated peer chat and leave the root empty on every first send.
 		const root = created.session.threads.find(thread => thread.status === 'active' && !thread.parentThreadId && !thread.forkedFromId);
@@ -381,6 +393,11 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 				if (token.isCancellationRequested) throw canceled();
 				this.assertCurrentConnection(generation, epoch);
 				await this.sessionApi.addWorkspaceFolder!(created.session.sessionId, folder.root);
+			}
+			if (options?.catalogOnly && !hadDetails) {
+				await this.unsubscribe(created.session.sessionId);
+				this.assertCurrentConnection(generation, epoch);
+				return { session: toSession(created.session), threadId: root.threadId };
 			}
 			const session = await this.subscribe(toSession(created.session));
 			this.assertCurrentConnection(generation, epoch);

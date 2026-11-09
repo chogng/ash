@@ -24,6 +24,8 @@ export interface ISessionsManagementService {
 	readonly error: string | undefined;
 	initialize(): Promise<void>;
 	refresh(): Promise<void>;
+	/** Reads the current provider record without changing the catalog or foreground selection. */
+	readCatalog(sessionId: SessionId): Promise<ISession | undefined>;
 	/** Hydrates current catalog directories without changing foreground selection. */
 	whenDirectoriesReady(signal?: AbortSignal): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;

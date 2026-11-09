@@ -231,6 +231,7 @@ import { StatusbarPart, StatusbarService } from './parts/statusbar/statusbarPart
 import { BannerPart } from './parts/banner/bannerPart.js';
 import { IBannerService } from '../services/banner/browser/bannerService.js';
 import {
+	BrowserTitlebarPart,
 	type BrowserTitleService,
 } from './parts/titlebar/titlebarPart.js';
 import { PaneCompositePartService } from './parts/paneCompositePartService.js';
@@ -1419,6 +1420,7 @@ export class Workbench extends Disposable {
 		const titleService = this._register(createTitleService(workbenchRoot, productName, editor, services));
 		services.registerInstance(ITitleService, titleService);
 		const titlebar = titleService.getPart(workbenchRoot);
+		if (!(titlebar instanceof BrowserTitlebarPart)) throw new Error('The Workbench requires an editor titlebar');
 		if (initialActivityBarLocation === ActivityBarPosition.TOP || initialActivityBarLocation === ActivityBarPosition.BOTTOM) {
 			titlebar.setActivityActions({ bar: globalCompositeBar, showContextMenu: event => activitybar.showContextMenu(event) });
 		}

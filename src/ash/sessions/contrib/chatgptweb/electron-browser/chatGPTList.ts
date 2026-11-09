@@ -4,7 +4,7 @@ import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { autorun, derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -23,15 +23,13 @@ import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 import type { ChatGPTConversation } from '../browser/chatGPTClient.js';
-import { IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
+import { chatGPTProjectConversationId, chatGPTProjectPreferenceKey, IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
-const conversationIconPrefix = 'sessions.chatgpt.icon:';
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';
-const projectAppearancePrefix = 'sessions.chatgpt.projectAppearance:';
 
-function conversationIconKey(id: string, scope: string | undefined): string | undefined {
-	if (id.startsWith('local:')) return `${conversationIconPrefix}${id}`;
-	if (scope && !id.startsWith('pending:')) return `${conversationIconPrefix}${scope}:${id}`;
+function conversationPreferenceKey(id: string, scope: string | undefined): string | undefined {
+	if (id.startsWith('local:')) return id;
+	if (scope && !id.startsWith('pending:')) return `${scope}:${id}`;
 	return undefined;
 }
 
@@ -39,9 +37,11 @@ function projectArchiveKey(id: string, scope: string | undefined): string | unde
 	return scope && `${projectArchivePrefix}${scope}:${id}`;
 }
 
-/** Projects ChatGPT's data into Ash's sidebar, including window selection and local row preferences. */
+/** Projects ChatGPT's data into Ash's sidebar, including window selection and scoped preference identities. */
 export class ChatGPTList extends Disposable implements ChatListSource {
 	readonly snapshot;
+	private readonly retiredPreferences = this._register(new Emitter<{ readonly key: string; readonly replacementKey?: string; }>());
+	readonly onDidRetirePreferenceIdentity = this.retiredPreferences.event;
 	private readonly nativeSelected;
 	private readonly loadingStatus: ISessionStatusIcon = {
 		label: localize('sessions.loadingConversation', 'Loading conversation…'),
@@ -71,23 +71,13 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 	) {
 		super();
 		const preferencesChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE
-				&& (event.key.startsWith(conversationIconPrefix) || event.key.startsWith(projectArchivePrefix)
-					|| event.key.startsWith(projectAppearancePrefix))) listener(event);
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith(projectArchivePrefix)) listener(event);
 		}));
 		this._register(chat.onDidRetireConversationIdentity(({ id, replacementId }) => {
 			const scope = chat.state.get().catalogScope;
-			const key = conversationIconKey(id, scope);
-			if (!key) return;
-			if (replacementId) {
-				const replacement = conversationIconKey(replacementId, scope);
-				const icon = storage.get(key, StorageScope.PROFILE);
-				if (!replacement || !icon) return;
-				if (!storage.get(replacement, StorageScope.PROFILE)) {
-					storage.store(replacement, icon, StorageScope.PROFILE, StorageTarget.MACHINE);
-				}
-			}
-			storage.remove(key, StorageScope.PROFILE);
+			const key = conversationPreferenceKey(id, scope);
+			const replacementKey = replacementId && conversationPreferenceKey(replacementId, scope);
+			if (key && (!replacementId || replacementKey)) this.retiredPreferences.fire({ key, replacementKey });
 		}));
 		// The provider catalog stays visible when the user leaves its editor for Code.
 		this.nativeSelected = observableFromEvent(this,
@@ -120,17 +110,27 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				const key = projectArchiveKey(project.id, state.catalogScope);
 				return !key || !this.storage.getBoolean(key, StorageScope.PROFILE, false);
 			});
-			const destinations = visibleProjects(state.projects);
+			const destinations = visibleProjects(state.projects).map(({ id, title }) => ({ id, title }));
+			const currentAccount = () => chat.state.get().catalogScope === state.catalogScope;
 			const entries = state.conversations.map((conversation): ChatListEntry => {
 				const { id, title, pinned, projectId } = conversation;
 				const selected = id === current;
-				const iconKey = conversationIconKey(id, state.catalogScope);
 				// Custom GPT conversations also have gizmo IDs, but are not project members.
 				const currentProject = projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined;
 				const catalogId = this.conversationCatalogId(id);
-				const canArchive = !id.startsWith('pending:') && (conversation.local || state.connected && state.networkAvailable);
+				const canManage = !id.startsWith('pending:') && (conversation.local || state.connected && state.networkAvailable);
+				const rename = canManage ? async (name: string) => {
+					if (currentAccount()) await chat.rename(id, name);
+				} : undefined;
+				const share = canManage && !conversation.local ? async () => {
+					if (currentAccount()) await shareChatGPTConversation(chat, this.dialogs, this.clipboard, id, title);
+				} : undefined;
+				const remove = async () => {
+					if (currentAccount()) await this.deleteConversation(conversation, currentAccount);
+				};
 				return {
 					id: catalogId,
+					externalConversationId: conversation.local || id.startsWith('pending:') ? undefined : chatGPTProjectConversationId(state.catalogScope, id),
 					title, pinned,
 					createdAt: conversation.createdAt,
 					updatedAt: conversation.updatedAt,
@@ -143,16 +143,11 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					disabled: state.managing || state.sending && (showSelection || !selected),
 					actionsDisabled: state.busy || state.sending,
 					defaultIcon: id.startsWith('local:') ? Lxicon.cowork : Lxicon.chatSession,
-					iconId: iconKey ? storage.get(iconKey, StorageScope.PROFILE) : undefined,
-					setIcon: iconKey ? value => {
-						const current = chat.state.get();
-						if (conversationIconKey(id, current.catalogScope) !== iconKey || !current.conversations.some(item => item.id === id)
-							|| value && !getLxiconDefinition(value.id)) return;
-						storage.store(iconKey, value?.id, StorageScope.PROFILE, StorageTarget.MACHINE);
-					} : undefined,
+					preferenceKey: conversationPreferenceKey(id, state.catalogScope),
 					open: signal => this.open(id, signal),
-					archive: canArchive ? async () => chat.state.get().catalogScope === state.catalogScope && await chat.archive(id) : undefined,
-					setPinned: id.startsWith('pending:') ? undefined : pinned => chat.setPinned(id, pinned),
+					rename, share, remove,
+					archive: canManage ? async () => currentAccount() && await chat.archive(id) : undefined,
+					setPinned: !id.startsWith('pending:') ? async pinned => { if (currentAccount()) await chat.setPinned(id, pinned); } : undefined,
 					project: !conversation.local && !id.startsWith('pending:') && (!projectId || currentProject) && state.connected && state.networkAvailable ? {
 						current: currentProject,
 						destinations,
@@ -167,12 +162,12 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 							await this.chat.moveToProject(id, destination ?? null);
 						},
 					} : undefined,
-					getActions: (_signal, restoreFocus) => this.getActions(conversation, restoreFocus),
+					getActions: (_signal, restoreFocus) => this.getActions(conversation, rename, share, remove, restoreFocus),
 				};
 			});
 			return {
 				entries,
-				projects: state.projects.map(project => {
+				projects: state.projects.map((project): ChatListProject => {
 					const isCurrentAccount = () => this.chat.state.get().catalogScope === state.catalogScope;
 					const archiveKey = projectArchiveKey(project.id, state.catalogScope);
 					const setArchived = archiveKey ? (archived: boolean) => {
@@ -181,9 +176,12 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 						else storage.remove(archiveKey, StorageScope.PROFILE);
 					} : undefined;
 					return {
-						...project,
+						id: project.id,
+						title: project.title,
+						createdAt: project.createdAt,
+						updatedAt: project.updatedAt,
 						history: this.projectHistory(project.id, state),
-						appearance: this.projectAppearance(project.id, state.catalogScope),
+						preferenceKey: chatGPTProjectPreferenceKey(state.catalogScope, project.id),
 						archived: archiveKey ? storage.getBoolean(archiveKey, StorageScope.PROFILE, false) : undefined,
 						restore: setArchived ? () => setArchived(false) : undefined,
 						archive: setArchived && state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.voice === 'idle'
@@ -204,25 +202,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				loading: state.loading?.kind === 'history',
 			};
 		});
-	}
-
-	private projectAppearance(projectId: string, scope: string | undefined): ChatListProject['appearance'] {
-		if (!scope) return undefined;
-		const key = (field: 'icon' | 'color') => `${projectAppearancePrefix}${field}:${scope}:${projectId}`;
-		const read = (field: 'icon' | 'color') => {
-			const value = this.storage.get(key(field), StorageScope.PROFILE);
-			return value && /^[a-zA-Z0-9][a-zA-Z0-9.-]{0,127}$/u.test(value) ? value : undefined;
-		};
-		return {
-			icon: read('icon'),
-			color: read('color'),
-			set: (field, value) => {
-				const current = this.chat.state.get();
-				if (current.catalogScope === scope && current.projects.some(project => project.id === projectId)) {
-					this.storage.store(key(field), value, StorageScope.PROFILE, StorageTarget.MACHINE);
-				}
-			},
-		};
 	}
 
 	private projectHistory(projectId: string, state: ChatGPTState): ChatListProject['history'] {
@@ -304,38 +283,31 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return `${this.chat.native ? 'chatgpt-native' : 'chatgpt'}:${id}`;
 	}
 
-	private getActions(conversation: ChatGPTConversation, restoreFocus: () => void): readonly IAction[] {
-		const state = this.chat.state.get();
-		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, () => this.deleteConversation(conversation)), class: 'ash-session-delete-action' };
-		if (conversation.id.startsWith('pending:') || !conversation.local && (!state.connected || !state.networkAvailable)) {
-			return [remove];
-		}
+	private getActions(conversation: ChatGPTConversation, rename: ChatListEntry['rename'], share: ChatListEntry['share'], removeConversation: () => Promise<void>, restoreFocus: () => void): readonly IAction[] {
+		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, removeConversation), class: 'ash-session-delete-action' };
+		if (!rename) return [remove];
 		const actions = [this.action('rename', localize('sessions.chatgpt.rename', 'Rename'), Lxicon.edit, async () => {
-			await this.rename(conversation);
+			const title = await this.quickInput.input({
+				title: localize('sessions.chatgpt.rename', 'Rename'), value: conversation.title,
+				validateInput: async value => value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
+			});
+			if (title !== undefined) await rename(title);
 			restoreFocus();
 		})];
-		if (!conversation.local) {
-			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, () => shareChatGPTConversation(this.chat, this.dialogs, this.clipboard, conversation.id, conversation.title)));
+		if (share) {
+			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, share));
 		}
 		actions.push(new Separator(), remove);
 		return actions;
 	}
 
-	private async rename(conversation: ChatGPTConversation): Promise<void> {
-		const title = await this.quickInput.input({
-			title: localize('sessions.chatgpt.rename', 'Rename'), value: conversation.title,
-			validateInput: async value => value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
-		});
-		if (title !== undefined) { await this.chat.rename(conversation.id, title); }
-	}
-
-	private async deleteConversation(conversation: ChatGPTConversation): Promise<void> {
+	private async deleteConversation(conversation: ChatGPTConversation, currentAccount: () => boolean): Promise<void> {
 		const result = await this.dialogs.confirm({
 			message: localize('sessions.chatgpt.deleteConfirm', 'Delete “{0}”?', conversation.title),
 			detail: localize('sessions.chatgpt.deleteDetail', 'This chat will be permanently deleted.'),
 			primaryButton: localize('sessions.chatgpt.delete', 'Delete'),
 		});
-		if (result.confirmed) { await this.chat.deleteConversation(conversation.id); }
+		if (result.confirmed && currentAccount()) { await this.chat.deleteConversation(conversation.id); }
 	}
 
 }
@@ -343,6 +315,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 export class ChatGPTNativeList extends Disposable implements ChatListSource {
 	private readonly delegate: ChatGPTList;
 	readonly snapshot;
+	readonly onDidRetirePreferenceIdentity;
 
 	constructor(
 		@IChatGPTNativeService chat: IChatGPTService,
@@ -352,6 +325,7 @@ export class ChatGPTNativeList extends Disposable implements ChatListSource {
 		const scope = this._register(instantiation.createChild(new ServiceCollection([IChatGPTService, chat])));
 		this.delegate = this._register(scope.createInstance(ChatGPTList));
 		this.snapshot = this.delegate.snapshot;
+		this.onDidRetirePreferenceIdentity = this.delegate.onDidRetirePreferenceIdentity;
 	}
 
 	attach(window: Window & typeof globalThis, isVisible: () => boolean): DisposableStore {

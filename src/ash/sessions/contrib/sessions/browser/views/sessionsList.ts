@@ -8,7 +8,7 @@ import { COPY_PATH_COMMAND_ID } from '../../../../../workbench/contrib/files/bro
 import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
-import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE, pickProjectAppearance } from './sessionGroupAppearancePicker.js';
+import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
 import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -54,7 +54,7 @@ import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
-import { IProjectsService } from '../../../projects/browser/projectsService.js';
+import { IProjectsService, type CatalogProjectAppearance } from '../../../projects/browser/projectsService.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
 import { defaultButtonStyles, defaultInputBoxStyles, defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -62,7 +62,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
-import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectAppearance, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
+import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { DeferredPromise, raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
@@ -115,7 +115,10 @@ const codeManagementIcons: typeof managementIcons = {
 export type SessionsListPresentation = 'chat' | 'code'
 	| { readonly createProject: () => Promise<void>; }
 	| { readonly openCommand: string; readonly activeContext: string; }
-	| { readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility; };
+	| {
+		readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility;
+		readonly editProject?: (title: string, appearance: CatalogProjectAppearance, restoreFocus: () => void) => void;
+	};
 
 interface SessionsListDragOptions {
 	organization(element: HTMLElement): SessionListOrganization | undefined;
@@ -221,6 +224,7 @@ class SessionsListDragAndDrop extends Disposable implements TreeDragAndDrop<HTML
 export class SessionsList extends DomWidget {
 	private readonly mode: 'chat' | 'code';
 	private readonly entry: Extract<SessionsListPresentation, { openCommand: string; }> | undefined;
+	private readonly editCatalogProject: Extract<SessionsListPresentation, { catalog: SessionsCatalogListInput; }>['editProject'];
 	private readonly search: SessionsListSearch;
 	private readonly tree: SessionsListTree;
 	private readonly feedback = this._register(new SessionActionFeedback());
@@ -292,6 +296,7 @@ export class SessionsList extends DomWidget {
 		super();
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
+		this.editCatalogProject = contributed?.editProject;
 		const code = typeof presentation !== 'string' && 'createProject' in presentation ? presentation : undefined;
 		const mode = this.mode = typeof presentation === 'string' ? presentation : code ? 'code' : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
@@ -787,7 +792,8 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showProjectMenu(projectId: string, title: string, change: ((field: 'icon' | 'color') => Promise<void>) | undefined,
-		operations: SessionsCatalogProjectOperations, row: ProjectMenuRow, anchor: ContextMenuAnchor): void {
+		operations: SessionsCatalogProjectOperations, row: ProjectMenuRow, anchor: ContextMenuAnchor,
+		edit?: (restoreFocus: () => void) => void): void {
 		if (!this.menuContext) return;
 		const { rename, archive, remove } = operations;
 		const trigger = row.getMenuTrigger(anchor);
@@ -803,6 +809,11 @@ export class SessionsList extends DomWidget {
 				pin: pinned ? undefined : () => this.setProjectPinned(projectId, true),
 				unpin: pinned ? () => this.setProjectPinned(projectId, false) : undefined,
 				rename: rename && (() => this.renameProject(title, row.domNode, trigger ?? row.button, rename)),
+				edit: edit && (() => edit(() => {
+					const target = trigger ?? row.button;
+					if (target.isConnected) target.focus({ preventScroll: true });
+					else this.focus();
+				})),
 				icon: change && (() => change('icon')),
 				color: change && (() => change('color')),
 				archive: archive && (() => runRemoval(archive)),
@@ -1203,7 +1214,7 @@ export class SessionsList extends DomWidget {
 			return item;
 		};
 		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section',
-			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: SessionsCatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly workspace?: URI; readonly catalogProjectId?: string; }): HTMLElement => {
+			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: CatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly workspace?: URI; readonly catalogProjectId?: string; }): HTMLElement => {
 			activeSections.add(key);
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind, this.mode, this.contextMenus,
 				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
@@ -1230,8 +1241,11 @@ export class SessionsList extends DomWidget {
 				if (project) {
 					section.setContextMenu(anchor => this.showLocalProjectMenu(title, project, section, anchor));
 				} else if (catalogProjectId) {
-					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, projectAppearance && (field =>
-						pickProjectAppearance(this.quickInput, field, projectAppearance[field], value => projectAppearance.set(field, value))), projectOperations ?? {}, section, anchor));
+					const operations = projectOperations ?? {};
+					const edit = this.editCatalogProject;
+					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, undefined, operations, section, anchor,
+						edit && projectAppearance
+							? restoreFocus => edit(title, projectAppearance, restoreFocus) : undefined));
 				} else {
 					section.setContextMenu(undefined);
 				}

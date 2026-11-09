@@ -70,7 +70,10 @@
 	display: none;
 }
 
-.ash-projects-dialog.ash-code-project-dialog {
+.ash-projects-dialog:is(
+	.ash-code-project-dialog,
+	.ash-project-appearance-dialog
+) {
 	height: fit-content;
 }
 
@@ -159,7 +162,7 @@
 
 .ash-project-appearance-colors > button:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-project-appearance .ash-icon-select-item[aria-selected="true"] {
@@ -193,37 +196,88 @@
 .ash-code-project-folder-panel {
 	display: flex;
 	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: var(--ash-spacing-size120);
 	box-sizing: border-box;
-	min-block-size: 104px;
-	padding: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size40);
 	border: var(--ash-strokeThickness) solid
 		var(--ash-input-border, var(--ash-widget-border));
 	border-radius: var(--ash-cornerRadius-large);
 	background: var(--ash-input-background);
 }
 
-.ash-code-project-folder-panel > span {
-	color: var(--ash-description-foreground);
+.ash-code-project-folder-panel > .ash-button {
+	justify-content: flex-start;
+	padding-block: var(--ash-spacing-size40);
+	padding-inline-end: var(--ash-spacing-size100);
+	padding-inline-start: calc(
+		(var(--ash-spacing-size360) - var(--ash-lxiconFontSize-large)) / 2 -
+			var(--ash-spacing-size40) - var(--ash-strokeThickness)
+	);
 }
 
 .ash-code-project-folder-list {
-	align-self: stretch;
 	margin: 0;
 	padding: 0;
 	list-style: none;
+	max-block-size: 160px;
+	overflow: hidden auto;
+}
+
+/* Give the scrollbar its own lane so it cannot cover row actions. */
+.ash-code-project-folder-list::-webkit-scrollbar {
+	width: var(--ash-scrollbar-size);
+}
+
+.ash-code-project-folder-list::-webkit-scrollbar-thumb {
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-scrollbarSlider-background);
+}
+
+.ash-code-project-folder-list::-webkit-scrollbar-thumb:hover {
+	background: var(--ash-scrollbarSlider-hoverBackground);
+}
+
+.ash-code-project-folder-list::-webkit-scrollbar-thumb:active {
+	background: var(--ash-scrollbarSlider-activeBackground);
+}
+
+.ash-code-project-folder-list,
+.ash-code-project-folder-list > li:not(:last-child) {
+	border-block-end: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+}
+
+.ash-code-project-folder-list > li,
+.ash-code-project-folder-panel > .ash-button {
+	min-block-size: var(--ash-spacing-size320);
 }
 
 .ash-code-project-folder-list > li {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: var(--ash-spacing-size80);
+	/* Keep separator strokes outside the shared row height. */
+	box-sizing: content-box;
+	/* Center the folder icons on the name field's icon column. */
+	padding-inline-start: calc(
+		(var(--ash-spacing-size360) - var(--ash-lxiconFontSize-large)) / 2 -
+			var(--ash-spacing-size40)
+	);
 }
 
-.ash-code-project-folder-list > li > span {
+.ash-code-project-folder-list > li,
+.ash-code-project-folder-panel > .ash-button > .ash-button-content {
+	gap: calc(
+		(var(--ash-spacing-size360) - var(--ash-lxiconFontSize-large)) / 2 +
+			var(--ash-spacing-size120)
+	);
+}
+
+.ash-code-project-folder-list > li > .ash-icon {
+	flex: none;
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-code-project-folder-name {
+	flex: 1;
 	min-inline-size: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;

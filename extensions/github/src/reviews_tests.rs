@@ -132,8 +132,8 @@ async fn thread_mutations_validate_repository_identity_before_writing() {
 #[tokio::test(flavor = "current_thread")]
 async fn threads_expose_both_thread_and_reply_pagination_without_discarding_cursors() {
     let http = Arc::new(FakeHttp::default());
-    http.push(200, json!({"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"thread1","path":"a.rs","line":4,"diffSide":"LEFT","isResolved":false,"isOutdated":true,"viewerCanResolve":true,"comments":{"nodes":[{"id":"comment1","body":"body","url":"https://github.com/team/repo/pull/7","author":null,"viewerCanUpdate":false,"viewerCanDelete":false}],"pageInfo":{"hasNextPage":true,"endCursor":"replies"}}}],"pageInfo":{"hasNextPage":true,"endCursor":"threads"}}}}}}));
-    let result = github(http)
+    http.push(200, json!({"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"thread1","path":"a.rs","line":4,"diffSide":"LEFT","isResolved":false,"isOutdated":true,"viewerCanResolve":true,"comments":{"nodes":[{"id":"comment1","body":"body","url":"https://github.com/team/repo/pull/7","author":null,"createdAt":"2026-10-06T10:00:00Z","updatedAt":"2026-10-06T11:00:00Z","viewerCanUpdate":false,"viewerCanDelete":false}],"pageInfo":{"hasNextPage":true,"endCursor":"replies"}}}],"pageInfo":{"hasNextPage":true,"endCursor":"threads"}}}}}}));
+    let result = github(http.clone())
         .review_threads(&repository(), 7, Some("previous"))
         .await
         .unwrap();
@@ -144,6 +144,17 @@ async fn threads_expose_both_thread_and_reply_pagination_without_discarding_curs
             result.nodes[0].is_outdated
         ),
         (Some("threads"), Some("replies"), true)
+    );
+    let comment = &result.nodes[0].comments.nodes[0];
+    assert_eq!(comment.created_at.as_deref(), Some("2026-10-06T10:00:00Z"));
+    assert_eq!(comment.updated_at.as_deref(), Some("2026-10-06T11:00:00Z"));
+    let request: serde_json::Value =
+        serde_json::from_slice(http.requests.lock().unwrap()[0].body()).unwrap();
+    assert!(
+        request["query"]
+            .as_str()
+            .unwrap()
+            .contains("createdAt updatedAt")
     );
 }
 

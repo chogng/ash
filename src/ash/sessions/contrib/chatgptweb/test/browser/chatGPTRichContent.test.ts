@@ -22,7 +22,7 @@ function render(value: string, references?: readonly ChatGPTReference[]): string
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
 	using resultRenderer = services.createInstance(ChatContentMarkdownRenderer);
-	using result = resultRenderer.render({ value: decodeChatGPTReply(value, references, 'fixture').text, supportHtml: true, isTrusted: false });
+	using result = resultRenderer.render({ value: decodeChatGPTReply(value, references, 'fixture').text, supportHtml: true, supportThemeIcons: true, isTrusted: false });
 	return result.element.innerHTML;
 }
 
@@ -120,6 +120,18 @@ suite('ChatGPT rich content', () => {
 		assert.match(getChatGPTRichContentText(source), /<box>inline<\/box>[\s\S]*<box>fenced<\/box>/u);
 		const nested = render('<box>\n  ```python\n  if ready:\n      run()\n  ```\n</box>');
 		assert.match(nested, /if ready:\n {4}run\(\)/u);
+	});
+
+	test('maps ChatGPT icons to registered Ash glyphs and retains accessible text', () => {
+		const names = ['check', 'x', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'arrow-down-up', 'plus', 'minus', 'info', 'warning', 'file'];
+		const markers = [...names.map(name => `<icon name="${name}"/>`), '<icon name="key-round" label="Key"/>'];
+		const root = document.createElement('div');
+		root.innerHTML = render(markers.join(' '));
+		assert.deepEqual(Array.from(root.querySelectorAll<HTMLElement>('[data-ash-icon-id]'), icon => icon.dataset.ashIconId), [
+			'check', 'close', 'arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'sort', 'add', 'remove', 'info', 'warning', 'file',
+		]);
+		assert.equal(root.querySelector('.ash-chat-rich-icon:last-child')?.textContent, 'Key');
+		assert.deepEqual(markers.map(marker => getChatGPTRichContentText(marker).trim()), ['✓', '×', '↓', '↑', '←', '→', '⇅', '+', '−', 'ⓘ', '⚠', 'file', 'Key']);
 	});
 
 	test('does not evaluate JSX expressions, forward event handlers or render arbitrary HTML', () => {

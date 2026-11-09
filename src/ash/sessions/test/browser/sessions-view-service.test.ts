@@ -46,6 +46,31 @@ function createView(sessions: ISessionsManagementService, storage: IStorageServi
 	return services.createInstance(SessionsService);
 }
 
+test('the compact Sessions slot restores a legacy Ash draft and persists its promoted Thread without moving Code', async () => {
+	const model = { provider: 'fixture', model: 'saved' };
+	const compact = { ...session('compact', 'root'), kind: 'chat' } as const;
+	using sessions = new FakeSessionService([session('code', 'code-root')]);
+	using storage = createTestStorage();
+	storage.store('sessions.chat.ashSelection', JSON.stringify({ kind: 'draft', id: 'old-draft', model }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	using view = createView(sessions, storage);
+	await view.initialize();
+	await view.restoreChatSelection();
+	const draft = view.getChatSelection();
+	assert.ok(draft?.kind === 'untitled');
+	assert.equal(draft.session.untitledSessionId, 'old-draft');
+	assert.deepEqual(draft.session.model, model);
+	assert.equal(draft.session.kind, 'chat');
+	assert.equal(selectionId(view.activeSelection), 'session:code:code-root');
+
+	sessions.promoteUntitledSession('old-draft', { session: compact, threadId: 'root' });
+	assert.equal(selectionId(view.getChatSelection()), 'session:compact:root');
+	assert.equal(selectionId(view.activeSelection), 'session:code:code-root');
+	using restored = createView(sessions, storage);
+	await restored.restoreChatSelection();
+	assert.equal(selectionId(restored.getChatSelection()), 'session:compact:root');
+	assert.deepEqual(restored.chatSelection.get()?.model, model);
+});
+
 test('Explicit Code opens reveal the selected conversation only when the target is available', async () => {
 	using sessions = new FakeSessionService([session('first', 'root'), session('second', 'other')]);
 	using storage = createTestStorage();
@@ -880,6 +905,7 @@ class FakeSessionService implements ISessionsManagementService {
 
 	async initialize(): Promise<void> { }
 	async refresh(): Promise<void> { }
+	async readCatalog(sessionId: SessionId): Promise<ISession | undefined> { return this.sessions.find(session => session.sessionId === sessionId); }
 	async listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return []; }
 	async prepareThread(): Promise<void> { }
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> { this.selectThread(sessionId, threadId); }

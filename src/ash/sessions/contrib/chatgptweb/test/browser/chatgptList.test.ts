@@ -158,7 +158,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(deleted).toEqual(['DELETE']);
 	});
 
-	test('ChatGPT project titles open the appearance menu and retain their own icon and color', async () => {
+	test('Ash project appearance works without ChatGPT project details from the sidebar and Projects page', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
@@ -168,34 +168,88 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				})), cursor: null
 			},
 		}));
-		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		let projectRequests = 0;
+		await page.route(/\/service\/backend-api\/(gizmos|projects)\/g-p-appearance-0$/, route => {
+			projectRequests++;
+			return route.fulfill({ status: 401 });
+		});
+		await page.goto('/chatgptNavigation.html?projects&locale=zh-CN');
 		const sidebar = page.locator('.ash-chat-navigation-list');
 		const research = sidebar.getByRole('button', { name: 'Research', exact: true });
 		const writing = sidebar.getByRole('button', { name: 'Writing', exact: true });
 		const iconSlot = research.locator('.ash-sessions-list-project-icon');
-		const pick = async (action: string, title: string, value: string) => {
-			await page.getByRole('menuitem', { name: action, exact: true }).click();
-			const picker = page.getByRole('combobox', { name: title, exact: true });
-			await picker.fill(value);
-			await page.getByRole('option').filter({
-				has: page.locator('.ash-quick-pick-row-label').getByText(value, { exact: true }),
-			}).click();
+		const edit = page.getByRole('menuitem', { name: '编辑', exact: true });
+		const editor = page.getByRole('dialog', { name: '编辑项目外观', exact: true });
+		const appearance = editor.getByRole('button', { name: '更改项目外观' });
+		const picker = page.getByRole('dialog', { name: '更改项目外观', exact: true });
+		const search = picker.getByRole('combobox', { name: '搜索图标' });
+		const red = picker.getByRole('button', { name: '红色', exact: true });
+		const saveAppearance = async () => {
+			await picker.getByRole('button', { name: '完成', exact: true }).click();
+			await editor.getByRole('button', { name: '保存更改', exact: true }).click();
+			await expect(editor).toHaveCount(0);
 		};
 
 		await research.click({ button: 'right' });
-		await pick('更改图标…', '更改项目图标', '聊天');
+		await expect(edit.locator('[data-ash-icon-id="gear"]')).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: '更改图标…', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('menuitem', { name: '更改颜色…', exact: true })).toHaveCount(0);
+		await edit.click();
+		const name = editor.getByRole('textbox', { name: '项目名称' });
+		await expect(name).toHaveValue('Research');
+		await expect(name).toHaveAttribute('readonly', '');
+		await expect(appearance).toBeFocused();
+		await appearance.press('Enter');
+		await search.fill('chat');
+		await picker.getByRole('option', { name: 'chat', exact: true }).click();
+		await red.click();
+		await picker.getByRole('button', { name: '完成', exact: true }).click();
+		const close = editor.getByRole('button', { name: '关闭对话框', exact: true });
+		const colors = await close.evaluate(element => {
+			const probe = element.appendChild(element.ownerDocument.createElement('span'));
+			try {
+				probe.style.backgroundColor = 'var(--ash-button-hoverBackground)';
+				const hover = getComputedStyle(probe).backgroundColor;
+				probe.style.backgroundColor = 'var(--ash-button-activeBackground)';
+				return { hover, active: getComputedStyle(probe).backgroundColor };
+			} finally {
+				probe.remove();
+			}
+		});
+		await close.hover();
+		await expect(close).toHaveCSS('background-color', colors.hover);
+		await page.mouse.down();
+		await expect(close).toHaveCSS('background-color', colors.active);
+		await page.mouse.up();
+		const keepEditing = page.getByRole('button', { name: '继续编辑', exact: true });
+		await expect(keepEditing).toBeFocused();
+		await keepEditing.press('Enter');
+		await expect(close).toBeFocused();
+		await appearance.press('Enter');
+		await expect(red).toHaveAttribute('aria-pressed', 'true');
+		await saveAppearance();
+		await expect(research).toBeFocused();
 		await expect(iconSlot.locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
-		await research.press('Shift+F10');
-		await pick('更改颜色…', '更改项目颜色', '红色');
 		await expect(iconSlot).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
 		await expect(writing.locator('[data-ash-icon-id="projects"]')).toHaveCount(1);
 		await page.reload();
 		await expect(iconSlot.locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
 		await expect(iconSlot).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
-		await research.press('Shift+F10');
-		await pick('更改图标…', '更改项目图标', '默认');
+
+		const card = page.locator('.ash-projects').getByRole('button', { name: 'Research', exact: true });
+		await expect(card.locator('[data-ash-icon-id="chat"]')).toBeVisible();
+		await card.hover();
+		await card.locator('..').locator('.ash-toolbar-more-actions button').click();
+		await edit.press('Enter');
+		await appearance.press('Enter');
+		await expect(picker.getByRole('option', { name: 'chat', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await expect(red).toHaveAttribute('aria-pressed', 'true');
+		await picker.getByRole('option', { name: 'projects', exact: true }).click();
+		await saveAppearance();
 		await expect(iconSlot.locator('[data-ash-icon-id="projects"]')).toHaveCount(1);
+		await expect(card.locator('[data-ash-icon-id="projects"]')).toBeVisible();
 		await expect(iconSlot).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
+		expect(projectRequests).toBe(0);
 	});
 
 	test('the Chat sidebar shows Ash and ChatGPT rows and excludes Code', async () => {
@@ -835,6 +889,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.getByRole('menuitem', { name: zh ? '编辑详情' : 'Edit details', exact: true }).click();
 			const dialog = page.getByRole('dialog');
 			await expect(dialog.getByRole('textbox').nth(1)).toHaveValue('Saved notes');
+			await expect(dialog.getByRole('button', { name: zh ? '更改项目外观' : 'Change project appearance' })).toHaveCount(0);
 			await dialog.getByRole('textbox').first().fill('Updated research');
 			const [write] = await Promise.all([
 				page.waitForRequest(request => request.method() === 'PATCH' && request.url().endsWith('/projects/g-p-research')),

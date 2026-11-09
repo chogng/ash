@@ -17,13 +17,14 @@ import { IMenuService } from '../../../platform/actions/common/actions.js';
 import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
-import { WebTitlebarPart } from '../../../workbench/browser/parts/titlebar/titlebarPart.js';
+import { WebTitlebarPart, type ITitlebarPart } from '../../../workbench/browser/parts/titlebar/titlebarPart.js';
+import type { ITitleService } from '../../../workbench/services/title/browser/titleService.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../menus.js';
-import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
+import { IsNewSessionContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../base/common/observable.js';
 import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
@@ -43,17 +44,25 @@ export function getSessionsTitlebarBackground(theme: IColorTheme): string | unde
 	return Color.Format.CSS.formatHex(background.flatten(shell ?? workbench, workbench));
 }
 
-export interface ISessionsTitlebarService {
-	setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable;
+export function getSessionsTitlebarPart(titleService: ITitleService, container: HTMLElement): TitlebarPart {
+	const part = titleService.getPart(container);
+	if (!(part instanceof TitlebarPart)) throw new Error('The Sessions window requires a Sessions titlebar');
+	return part;
 }
 
-export const ISessionsTitlebarService = createServiceIdentifier<ISessionsTitlebarService>('sessionsTitlebarService');
-
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
-export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarService {
+export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
+	readonly onMenubarVisibilityChange = Event.None;
+
+	// This part presents the active session, independent of the editor window title template.
+	updateProperties(): void { }
+	registerVariables(): void { }
+
 	private readonly activityActions: WorkbenchToolBar;
+	private readonly leftControls: HTMLElement;
 	private readonly pageContent: HTMLElement;
 	private readonly sessionContent: HTMLElement;
+	private readonly toolHeaders: HTMLElement;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
 	private sidebarMinimumWidth = 0;
 
@@ -81,7 +90,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		const pixels = (value: string): number => Number.parseFloat(value) || 0;
 		this.domNode.classList.add('ash-sessions-titlebar');
 		this.updateStyles();
-		const left = h(container.ownerDocument, 'div');
+		const left = this.leftControls = h(container.ownerDocument, 'div');
 		left.className = 'ash-sessions-titlebar-left';
 		this.contentDomNode.append(left);
 		const titlebarContext = this._register(contextKeys.createScoped(left));
@@ -98,6 +107,17 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		});
 		const activeMode = observableFromEvent(this, modeChanged, () =>
 			contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' as const : 'agents' as const);
+		this._register(autorun(reader => {
+			this.domNode.classList.toggle('ash-sessions-titlebar-code', activeMode.read(reader) === 'code');
+		}));
+		const draftKeys = new Set([IsNewSessionContext.key]);
+		const updateDraftState = (): void => {
+			this.domNode.classList.toggle('is-new-session', contextKeys.getValue(IsNewSessionContext.key) === true);
+		};
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(draftKeys)) updateDraftState();
+		}));
+		updateDraftState();
 		const modeHost = h(container.ownerDocument, 'div');
 		modeHost.className = 'ash-sessions-workspace-mode';
 		left.append(modeHost);
@@ -149,6 +169,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		}));
 		const updatePageVisibility = (): void => {
 			this.pageContent.hidden = pageActions.element.hidden;
+			this.domNode.classList.toggle('has-page-content', !this.pageContent.hidden);
 		};
 		this._register(pageActions.onDidChangeMenuItems(updatePageVisibility));
 		this._register(presentations.onDidChange(menu => {
@@ -160,7 +181,9 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		updatePageVisibility();
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
-		this.contentDomNode.append(right);
+		this.toolHeaders = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-tool-headers' });
+		this.toolHeaders.hidden = true;
+		this.contentDomNode.append(right, this.toolHeaders);
 		const horizontalPadding = (element: HTMLElement): number => {
 			const style = ownerWindow.getComputedStyle(element);
 			return pixels(style.paddingLeft) + pixels(style.paddingRight);
@@ -179,9 +202,12 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 						const accounts = this.activityActions?.element;
 						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
 						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
+						const toolWidth = this.toolHeaders.getBoundingClientRect().width;
+						const titleMinimum = toolWidth ? pixels(ownerWindow.getComputedStyle(center).minWidth) : 0;
 						// Use the remaining titlebar space so growing the window can restore overflowed actions.
 						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
-							+ horizontalPadding(center) + accountsWidth + accountsGap;
+							+ Math.max(horizontalPadding(center), titleMinimum) + horizontalPadding(right)
+							+ accountsWidth + accountsGap + toolWidth;
 						return Math.max(0, this.contentDomNode.clientWidth - reservedWidth);
 					},
 				},
@@ -194,7 +220,25 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
 		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
-		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element], () => relayoutActions.schedule(), { box: 'border-box' }));
+		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.toolHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
+	}
+
+	public setToolHeaderStart(left: number | undefined): HTMLElement | undefined {
+		let width = 0;
+		if (left !== undefined) {
+			// A very narrow conversation split still needs its title menu and tool overflow trigger.
+			const minimumActionsWidth = this.minimumHeight * 2 + this.activityActions.element.offsetWidth;
+			if (left - this.leftControls.getBoundingClientRect().right >= minimumActionsWidth) {
+				const row = this.contentDomNode;
+				const rightInset = parseFloat(row.ownerDocument.defaultView!.getComputedStyle(row).paddingRight);
+				width = Math.max(0, row.getBoundingClientRect().right - rightInset - left);
+			}
+		}
+		const visible = width > 0;
+		this.toolHeaders.hidden = !visible;
+		this.domNode.classList.toggle('has-tool-headers', visible);
+		this.toolHeaders.style.flexBasis = `${width}px`;
+		return visible ? this.toolHeaders : undefined;
 	}
 
 	public override updateStyles(): void {

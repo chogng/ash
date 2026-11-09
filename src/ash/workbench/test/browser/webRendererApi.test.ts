@@ -329,8 +329,9 @@ test('instruction catalog uses the shared connection and exposes metadata withou
 	assert.equal(connected.api.instructions.isAvailable, true);
 	const catalog = connected.api.instructions.list('instruction-session');
 	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'instructions/list', params: { sessionId: 'instruction-session' } });
-	transport.respondAt(-1, { instructions: [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: null, scope: 'directory', load: 'onDemand', patterns: [] }], diagnostics: [] });
-	assert.deepEqual(await catalog, [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: undefined, scope: 'directory' }]);
+	const path = '/workspace/.ash/instructions/review.md';
+	transport.respondAt(-1, { instructions: [{ path, name: 'Review', description: null, scope: 'directory', load: 'onDemand', patterns: [] }], diagnostics: [] });
+	assert.deepEqual(await catalog, [{ path, resource: URI.file(path), name: 'Review', description: undefined, scope: 'directory' }]);
 });
 
 test('Terminal host adapts raw bytes and command exit codes at the protocol boundary', async () => {
@@ -419,6 +420,21 @@ test('GitHub retains error categories independently of product issue reporting',
 		transport.rejectAt(-1, { code: -32070, message: kind, data: { kind } });
 		await rejected;
 	}
+});
+
+test('GitHub reads required CI for the exact PR head on the shared connection', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const headCommit = 'a'.repeat(40);
+	const status = connected.api.github.readPullRequestChecks({ ...githubRepository, accountId: '42' }, 7, headCommit);
+	const request = transport.requests.at(-1)!;
+	assert.equal(request.method, 'github/pullRequest/checks');
+	assert.deepEqual({ ...(request.params as object), operationId: 'generated' }, {
+		accountId: '42', repository: githubRepository, number: 7, headCommit, operationId: 'generated',
+	});
+	transport.respondAt(-1, { status: 'failure', latestCheckAtUnixMs: 10_000 });
+	assert.deepEqual(await status, { status: 'failure', latestCheckAtUnixMs: 10_000 });
 });
 
 test('GitHub cancels its original operation and releases cancellation listeners', async () => {

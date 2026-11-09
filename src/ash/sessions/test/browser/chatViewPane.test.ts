@@ -1,3 +1,4 @@
+import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { ISessionContext } from '../../services/sessions/browser/sessionContext.js';
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
@@ -76,7 +77,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
-import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
@@ -193,6 +194,7 @@ function createInputServices(
 	services.registerInstance(IChatService, chat);
 	services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	services.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
 	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
@@ -233,7 +235,7 @@ function createInputServices(
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
-	registerTestDictationOnboarding(services);
+	registerTestVoiceInputServices(services);
 	// Command actions validate membership against the registry that owns this composer.
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
 	return services;
@@ -1254,7 +1256,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
 		services.registerInstance(IApprovalEnvironmentService, undefined);
 		services.registerInstance(ISessionsGitHubService, {
-			onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], initialize() { },
+			onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], initialize() { },
 			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { },
 		});
 		const identity = `untitled:${draft.untitledSessionId}`;
@@ -1266,7 +1268,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
 		};
 		const composerResources = resources.add(new DisposableStore());
-		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model, constObservable(false)));
+		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model, constObservable(false), undefined));
 		const input = composerResources.add(composer.input);
 		input.render(model.inputState);
 		return { input, model, storage, notices, identity, services, delegate, disposeInput: () => composerResources.dispose(), [Symbol.dispose]() { resources.dispose(); } };
@@ -1302,7 +1304,7 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 	using composer = surface === 'chat'
-		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false))
+		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false), undefined)
 		: undefined;
 	using input = composer?.input ?? fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
 	input.render(fixture.model.inputState);
@@ -1638,6 +1640,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 		editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+		editorServices.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
 		editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 		editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 		editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
@@ -1653,7 +1656,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 		editorServices.registerInstance(ISessionsGitHubService, {
 			onDidChange: Event.None,
-			getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
+			getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
 			initialize() { },
 			attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 			detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
@@ -1672,7 +1675,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IChatSessionNavigationService, {
 			openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); },
 		} as unknown as IChatSessionNavigationService);
-		registerTestDictationOnboarding(editorServices);
+		registerTestVoiceInputServices(editorServices);
 		editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 		Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 		editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));

@@ -109,19 +109,22 @@ pub fn remote_runtime_install_command(
             "elif command -v shasum >/dev/null 2>&1; then hash_kind=shasum; ",
             "else fail 'sha256-unavailable' 69; fi; ",
             "mkdir -p \"$runtime_parent\" || fail 'install-root-unwritable' 73; ",
-            "lock=\"$runtime_dir.installing\"; lock_owned=0; staging=''; ",
-            "cleanup() {{ if [ -n \"$staging\" ] && [ -d \"$staging\" ]; then rm -rf \"$staging\"; fi; if [ \"$lock_owned\" = 1 ] && [ -d \"$lock\" ]; then rm -rf \"$lock\"; fi; }}; ",
+            // Keep the lock file in place so every installer locks the same inode.
+            // Children that mutate the published runtime inherit the descriptor.
+            "{{ ",
+            "if command -v flock >/dev/null 2>&1; then flock -n 9 || fail 'install-in-progress' 75; ",
+            "elif command -v perl >/dev/null 2>&1; then ",
+            "perl -MFcntl=:flock -e 'open my $lock, \">&=9\" or exit 1; exit !flock($lock, LOCK_EX | LOCK_NB);' || fail 'install-in-progress' 75; ",
+            "else fail 'install-lock-tool-unavailable' 69; fi; ",
+            "staging=''; cleanup() {{ if [ -n \"$staging\" ] && [ -d \"$staging\" ]; then rm -rf \"$staging\"; fi; }}; ",
             "trap cleanup EXIT; trap 'exit 130' HUP INT TERM; ",
-            "if ! mkdir \"$lock\" 2>/dev/null; then lock_pid=''; [ -f \"$lock/pid\" ] && lock_pid=$(cat \"$lock/pid\" 2>/dev/null || true); ",
-            "case \"$lock_pid\" in ''|*[!0-9]*) lock_live=0 ;; *) if kill -0 \"$lock_pid\" 2>/dev/null; then lock_live=1; else lock_live=0; fi ;; esac; ",
-            "if [ \"$lock_live\" = 1 ]; then fail 'install-in-progress' 75; fi; rm -rf \"$lock\" || fail 'stale-lock-unremovable' 73; mkdir \"$lock\" || fail 'install-lock-unavailable' 75; fi; ",
-            "lock_owned=1; printf '%s\\n' \"$$\" > \"$lock/pid\" || fail 'install-lock-unwritable' 73; ",
             "if [ -f \"$legacy_receipt\" ] && [ \"$(cat \"$legacy_receipt\")\" = \"$digest\" ]; then mv \"$legacy_receipt\" \"$receipt\" || fail 'receipt-migration-failed' 73; fi; ",
             "if [ -x \"$executable\" ] && [ -f \"$receipt\" ] && [ \"$(cat \"$receipt\")\" = \"$digest\" ]; then report {reused_marker}; fi; ",
             "if [ -e \"$runtime_dir\" ]; then rm -rf \"$runtime_dir\" || fail 'incomplete-runtime-unremovable' 73; fi; ",
             "staging=$(mktemp -d \"$runtime_parent/.staging.XXXXXX\") || fail 'staging-unavailable' 73; ",
             "archive=\"$staging/ash-package.tar.gz\"; package=\"$staging/package\"; mkdir \"$package\" || fail 'staging-unwritable' 73; ",
-            "cat > \"$archive\" || fail 'upload-write-failed' 74; observed_size=$(wc -c < \"$archive\" | tr -d '[:space:]'); ",
+            // A blocked upload only touches private staging and must not retain the lock if the shell dies.
+            "cat 9>&- > \"$archive\" || fail 'upload-write-failed' 74; observed_size=$(wc -c < \"$archive\" | tr -d '[:space:]'); ",
             "[ \"$observed_size\" = \"$expected_size\" ] || fail 'archive-size-mismatch' 65; ",
             "if [ \"$hash_kind\" = sha256sum ]; then observed_hash=$(sha256sum \"$archive\"); else observed_hash=$(shasum -a 256 \"$archive\"); fi; observed_hash=${{observed_hash%% *}}; ",
             "[ \"$observed_hash\" = \"$digest\" ] || fail 'archive-sha256-mismatch' 65; ",
@@ -133,7 +136,8 @@ pub fn remote_runtime_install_command(
             "[ -f \"$package/ash-resources/node/bin/node\" ] || fail 'package-node-missing' 65; ",
             "chmod 700 \"$package/bin/ash-remote-server\" \"$package/bin/ash-app-server-daemon\" \"$package/ash-path/rg\" \"$package/ash-resources/node/bin/node\" || fail 'package-executable-permissions-failed' 73; ",
             "printf '%s\\n' \"$digest\" > \"$receipt\" || fail 'receipt-write-failed' 73; ",
-            "mv \"$package\" \"$runtime_dir\" || fail 'runtime-commit-failed' 73; report {installed_marker}"
+            "mv \"$package\" \"$runtime_dir\" || fail 'runtime-commit-failed' 73; report {installed_marker}; ",
+            "}} 9>>\"$runtime_dir.install.lock\" || fail 'install-lock-unwritable' 73"
         ),
         error_marker = error_marker,
         root_selection = root_selection,
@@ -201,7 +205,7 @@ pub fn parse_install_receipt(
 
 pub(super) fn remote_install_failure(code: &str) -> RemoteRuntimeInstallError {
     let kind = match code {
-        "tar-unavailable" | "sha256-unavailable" => {
+        "tar-unavailable" | "sha256-unavailable" | "install-lock-tool-unavailable" => {
             RemoteRuntimeInstallFailureKind::RemotePrerequisite
         }
         "install-in-progress" | "install-lock-unavailable" => {

@@ -86,8 +86,8 @@ fn project_times_preserve_creation_and_follow_committed_updates() {
         },
     );
     let created = crate::reducer::apply(None, &create, 100).unwrap();
-    assert_eq!(created.created_at_ms, 100);
-    assert_eq!(created.updated_at_ms, 100);
+    assert_eq!(created.created_at_ms, Some(100));
+    assert_eq!(created.updated_at_ms, Some(100));
     let update = request(
         "update-project-time",
         1,
@@ -98,12 +98,12 @@ fn project_times_preserve_creation_and_follow_committed_updates() {
         },
     );
     let updated = crate::reducer::apply(Some(created), &update, 300).unwrap();
-    assert_eq!(updated.created_at_ms, 100);
-    assert_eq!(updated.updated_at_ms, 300);
+    assert_eq!(updated.created_at_ms, Some(100));
+    assert_eq!(updated.updated_at_ms, Some(300));
     let archive = request("archive-project-time", 2, ProjectCommand::Archive);
     let archived = crate::reducer::apply(Some(updated), &archive, 200).unwrap();
-    assert_eq!(archived.created_at_ms, 100);
-    assert_eq!(archived.updated_at_ms, 300);
+    assert_eq!(archived.created_at_ms, Some(100));
+    assert_eq!(archived.updated_at_ms, Some(300));
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn project_commands_are_revision_checked_and_retry_safe() {
     );
     let created = coordinator.apply(create.clone()).unwrap();
     assert_eq!(created.project.revision, 1);
-    assert!(created.project.created_at_ms > 0);
+    assert!(created.project.created_at_ms.is_some_and(|time| time > 0));
     assert_eq!(created.project.created_at_ms, created.project.updated_at_ms);
     assert_eq!(created.disposition, ProjectCommandDisposition::Committed);
     assert_eq!(
@@ -189,6 +189,31 @@ fn project_roots_and_associations_remain_organizational_facts() {
     assert_eq!(project.roots.len(), 1);
     assert_eq!(project.session_ids.len(), 1);
     assert_eq!(project.revision, 3);
+    let reference = "external-conversation-fixture";
+    let linked = coordinator
+        .apply(request(
+            "link-external-conversation",
+            project.revision,
+            ProjectCommand::LinkExternalConversation {
+                conversation_id: reference.into(),
+            },
+        ))
+        .unwrap()
+        .project;
+    assert!(linked.external_conversation_ids.contains(reference));
+    assert_eq!(linked.session_ids, project.session_ids);
+    let unlinked = coordinator
+        .apply(request(
+            "unlink-external-conversation",
+            linked.revision,
+            ProjectCommand::UnlinkExternalConversation {
+                conversation_id: reference.into(),
+            },
+        ))
+        .unwrap()
+        .project;
+    assert!(unlinked.external_conversation_ids.is_empty());
+    assert_eq!(unlinked.session_ids, project.session_ids);
 }
 
 fn coordinator() -> ProjectCoordinator {

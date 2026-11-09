@@ -26,10 +26,7 @@ export class VoiceModeOnboardingService extends Disposable implements IVoiceMode
 
 	constructor(@IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
-		this.onboarding = this._register(instantiation.createInstance(ChatInputOnboarding, {
-			storageKey: AgentsVoiceStorageKeys.IntroBannerShown,
-			markSeenOn: 'acknowledge',
-		}));
+		this.onboarding = this._register(instantiation.createInstance(ChatInputOnboarding, AgentsVoiceStorageKeys.IntroBannerShown));
 	}
 
 	registerHost(options: IChatInputOnboardingHostOptions): IDisposable {

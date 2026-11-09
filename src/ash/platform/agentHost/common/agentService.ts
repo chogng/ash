@@ -165,6 +165,7 @@ export interface IAgentSessionService {
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
 	canChangeDirectory?(): boolean;
 	canClearDirectory?(): boolean;
+	/** Binds an unbound Session to a directory, or clears its current binding. */
 	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string | null; }): Promise<void>;
 	addWorkspaceFolder?(sessionId: string, path: string): Promise<void>;
 	saveEnvironmentProfile?(environmentId: string, variables: Readonly<Record<string, string>>): Promise<void>;
@@ -294,6 +295,8 @@ export interface IAgentVoiceService {
 	readonly onDidChange: Event<void>;
 	readonly onDidRequestTask: Event<Agent.AgentVoiceTaskRequest>;
 	getOptions(): Promise<readonly Agent.AgentVoiceConnectionChoice[]>;
+	/** Requests access on hosts that manage microphone permission before starting native media. */
+	requestMicrophoneAccess?(): Promise<void>;
 	start(source: Agent.AgentVoiceSource, selection: Agent.AgentVoiceSelection, signal?: AbortSignal): Promise<Agent.AgentVoiceSessionState>;
 	stop(): Promise<void>;
 	interrupt(): Promise<void>;

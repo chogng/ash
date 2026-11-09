@@ -11,6 +11,7 @@ export interface ICommonNativeHostService {
 
 export const SHOW_TOAST_CHANNEL = 'ash:host:showToast';
 export const CANCEL_TOAST_CHANNEL = 'ash:host:cancelToast';
+export const REQUEST_MICROPHONE_ACCESS_CHANNEL = 'ash:host:requestMicrophoneAccess';
 
 export interface IToastOptions {
 	readonly id: string;

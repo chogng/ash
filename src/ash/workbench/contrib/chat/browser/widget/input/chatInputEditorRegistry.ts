@@ -41,6 +41,8 @@ export interface IChatInputEditor extends IDisposable {
 	getSelection(): ChatInputEditorSelection;
 	setSelection(selection: ChatInputEditorSelection): void;
 	setReadOnly(readOnly: boolean): void;
+	/** Overrides the empty editor hint, or restores the configured hint when omitted. */
+	setPlaceholder(placeholder?: string): void;
 	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean;
 	/** Insert recognized text at the current selection using the editor's edit lifecycle. */
 	insertText(text: string): void;
@@ -106,12 +108,14 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly onDidSubmit = this._onDidSubmit.event;
 	private readonly minimumHeight: number;
 	private readonly maximumHeight: number;
+	private readonly defaultPlaceholder: string;
 	private textMeasurement: CanvasRenderingContext2D | null | undefined;
 
 	constructor(options: ChatInputEditorOptions) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? 40;
 		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_DEFAULT_MAX_HEIGHT;
+		this.defaultPlaceholder = options.placeholder;
 		this.element = h(options.container.ownerDocument, 'textarea');
 		this.element.className = 'ash-chat-textarea-input';
 		this.element.rows = 2;
@@ -162,6 +166,10 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 
 	setReadOnly(readOnly: boolean): void {
 		this.element.readOnly = readOnly;
+	}
+
+	setPlaceholder(placeholder = this.defaultPlaceholder): void {
+		if (this.element.placeholder !== placeholder) this.element.placeholder = placeholder;
 	}
 
 	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean {

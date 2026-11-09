@@ -9,6 +9,7 @@ mod links;
 mod managed_settings;
 mod notifications;
 mod provider;
+mod pull_request_checks;
 mod pull_requests;
 mod reporter;
 mod repositories;

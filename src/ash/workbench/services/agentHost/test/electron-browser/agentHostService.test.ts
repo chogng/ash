@@ -26,6 +26,7 @@ import { installEditorTestDom } from '../../../../../editor/test/browser/editorT
 import type { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
 import type { LogEntry } from '../../../../../platform/log/common/log.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { DEVELOPMENT_DIR_PERMISSIONS } from '../../../../../platform/workspace/common/workspaceTrust.js';
 
 class RemoteEndpoint extends Disposable implements ISocket {
 	private readonly data = this._register(new Emitter<VSBuffer>());
@@ -66,6 +67,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	let onLog: ((entry: LogEntry) => void) | undefined;
 	let failDirectoryBinding: boolean;
 	let directoryAuthorized: boolean;
+	let directoryPermissions: readonly string[];
 	let beforeWorkspaceRead: (() => Promise<void>) | undefined;
 	let beforeHostOpen: (() => Promise<void>) | undefined;
 	const hostOpens: { id: string; connection: { name: string; host: string; workspace: string; }; }[] = [];
@@ -107,7 +109,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 						handshakes.push({ channel, params: frame.params });
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n') });
 					} else if (frame.method === 'config/directoryGrants/read') {
-						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { dir: frame.params.path, permissions: directoryAuthorized ? [] : undefined } }) + '\n') });
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { dir: frame.params.path, permissions: directoryAuthorized ? directoryPermissions : undefined } }) + '\n') });
 					} else if (frame.method === 'fs/resolvePath') {
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { root: frame.params.path, target: { type: 'environment', dirId: `agent-host:${hostOpens.at(-1)!.id}` } } }) + '\n') });
 					} else if (frame.method === 'env/dirs/set') {
@@ -149,6 +151,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		onDirectoryBound = onInitialized = onLog = onWorkspaceCompleted = undefined;
 		failDirectoryBinding = false;
 		directoryAuthorized = true;
+		directoryPermissions = [];
 		beforeHostOpen = beforeWorkspaceRead = undefined;
 		hostOpens.length = hostCloses.length = 0;
 		windowConnection = { kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' };
@@ -388,15 +391,28 @@ suite('Desktop Workbench Agent Host selection', () => {
 	test('cancelled startup authorization keeps the renderer available and explicit retry shares the ready carrier', async () => {
 		directoryAuthorized = false;
 		let prompts = 0;
+		const prompted = new DeferredPromise<void>();
+		const choice = new DeferredPromise<'cancel'>();
 		using renderer = await createRendererApi([], { browser: false }, {
-			requestDirectoryPermissions: async () => { prompts++; return 'cancel'; },
+			requiresDevelopmentTrust: true,
+			requestDirectoryPermissions: async () => {
+				prompts++;
+				void prompted.complete();
+				return choice.p;
+			},
 		}, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		assert.equal(await renderer.appServer.getConnectionState(), 'ready');
 		assert.equal(prompts, 0, 'startup permission waits for the workbench to accept a prompt');
 		renderer.startWorkspaceDirectories();
+		await prompted.p;
+		assert.equal(recovery.status, 'recovering');
+		assert.equal(recovery.phase, 'workspaceTrust');
+		await choice.complete('cancel');
 		await renderer.workspaceDirectoriesReady;
 		assert.equal(recovery.status, 'failed');
+		assert.equal(recovery.phase, 'workspaceTrust');
+		assert.equal(recovery.error, undefined);
 		assert.equal(prompts, 1);
 		assert.deepEqual(directoryBindings, []);
 		const generation = renderer.appServer.connectionGeneration;
@@ -404,10 +420,13 @@ suite('Desktop Workbench Agent Host selection', () => {
 		await assert.rejects(recovery.reconnect(), { name: 'CancellationError' });
 		assert.equal(prompts, 2);
 		assert.equal(recovery.status, 'failed');
+		assert.equal(recovery.phase, 'workspaceTrust');
 		assert.deepEqual(directoryBindings, []);
 		directoryAuthorized = true;
+		directoryPermissions = DEVELOPMENT_DIR_PERMISSIONS;
 		await recovery.reconnect();
 		assert.equal(recovery.status, 'idle');
+		assert.equal(recovery.phase, 'connection');
 		assert.equal(recovery.error, undefined);
 		assert.equal(renderer.appServer.connectionGeneration, generation);
 		assert.equal(acquired.length, acquisitions);

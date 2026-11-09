@@ -1,3 +1,15 @@
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
+import { ISessionGroupsService, type SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { canOpenThreadInCode } from '../../../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
+import { ISessionsSearchService } from '../../search/browser/searchService.js';
+import type { SearchResult } from '../../search/browser/searchModel.js';
+import type { Event } from '../../../../base/common/event.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -6,20 +18,22 @@ import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWor
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { SessionGroupingContext, SessionsCatalogProject, SessionsCatalogProjectAppearance, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { derived, observableValue, type IObservable } from '../../../../base/common/observable.js';
+import { derived, observableFromEvent, observableSignalFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 
-import type { SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
+
 import { sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
+import { NativeConversationShare } from './nativeConversationShare.js';
 
 export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
@@ -27,6 +41,7 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly title: string;
 	/** Session catalog identity, when this row represents an Ash session. */
 	readonly sessionId?: string;
+	readonly externalConversationId?: string;
 	readonly groupingContext?: SessionGroupingContext;
 	/** Milliseconds since the Unix epoch, when supplied by the catalog. */
 	readonly createdAt?: number;
@@ -38,26 +53,19 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly disabled?: boolean;
 	readonly actionsDisabled?: boolean;
 	readonly defaultIcon: Icon;
-	readonly iconId?: string;
-	readonly setIcon?: (icon: Icon | undefined) => void;
+	/** Opaque profile identity for catalog conversation preferences. */
+	readonly preferenceKey?: string;
 	readonly open: (signal: AbortSignal, threadId?: string) => Promise<void>;
+	readonly rename?: (title: string) => Promise<void>;
+	readonly share?: () => Promise<void>;
 	readonly archive?: () => Promise<boolean>;
+	readonly remove?: () => Promise<void>;
 	readonly getActions?: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
 }
 
 type ProjectHistory =
 	| { readonly state: 'idle' | 'more'; readonly load: () => void; }
 	| { readonly state: 'loading' | 'complete' | 'unavailable' | 'error'; };
-
-export interface ConversationProjectDetails {
-	readonly name: string;
-	readonly description: string;
-}
-
-export interface ConversationProjectEditor {
-	readonly details: ConversationProjectDetails;
-	save(details: ConversationProjectDetails): Promise<void>;
-}
 
 export interface ChatListProject {
 	/** Stable identity for membership and persisted expansion. */
@@ -72,7 +80,8 @@ export interface ChatListProject {
 	readonly restore?: () => void;
 	readonly remove?: { readonly removesContents: boolean; run(): Promise<void>; };
 	readonly editDetails?: (signal: AbortSignal) => Promise<ConversationProjectEditor>;
-	readonly appearance?: SessionsCatalogProjectAppearance;
+	/** Profile preference identity, scoped to the owning account and project. */
+	readonly preferenceKey?: string;
 }
 
 export interface ChatListSnapshot {
@@ -85,6 +94,7 @@ export interface ChatListSnapshot {
 /** Catalog owners supply records and operations. The list owns their placement. */
 export interface ChatListSource {
 	readonly snapshot: IObservable<ChatListSnapshot>;
+	readonly onDidRetirePreferenceIdentity?: Event<{ readonly key: string; readonly replacementKey?: string; }>;
 	attach?(window: Window & typeof globalThis, isVisible: () => boolean): IDisposable;
 	loadMore?(): void;
 }
@@ -98,13 +108,117 @@ export const IChatListCatalog = createServiceIdentifier<IChatListCatalog>('chatL
 export class ChatListCatalog extends Disposable implements IChatListCatalog {
 	readonly sources: readonly ChatListSource[];
 
-	constructor(adapters: readonly SyncDescriptor<ChatListSource>[], @IInstantiationService instantiation: IInstantiationService) {
+	constructor(adapters: readonly SyncDescriptor<ChatListSource>[],
+		@IInstantiationService instantiation: IInstantiationService,
+		@ISessionsListModelService list: ISessionsListModelService,
+	) {
 		super();
 		this.sources = adapters.map(adapter => {
 			const source = instantiation.createInstance(adapter);
 			if (isDisposable(source)) this._register(source);
+			if (source.onDidRetirePreferenceIdentity) {
+				this._register(source.onDidRetirePreferenceIdentity(({ key, replacementKey }) => {
+					const icon = list.getRowIcon(key, 'catalog');
+					if (replacementKey === key || icon === undefined) return;
+					if (replacementKey && list.getRowIcon(replacementKey, 'catalog') === undefined) {
+						list.setRowIcon(replacementKey, icon, 'catalog');
+					}
+					list.setRowIcon(key, undefined, 'catalog');
+				}));
+			}
 			return source;
 		});
+	}
+}
+
+/** Projects native Sessions through the same list contract as contributed sources. */
+export class NativeChatCatalogSource extends Disposable implements ChatListSource {
+	readonly snapshot;
+
+	constructor(
+		@ISessionsListModelService list: ISessionsListModelService,
+		@ISessionGroupsService groups: ISessionGroupsService,
+		@ICommandService commands: ICommandService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@ISessionsSearchService search: ISessionsSearchService,
+		@ISessionsManagementService management: ISessionsManagementService,
+		@ISessionsService view: ISessionsService,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
+		super();
+		const sharing = instantiation.createInstance(NativeConversationShare);
+		const context = new Set([ASH_CHAT_SELECTED_CONTEXT]);
+		const visible = observableFromEvent(this, listener => contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(context)) listener(event);
+		}), () => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
+		const catalog = observableFromEvent(this, management.onDidChange, () => management.sessions);
+		void management.initialize().catch(onUnexpectedError);
+		const listChanged = observableSignalFromEvent(this, list.onDidChange);
+		const groupsChanged = observableSignalFromEvent(this, groups.onDidChange);
+		const working: ISessionStatusIcon = {
+			label: localize('sessions.management.working', 'Working'), kind: 'inProgress', icon: Lxicon.sync,
+		};
+		this.snapshot = derived<ChatListSnapshot>(reader => {
+			listChanged.read(reader);
+			groupsChanged.read(reader);
+			const active = view.chatSelection.read(reader);
+			const selectedId = visible.read(reader) && active?.kind === 'thread' ? active.sessionId : undefined;
+			const rows: ChatListEntry[] = [];
+			for (const session of catalog.read(reader)) {
+				if (session.kind !== 'chat' || session.backendSessionId !== undefined || session.status !== 'active'
+					|| session.sessionId !== selectedId && !list.isSessionListed(session)) continue;
+				const chats = session.chats.filter(chat => chat.status === 'active');
+				const thread = chats.find(chat => chat.threadId === session.sessionId)
+					?? chats.find(chat => chat.origin.type === 'root') ?? chats[0];
+				if (!thread) continue;
+				const id = session.sessionId;
+				const title = session.title || localize('sessions.list.untitled', 'Untitled Session');
+				const selectedThreadId = selectedId === id && active?.kind === 'thread' ? active.threadId : undefined;
+				const isPinned = list.isSessionPinned(session);
+				rows.push({
+					id: `ash:${id}`,
+					title,
+					sessionId: id,
+					groupingContext: { sessionId: id, workspace: session.workspace ?? undefined, management: session.management },
+					createdAt: thread.createdAt?.getTime(),
+					updatedAt: (thread.updatedAt ?? thread.createdAt)?.getTime(),
+					selected: selectedId === id,
+					selectedThreadId,
+					status: session.management?.status === 'working' ? working : undefined,
+					defaultIcon: Lxicon.chatSession,
+					pinned: isPinned,
+					setPinned: pinned => pinned ? list.pinSession(session) : list.unpinSession(session),
+					moveToGroup: group => groups.move(id, group),
+					open: async (signal, threadId = thread.threadId) => {
+						await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
+						if (signal.aborted) return;
+						view.selectChatThread(id, threadId);
+					},
+					rename: title => management.renameSession(id, title),
+					remove: () => commands.executeCommand('agentSession.delete', id),
+					share: () => sharing.share(id, selectedThreadId ?? thread.threadId, title),
+					getActions: () => {
+						const saved = management.sessions.find(session => session.sessionId === id);
+						const savedThread = saved?.chats.find(chat => chat.threadId === thread.threadId);
+						const workspaceActions = createSessionWorkspaceActions(id, thread.threadId, management, commands);
+						if (saved?.status === 'active' && savedThread && canOpenThreadInCode(saved, savedThread)) {
+							workspaceActions.push({
+								id: 'sessions.workspace.continueInCode',
+								label: localize({ bundle: 'ash.sessions', key: 'sessions.workspace.continueInCode' }, 'Continue in Code'),
+								tooltip: '', enabled: true,
+								run: () => view.openSession(id, thread.threadId, { reveal: 'code' }),
+							});
+						}
+						return workspaceActions;
+					},
+				});
+			}
+			return { entries: rows, groups: groups.groups.filter(group => group.kind !== 'comparison') };
+		});
+		this._register(search.registerSource(this.snapshot.map(snapshot => snapshot.entries.map(entry => ({
+			id: entry.id, category: 'sessions', title: entry.title, icon: entry.defaultIcon,
+			target: { kind: 'contributed', open: () => entry.open(new AbortController().signal) },
+		} satisfies SearchResult)))));
 	}
 }
 
@@ -115,9 +229,11 @@ export interface ChatListGroup {
 	readonly project?: ChatListProject;
 }
 
-export function getProjectSessionRows(entries: readonly ChatListEntry[], sessionIds: readonly string[]): ChatListEntry[] {
+export function getProjectSessionRows(entries: readonly ChatListEntry[], sessionIds: readonly string[], externalConversationIds?: readonly string[]): ChatListEntry[] {
 	const members = new Set(sessionIds);
-	return entries.filter(entry => entry.sessionId !== undefined && members.has(entry.sessionId))
+	const external = new Set(externalConversationIds);
+	return entries.filter(entry => (entry.sessionId !== undefined && members.has(entry.sessionId))
+		|| (entry.externalConversationId !== undefined && external.has(entry.externalConversationId)))
 		.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
 }
 
@@ -146,6 +262,7 @@ export function groupChatList(snapshots: readonly ChatListSnapshot[], mode: 'cha
 interface ProjectMembership {
 	readonly revision: number;
 	sessionIds?: readonly string[];
+	externalConversationIds?: readonly string[];
 	failed?: boolean;
 }
 
@@ -164,10 +281,13 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		@IStorageService storage: IStorageService,
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ISessionsListModelService private readonly list: ISessionsListModelService,
 	) {
 		super();
 		this.migrateCollapseState(storage);
+		const listChanged = observableSignalFromEvent(this, list.onDidChange);
 		this.snapshot = derived(reader => {
+			listChanged.read(reader);
 			const projects = this.projects.state.read(reader).projects.filter(project => !project.archived);
 			this.membershipVersion.read(reader);
 			const snapshots = this.catalog.sources.map(source => source.snapshot.read(reader));
@@ -181,7 +301,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			for (const project of projects) {
 				const membership = this.readMembership(project.id, project.revision, project.sessionCount);
 				const existing = projectGroups.get(project.id);
-				const rows = getProjectSessionRows(entries, membership?.sessionIds ?? []);
+				const rows = getProjectSessionRows(entries, membership?.sessionIds ?? [], membership?.externalConversationIds);
 				for (const row of rows) projectEntryIds.add(row.id);
 				projectGroups.set(project.id, { key: project.id, title: project.name, rows: [...rows, ...(existing?.rows ?? [])], project: existing?.project });
 			}
@@ -261,15 +381,18 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		if (current?.revision === revision) return current;
 
 		// Keep the last known membership until the new project revision is read.
-		const request: ProjectMembership = { revision, sessionIds: current?.sessionIds };
+		const request: ProjectMembership = { revision, sessionIds: current?.sessionIds, externalConversationIds: current?.externalConversationIds };
 		this.membership.set(id, request);
-		const finish = (sessionIds?: readonly string[]): void => {
+		const finish = (project?: { readonly sessionIds: readonly string[]; readonly externalConversationIds?: readonly string[]; }): void => {
 			if (this.isDisposed || this.membership.get(id) !== request) return;
-			request.failed = sessionIds === undefined;
-			request.sessionIds = sessionIds ?? request.sessionIds;
+			request.failed = project === undefined;
+			if (project) {
+				request.sessionIds = project.sessionIds;
+				request.externalConversationIds = project.externalConversationIds;
+			}
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		};
-		void this.projectService.read(id, 'chat').then(value => finish(value.sessionIds), () => finish());
+		void this.projectService.read(id, 'chat').then(finish, () => finish());
 		return request;
 	}
 
@@ -289,7 +412,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			rows,
 			loading,
 			localProject,
-			appearance: project.project?.appearance,
+			appearance: project.project?.preferenceKey ? this.projects.getCatalogProjectAppearance(project.project.preferenceKey) : undefined,
 			operations: {
 				rename: editDetails && (async (name, signal) => {
 					const editor = await editDetails(signal);
@@ -307,11 +430,35 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 
 	private toRow(entry: ChatListEntry, destinations: readonly { readonly id: string; readonly name: string; }[], parentProject?: string): SessionsCatalogRow {
 		const sessionId = entry.sessionId;
+		const iconKey = sessionId ? `session:${sessionId}` : entry.preferenceKey;
+		const iconScope = sessionId ? undefined : 'catalog';
 		const project = sessionId ? () => {
 			const memberships = destinations.filter(project => this.membership.get(project.id)?.sessionIds?.includes(sessionId));
 			const current = parentProject ?? (memberships.length === 1 ? memberships[0]!.id : undefined);
 			return sessionProjectOrganization(this.projectService, sessionId, current, destinations);
-		} : () => entry.project;
+		} : () => {
+			const externalId = entry.externalConversationId;
+			if (!externalId) return entry.project;
+			const memberships = destinations.filter(item => this.membership.get(item.id)?.externalConversationIds?.includes(externalId));
+			const current = memberships.find(item => item.id === parentProject) ?? (memberships.length === 1 ? memberships[0] : undefined);
+			const ashDestinations = destinations.map(({ id, name }) => ({ id, title: name }));
+			if (!current) {
+				const remote = entry.project;
+				if (remote?.current || !ashDestinations.length) return remote;
+				return {
+					...remote,
+					destinations: [...ashDestinations, ...(remote?.destinations ?? [])],
+					move: (destination: string | undefined) => ashDestinations.some(item => item.id === destination)
+						? this.projectService.moveExternalConversation(externalId, undefined, destination)
+						: remote?.move(destination) ?? Promise.resolve(),
+				};
+			}
+			return {
+				current: current.id,
+				destinations: ashDestinations,
+				move: (destination: string | undefined) => this.projectService.moveExternalConversation(externalId, current.id, destination),
+			};
+		};
 		return {
 			id: entry.id,
 			sessionId,
@@ -324,8 +471,8 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			disabled: entry.disabled,
 			actionsDisabled: entry.actionsDisabled,
 			defaultIcon: entry.defaultIcon,
-			iconId: entry.iconId,
-			setIcon: entry.setIcon,
+			iconId: iconKey ? this.list.getRowIcon(iconKey, iconScope) : undefined,
+			setIcon: iconKey ? icon => this.list.setRowIcon(iconKey, icon?.id, iconScope) : undefined,
 			pinned: entry.pinned,
 			setPinned: entry.setPinned,
 			organization: () => entry.disabled || entry.actionsDisabled ? undefined : {

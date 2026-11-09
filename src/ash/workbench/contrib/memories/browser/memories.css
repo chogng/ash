@@ -1,41 +1,25 @@
 .ash-memories {
 	display: grid;
-	gap: var(--ash-spacing-size160);
-	min-width: 0;
-}
-
-.ash-memories .memories-group {
-	min-width: 0;
-	border: var(--ash-strokeThickness) solid var(--ash-settings-itemSeparator);
-	border-radius: var(--ash-cornerRadius-large);
-	background: var(--ash-settings-itemBackground);
-}
-
-.ash-memories .memories-scope {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
 	gap: var(--ash-spacing-size120);
-	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	min-width: 0;
 }
 
-.ash-memories .memories-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--ash-spacing-size160);
-	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+.ash-memories .ash-settings-card {
+	min-width: 0;
 }
 
-.ash-memories .memories-scope + .memories-row,
-.ash-memories .memories-row + .memories-row,
-.ash-memories .memories-manager,
+.ash-memories .memories-intro {
+	margin: 0;
+}
+
+.ash-memories .ash-settings-field-row > .ash-select-box-field {
+	width: fit-content;
+	max-width: min(100%, 320px);
+}
+
 .ash-memories .memories-detail {
 	border-top: var(--ash-strokeThickness) solid
 		var(--ash-settings-itemSeparator);
-}
-
-.ash-memories .memories-row > .ash-switch {
-	flex-shrink: 0;
 }
 
 .ash-memories .memories-heading {
@@ -45,7 +29,6 @@
 	overflow-wrap: anywhere;
 }
 
-.ash-memories .memories-description,
 .ash-memories .memories-status {
 	margin: 0;
 	color: var(--ash-description-foreground);
@@ -53,8 +36,8 @@
 	overflow-wrap: anywhere;
 }
 
-.ash-memories .memories-row .memories-description {
-	margin-top: var(--ash-spacing-size40);
+.ash-memories .ash-settings-card > .memories-status::before {
+	content: none;
 }
 
 .ash-memories .memories-status:not(:empty) {
@@ -125,7 +108,6 @@
 }
 
 .ash-memories .memories-field > input,
-.ash-memories .memories-field > select,
 .ash-memories .memories-field > textarea {
 	box-sizing: border-box;
 	min-width: 0;
@@ -135,7 +117,7 @@
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
 	border: var(--ash-strokeThickness) solid var(--ash-input-border);
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-memories textarea {

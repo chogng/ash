@@ -53,10 +53,17 @@ suite('Projects toolbar', () => {
 			await expect(search).toBeFocused();
 			await search.fill('clockface');
 			await picker.getByRole('option', { name: 'clockface', exact: true }).click();
+			await expect(search).toBeFocused();
 			await blue.click();
 			await expect(appearance.locator('[data-ash-icon-id="clockface"]')).toBeVisible();
 			const previewColor = await appearance.evaluate(element => getComputedStyle(element).color);
-			await picker.getByRole('button', { name: chinese ? '完成' : 'Done', exact: true }).click();
+			const done = picker.getByRole('button', { name: chinese ? '完成' : 'Done', exact: true });
+			await done.click();
+			await expect(appearance).toBeFocused();
+			await appearance.press('Enter');
+			await expect(picker.getByRole('option', { name: 'clockface', exact: true })).toHaveAttribute('aria-selected', 'true');
+			await expect(blue).toHaveAttribute('aria-pressed', 'true');
+			await done.click();
 			await expect(appearance).toBeFocused();
 			await dialog.getByRole('button', { name: chinese ? '创建' : 'Create', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
@@ -148,6 +155,7 @@ suite('Projects toolbar', () => {
 			const create = page.locator('.ash-projects').getByRole('button', { name: locale === 'zh-CN' ? '新建项目' : 'New project', exact: true });
 			await create.press('Enter');
 			const dialog = page.getByRole('dialog');
+			const close = dialog.getByRole('button', { name: locale === 'zh-CN' ? '关闭对话框' : 'Close Dialog', exact: true });
 			// Loading the base widget last must not replace the host's geometry.
 			const lateBaseStyles = await page.addStyleTag({ path: 'src/ash/base/browser/ui/dialog/dialog.css' });
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
@@ -160,8 +168,16 @@ suite('Projects toolbar', () => {
 					await expect(dialog).toHaveCSS('border-radius', '12px');
 					await expect(dialog.locator('.ash-dialog-header')).toHaveCSS('gap', '8px');
 					await expect(dialog.locator('.ash-dialog-header')).toHaveCSS('height', '28px');
-					await expect(dialog.locator('.ash-dialog-close')).toHaveCSS('width', '28px');
-					await expect(dialog.locator('.ash-dialog-close')).toHaveCSS('height', '28px');
+					await expect(close).toHaveCSS('width', '28px');
+					await expect(close).toHaveCSS('height', '28px');
+					await expect(close).toHaveCSS('border-radius', '8px');
+					await expect(close.locator('[data-ash-icon-id="dialog-close"]')).toHaveCSS('width', '18px');
+					const alignment = await close.evaluate(button => {
+						const header = button.closest('header')!.getBoundingClientRect();
+						const target = button.getBoundingClientRect();
+						return target.top + target.height / 2 - header.top - header.height / 2;
+					});
+					expect(alignment).toBeCloseTo(0);
 					await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('padding', '0px');
 					const bounds = (await dialog.boundingBox())!;
 					expect(bounds.x).toBeGreaterThanOrEqual(20);

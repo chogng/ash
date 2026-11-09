@@ -1,21 +1,39 @@
-.ash-sessions-agents {
-	display: flex;
-	flex-direction: column;
-	gap: var(--ash-spacing-size160);
-	min-width: 0;
-}
-
-.ash-agents-view[hidden] {
+.ash-sessions-settings-page
+	[data-settings-item-id="chat.advisor"]
+	> .ash-settings-card-title {
 	display: none;
 }
 
-.ash-agents-tabs,
-.ash-agents-view {
-	min-width: 0;
+.ash-sessions-settings-page
+	[data-settings-tree-group-id="sessions.category.agents"]
+	> .ash-sessions-settings-list
+	> *
+	+ :is(.ash-settings-card-section, .ash-sessions-agents) {
+	margin-block-start: var(--ash-spacing-size160);
 }
 
-.ash-agents-roles {
+.ash-sessions-settings-page
+	.ash-settings-card
+	> [data-settings-item-id="chat.advisor"]
+	+ .ash-settings-card-section {
+	margin-block-start: 0;
+	padding-block-start: var(--ash-spacing-size160);
+}
+
+.ash-sessions-settings-page
+	.ash-settings-card
+	> [data-settings-item-id="chat.advisor"]
+	+ .ash-settings-card-section::before {
+	content: "";
+}
+
+.ash-sessions-settings-page .ash-settings-card > .ash-sessions-agents::before {
+	content: none;
+}
+
+.ash-sessions-agents {
 	display: flex;
+	min-width: 0;
 	flex-direction: column;
 	gap: var(--ash-spacing-size160);
 }

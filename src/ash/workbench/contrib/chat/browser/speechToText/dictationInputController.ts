@@ -13,7 +13,6 @@ import type { ICommandAction } from '../../../../../platform/action/common/actio
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
-import { IDictationOnboardingService } from './dictationOnboarding.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState, isDictationActiveOnSurface, type ChatDictationSurface } from './chatSpeechToTextService.js';
 
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
@@ -83,7 +82,6 @@ export class DictationInput extends Disposable {
 		private readonly showPreparation: (snapshot: ILocalTranscriptionModelSnapshot) => Promise<void>,
 		private readonly surface: ChatDictationSurface,
 		@IChatSpeechToTextService private readonly service: IChatSpeechToTextService,
-		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@ILocalTranscriptionModelService private readonly localTranscription: ILocalTranscriptionModelService,
 		@ISpeechService private readonly speechProviders: ISpeechService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -115,7 +113,6 @@ export class DictationInput extends Disposable {
 				await this.showPreparation(preparation);
 				return;
 			}
-			if (preparation?.available !== false) this.onboarding.showIfNeeded();
 			await this.start();
 		} catch (error) {
 			if (!this.isDisposed && !isCancellationError(error)) { this.ended.fire(error instanceof Error ? error.message : String(error)); }

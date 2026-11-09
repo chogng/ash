@@ -106,7 +106,9 @@ impl TranscriptAccumulator {
         }
 
         match &update.update {
-            ThreadUpdate::Committed { event } => self.apply_committed(event, &mut changes),
+            ThreadUpdate::Committed { event } => {
+                self.apply_committed(event, update.recorded_at_unix_ms, &mut changes)
+            }
             ThreadUpdate::ItemStarted { item, .. } => self.upsert_started(item, &mut changes),
             ThreadUpdate::ItemDelta {
                 turn_id,
@@ -234,7 +236,12 @@ impl TranscriptAccumulator {
         self.stream_valid
     }
 
-    fn apply_committed(&mut self, event: &ThreadEvent, changes: &mut Vec<ThreadTranscriptChange>) {
+    fn apply_committed(
+        &mut self,
+        event: &ThreadEvent,
+        timestamp: Option<u64>,
+        changes: &mut Vec<ThreadTranscriptChange>,
+    ) {
         match event {
             ThreadEvent::TurnSkillsLoaded { turn_id, loads, .. } => {
                 changes.extend(loads.iter().map(|load| ThreadTranscriptChange::Upsert {
@@ -274,6 +281,7 @@ impl TranscriptAccumulator {
                         turn_id: item.turn_id().clone(),
                         item: item.clone(),
                         transient: false,
+                        timestamp,
                     },
                 });
             }
@@ -384,6 +392,7 @@ impl TranscriptAccumulator {
             turn_id: item.turn_id().clone(),
             item: item.clone(),
             transient: true,
+            timestamp: None,
         };
         self.store_transient(entry.clone(), changes);
         changes.push(ThreadTranscriptChange::Upsert { entry });
@@ -409,6 +418,7 @@ impl TranscriptAccumulator {
                     turn_id: turn_id.clone(),
                     item: item_from_delta(turn_id, item_id, delta),
                     transient: true,
+                    timestamp: None,
                 })
             }
         };

@@ -59,6 +59,7 @@
 
 .ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
 	.ash-sessions-window {
+	--ash-menu-check-foreground: var(--ash-accent-foreground);
 	--ash-sessions-sidebar-selection-background: var(
 		--ash-menu-hoverBackground
 	);
@@ -116,8 +117,12 @@
 	stroke-width: 2.5px;
 }
 
-.ash-sessions-window {
+.ash-sessions-window,
+.ash-sessions-directory-permission-dialog {
 	--ash-button-border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-window {
 	--ash-button-small-font-size: var(--ash-fontSize-label1);
 	--ash-keybindingLabel-background: transparent;
 	--ash-keybindingLabel-foreground: var(--ash-description-foreground);
@@ -262,6 +267,8 @@
 }
 
 .ash-sessions-window
+	.ash-button-standard:where(.ash-button-primary, .ash-button-secondary),
+.ash-sessions-directory-permission-dialog
 	.ash-button-standard:where(.ash-button-primary, .ash-button-secondary) {
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }
@@ -280,11 +287,17 @@
 	border-color: var(--ash-contrastBorder, transparent);
 }
 
-.ash-sessions-window .ash-button-quiet:where(:not(:disabled):hover) {
+.ash-sessions-window .ash-button-quiet:where(:not(:disabled):hover),
+.ash-sessions-window
+	:where(.ash-dialog-form .ash-dialog-close)
+	.ash-action-label:where(:not(:disabled):hover) {
 	background: var(--ash-button-hoverBackground);
 }
 
-.ash-sessions-window .ash-button-quiet:where(:not(:disabled):active) {
+.ash-sessions-window .ash-button-quiet:where(:not(:disabled):active),
+.ash-sessions-window
+	:where(.ash-dialog-form .ash-dialog-close)
+	.ash-action-label:where(:not(:disabled):active) {
 	background: var(--ash-button-activeBackground);
 }
 
@@ -325,7 +338,9 @@
 	outline-offset: var(--ash-spacing-size20);
 }
 
-.ash-sessions-window .ash-dialog-form {
+/* The directory permission prompt can open before the Sessions workbench exists. */
+.ash-sessions-window .ash-dialog-form,
+.ash-sessions-directory-permission-dialog.ash-dialog-form {
 	--ash-dialog-form-padding: var(--ash-spacing-size120);
 	--ash-dialog-form-viewport-margin: var(--ash-spacing-size200);
 	--ash-dialog-form-radius: var(--ash-cornerRadius-xLarge);
@@ -355,8 +370,14 @@
 			[data-color-scheme="dark"]
 		)
 	)
-	:where(.ash-sessions-window)
-	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
+	:is(
+		:where(.ash-sessions-window)
+			:is(
+				.ash-dialog-close-confirmation,
+				.ash-dialog-destructive-confirmation
+			),
+		.ash-sessions-directory-permission-dialog
+	)
 	:is(.ash-button-secondary, .ash-button-danger) {
 	border-color: transparent;
 }
@@ -367,8 +388,14 @@
 			[data-color-scheme="dark"]
 		)
 	)
-	:where(.ash-sessions-window)
-	:is(.ash-dialog-close-confirmation, .ash-dialog-destructive-confirmation)
+	:is(
+		:where(.ash-sessions-window)
+			:is(
+				.ash-dialog-close-confirmation,
+				.ash-dialog-destructive-confirmation
+			),
+		.ash-sessions-directory-permission-dialog
+	)
 	.ash-button-secondary {
 	background: color-mix(in srgb, var(--ash-foreground) 6%, transparent);
 }
@@ -389,64 +416,20 @@
 	);
 }
 
-:is(.hc-black, .hc-light) :where(.ash-sessions-window) .ash-dialog-form {
+:is(.hc-black, .hc-light)
+	:is(
+		:where(.ash-sessions-window) .ash-dialog-form,
+		.ash-sessions-directory-permission-dialog
+	) {
 	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }
 
 :is(.hc-black, .hc-light)
-	:where(.ash-sessions-window)
-	.ash-dialog-form
+	:is(
+		:where(.ash-sessions-window) .ash-dialog-form,
+		.ash-sessions-directory-permission-dialog
+	)
 	.ash-button:focus-visible {
 	outline-offset: var(--ash-spacing-size20);
-}
-
-.ash-sessions-directory-permission-dialog {
-	inline-size: min(36rem, calc(100vw - var(--ash-spacing-size320)));
-	border-radius: var(--ash-cornerRadius-xLarge);
-}
-
-.ash-sessions-directory-permission-dialog
-	> :is(.ash-dialog-header, .ash-dialog-body) {
-	padding-inline: var(--ash-spacing-size240);
-}
-
-.ash-sessions-directory-permission-dialog > .ash-dialog-header {
-	padding-block-start: var(--ash-spacing-size240);
-}
-
-.ash-sessions-directory-permission-dialog .ash-dialog-title {
-	font-weight: var(--ash-fontWeight-regular);
-}
-
-.ash-sessions-directory-permission-dialog > .ash-dialog-body {
-	padding-block-end: var(--ash-spacing-size240);
-}
-
-.ash-sessions-directory-permission-dialog .ash-dialog-actions {
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size80);
-	padding-block-start: var(--ash-spacing-size200);
-}
-
-.ash-sessions-directory-permission-dialog .ash-dialog-actions .ash-button {
-	min-inline-size: 0;
-	padding-inline: var(--ash-spacing-size120);
-	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-sessions-directory-permission-detail {
-	display: grid;
-	gap: var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-body1);
-}
-
-.ash-sessions-directory-permission-path {
-	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-	border-radius: var(--ash-cornerRadius-medium);
-	background: color-mix(in srgb, var(--ash-foreground) 7%, transparent);
-	color: var(--ash-foreground);
-	overflow-wrap: anywhere;
 }

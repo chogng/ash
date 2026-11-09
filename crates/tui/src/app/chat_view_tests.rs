@@ -643,6 +643,7 @@ fn operation_details_are_visible_before_expansion_in_both_modes() {
             turn_id: turn_id.clone(),
             item,
             transient: false,
+            timestamp: None,
         };
         let call = |id: &str, name: &str, activity, arguments: serde_json::Value| {
             entry(

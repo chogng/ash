@@ -194,7 +194,7 @@ impl MemoryScopeProvider for MemoryScopes {
         thread_id: &ThreadId,
     ) -> Result<Vec<MemoryScope>, MemoryError> {
         let kind = self.route(session_id)?.kind();
-        if kind == SessionKind::Code && !self.code_memory_enabled()? {
+        if !self.memory_enabled(kind)? {
             return Ok(Vec::new());
         }
         self.available_scopes(kind, session_id, thread_id)
@@ -206,7 +206,7 @@ impl MemoryScopeProvider for MemoryScopes {
         thread_id: &ThreadId,
     ) -> Result<Vec<MemoryScope>, MemoryError> {
         let route = self.route(session_id)?;
-        if route.kind() == SessionKind::Code && !self.code_memory_enabled()? {
+        if !self.memory_enabled(route.kind())? {
             return Ok(Vec::new());
         }
         if route.kind() == SessionKind::Chat || route.allows_workspace() {
@@ -227,16 +227,20 @@ impl MemoryScopes {
             .map_err(|error| MemoryError::Storage(error.to_string()))
     }
 
-    fn code_memory_enabled(&self) -> Result<bool, MemoryError> {
+    fn memory_enabled(&self, kind: SessionKind) -> Result<bool, MemoryError> {
+        let feature = match kind {
+            SessionKind::Chat => features::Feature::ChatMemories,
+            SessionKind::Code => features::Feature::Memories,
+        };
         self.config
             .as_ref()
             .map(|config| {
                 config
                     .read_snapshot()
-                    .map(|snapshot| features::Feature::Memories.enabled(&snapshot.values.features))
+                    .map(|snapshot| feature.enabled(&snapshot.values.features))
             })
             .transpose()
-            .map(|enabled| enabled.unwrap_or(false))
+            .map(|enabled| enabled.unwrap_or_else(|| feature.default_enabled()))
             .map_err(|error| MemoryError::Storage(error.to_string()))
     }
 

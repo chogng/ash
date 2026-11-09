@@ -24,7 +24,9 @@ The desktop host presents those records in Ash's [Sessions view](contrib/session
 search and `ReplyChatEditor`. The desktop Chat list model combines catalog
 records and supplies ordered sections and row operations. The view owns
 rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
-host's contracts. In an eligible new Chat draft, selecting an Ash model asks the
+host's contracts. The [catalog project ownership contract](SESSIONS_LIST.md#catalog-project-ownership)
+defines which actions reach a provider.
+In an eligible new Chat draft, selecting an Ash model asks the
 adapter for the current unsent text after model validation. The host opens an
 independent Ash Chat draft without sending a message. Its first send creates a
 Chat-owned Thread through the shared App Server.
@@ -110,14 +112,20 @@ editor and draft policy to the shared input. File selection, paste,
 drop, attachment preparation and cancellation belong to the shared Workbench input.
 Its permission slot binds the current model to Workbench `PermissionPickerActionItem`, which owns
 the shared permission menu, keyboard interaction and popup lifetime.
-In Code, **Choose project** selects a Project and a folder for the new
-conversation. A Project without a folder prompts for one. Opening a local
-folder directly reuses its Project or creates one.
-The draft holds the selected Project ID and the workspace for execution.
-Sessions management links the durable conversation through `IProjectService`
-before the first request can run. Worktrees and Dev Containers change where the
-Agent runs while retaining the selected Project. The picker owns folder history,
-cancellation and focus restoration.
+
+In local Code, the Project is the unit of organization for conversations. A
+Project can contain several folders and needs at least one usable folder to
+start a conversation. **Choose project** lists saved Projects. Selecting a
+Project with one folder uses that folder directly. With several folders, choose
+the working folder from the Project's submenu. Selecting a Project that has no
+folders yet prompts for its first folder. **Open Folder** selects the Project
+that already contains the directory or creates a Project for it.
+
+The draft keeps the Project ID for conversation membership and the selected
+workspace for execution. Sessions management links the durable conversation to
+the Project through `IProjectService` before the first request can run. Worktrees
+and Dev Containers change where the Agent runs while retaining the selected
+Project. The picker owns folder history, cancellation and focus restoration.
 For an independent remote Agent host, folder selection stays on that host.
 The Workbench Welcome workspace picker has a separate delegate and presentation;
 it does not own the Sessions execution environment.
@@ -141,8 +149,8 @@ window's notice hub; hiding a composer releases its introduction and focus regis
 with composer identities preventing messages in one input from hiding another's notices.
 `ChatInputNotificationWidget` owns banner rendering and action lifetimes. Input state
 only projects failures into the service; replacing a conversation or disposing its
-composer retires those projections. `registerChatInputOnboardingHosts` binds the
-voice and dictation providers to that composer's visible lifetime and onboarding lane.
+composer retires those projections. The composer registers voice onboarding in its
+notice lane while the input is visible.
 Voice introductions retain the profile acknowledgement preference and share one
 service across Chat, Cowork and floating voice controls. Escape and hiding an input
 release their presentation without acknowledging it; Got it records acknowledgement.

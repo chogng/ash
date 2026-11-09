@@ -9,7 +9,7 @@ import { Menus } from '../../../src/ash/sessions/browser/menus.js';
 import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
 import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
-import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
+import { IProjectService, type Project } from '../../../src/ash/platform/projects/common/projectService.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -22,7 +22,7 @@ import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimel
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
-import { autorun, constObservable } from '../../../src/ash/base/common/observable.js';
+import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
@@ -41,7 +41,7 @@ import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electr
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
 import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
-import { IChatListCatalog, type ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
+import { IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
 import { SessionActionsService } from '../../../src/ash/sessions/browser/sessionActionsService.js';
 import { IAgentSessionActionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
@@ -81,12 +81,9 @@ import { BrowserContextViewService } from '../../../src/ash/platform/contextview
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { SessionsViewRegistry } from '../../../src/ash/sessions/common/views.js';
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
-import { Event } from '../../../src/ash/base/common/event.js';
-import { AshChatNavigationSource } from '../../../src/ash/sessions/contrib/chat/browser/ashChatNavigationSource.js';
-import { AshChatSelectionService, IAshChatSelectionService } from '../../../src/ash/sessions/contrib/chat/browser/ashChatSelectionService.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { ISessionsSearchService } from '../../../src/ash/sessions/contrib/search/browser/searchService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
-import { IAshChatSessionService } from '../../../src/ash/sessions/contrib/chat/browser/ashChatSessionService.js';
 import { ISessionsService, type SessionsSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { ISessionSectionOrderService } from '../../../src/ash/sessions/services/sessions/browser/sessionSectionOrderService.js';
 import { IGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
@@ -96,7 +93,7 @@ import { ISessionGroupsService } from '../../../src/ash/sessions/services/sessio
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
@@ -219,7 +216,8 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[ISessionProviderScopeService, { onDidChangeScopes: Event.None, getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
 	[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModelCatalog: async () => [] } } as unknown as SessionProviderServices],
 	[IThemeService, theme],
-	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
+	// The project picker exercises the inherited styles of the production popup host.
+	[IContextViewService, resources.add(new BrowserContextViewService(parameters.has('folderPicker') ? sessionsRoot : document.body))],
 	[IVoiceCodeTranscriptionBackendService, dictation ? createTestDictationBackend(resources, dictation) : undefined],
 	[IPreferencesService, { openSettings: async () => undefined } as unknown as IPreferencesService],
 )));
@@ -227,7 +225,7 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
-registerTestDictationOnboarding(services);
+registerTestVoiceInputServices(services);
 registerTestComponentServices(services);
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
 	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: configuration,
@@ -302,7 +300,26 @@ window.ashChatGPTIntegration = {
 	},
 };
 services.registerInstance(ISessionsListModelService, new SessionsListModelService(storage));
-services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);
+let ashProject: Project = {
+	id: 'ash-project-fixture', name: 'Local Ash project', revision: 1,
+	archived: false, sessionCount: 0, description: '', materials: [], sessionIds: [],
+	icon: 'chat', color: 'terminal.ansiBlue',
+};
+const projectChanged = resources.add(new Emitter<void>());
+services.registerInstance(IProjectService, {
+	list: async () => parameters.has('ashProjectPicker') ? [ashProject] : [],
+	read: async (id: string) => {
+		if (parameters.has('ashProjectPicker') && id === ashProject.id) return ashProject;
+		throw new Error('Unknown fixture project');
+	},
+	moveExternalConversation: async (id: string, _from: string | undefined, to: string | undefined) => {
+		if (to !== ashProject.id) throw new Error('Unknown destination project');
+		ashProject = { ...ashProject, revision: ashProject.revision + 1, sessionCount: 1, externalConversationIds: [id] };
+		document.body.dataset.linkedConversation = id;
+		projectChanged.fire();
+	},
+	onDidChange: projectChanged.event,
+} as unknown as IProjectService);
 const groups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None, getOrder: (_mode, ids) => ids } as ISessionSectionOrderService);
@@ -310,42 +327,39 @@ services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None
 services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService);
 services.registerInstance(ISessionsManagementService, {
 	state: 'ready', onDidChange: Event.None, untitledSessions: [],
+	async initialize() { },
 	sessions: parameters.has('mixedCatalog') ? [{
 		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', kind: 'code',
 		chats: [{ threadId: 'fixture-code', status: 'active', origin: { type: 'root' } }],
+	}, {
+		sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
+		management: { status: 'idle' },
+		chats: [{ threadId: 'fixture-thread', status: 'active', origin: { type: 'root' }, createdAt: new Date(1) }],
 	}] : [],
 } as unknown as ISessionsManagementService);
+const chatSelection = observableValue<import('../../../src/ash/sessions/services/sessions/browser/sessionGridState.js').StoredChatSelection | undefined>('fixture chat', undefined);
 services.registerInstance(ISessionsService, {
+	chatSelection,
+	selectChatThread(sessionId: string, threadId: string) {
+		chatSelection.set({ kind: 'thread', sessionId, threadId }, undefined);
+		document.body.dataset.openedAsh = `${sessionId}/${threadId}`;
+	},
 	onDidChange: Event.None,
 	getSelection: (): SessionsSelection => ({ activeSelection: undefined, visibleSelections: [] }),
-	openSession: async (sessionId, threadId) => { document.body.dataset.openedCode = `${sessionId}/${threadId}`; },
-} as ISessionsService);
+	openSession: async (sessionId: string, threadId: string) => { document.body.dataset.openedCode = `${sessionId}/${threadId}`; },
+} as unknown as ISessionsService);
 services.registerInstance(IBlockedSessionsIndicatorService, services.createInstance(BlockedSessionsIndicatorModel));
 const sources: ChatListSource[] = [resources.add(services.createInstance(ChatGPTList))];
 if (parameters.has('mixedCatalog')) {
 	const ashServices = resources.add(services.createChild(new ServiceCollection(
 		[ICommandService, commands],
-		[IAshChatSessionService, {
-			initializeCatalog() {},
-			catalog: constObservable([{
-				sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
-				manager: { status: 'idle' },
-				threads: [{ threadId: 'fixture-thread', status: 'active', createdAtUnixMs: 1 }],
-			}]),
-		} as unknown as IAshChatSessionService],
 	)));
 	ashServices.registerInstance(ISessionsSearchService, { registerSource: () => Disposable.None, show: async () => { }, focus: () => { } });
-	const selection = ashServices.createInstance(AshChatSelectionService);
-	ashServices.registerInstance(IAshChatSelectionService, selection);
-	resources.add(autorun(reader => {
-		const current = selection.selection.read(reader);
-		if (current.kind === 'thread') document.body.dataset.openedAsh = `${current.sessionId}/${current.threadId}`;
-	}));
 	resources.add(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, () => {
 		ashChatSelected.set(true);
 		workspaceMode.set('chat');
 	}));
-	sources.push(resources.add(ashServices.createInstance(AshChatNavigationSource)));
+	sources.push(resources.add(ashServices.createInstance(NativeChatCatalogSource)));
 }
 services.registerInstance(IChatListCatalog, { sources });
 services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));

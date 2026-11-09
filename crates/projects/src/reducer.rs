@@ -36,8 +36,8 @@ pub(crate) fn apply(
                 schema_version: PROJECT_SCHEMA_VERSION,
                 project_id: request.project_id.clone(),
                 revision: 1,
-                created_at_ms: now_ms,
-                updated_at_ms: now_ms,
+                created_at_ms: Some(now_ms),
+                updated_at_ms: Some(now_ms),
                 status: ProjectStatus::Active,
                 scope: *scope,
                 name: name.clone(),
@@ -46,6 +46,7 @@ pub(crate) fn apply(
                 color: color.clone(),
                 roots: BTreeMap::new(),
                 session_ids: BTreeSet::new(),
+                external_conversation_ids: BTreeSet::new(),
                 materials: materials.clone(),
             }
         }
@@ -67,7 +68,8 @@ pub(crate) fn apply(
                 .checked_add(1)
                 .ok_or_else(|| ProjectError::InvalidTransition("revision overflow".into()))?;
             // A clock adjustment cannot make a saved update precede an earlier revision.
-            project.updated_at_ms = now_ms.max(project.updated_at_ms);
+            project.updated_at_ms =
+                Some(now_ms.max(project.updated_at_ms.or(project.created_at_ms).unwrap_or(0)));
             project
         }
     };
@@ -91,6 +93,7 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
             project.status = ProjectStatus::Deleted;
             project.roots.clear();
             project.session_ids.clear();
+            project.external_conversation_ids.clear();
             project.materials.clear();
             return Ok(());
         }
@@ -159,6 +162,24 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
         ProjectCommand::UnlinkSession { session_id } => {
             if !project.session_ids.remove(session_id) {
                 return Err(ProjectError::NotFound(session_id.to_string()));
+            }
+        }
+        ProjectCommand::LinkExternalConversation { conversation_id } => {
+            if project.scope() != crate::ProjectScope::Chat {
+                return Err(ProjectError::InvalidTransition(
+                    "external conversations require a Chat Project".into(),
+                ));
+            }
+            if !project
+                .external_conversation_ids
+                .insert(conversation_id.clone())
+            {
+                return Err(ProjectError::AlreadyExists(conversation_id.clone()));
+            }
+        }
+        ProjectCommand::UnlinkExternalConversation { conversation_id } => {
+            if !project.external_conversation_ids.remove(conversation_id) {
+                return Err(ProjectError::NotFound(conversation_id.clone()));
             }
         }
         ProjectCommand::Archive => project.status = ProjectStatus::Archived,

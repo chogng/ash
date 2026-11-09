@@ -1,3 +1,5 @@
+import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
+import { IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService } from '../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { QueryBuilder } from '../../../workbench/services/search/common/queryBuilder.js';
 import { SearchService } from '../../../workbench/services/search/common/searchService.js';
 import { BulkEditTestServices } from '../../../workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -53,6 +55,7 @@ test('Session files preserve their original directory through selection, directo
 			getHostWorkspace: () => ({ id: 'host', folders: [] }),
 			updateWorkspace: next => workspace.updateWorkspace(next),
 		});
+		registerFolderLabels(services);
 		using workspaceFolders = services.createInstance(WorkspaceFolderManagementContribution);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
@@ -88,6 +91,7 @@ test('Session files preserve their original directory through selection, directo
 		};
 		await sessions.openThread('first', 'restored-thread');
 		assert.equal(workspace.getWorkspace().folders[0]!.uri.toString(), URI.file(restoredRoot).toString());
+		assert.equal(workspace.getWorkspace().folders[0]!.name, 'first');
 		await files.readFile(URI.file(`${restoredRoot}/main.ts`));
 		assert.deepEqual(calls.pop(), { sessionDirectory: { sessionId: 'first', path: restoredRoot }, path: 'main.ts' });
 		await sessions.openThread('first', 'first-thread');
@@ -218,6 +222,7 @@ test('restored file identity waits for backend routing independently of Session 
 			getHostWorkspace: () => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }),
 			updateWorkspace: next => workspace.updateWorkspace(next),
 		});
+		registerFolderLabels(services);
 		using workspaceFolders = services.createInstance(WorkspaceFolderManagementContribution);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
@@ -234,3 +239,10 @@ test('restored file identity waits for backend routing independently of Session 
 		await assert.rejects(files.resolvePathIdentity(URI.file('/outside/main.ts')), /PermissionRequired/);
 	} finally { browser.window.close(); }
 });
+
+function registerFolderLabels(services: InstantiationService): void {
+	services.registerInstance(ISessionProviderScopeService, {
+		getScope: () => { throw new Error('Explorer labels do not query Git'); },
+	} as unknown as ISessionProviderScopeService);
+	services.registerSingleton(IWorkspaceFolderLabelService, () => services.createInstance(SessionsWorkspaceFolderLabelService));
+}

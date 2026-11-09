@@ -166,9 +166,10 @@ export class TabbedModelPicker extends Disposable {
 					}
 				}
 				return {
-					items: buildModelPickerItems(models, current),
+					items: buildModelPickerItems(models, current, configureInMenu),
 					listOptions: {
 						className: 'ash-chat-model-picker ash-action-widget-accent-checks', presentation: 'details',
+						menuIconPlacement: configureInMenu ? 'leading-with-trailing-check' : undefined,
 						ariaLabel: localize('chat.modelPicker.aria', 'Choose a chat model'),
 						showFilter: true, filterVisible: models.length > 0 && !this.delegate.isAutomaticModel(),
 						filterPlaceholder: localize('chat.modelPicker.search', 'Search models'),

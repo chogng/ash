@@ -87,19 +87,18 @@ function modelEntry(model = 'example', provider = 'openai'): ModelListResult['mo
 	};
 }
 
-test('model picker and management get the same GPT name after a catalog refresh', async () => {
+test('model picker and management use the catalog display name after a refresh', async () => {
 	using resources = new DisposableStore();
 	const { source, models } = catalogFixture(resources);
 	const gpt = modelEntry('gpt-6.1-sol', 'chatgpt-subscription');
-	gpt.display_name = 'GPT-6.1-Sol';
+	gpt.display_name = 'Sol 6.1';
 	const custom = modelEntry('gpt-6.1-sol', 'custom-gateway');
 	custom.display_name = 'Team coding model';
 	source.catalog = [gpt, custom];
 
 	const names = (catalog: Awaited<ReturnType<LanguageModelsService['listModels']>>) => catalog.map(entry => entry.displayName);
-	const expected = ['GPT-6.1 Sol', 'Team coding model'];
+	const expected = ['Sol 6.1', 'Team coding model'];
 	assert.deepEqual(names(await models.listModels()), expected);
-	gpt.display_name = 'GPT-6.1 Sol Fast';
 	gpt.selected_acceleration = 'priority';
 	assert.deepEqual(names(await models.refreshModels()), expected);
 	assert.deepEqual(names(await models.listModelCatalog()), expected);

@@ -90,6 +90,7 @@ pub use runtime::SubmitShellRequest;
 pub use runtime::SubmitToolRequest;
 pub use runtime::SubmitTurnRequest;
 pub use runtime::SubmittedCommand;
+pub use runtime::ThreadTranscriptMetadata;
 pub use runtime::TurnReceipt;
 pub use thread::LeaseGuard;
 pub use thread::ThreadUpdateSink;

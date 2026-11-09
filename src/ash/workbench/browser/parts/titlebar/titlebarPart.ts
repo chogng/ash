@@ -55,36 +55,47 @@ export interface ITitlebarPartFactoryOptions {
 }
 
 /** Creates the titlebar implementation selected by the current host. */
-export type TitlebarPartFactory = (
+export type TitlebarPartFactory<T extends ITitlebarPart = BrowserTitlebarPart> = (
 	container: HTMLElement,
 	options: ITitlebarPartFactoryOptions,
 	instantiationService: IInstantiationService,
-) => BrowserTitlebarPart;
+) => T;
 
 export class BrowserTitleService extends Disposable implements ITitleService {
 	declare readonly _serviceBrand: undefined;
-	public readonly windowTitle: WindowTitle;
-	private readonly mainPart: BrowserTitlebarPart;
-	private readonly auxiliaryParts = this._register(new DisposableMap<Document, AuxiliaryBrowserTitlebarPart>());
+	private resolvedWindowTitle: WindowTitle | undefined;
+	private readonly mainPart: ITitlebarPart;
+	private readonly auxiliaryParts = this._register(new DisposableMap<Document, ITitlebarPart>());
 	private readonly variables = new Map<string, ITitleVariable>();
 	private properties: ITitleProperties = {};
 	public get onMenubarVisibilityChange(): Event<boolean> { return this.mainPart.onMenubarVisibilityChange; }
+	public get windowTitle(): WindowTitle {
+		return this.resolvedWindowTitle ??= this._register(this.instantiationService.createInstance(
+			WindowTitle, this.container.ownerDocument.defaultView!, this.productName, this.editorGroupsContainer));
+	}
 
 	constructor(
 		private readonly container: HTMLElement,
 		protected readonly productName: string,
-		createTitlebarPart: TitlebarPartFactory,
-		editorGroupsContainer: IEditorGroupsContainer,
-		@IInstantiationService instantiationService: IInstantiationService,
+		createTitlebarPart: TitlebarPartFactory<ITitlebarPart>,
+		private readonly editorGroupsContainer: IEditorGroupsContainer | undefined,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		// Window chrome reads its own groups; global editor commands may follow another window's focus.
-		this.windowTitle = this._register(instantiationService.createInstance(WindowTitle, container.ownerDocument.defaultView!, productName, editorGroupsContainer));
-		this.mainPart = this._register(createTitlebarPart(container, {
-			windowTitle: this.windowTitle,
-			editorGroupsContainer,
-		}, instantiationService));
-		this._register(CommandsRegistry.register('registerWindowTitleVariable', (_accessor, name, contextKey) => {
+		const titleService = this;
+		try {
+			// Editor windows resolve the title against their own groups at startup.
+			if (editorGroupsContainer) void this.windowTitle;
+			this.mainPart = this._register(createTitlebarPart(container, {
+				// Session chrome doesn't use the editor title model. Resolve it only when requested.
+				get windowTitle() { return titleService.windowTitle; },
+				editorGroupsContainer,
+			}, instantiationService));
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+		if (editorGroupsContainer) this._register(CommandsRegistry.register('registerWindowTitleVariable', (_accessor, name, contextKey) => {
 			if (typeof name !== 'string' || typeof contextKey !== 'string') {
 				throw new TypeError(localize('window.title.invalidVariable', 'Window title variables require a name and a context key.'));
 			}
@@ -110,7 +121,7 @@ export class BrowserTitleService extends Disposable implements ITitleService {
 		}
 	}
 
-	public getPart(container: HTMLElement): BrowserTitlebarPart {
+	public getPart(container: HTMLElement): ITitlebarPart {
 		const part = container.ownerDocument === this.container.ownerDocument ? this.mainPart : this.auxiliaryParts.get(container.ownerDocument);
 		if (!part) {
 			throw new Error('This window has no titlebar registered with the title service');
@@ -118,18 +129,35 @@ export class BrowserTitleService extends Disposable implements ITitleService {
 		return part;
 	}
 
-	public createAuxiliaryTitlebarPart(container: HTMLElement, editorGroupsContainer: IEditorGroupsContainer, instantiationService: IInstantiationService): IAuxiliaryTitlebarPart {
+	public createAuxiliaryTitlebarPart(container: HTMLElement, editorGroupsContainer: IEditorGroupsContainer, instantiationService: IInstantiationService): IAuxiliaryTitlebarPart;
+	public createAuxiliaryTitlebarPart<P extends ITitlebarPart>(container: HTMLElement, createPart: (onDispose: () => void) => P): P;
+	public createAuxiliaryTitlebarPart(
+		container: HTMLElement,
+		editorGroupsOrFactory: IEditorGroupsContainer | ((onDispose: () => void) => ITitlebarPart),
+		instantiationService?: IInstantiationService,
+	): ITitlebarPart {
 		const document = container.ownerDocument;
 		if (document === this.container.ownerDocument || this.auxiliaryParts.has(document)) {
 			throw new Error('This window already has a titlebar registered with the title service');
 		}
-		const part = this.doCreateAuxiliaryTitlebarPart(container, editorGroupsContainer, instantiationService,
-			() => { this.auxiliaryParts.deleteAndLeak(document); });
+		const unregister = () => { this.auxiliaryParts.deleteAndLeak(document); };
+		let part: ITitlebarPart;
+		if (typeof editorGroupsOrFactory === 'function') {
+			part = editorGroupsOrFactory(unregister);
+		} else {
+			const editorTitlebar = this.doCreateAuxiliaryTitlebarPart(container, editorGroupsOrFactory, instantiationService!, unregister);
+			// The window owns sibling order; its editor and status bar follow the title area.
+			container.prepend(editorTitlebar.domNode);
+			part = editorTitlebar;
+		}
 		this.auxiliaryParts.set(document, part);
-		part.updateProperties(this.properties);
-		part.registerVariables([...this.variables.values()]);
-		// The window owns sibling order; its editor and status bar follow the title area.
-		container.prepend(part.domNode);
+		try {
+			part.updateProperties(this.properties);
+			part.registerVariables([...this.variables.values()]);
+		} catch (error) {
+			part.dispose();
+			throw error;
+		}
 		return part;
 	}
 

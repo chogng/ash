@@ -58,10 +58,12 @@ pub struct ProjectDto {
     #[ts(type = "number")]
     pub revision: u64,
     /// Unix epoch milliseconds.
-    #[ts(type = "number")]
-    pub created_at_ms: u64,
-    #[ts(type = "number")]
-    pub updated_at_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub created_at_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatusDto,
     pub name: String,
     pub description: String,
@@ -73,6 +75,9 @@ pub struct ProjectDto {
     pub color: Option<String>,
     pub roots: Vec<ProjectRootDto>,
     pub session_ids: Vec<SessionId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub external_conversation_ids: Option<Vec<String>>,
     pub materials: Vec<ProjectMaterialDto>,
 }
 
@@ -82,10 +87,12 @@ pub struct ProjectSummaryDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
-    #[ts(type = "number")]
-    pub created_at_ms: u64,
-    #[ts(type = "number")]
-    pub updated_at_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub created_at_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatusDto,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -226,6 +233,24 @@ pub struct ProjectSessionMutationParams {
     #[ts(type = "number")]
     pub expected_revision: u64,
     pub session_id: SessionId,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectConversationMembership {
+    Link,
+    Unlink,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectConversationMembershipParams {
+    pub command_id: CommandId,
+    pub project_id: ProjectId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub conversation_id: String,
+    pub membership: ProjectConversationMembership,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

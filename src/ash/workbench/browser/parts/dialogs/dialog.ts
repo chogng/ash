@@ -29,7 +29,7 @@ export function createWorkbenchDialogOptions({ shouldConfirmDiscard, ...options 
 	};
 }
 
-export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'detailElement' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
+export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'layout' | 'detailElement' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
 	readonly messageAsTitle?: boolean;
 	readonly useFormForDestructiveConfirmations?: boolean;
 }

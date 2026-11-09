@@ -11,6 +11,7 @@ import type {
 	IWorkspaceContextApi,
 } from '../../platform/workspace/common/workspaceIpc.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
+import type { IWorkspaceFolder } from '../../platform/workspace/common/workspace.js';
 import type {
 	INativeHostApi,
 } from '../../platform/native/common/nativeHost.js';
@@ -32,6 +33,7 @@ import type { IAddress } from '../../platform/remote/common/remoteAgentConnectio
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
 import { AppServerSymphonyService } from '../../platform/symphony/browser/appServerSymphonyService.js';
 import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/native/common/nativeHost.js';
+import { REQUEST_MICROPHONE_ACCESS_CHANNEL } from '../../platform/native/common/native.js';
 import { AppServerBackupService } from '../../platform/backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../platform/call/browser/appServerCallService.js';
 import { AppServerAgentVoiceService } from '../../platform/agentHost/browser/appServerAgentService.js';
@@ -66,7 +68,7 @@ import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 import type { IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
 import { createRemoteAgentApi } from '../../platform/remote/electron-browser/remoteAgentApi.js';
 import { createRemoteConnectionApi } from '../../platform/remote/electron-browser/remoteConnectionApi.js';
-import type { IDirectoryPermissionRequestService } from '../../platform/workspace/common/workspaceTrust.js';
+import { hasDevelopmentPermissions, type IDirectoryPermissionRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../../platform/webWorker/browser/webWorkerService.js';
@@ -87,8 +89,10 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 	readonly workspaceStartupScheduled: Promise<void>;
 	/** Settles after the first directory binding, including a declined startup prompt. */
 	readonly workspaceDirectoriesReady: Promise<void>;
-	readonly startWorkspaceDirectories: () => void;
+	/** Releases any startup authorization decision once the window is ready. */
+	readonly startWorkspaceDirectories: (options?: WorkspaceStartupOptions) => void;
 	readonly reloadWorkspaceDirectories: () => Promise<void>;
+	readonly bindLocalWorkspaceFolder: (folder: IWorkspaceFolder) => Promise<boolean>;
 }
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
@@ -116,6 +120,11 @@ export class ElectronRendererLocalApi extends Disposable {
 		]);
 		void this.paths.catch(() => undefined);
 	}
+}
+
+interface WorkspaceStartupOptions {
+	readonly discardUntrustedWorkspace?: () => Promise<void>;
+	readonly onTrustDeclined?: () => Promise<void>;
 }
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
@@ -155,7 +164,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const client = agentHost.client;
 		let backend: IWorkbenchHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
-		const workspaceWindowReady = new DeferredPromise<void>();
+		const workspaceWindowReady = new DeferredPromise<WorkspaceStartupOptions | undefined>();
 		const workspaceStartupScheduled = new DeferredPromise<void>();
 		const finishWorkspaceScheduling = (): void => {
 			if (workspaceStartupScheduled.isSettled) return;
@@ -163,25 +172,16 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			void workspaceStartupScheduled.complete();
 		};
 		resources.add(toDisposable(() => {
-			void workspaceWindowReady.complete();
+			void workspaceWindowReady.complete(undefined);
 			void workspaceStartupScheduled.complete();
 		}));
-		// Previously authorized folders can bind while the Workbench is being
-		// restored. Only a new permission prompt needs the window to be ready.
-		const startupTrust: IDirectoryPermissionRequestService = {
-			requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
-			async requestDirectoryPermissions(request, signal) {
-				finishWorkspaceScheduling();
-				await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
-				if (resources.isDisposed) throw new CancellationError();
-				return workspaceTrust.requestDirectoryPermissions(request, signal);
-			},
-		};
 		let workspaceDirectoriesReady = Promise.resolve();
-		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
-		const trackWorkspaceInitialization = (promise: Promise<void>): Promise<void> => {
+		// Files and terminals can remain open after switching away from a draft.
+		const additionalFolders = new Map<string, IWorkspaceFolder>();
+		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; needsTrust: boolean; error?: unknown; } | undefined;
+		const trackWorkspaceInitialization = (promise: Promise<void>): NonNullable<typeof workspaceInitialization> => {
 			const attempt: NonNullable<typeof workspaceInitialization> = {
-				generation: client.generation, state: 'restoring', promise,
+				generation: client.generation, state: 'restoring', needsTrust: false, promise,
 			};
 			workspaceInitialization = attempt;
 			workspaceChanges.fire();
@@ -195,9 +195,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				attempt.error = error;
 				workspaceChanges.fire();
 			});
-			return promise;
+			return attempt;
 		};
-		const restoreWorkspace = (retry = false, force = false): Promise<void> => {
+		const restoreWorkspace = ({ retry = false, force = false, startup = false } = {}): Promise<void> => {
 			// Terminals and reconnect listeners share one binding attempt per generation.
 			if (force || workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
 				let remoteHostLabel: string | undefined;
@@ -207,7 +207,52 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					remoteHostLabel = remoteConnection.authority;
 				}
 				if (resources.isDisposed) throw new CancellationError();
-				return trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel, onBindingQueued: finishWorkspaceScheduling }));
+				const startupTrust: IDirectoryPermissionRequestService = {
+					requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
+					async requestDirectoryPermissions(request, signal) {
+						finishWorkspaceScheduling();
+						// Only the prompt needs the window. Saved grants can bind during startup.
+						const startupOptions = await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
+						if (resources.isDisposed) throw new CancellationError();
+						const setNeedsTrust = (value: boolean): void => {
+							if (workspaceInitialization !== attempt || attempt.generation !== client.generation || attempt.needsTrust === value) return;
+							attempt.needsTrust = value;
+							workspaceChanges.fire();
+						};
+						setNeedsTrust(workspaceTrust.requiresDevelopmentTrust === true);
+						let declined = false;
+						try {
+							const choice = await workspaceTrust.requestDirectoryPermissions(request, signal);
+							declined = choice === 'cancel' && !signal?.aborted;
+							if (startup && declined && workspaceInitialization === attempt) await startupOptions?.onTrustDeclined?.();
+							return choice;
+						} finally {
+							// A declined workspace stays available for retry until its context changes.
+							if (!declined) setNeedsTrust(false);
+						}
+					},
+				};
+				const generation = client.generation;
+				const previous = workspaceInitialization?.generation === generation ? workspaceInitialization.promise : undefined;
+				const initialize = async (): Promise<void> => {
+					await previous?.catch(() => undefined);
+					if (resources.isDisposed || client.generation !== generation) throw new CancellationError();
+					await initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, {
+						remoteHostLabel,
+						additionalFolders: [...additionalFolders.values()],
+						onBindingQueued: finishWorkspaceScheduling,
+						discardUntrustedWorkspace: startup ? async signal => {
+							finishWorkspaceScheduling();
+							const options = await raceCancellationError(workspaceWindowReady.p, signal);
+							if (resources.isDisposed || workspaceInitialization !== attempt) throw new CancellationError();
+							if (!options?.discardUntrustedWorkspace) return false;
+							await options.discardUntrustedWorkspace();
+							return true;
+						} : undefined,
+					});
+				};
+				const attempt = trackWorkspaceInitialization(initialize());
+				return attempt.promise;
 			}
 			return workspaceInitialization.promise;
 		};
@@ -228,8 +273,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const recovery: IAppServerConnectionRecovery = {
 			get phase() {
 				if (permissionRecoveries > 0) return 'permissions';
-				return connection.recovery.status === 'idle' && workspaceInitialization?.generation === client.generation
-					&& workspaceInitialization.state !== 'ready' ? 'workspace' : 'connection';
+				if (connection.recovery.status !== 'idle' || workspaceInitialization?.generation !== client.generation
+					|| workspaceInitialization.state === 'ready') return 'connection';
+				return workspaceInitialization.needsTrust ? 'workspaceTrust' : 'workspace';
 			},
 			get status() {
 				const status = connection.recovery.status;
@@ -238,9 +284,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				return workspaceInitialization.state === 'restoring' ? 'recovering' : workspaceInitialization.state === 'failed' ? 'failed' : 'idle';
 			},
 			get error() {
-				return connection.recovery.status === 'idle' && workspaceInitialization?.generation === client.generation && workspaceInitialization.state === 'failed'
-					? String(workspaceInitialization.error instanceof Error ? workspaceInitialization.error.message : workspaceInitialization.error)
-					: connection.recovery.error;
+				const attempt = workspaceInitialization;
+				if (connection.recovery.status !== 'idle' || attempt?.generation !== client.generation || attempt.state !== 'failed') {
+					return connection.recovery.error;
+				}
+				if (attempt.needsTrust) return undefined;
+				return String(attempt.error instanceof Error ? attempt.error.message : attempt.error);
 			},
 			onDidChange: Event.any(connection.recovery.onDidChange, workspaceChanges.event),
 			reconnect: async options => {
@@ -250,7 +299,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					// A ready carrier needs only its failed directory binding retried.
 					const bindingPending = workspaceInitialization?.generation === client.generation && workspaceInitialization.state !== 'ready';
 					if (connection.recovery.status !== 'idle' || !bindingPending) await connection.recovery.reconnect();
-					await restoreWorkspace(true);
+					await restoreWorkspace({ retry: true });
 				} finally {
 					if (permissions) { permissionRecoveries--; workspaceChanges.fire(); }
 				}
@@ -277,7 +326,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			// Device ownership stays on this computer when the workspace connection is remote.
 			if (localClient.capabilities?.contracts.channels?.version === 1) { backend = { ...backend, channels: resources.add(new AppServerChannelService(localClient)) }; }
 			if (localClient.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(localClient)) }; }
-			if (remoteConnection.kind === 'local' && client.capabilities?.contracts.voiceConversation?.version === 1) { backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client)) }; }
+			if (remoteConnection.kind === 'local' && AppServerAgentVoiceService.isSupported(client)) {
+				backend = { ...backend, agentVoice: resources.add(new AppServerAgentVoiceService(client, () => invoke<boolean>(REQUEST_MICROPHONE_ACCESS_CHANNEL))) };
+			}
 			backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(localClient) };
 			if (client.capabilities?.contracts.symphony?.version === 1) { backend = { ...backend, symphony: resources.add(new AppServerSymphonyService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
@@ -290,7 +341,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			resources.add(toDisposable(() => replacement.dispose()));
 			// Publish the pending binding before Workbench services read connection recovery state.
 			// The window releases the prompt after its shell and theme are ready.
-			workspaceDirectoriesReady = restoreWorkspace().catch(error => {
+			workspaceDirectoriesReady = restoreWorkspace({ startup: true }).catch(error => {
 				if (!isCancellationError(error)) throw error;
 			});
 			void workspaceDirectoriesReady.catch(() => undefined);
@@ -360,8 +411,24 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			workspace: workspaceApi,
 			workspaceStartupScheduled: workspaceStartupScheduled.p,
 			workspaceDirectoriesReady,
-			startWorkspaceDirectories: () => { void workspaceWindowReady.complete(); },
-			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace(false, true); },
+			startWorkspaceDirectories: options => { void workspaceWindowReady.complete(options); },
+			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace({ force: true }); },
+			bindLocalWorkspaceFolder: async folder => {
+				if (!enabled || remoteConnection.kind !== 'local') return false;
+				await workspaceDirectoriesReady;
+				if (resources.isDisposed || client.state !== 'ready') return false;
+				if (additionalFolders.has(folder.id) && hasDevelopmentPermissions(await backend.workspaceTrust.readWorkspaceDirectory(folder.id))) return true;
+				const existing = await backend.workspaceTrust.readDirectory(folder.uri.fsPath);
+				if (!hasDevelopmentPermissions(existing.permissions)) return false;
+				additionalFolders.set(folder.id, folder);
+				try {
+					await restoreWorkspace({ force: true });
+					return hasDevelopmentPermissions(await backend.workspaceTrust.readWorkspaceDirectory(folder.id));
+				} catch (error) {
+					if (additionalFolders.get(folder.id) === folder) additionalFolders.delete(folder.id);
+					throw error;
+				}
+			},
 			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};
 	} catch (error) {

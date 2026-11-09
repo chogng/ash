@@ -20,7 +20,7 @@ export class SessionsAccountMenu {
 		const settingsLabel = localize('workbench.manageSettings', 'Settings');
 		const accountLabel = localize('sessions.settings.account', 'Account');
 		const ideLabel = localize('sessions.menu.openIde', 'Open IDE');
-		const shortcutsLabel = localize('sessions.settings.shortcuts', 'Keyboard Shortcuts');
+		const shortcutsLabel = localize('sessions.accountMenu.shortcuts', 'Shortcuts');
 		const actions: IAction[] = [
 			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, icon: Lxicon.gear, enabled: true, run: () => this.preferences.open() },
 			{ id: 'workbench.action.manageAccounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run: () => this.commands.executeCommand('workbench.action.manageAccounts') },

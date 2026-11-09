@@ -242,41 +242,6 @@ async function replaceChatInput(editor: Editor, text: string): Promise<void> {
 	);
 }
 
-test(
-	'Sessions dictation introduction preserves the draft and restores focus after accessible help',
-	{ tag: ['@electron-ui', '@electron-app-server'] },
-	async ({ application, target, workbench }) => {
-		if (!('windows' in application)) {
-			throw new Error('Expected Electron windows');
-		}
-		const page = await workbench.openAgentsWindow(target.kind);
-		const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
-		const editor = new Editor(chat);
-		await replaceChatInput(editor, 'Keep the Sessions draft');
-		await new QuickAccess(page).runCommand('workbench.action.chat.showSpeechToTextIntroduction');
-		const introduction = page.getByRole('region', { name: 'Dictation introduction', exact: true });
-		await expect(introduction).toBeVisible();
-		const done = introduction.getByRole('button', { name: 'Done', exact: true });
-		await done.focus();
-		await page.keyboard.press('Alt+F1');
-		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-		await expect(help).toBeVisible();
-		await expect(help.getByRole('textbox')).toHaveValue(/Test text is never inserted/);
-		await page.keyboard.press('Escape');
-		await expect(help).toHaveCount(0);
-		await expect(done).toBeFocused();
-		await page.keyboard.press('Alt+F2');
-		const accessibleView = page.getByRole('dialog', { name: 'Accessible View', exact: true });
-		await expect(accessibleView).toBeVisible();
-		await expect(accessibleView.getByRole('textbox')).toHaveAttribute('readonly', '');
-		await page.keyboard.press('Escape');
-		await page.keyboard.press('Escape');
-		await expect(introduction).toHaveCount(0);
-		await editor.waitForEditorContents(text => text === 'Keep the Sessions draft');
-		await expect(editor.input).toBeFocused();
-	},
-);
-
 async function expectComposerFocusWithoutOutline(card: Locator, input: Locator, blurTarget: Locator): Promise<void> {
 	await blurTarget.hover();
 	await blurTarget.focus();
@@ -1952,7 +1917,7 @@ test(
 		const catalogSearch = settings.getByRole('combobox', { name: 'Search models', exact: true });
 		await catalogSearch.fill('openai/gpt-6-astra');
 		await expect(modelRows).toHaveCount(1);
-		await expect(modelRows).toContainText(['GPT-6 Astra']);
+		await expect(modelRows).toContainText(['Astra 6']);
 		await expect(catalogSearch).toBeFocused();
 		await expect(apiConnection).toBeVisible();
 		await catalogSearch.fill('');
@@ -2148,7 +2113,7 @@ test(
 				settings.locator('.ash-models-settings-api-row').first().locator('input[type="password"]'),
 			).toBeVisible();
 			await expect(
-				settings.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true }),
+				settings.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true }),
 			).toBeChecked();
 		}
 		await navigation.getByRole('button', { name: 'Appearance' }).click();
@@ -2269,10 +2234,10 @@ test(
 	},
 );
 
-test(
+focusTest(
 	'Open in Agents moves the IDE chat draft and preserves drafts when the target chat is occupied',
 	{ tag: ['@electron-ui'] },
-	async ({ application, driver, target, workbench }) => {
+	async ({ application, target, workbench }) => {
 		if (target.kind !== 'electron' || !('windows' in application))
 			throw new Error('Agents Window handoff requires Electron');
 
@@ -2305,7 +2270,6 @@ test(
 		);
 		await expect(auxiliaryBar).toBeHidden();
 		await expect(sourceLine).toHaveText('');
-		let activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
 		await sessionsPage
 			.locator('.ash-window-mode-control')
 			.getByRole('button', { name: 'Code', exact: true })
@@ -2320,13 +2284,9 @@ test(
 		await workbenchPage.keyboard.insertText('Keep this second draft in the IDE');
 		await expect(sourceLine).toHaveText('Keep this second draft in the IDE');
 		sessionsPage = await workbench.openAgentsWindow('electron');
-		// The occupied target rejects the second handoff; assert and consume only that expected command error.
-		const rejectedHandoff =
-			"[runtime] Error: Error invoking remote method 'ash:native-host:open-agents-window': Error: Error: The Agents Window already has an unsent draft in this chat.";
-		await expect.poll(() => driver.diagnostics.errors).toEqual([rejectedHandoff]);
-		driver.diagnostics.consoleErrors.splice(driver.diagnostics.consoleErrors.indexOf(rejectedHandoff), 1);
+		await expect(workbenchPage.getByRole('region', { name: 'Notifications', exact: true })
+			.getByText('The Agents Window already has an unsent draft in this chat.')).toBeVisible();
 		targetEditor = new Editor(sessionsPage.locator('.ash-sessions-chat-slot.active:visible'));
-		activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
 		// Chat and Code share this Session's draft, including the edit made before close.
 		await targetEditor.waitForEditorContents(contents => contents === 'Keep this Code draft during handoff');
 		await expect(sourceLine).toHaveText('Keep this second draft in the IDE');
@@ -2368,7 +2328,6 @@ test(
 		await expect(targetChat).toHaveAttribute('data-session-id', sessionId!);
 		await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
 		const sessionTitle = (await targetChat.getAttribute('aria-label'))!;
-		const navigation = sessionsPage.locator('.ash-sessions-activity-content');
 		await sessionsPage
 			.locator('.ash-window-mode-control')
 			.getByRole('button', { name: 'Code', exact: true })
@@ -2377,22 +2336,14 @@ test(
 		const codeChat = sessionsPage.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 		await expect(codeChat).toHaveAttribute('data-session-id', sessionId!);
 		await expect(codeChat).toHaveAttribute('data-thread-id', threadId!);
-		await replaceChatInput(new Editor(codeChat), 'Code draft for the same conversation');
-		await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
-		const chatEditor = new Editor(
-			sessionsPage.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)'),
-		);
-		await chatEditor.waitForEditorContents(contents => contents === 'Code draft for the same conversation');
-		await sessionsPage
-			.locator('.ash-window-mode-control')
-			.getByRole('button', { name: 'Code', exact: true })
-			.click();
+		const codeEditor = new Editor(codeChat);
+		await replaceChatInput(codeEditor, 'Code draft for the same conversation');
 		await sessionsPage.locator('[data-action-id="sessions.newSession"] button').click();
-		await expect(codeChat).not.toHaveAttribute('data-session-id', sessionId!);
+		await expect(codeChat).toHaveAttribute('data-untitled-session-id', /.+/u);
 		await sessionsPage.locator('[data-part="titlebar"]').getByRole('button', { name: 'Back', exact: true }).click();
-		await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
-		await expect(targetChat).toHaveAttribute('data-session-id', sessionId!);
-		await expect(targetChat).toHaveAttribute('data-thread-id', threadId!);
+		await expect(codeChat).toHaveAttribute('data-session-id', sessionId!);
+		await expect(codeChat).toHaveAttribute('data-thread-id', threadId!);
+		await codeEditor.waitForEditorContents(contents => contents === 'Code draft for the same conversation');
 	},
 );
 
@@ -3011,7 +2962,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: 'New', exact: true });
 	const projects = navigation.getByRole('button', { name: 'Projects' });
-	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
+	const menu = page.getByRole('menuitem', { name: 'Application menu', exact: true });
 	const hasWindowMenu = target.kind === 'browser' || process.platform !== 'darwin';
 	if (!hasWindowMenu) {
 		await expect(menu).toHaveCount(0);

@@ -2,20 +2,24 @@ import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from '.
 import { ChatCoworkTasks } from '../../cowork/browser/chatCoworkTasks.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../workbench/services/chat/common/chatService.js';
+import { formatChatMessageTime } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatReplyError } from '../../../common/chatReplyBackend.js';
 import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
 import { ChatGPTOutbox, type PendingChatGPTCreation } from './chatGPTOutbox.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
+import { StringSHA1 } from '../../../../base/common/hash.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { equals } from '../../../../base/common/objects.js';
+import { isMacintosh, isNative } from '../../../../base/common/platform.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { isUuid } from '../../../../base/common/uuid.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService, Severity, type INotificationActions, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
+import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ChatGPTAuthenticationError, IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTHistory } from './chatGPTClient.js';
@@ -67,7 +71,20 @@ interface ChatGPTDraft {
 
 interface ChatGPTDraftTarget {
 	readonly projectId?: string;
+	readonly ashProjectId?: string;
 	readonly folder?: URI;
+}
+
+export function chatGPTProjectPreferenceKey(scope: string | undefined, id: string): string | undefined {
+	return scope && `${scope}:${id}`;
+}
+
+/** The account scope keeps external conversation IDs distinct in the shared Ash catalog. */
+export function chatGPTProjectConversationId(scope: string | undefined, id: string): string | undefined {
+	if (!scope) return undefined;
+	const hash = new StringSHA1();
+	hash.update(JSON.stringify(['chatgpt', scope, id]));
+	return hash.digest();
 }
 
 export const chatGPTAttachmentLimits = { count: 10, fileBytes: 20 * 1024 * 1024, totalBytes: 50 * 1024 * 1024 };
@@ -232,6 +249,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private voiceController: AbortController | undefined;
 	private voiceMedia: ChatGPTVoiceSession | undefined;
 	private voiceMessageId: string | undefined;
+	private pendingVoiceConversationId: string | undefined;
 	private voiceCreatedConversation = false;
 	private voiceStopping: Promise<void> | undefined;
 	private operation: AbortController | undefined;
@@ -717,7 +735,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const key = this.draftKey();
 		this.drafts.set(key, {
 			...this.drafts.get(key), text: state.draft, attachments: state.attachments,
-			target: { ...state.draftTarget, ...change },
+			target: {
+				...state.draftTarget, ...change,
+				...(change.projectId && { ashProjectId: undefined }),
+				...(change.ashProjectId && { projectId: undefined }),
+			},
 		});
 		this.update({});
 	}
@@ -756,22 +778,29 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			if (controller.signal.aborted || this.voiceController !== controller) { return; }
 			const media = this.voiceMedia = new ChatGPTVoiceSession(window, update => {
 				if (this.voiceController !== controller || controller.signal.aborted) { return; }
-				if (update.conversationId && update.conversationId !== this.model.get().conversationId) {
-					this.update({ conversationId: update.conversationId }); this.rememberConversation(update.conversationId);
-				}
 				if (update.parentId) { this.voiceMessageId = update.parentId; }
+				const current = this.model.get();
+				let transcript = current.voiceTranscript;
 				const message = update.message;
 				if (message?.text.trim() && !message.activity) {
 					this.voiceMessageId = message.id;
-					const transcript = this.model.get().voiceTranscript;
 					const item = { id: message.id, text: message.text.slice(0, 65536), role: message.role };
-					this.update({ voiceTranscript: (transcript.some(previous => previous.id === item.id) ? transcript.map(previous => previous.id === item.id ? item : previous) : [...transcript, item]).slice(-64) });
+					transcript = (transcript.some(previous => previous.id === item.id) ? transcript.map(previous => previous.id === item.id ? item : previous) : [...transcript, item]).slice(-64);
+				}
+				// A new voice room can report its ID before the user submits an utterance.
+				const voiceId = update.conversationId ?? this.pendingVoiceConversationId;
+				const awaitingFirstMessage = this.voiceCreatedConversation && !transcript.length;
+				this.pendingVoiceConversationId = awaitingFirstMessage ? voiceId : undefined;
+				const conversationId = (awaitingFirstMessage ? undefined : voiceId) ?? current.conversationId;
+				if (conversationId !== current.conversationId || transcript !== current.voiceTranscript) {
+					this.update({ conversationId, voiceTranscript: transcript });
+					if (conversationId !== current.conversationId) this.rememberConversation(conversationId);
 				}
 			}, error => {
 				if (this.voiceController !== controller) { return; }
 				// Even a failed room may have committed turns; reload its continuation node.
 				void this.endVoice(true);
-				if (error !== undefined) { this.update({ error: this.errorText(error) }); }
+				if (error !== undefined) { this.notifications.error(this.errorText(error)); }
 			});
 			media.unlockAudio();
 			await media.connect((sdp, signal) => this.client.voice({ sdp, conversationId: state.conversationId, parentId: state.parentId, language: getNLSLanguage() }, signal), controller.signal);
@@ -779,7 +808,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		} catch (error) {
 			if (this.voiceController === controller && !controller.signal.aborted) {
 				await this.endVoice(!!this.voiceMessageId);
-				this.update({ error: this.errorText(error) });
+				if (error instanceof DOMException && error.name === 'NotAllowedError') {
+					this.notifications.warn(isNative && isMacintosh
+						? localize('sessions.chatgpt.voicePermissionDeniedMac', 'Microphone access was denied. In System Settings, open Privacy & Security, select Microphone, and enable access for Ash. Then try again.')
+						: localize('sessions.chatgpt.voicePermissionDenied', 'Microphone access was denied. Allow microphone access in your system or browser settings, then try again.'));
+				} else {
+					this.notifications.error(this.errorText(error));
+				}
 			}
 		}
 	}
@@ -793,7 +828,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.voiceController = undefined;
 		controller.abort();
 		this.voiceMedia?.dispose(); this.voiceMedia = undefined;
-		const id = this.model.get().conversationId;
+		const id = this.pendingVoiceConversationId ?? this.model.get().conversationId;
+		this.pendingVoiceConversationId = undefined;
 		const messageId = this.voiceMessageId;
 		if (!refresh || this.isDisposed) { this.update({ voice: 'idle', voiceTranscript: [] }); return; }
 		if (!messageId && this.voiceCreatedConversation) {
@@ -805,19 +841,22 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			try {
 				if (id) {
 					const history = await this.client.voiceHistory(id, messageId, signal);
-					const projectId = this.voiceCreatedConversation ? this.drafts.get(this.draftKey())?.target?.projectId : undefined;
-					const move = projectId ? await this.assignNewConversationToProject(id, projectId, signal) : undefined;
+					const target = this.voiceCreatedConversation ? this.drafts.get(this.draftKey())?.target : undefined;
+					const move = await this.assignNewConversationToProject(id, target, signal);
 					if (generation === this.generation) {
 						if (this.voiceCreatedConversation) this.forgetDraft(this.draftKey());
 						this.bindConversation(history.id, this.draftKey());
 						this.bindLocalTimeline(this.draftKey(), history.id);
 						this.restoreHistory(history);
 						this.rememberHistory(history, { projectId: move?.projectId });
-						if (move?.error) this.update({ error: move.error });
+						if (move?.error) this.notifications.error(move.error);
 					}
 				}
 			} catch (error) {
-				if (generation === this.generation) { this.update({ error: this.errorText(error), uncertain: !!messageId }); }
+				if (generation === this.generation) {
+					this.update({ uncertain: !!messageId });
+					this.notifications.error(this.errorText(error));
+				}
 			} finally {
 				if (generation === this.generation) { this.update({ voice: 'idle', busy: false, loading: undefined, voiceTranscript: [] }); }
 			}
@@ -927,7 +966,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public getAccessibleContent(): string {
 		const state = this.model.get();
 		const messages = state.messages.filter(message => !message.activity).map(message => {
-			return `${message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'}\n${message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text}\n${message.resources?.map(resource => resource.name).join('\n') ?? ''}`;
+			return [message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
+			message.timestamp === undefined ? undefined : formatChatMessageTime(message.timestamp),
+			message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text,
+			message.resources?.map(resource => resource.name).join('\n')].filter(Boolean).join('\n');
 		});
 		const cowork = state.coworkTasks.map(task => [task.prompt, coworkTaskStatus(task), task.error ?? task.readError,
 		...task.thread?.turns.flatMap(turn => turn.items.flatMap(item => item.type === 'agentMessage' || item.type === 'plan' ? [item.text]
@@ -1174,7 +1216,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.forgetRemoteConversation(history.id);
 			return;
 		}
-		const projectMove = entry.projectId && await this.assignNewConversationToProject(history.id, entry.projectId, signal);
+		const projectMove = await this.assignNewConversationToProject(history.id, entry, signal);
 		if (signal.aborted || this.outbox !== outbox || outbox.creation(entry.localId) !== entry) return;
 		const selected = this.model.get().localConversationId === entry.localId;
 		this.bindConversation(history.id, entry.localId);
@@ -1828,10 +1870,19 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	private async assignNewConversationToProject(id: string, projectId: string, signal: AbortSignal): Promise<{ projectId?: string; error?: string; }> {
+	private async assignNewConversationToProject(id: string, target: Pick<ChatGPTDraftTarget, 'projectId' | 'ashProjectId'> | undefined, signal: AbortSignal): Promise<{ projectId?: string; error?: string; } | undefined> {
 		try {
-			await this.client.updateConversation(id, { gizmo_id: projectId }, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
-			return { projectId };
+			if (target?.ashProjectId) {
+				const reference = chatGPTProjectConversationId(this.cacheScope, id);
+				const projects = this.instantiation?.getOptional(IProjectService);
+				if (!reference || !projects) throw new Error(localize({ bundle: 'ash', key: 'projects.requestFailed' }, 'Could not access projects. Check the connection and try again.'));
+				signal.throwIfAborted();
+				await projects.moveExternalConversation(reference, undefined, target.ashProjectId);
+			} else if (target?.projectId) {
+				await this.client.updateConversation(id, { gizmo_id: target.projectId }, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
+				return { projectId: target.projectId };
+			}
+			return undefined;
 		} catch (error) {
 			return { error: localize('sessions.chatgpt.newProjectMoveFailed', 'The message was sent, but the conversation could not be added to the project: {0}', this.errorText(error)) };
 		}
@@ -1890,10 +1941,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.isDisposed || state.pendingCreation || state.busy || state.sending || state.managing || state.voice !== 'idle') return;
 		this.refreshOperation?.abort();
 		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
-		const projectId = isChatGPTNewDraft(state) ? state.draftTarget?.projectId : undefined;
+		const target = isChatGPTNewDraft(state) ? state.draftTarget : undefined;
 		const creation = canQueueChatGPTCreation(state) ? {
 			localId: state.localConversationId, text, messageId: crypto.randomUUID(), parentId: state.parentId,
-			model: preset?.model, thinkingEffort: preset?.thinkingEffort, projectId,
+			model: preset?.model, thinkingEffort: preset?.thinkingEffort, projectId: target?.projectId, ashProjectId: target?.ashProjectId,
 		} : undefined;
 		if (creation && (!state.connected || !state.networkAvailable)) { await this.queueCreation(creation); return; }
 		if (!preset || !state.connected || !state.networkAvailable || state.uncertain || (!text && !state.attachments.length) || state.attachments.some(attachment => attachment.status !== 'ready') || !state.model) { return; }
@@ -1923,16 +1974,19 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				if (event.message) {
 					const message = event.message;
 					const index = messages.findIndex(item => item.id === message.id);
-					messages = index < 0 ? [...messages, message] : messages.map((item, i) => i === index ? message : item);
+					// A later stream snapshot may omit the time already sent for this message.
+					messages = index < 0 ? [...messages, message] : messages.map((item, i) => i === index
+						? { ...message, timestamp: message.timestamp ?? item.timestamp }
+						: item);
 				}
 				this.update({ messages, conversationId: event.conversationId ?? current.conversationId, parentId: event.message?.id ?? current.parentId });
 				if (event.conversationId) { this.rememberConversation(event.conversationId); }
-				if (event.conversationId && projectId && !projectMove) {
+				if (event.conversationId && (target?.projectId || target?.ashProjectId) && !projectMove) {
 					// The conversation can be organized as soon as the server assigns its ID.
 					// Keep consuming reply frames while the independent catalog write runs.
 					projectMove = {
 						id: event.conversationId,
-						result: this.assignNewConversationToProject(event.conversationId, projectId, this.management.signal),
+						result: this.assignNewConversationToProject(event.conversationId, target, this.management.signal),
 					};
 				}
 			}

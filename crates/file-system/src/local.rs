@@ -1391,6 +1391,41 @@ impl ScopedFiles {
         self.relative(resolved)
     }
 
+    fn open_mutation_entry(&self, path: &Path) -> Result<(PathBuf, Directory), FileSystemError> {
+        self.check_requested(path)?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| FileSystemError::InvalidPath(path.to_path_buf()))?;
+        #[cfg(windows)]
+        {
+            // The handle-relative lookup and Win32 rename must agree on the entry name.
+            let bytes = name.as_encoded_bytes();
+            if bytes.contains(&b':') || matches!(bytes.last(), Some(b'.' | b' ')) {
+                return Err(FileSystemError::InvalidPath(path.to_path_buf()));
+            }
+        }
+        // Check the requested name and the name under its canonical parent. Resolving the
+        // entry itself would turn deletion or rename of a link into a mutation of its target.
+        let resolved_parent = self
+            .dir
+            .resolve_for_write(path.parent().expect("an entry has a parent"))
+            .map_err(|_| FileSystemError::InvalidPath(path.to_path_buf()))?;
+        let relative = self.relative(resolved_parent.join(name))?;
+        let parent = open_write_parent(self.handle(), &relative)
+            .map_err(|error| entry_error(error, path))?;
+        #[cfg(any(windows, target_os = "macos"))]
+        let relative = {
+            let mut relative = relative;
+            if let Some(name) = stored_entry_name(&parent, name).map_err(io_error)? {
+                // Filesystem aliases must also pass policy under the stored name.
+                relative.set_file_name(name);
+                self.check_requested(&relative)?;
+            }
+            relative
+        };
+        Ok((relative, parent))
+    }
+
     fn check_requested(&self, path: &Path) -> Result<(), FileSystemError> {
         if !self.policy.allows(path, self.operation) {
             return Err(FileSystemError::PermissionDenied(
@@ -1730,49 +1765,46 @@ impl ScopedFiles {
             .directory()
             .lock_writes()
             .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
-        let source_path = self.resolve_existing(source)?;
-        let target_path = self.resolve_for_write(target)?;
+        let (source_path, source_parent) = self.open_mutation_entry(source)?;
+        let source_name = source_path.file_name().expect("resolved entry has a name");
+        source_parent
+            .symlink_metadata(source_name)
+            .map_err(|error| entry_error(error, source))?;
+        let (target_path, target_parent) = self.open_mutation_entry(target).map_err(|error| {
+            if matches!(error, FileSystemError::NotFound(_)) {
+                FileSystemError::NotDirectory(target.parent().unwrap_or(Path::new("")).into())
+            } else {
+                error
+            }
+        })?;
+        let target_name = target_path.file_name().expect("resolved entry has a name");
         if source_path == target_path {
             return Ok(());
         }
-        if self.handle().try_exists(&target_path).map_err(io_error)? {
+        if entry_exists(&target_parent, target_name).map_err(io_error)? {
             match existing {
                 ExistingTargetBehavior::Error => {
                     return Err(FileSystemError::AlreadyExists(target.to_path_buf()));
                 }
                 ExistingTargetBehavior::Ignore => return Ok(()),
                 ExistingTargetBehavior::Overwrite => {
-                    let backup = rename_backup_path(self.handle(), &target_path)?;
-                    self.handle()
-                        .rename(&target_path, self.handle(), &backup)
+                    let backup = rename_backup_path(&target_parent)?;
+                    target_parent
+                        .rename(target_name, &target_parent, &backup)
                         .map_err(io_error)?;
                     if let Err(error) =
-                        self.handle()
-                            .rename(&source_path, self.handle(), &target_path)
+                        source_parent.rename(source_name, &target_parent, target_name)
                     {
-                        let _ = self.handle().rename(&backup, self.handle(), &target_path);
+                        let _ = target_parent.rename(&backup, &target_parent, target_name);
                         return Err(io_error(error));
                     }
-                    let _ = remove_resource(self.handle(), &backup, FileDeleteMode::Recursive);
+                    let _ = remove_resource(&target_parent, &backup, FileDeleteMode::Recursive);
                     return Ok(());
                 }
             }
         }
-        let parent = target_path
-            .parent()
-            .ok_or_else(|| FileSystemError::InvalidPath(target.to_path_buf()))?;
-        let parent = if parent.as_os_str().is_empty() {
-            Path::new(".")
-        } else {
-            parent
-        };
-        if !self.handle().is_dir(parent) {
-            return Err(FileSystemError::NotDirectory(
-                target.parent().unwrap_or(Path::new("")).to_path_buf(),
-            ));
-        }
-        self.handle()
-            .rename(source_path, self.handle(), target_path)
+        source_parent
+            .rename(source_name, &target_parent, target_name)
             .map_err(io_error)
     }
 
@@ -1787,28 +1819,146 @@ impl ScopedFiles {
             .directory()
             .lock_writes()
             .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
-        let candidate = self.resolve_for_write(path)?;
-        if !self.handle().try_exists(&candidate).map_err(io_error)? {
-            return match missing {
-                MissingTargetBehavior::Error => Err(FileSystemError::NotFound(path.to_path_buf())),
-                MissingTargetBehavior::Ignore => Ok(()),
-            };
+        let result = self
+            .open_mutation_entry(path)
+            .and_then(|(relative, parent)| {
+                let name = relative.file_name().expect("resolved entry has a name");
+                let metadata = parent
+                    .symlink_metadata(name)
+                    .map_err(|error| entry_error(error, path))?;
+                remove_entry(&parent, Path::new(name), metadata.file_type(), mode).map_err(io_error)
+            });
+        match result {
+            Err(FileSystemError::NotFound(_)) if missing == MissingTargetBehavior::Ignore => Ok(()),
+            result => result,
         }
-        let resolved = self.resolve_existing(path)?;
-        remove_resource(self.handle(), &resolved, mode)
     }
 }
 
-fn rename_backup_path(dir: &Directory, target: &Path) -> Result<PathBuf, FileSystemError> {
-    let parent = target
-        .parent()
-        .ok_or_else(|| FileSystemError::InvalidPath(target.to_path_buf()))?;
+#[cfg(windows)]
+fn stored_entry_name(parent: &Directory, name: &OsStr) -> std::io::Result<Option<OsString>> {
+    use cap_std::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+    use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
+
+    let file = match parent.open_with(
+        name,
+        OpenOptions::new()
+            .access_mode(FILE_READ_ATTRIBUTES)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+            .follow(FollowSymlinks::No),
+    ) {
+        Ok(file) => file.into_std(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let path = ash_file_identity::canonical_path_from_handle(&file)?;
+    path.file_name()
+        .map(|name| Some(name.to_os_string()))
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, path.display().to_string())
+        })
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn stored_entry_name(parent: &Directory, name: &OsStr) -> std::io::Result<Option<OsString>> {
+    use std::ffi::CStr;
+    use std::ffi::CString;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::ffi::OsStrExt;
+
+    #[repr(C)]
+    struct NameBuffer {
+        length: u32,
+        name: libc::attrreference_t,
+        bytes: [u8; libc::PATH_MAX as usize],
+    }
+
+    let name = CString::new(name.as_bytes())?;
+    let mut attributes = libc::attrlist {
+        bitmapcount: libc::ATTR_BIT_MAP_COUNT,
+        reserved: 0,
+        commonattr: libc::ATTR_CMN_NAME,
+        volattr: 0,
+        dirattr: 0,
+        fileattr: 0,
+        forkattr: 0,
+    };
+    let mut buffer = NameBuffer {
+        length: 0,
+        name: libc::attrreference_t {
+            attr_dataoffset: 0,
+            attr_length: 0,
+        },
+        bytes: [0; libc::PATH_MAX as usize],
+    };
+    // SAFETY: The pinned directory and NUL-terminated name remain live, and both output
+    // pointers refer to initialized, correctly sized and aligned storage.
+    let status = unsafe {
+        libc::getattrlistat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            (&raw mut attributes).cast(),
+            (&raw mut buffer).cast(),
+            size_of::<NameBuffer>(),
+            libc::FSOPT_NOFOLLOW.into(),
+        )
+    };
+    if status != 0 {
+        let error = std::io::Error::last_os_error();
+        // Match realpath's lexical fallback on volumes that do not report stored names.
+        if error.kind() == std::io::ErrorKind::NotFound
+            || matches!(error.raw_os_error(), Some(libc::ENOTSUP | libc::EINVAL))
+        {
+            return Ok(None);
+        }
+        return Err(error);
+    }
+    // Darwin measures the offset from the attribute reference, before the name bytes.
+    let returned_length =
+        (buffer.length as usize).saturating_sub(std::mem::offset_of!(NameBuffer, bytes));
+    let name = usize::try_from(buffer.name.attr_dataoffset)
+        .ok()
+        .and_then(|offset| offset.checked_sub(size_of::<libc::attrreference_t>()))
+        .and_then(|start| {
+            buffer
+                .bytes
+                .get(..returned_length)?
+                .get(start..)?
+                .get(..buffer.name.attr_length as usize)
+        })
+        .and_then(|bytes| CStr::from_bytes_with_nul(bytes).ok())
+        .map(|name| OsStr::from_bytes(name.to_bytes()));
+    name.filter(|name| Path::new(name).file_name() == Some(*name))
+        .map(|name| Some(name.to_os_string()))
+        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidData))
+}
+
+fn entry_error(error: std::io::Error, path: &Path) -> FileSystemError {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        FileSystemError::NotFound(path.to_path_buf())
+    } else {
+        io_error(error)
+    }
+}
+
+fn entry_exists(dir: &Directory, name: impl AsRef<Path>) -> std::io::Result<bool> {
+    match dir.symlink_metadata(name) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+fn rename_backup_path(dir: &Directory) -> Result<PathBuf, FileSystemError> {
     for sequence in 0..1_024u32 {
-        let candidate = parent.join(format!(
+        let candidate = PathBuf::from(format!(
             ".ash-rename-backup-{}-{sequence}",
             std::process::id()
         ));
-        if !dir.try_exists(&candidate).map_err(io_error)? {
+        if !entry_exists(dir, &candidate).map_err(io_error)? {
             return Ok(candidate);
         }
     }
@@ -1817,19 +1967,23 @@ fn rename_backup_path(dir: &Directory, target: &Path) -> Result<PathBuf, FileSys
     ))
 }
 
-fn remove_resource(
+fn remove_resource(dir: &Directory, path: &Path, mode: FileDeleteMode) -> std::io::Result<()> {
+    remove_entry(dir, path, dir.symlink_metadata(path)?.file_type(), mode)
+}
+
+fn remove_entry(
     dir: &Directory,
     path: &Path,
+    kind: cap_std::fs::FileType,
     mode: FileDeleteMode,
-) -> Result<(), FileSystemError> {
-    let metadata = dir.symlink_metadata(path).map_err(io_error)?;
-    if metadata.file_type().is_dir() {
+) -> std::io::Result<()> {
+    if kind.is_dir() {
         match mode {
-            FileDeleteMode::FileOrEmptyDirectory => dir.remove_dir(path).map_err(io_error),
-            FileDeleteMode::Recursive => dir.remove_dir_all(path).map_err(io_error),
+            FileDeleteMode::FileOrEmptyDirectory => dir.remove_dir(path),
+            FileDeleteMode::Recursive => dir.remove_dir_all(path),
         }
     } else {
-        dir.remove_file(path).map_err(io_error)
+        dir.remove_file_or_symlink(path)
     }
 }
 

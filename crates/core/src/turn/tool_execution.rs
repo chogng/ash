@@ -1151,6 +1151,7 @@ impl ToolOutputSink for ToolUpdateStream<'_> {
             session_id: self.session_id.clone(),
             thread_id: self.thread_id.clone(),
             durable_sequence: self.durable_sequence,
+            recorded_at_unix_ms: None,
             stream_cursor: Some(StreamCursor {
                 stream_instance_id: self.stream_instance_id.clone(),
                 sequence: self.next_sequence,

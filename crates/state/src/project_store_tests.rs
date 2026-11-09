@@ -44,24 +44,47 @@ fn sqlite_projects_persist_records_and_original_command_results() {
 }
 
 #[test]
-fn sqlite_projects_require_both_timestamps() {
-    for field in ["createdAtMs", "updatedAtMs"] {
+fn sqlite_projects_reopen_and_replay_with_missing_legacy_timestamps() {
+    for (missing_created, missing_updated) in [(true, true), (true, false), (false, true)] {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("state.sqlite3");
         let coordinator =
             ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
-        let created = coordinator.apply(create_request()).unwrap().project;
-        let mut record = serde_json::to_value(created).unwrap();
-        record.as_object_mut().unwrap().remove(field);
+        let create = create_request();
+        let mut legacy = coordinator.apply(create.clone()).unwrap().project;
+        if missing_created {
+            legacy.created_at_ms = None;
+        }
+        if missing_updated {
+            legacy.updated_at_ms = None;
+        }
+        let record = serde_json::to_string(&legacy).unwrap();
         drop(coordinator);
-        Connection::open(&path)
-            .unwrap()
-            .execute(
-                "UPDATE projects SET record_json = ?1 WHERE project_id = ?2",
-                rusqlite::params![record.to_string(), "project-a"],
-            )
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute("UPDATE projects SET record_json = ?1", [&record])
             .unwrap();
-        assert!(SqliteProjectStore::open(&path).is_err());
+        connection
+            .execute("UPDATE project_commands SET result_json = ?1", [&record])
+            .unwrap();
+        drop(connection);
+
+        let reopened = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
+        assert_eq!(reopened.list().unwrap(), vec![legacy.clone()]);
+        let updated = reopened
+            .apply(ProjectCommandRequest {
+                command_id: CommandId::new("archive-legacy-project").unwrap(),
+                project_id: create.project_id.clone(),
+                expected_revision: 1,
+                command: ProjectCommand::Archive,
+            })
+            .unwrap();
+        assert_eq!(updated.project.created_at_ms, legacy.created_at_ms);
+        assert!(updated.project.updated_at_ms.is_some());
+        assert_eq!(reopened.read(&create.project_id).unwrap(), updated.project);
+        let replay = reopened.apply(create).unwrap();
+        assert_eq!(replay.disposition, ProjectCommandDisposition::Replayed);
+        assert_eq!(replay.project, legacy);
     }
 }
 

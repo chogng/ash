@@ -1151,6 +1151,14 @@ fn creates_renames_overwrites_and_deletes_dir_files() {
             FileDeleteMode::FileOrEmptyDirectory,
         )
         .unwrap();
+    assert!(matches!(
+        file_system.delete(
+            Path::new("."),
+            MissingTargetBehavior::Error,
+            FileDeleteMode::Recursive
+        ),
+        Err(FileSystemError::InvalidPath(_))
+    ));
 
     assert_eq!(
         fs::read_to_string(dir.path.join("target.txt")).unwrap(),
@@ -1158,6 +1166,330 @@ fn creates_renames_overwrites_and_deletes_dir_files() {
     );
     assert!(!dir.path.join("source.txt").exists());
     assert!(!dir.path.join("created.txt").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn renaming_and_deleting_symlinks_preserves_the_referents() {
+    use std::os::unix::fs::symlink;
+
+    let dir = TestDir::new();
+    fs::create_dir(dir.path.join("nested")).unwrap();
+    fs::write(dir.path.join("nested/child"), b"directory content").unwrap();
+    fs::write(dir.path.join("file"), b"file content").unwrap();
+    let files = dir.file_system();
+
+    for referent in ["file", "nested", "missing"] {
+        for mode in [
+            FileDeleteMode::FileOrEmptyDirectory,
+            FileDeleteMode::Recursive,
+        ] {
+            symlink(referent, dir.path.join("link")).unwrap();
+            files
+                .rename(
+                    Path::new("link"),
+                    Path::new("moved"),
+                    ExistingTargetBehavior::Error,
+                )
+                .unwrap();
+            assert!(!dir.path.join("link").is_symlink());
+            assert_eq!(
+                fs::read_link(dir.path.join("moved")).unwrap(),
+                Path::new(referent)
+            );
+            files
+                .delete(Path::new("moved"), MissingTargetBehavior::Error, mode)
+                .unwrap();
+            assert!(!dir.path.join("moved").is_symlink());
+            assert_eq!(fs::read(dir.path.join("file")).unwrap(), b"file content");
+            assert_eq!(
+                fs::read(dir.path.join("nested/child")).unwrap(),
+                b"directory content"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn rename_conflicts_and_overwrites_treat_symlinks_as_existing_entries() {
+    use std::os::unix::fs::symlink;
+
+    let dir = TestDir::new();
+    fs::create_dir(dir.path.join("nested")).unwrap();
+    fs::write(dir.path.join("nested/child"), b"directory content").unwrap();
+    let files = dir.file_system();
+
+    for referent in ["nested", "missing"] {
+        fs::write(dir.path.join("source"), b"replacement").unwrap();
+        symlink(referent, dir.path.join("target")).unwrap();
+        let source = Path::new("source");
+        let target = Path::new("target");
+        assert_eq!(
+            files.rename(source, target, ExistingTargetBehavior::Error),
+            Err(FileSystemError::AlreadyExists(target.into()))
+        );
+        files
+            .rename(source, target, ExistingTargetBehavior::Ignore)
+            .unwrap();
+        assert_eq!(
+            fs::read_link(dir.path.join(target)).unwrap(),
+            Path::new(referent)
+        );
+        assert_eq!(fs::read(dir.path.join(source)).unwrap(), b"replacement");
+        files
+            .rename(source, target, ExistingTargetBehavior::Overwrite)
+            .unwrap();
+        assert_eq!(fs::read(dir.path.join(target)).unwrap(), b"replacement");
+        assert!(!dir.path.join(target).is_symlink());
+        assert!(!dir.path.join(source).exists());
+        assert_eq!(
+            fs::read(dir.path.join("nested/child")).unwrap(),
+            b"directory content"
+        );
+        fs::remove_file(dir.path.join(target)).unwrap();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn entry_mutations_check_canonical_parents_without_following_leaf_links() {
+    use ash_file_access::PathAccess;
+    use ash_file_access::PathAccessPolicy;
+    use ash_file_access::PathAccessRule;
+    use std::os::unix::fs::symlink;
+
+    let dir = TestDir::new();
+    let outside = TestDir::new();
+    for name in ["visible", "restricted"] {
+        fs::create_dir(dir.path.join(name)).unwrap();
+    }
+    fs::write(dir.path.join("restricted/keep"), b"restricted").unwrap();
+    fs::write(outside.path.join("keep"), b"outside").unwrap();
+    symlink("visible", dir.path.join("allowed-parent")).unwrap();
+    symlink("restricted", dir.path.join("denied-parent")).unwrap();
+    symlink(&outside.path, dir.path.join("outside-parent")).unwrap();
+    symlink(outside.path.join("keep"), dir.path.join("visible/link")).unwrap();
+    let policy = PathAccessPolicy::new(
+        PathAccess::ReadWrite,
+        vec![PathAccessRule {
+            pattern: "restricted".into(),
+            access: PathAccess::Denied,
+        }],
+    )
+    .unwrap();
+    let files = LocalFileSystem::new(
+        Grant::for_environment(
+            Dir::open_local(&dir.path).unwrap(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([Permission::WriteFiles]),
+        )
+        .with_path_policy(policy),
+    );
+    let link = Path::new("allowed-parent/link");
+    for parent in ["denied-parent", "outside-parent"] {
+        let protected = Path::new(parent).join("keep");
+        assert!(
+            files
+                .rename(link, &protected, ExistingTargetBehavior::Overwrite)
+                .is_err()
+        );
+        assert!(
+            files
+                .rename(&protected, link, ExistingTargetBehavior::Overwrite)
+                .is_err()
+        );
+        assert!(
+            files
+                .delete(
+                    &protected,
+                    MissingTargetBehavior::Ignore,
+                    FileDeleteMode::Recursive
+                )
+                .is_err()
+        );
+    }
+    let moved = Path::new("moved");
+    files
+        .rename(link, moved, ExistingTargetBehavior::Error)
+        .unwrap();
+    assert_eq!(
+        fs::read_link(dir.path.join(moved)).unwrap(),
+        outside.path.join("keep")
+    );
+    files
+        .delete(
+            moved,
+            MissingTargetBehavior::Error,
+            FileDeleteMode::Recursive,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(dir.path.join(moved)).is_err());
+    assert_eq!(
+        fs::read(dir.path.join("restricted/keep")).unwrap(),
+        b"restricted"
+    );
+    assert_eq!(fs::read(outside.path.join("keep")).unwrap(), b"outside");
+}
+
+#[cfg(unix)]
+#[test]
+fn replacing_a_checked_parent_with_a_symlink_cannot_redirect_mutations() {
+    use std::os::unix::fs::symlink;
+
+    #[derive(Debug)]
+    enum Operation {
+        Delete,
+        RenameSource,
+        RenameTarget,
+    }
+
+    for operation in [
+        Operation::Delete,
+        Operation::RenameSource,
+        Operation::RenameTarget,
+    ] {
+        let dir = TestDir::new();
+        fs::create_dir(dir.path.join("visible")).unwrap();
+        fs::create_dir(dir.path.join("other")).unwrap();
+        fs::write(dir.path.join("visible/file"), b"visible").unwrap();
+        fs::write(dir.path.join("other/file"), b"other").unwrap();
+        fs::write(dir.path.join("source"), b"source").unwrap();
+        let files = dir.file_system();
+        let replace_parent = {
+            let root = dir.path.clone();
+            move || {
+                fs::rename(root.join("visible"), root.join("original")).unwrap();
+                symlink("other", root.join("visible")).unwrap();
+            }
+        };
+        let entry = Path::new("visible/file");
+        let result = match operation {
+            Operation::Delete => {
+                on_write_resolution(replace_parent);
+                files.delete(
+                    entry,
+                    MissingTargetBehavior::Error,
+                    FileDeleteMode::Recursive,
+                )
+            }
+            Operation::RenameSource => {
+                on_write_resolution(replace_parent);
+                files.rename(
+                    entry,
+                    Path::new("destination"),
+                    ExistingTargetBehavior::Error,
+                )
+            }
+            Operation::RenameTarget => {
+                on_write_resolution(|| on_write_resolution(replace_parent));
+                files.rename(
+                    Path::new("source"),
+                    entry,
+                    ExistingTargetBehavior::Overwrite,
+                )
+            }
+        };
+        assert!(
+            result.is_err(),
+            "{operation:?} followed a substituted parent"
+        );
+        assert_eq!(fs::read(dir.path.join("other/file")).unwrap(), b"other");
+        assert_eq!(
+            fs::read(dir.path.join("original/file")).unwrap(),
+            b"visible"
+        );
+        assert_eq!(fs::read(dir.path.join("source")).unwrap(), b"source");
+    }
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn case_aliases_cannot_bypass_entry_mutation_policy() {
+    use ash_file_access::PathAccess;
+    use ash_file_access::PathAccessPolicy;
+    use ash_file_access::PathAccessRule;
+
+    let dir = TestDir::new();
+    fs::write(dir.path.join("Restricted"), b"keep").unwrap();
+    let alias = Path::new("restricted");
+    if !dir.path.join(alias).exists() {
+        return; // The test directory is case-sensitive.
+    }
+    fs::write(dir.path.join("source"), b"source").unwrap();
+    let policy = PathAccessPolicy::new(
+        PathAccess::ReadWrite,
+        vec![PathAccessRule {
+            pattern: "Restricted".into(),
+            access: PathAccess::Denied,
+        }],
+    )
+    .unwrap();
+    let files = LocalFileSystem::new(
+        Grant::for_environment(
+            Dir::open_local(&dir.path).unwrap(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([Permission::WriteFiles]),
+        )
+        .with_path_policy(policy),
+    );
+    assert!(matches!(
+        files.delete(
+            alias,
+            MissingTargetBehavior::Error,
+            FileDeleteMode::Recursive
+        ),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+    assert!(matches!(
+        files.rename(
+            Path::new("source"),
+            alias,
+            ExistingTargetBehavior::Overwrite
+        ),
+        Err(FileSystemError::PermissionDenied(_))
+    ));
+    assert_eq!(fs::read(dir.path.join("Restricted")).unwrap(), b"keep");
+}
+
+#[cfg(windows)]
+#[test]
+fn renaming_and_recursively_deleting_a_junction_preserves_the_directory() {
+    let dir = TestDir::new();
+    let target = dir.path.join("target");
+    fs::create_dir(&target).unwrap();
+    fs::write(target.join("child"), b"keep").unwrap();
+    let output = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; New-Item -ItemType Junction -Path $env:ASH_TEST_LINK -Target $env:ASH_TEST_TARGET | Out-Null"])
+        .env("ASH_TEST_LINK", dir.path.join("link"))
+        .env("ASH_TEST_TARGET", &target)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let files = dir.file_system();
+    files
+        .rename(
+            Path::new("link"),
+            Path::new("moved"),
+            ExistingTargetBehavior::Error,
+        )
+        .unwrap();
+    assert!(!dir.path.join("link").exists());
+    assert_eq!(fs::read(dir.path.join("moved/child")).unwrap(), b"keep");
+    assert_eq!(fs::read(target.join("child")).unwrap(), b"keep");
+    files
+        .delete(
+            Path::new("moved"),
+            MissingTargetBehavior::Error,
+            FileDeleteMode::Recursive,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(dir.path.join("moved")).is_err());
+    assert_eq!(fs::read(target.join("child")).unwrap(), b"keep");
 }
 
 #[test]

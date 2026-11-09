@@ -13,8 +13,12 @@ export interface IResolvedSessionPullRequest {
 	readonly number: number;
 	readonly title: string;
 	readonly headCommit?: string;
+	readonly mergedAt?: number;
 	readonly state: ChatPullRequestState | 'unavailable';
 	readonly status: IPullRequestIconStatus;
+	readonly checksPassed?: boolean;
+	readonly latestCheckAtUnixMs?: number;
+	readonly copilotReview?: { readonly revision: string; readonly timestamp?: number; };
 	readonly icon: ThemeIcon;
 	readonly recordedReference?: GitHubPullRequestReference;
 	readonly artifact?: ArtifactRecord;

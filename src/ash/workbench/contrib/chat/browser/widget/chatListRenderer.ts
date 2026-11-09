@@ -22,7 +22,7 @@ import { ChatAttachmentsContentPart, type IChatAttachmentResource } from './chat
 import { addDisposableListener, getWindow, getWindowId, h } from '../../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
+import { formatChatMessageTime, type ChatTurnErrorAction, type IChatListItem } from '../../common/model/chatViewModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { parseMemoryReference, type MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
@@ -104,6 +104,7 @@ export class ChatListItemRenderer extends Disposable {
 	private responseActionContext: ChatResponseActionContext | undefined;
 	private updateResponseActions: ((beforeLayout?: () => void) => boolean) | undefined;
 	private updateTurnChanges: (() => void) | undefined;
+	private messageTime: HTMLTimeElement | undefined;
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly mediaChanges = this._register(new MutableDisposable());
@@ -151,7 +152,10 @@ export class ChatListItemRenderer extends Disposable {
 		const contentPart: IChatContentPart | undefined = this.toolPart ?? this.markdownPart;
 		const same = sameItem(this.item, item);
 		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
+			const timeChanged = this.item.timestamp !== item.timestamp;
+			if (timeChanged) beforeLayout();
 			this.item = item;
+			if (timeChanged) this.updateMessageTime();
 			this.requestActionContext?.update(item);
 			// Providers can gain or lose response actions without changing the transcript.
 			if (this.options.getResponseActions) {
@@ -159,7 +163,7 @@ export class ChatListItemRenderer extends Disposable {
 			} else {
 				this.responseActionContext?.update(item);
 			}
-			return 'unchanged';
+			return timeChanged ? 'updated' : 'unchanged';
 		}
 		const source = this.item.requestSource;
 		if (this.edit.value && source && item.type === 'userMessage' && item.requestSource?.sessionId === source.sessionId
@@ -208,7 +212,7 @@ export class ChatListItemRenderer extends Disposable {
 			|| previous.resources?.length || item.resources?.length || this.responseActionContext?.isReading || this.options.getResponseActions
 			|| previous.content?.some(part => part.type !== 'text') || item.content?.some(part => part.type !== 'text')
 			|| this.options.onDidRequestMemoryReference && (this.memoryReferences.size || item.text.includes('memory:'))
-			|| !sameItemPresentation(previous, item)) return false;
+			|| previous.timestamp !== item.timestamp || !sameItemPresentation(previous, item)) return false;
 		if (!this.markdownPart.tryQueueIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient)) return false;
 		this.item = item;
 		return true;
@@ -221,6 +225,7 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private refreshContent(): void {
+		this.updateMessageTime();
 		this.updateResponseActions?.();
 		this.updateTurnChanges?.();
 		this.renderAttachments();
@@ -282,8 +287,31 @@ export class ChatListItemRenderer extends Disposable {
 	private createMessageActions(): HTMLElement {
 		const actions = h(this.element.ownerDocument, 'div');
 		actions.className = 'ash-chat-message-actions';
+		if (this.item.type === 'userMessage' || this.item.type === 'agentMessage') {
+			this.messageTime = h(this.element.ownerDocument, 'time');
+			this.messageTime.className = 'ash-chat-message-time';
+			actions.append(this.messageTime);
+		}
 		this.element.append(actions);
 		return actions;
+	}
+
+	private updateMessageTime(): void {
+		const time = this.messageTime;
+		if (!time) return;
+		const { timestamp } = this.item;
+		time.hidden = timestamp === undefined;
+		if (timestamp === undefined) {
+			if (time.dateTime) {
+				time.removeAttribute('datetime');
+				time.textContent = '';
+			}
+			return;
+		}
+		const dateTime = new Date(timestamp).toISOString();
+		if (time.dateTime === dateTime) return;
+		time.dateTime = dateTime;
+		time.textContent = formatChatMessageTime(timestamp);
 	}
 
 	private createMessageToolbar(actions: HTMLElement, menu: MenuId, label: string, context: IContextKeyService, lifetime: DisposableStore): MenuWorkbenchToolBar {

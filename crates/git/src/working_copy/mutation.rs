@@ -44,9 +44,9 @@ impl GitPathspecSet {
     }
 
     fn arguments(&self, prefix: &[&str]) -> Vec<OsString> {
-        prefix
-            .iter()
-            .map(|argument| OsString::from(*argument))
+        std::iter::once("--literal-pathspecs")
+            .chain(prefix.iter().copied())
+            .map(OsString::from)
             .chain(std::iter::once(OsString::from("--")))
             .chain(self.paths.iter().map(|path| path.as_os_str().to_owned()))
             .collect()

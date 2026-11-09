@@ -26,7 +26,7 @@ suite('Chat input stack browser layout', () => {
 			const tip = stack.locator('.ash-chat-input-tip');
 			const changes = stack.locator('.ash-chat-input-changes');
 			const notification = stack.locator('.ash-chat-input-notice-notification');
-			const introduction = stack.locator('.ash-dictation-onboarding');
+			const introduction = stack.locator('.ash-agents-voice-introduction');
 			await expect(tip).toBeVisible();
 			await expectGap(tip, input);
 			await editor.pressSequentially('Retained draft');
@@ -34,7 +34,7 @@ suite('Chat input stack browser layout', () => {
 			await expectGap(tip, changes);
 			await expectGap(changes, input);
 
-			await page.evaluate(() => window.ashChatInputIntegration.showIntroduction());
+			await page.evaluate(() => window.ashChatInputIntegration.showVoiceIntroduction());
 			await expect(introduction).toBeVisible();
 			await expect.poll(() => introduction.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
 			await expect(tip).toBeHidden();

@@ -432,6 +432,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "deepseek",
+      "file": "deepseek.svg",
+      "rendering": "multicolor"
+    },
+    {
       "id": "design",
       "file": "design.svg",
       "rendering": "symbolic"
@@ -682,6 +687,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "gemini",
+      "file": "gemini.svg",
+      "rendering": "multicolor"
+    },
+    {
       "id": "git",
       "file": "git.svg",
       "rendering": "symbolic"
@@ -754,6 +764,11 @@
     {
       "id": "go-to-file",
       "file": "go-to-file.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "grok",
+      "file": "grok.svg",
       "rendering": "symbolic"
     },
     {

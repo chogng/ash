@@ -74,6 +74,7 @@ fn thread_update_preserves_typed_scope_and_sequence() {
         session_id: session_id.clone(),
         thread_id: thread_id.clone(),
         durable_sequence: 1,
+        recorded_at_unix_ms: None,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {

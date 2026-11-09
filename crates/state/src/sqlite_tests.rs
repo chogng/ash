@@ -2438,6 +2438,7 @@ fn history_window_cold_reads_and_reconnect_skip_unrequested_records() {
             session_id: expected.session_id.clone(),
             thread_id: thread_id.clone(),
             durable_sequence: record.sequence,
+            recorded_at_unix_ms: record.message_timestamp(),
             stream_cursor: None,
             update: ash_protocol::ThreadUpdate::Committed {
                 event: record.event,

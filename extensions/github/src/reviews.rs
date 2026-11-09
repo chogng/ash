@@ -13,7 +13,8 @@ use github::*;
 use serde::Deserialize;
 use serde_json::json;
 
-const COMMENT_FIELDS: &str = "id body url author{login} viewerCanUpdate viewerCanDelete";
+const COMMENT_FIELDS: &str =
+    "id body url author{login} createdAt updatedAt viewerCanUpdate viewerCanDelete";
 const THREAD_FIELDS: &str = "id path line diffSide isResolved isOutdated viewerCanResolve";
 const PAGE_FIELDS: &str = "pageInfo{hasNextPage endCursor}";
 

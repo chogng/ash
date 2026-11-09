@@ -11,4 +11,6 @@ export interface ITitleService extends ITitlebarPart {
 	readonly windowTitle: WindowTitle;
 	getPart(container: HTMLElement): ITitlebarPart;
 	createAuxiliaryTitlebarPart(container: HTMLElement, editorGroupsContainer: IEditorGroupsContainer, instantiationService: IInstantiationService): IAuxiliaryTitlebarPart;
+	/** Registers the chrome of an auxiliary window whose content is independent of editor groups. */
+	createAuxiliaryTitlebarPart<T extends ITitlebarPart>(container: HTMLElement, createPart: (onDispose: () => void) => T): T;
 }

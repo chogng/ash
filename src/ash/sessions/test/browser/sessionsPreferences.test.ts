@@ -1,3 +1,5 @@
+import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import '../../../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { IMemoriesService } from '../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IMemorySettingsNavigation, MemorySettingsNavigation, OPEN_MEMORIES_COMMAND_ID } from '../../../workbench/contrib/memories/browser/memorySettings.js';
@@ -53,6 +55,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
+import { URI } from '../../../base/common/uri.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService } from '../../../platform/extensionManagement/common/extensionManagementService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
@@ -66,6 +69,8 @@ import { ISessionsService } from '../../services/sessions/browser/sessionsServic
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
+import { IProfileStorageService } from '../../../platform/storage/common/profileStorageService.js';
+import { IWorkbenchEnvironmentService } from '../../../workbench/services/environment/common/environmentService.js';
 import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../workbench/services/localization/common/locale.js';
 import { createEmptyTestLanguagePacks, createTestLocaleService } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
@@ -189,6 +194,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	services.registerInstance(IAgentVoiceService, undefined);
 	const { IContextKeyService: ContextKeys } = await import('../../../platform/contextkey/browser/contextKeyService.js');
 	services.registerInstance(ContextKeys, contextKeys);
 	services.registerSingleton(IExtensionService, () => new TestExtensionService());
@@ -276,6 +282,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		}
 	} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);
+	services.registerInstance(IWorkbenchEnvironmentService, { isBuilt: false, argvResource: URI.file('/argv.json'), webviewExternalEndpoint: '' });
+	services.registerInstance(IProfileStorageService, {
+		_serviceBrand: undefined,
+		readOverview: async () => ({ profileRoot: '/profile', worktreeRoot: '/worktrees', desktopRoot: undefined, worktreeBytes: 0, sessionBytes: 0, otherBytes: 0, complete: true, worktrees: [] }),
+		cleanWorktree: async () => { throw new Error('Unexpected worktree cleanup'); },
+	});
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback) => localize({ bundle, key }, fallback) });
 	const languagePacks = createEmptyTestLanguagePacks();
 	services.registerInstance(ILanguagePackService, languagePacks);
@@ -310,7 +322,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const unusedMemoryOperation = async (): Promise<never> => { throw new Error('Unexpected memory operation'); };
 	services.registerInstance(IMemoriesService, {
 		onDidChange: Event.None,
-		readModelMemoryEnabled: async () => false,
+		readModelMemoryEnabled: async () => ({ chat: true, code: false }),
 		scopes: async () => [],
 		list: async () => ({ memories: [], cursor: undefined }),
 		read: unusedMemoryOperation,
@@ -623,6 +635,16 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await configuration.updateValue('accessibility.verbosity.designCanvas', false);
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
+	Object.defineProperty(window.navigator, 'mediaDevices', {
+		configurable: true,
+		value: Object.assign(new window.EventTarget(), {
+			enumerateDevices: async () => [
+				{ deviceId: 'default', kind: 'audioinput', label: '默认 - MacBook Pro麦克风' },
+				{ deviceId: 'iphone', kind: 'audioinput', label: '“iPhone”的麦克风' },
+				{ deviceId: 'macbook', kind: 'audioinput', label: 'MacBook Pro麦克风' },
+			],
+		}),
+	});
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
@@ -645,10 +667,20 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await preferences.open({ section: 'dictation' });
 		assert.equal(categoryButton('dictation').textContent, '语音');
 		assert.equal(window.document.querySelector('[data-settings-tree-group-id="dictation"]'), null);
+		assert.equal(window.document.querySelector('[data-settings-tree-group-id="voice-mode"]'), null);
+		assert.equal(window.document.querySelector('[data-settings-item-id="dictation.voiceMode.status"]'), null);
+		assert.equal(window.document.querySelector('[data-configuration-key="agents.voice.model"] [role="combobox"]')?.getAttribute('aria-label'), '语音模型');
+		assert.equal(window.document.querySelector('[data-configuration-key="agents.voice.showButton"][role="switch"]')?.getAttribute('aria-label'), '显示语音对话按钮');
 		assert.ok(window.document.querySelector('[data-configuration-key="dictation.backend"]'));
-		const microphone = window.document.querySelector('[data-settings-item-id="dictation.inputDevice"] [role="combobox"]');
-		assert.equal(microphone?.getAttribute('aria-label'), '麦克风');
-		assert.equal(microphone?.textContent, '跟随系统');
+		const microphone = window.document.querySelector<HTMLButtonElement>('[data-settings-item-id="dictation.inputDevice"] [role="combobox"]')!;
+		assert.equal(microphone.getAttribute('aria-label'), '麦克风');
+		assert.equal(microphone.textContent, 'MacBook Pro 的麦克风（系统默认）');
+		microphone.click();
+		const microphoneOptions = [...window.document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]')];
+		assert.deepEqual(microphoneOptions.map(option => option.textContent), ['MacBook Pro 的麦克风（系统默认）', '“iPhone”的麦克风', 'MacBook Pro 的麦克风']);
+		microphoneOptions[1].click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(configuration.getValue('dictation.inputDevice'), 'iphone');
 		assert.equal(window.document.querySelector('[data-settings-item-id="dictation.language"]'), null);
 		assert.equal(window.document.querySelector('[data-settings-item-id="accessibility.verbosity.dictationModels"]'), null);
 		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');
@@ -661,19 +693,25 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await assert.rejects(configuration.updateValue('sessions.design.usePointerCursor', 'false'), /必须是布尔值/u);
 		await preferences.open({ section: 'keyboard-shortcuts' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
-		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('查看仅在 Agent 窗口中生效的快捷键。'));
+		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('按分类浏览 Agent 窗口中可用的快捷键。'));
 		await preferences.open({ section: 'memory' });
-		assert.equal(categoryButton('memory').textContent, '记忆');
+		assert.equal(categoryButton('memory').textContent, '你的 Ash');
 		await new Promise(resolve => setTimeout(resolve, 0));
 		const memory = window.document.querySelector('.ash-sessions-settings-page .ash-memories')!;
+		assert.ok(memory.querySelector('.ash-settings-card > .ash-settings-field-row > button[aria-label="管理指令"]'));
+		assert.ok(memory.querySelector('.ash-settings-card > .ash-settings-field-row > button[aria-label="管理 AGENTS.md"]'));
+		assert.ok(memory.querySelector('.ash-settings-field-row .ash-select-box-field [role="combobox"][aria-label="对话上下文"]'));
+		assert.equal(memory.querySelector('input[aria-label="聊天记忆"]')?.getAttribute('aria-checked'), 'true');
+		assert.equal(memory.querySelector('input[aria-label="代码记忆"]')?.getAttribute('aria-checked'), 'false');
 		assert.equal(memory.querySelector('input[role="switch"][aria-label="使用已保存的记忆"]')?.getAttribute('aria-checked'), 'false');
-		const manage = memory.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+		const manage = memory.querySelector<HTMLButtonElement>('button[aria-label="管理已保存的记忆"]')!;
 		assert.equal(manage.textContent, '管理');
 		assert.equal(manage.getAttribute('aria-expanded'), 'false');
 		manage.click();
 		await new Promise(resolve => setTimeout(resolve, 0));
 		assert.equal(manage.getAttribute('aria-expanded'), 'true');
-		assert.match(memory.querySelector('.memories-manager')?.textContent ?? '', /主题.*选择记忆范围/u);
+		const manager = window.document.getElementById(manage.getAttribute('aria-controls')!)!;
+		assert.match(manager.textContent ?? '', /主题.*选择记忆范围/u);
 		await preferences.open({ section: 'customize' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
 

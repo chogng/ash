@@ -1999,6 +1999,9 @@
         "analytics": {
           "type": "boolean"
         },
+        "chatMemories": {
+          "type": "boolean"
+        },
         "codeMode": {
           "type": "boolean"
         },

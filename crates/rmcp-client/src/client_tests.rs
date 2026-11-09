@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, JsonObject,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
+    ListToolsResult, PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig,
+    Tool,
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, ServiceExt};
@@ -66,8 +67,8 @@ impl McpClientHost for GatedHost {
 }
 
 impl ServerHandler for ElicitationServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
     }
 
     async fn call_tool(
@@ -198,13 +199,21 @@ async fn cancelling_a_call_waiting_for_elicitation_does_not_wait_for_the_active_
 }
 
 impl ServerHandler for TestServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(
+    fn get_info(&self) -> ServerConfig {
+        let mut config = ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_tools()
                 .enable_resources()
                 .build(),
         )
+        .with_protocol_version(ProtocolVersion::V_2025_11_25)
+        .with_server_info(Implementation::new("test-server", "1"))
+        .with_instructions("Use echo to repeat input.");
+        config.meta = Some(rmcp::model::MetaObject(JsonObject::from_iter([(
+            "ash/test".into(),
+            serde_json::json!(true),
+        )])));
+        config
     }
 
     async fn list_tools(
@@ -289,7 +298,7 @@ async fn initializes_lists_and_calls_tools_over_an_in_process_transport() {
         .await
         .expect("initialize client");
 
-    assert!(client.server_info().capabilities.tools.is_some());
+    assert_eq!(client.server_info(), &TestServer.get_info());
     let tools = client.list_tools().await.expect("list tools");
     assert_eq!(tools.tools.len(), 1);
     assert_eq!(tools.tools[0].name, "echo");
@@ -332,8 +341,8 @@ struct CancellationServer {
 }
 
 impl ServerHandler for CancellationServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_tools()
                 .enable_resources()

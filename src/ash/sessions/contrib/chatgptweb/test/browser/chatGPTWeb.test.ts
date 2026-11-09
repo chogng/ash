@@ -3,7 +3,7 @@ import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { observableValue, type IObservable } from '../../../../../base/common/observable.js';
+import { constObservable, observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
@@ -24,13 +24,15 @@ import { LanguageModelsService } from '../../../../../workbench/contrib/chat/com
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
-import { SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../../../common/configuration.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
-import { AshChatSelectionService, IAshChatSelectionService } from '../../../chat/browser/ashChatSelectionService.js';
-import { IAshChatSessionService } from '../../../chat/browser/ashChatSessionService.js';
+import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { loadChatSelection } from '../../../../services/sessions/browser/sessionGridState.js';
+import type { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
+import type { ISession, IUntitledChatSession, ModelRef } from '../../../../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
-import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization } from '../../electron-browser/chatGPTWeb.js';
+import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../electron-browser/chatGPTWeb.js';
 import { IChatGPTNativeService, IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../../common/chatGPTNative.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
@@ -47,6 +49,28 @@ import { SessionsViewRegistry } from '../../../../common/views.js';
 const newChatState = { conversations: [], messages: [], coworkTasks: [] } satisfies Partial<ChatGPTState>;
 
 const testStorage = { get: () => undefined, store() { } } as unknown as IStorageService;
+
+function chatSelectionFixture(storage: IStorageService, sessions: readonly ISession[] = []) {
+	let drafts: IUntitledChatSession[] = [];
+	let nextDraft = 0;
+	const management = {
+		sessions, onDidChange: Event.None, primaryCatalogReady: true, state: 'ready',
+		materializedSessions: constObservable(new Map()),
+		get untitledSessions() { return drafts; },
+		async initialize() { },
+		async readCatalog(id: string) { return sessions.find(session => session.sessionId === id); },
+		createUntitledSession() {
+			const draft = { untitledSessionId: `draft-${++nextDraft}`, title: '', kind: 'chat', workspace: { type: 'current' }, model: undefined, agent: undefined } as const;
+			drafts.push(draft);
+			return draft;
+		},
+		discardUntitledSession(id: string) { drafts = drafts.filter(draft => draft.untitledSessionId !== id); },
+		setUntitledSessionModel(id: string, model: ModelRef) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, model } : draft); },
+	} as unknown as ISessionsManagementService;
+	const customViews = { activeCustomViewOpen: constObservable(undefined) } as unknown as ICustomViewService;
+	const view = new SessionsService(management, storage, customViews, {} as ICommandService);
+	return { management, view };
+}
 
 registerChatWorkspace(chatGPTWorkspaceSource);
 
@@ -161,8 +185,12 @@ suite('ChatGPT entry', () => {
 
 	test('Ash opens native conversations inside the Chat workspace and restores them from the mode toggle', async () => {
 		const values = new Map([['sessions.chat.ashSelection', JSON.stringify({ kind: 'thread', sessionId: 'saved', threadId: 'old-root' })]]);
-		const storage = { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
-		const selection = new AshChatSelectionService(storage);
+		const storage = { get: (key: string) => values.get(key), getBoolean: () => false, onWillSaveState: Event.None, store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
+		const { management, view } = chatSelectionFixture(storage, [
+			{ sessionId: 'saved', kind: 'chat', status: 'active', chats: [{ threadId: 'old-root', status: 'active' }] },
+			{ sessionId: 'code', kind: 'code', status: 'active', chats: [{ threadId: 'code', status: 'active' }] },
+		] as unknown as ISession[]);
+		using selection = view;
 		let linkOpener: IOpener | undefined;
 		using contexts = new ContextKeyService();
 		const entries: ISessionsEntry[] = [];
@@ -170,12 +198,8 @@ suite('ChatGPT entry', () => {
 			[IStorageService, storage],
 			[ICommandService, { executeCommand: (id: string, ...args: unknown[]) => services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args) } as ICommandService],
 			[IContextKeyService, contexts],
-			[IAshChatSelectionService, selection],
-			[IAshChatSessionService, {
-				read: async (sessionId: string) => sessionId === 'saved' ? {
-					sessionId, status: 'active', threads: [{ threadId: 'old-root', status: 'active' }],
-				} : undefined
-			} as IAshChatSessionService],
+			[ISessionsService, selection],
+			[ISessionsManagementService, management],
 			[IOpenerService, { registerOpener: (value: IOpener) => { linkOpener = value; return toDisposable(() => { linkOpener = undefined; }); } } as IOpenerService],
 			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize() { } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
@@ -185,7 +209,7 @@ suite('ChatGPT entry', () => {
 		using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand);
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_ASH_CHAT_COMMAND)!, 'restore');
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_CHAT_WORKSPACE_COMMAND)!);
-		assert.deepEqual(selection.selection.get(), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
+		assert.deepEqual(selection.chatSelection.get(), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
 		assert.equal(entries.length, 2);
 		for (const entry of entries) {
 			assert.equal(entry.workspaceMode, 'chat');
@@ -196,11 +220,11 @@ suite('ChatGPT entry', () => {
 			assert.equal(entry.sidebarContainerId, CHAT_WORKSPACE_NAVIGATION_ID);
 			assert.equal(entry.restoreCommand, SHOW_ASH_CHAT_COMMAND);
 		}
-		selection.select({ kind: 'draft', id: 'another-draft' });
+		selection.openChatDraft();
 		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('code', 'code', 'local')), false);
 		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('saved', 'old-root', 'sessions+remote')), false);
 		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('saved', 'old-root', 'local')), true);
-		assert.deepEqual(new AshChatSelectionService(storage).selection.get(), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
+		assert.deepEqual(loadChatSelection(storage), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
 	});
 
 	test('an experimental Chat draft applies Ash model visibility while default model reads are pending', async () => {
@@ -271,8 +295,8 @@ suite('ChatGPT entry', () => {
 
 	test('choosing an Ash model from ChatGPT creates a separate Ash draft with the chosen model and plain text', async () => {
 		const values = new Map<string, string>();
-		const storage = { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
-		const selection = new AshChatSelectionService(storage);
+		const storage = { get: (key: string) => values.get(key), getBoolean: () => false, onWillSaveState: Event.None, store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
+		using selection = chatSelectionFixture(storage).view;
 		let mode = 'code';
 		let experimental = false;
 		const state = observableValue<ChatGPTState>('draft', {
@@ -295,7 +319,7 @@ suite('ChatGPT entry', () => {
 			[IChatGPTService, { state, newDraftRevision: 1 } as unknown as IChatGPTService],
 			[IChatGPTNativeService, { native: true, state: experimentalState, newDraftRevision: 1 } as unknown as IChatGPTService],
 			[ICommandService, { executeCommand: async (id: string) => { calls.push([id]); } } as ICommandService],
-			[IAshChatSelectionService, selection],
+			[ISessionsService, selection],
 			[IStorageService, storage],
 		));
 		const command = CommandsRegistry.getCommand(OPEN_ASH_CHAT_WITH_MODEL_COMMAND)!;
@@ -321,11 +345,11 @@ suite('ChatGPT entry', () => {
 
 		await services.invokeFunction(command, model);
 		assert.deepEqual(calls, [[SHOW_ASH_CHAT_COMMAND]]);
-		const selected = selection.selection.get();
-		assert.equal(selected.kind, 'draft');
+		const selected = selection.chatSelection.get();
+		assert.ok(selected?.kind === 'draft');
 		assert.deepEqual(selected.model, model);
 		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`, chatInputStatePersistence), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
-		assert.deepEqual(new AshChatSelectionService(storage).selection.get(), selected);
+		assert.deepEqual(loadChatSelection(storage), selected);
 
 		experimental = true;
 		const experimentalHandoff = services.invokeFunction(command, model);
@@ -336,8 +360,8 @@ suite('ChatGPT entry', () => {
 		experimental = true;
 		await services.invokeFunction(command, model);
 		assert.deepEqual(calls, [[SHOW_ASH_CHAT_COMMAND], [SHOW_ASH_CHAT_COMMAND]]);
-		const experimentalSelection = selection.selection.get();
-		assert.equal(experimentalSelection.kind, 'draft');
+		const experimentalSelection = selection.chatSelection.get();
+		assert.ok(experimentalSelection?.kind === 'draft');
 		assert.deepEqual(experimentalSelection.model, model);
 		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${experimentalSelection.id}`, chatInputStatePersistence), { text: 'Experimental prompt', mode: 'agent', contexts: [] });
 	});

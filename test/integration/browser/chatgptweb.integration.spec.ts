@@ -421,8 +421,14 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 });
 
-test('Work rows use the same leading action and persist an independent icon', async ({ page }) => {
+test('Chat and Work row icons persist independently without a provider write', async ({ page }) => {
 	await mockChatGPTRequests(page);
+	const writes: string[] = [];
+	page.on('request', request => {
+		if (new URL(request.url()).pathname.includes('/service/backend-api/conversation') && request.method() !== 'GET') {
+			writes.push(request.method());
+		}
+	});
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&workRow');
 	const trigger = page.getByRole('button', { name: '更换「Synthetic Work」的图标' });
 	const picker = page.getByRole('dialog', { name: '更换图标', exact: true });
@@ -432,7 +438,20 @@ test('Work rows use the same leading action and persist an independent icon', as
 	await picker.getByRole('option', { name: 'folder', exact: true }).click();
 	await page.reload();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
-	await expect(page.getByRole('button', { name: '更换「Synthetic conversation」的图标' }).locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+	const chat = page.getByRole('button', { name: '更换「Synthetic conversation」的图标' });
+	await expect(chat.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+	await chat.click();
+	await picker.getByRole('combobox', { name: '搜索图标' }).fill('clockface');
+	await picker.getByRole('option', { name: 'clockface', exact: true }).click();
+	await page.reload();
+	await expect(chat.locator('[data-ash-icon-id="clockface"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+	await chat.click();
+	await picker.getByRole('button', { name: '恢复默认图标' }).click();
+	await page.reload();
+	await expect(chat.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+	expect(writes).toEqual([]);
 });
 
 test('ChatGPT dictation inserts text at the cursor and cancels on navigation without sending', async ({ page }) => {
@@ -583,19 +602,45 @@ voiceTest('ChatGPT can stop pending voice negotiation and rejects a late or inva
 	});
 	await page.goto('/chatgptNavigation.html?locale=en');
 	const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
+	const placeholder = page.locator('.ash-chat-input-editor .stanza-editor-placeholder-text');
 	await expect(voice).toBeEnabled();
+	await expect(placeholder).toHaveText('Describe a task or ask a question');
+	await page.evaluate(() => {
+		const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+		navigator.mediaDevices.getUserMedia = async () => {
+			navigator.mediaDevices.getUserMedia = capture;
+			throw new DOMException('Permission denied', 'NotAllowedError');
+		};
+	});
+	const notifications = () => page.evaluate(() => window.ashChatGPTIntegration.notifications().map(item => item.message));
+	await voice.click();
+	await expect.poll(notifications).toContain('Microphone access was denied. Allow microphone access in your system or browser settings, then try again.');
+	await expect(voice).toBeEnabled();
+	await expect(placeholder).toHaveText('Describe a task or ask a question');
+	await expect(page.locator('.ash-chat-input-notification-message')).toBeHidden();
+	expect(requests).toBe(0);
 	await voice.click();
 	await expect.poll(() => requests).toBe(1);
-	await expect(page.locator('.ash-chat-status')).toHaveText('Connecting voice…');
+	await expect(placeholder).toHaveText('Connecting…');
+	await expect(page.locator('.ash-chat-status')).toBeHidden();
 	await expect(page.locator('.ash-chat-input-editor').getByRole('textbox')).toHaveAttribute('aria-readonly', 'true');
-	await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
+	const cancel = page.getByRole('button', { name: 'Cancel voice connection', exact: true });
+	await expect(cancel).toHaveText('Cancel');
+	const dots = cancel.locator('.ash-chat-input-voice-connecting-dots > span');
+	await expect(dots).toHaveCount(3);
+	await expect(dots.first()).toHaveCSS('animation-name', 'ash-chat-input-voice-dot');
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await expect(dots.first()).toHaveCSS('animation-name', 'none');
+	await cancel.press('Enter');
 	await release();
 	await expect(voice).toBeEnabled();
+	await expect(placeholder).toHaveText('Describe a task or ask a question');
 	await expect(page.locator('.ash-chat-status')).toBeHidden();
 	await voice.click();
 	await expect.poll(() => requests).toBe(2);
 	await release();
-	await expect(page.locator('.ash-chatgpt-widget')).toContainText('unsupported response');
+	await expect.poll(notifications).toEqual(expect.arrayContaining([expect.stringContaining('unsupported response')]));
+	await expect(page.locator('.ash-chat-input-notification-message')).toBeHidden();
 	await expect(voice).toBeEnabled();
 });
 
@@ -605,6 +650,14 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 		if (!navigator.mediaDevices) return;
 		const tracks: MediaStreamTrack[] = [];
 		Object.assign(window, { testMediaTracks: tracks });
+		const createDataChannel = RTCPeerConnection.prototype.createDataChannel;
+		RTCPeerConnection.prototype.createDataChannel = function (label, options) {
+			const channel = createDataChannel.call(this, label, options);
+			channel.addEventListener('message', event => {
+				document.documentElement.dataset.testVoiceFrame = JSON.parse(event.data).type;
+			});
+			return channel;
+		};
 		const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 		navigator.mediaDevices.getUserMedia = async constraints => {
 			const stream = await capture(constraints);
@@ -647,6 +700,9 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 			state(): { connection: string; ice: string; channel: string; }[] {
 				return resources.map(({ peer, channel }) => ({ connection: peer.connectionState, ice: peer.iceConnectionState, channel: channel.readyState }));
 			},
+			send(frame: unknown): void {
+				resources.at(-1)!.channel.send(JSON.stringify(frame));
+			},
 			dispose(): boolean {
 				for (const { peer, channel, stream, audio } of resources) {
 					peer.ontrack = null;
@@ -663,6 +719,10 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 	});
 	try {
 		await mockChatGPTRequests(page);
+		const utterance = { id: 'voice-prompt', author: { role: 'user' }, content: { content_type: 'text', parts: ['Synthetic voice prompt'] } };
+		await page.route('**/service/backend-api/conversation/voice-room', route => route.fulfill({
+			json: { title: 'Synthetic voice conversation', current_node: utterance.id, mapping: { [utterance.id]: { parent: null, message: utterance } } },
+		}));
 		let negotiations = 0;
 		await page.route('**/service/realtime/vp**', async route => {
 			const request = route.request();
@@ -676,10 +736,22 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 		});
 		await page.goto('/chatgptNavigation.html?locale=en');
 		const voice = page.getByRole('button', { name: 'Voice conversation', exact: true });
+		const welcome = page.locator('.ash-chatgpt-widget .ash-chat-welcome');
+		const placeholder = page.locator('.ash-chat-input-editor .stanza-editor-placeholder-text');
+		const room = { type: 'startup_telemetry', payload: { conversation_id: 'voice-room' } };
+		await expect(welcome).toBeVisible();
 		await voice.click();
-		await expect.poll(async () => ({ status: await page.locator('.ash-chat-status').textContent(), peers: await remote.evaluate(remote => remote.state()) })).toEqual({
-			status: 'Voice conversation is active', peers: [{ connection: 'connected', ice: expect.stringMatching(/^(connected|completed)$/u), channel: 'open' }],
-		});
+		const connectedPeer = { connection: 'connected', ice: expect.stringMatching(/^(connected|completed)$/u), channel: 'open' };
+		await expect.poll(() => remote.evaluate(remote => remote.state())).toEqual([connectedPeer]);
+		await expect(page.locator('.ash-chat-status')).toBeHidden();
+		const stop = page.getByRole('button', { name: 'Stop voice conversation', exact: true });
+		await expect(stop).toHaveText('Stop');
+		await expect(stop.locator('.ash-chat-input-voice-connecting-dots > span')).toHaveCount(3);
+		await expect(placeholder).toHaveText('Listening…');
+		await remote.evaluate((remote, room) => remote.send(room), room);
+		await expect(page.locator('html')).toHaveAttribute('data-test-voice-frame', room.type);
+		await expect(welcome).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Cancel voice connection', exact: true })).toHaveCount(0);
 		await expect(page.locator('audio')).toHaveCount(1);
 		for (const participant of [page, peer]) {
 			await expect.poll(() => participant.evaluate(() => [...document.querySelectorAll('audio')].some(audio => audio.readyState >= 2 && !audio.paused))).toBe(true);
@@ -689,14 +761,22 @@ voiceTest('ChatGPT WebRTC exchanges audio and releases the microphone on stop an
 			return tracks.map(track => track.readyState);
 		});
 		await expect.poll(microphoneStates).toEqual(['live']);
-		await page.getByRole('button', { name: 'Stop voice conversation', exact: true }).click();
+		await stop.click();
 		await expect.poll(microphoneStates).toEqual(['ended']);
 		await expect(page.locator('audio')).toHaveCount(0);
 		await expect(voice).toBeEnabled();
+		await expect(placeholder).toHaveText('Describe a task or ask a question');
 		await voice.click();
-		await expect(page.locator('.ash-chat-status')).toHaveText('Voice conversation is active');
+		await expect.poll(() => remote.evaluate(remote => remote.state())).toEqual([expect.anything(), connectedPeer]);
+		await expect(page.locator('.ash-chat-status')).toBeHidden();
 		expect(negotiations).toBe(2);
 		await expect.poll(microphoneStates).toEqual(['ended', 'live']);
+		await remote.evaluate((remote, { room, utterance }) => {
+			remote.send(room);
+			remote.send({ type: 'full_chat_message', payload: { message: utterance } });
+		}, { room, utterance });
+		await expect(page.locator('.ash-chat-item-voiceTranscript')).toContainText('Synthetic voice prompt');
+		await expect(welcome).toBeHidden();
 		// The host can navigate while the in-chat New button is disabled during voice.
 		await page.evaluate(() => window.ashChatGPTIntegration.newChat());
 		await expect.poll(microphoneStates).toEqual(['ended', 'ended']);

@@ -13,9 +13,9 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { IProjectService, type Project, type ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
-import type { ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
+import type { ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ProjectAppearancePicker } from './projectAppearancePicker.js';
-import { IProjectsService } from './projectsService.js';
+import { IProjectsService, type CatalogProjectAppearance } from './projectsService.js';
 import './media/projectForm.css';
 
 function createProjectFormDialog(
@@ -23,10 +23,14 @@ function createProjectFormDialog(
 	title: string,
 	form: HTMLFormElement,
 	actions: HTMLElement,
-	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; },
+	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; },
 ): Dialog {
 	return new Dialog(container, title, [], createWorkbenchDialogOptions({
-		extraClasses: options.code ? ['ash-projects-dialog', 'ash-code-project-dialog'] : ['ash-projects-dialog'],
+		extraClasses: [
+			'ash-projects-dialog',
+			...(options.code ? ['ash-code-project-dialog'] : []),
+			...(options.appearanceOnly ? ['ash-project-appearance-dialog'] : []),
+		],
 		layout: 'form',
 		modal: false,
 		closeOnBackdropClick: true,
@@ -38,8 +42,13 @@ function createProjectFormDialog(
 	}));
 }
 
+export type ChatProjectEdit =
+	| { readonly project: Project; }
+	| { readonly conversation: ConversationProjectEditor; }
+	| { readonly title: string; readonly appearance: CatalogProjectAppearance; };
+
 export interface IProjectDialogService {
-	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, project?: Project, conversation?: ConversationProjectEditor): void;
+	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit): void;
 	showCodeProjectDialog(owner: HTMLElement): Promise<void>;
 	close(owner: HTMLElement): void;
 }
@@ -75,19 +84,26 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		return active;
 	}
 
-	showChatProjectDialog(container: HTMLElement, restoreFocus: () => void, project?: Project, conversation?: ConversationProjectEditor): void {
+	showChatProjectDialog(container: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit): void {
 		const active = this.begin(container);
 		if (!active) return;
 		const { store } = active;
 		const document = container.ownerDocument;
 		const previousFocus = getActiveElement(document);
+		const project = edit && 'project' in edit ? edit.project : undefined;
+		const conversation = edit && 'conversation' in edit ? edit.conversation : undefined;
+		const appearanceEdit = edit && 'appearance' in edit ? edit : undefined;
+		const savedAppearance = appearanceEdit?.appearance;
 		const form = h(document, 'form', { className: 'ash-projects-form' });
 		form.id = generateUuid();
-		const nameLabel = h(document, 'label', {}, localize('projects.nameLabel', 'What are you working on?'));
+		const nameLabel = h(document, 'label', {}, appearanceEdit
+			? localize('projects.appearanceProject', 'Project name')
+			: localize('projects.nameLabel', 'What are you working on?'));
 		const name = h(document, 'input', {
 			properties: {
 				type: 'text',
-				value: project?.name ?? conversation?.details.name ?? '',
+				value: project?.name ?? conversation?.details.name ?? appearanceEdit?.title ?? '',
+				readOnly: !!appearanceEdit,
 				required: true,
 				maxLength: 200,
 				placeholder: localize('projects.namePlaceholder', 'Name your project'),
@@ -96,9 +112,10 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		name.id = generateUuid();
 		nameLabel.htmlFor = name.id;
 		const nameField = h(document, 'div', { className: 'ash-project-name' });
-		const appearance = !project && !conversation
-			? store.add(new ProjectAppearancePicker(container, nameField, Lxicon.projects))
+		const appearance = appearanceEdit || !edit
+			? store.add(new ProjectAppearancePicker(container, nameField, Lxicon.projects, savedAppearance))
 			: undefined;
+		const appearanceChanged = () => appearance?.appearance.icon !== savedAppearance?.icon || appearance?.appearance.color !== savedAppearance?.color;
 		if (!appearance) {
 			const leadingIcon = h(document, 'span', { attributes: { 'aria-hidden': 'true' } });
 			appendIcon(Lxicon.projects, leadingIcon);
@@ -175,23 +192,25 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		);
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
-		form.append(nameGroup, descriptionLabel);
-		if (!conversation) form.append(folderRow);
+		form.append(nameGroup);
+		if (!appearanceEdit) form.append(descriptionLabel);
+		if (!conversation && !appearanceEdit) form.append(folderRow);
 		form.append(feedback, conflicts);
 		let didSave = false;
 		const dialog = store.add(
 			createProjectFormDialog(
 				container,
-				project || conversation
-					? localize('projects.edit', 'Edit details')
-					: localize('projects.createTitle', 'Create a project'),
+				appearanceEdit ? localize('projects.editAppearance', 'Edit project appearance')
+					: edit ? localize('projects.edit', 'Edit details')
+						: localize('projects.createTitle', 'Create a project'),
 				form,
 				actions,
 				{
+					appearanceOnly: !!appearanceEdit,
 					canClose: () => !name.disabled && !pickingFolder,
 					shouldConfirmDiscard: () => name.value !== (base?.name ?? initialName) ||
 						description.value !== (base?.description ?? initialDescription) ||
-						!!chosenFolder || !!appearance?.appearance.icon || !!appearance?.appearance.color || unresolved.size > 0,
+						!!chosenFolder || appearanceChanged() || unresolved.size > 0,
 				},
 			),
 		);
@@ -217,12 +236,12 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		const submit = store.add(
 			new Button(actions, {
 				...defaultButtonStyles,
-				label: project || conversation
+				label: edit
 					? localize('projects.save', 'Save changes')
 					: localize('projects.create', 'Create'),
 				presentation: 'primary',
 				type: 'submit',
-				enabled: !!name.value.trim(),
+				enabled: !!appearanceEdit || !!name.value.trim(),
 			}),
 		);
 		submit.domNode.setAttribute('form', form.id);
@@ -381,6 +400,16 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		store.add(
 			addDisposableListener(form, 'submit', event => {
 				event.preventDefault();
+				if (appearanceEdit && appearance) {
+					try {
+						appearanceEdit.appearance.save(appearance.appearance);
+						didSave = true;
+						dialog.dispose();
+					} catch (error) {
+						feedback.textContent = toErrorMessage(error);
+					}
+					return;
+				}
 				if (
 					name.disabled || pickingFolder || !name.value.trim() ||
 					this.chatProjects.state.get().busy ||
@@ -431,7 +460,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				restoreFocus();
 			}
 		});
-		name.focus();
+		if (appearanceEdit) appearance?.focus();
+		else name.focus();
 	}
 
 	async showCodeProjectDialog(container: HTMLElement): Promise<void> {
@@ -442,7 +472,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		const nameLabel = localize('projects.nameLabel', 'What are you working on?');
 		const name = h(document, 'input', {
 			attributes: { 'aria-label': nameLabel },
-			properties: { type: 'text', required: true, maxLength: 200, placeholder: nameLabel },
+			properties: { type: 'text', maxLength: 200, placeholder: nameLabel },
 		});
 		const nameField = h(document, 'div', { className: 'ash-project-name' });
 		const appearance = store.add(new ProjectAppearancePicker(container, nameField, Lxicon.folder));
@@ -454,9 +484,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		const materials = new Map<string, ProjectMaterial>();
 		const rows = store.add(new DisposableStore());
 		const sourceLabel = localize('projects.code.sourceFolders', 'Source folders');
-		const list = h(document, 'ul', { className: 'ash-code-project-folder-list', attributes: { 'aria-label': sourceLabel } });
-		const hint = h(document, 'span', localize('projects.code.folderHint', 'Add a folder on this computer'));
-		const panel = h(document, 'div', { className: 'ash-code-project-folder-panel' }, list, hint);
+		const list = h(document, 'ul', { className: 'ash-code-project-folder-list', attributes: { 'aria-label': sourceLabel }, properties: { hidden: true } });
+		const panel = h(document, 'div', { className: 'ash-code-project-folder-panel' }, list);
 		const source = h(document, 'fieldset', { className: 'ash-code-project-source' },
 			h(document, 'legend', sourceLabel), panel);
 		form.append(source, feedback);
@@ -464,11 +493,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		let saving = false;
 		const add = store.add(new Button(panel, {
 			...defaultButtonStyles,
-			label: localize('projects.code.addFolder', 'Add'),
-			ariaLabel: localize('projects.code.addFolderLabel', 'Add source folder'),
+			label: localize('projects.code.addFolder', 'Add folder'),
 			icon: Lxicon.newFolder,
-			presentation: 'secondary',
-			size: 'small',
+			presentation: 'quiet',
 			onClick: async () => {
 				if (picking || saving) return;
 				picking = true;
@@ -482,8 +509,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					if (store.isDisposed) return;
 					for (const resource of folders ?? []) {
 						if (resource.scheme !== 'file' || resource.authority) continue;
+						const folderName = basename(resource);
 						materials.set(extUriBiasedIgnorePathCase.getComparisonKey(resource), {
-							kind: 'folder', resource, name: basename(resource) || resource.fsPath,
+							kind: 'folder', resource, name: folderName.trim() ? folderName : resource.fsPath,
 						});
 					}
 					renderFolders();
@@ -498,15 +526,20 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				}
 			},
 		}));
+		function firstFolderName(): string | undefined {
+			return materials.values().next().value?.name;
+		}
+
 		function renderFolders(): void {
 			rows.clear();
 			list.replaceChildren();
 			list.hidden = materials.size === 0;
-			hint.hidden = !list.hidden;
+			name.placeholder = firstFolderName() ?? nameLabel;
 			for (const [key, material] of materials) {
 				const path = material.resource.fsPath;
-				const row = h(document, 'li', {},
-					h(document, 'span', { attributes: { title: path } }, path));
+				const row = h(document, 'li');
+				appendIcon(Lxicon.folder, row);
+				row.append(h(document, 'span', { className: 'ash-code-project-folder-name', attributes: { title: path } }, material.name));
 				list.append(row);
 				const label = localize('projects.code.removeFolder', 'Remove {0}', path);
 				rows.add(new Button(row, {
@@ -519,12 +552,12 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					onClick: () => {
 						materials.delete(key);
 						renderFolders();
+						updateSubmit();
 						add.focus();
 					},
 				}));
 			}
 		}
-		renderFolders();
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
 		const dialog = store.add(createProjectFormDialog(container, localize('projects.createTitle', 'Create a project'), form, actions, {
 			code: true,
@@ -541,20 +574,24 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			...defaultButtonStyles, label: localize('projects.create', 'Create'), presentation: 'primary', type: 'submit', enabled: false,
 		}));
 		submit.domNode.setAttribute('form', form.id);
+		function projectName(): string | undefined {
+			return name.value.trim() || firstFolderName();
+		}
+
 		function updateSubmit(): void {
-			submit.enabled = !!name.value.trim() && !picking && !saving;
+			submit.enabled = !!projectName() && !picking && !saving;
 		}
 		store.add(addDisposableListener(name, 'input', updateSubmit));
 		store.add(addDisposableListener(form, 'submit', async event => {
 			event.preventDefault();
-			const projectName = name.value.trim();
-			if (picking || saving || !projectName) return;
+			const title = projectName();
+			if (picking || saving || !title) return;
 			saving = name.disabled = source.disabled = true;
 			appearance.enabled = false;
 			feedback.textContent = '';
 			updateSubmit();
 			try {
-				await this.projects.create(id, projectName, '', [...materials.values()], 'code', appearance.appearance);
+				await this.projects.create(id, title, '', [...materials.values()], 'code', appearance.appearance);
 				if (!store.isDisposed) dialog.dispose();
 			} catch (error) {
 				if (store.isDisposed) return;

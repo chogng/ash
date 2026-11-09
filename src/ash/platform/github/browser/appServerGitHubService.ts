@@ -1,6 +1,6 @@
 import { decodeBase64 } from '../../../base/common/buffer.js';
 import { GitHubRepositoryEntryKind, type GitHubRepositoryTree, type GitHubRepositoryBlob } from '../common/githubService.js';
-import type { GitHubCheckDetails, GitHubCheckTarget } from '../common/githubService.js';
+import type { GitHubCheckDetails, GitHubCheckTarget, GitHubPullRequestChecks } from '../common/githubService.js';
 import type { GitHubRemoteRepository, GitHubRepositoryVisibility, GitHubRepositoryBranch, GitHubBranchProtection, GitHubShareLink } from '../common/githubService.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../base/common/errors.js';
@@ -252,6 +252,9 @@ export class AppServerGitHubService implements IGitHubService {
 		const result = await this.request('github/checks', { repository, commit, page }, RequestKind.Read, token);
 		return { state: result.state, statuses: result.statuses.map(status => ({ ...status })), checks: result.checks.map(check => ({ ...check })), nextPage: result.nextPage };
 	}
+	public async readPullRequestChecks(repository: GitHubRepository, number: number, headCommit: string, token?: CancellationToken): Promise<GitHubPullRequestChecks> {
+		return this.request('github/pullRequest/checks', { repository, number, headCommit }, RequestKind.Read, token);
+	}
 	public async listLabels(repository: GitHubRepository, token?: CancellationToken): Promise<readonly GitHubLabel[]> {
 		const result = await this.request('github/labels/list', { repository }, RequestKind.Read, token);
 		return result.labels.map(label => ({ ...label }));
@@ -311,7 +314,7 @@ export function createDisconnectedGitHubService(): IGitHubService {
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,
 		listPullRequestFiles: unavailable, listPullRequestReviews: unavailable, reviewPullRequest: unavailable, mergePullRequest: unavailable, enableAutoMerge: unavailable,
 		readReviewDiff: unavailable, readRepositoryTree: unavailable, readRepositoryBlob: unavailable, readFile: unavailable, listReviewThreads: unavailable, readReviewThreadComments: unavailable, replyReviewThread: unavailable, resolveReviewThread: unavailable,
-		readCheckDetails: unavailable, readCheckLog: unavailable, rerunCheck: unavailable, readChecks: unavailable, listLabels: unavailable, createLabel: unavailable, updateLabelColor: unavailable, listAssignees: unavailable,
+		readCheckDetails: unavailable, readCheckLog: unavailable, rerunCheck: unavailable, readChecks: unavailable, readPullRequestChecks: unavailable, listLabels: unavailable, createLabel: unavailable, updateLabelColor: unavailable, listAssignees: unavailable,
 	};
 }
 

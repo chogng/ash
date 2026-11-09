@@ -67,6 +67,7 @@ mod approval;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadSnapshot {
     pub(crate) user_time_contexts: BTreeMap<ItemId, ash_protocol::TimeContext>,
+    pub(crate) message_times: BTreeMap<ItemId, u64>,
     pub(crate) history_sources: BTreeMap<ThreadId, ash_protocol::HistoryPrefixRef>,
     pub(crate) message_checkpoints: BTreeMap<ItemId, ash_protocol::MessageCheckpoint>,
     pub(crate) history_redo: Vec<ash_protocol::ThreadHistoryCheckpoint>,
@@ -485,6 +486,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 Ok(ThreadSnapshot {
                     voice_transcripts: Vec::new(),
                     user_time_contexts: Default::default(),
+                    message_times: BTreeMap::new(),
                     history_sources: BTreeMap::new(),
                     message_checkpoints: BTreeMap::new(),
                     agent_id: ash_history::created_thread_agent_id(envelope)
@@ -627,6 +629,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot.voice_transcripts = source.voice_transcripts.clone();
             snapshot.hook_runs = source.hook_runs.clone();
             snapshot.user_time_contexts = source.user_time_contexts.clone();
+            snapshot.message_times = source.message_times.clone();
             snapshot.message_checkpoints = source.message_checkpoints.clone();
             snapshot.history_sources = source.history_sources.clone();
             snapshot
@@ -685,6 +688,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             }
             snapshot.advisor = source.advisor.clone();
             snapshot.voice_transcripts = source.voice_transcripts.clone();
+            snapshot.message_times = source.message_times.clone();
             snapshot.context_checkpoints = source.context_checkpoints.clone();
             snapshot.user_time_contexts = source
                 .user_time_contexts
@@ -1829,6 +1833,11 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 | ThreadItem::AgentMessage { .. }
                 | ThreadItem::Reasoning { .. }
                 | ThreadItem::Plan { .. } => {}
+            }
+            if let Some(timestamp) = envelope.message_timestamp() {
+                snapshot
+                    .message_times
+                    .insert(item.item_id().clone(), timestamp);
             }
             snapshot.items.push(item.clone());
             snapshot

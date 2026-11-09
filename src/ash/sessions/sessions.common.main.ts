@@ -106,11 +106,13 @@ import { localize2 } from '../nls.js';
 import { Menus } from './browser/menus.js';
 import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from './common/contextkeys.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+import { IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService } from './services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
 
 // Sessions has its own renderer entry and cannot rely on Code's shared editor service registrations.
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
+registerSingleton(IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService, InstantiationType.Delayed);
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 	command: {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -136,6 +136,33 @@ setInterval(() => {}, 1000);
 	const [code] = await closed;
 	assert.equal(code, 0, output);
 	assert.deepEqual(JSON.parse(output.trim().split(/\r?\n/u).at(-1)!), [true, true], 'Both original process objects have exited');
+});
+
+test('Windows cleanup terminates an owned process when taskkill fails', { skip: process.platform !== 'win32', timeout: 90_000 }, async t => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-taskkill-failure-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	// The worker's current directory shadows taskkill with a command that rejects its arguments.
+	await copyFile(join(process.env.SystemRoot!, 'System32', 'where.exe'), join(directory, 'taskkill.exe'));
+	const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
+import assert from 'node:assert/strict';
+import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { isProcessRunning, ProcessRun } from ${JSON.stringify(pathToFileURL(join(repository, 'build/processes.ts')).href)};
+const child = spawn(process.execPath, ['-e', 'process.send(process.pid); setInterval(() => {}, 1000)'], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true });
+const run = new ProcessRun(process.cwd());
+try {
+	await once(child, 'message');
+	await run.own(child);
+	assert.throws(() => execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }));
+	assert.equal(isProcessRunning(child.pid), true);
+	await run.close();
+	assert.equal(isProcessRunning(child.pid), false);
+	console.log('native cleanup completed');
+} finally {
+	if (child.exitCode === null && child.signalCode === null) child.kill();
+}
+`], { cwd: directory, windowsHide: true, timeout: 75_000 });
+	assert.match(stdout, /native cleanup completed/u);
 });
 
 for (const ignoresSignal of [false, true]) {

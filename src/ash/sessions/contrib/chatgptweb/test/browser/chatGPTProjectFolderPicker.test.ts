@@ -11,6 +11,7 @@ import { IFileDialogService } from '../../../../../platform/dialogs/common/dialo
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IProjectsService } from '../../../projects/browser/projectsService.js';
 import { ChatGPTProjectFolderPicker } from '../../electron-browser/chatGPTProjectFolderPicker.js';
 import { IChatGPTService, type ChatGPTState } from '../../browser/chatGPTService.js';
 
@@ -55,25 +56,31 @@ suite('ChatGPTProjectFolderPicker', () => {
 		services.registerInstance(IFileDialogService, {} as unknown as IFileDialogService);
 		services.registerInstance(IFileService, {} as unknown as IFileService);
 		services.registerInstance(INotificationService, { error() { } } as unknown as INotificationService);
+		services.registerInstance(IProjectsService, {
+			state: observableValue('projects', { projects: [] }),
+			reload: async () => { },
+		} as unknown as IProjectsService);
 		services.registerInstance(IActionWidgetService, {
 			show() { },
 			hide() { },
 		} as unknown as IActionWidgetService);
 
 		const picker = resources.add(services.createInstance(ChatGPTProjectFolderPicker, footer, visible));
-		const button = footer.querySelector('button')!;
+		const button = footer.querySelector<HTMLButtonElement>('.ash-chat-input-workspace-picker')!;
+		const remove = footer.querySelector<HTMLButtonElement>('.ash-chatgpt-project-remove')!;
 		const getIconId = () => button.querySelector<HTMLElement>('.ash-icon-label-icon .ash-icon')?.dataset.ashIconId;
 
 		return {
 			picker,
 			button,
+			remove,
 			chatService,
 			getIconId,
 			[Symbol.dispose]() { resources.dispose(); },
 		};
 	}
 
-	test('shows project icon by default and when a project is selected', () => {
+	test('shows a filled project icon on the removal control for the selected project', () => {
 		using f = fixture();
 		const iconSpan = f.button.querySelector('.ash-icon-label-icon')!;
 		const labelSpan = f.button.querySelector('.ash-button-label')!;
@@ -82,17 +89,19 @@ suite('ChatGPTProjectFolderPicker', () => {
 		assert.equal(labelSpan.textContent, 'Project or folder');
 		assert.ok(iconSpan.querySelector('.ash-icon'), 'Icon element should be present by default');
 		assert.equal(f.getIconId(), Lxicon.projects.id);
+		assert.ok(f.remove.hidden);
 
 		// 2. Select a project
 		f.chatService.setDraftTarget!({ projectId: 'p1' });
 		assert.equal(labelSpan.textContent, '智能体harness优化');
-		assert.ok(iconSpan.querySelector('.ash-icon'), 'Icon element should be present after selecting a project');
-		assert.equal(f.getIconId(), Lxicon.projects.id);
+		assert.equal(f.getIconId(), undefined);
+		assert.equal(f.remove.hidden, false);
+		assert.ok(f.remove.querySelector('[data-ash-icon-id="projects-filled"]'));
 
 		// 3. Select a folder as well
 		f.chatService.setDraftTarget!({ folder: URI.file('/work/demo') });
 		assert.equal(labelSpan.textContent, '智能体harness优化 · demo');
-		assert.equal(f.getIconId(), Lxicon.projects.id);
+		assert.equal(f.remove.hidden, false);
 
 		// 4. Clear project (only folder remains)
 		f.chatService.setDraftTarget!({ projectId: undefined });

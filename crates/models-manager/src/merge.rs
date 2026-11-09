@@ -174,6 +174,7 @@ pub(crate) fn seed_records(definition: &ProviderDefinition) -> BTreeMap<ModelId,
 
 pub(crate) fn apply_discovery(
     records: &mut BTreeMap<ModelId, CatalogRecord>,
+    provider: &ProviderId,
     catalog: &DiscoveredCatalog,
     source: MetadataSource,
 ) {
@@ -189,7 +190,7 @@ pub(crate) fn apply_discovery(
         record.observation = Some(source);
         record.catalog_order = Some(order);
         record.availability = ModelAvailability::Available;
-        apply_patch(record, &discovered.metadata, source);
+        apply_patch(record, provider, &discovered.metadata, source);
     }
 }
 
@@ -201,7 +202,12 @@ pub(crate) fn mark_unverified(records: &mut BTreeMap<ModelId, CatalogRecord>) {
     }
 }
 
-fn apply_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch, source: MetadataSource) {
+fn apply_patch(
+    record: &mut CatalogRecord,
+    provider: &ProviderId,
+    patch: &ModelMetadataPatch,
+    source: MetadataSource,
+) {
     if patch.settings != ash_protocol::ModelSettings::default() {
         merge_settings(&mut record.info.settings, &patch.settings);
         record.provenance.settings = Some(source);
@@ -225,10 +231,14 @@ fn apply_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch, source: M
         record.info.description = Some(description.clone());
         record.provenance.description = Some(source);
     }
-    if let Some(display_name) = patch
-        .display_name
-        .as_ref()
-        .filter(|display_name| !display_name.trim().is_empty())
+    // Ash owns the curated labels for these built-in models across connections.
+    let has_curated_name = matches!(provider.as_str(), "openai" | "anthropic" | "xai")
+        && record.provenance.display_name == Some(MetadataSource::ProviderSeed);
+    if !has_curated_name
+        && let Some(display_name) = patch
+            .display_name
+            .as_ref()
+            .filter(|display_name| !display_name.trim().is_empty())
     {
         record.info.display_name = display_name.clone();
         record.provenance.display_name = Some(source);

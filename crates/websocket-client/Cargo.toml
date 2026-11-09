@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 base64 = { workspace = true }
 futures = { workspace = true }
+percent-encoding = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "time"] }
 tokio-tungstenite = { workspace = true }
 url = { workspace = true }
@@ -20,7 +21,10 @@ ash-http-client = { workspace = true }
 zeroize = { workspace = true }
 
 [dev-dependencies]
+rcgen = { workspace = true, features = ["ring"] }
+rustls = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
+tokio-rustls = { workspace = true }
 
 [lints]
 workspace = true

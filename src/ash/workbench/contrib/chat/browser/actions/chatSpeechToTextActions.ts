@@ -12,13 +12,12 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { ILocalTranscriptionModelService, isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
-import { getDictationMicrophoneChoices, readDictationInputDevices, readDictationPreparation } from '../speechToText/dictationInput.js';
+import { readDictationMicrophones, readDictationPreparation } from '../speechToText/dictationInput.js';
 import { activeDictationEditor, cancelDictation, isDictating, onDidChangeDictationEditor, startDictation, stopDictation } from '../speechToText/dictationSession.js';
 import { IChatWidgetService, type IChatWidget } from '../chat.js';
 import { SELECT_MICROPHONE_COMMAND } from '../speechToText/micButtonMenuActions.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IDictationOnboardingService, SHOW_DICTATION_ONBOARDING_COMMAND, RESET_DICTATION_ONBOARDING_COMMAND } from '../speechToText/dictationOnboarding.js';
 import { ChatSpeechToTextState, IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechToText/chatSpeechToTextService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { DictationConfiguration } from '../../common/constants.js';
@@ -26,22 +25,6 @@ import { DictationConfiguration } from '../../common/constants.js';
 // Command admission while local model discovery is pending; capture state belongs to the speech service.
 const preparations = new WeakMap<IChatSpeechToTextService, { readonly widget: IChatWidget; readonly cancel: () => void; }>();
 
-class ShowDictationIntroductionAction extends Action2 {
-	constructor() {
-		super({
-			id: SHOW_DICTATION_ONBOARDING_COMMAND,
-			title: localize2({ bundle: 'ash', key: 'dictation.showIntroduction' }, 'Dictation: Show introduction'),
-			f1: true,
-		});
-	}
-	public override run(accessor: ServicesAccessor): void { accessor.get(IDictationOnboardingService).show(); }
-}
-class ResetDictationIntroductionAction extends Action2 {
-	constructor() {
-		super({ id: RESET_DICTATION_ONBOARDING_COMMAND, title: localize2('dictation.resetIntroduction', 'Dictation: Reset introduction'), f1: true });
-	}
-	public override run(accessor: ServicesAccessor): void { accessor.get(IDictationOnboardingService).reset(); }
-}
 class CancelDictationAction extends Action2 {
 	constructor() {
 		super({
@@ -91,7 +74,6 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	const local = accessor.get(ILocalTranscriptionModelService);
 	const speech = accessor.get(ISpeechService);
 	const preferences = accessor.get(IPreferencesService);
-	const onboarding = accessor.get(IDictationOnboardingService);
 	const log = accessor.get(ILogService);
 	const lifetime = new DisposableStore();
 	const controller = new AbortController();
@@ -125,7 +107,6 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 		const model = await readDictationPreparation(configuration, local, speech);
 		if (controller.signal.aborted || !widget.visible || widget.isTranscriptProgressActive || !widgets.getAllWidgets().includes(widget) || service.isBusy || isDictating()) return;
 		if (model && (isModelPreparing(model.status) || !model.available && model.downloadSizeBytes === undefined)) { await preferences.openSettings({ section: 'dictation' }); return; }
-		if (model?.available !== false) onboarding.showIfNeeded();
 		if (preparations.get(service) === preparation) preparations.delete(service);
 		await startDictation(service, editor, editor.getContainerDomNode().ownerDocument.defaultView as Window & typeof globalThis, log, 'chat', controller.signal);
 		if (release) {
@@ -179,15 +160,14 @@ class SelectDictationMicrophoneAction extends Action2 {
 		const target = (editor?.getContainerDomNode().ownerDocument.defaultView ?? window) as Window & typeof globalThis;
 		const configuration = accessor.get(IConfigurationService);
 		const service = accessor.get(IChatSpeechToTextService);
-		const onboarding = accessor.get(IDictationOnboardingService);
 		const quickInput = accessor.get(IQuickInputService);
-		const devices = await readDictationInputDevices(target);
+		const { choices, selectedDeviceId } = await readDictationMicrophones(target, configuration);
 		const lifetime = new DisposableStore();
 		const picker = lifetime.add(quickInput.createQuickPick<IQuickPickItem & { deviceId: string; }>());
 		picker.placeholder = picker.ariaLabel = localize('dictation.selectMicrophone', 'Select microphone');
-		const items = getDictationMicrophoneChoices(devices).map(({ id, label }) => ({ label, deviceId: id }));
+		const items = choices.filter(choice => !choice.disconnected).map(({ id, label }) => ({ label, deviceId: id }));
 		picker.items = items;
-		picker.activeItems = items.filter(item => item.deviceId === configuration.getValue(DictationConfiguration.inputDevice));
+		picker.activeItems = items.filter(item => item.deviceId === selectedDeviceId);
 		await new Promise<void>((resolve, reject) => {
 			let accepted = false;
 			lifetime.add(picker.onDidHide(() => { if (!accepted) resolve(); }));
@@ -199,7 +179,6 @@ class SelectDictationMicrophoneAction extends Action2 {
 				void (async () => {
 					await configuration.updateValue(DictationConfiguration.inputDevice, selected.deviceId);
 					if (service.isBusy) await service.switchMicrophone(target, selected.deviceId);
-					onboarding.refreshMicrophones(service.analyserNode);
 				})().then(resolve, reject);
 			}));
 			picker.show();
@@ -210,8 +189,6 @@ class SelectDictationMicrophoneAction extends Action2 {
 export function registerChatSpeechToTextActions(): DisposableStore {
 	const store = new DisposableStore();
 	try {
-		store.add(registerAction2(ShowDictationIntroductionAction));
-		store.add(registerAction2(ResetDictationIntroductionAction));
 		store.add(registerAction2(CancelDictationAction));
 		store.add(registerAction2(ToggleChatSpeechToTextAction));
 		store.add(registerAction2(HoldDictationAction));

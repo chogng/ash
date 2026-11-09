@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rmcp::model::{
-    CallToolRequest, CallToolRequestParams, CallToolResult, ClientInfo, ClientRequest,
+    CallToolRequest, CallToolRequestParams, CallToolResult, ClientConfig, ClientRequest,
     ElicitationCapability, FormElicitationCapability, Implementation, ListToolsRequest,
-    ListToolsResult, PaginatedRequestParams, ReadResourceRequest, ReadResourceRequestParams,
-    ReadResourceResult, ServerInfo, ServerResult,
+    ListToolsResult, PaginatedRequestParams, ProtocolVersion, ReadResourceRequest,
+    ReadResourceRequestParams, ReadResourceResult, ServerResult,
 };
 use rmcp::service::{
     ClientServiceExt, PeerRequestOptions, RequestHandle, RoleClient, RunningService, ServiceError,
@@ -14,6 +14,7 @@ use rmcp::service::{
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::transport::{IntoTransport, StreamableHttpClientTransport};
 
+use crate::ServerInfo;
 use crate::error::RmcpClientError;
 use crate::handler::{ClientRuntimeHandler, McpClientHost, NoopMcpClientHost, SessionHost};
 use crate::transport::{HttpAuthorization, StdioServerCommand, StreamableHttpServer};
@@ -39,7 +40,7 @@ impl Default for RmcpTimeouts {
 /// Client identity, host callbacks, and operation deadlines for a new MCP session.
 #[derive(Clone)]
 pub struct RmcpClientOptions {
-    client_info: ClientInfo,
+    client_info: ClientConfig,
     host: Arc<dyn McpClientHost>,
     timeouts: RmcpTimeouts,
 }
@@ -57,8 +58,9 @@ impl std::fmt::Debug for RmcpClientOptions {
 
 impl RmcpClientOptions {
     pub fn new(name: impl Into<String>, version: impl Into<String>) -> Self {
-        let mut client_info = ClientInfo::default();
-        client_info.client_info = Implementation::new(name, version);
+        // This client explicitly uses the initialize handshake for stateful servers.
+        let client_info = ClientConfig::new(Default::default(), Implementation::new(name, version))
+            .with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
         Self {
             client_info,
             host: Arc::new(NoopMcpClientHost),
@@ -66,7 +68,7 @@ impl RmcpClientOptions {
         }
     }
 
-    pub fn with_client_info(mut self, client_info: ClientInfo) -> Self {
+    pub fn with_client_info(mut self, client_info: ClientConfig) -> Self {
         self.client_info = client_info;
         self
     }
@@ -126,7 +128,7 @@ impl RmcpClientOptions {
 /// durable tool results, credential persistence, and reconnect policy belong to higher layers.
 pub struct RmcpClient {
     service: RunningService<RoleClient, ClientRuntimeHandler>,
-    server_info: Arc<ServerInfo>,
+    server_info: ServerInfo,
     timeouts: RmcpTimeouts,
     host: Arc<SessionHost>,
     elicitation_calls: Option<tokio::sync::Mutex<()>>,
@@ -163,10 +165,21 @@ impl RmcpClient {
             .await
             .map_err(|_| RmcpClientError::InitializeTimeout(timeouts.initialize))?
             .map_err(|error| RmcpClientError::Initialize(Box::new(error)))?;
-        let server_info = service
+        let peer_info = service
             .peer()
             .peer_info()
             .ok_or(RmcpClientError::MissingServerInfo)?;
+        // RMCP also uses peer info for discovery, where the server identity is optional.
+        // This client uses initialize, which requires an identity in the response.
+        let identity = peer_info
+            .server_info
+            .clone()
+            .ok_or(RmcpClientError::MissingServerInfo)?;
+        let mut server_info = ServerInfo::new(peer_info.capabilities.clone())
+            .with_protocol_version(peer_info.protocol_version.clone())
+            .with_server_info(identity);
+        server_info.instructions = peer_info.instructions.clone();
+        server_info.meta = peer_info.meta.clone();
         Ok(Self {
             service,
             server_info,

@@ -111,6 +111,8 @@ export class MenuId {
 	static readonly ChatSessionsLayout = new MenuId('chatAgentSessionsOrientationSubmenu');
 	static readonly ChatInputSecondary = new MenuId('ChatInputSecondary');
 	static readonly ChatInputStatus = new MenuId('ChatInputStatus');
+	static readonly ChatTipToolbar = new MenuId('ChatTipToolbar');
+	static readonly ChatTipContext = new MenuId('ChatTipContext');
 	static readonly ChatInputResourceAttachmentContext = new MenuId('ChatInputResourceAttachmentContext');
 	static readonly ChatInputSymbolAttachmentContext = new MenuId('ChatInputSymbolAttachmentContext');
 	static readonly AgentSidebarTitle = new MenuId('AgentSidebarTitle');

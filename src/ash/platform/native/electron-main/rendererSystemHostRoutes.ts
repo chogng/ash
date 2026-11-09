@@ -3,7 +3,7 @@ import { collectElectronMemory } from '../../memory/electron-main/electronMemory
 import { URI } from '../../../base/common/uri.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { Notification, type BrowserWindow } from 'electron/main';
+import { Notification, systemPreferences, type BrowserWindow } from 'electron/main';
 import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
 import { ElectronOpenerService } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
@@ -11,7 +11,7 @@ import type { DialogRequest } from '../../dialogs/common/dialogs.js';
 import { validateScreenshotRectangle } from '../common/nativeHost.js';
 import { getScreenshot } from './nativeHostMainService.js';
 import { nativeToastRoutes, type INativeToast } from './nativeToast.js';
-import type { IToastOptions } from '../common/native.js';
+import { REQUEST_MICROPHONE_ACCESS_CHANNEL, type IToastOptions } from '../common/native.js';
 import type { DirectoryPermissionRequest } from '../../workspace/common/workspaceTrust.js';
 import { validateDirectoryPermissionRequest } from '../../workspace/common/workspaceIpc.js';
 
@@ -77,6 +77,16 @@ export function rendererSystemHostRoutes(
 		return { resources, operation };
 	};
 	return [
+		{
+			channel: REQUEST_MICROPHONE_ACCESS_CHANNEL,
+			validate: value => { if (value !== undefined) throw new TypeError('Unexpected microphone permission arguments'); },
+			invoke: () => {
+				if (process.platform === 'darwin') return systemPreferences.askForMediaAccess('microphone');
+				if (process.platform !== 'win32') return true;
+				const status = systemPreferences.getMediaAccessStatus('microphone');
+				return status !== 'denied' && status !== 'restricted';
+			},
+		},
 		...nativeToastRoutes(
 			createNativeToast,
 			reset => {

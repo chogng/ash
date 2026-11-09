@@ -22,7 +22,7 @@ Chat and Code are workspace shells selected by the titlebar switcher. Entry desc
 | Editing and central product pages | `EditorPart`       | `EditorInput` and `EditorPane` opened through `IEditorService`                           |
 | Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor                      |
 
-The Agents Window has no Banner Part or reserved notice row. The Sessions workspace contribution presents restricted directory permissions only in the Code workspace, naming the window workspace and opening its existing Workspace Trust editor. Connection recovery remains available through a title bar action in every workspace. These controls read the owning services and do not own another permission or connection model. A terminal connection failure offers a sticky global notification with the existing Reload Window action; startup failures retain the host's recovery surface. Status changes do not move the content or enter saved session layouts. The regular IDE retains its Banner Part and notice producers.
+The Agents Window has no Banner Part or reserved notice row. Restricted Mode and its Workspace Trust editor belong to the regular IDE. Agents restores a folder only if it has development permissions and otherwise starts with an empty workspace. Explicit folder selection can ask for development permissions. The Sessions workspace contribution shows authorization retries for explicit selections and connection recovery through title bar actions. These controls read the owning services and do not own another permission or connection model. A terminal connection failure offers a sticky global notification with the existing Reload Window action; startup failures retain the host's recovery surface. Status changes do not move the content or enter saved session layouts. The regular IDE retains its Banner Part and notice producers.
 
 `ViewContainer` is the sidebar, auxiliary-bar and panel registration mechanism. Central editor pages use the editor input/pane mechanism rather than a separate mode container. An `EditorPane` can render a canvas, a browsing page or another rich interface; it is not limited to a text editor. Mode implementations own their documents, commands and content while the shared Parts own placement, resizing, focus and hosting lifecycle. Mode changes retain the same Sessions service and selection ownership.
 
@@ -219,9 +219,11 @@ All non-phone Agents windows use the desktop detail layout. Phone viewports use 
 
 `DesktopWorkbenchLayout` composes the window's outer Parts. Within its editor region, `DesktopEditorArea` owns the tool Grid for Files, Changes, Browser (Preview), Terminal and Side Chat. Each tool card has exactly one independent `EditorPart`. `DesktopEditorParts` coordinates the Parts. Each Part owns one or more `EditorGroup`s and their internal split layout. Each group owns its title toolbar and tabs and displays its active editor in an `EditorPane`. A Side Chat tab renders a `SessionSideChatEditor` in its group. In layout discussions, a _tool pane_ means the whole tool card that the tool Grid moves.
 
+In split Code windows the conversation and tool divider continues into the window title bar. The conversation title and window tool controls occupy the conversation side. Visible groups mount their existing title rows in visual tool order on the other side, scrolling horizontally when needed. The groups retain their tabs, commands, focus and drag ownership. Breadcrumbs remain with the editor body. When the split is unavailable or too narrow for the title bar controls, groups mount their title rows in their own card again.
+
 Changes starts with one group and hides the tab strip while keeping the group's title toolbar. Splitting a Changes group adds another group inside the same card, with its own title toolbar. Diff View commands use that group as their context and update the Agents window's shared diff preference. Maximize Tool acts on the whole card in the outer tool Grid.
 
-Ordinary title dragging moves groups within a tool; Alt-drag moves a whole tool card. Alt+Shift+Arrow first moves a group beside its local neighbor, then moves the tool at a group-grid boundary. Tool and group separators retain their own geometry.
+The desktop window title bar reserves pointer interaction for editor tabs and controls, and dragging the surrounding title area moves the window. In an inline card header, dragging the title moves groups within a tool and Alt-drag moves the whole tool card. Alt+Shift+Arrow first moves a group beside its local neighbor, then moves the tool at a group-grid boundary. Tool and group separators retain their own geometry.
 
 ### Tool placement strategy
 
@@ -260,6 +262,8 @@ A custom view is an independent page, mutually exclusive with Sessions Part, gri
 Explicit session and chat open actions dismiss the active custom view. Reactive fallback opens driven by session or chat lifecycle changes preserve the custom view while reconciling the hidden Sessions grid. On phone layouts, custom views participate in mobile navigation so platform back navigation dismisses them.
 
 ## Part lifecycle
+
+Web and Electron register `ITitleService` in the Agents Window scope. It owns the main titlebar and tracks each detached conversation titlebar by its window document. Closing the popup releases its titlebar registration. `SessionsPart` retains ownership of the conversation and reattaches it to the main window on close.
 
 The workbench:
 

@@ -474,10 +474,11 @@ suite('ChatGPT shared service', () => {
 			await chat.reload(); await chat.startVoice(window);
 			assert.equal(chat.state.get().voice, 'connected');
 			channel.onmessage!({ data: JSON.stringify({ type: 'conversation_update', payload: { conversation_id: 'created-voice', parent_message_id: 'voice-reply' } }) });
+			assert.equal(chat.state.get().conversationId, undefined);
 			const moving = navigation === 'history' ? chat.select('two') : chat.newChat();
 			await entered.p;
 			assert.equal(chat.state.get().voice, 'stopping');
-			assert.equal(chat.state.get().conversationId, 'created-voice');
+			assert.equal(chat.state.get().conversationId, undefined);
 			assert.equal(channel.readyState, 'closed');
 			await saved.complete(); await moving; await chat.stopVoice(); await Promise.resolve();
 			assert.equal(chat.state.get().voice, 'idle');

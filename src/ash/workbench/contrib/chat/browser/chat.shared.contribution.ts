@@ -92,7 +92,6 @@ import { IChatEditingService } from '../common/editing/chatEditingService.js';
 import './chatEditing/chatEditingEditorActions.js';
 import { CodeMapperService, ICodeMapperService } from '../common/editing/chatCodeMapperService.js';
 import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
-import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
 import { ChatInputNoticeHubService, IChatInputNoticeHubService } from './widget/input/chatInputNoticeHub.js';
 import { ChatInputNotificationService, IChatInputNotificationService } from './widget/input/chatInputNotificationService.js';
 import { ChatInputEditor } from './widget/input/chatInputEditor.js';
@@ -119,7 +118,6 @@ import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
 registerSingleton(ISessionSummaryHoverService, SessionSummaryHoverService, InstantiationType.Delayed);
 registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
-registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerSingleton(IVoiceInputModeService, VoiceInputModeService, InstantiationType.Delayed);
 registerSingleton(IChatInputNoticeHubService, ChatInputNoticeHubService, InstantiationType.Delayed);
 registerSingleton(IChatInputNotificationService, ChatInputNotificationService, InstantiationType.Delayed);
@@ -572,11 +570,11 @@ configurationRegistry.registerConfiguration<'local' | 'cloud' | 'codex'>({
 	setting: {
 		valueType: 'select',
 		title: localize({ bundle: 'ash', key: 'dictation.backend.title' }, 'Dictation service'),
-		description: localize({ bundle: 'ash', key: 'dictation.backend.description' }, 'Choose local transcription, a cloud API, or your Codex subscription for voice input.'),
+		description: localize({ bundle: 'ash', key: 'dictation.backend.description' }, 'Choose local transcription, a cloud API, or ChatGPT for voice input.'),
 		options: [
 			{ value: 'local', label: localize({ bundle: 'ash', key: 'dictation.backend.local' }, 'Local') },
 			{ value: 'cloud', label: localize({ bundle: 'ash', key: 'dictation.backend.cloud' }, 'Cloud') },
-			{ value: 'codex', label: localize({ bundle: 'ash', key: 'dictation.backend.codex' }, 'Codex subscription') },
+			{ value: 'codex', label: localize({ bundle: 'ash', key: 'dictation.backend.codex' }, 'ChatGPT') },
 		],
 	},
 });

@@ -1639,6 +1639,7 @@ fn thread_read_and_subscribe_keep_transients_within_the_visible_running_history(
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
                 durable_sequence: started.sequence,
+                recorded_at_unix_ms: None,
                 stream_cursor: Some(ash_protocol::StreamCursor {
                     stream_instance_id: ash_protocol::StreamInstanceId::new(
                         "history-window-stream",

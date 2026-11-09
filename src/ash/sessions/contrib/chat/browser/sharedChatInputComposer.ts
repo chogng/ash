@@ -8,6 +8,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { autorun, type IObservable } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -38,6 +39,7 @@ export class SharedChatInputComposer extends Disposable {
 		delegate: ChatInputDelegate,
 		model: ChatWidgetModel,
 		chatPresentation: IObservable<boolean>,
+		openWorkspacePicker: (() => void) | undefined,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
@@ -101,6 +103,15 @@ export class SharedChatInputComposer extends Disposable {
 				return status;
 			},
 			attachGitHubReference: (kind, signal) => attachSessionGitHubReference(kind, model, github, quickInput, signal),
+			attachMenuHost: {
+				getWorkspaceAction: () => openWorkspacePicker && !chatPresentation.get() && model.untitledSessionId && !model.isNestedDraft
+					&& !model.inputState.aiDisabled && model.inputState.phase !== 'submitting' ? {
+					id: 'sessions.focusNewSessionWorkspacePicker',
+					label: localize({ bundle: 'ash.sessions', key: 'sessions.project.choose' }, 'Choose project'),
+					tooltip: '', icon: Lxicon.folder, enabled: true,
+					run: openWorkspacePicker,
+				} : undefined,
+			},
 			get primaryPermissionPicker() { return chatPresentation.get() ? undefined : permissionPicker; },
 		} satisfies ChatInputPartOptions);
 		this._register(instantiationService.createInstance(SessionReferenceCompletions, input, model));

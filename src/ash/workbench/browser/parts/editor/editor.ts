@@ -27,6 +27,7 @@ export const CONNECTED_EDITOR_TABS_SELECTOR = `.${CONNECTED_EDITOR_TABS_CLASS}`;
 /** Browser host capabilities used by editor parts, separate from command operations. */
 export interface IEditorGroupView extends IEditorGroup {
 	readonly domNode: HTMLElement;
+	readonly headerElement: HTMLElement;
 	readonly activePane: IEditorPane | undefined;
 	saveEditor(input: IResourceEditorInput, options?: ISaveEditorsOptions): Promise<IResourceEditorInput | undefined>;
 	saveEditorViewState(input: IResourceEditorInput): SerializedEditorViewState | undefined;
@@ -38,5 +39,6 @@ export interface IEditorGroupView extends IEditorGroup {
 	moveEditorTo(input: IResourceEditorInput, target: IEditorGroupView, targetIndex: number): Promise<void>;
 	setContent(content: Element): Promise<boolean>;
 	setTitleVisible(visible: boolean): void;
+	setHeaderHost(host: HTMLElement | undefined): void;
 	layout(dimension: IDimension): void;
 }

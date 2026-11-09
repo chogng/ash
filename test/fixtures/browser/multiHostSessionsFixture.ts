@@ -1,12 +1,13 @@
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { GitHubDiffSide } from '../../../src/ash/platform/github/common/githubService.js';
 import { IAgentConnection } from '../../../src/ash/platform/agentHost/common/agentService.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { IAgentExecutionSettingsService } from '../../../src/ash/platform/agentHost/common/agentExecutionSettingsService.js';
-import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../src/ash/platform/storage/common/storage.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { AgentHostAutomationStore } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/agentHostAutomationStore.js';
@@ -25,7 +26,7 @@ import { saveSessionGridState } from '../../../src/ash/sessions/services/session
 import { referenceForSelection } from '../../../src/ash/sessions/services/sessions/browser/visibleSessions.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { buildOpenSessionLinkUri } from '../../../src/ash/platform/agentHost/common/openSessionLink.js';
-import { sessionIdentity, sessionProviderAuthority } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
+import { sessionIdentity, sessionProviderAuthority, threadIdentity } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import type { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 
 const replacementAgent = { name: 'Agent B', sourceId: 'fixture', description: 'An alternative Agent' };
@@ -44,12 +45,16 @@ export function installMultiHostSessionsFixture(): {
 	showAttentionDraft(): void;
 	pauseNextRename(): void;
 	rejectPausedRename(): void;
+	completeRequiredCheck(): void;
+	requiredCheckReads(): number;
 	calls: { host: string; method: string; sessionId: string; threadId: string; }[];
 	submissions: Submission[];
 } {
 	const calls: { host: string; method: string; sessionId: string; threadId: string; }[] = [];
 	const submissions: Submission[] = [];
 	let pausedRename: DeferredPromise<void> | undefined;
+	let completeRequiredCheck = () => { };
+	let requiredCheckReads = 0;
 	let services: InstantiationService;
 	const registrations = new Map<string, { dispose(): void; }>();
 	const params = new URL(location.href).searchParams;
@@ -58,6 +63,7 @@ export function installMultiHostSessionsFixture(): {
 	const sideChatHostSwitch = params.has('sideChatHostSwitch');
 	const background = params.has('backgroundActivities');
 	const comparisonPreview = params.has('comparisonPreview');
+	const botsInbox = params.has('botsInbox');
 	registerWorkbenchServiceContribution({
 		service: createServiceIdentifier<object>('test.multiHostSessionsFixture'),
 		dependencies: [ISessionsProvidersService, ISessionsManagementService, ISessionsService],
@@ -79,7 +85,16 @@ export function installMultiHostSessionsFixture(): {
 					uri: URI.from({ scheme: 'internal', authority: 'skill', path: `/${skillName}/SKILL.md` }),
 				}] : [];
 				const usage: Thread['usage'] = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
-				const read = (sessionId: string, threadId: string): ThreadRead => ({ thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId, threadId, title: name, status: 'active', sequence: 1, usage, turns: [] }, transcript: { sessionId, threadId, durableSequence: 1, revision: 1, entries: [] } });
+				const read = (sessionId: string, threadId: string): ThreadRead => ({
+					thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId, threadId, title: name, status: 'active', sequence: 1, usage, turns: [] },
+					transcript: {
+						sessionId, threadId, durableSequence: 1, revision: 1,
+						entries: botsInbox && name === 'Host A' && threadId === 'side' ? [{
+							type: 'item', entryId: 'review-reply', turnId: 'review-turn', transient: false,
+							item: { type: 'agentMessage', itemId: 'reply', turnId: 'review-turn', text: 'I reviewed the change.' },
+						}] : [],
+					},
+				});
 				const record = (method: string, sessionId: string, threadId: string): void => { if (sessionId !== 'same' || (threadId !== 'same' && !((sideThreads || nestedDraft) && threadId === 'side'))) throw new Error('A qualified identity reached a host'); calls.push({ host: name, method, sessionId, threadId }); };
 				const chat = {
 					onDidSubmitRequest: Event.None, onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidUpdateThreadTranscript: Event.None, onDidUpdateGoal: Event.None, onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None, onDidChangeQueue: Event.None, onDidChangeInteractionOffer: Event.None,
@@ -107,6 +122,18 @@ export function installMultiHostSessionsFixture(): {
 				child.registerInstance(IPromptsService, { onDidChangeSkills: Event.None, onDidChangeHooks: Event.None, findAgentSkills: async () => skills, getHooks: async () => [], dispose() { }, [Symbol.dispose]() { } } as unknown as IPromptsService);
 				child.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 				const automation = name === 'Host A' && new URL(location.href).searchParams.has('search') ? globalThis.ashWebWorkbenchHost?.api.automation : undefined;
+				const mergeReady = name === 'Host B' && params.has('inboxMergeReady');
+				const pullRequestEvents = name === 'Host B' && params.has('inboxPullRequestEvents');
+				const pullRequestNumbers = pullRequestEvents ? [7, 8] : mergeReady ? [7] : [];
+				const pullRequestsChanged = mergeReady ? lifetime.add(new Emitter<string>()) : undefined;
+				let checkReported = false;
+				if (pullRequestsChanged) {
+					completeRequiredCheck = () => {
+						checkReported = true;
+						pullRequestsChanged.fire('same');
+					};
+				}
+				const repository = { host: 'github.com', owner: 'team', name: 'repo' };
 				child.registerInstance(IAgentConnection, {
 					...host,
 					appServer: { ...host.appServer, getConnectionState: async () => 'ready' },
@@ -133,7 +160,37 @@ export function installMultiHostSessionsFixture(): {
 							sandboxPolicy: { profile: ':readOnly', fileSystem: 'readOnly', network: 'denied', hostRead: 'grantedRoots', managedConstraints: true, pathRuleCount: 0 },
 						}),
 					},
-					github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] },
+					github: {
+						...host.github,
+						listAccounts: async () => pullRequestNumbers.length ? [{ id: 'github', host: repository.host, login: 'owner', status: 'ready', credentialRevision: 1n }] : [],
+						listSessionPullRequests: async () => pullRequestNumbers.map(number => ({ repository, number, isArtifact: true })),
+						listSessionIssues: async () => [],
+						...(pullRequestNumbers.length ? {
+							readPullRequest: async (_repository, number) => ({
+								number, title: 'Fixture PR', body: '', url: `https://github.com/team/repo/pull/${number}`,
+								state: number === 8 ? 'closed' : 'open', draft: false,
+								mergedAt: number === 8 ? '2026-10-06T11:00:00Z' : null, mergeable: true, headCommit: 'a'.repeat(40),
+								headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', autoMerge: false,
+							}),
+							onDidChangeSessionPullRequests: pullRequestsChanged?.event ?? Event.None,
+							readPullRequestChecks: async () => {
+								requiredCheckReads++;
+								return pullRequestEvents
+									? { status: 'failure', latestCheckAtUnixMs: Date.parse('2026-10-06T10:30:00Z') }
+									: { status: checkReported ? 'success' : 'pending' };
+							},
+							listReviewThreads: async () => ({
+								threads: pullRequestEvents ? [{
+									id: 'thread', path: 'file.ts', line: 1, side: GitHubDiffSide.Right, resolved: false, outdated: false, canResolve: true,
+									comments: { comments: [{
+										id: 'comment', body: 'Please fix this.', url: 'https://github.com/team/repo/pull/7',
+										author: 'copilot-pull-request-reviewer[bot]', createdAt: '2026-10-06T10:00:00Z', canUpdate: false, canDelete: false,
+									}], nextCursor: null },
+								}] : [],
+								nextCursor: null,
+							}),
+						} : {}),
+					},
 				});
 				const automations = automation ? lifetime.add(child.createInstance(AgentHostAutomationStore, name, observableValue<'connected'>('searchFixtureConnection', 'connected'))) : undefined;
 				const title = comparisonPreview && name !== 'Judge' ? `Attempt ${name === 'Host A' ? 1 : 2} · ${name}` : `Task from ${name}`;
@@ -162,9 +219,30 @@ export function installMultiHostSessionsFixture(): {
 				if (params.has('blockedTitlebar') && name === 'Host B') {
 					session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 1 } };
 				}
-				if (params.has('inbox')) {
+				if (botsInbox && name === 'Host A') {
+					const sessionId = sessionIdentity(name, session.sessionId, 'local-agent-host');
+					const repliedAt = Date.now() - 1000;
+					session = {
+						...session,
+						chats: session.chats.map(thread => ({
+							...thread,
+							management: { status: 'completed', statusChangedAtUnixMs: repliedAt },
+						})),
+					};
+					services.get(IStorageService).store('sessions.codeReview.' + JSON.stringify([sessionId, sessionId]), JSON.stringify({
+						batches: [{
+							id: 'ash-code-review-inbox', threadId: threadIdentity(name, 'side', 'local-agent-host'), createdAt: repliedAt - 1000,
+							files: [{ key: 'file', path: 'file.ts', before: 'old', after: 'new' }],
+							comments: [{ id: 'comment', file: 'file', side: 'modified', line: 1, text: 'Please check this change' }],
+						}],
+					}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				} else if (params.has('inbox')) {
 					const status = name === 'Host A' ? 'completed' : 'needsInput';
-					session = { ...session, management: { status, statusChangedAtUnixMs: Date.now() - 1000 } };
+					const age = params.has('inboxActions') && name === 'Host A' ? 500 : 1000;
+					const management = { status, statusChangedAtUnixMs: Date.now() - age } as const;
+					session = botsInbox
+						? { ...session, chats: session.chats.map(thread => thread.threadId === 'same' ? { ...thread, management } : thread) }
+						: { ...session, management };
 				}
 				const provider = Object.assign(lifetime.add(new class extends Disposable { }()), {
 					automations,
@@ -257,5 +335,7 @@ export function installMultiHostSessionsFixture(): {
 		openLink: (name, sideBySide, threadId = 'same') => services.get(IOpenerService).open(
 			buildOpenSessionLinkUri('same', threadId, sessionProviderAuthority(name, 'local-agent-host')), { openToSide: sideBySide }),
 		disconnect: name => registrations.get(name)?.dispose(),
+		completeRequiredCheck: () => completeRequiredCheck(),
+		requiredCheckReads: () => requiredCheckReads,
 	};
 }

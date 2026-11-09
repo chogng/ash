@@ -1,15 +1,16 @@
-//! Subscription dictation buffers one bounded recording and uploads only after an explicit stop.
-use crate::audio_input::AudioInput;
-use crate::audio_input::AudioReceiver;
+//! Both live capture and queued PCM use the account-bound ChatGPT dictation stream.
 
 use crate::DictationEvent;
 use crate::SubscriptionDictationRequest;
+use crate::audio_input::AudioInput;
+use crate::audio_input::AudioReceiver;
 use async_utils::CancellationToken;
+use model_provider::ChatGptDictationEvent;
+use std::time::Duration;
 use tokio::sync::oneshot;
 use voice_host::SampleRate;
 
-const SAMPLE_RATE: usize = 24_000;
-const MAX_SAMPLES: usize = SAMPLE_RATE * 180;
+const MAX_SAMPLES: usize = 24_000 * 180;
 
 pub(super) async fn run(
     request: SubscriptionDictationRequest,
@@ -18,6 +19,24 @@ pub(super) async fn run(
     on_event: &dyn Fn(DictationEvent),
     input: Option<AudioReceiver>,
 ) -> Result<(), String> {
+    tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => Ok(()),
+        result = capture(request, stopped, on_event, input) => result,
+    }
+}
+
+async fn capture(
+    request: SubscriptionDictationRequest,
+    stopped: &mut oneshot::Receiver<()>,
+    on_event: &dyn Fn(DictationEvent),
+    input: Option<AudioReceiver>,
+) -> Result<(), String> {
+    let mut stream = tokio::select! {
+        _ = &mut *stopped => return Ok(()),
+        result = request.dictation.connect(&request.connector, request.language.as_deref()) =>
+            result.map_err(|error| error.to_string())?,
+    };
     let mut audio = AudioInput::open(
         &request.audio_host,
         request.input_device,
@@ -25,70 +44,78 @@ pub(super) async fn run(
         input,
     )
     .await?;
-    let mut samples = Vec::new();
+    let mut sample_count = 0;
+    let mut account_check = tokio::time::interval(Duration::from_secs(1));
+    account_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
             biased;
-            _ = cancellation.cancelled() => { audio.close().await.map_err(|error| error.to_string())?; return Ok(()); }
             result = &mut *stopped => {
                 if result.is_err() { return Ok(()); }
                 break;
             }
-            capture = audio.next_capture() => {
-                let Some(chunk) = capture? else { break; };
-                if samples.len() + chunk.len() > MAX_SAMPLES { return Err("CodexDictationAudioTooLong".into()); }
-                samples.extend_from_slice(&chunk);
+            _ = account_check.tick() => request.dictation.check_account().map_err(|error| error.to_string())?,
+            event = stream.receive() => match event.map_err(|error| error.to_string())? {
+                ChatGptDictationEvent::Transcript(text) => {
+                    request.dictation.check_account().map_err(|error| error.to_string())?;
+                    on_event(DictationEvent::Transcript { text, is_final: false });
+                }
+                ChatGptDictationEvent::Finished(_) => return Err("CodexDictationInvalidResponse".into()),
+                ChatGptDictationEvent::Other => {}
+            },
+            chunk = audio.next_capture() => {
+                let Some(samples) = chunk? else { break; };
+                sample_count += samples.len();
+                if sample_count > MAX_SAMPLES { return Err("CodexDictationAudioTooLong".into()); }
+                tokio::time::timeout(Duration::from_secs(10), stream.append_pcm(&samples))
+                    .await.map_err(|_| "CodexDictationRequestFailed")?
+                    .map_err(|error| error.to_string())?;
             }
         }
     }
-    // Release the physical device before the potentially slow network request.
+    // Release the microphone before waiting for the remaining transcript.
     audio.stop().await.map_err(|error| error.to_string())?;
     audio.close().await.map_err(|error| error.to_string())?;
-    if samples.is_empty() || cancellation.is_cancelled() {
+    if sample_count == 0 {
         return Ok(());
     }
-    let wav = encode_wav(&samples);
-    let token = cancellation.clone();
-    let text = tokio::task::spawn_blocking(move || {
+    let text = tokio::time::timeout(Duration::from_secs(15), async {
         request
             .dictation
-            .transcribe(&wav, request.language.as_deref(), &token)
+            .check_account()
+            .map_err(|error| error.to_string())?;
+        stream
+            .finish_input()
+            .await
+            .map_err(|error| error.to_string())?;
+        loop {
+            match stream.receive().await.map_err(|error| error.to_string())? {
+                ChatGptDictationEvent::Finished(text) => {
+                    request
+                        .dictation
+                        .check_account()
+                        .map_err(|error| error.to_string())?;
+                    return Ok::<_, String>(text);
+                }
+                ChatGptDictationEvent::Transcript(text) => {
+                    request
+                        .dictation
+                        .check_account()
+                        .map_err(|error| error.to_string())?;
+                    on_event(DictationEvent::Transcript {
+                        text,
+                        is_final: false,
+                    });
+                }
+                ChatGptDictationEvent::Other => {}
+            }
+        }
     })
     .await
-    .map_err(|_| "CodexDictationRequestFailed")?
-    .map_err(|error| error.to_string())?;
-    if !cancellation.is_cancelled() {
-        on_event(DictationEvent::Transcript {
-            text,
-            is_final: true,
-        });
-    }
+    .map_err(|_| "CodexDictationRequestFailed")??;
+    on_event(DictationEvent::Transcript {
+        text,
+        is_final: true,
+    });
     Ok(())
 }
-
-fn encode_wav(samples: &[i16]) -> Vec<u8> {
-    let data_size = (samples.len() * 2) as u32;
-    let mut wav = Vec::with_capacity(44 + data_size as usize);
-    wav.extend_from_slice(b"RIFF");
-    wav.extend_from_slice(&(36 + data_size).to_le_bytes());
-    wav.extend_from_slice(b"WAVEfmt ");
-    wav.extend_from_slice(&16u32.to_le_bytes());
-    for value in [1u16, 1] {
-        wav.extend_from_slice(&value.to_le_bytes());
-    }
-    wav.extend_from_slice(&(SAMPLE_RATE as u32).to_le_bytes());
-    wav.extend_from_slice(&(SAMPLE_RATE as u32 * 2).to_le_bytes());
-    for value in [2u16, 16] {
-        wav.extend_from_slice(&value.to_le_bytes());
-    }
-    wav.extend_from_slice(b"data");
-    wav.extend_from_slice(&data_size.to_le_bytes());
-    for sample in samples {
-        wav.extend_from_slice(&sample.to_le_bytes());
-    }
-    wav
-}
-
-#[cfg(test)]
-#[path = "subscription_tests.rs"]
-mod tests;

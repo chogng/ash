@@ -8,8 +8,6 @@ import { IChatWidgetService } from '../../../browser/chat.js';
 import { registerChatSpeechToTextActions, ToggleChatSpeechToTextAction } from '../../../browser/actions/chatSpeechToTextActions.js';
 
 const commands = [
-	'workbench.action.chat.showSpeechToTextIntroduction',
-	'workbench.action.chat.resetSpeechToTextIntroduction',
 	'workbench.action.chat.cancelSpeechToText',
 	'workbench.action.chat.toggleSpeechToText',
 	'workbench.action.chat.holdToSpeechToText',

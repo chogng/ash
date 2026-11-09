@@ -3,6 +3,7 @@ use super::RpcError;
 use super::core_error;
 use super::decode;
 use super::result;
+use super::session_operations::SessionDirectoryChange;
 use ash_app_server_protocol::protocol::agent::AgentCapabilitiesReadResult;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::goal::ThreadGoalClearParams;
@@ -166,7 +167,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
     fn change_session_directory_request(
         &self,
         mutation: SessionMutation,
-        root: Option<std::path::PathBuf>,
+        change: SessionDirectoryChange,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, RpcError>;
     fn archive_session_request(
         &self,
@@ -781,19 +782,18 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     thread_id,
                 }))
             }
-            request @ (SessionRequest::ChangeDirectory { .. } | SessionRequest::ClearDirectory) => {
-                if !connection.allows_product_host_capabilities() {
-                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
-                }
-                let root = if let SessionRequest::ChangeDirectory { root } = request {
-                    Some(root)
-                } else {
-                    None
-                };
-                result(&SessionRequestResult::Session(
-                    self.context
-                        .change_session_directory_request(mutation, root)?,
-                ))
+            SessionRequest::ChangeDirectory { root } => self.change_session_directory(
+                connection,
+                mutation,
+                SessionDirectoryChange::Replace(root),
+            ),
+            SessionRequest::BindDirectory { root } => self.change_session_directory(
+                connection,
+                mutation,
+                SessionDirectoryChange::Bind(root),
+            ),
+            SessionRequest::ClearDirectory => {
+                self.change_session_directory(connection, mutation, SessionDirectoryChange::Clear)
             }
             SessionRequest::MoveThreadToSession {
                 thread_id,
@@ -1280,6 +1280,21 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         Ok(receipt.map_err(core_error)?.map(turn_start_result))
     }
 
+    fn change_session_directory(
+        &self,
+        connection: &ConnectionState,
+        mutation: SessionMutation,
+        change: SessionDirectoryChange,
+    ) -> Result<Value, RpcError> {
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        result(&SessionRequestResult::Session(
+            self.context
+                .change_session_directory_request(mutation, change)?,
+        ))
+    }
+
     fn create_session_thread_request(
         &self,
         connection_id: u64,
@@ -1589,14 +1604,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             &params.thread_id,
             params.history,
         )?;
-        let voice_transcripts = self
+        let metadata = self
             .context
             .agent_runtime()
-            .read_voice_transcripts(&thread.thread_id, thread.sequence)
+            .read_transcript_metadata(&thread)
             .map_err(core_error)?;
-        let transcript =
-            self.updates
-                .thread_transcript_snapshot(&thread, include_transient, &voice_transcripts);
+        let transcript = self
+            .updates
+            .thread_transcript_snapshot(&thread, include_transient, &metadata.voice_transcripts)
+            .with_message_times(&metadata.message_times);
         result(&SessionThreadReadResult {
             directory: self.context.thread_directory(&params.thread_id)?,
             thread,
@@ -1680,14 +1696,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         if params.after_sequence > sequence {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let voice_transcripts = self
+        let metadata = self
             .context
             .agent_runtime()
-            .read_voice_transcripts(&thread.thread_id, thread.sequence)
+            .read_transcript_metadata(&thread)
             .map_err(core_error)?;
-        let transcript =
-            self.updates
-                .thread_transcript_snapshot(&thread, include_transient, &voice_transcripts);
+        let transcript = self
+            .updates
+            .thread_transcript_snapshot(&thread, include_transient, &metadata.voice_transcripts)
+            .with_message_times(&metadata.message_times);
         let replay_after = if bounded_history {
             params.after_sequence.max(thread.sequence)
         } else {

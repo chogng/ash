@@ -103,6 +103,25 @@ test('Voice client materializes the original Untitled source once without submit
 	assert.equal(prepared, 1); assert.equal(sent, 0); assert.deepEqual({ sessionId: voice.state?.sessionId, threadId: voice.state?.threadId }, source);
 });
 
+test('Voice permission denial restores the idle state before materializing an Untitled source', async () => {
+	const permission = new DeferredPromise<void>();
+	using voice = Object.assign(new Voice(), { requestMicrophoneAccess: () => permission.p });
+	let prepared = false;
+	using client = new VoiceSessionController(async () => { }, error => { throw error; }, async () => {
+		prepared = true;
+		return source;
+	}, voice);
+	client.setSource(undefined, 'draft');
+	const start = client.connect(gesture);
+	const denied = assert.rejects(start, /microphone denied/u);
+	assert.equal(client.isConnecting, true);
+	await permission.error(new Error('microphone denied'));
+	await denied;
+	assert.equal(client.isActive, false);
+	assert.equal(prepared, false);
+	assert.equal(voice.starts, 0);
+});
+
 test('Voice client binds delegation once per original source and epoch and cancels pending dispatch on a source switch', async () => {
 	using voice = new Voice(); const sent: string[] = []; const errors: unknown[] = [];
 	using client = new VoiceSessionController(async task => { sent.push(task.commandId); }, error => errors.push(error), undefined, voice); client.setSource(source); await client.connect(gesture);

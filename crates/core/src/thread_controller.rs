@@ -525,6 +525,7 @@ impl ThreadController {
             session_id: session_id.clone(),
             thread_id,
             durable_sequence: sequence,
+            recorded_at_unix_ms: None,
             stream_cursor: None,
             update: ThreadUpdate::Committed { event },
         }))
@@ -2313,21 +2314,35 @@ impl ThreadController {
         })
     }
 
-    /// Reads speech from the exact journal boundary used by a transcript/history snapshot.
-    pub fn read_voice_transcripts(
+    /// Reads transcript metadata from the exact journal boundary of the supplied history page.
+    pub fn read_transcript_metadata(
         &self,
-        thread_id: &ThreadId,
-        sequence: u64,
-    ) -> Result<Vec<ash_protocol::VoiceTranscript>, CoreError> {
-        if let Some(current) = self.with_loaded_thread(thread_id, |loaded| {
-            Ok((loaded.snapshot.sequence == sequence)
-                .then(|| loaded.snapshot.voice_transcripts.clone()))
+        thread: &ash_protocol::Thread,
+    ) -> Result<core_api::ThreadTranscriptMetadata, CoreError> {
+        let metadata = |snapshot: &ThreadSnapshot| core_api::ThreadTranscriptMetadata {
+            voice_transcripts: snapshot.voice_transcripts.clone(),
+            message_times: thread
+                .turns
+                .iter()
+                .flat_map(|turn| &turn.items)
+                .filter_map(|item| {
+                    let id = item.item_id();
+                    snapshot
+                        .message_times
+                        .get(id)
+                        .map(|time| (id.clone(), *time))
+                })
+                .collect(),
+        };
+        if let Some(current) = self.with_loaded_thread(&thread.thread_id, |loaded| {
+            Ok((loaded.snapshot.sequence == thread.sequence).then(|| metadata(&loaded.snapshot)))
         })? {
             return Ok(current);
         }
-        Ok(self
-            .load_snapshot_at_sequence(thread_id, sequence)?
-            .voice_transcripts)
+        Ok(metadata(&self.load_snapshot_at_sequence(
+            &thread.thread_id,
+            thread.sequence,
+        )?))
     }
 
     /// Commits speech without acquiring an execution Turn or modifying its accepted inputs.
@@ -3346,6 +3361,7 @@ impl ThreadController {
                     session_id: binding.session_id.clone(),
                     thread_id: thread_id.clone(),
                     durable_sequence: cursor,
+                    recorded_at_unix_ms: event.message_timestamp(),
                     stream_cursor: None,
                     update: ThreadUpdate::Committed { event: event.event },
                 });

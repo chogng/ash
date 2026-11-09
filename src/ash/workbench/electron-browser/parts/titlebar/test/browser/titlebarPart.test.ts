@@ -180,7 +180,7 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			const action = (enabled: boolean): HTMLButtonElement | null => auxiliary.container.querySelector(
 				`[data-action-id="workbench.action.${enabled ? 'enable' : 'disable'}WindowAlwaysOnTop"] button`,
 			);
-			assert.equal(titleService.getPart(environment.window.document.body).domNode.querySelector('[data-action-id="workbench.action.enableWindowAlwaysOnTop"]'), null);
+			assert.equal(environment.window.document.querySelector('[data-action-id="workbench.action.enableWindowAlwaysOnTop"]'), null);
 			assert.equal(action(true)?.closest('[role="toolbar"]')?.parentElement?.className, 'ash-titlebar-actions ash-titlebar-interactive-region');
 			assert.equal(action(true)?.getAttribute('aria-label'), 'Turn On Always on Top');
 			const focusedRead = new DeferredPromise<void>();

@@ -95,6 +95,9 @@ use ash_app_server_protocol::protocol::github::GitHubMergeResult;
 use ash_app_server_protocol::protocol::github::GitHubNumberParams;
 use ash_app_server_protocol::protocol::github::GitHubPageParams;
 use ash_app_server_protocol::protocol::github::GitHubPullRequest;
+use ash_app_server_protocol::protocol::github::GitHubPullRequestChecksParams;
+use ash_app_server_protocol::protocol::github::GitHubPullRequestChecksResult;
+use ash_app_server_protocol::protocol::github::GitHubPullRequestChecksStatus;
 use ash_app_server_protocol::protocol::github::GitHubPullRequestCreateParams;
 use ash_app_server_protocol::protocol::github::GitHubPullRequestFile;
 use ash_app_server_protocol::protocol::github::GitHubPullRequestFilesResult;
@@ -402,6 +405,7 @@ impl GitHubRequestProcessor {
                 | ClientMethod::GitHubCheckLog
                 | ClientMethod::GitHubCheckRerun
                 | ClientMethod::GitHubChecks
+                | ClientMethod::GitHubPullRequestChecks
                 | ClientMethod::GitHubLabelsList
                 | ClientMethod::GitHubLabelCreate
                 | ClientMethod::GitHubLabelUpdate
@@ -1080,6 +1084,31 @@ impl GitHubRequestProcessor {
                         .collect(),
                 })
             }),
+            ClientMethod::GitHubPullRequestChecks => {
+                operation!(GitHubPullRequestChecksParams, |p, repository| {
+                    let checks = client
+                        .pull_request_checks(&repository, p.number, &p.head_commit)
+                        .await?;
+                    let status = match checks.status {
+                        github::PullRequestChecksStatus::Pending => {
+                            GitHubPullRequestChecksStatus::Pending
+                        }
+                        github::PullRequestChecksStatus::Success => {
+                            GitHubPullRequestChecksStatus::Success
+                        }
+                        github::PullRequestChecksStatus::Failure => {
+                            GitHubPullRequestChecksStatus::Failure
+                        }
+                        github::PullRequestChecksStatus::Neutral => {
+                            GitHubPullRequestChecksStatus::Neutral
+                        }
+                    };
+                    Ok::<_, github::Error>(GitHubPullRequestChecksResult {
+                        status,
+                        latest_check_at_unix_ms: checks.latest_check_at_unix_ms,
+                    })
+                })
+            }
             ClientMethod::GitHubLabelsList => {
                 operation!(GitHubRepositoryParams, |p, repository| {
                     client
@@ -1368,6 +1397,8 @@ fn review_comment(comment: github::ReviewComment) -> GitHubReviewComment {
         body: comment.body,
         url: comment.url,
         author: comment.author.map(|author| author.login),
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
         can_update: comment.viewer_can_update,
         can_delete: comment.viewer_can_delete,
     }

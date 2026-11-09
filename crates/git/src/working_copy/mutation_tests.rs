@@ -489,6 +489,74 @@ async fn stages_unstages_discards_and_commits_selected_paths() {
 }
 
 #[tokio::test]
+async fn stages_and_unstages_literal_paths_with_or_without_head() {
+    for has_head in [false, true] {
+        let repository = TestRepository::init();
+        if has_head {
+            repository.write("literal[1].txt", "initial\n");
+            repository.write("literal1.txt", "initial\n");
+            repository.commit_all("initial");
+        }
+        repository.write("literal[1].txt", "selected change\n");
+        repository.write("literal1.txt", "unselected change\n");
+        let client = GitClient::system();
+        let opened = client.open_repository(repository.root()).await.unwrap();
+        let selected = GitPathspecSet::new(vec![PathBuf::from("literal[1].txt")]).unwrap();
+
+        client.stage(&opened, &selected).await.unwrap();
+        assert_eq!(
+            repository.git(&["diff", "--cached", "--name-only"]),
+            "literal[1].txt"
+        );
+
+        repository.git(&["add", "--all"]);
+        client.unstage(&opened, &selected).await.unwrap();
+        assert_eq!(
+            repository.git(&["diff", "--cached", "--name-only"]),
+            "literal1.txt"
+        );
+        assert_eq!(repository.read("literal[1].txt"), "selected change\n");
+        assert_eq!(repository.read("literal1.txt"), "unselected change\n");
+    }
+}
+
+#[tokio::test]
+async fn discards_only_the_literal_path_and_restores_it_from_the_index() {
+    for (selected, unselected) in [
+        ("literal[1].txt", "literal1.txt"),
+        #[cfg(unix)]
+        ("*.txt", "notes.txt"),
+        #[cfg(unix)]
+        (":(glob)notes.txt", "notes.txt"),
+    ] {
+        let repository = TestRepository::init();
+        repository.write(selected, "initial\n");
+        repository.write(unselected, "initial\n");
+        repository.commit_all("initial");
+        repository.write(selected, "staged change\n");
+        repository.git(&["--literal-pathspecs", "add", "--", selected]);
+        repository.write(selected, "selected change\n");
+        repository.write(unselected, "unselected change\n");
+        let client = GitClient::system();
+        let opened = client.open_repository(repository.root()).await.unwrap();
+        let paths = GitPathspecSet::new(vec![PathBuf::from(selected)]).unwrap();
+
+        client.discard_worktree(&opened, &paths).await.unwrap();
+
+        assert_eq!(repository.read(selected), "staged change\n", "{selected}");
+        assert_eq!(
+            repository.read(unselected),
+            "unselected change\n",
+            "{selected} matched {unselected}"
+        );
+        assert_eq!(
+            repository.git(&["diff", "--cached", "--name-only"]),
+            selected
+        );
+    }
+}
+
+#[tokio::test]
 async fn fetches_pulls_and_pushes_against_a_local_remote() {
     let origin = TestBareRepository::init();
     let first = TestRepository::clone_from(origin.root());

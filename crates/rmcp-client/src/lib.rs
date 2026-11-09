@@ -13,12 +13,14 @@ pub use client::{RmcpClient, RmcpClientOptions, RmcpTimeouts};
 pub use error::RmcpClientError;
 pub use handler::{HostFuture, McpClientEvent, McpClientHost, McpElicitation, NoopMcpClientHost};
 pub use rmcp::ErrorData as RmcpErrorData;
+pub use rmcp::model::ClientConfig as ClientInfo;
+pub use rmcp::model::InitializeResult as ServerInfo;
 pub use rmcp::model::RequestId as McpRequestId;
 pub use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ClientInfo, ContentBlock, ElicitRequestParams,
-    ElicitResult, ElicitationAction, Implementation, JsonObject, ListToolsResult,
-    PaginatedRequestParams, ProgressNotificationParam, ReadResourceRequestParams,
-    ReadResourceResult, ResourceContents, ServerInfo, Tool,
+    CallToolRequestParams, CallToolResult, ContentBlock, ElicitRequestParams, ElicitResult,
+    ElicitationAction, Implementation, JsonObject, ListToolsResult, PaginatedRequestParams,
+    ProgressNotificationParam, ReadResourceRequestParams, ReadResourceResult, ResourceContents,
+    Tool,
 };
 pub use transport::{BearerToken, HttpAuthorization, StdioServerCommand, StreamableHttpServer};
 

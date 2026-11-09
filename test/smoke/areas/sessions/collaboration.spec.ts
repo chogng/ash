@@ -18,7 +18,6 @@ test('Collab retains channel navigation while Agent settings are open', { tag: [
 	await new QuickAccess(page).runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'Agents', exact: true }).click();
-	await settings.getByRole('tab', { name: 'Teams', exact: true }).click();
 	await expect(settings.getByRole('button', { name: 'New Team', exact: true })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(settings).toHaveCount(0);

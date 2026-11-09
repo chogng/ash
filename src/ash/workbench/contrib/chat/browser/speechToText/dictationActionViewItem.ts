@@ -1,5 +1,5 @@
 import './media/dictationActionViewItem.css';
-import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, WindowIntervalTimer } from '../../../../../base/browser/dom.js';
 import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import { ActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../../base/browser/ui/contextview/contextview.js';
@@ -9,7 +9,7 @@ import { Separator, SubmenuAction, type IAction } from '../../../../../base/comm
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { autorun, type IObservable } from '../../../../../base/common/observable.js';
+import { autorun, autorunWithStore, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
 import { localize } from '../../../../../nls.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
@@ -17,14 +17,13 @@ import type { MenuItemAction } from '../../../../../platform/actions/common/acti
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { IVoiceCodeTranscriptionBackendService, type IDictationInputOptions } from '../../../../../platform/dictation/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { DictationConfiguration } from '../../common/constants.js';
 import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
-import { readDictationLevel, showDictationMicFeedback } from './dictationMicFeedback.js';
-import { getDictationMicrophoneChoices, readDictationOptions } from './dictationInput.js';
-import { IDictationOnboardingService } from './dictationOnboarding.js';
+import { showDictationMicFeedback } from './dictationMicFeedback.js';
+import { readDictationOptions, type DictationMenuOptions } from './dictationInput.js';
 import { addMicButtonContextMenuListener, getDictationContextMenuActions, SELECT_MICROPHONE_COMMAND } from './micButtonMenuActions.js';
 
 /** The toolbar item stays navigable when only its settings action is available. */
@@ -49,7 +48,6 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		@IVoiceCodeTranscriptionBackendService private readonly backend: IVoiceCodeTranscriptionBackendService | undefined,
 		@ISpeechService private readonly speechProviders: ISpeechService,
 		@IChatSpeechToTextService private readonly speech: IChatSpeechToTextService,
-		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 	) {
 		const label = localize('dictation.openSettings', 'Dictation settings');
@@ -101,7 +99,7 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 			if (event.key === 'Escape') cancel();
 		}, true));
 
-		let options: IDictationInputOptions | undefined;
+		let options: DictationMenuOptions | undefined;
 		try {
 			options = await readDictationOptions(window, this.configuration, this.backend, this.speechProviders);
 		} catch {
@@ -119,10 +117,11 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		if (options) actions.unshift(...this.inputChoices(window, options), new Separator());
 		const level = { id: 'dictation.inputLevel', label: '', tooltip: '', enabled: false, run() { } };
 		actions.unshift(level);
+		const deviceId = options?.microphones.hasMicrophone ? options.microphones.selectedDeviceId : undefined;
 		this.contextMenus.showContextMenu({
 			...delegate,
 			getActions: () => actions,
-			getActionViewItem: action => action === level ? new DictationLevelViewItem(level, () => this.isActive.get() ? this.speech.analyserNode : undefined) : undefined,
+			getActionViewItem: action => action === level ? new DictationLevelViewItem(level, this.speech, this.isActive, deviceId) : undefined,
 			getCheckedActionsRepresentation: () => 'radio',
 			getMenuClassName: () => 'ash-dictation-settings-menu',
 			iconPlacement: 'trailing',
@@ -131,18 +130,22 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 		});
 	}
 
-	private inputChoices(window: Window & typeof globalThis, options: IDictationInputOptions): IAction[] {
-		const currentDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice) ?? '';
-		const devices = getDictationMicrophoneChoices(options.inputDevices, currentDevice);
-		const actions: IAction[] = devices.map(({ id, label, disconnected }, index) => ({
-			id: `dictation.microphone.${index}`, label, tooltip: label, enabled: !disconnected, checked: currentDevice === id,
-			run: async () => {
-				if (disconnected) return;
-				await this.configuration.updateValue(DictationConfiguration.inputDevice, id);
-				if (this.isActive.get()) await this.speech.switchMicrophone(window, id);
-				this.onboarding.refreshMicrophones(this.speech.analyserNode);
-			},
-		}));
+	private inputChoices(window: Window & typeof globalThis, options: DictationMenuOptions): IAction[] {
+		const { choices, selectedDeviceId, hasMicrophone } = options.microphones;
+		const actions: IAction[] = [];
+		if (hasMicrophone) {
+			actions.push(...choices.map(({ id, label, disconnected }, index) => ({
+				id: `dictation.microphone.${index}`, label, tooltip: label, enabled: !disconnected, checked: selectedDeviceId === id,
+				run: async () => {
+					if (disconnected) return;
+					await this.configuration.updateValue(DictationConfiguration.inputDevice, id);
+					if (this.isActive.get()) await this.speech.switchMicrophone(window, id);
+				},
+			})));
+		} else {
+			const label = localize({ bundle: 'ash', key: 'dictation.noDevicesFound' }, 'No devices found');
+			actions.push({ id: 'dictation.noDevicesFound', label, tooltip: label, enabled: false, run() { } });
+		}
 		if (options.languages.length) {
 			const currentLanguage = this.configuration.getValue<string>(DictationConfiguration.language) ?? 'auto';
 			const names = new Intl.DisplayNames([window.document.documentElement.lang || 'en'], { type: 'language' });
@@ -160,27 +163,81 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 }
 
 class DictationLevelViewItem extends ActionViewItem {
-	constructor(action: IAction, private readonly getAnalyser: () => AnalyserNode | undefined) { super(action); }
+	constructor(
+		action: IAction,
+		private readonly speech: IChatSpeechToTextService,
+		private readonly ownsRecording: IObservable<boolean>,
+		private readonly deviceId: string | undefined,
+	) { super(action); }
 
 	override render(container: HTMLElement): void {
-		container.setAttribute('aria-hidden', 'true');
 		const row = h(container.ownerDocument, 'div', { className: 'ash-dictation-level' });
 		appendIcon(Lxicon.mic, row);
 		const meter = h(container.ownerDocument, 'meter');
-		row.append(meter);
+		meter.setAttribute('aria-label', localize({ bundle: 'ash', key: 'dictation.inputLevel' }, 'Microphone input level'));
+		const track = h(container.ownerDocument, 'div', { className: 'ash-dictation-level-track' });
+		const fill = h(container.ownerDocument, 'div', { className: 'ash-dictation-level-fill', attributes: { 'aria-hidden': 'true' } });
+		track.append(meter, fill);
+		row.append(track);
 		container.append(row);
-		const analyser = this.getAnalyser();
-		if (!analyser) return;
-		const window = getWindow(container);
-		const samples = new Uint8Array(analyser.fftSize);
-		let frame = 0;
-		const update = (): void => {
-			if (this.getAnalyser() !== analyser) { meter.value = 0; return; }
-			meter.value = readDictationLevel(analyser, samples);
-			frame = window.requestAnimationFrame(update);
+		const setLevel = (level: number): void => {
+			if (meter.value === level) return;
+			meter.value = level;
+			fill.style.inlineSize = `${Math.round(level * 100)}%`;
 		};
-		frame = window.requestAnimationFrame(update);
-		this._register(toDisposable(() => window.cancelAnimationFrame(frame)));
+
+		const analyser = observableFromEvent(container, this.speech.onDidChangeState, () => this.speech.analyserNode);
+		const busy = observableFromEvent(container, this.speech.onDidChangeState, () => this.speech.isBusy);
+		this._register(autorunWithStore((reader, store) => {
+			const recordingAnalyser = this.ownsRecording.read(reader) ? analyser.read(reader) : undefined;
+			if (recordingAnalyser) {
+				this.showLevel(row, setLevel, recordingAnalyser, store);
+			} else if (!busy.read(reader) && this.deviceId !== undefined) {
+				void this.previewLevel(row, setLevel, this.deviceId, store.add(new DisposableStore()));
+			}
+		}));
+	}
+
+	private async previewLevel(row: HTMLElement, setLevel: (level: number) => void, deviceId: string, lifetime: DisposableStore): Promise<void> {
+		const window = getWindow(row);
+		try {
+			const stream = await window.navigator.mediaDevices.getUserMedia({
+				audio: { deviceId: deviceId ? { exact: deviceId } : undefined, channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+			});
+			// The system can resolve a permission prompt after the menu has closed.
+			const stopTracks = () => stream.getTracks().forEach(track => track.stop());
+			if (lifetime.isDisposed) {
+				stopTracks();
+				return;
+			}
+			lifetime.add(toDisposable(stopTracks));
+			const context = new window.AudioContext();
+			lifetime.add(toDisposable(() => { void context.close().catch(() => undefined); }));
+			const source = context.createMediaStreamSource(stream);
+			const analyser = context.createAnalyser();
+			analyser.fftSize = 256;
+			analyser.smoothingTimeConstant = 0.5;
+			source.connect(analyser);
+			lifetime.add(toDisposable(() => source.disconnect()));
+			await context.resume();
+			if (!lifetime.isDisposed) this.showLevel(row, setLevel, analyser, lifetime);
+		} catch {
+			// Permission and device errors leave the menu usable and the meter empty.
+			lifetime.dispose();
+		}
+	}
+
+	private showLevel(row: HTMLElement, setLevel: (level: number) => void, analyser: AnalyserNode, lifetime: DisposableStore): void {
+		const bins = new Uint8Array(analyser.frequencyBinCount);
+		const timer = lifetime.add(new WindowIntervalTimer(row));
+		// The fill interpolates between samples, so the preview does not need to sample every frame.
+		timer.cancelAndSet(() => {
+			analyser.getByteFrequencyData(bins);
+			let total = 0;
+			for (const bin of bins) total += bin;
+			setLevel(Math.min(100, Math.round(total * 100 / (bins.length * 128))) / 100);
+		}, 50);
+		lifetime.add(toDisposable(() => setLevel(0)));
 	}
 
 	override setTabbable(): void { }

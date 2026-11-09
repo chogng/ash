@@ -23,6 +23,8 @@ pub use plan::ChatGptPlanOAuth;
 
 pub use dictation::ChatGptDictation;
 pub use dictation::ChatGptDictationError;
+pub use dictation::ChatGptDictationEvent;
+pub use dictation::ChatGptDictationStream;
 pub use storage::codex_home;
 
 pub use account::ChatGptAccount;

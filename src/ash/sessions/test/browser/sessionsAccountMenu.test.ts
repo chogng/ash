@@ -47,7 +47,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions account menu opens settings
 		menu.show(anchor);
 		assert.deepEqual(actions.map(action => action.label), locale === 'zh-CN'
 			? ['设置', '账号', '打开 IDE', '快捷键']
-			: ['Settings', 'Account', 'Open IDE', 'Keyboard Shortcuts']);
+			: ['Settings', 'Account', 'Open IDE', 'Shortcuts']);
 		assert.ok(actions.every(action => action.enabled));
 		assert.equal(actions.at(-1)?.icon, Lxicon.recordKeys);
 		assert.match(localize('sessions.activity.help', ''), locale === 'zh-CN' ? /保留 Agent 窗口及其中未发送的草稿/u : /keeping the Agents window and its unsent drafts open/u);

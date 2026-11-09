@@ -22,11 +22,65 @@ This specification defines stable placement and state-ownership rules. Row styli
 | Desktop contributed projects and paging          | Conversation catalog sources and their projection            |
 | Row rendering, keyboard focus and scrolling      | Sidebar view and list controls                               |
 
-Desktop Chat and Code each retain a Sessions tree with its own sorting, row order, and collapse state. Pins and custom-group membership remain attached to their conversation identities. Native Session rows retain their thread hierarchy, and catalog sources supply provider-owned conversation rows, project membership, and paging. Opening a row uses its owning conversation service. The shared Archive action invokes `agentSession.archive`. For catalog conversations, it resolves the contributed identity and dispatches to the source’s archive operation. Workspace grouping uses the Agent's bound execution directory, which can be a worktree or container for the same Project.
+Desktop Chat and Code each retain a Sessions tree with its own sorting, row order, and collapse state. Pins and custom-group membership remain attached to their conversation identities. Native Session rows retain their thread hierarchy. Workspace grouping uses the Agent's bound execution directory, which can be a worktree or container for the same Project.
+
+### Conversation adapter boundary
+
+Shared Ash code sees conversations through the Ash Chat catalog contract. The adapter translates ChatGPT conversations into that contract before the views and actions consume them.
+
+| Layer                   | Works with                                                                           | Responsibility                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ash views and actions   | Ash catalog conversations with an opaque identity, state, and supported capabilities | Render conversations and invoke Ash capabilities. For example, `agentSession.archive` calls the selected conversation's Archive capability. |
+| ChatGPT adapter         | ChatGPT records, remote identifiers, and APIs                                        | Publish Ash catalog conversations, implement their capabilities, and publish the resulting Ash state after a remote operation.              |
+| ChatGPT                 | Remote conversation and project data                                                 | Own the remote records and their lifecycle, including conversation archive and project creation.                                            |
+| Ash profile preferences | Scoped catalog identity and Ash presentation settings                                | Read and save conversation icons and project appearance locally.                                                                            |
+
+The shared New action invokes the contributed draft-opening capability. The adapter resolves its own default entry and opens a draft through the shared editor contract. Conversation sources publish scoped preference identities and identity changes. Ash retains or transfers the saved icon when a source replaces an identity.
+
+```mermaid
+flowchart LR
+    subgraph Ash["Shared Ash"]
+        UI["Sidebar, Projects, and shared actions"]
+        Catalog["Ash Chat catalog<br/>Opaque identity, state, capabilities"]
+        Preferences["Ash profile storage<br/>Conversation icons and project appearance"]
+        Catalog -->|"Ash conversation or project record"| UI
+        UI -->|"Invoke Archive capability"| Catalog
+        UI -->|"Read or save local icons and colors"| Preferences
+    end
+
+    Adapter["ChatGPT adapter"]
+    ChatGPT["ChatGPT records and API"]
+
+    ChatGPT -->|"Conversation records and operation results"| Adapter
+    Adapter -->|"Publish Ash records and updated state"| Catalog
+    Catalog -->|"Call the mapped capability"| Adapter
+    Adapter -->|"Archive remote conversation"| ChatGPT
+```
+
+### Project catalog scope
 
 Chat and Code projects retain separate membership scopes. Each sidebar reads the project catalog for its mode and displays conversations of the corresponding kind. The Projects page, Chat Search and the Chat sidebar read local Chat projects. The Projects page and sidebar also show projects supplied by Chat providers. The Code project picker reads Code projects. Each scope has its own memberships even when both projects include the same Ash conversation. App Server persists the scope for newly created projects and recognizes legacy workspace-derived project IDs as Code. Other legacy local projects remain in Chat.
 
-The Desktop Chat sidebar and Projects consume the conversation catalog contract owned by the Chat contribution. Sources supply opaque conversation and project identities, membership, paging state, and operations. The Desktop Chat sidebar shows pinned projects in Pinned and other active projects in Projects. Each project can expand to show its conversations. Project membership also keeps unpinned conversations out of Recent. A pinned conversation has a shortcut in Pinned and remains visible inside each of its projects. Project pins and expansion are profile preferences. The Projects page shares the project pins. The Projects main page groups conversations by project identity regardless of their source, includes pinned conversations in their projects, and loads project history when a project opens. A conversation with a known project links back to that project from its header. Sources own membership, history and pin state. When a source supports editing project details, its adapter reads and saves them through the shared Projects form. The sidebar owns the project context menu and appearance picker. Project actions route through the owning adapter, which supplies the saved appearance and persists new selections. The sidebar and Projects page invoke `projects.archive` to archive the project’s active conversations before marking the project archived. A partial failure leaves the project active so the command can retry the remaining conversations. Restoring a project does not restore its conversations. For catalogs without a project archive operation, the adapter stores the project’s archived status in the current profile, scoped to the connected account, after archiving its conversations. The Archived view uses the project owner’s restore operation. Restoring a locally archived project clears the same stored marker. The views keep only their presentation state.
+The Desktop Chat sidebar and Projects consume the conversation catalog contract owned by the Chat contribution. Sources supply opaque conversation and project identities, membership, paging state, and operations. The Desktop Chat sidebar shows pinned projects in Pinned and other active projects in Projects. Each project can expand to show its conversations. Project membership also keeps unpinned conversations out of Recent. A pinned conversation has a shortcut in Pinned and remains visible inside each of its projects. The Projects main page groups conversations by project identity regardless of their source, includes pinned conversations in their projects, and loads project history when a project opens. A conversation with a known project links back to that project from its header. The views keep only their presentation state.
+
+### Catalog project ownership
+
+Apply the same catalog contract to project operations. An adapter maps the provider's supported project operations to the capabilities of its Ash catalog records. For creation, the adapter creates the project in the target catalog and supplies the resulting record through that catalog.
+
+Keep catalog project icons and colors in Ash profile preferences, keyed by account and project identity. Open and save appearance using the catalog record and local storage, independently of provider authentication and project-detail requests. Route each edit by data ownership, even when fields appear in the same form.
+
+The table describes the current entry points and effects.
+
+| User action                                                                                                                                                                     | Owner and effect                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Change or reset a project icon or color                                                                                                                                         | Ash Projects reads and writes the same profile preferences for the sidebar and Projects page. The ChatGPT adapter supplies the scoped identity.                                                                     |
+| Pin or unpin a project, expand or collapse its sidebar row, or change the Projects sort order                                                                                   | Ash stores the presentation preference. Expanding a row can separately load its conversation history through the provider.                                                                                          |
+| Open **Edit details** for a ChatGPT project, rename it, or save changes to its goals                                                                                            | The ChatGPT adapter reads the provider details and writes changed names or goals to ChatGPT.                                                                                                                        |
+| Browse ChatGPT project history, move a ChatGPT conversation into or out of a ChatGPT project, create a ChatGPT project through **Move to project**, or delete a ChatGPT project | The ChatGPT adapter reads history or changes the remote project and conversation membership.                                                                                                                        |
+| Use **New project** on the Ash Projects page                                                                                                                                    | Ash App Server creates a local Chat project, including its materials and appearance.                                                                                                                                |
+| Archive or restore a ChatGPT project in Ash                                                                                                                                     | Archive first archives its active conversations through ChatGPT, then records the project’s archived status in the account-scoped Ash profile. Restore clears that local marker. The conversations remain archived. |
+
+The sidebar and Projects page invoke `projects.archive` to archive a project’s active conversations before marking the project archived. A partial failure leaves the project active so the command can retry the remaining conversations. The Archived view uses the project owner’s restore operation.
 
 List-owned state is local presentation state. It is not synchronized back to a provider and must not mutate provider timestamps or metadata.
 
