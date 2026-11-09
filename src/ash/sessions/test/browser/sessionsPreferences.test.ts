@@ -56,6 +56,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
+import { URI } from '../../../base/common/uri.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService } from '../../../platform/extensionManagement/common/extensionManagementService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
@@ -69,6 +70,8 @@ import { ISessionsService } from '../../services/sessions/browser/sessionsServic
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
+import { IProfileStorageService } from '../../../platform/storage/common/profileStorageService.js';
+import { IWorkbenchEnvironmentService } from '../../../workbench/services/environment/common/environmentService.js';
 import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../workbench/services/localization/common/locale.js';
 import { createEmptyTestLanguagePacks, createTestLocaleService } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
@@ -285,6 +288,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		}
 	} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);
+	services.registerInstance(IWorkbenchEnvironmentService, { isBuilt: false, argvResource: URI.file('/argv.json'), webviewExternalEndpoint: '' });
+	services.registerInstance(IProfileStorageService, {
+		_serviceBrand: undefined,
+		readOverview: async () => ({ profileRoot: '/profile', worktreeRoot: '/worktrees', desktopRoot: undefined, worktreeBytes: 0, sessionBytes: 0, otherBytes: 0, complete: true, worktrees: [] }),
+		cleanWorktree: async () => { throw new Error('Unexpected worktree cleanup'); },
+	});
 	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback) => localize({ bundle, key }, fallback) });
 	const languagePacks = createEmptyTestLanguagePacks();
 	services.registerInstance(ILanguagePackService, languagePacks);
@@ -319,7 +328,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const unusedMemoryOperation = async (): Promise<never> => { throw new Error('Unexpected memory operation'); };
 	services.registerInstance(IMemoriesService, {
 		onDidChange: Event.None,
-		readModelMemoryEnabled: async () => false,
+		readModelMemoryEnabled: async () => ({ chat: true, code: false }),
 		scopes: async () => [],
 		list: async () => ({ memories: [], cursor: undefined }),
 		read: unusedMemoryOperation,
@@ -689,17 +698,23 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
 		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('查看仅在 Agent 窗口中生效的快捷键。'));
 		await preferences.open({ section: 'memory' });
-		assert.equal(categoryButton('memory').textContent, '记忆');
+		assert.equal(categoryButton('memory').textContent, '你的 Ash');
 		await new Promise(resolve => setTimeout(resolve, 0));
 		const memory = window.document.querySelector('.ash-sessions-settings-page .ash-memories')!;
+		assert.ok(memory.querySelector('.ash-settings-card > .ash-settings-field-row > button[aria-label="管理指令"]'));
+		assert.ok(memory.querySelector('.ash-settings-card > .ash-settings-field-row > button[aria-label="管理 AGENTS.md"]'));
+		assert.ok(memory.querySelector('.ash-settings-field-row .ash-select-box-field [role="combobox"][aria-label="对话上下文"]'));
+		assert.equal(memory.querySelector('input[aria-label="聊天记忆"]')?.getAttribute('aria-checked'), 'true');
+		assert.equal(memory.querySelector('input[aria-label="代码记忆"]')?.getAttribute('aria-checked'), 'false');
 		assert.equal(memory.querySelector('input[role="switch"][aria-label="使用已保存的记忆"]')?.getAttribute('aria-checked'), 'false');
-		const manage = memory.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+		const manage = memory.querySelector<HTMLButtonElement>('button[aria-label="管理已保存的记忆"]')!;
 		assert.equal(manage.textContent, '管理');
 		assert.equal(manage.getAttribute('aria-expanded'), 'false');
 		manage.click();
 		await new Promise(resolve => setTimeout(resolve, 0));
 		assert.equal(manage.getAttribute('aria-expanded'), 'true');
-		assert.match(memory.querySelector('.memories-manager')?.textContent ?? '', /主题.*选择记忆范围/u);
+		const manager = window.document.getElementById(manage.getAttribute('aria-controls')!)!;
+		assert.match(manager.textContent ?? '', /主题.*选择记忆范围/u);
 		await preferences.open({ section: 'customize' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
 

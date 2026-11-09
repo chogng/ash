@@ -153,9 +153,10 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             .unwrap();
     }
     let mut builder = ExtensionRegistryBuilder::new();
+    let config = enabled_memories(root.path());
     let scopes = Arc::new(MemoryScopes {
         context_router: SessionExecutionRouter::new(&threads),
-        config: Some(enabled_memories(root.path())),
+        config: Some(config.clone()),
         projects: Some(projects.clone()),
         teams: None,
         dirs: dirs.clone(),
@@ -196,14 +197,39 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             project_id: project.clone()
         }]
     );
-    assert_eq!(
-        read_ids(&ContextSourceRequest {
-            session_id: &chat.session_id,
-            thread_id: &chat.thread_id,
-            ..request
-        }),
-        ["chat-project"]
+    let chat_request = ContextSourceRequest {
+        session_id: &chat.session_id,
+        thread_id: &chat.thread_id,
+        ..request
+    };
+    assert_eq!(read_ids(&chat_request), ["chat-project"]);
+    config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: CommandId::new("disable-chat-memory").unwrap(),
+            expected_revision: config.read_snapshot().unwrap().revision,
+            command: ash_config::UserConfigCommand::UpdatePreferences(
+                ash_config::PreferencesUpdate {
+                    features: ash_protocol::Patch::Value(
+                        [
+                            (features::Feature::ChatMemories, false),
+                            (features::Feature::Memories, true),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                    ..Default::default()
+                },
+            ),
+        })
+        .unwrap();
+    assert!(read_ids(&chat_request).is_empty());
+    assert!(
+        scopes
+            .scopes(&chat.session_id, &chat.thread_id)
+            .unwrap()
+            .is_empty()
     );
+    assert_eq!(read_ids(&request), ["dir", "profile", "project"]);
     let other = ContextSourceRequest {
         session_id: &separate.session_id,
         thread_id: &separate.thread_id,

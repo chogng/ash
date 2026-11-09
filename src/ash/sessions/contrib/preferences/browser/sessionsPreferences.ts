@@ -367,7 +367,7 @@ export class SessionsPreferences extends Disposable {
 			management.set('storage', storageContent);
 		}
 		memoryContent = resources.add(contentServices.createInstance(MemorySettingsRenderer, list,
-			() => this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat' ? 'chat' : 'code', closeDialog));
+			() => this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat' ? 'chat' : 'code', closeDialog, this.showEditor));
 		management.set(MEMORY_SETTINGS_CATEGORY, memoryContent);
 		const sessions = this.instantiationService.invokeFunction(accessor => accessor.get(ISessionsService));
 		management.set('agents', resources.add(contentServices.createInstance(SessionsAgentsContent, list,
@@ -622,7 +622,7 @@ export class SessionsPreferences extends Disposable {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
 				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.bot, settings: [], content: management.get('agents') },
-				{ id: MEMORY_SETTINGS_CATEGORY, title: memorySettingsTitle(), icon: Lxicon.brain, settings: [], content: management.get(MEMORY_SETTINGS_CATEGORY) },
+				{ id: MEMORY_SETTINGS_CATEGORY, title: memorySettingsTitle(), icon: Lxicon.personalization, settings: [], content: management.get(MEMORY_SETTINGS_CATEGORY) },
 				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },

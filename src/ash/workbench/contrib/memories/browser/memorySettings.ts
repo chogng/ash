@@ -8,7 +8,7 @@ export const MEMORY_SETTINGS_CATEGORY = 'memory';
 export const MEMORIES_FOCUS_CONTEXT = 'memoriesFocus';
 
 export function memorySettingsTitle(): string {
-	return localize({ bundle: 'ash.settings', key: 'categories.memory.label' }, 'Memory');
+	return localize({ bundle: 'ash.settings', key: 'categories.memory.label' }, 'Your Ash');
 }
 
 type MemorySettingsRequest =

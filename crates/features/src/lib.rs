@@ -15,6 +15,7 @@ pub enum Feature {
     Queue,
     Analytics,
     Memories,
+    ChatMemories,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -45,17 +46,25 @@ pub struct FeatureState {
 pub type FeatureOverrides = BTreeMap<Feature, bool>;
 
 impl Feature {
-    pub const ALL: [Self; 4] = [Self::CodeMode, Self::Queue, Self::Analytics, Self::Memories];
+    pub const ALL: [Self; 5] = [
+        Self::CodeMode,
+        Self::Queue,
+        Self::Analytics,
+        Self::Memories,
+        Self::ChatMemories,
+    ];
 
     pub fn stage(self) -> FeatureStage {
         match self {
-            Self::CodeMode | Self::Queue | Self::Memories => FeatureStage::Stable,
+            Self::CodeMode | Self::Queue | Self::Memories | Self::ChatMemories => {
+                FeatureStage::Stable
+            }
             Self::Analytics => FeatureStage::Experimental,
         }
     }
 
     pub fn default_enabled(self) -> bool {
-        matches!(self, Self::CodeMode | Self::Queue)
+        matches!(self, Self::CodeMode | Self::Queue | Self::ChatMemories)
     }
 
     pub fn enabled(self, overrides: &FeatureOverrides) -> bool {

@@ -3730,7 +3730,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		['agents', 'teams', 'memory', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks'].map(
 			categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent,
 		),
-		['Agents', 'Teams', 'Memory', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
+		['Agents', 'Teams', 'Your Ash', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="interaction"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="skills"]'), null);
@@ -4200,7 +4200,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let personalPolicy = { scope: memoryScope, revision: 1, reading: false, saving: false };
 	services.registerInstance(IMemoriesService, {
 		onDidChange: Event.None,
-		readModelMemoryEnabled: async () => false,
+		readModelMemoryEnabled: async () => ({ chat: true, code: false }),
 		scopes: async threadId => [{
 			label: threadId ? 'Project' : 'Personal',
 			policy: threadId ? { scope: projectScope, revision: 1, reading: false, saving: false } : personalPolicy,
@@ -4239,7 +4239,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(reading.getAttribute('aria-checked'), 'true');
 	assert.equal(saving.getAttribute('aria-checked'), 'false');
 	assert.equal(personalPolicy.reading, true);
-	const manage = memories.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+	const manage = memories.querySelector<HTMLButtonElement>('button[aria-label="Manage saved memories"]')!;
 	const manager = ownerDocument.getElementById(manage.getAttribute('aria-controls')!)!;
 	const detail = manager.querySelector<HTMLElement>('.memories-detail')!;
 	assert.equal(manage.getAttribute('aria-expanded'), 'false');

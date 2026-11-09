@@ -94,7 +94,7 @@ just rust-warnings ash-instructions
 - `write_file`、`edit`、`apply_patch` 在执行前检查目标文件的 contextual 与子目录规则，包括尚不存在的文件。缺少规则时返回待读路径，不写入、不请求额外权限；模型通过 `read_instruction` 读取并重新提交后继续。该工具只读取当前授权 catalog 中的规则正文，不开放用户 home 的其他文件，也不满足修改源文件前的完整读取要求。
 - 同一批工具调用或同一个 Code Mode cell 中临时读到的规则，不能直接满足本批写入前置条件；必须先返回模型。Shell 等任意程序的写入目标不在这项检查的覆盖范围内。
 - 用户可通过 `instructions/list` 获取当前会话授权范围内的 metadata 与 diagnostics，并在 Turn input 使用 `{ "type": "instruction", "path": "列表返回的绝对路径" }` 显式附加。服务器重新匹配当前 catalog，拒绝已删除、格式错误或范围外的文件；正文作为本轮上下文附件保存。
-- 列表响应不包含正文，也不等同于“本轮已使用”。当前没有独立的 Desktop/TUI 指令管理面板、逐轮使用记录、启停配置或 Plugin 指令来源。
+- 列表响应不包含正文，也不等同于“本轮已使用”。Desktop 的 Your Ash 设置可在编辑器中打开或创建个人与工作区的 Instructions 和根目录 `AGENTS.md`。当前没有独立的 TUI 指令管理面板、逐轮使用记录、启停配置或 Plugin 指令来源。
 
 指令权威、请求位置与预算保留的独立契约见 [指令优先级](../../docs/core-context.md#62-指令优先级)。
 目录匹配及来源测试不等同于真实模型遵守率评测。

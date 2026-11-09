@@ -204,8 +204,13 @@
 }
 
 .ash-sessions-settings-page .ash-button-secondary:not(:where(.icon-only)) {
-	--ash-button-secondaryBackground: var(--ash-button-hoverBackground);
 	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-settings-page
+	.ash-button-secondary:not(:where(.icon-only, :active)) {
+	/* Set the paint on the page so the widget's inline theme defaults cannot mask it. */
+	background-color: var(--ash-button-hoverBackground);
 }
 
 .ash-sessions-settings-page
@@ -248,7 +253,12 @@
 	pointer-events: none;
 }
 
-.ash-sessions-settings-page .ash-settings-field-row {
+.ash-sessions-settings-page
+	:is(
+		.ash-settings-field-row,
+		.ash-memories .memories-manager,
+		.ash-memories .memories-status:not(:empty)
+	) {
 	padding-inline: 0 var(--ash-spacing-size80);
 }
 
@@ -297,7 +307,11 @@
 }
 
 .ash-sessions-settings-page
-	:is(.ash-configuration-setting, .ash-setting-font-controls)
+	:is(
+		.ash-configuration-setting,
+		.ash-setting-font-controls,
+		.ash-settings-field-row
+	)
 	> .ash-select-box-field
 	> .ash-select-box-button {
 	--ash-select-style-select-border: var(--ash-contrastBorder, transparent);
@@ -307,11 +321,19 @@
 }
 
 .ash-sessions-settings-page
-	:is(.ash-configuration-setting, .ash-setting-font-controls)
+	:is(
+		.ash-configuration-setting,
+		.ash-setting-font-controls,
+		.ash-settings-field-row
+	)
 	> .ash-select-box-field
 	> .ash-select-box-button:hover,
 .ash-sessions-settings-page
-	:is(.ash-configuration-setting, .ash-setting-font-controls)
+	:is(
+		.ash-configuration-setting,
+		.ash-setting-font-controls,
+		.ash-settings-field-row
+	)
 	> .ash-select-box-field.ash-dropdown-open
 	> .ash-select-box-button {
 	--ash-select-style-select-background: var(--ash-toolbar-hoverBackground);
