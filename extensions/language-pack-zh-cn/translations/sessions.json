@@ -359,7 +359,7 @@
     "sessions.chatgpt.webTitle": "ChatGPT 网页版",
     "sessions.chatgpt.experimentalHelp": "ChatGPT（实验性）使用你现有的 Codex 登录。在聊天侧栏中打开会话，或用“新建”开始草稿。在会话顶部选择“加载更早的消息”可以阅读更早的回复。按 Enter 发送，Shift+Enter 换行，也可以用“停止”中断回复。按 Tab 前往模型选择器，或打开无障碍视图阅读会话内容。在“新建”按钮的上下文菜单中选择“刷新”即可刷新历史。在命令面板或“新建”按钮的上下文菜单中选择“ChatGPT 网页版”，即可切换到网页版入口。",
     "sessions.chatgpt.experimentalEntryHelp": "要用 Codex 登录试用独立的 ChatGPT 入口，请在“新建”按钮的上下文菜单或命令面板中选择“ChatGPT（实验性）”。",
-    "sessions.chatgpt.promptTimelineHelp": "当对话至少有两条提问且窗格足够宽时，会显示提问时间线。聚焦左侧的「显示提问」后，按 Enter 或空格打开列表。使用上、下方向键、Home 或 End 在提问间移动。在概览标尺模式下，按 Tab 聚焦标记，再激活它查看对应的提问。激活提问可跳转到原消息。按 Escape 关闭列表并将焦点移回打开列表的控件。",
+    "sessions.chatgpt.promptTimelineHelp": "当对话至少有两条提问且窗格足够宽时，会显示提问时间线。点击左侧的标记可跳转到预览的提问。要用键盘打开列表，请聚焦「显示提问」并按 Enter 或空格。使用上、下方向键、Home 或 End 在提问间移动。在概览标尺模式下，按 Tab 聚焦标记，再激活它查看对应的提问。激活提问可跳转到原消息。按 Escape 关闭列表并将焦点移回打开列表的控件。",
     "sessions.chatgpt.codeModelsHelp": "在没有附件的新聊天中，模型列表也会显示可用的 Ash 模型。选择后会打开独立的 Ash 聊天草稿，并带上未发送的文字。",
     "sessions.newChatModel.unavailable": "所选模型已不可用。",
     "sessions.chatList.pin": "置顶聊天",

@@ -34,6 +34,16 @@ export class PromptTimelineGutterRail extends Disposable implements IPromptTimel
 		this.rail.append(handle, this.panel);
 		handle.onclick = event => {
 			event.preventDefault();
+			// Touch and keyboard activation still open the full list from the handle.
+			if (event.pointerType === 'mouse') {
+				const index = Array.from(this.marks.children).findIndex(mark => mark === event.target);
+				const prompt = this.buckets[index]?.[0].prompt;
+				if (prompt) {
+					this.close();
+					actions.reveal(prompt.id);
+					return;
+				}
+			}
 			if (this.pinned) {
 				this.close();
 				return;

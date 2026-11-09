@@ -418,7 +418,7 @@
     "chat.promptTimeline.show": "显示提问",
     "chat.promptTimeline.files": "已更改的文件（{0}）",
     "chat.promptTimeline.group": "{0} 条提问，首条为 {1}",
-    "chat.promptTimeline.help": "在智能体窗口中，将鼠标悬停在左侧时间线上可显示提问，也可以聚焦“显示提问”后按 Enter。按向上或向下箭头键、Home 或 End 在提问之间移动，按向左或向右箭头键在提问和改动统计之间切换。激活提问即可跳转，激活统计数字可打开该轮改动。在标尺中，激活标记可使用相同操作，也可以展开“已更改的文件”查看单个文件的改动。按 Escape 关闭提问列表。",
+    "chat.promptTimeline.help": "在智能体窗口中，将鼠标悬停在左侧时间线上可显示提问，点击标记即可跳转到预览的提问。要用键盘打开列表，请聚焦“显示提问”并按 Enter。按向上或向下箭头键、Home 或 End 在提问之间移动，按向左或向右箭头键在提问和改动统计之间切换。激活提问即可跳转，激活统计数字可打开该轮改动。在标尺中，激活标记可使用相同操作，也可以展开“已更改的文件”查看单个文件的改动。按 Escape 关闭提问列表。",
     "chat.stickyScroll.invalid": "聊天吸顶滚动设置必须为布尔值。",
     "chat.scrollToLatest": "跳到最新输出",
     "chat.stickyScroll.title": "吸顶滚动",

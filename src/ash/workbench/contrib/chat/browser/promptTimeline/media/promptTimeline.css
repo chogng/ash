@@ -87,30 +87,33 @@
 }
 
 .ash-prompt-timeline-gutter > summary {
-	display: grid;
-	place-items: center;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
 	box-sizing: border-box;
-	inline-size: var(--ash-spacing-size240);
+	inline-size: var(--ash-spacing-size320);
 	min-block-size: var(--ash-spacing-size240);
 	padding-block: var(--ash-spacing-size60);
+	padding-inline: var(--ash-spacing-size40);
 	border-radius: var(--ash-cornerRadius-small);
 	list-style: none;
 	cursor: pointer;
 }
 
-.ash-prompt-timeline-gutter > summary:hover,
-.ash-prompt-timeline-gutter[open] > summary {
-	background: var(--ash-toolbar-hoverBackground);
-}
-
 .ash-prompt-timeline-gutter-marks {
 	display: grid;
-	justify-items: center;
-	gap: var(--ash-spacing-size80);
-	color: var(--ash-description-foreground);
+	color: color-mix(in srgb, var(--ash-foreground) 20%, transparent);
 }
 
 .ash-prompt-timeline-gutter-marks > span {
+	display: flex;
+	align-items: center;
+	block-size: var(--ash-spacing-size100);
+}
+
+/* Fixed hit areas let the strokes grow and shrink without moving the pointer targets. */
+.ash-prompt-timeline-gutter-marks > span::before {
+	content: "";
 	inline-size: var(--ash-spacing-size60);
 	border-block-start: var(--ash-spacing-size20) solid currentColor;
 }
@@ -119,10 +122,49 @@
 	color: var(--ash-foreground);
 }
 
+@media (hover: hover) {
+	.ash-prompt-timeline-gutter-marks
+		> :is(
+			span:hover + span + span + span,
+			span:has(+ span + span + span:hover)
+		)::before {
+		inline-size: var(--ash-spacing-size100);
+	}
+
+	.ash-prompt-timeline-gutter-marks
+		> :is(span:hover + span + span, span:has(+ span + span:hover))::before {
+		inline-size: var(--ash-spacing-size160);
+	}
+
+	.ash-prompt-timeline-gutter-marks
+		> :is(span:hover + span, span:has(+ span:hover))::before {
+		inline-size: var(--ash-spacing-size200);
+	}
+
+	.ash-prompt-timeline-gutter-marks > span:hover::before {
+		inline-size: var(--ash-spacing-size240);
+	}
+
+	.ash-prompt-timeline-gutter-marks > span:hover:not(.active) {
+		color: var(--ash-description-foreground);
+	}
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	.ash-prompt-timeline-gutter-marks:not(.ash-reduce-motion *) > span::before {
+		transition: inline-size var(--ash-animation-durationFast) ease-out;
+	}
+}
+
+:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-prompt-timeline-gutter-marks {
+	color: var(--ash-description-foreground);
+}
+
 :where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
 	.ash-prompt-timeline-gutter-marks
 	> .active {
-	inline-size: var(--ash-spacing-size120);
+	color: var(--ash-accent-foreground);
 }
 
 .ash-prompt-timeline-mark {
@@ -138,7 +180,8 @@
 	box-sizing: border-box;
 	inline-size: min(18rem, 65vw);
 	max-block-size: min(22rem, 50vh);
-	overflow: auto;
+	overflow: hidden auto;
+	overscroll-behavior-y: contain;
 	padding: var(--ash-spacing-size60);
 	border: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
@@ -149,6 +192,36 @@
 		color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
 	font-size: var(--ash-fontSize-body1);
 	line-height: 1.4;
+}
+
+.ash-prompt-timeline-panel::-webkit-scrollbar {
+	width: var(--ash-spacing-size80);
+}
+
+.ash-prompt-timeline-panel::-webkit-scrollbar-track {
+	margin-block: var(--ash-spacing-size60);
+}
+
+.ash-prompt-timeline-panel::-webkit-scrollbar-thumb {
+	border: var(--ash-strokeThickness) solid transparent;
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-scrollbarSlider-background);
+	background-clip: padding-box;
+}
+
+.ash-prompt-timeline-panel::-webkit-scrollbar-thumb:hover {
+	background-color: var(--ash-scrollbarSlider-hoverBackground);
+}
+
+.ash-prompt-timeline-panel::-webkit-scrollbar-thumb:active {
+	background-color: var(--ash-scrollbarSlider-activeBackground);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+	.ash-prompt-timeline-panel {
+		scrollbar-width: thin;
+		scrollbar-color: var(--ash-scrollbarSlider-background) transparent;
+	}
 }
 
 .ash-prompt-timeline-gutter .ash-prompt-timeline-panel {
