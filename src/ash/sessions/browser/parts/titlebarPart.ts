@@ -17,10 +17,11 @@ import { IMenuService } from '../../../platform/actions/common/actions.js';
 import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
-import { WebTitlebarPart } from '../../../workbench/browser/parts/titlebar/titlebarPart.js';
+import { WebTitlebarPart, type ITitlebarPart } from '../../../workbench/browser/parts/titlebar/titlebarPart.js';
+import type { ITitleService } from '../../../workbench/services/title/browser/titleService.js';
 import { BrowserMenubarControl } from '../../../workbench/browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../menus.js';
-import { createServiceIdentifier, IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IsNewSessionContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
@@ -43,14 +44,20 @@ export function getSessionsTitlebarBackground(theme: IColorTheme): string | unde
 	return Color.Format.CSS.formatHex(background.flatten(shell ?? workbench, workbench));
 }
 
-export interface ISessionsTitlebarService {
-	setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable;
+export function getSessionsTitlebarPart(titleService: ITitleService, container: HTMLElement): TitlebarPart {
+	const part = titleService.getPart(container);
+	if (!(part instanceof TitlebarPart)) throw new Error('The Sessions window requires a Sessions titlebar');
+	return part;
 }
 
-export const ISessionsTitlebarService = createServiceIdentifier<ISessionsTitlebarService>('sessionsTitlebarService');
-
 /** Window chrome and primary product actions for the dedicated Sessions Workbench. */
-export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarService {
+export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
+	readonly onMenubarVisibilityChange = Event.None;
+
+	// This part presents the active session, independent of the editor window title template.
+	updateProperties(): void { }
+	registerVariables(): void { }
+
 	private readonly activityActions: WorkbenchToolBar;
 	private readonly leftControls: HTMLElement;
 	private readonly pageContent: HTMLElement;

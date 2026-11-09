@@ -25,7 +25,8 @@ import { IChatSessionNavigationService } from '../../../../workbench/services/ch
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from './sessionsActions.js';
 import { createSessionItemActions, createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { renderInlineRenameInput, showInlineRenameInput } from '../../../browser/parts/titlebar/inlineRenameInput.js';
-import { ISessionsTitlebarService } from '../../../browser/parts/titlebarPart.js';
+import { getSessionsTitlebarPart } from '../../../browser/parts/titlebarPart.js';
+import { ITitleService } from '../../../../workbench/services/title/browser/titleService.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
@@ -48,7 +49,7 @@ export class SessionsTitleBarWidget extends Disposable {
 	static readonly ID = 'sessions.contrib.titleBarWidget';
 
 	constructor(
-		@ISessionsTitlebarService titlebar: ISessionsTitlebarService,
+		@ITitleService titleService: ITitleService,
 		@ISessionsService sessions: ISessionsService,
 		@ICustomViewService customViews: ICustomViewService,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
@@ -268,6 +269,6 @@ export class SessionsTitleBarWidget extends Disposable {
 					: workspaceDetails;
 			});
 		}));
-		this._register(titlebar.setSessionContent(element, menuOpen));
+		this._register(getSessionsTitlebarPart(titleService, layout.mainContainer).setSessionContent(element, menuOpen));
 	}
 }

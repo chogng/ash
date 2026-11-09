@@ -17,6 +17,7 @@ import type { SessionsViewSelection } from '../../services/sessions/browser/sess
 import type { SessionRecencyEntry } from '../../services/sessions/browser/sessionsRecencyHistory.js';
 import { sessionViewSelectionKey } from '../../services/sessions/browser/visibleSessions.js';
 import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
+import { ITitleService } from '../../../workbench/services/title/browser/titleService.js';
 import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
 import { Direction, type IView } from '../../../base/browser/ui/grid/grid.js';
@@ -86,6 +87,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
+		@ITitleService private readonly titleService: ITitleService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -237,7 +239,9 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		}
 		const resources = new DisposableStore();
 		try {
-			const shell = resources.add(this.services.createInstance(ChatAuxiliaryWindow, window, title));
+			const shell = this.titleService.createAuxiliaryTitlebarPart(window.container, unregister =>
+				this.services.createInstance(ChatAuxiliaryWindow, window, title, unregister));
+			resources.add(toDisposable(() => shell.dispose()));
 			const { header } = shell;
 			const placeholder = h(this.content.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
 			resources.add(
@@ -305,7 +309,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			resources.add(addDisposableListener(window.window, 'focus', markViewed));
 			resources.add(addDisposableListener(document, 'visibilitychange', markViewed));
 			resources.add(this.sessionService.onDidChange(markViewed));
-			document.title = title;
 			window.layout();
 			window.window.focus();
 			view.focus();
@@ -447,7 +450,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 						view.openSession({ kind: 'session', active: { session, threadId: thread.threadId } });
 						const popup = this.popouts.get(view)!;
 						popup.shell.setTitle(session.title);
-						popup.window.container.setAttribute('aria-label', session.title);
 						continue;
 					}
 				}
@@ -485,7 +487,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			if (popup) {
 				const title = selection.kind === 'session' ? selection.active.session.title : selection.session.title;
 				popup.shell.setTitle(title);
-				popup.window.container.setAttribute('aria-label', title);
 			}
 			view.element.classList.toggle('last-slot', selection === selections.at(-1));
 		}

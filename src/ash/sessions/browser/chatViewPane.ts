@@ -270,7 +270,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		if (this.viewDisposed || ![...this.panes.values()].includes(pane)) { window.dispose(); return; }
 		const resources = new DisposableStore();
 		try {
-			const shell = resources.add(this.instantiationService.createInstance(ChatAuxiliaryWindow, window, title));
+			const shell = resources.add(this.instantiationService.createInstance(ChatAuxiliaryWindow, window, title, undefined));
 			const placeholder = h(this.paneHost.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
 			placeholder.id = `${pane.element.id}-detached`;
 			resources.add(new Button(placeholder, {

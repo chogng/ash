@@ -2976,7 +2976,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: 'New', exact: true });
 	const projects = navigation.getByRole('button', { name: 'Projects' });
-	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
+	const menu = page.getByRole('menuitem', { name: 'Application menu', exact: true });
 	const hasWindowMenu = target.kind === 'browser' || process.platform !== 'darwin';
 	if (!hasWindowMenu) {
 		await expect(menu).toHaveCount(0);

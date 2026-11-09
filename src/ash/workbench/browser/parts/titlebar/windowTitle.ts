@@ -29,7 +29,7 @@ export class WindowTitle extends Disposable {
 	constructor(
 		private readonly targetWindow: Window,
 		private readonly productName: string,
-		private readonly editorGroupsContainer: IEditorGroupsContainer,
+		private readonly editorGroupsContainer: IEditorGroupsContainer | undefined,
 		@IWorkspaceContextService private readonly workspaceService: IWorkspaceContextService,
 		@IWorkingCopyService private readonly workingCopyService: IWorkingCopyService,
 		@ILabelService private readonly labelService: ILabelService,
@@ -38,6 +38,8 @@ export class WindowTitle extends Disposable {
 		@ILocalizationService private readonly localizationService: ILocalizationService,
 	) {
 		super();
+		// A window with product-owned chrome supplies its document title directly.
+		if (!editorGroupsContainer) return;
 		this._register(editorGroupsContainer.onDidChangeActiveGroup(() => this.bindActiveGroup()));
 		this._register(workspaceService.onDidChangeWorkspaceName(() => this.updateTitle()));
 		this._register(workspaceService.onDidChangeWorkspaceFolders(() => this.updateTitle()));
@@ -72,7 +74,7 @@ export class WindowTitle extends Disposable {
 	}
 
 	private bindActiveGroup(): void {
-		this.groupListener.value = this.editorGroupsContainer.activeGroup.onDidChangeEditors(event => {
+		this.groupListener.value = this.editorGroupsContainer?.activeGroup.onDidChangeEditors(event => {
 			if (event.kind === 'activeEditorChanged') {
 				this.handleActiveEditorChange();
 			}
@@ -81,11 +83,12 @@ export class WindowTitle extends Disposable {
 	}
 
 	private handleActiveEditorChange(): void {
-		this.editorLabelListener.value = this.editorGroupsContainer.activeGroup.activeInput?.onDidChangeLabel?.(() => this.updateTitle());
+		this.editorLabelListener.value = this.editorGroupsContainer?.activeGroup.activeInput?.onDidChangeLabel?.(() => this.updateTitle());
 		this.updateTitle();
 	}
 
 	private updateTitle(): void {
+		if (!this.editorGroupsContainer) return;
 		const editor = this.editorGroupsContainer.activeGroup.activeInput;
 		const workspace = this.workspaceService.getWorkspace();
 		const resource = editor?.resource;

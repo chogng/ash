@@ -40,11 +40,9 @@ import { BrowserContextMenuService } from '../../platform/contextview/browser/co
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from '../browser/workbench.js';
 import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
-import { isMacintosh } from '../../base/common/platform.js';
-import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
-import { Menus } from '../browser/menus.js';
-import { getSessionsTitlebarBackground, TitlebarPart } from '../browser/parts/titlebarPart.js';
-import { bindWindowControlTheme, bindWindowsTitlebarInsets } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
+import { getSessionsTitlebarBackground } from '../browser/parts/titlebarPart.js';
+import { registerTitleService } from '../services/title/electron-browser/titleService.js';
+import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
@@ -404,20 +402,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					void colors.initialize().catch(onUnexpectedError);
 					return colors;
 				},
-				createTitlebarPart: (titlebarContainer, services) => {
-					if (isMacintosh) {
-						// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
-						sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
-					}
-					const titlebar = services.createInstance(
-						TitlebarPart,
-						titlebarContainer,
-						isMacintosh ? 'actions-only' : 'application-menu',
-					);
-					titlebar.domNode.classList.add('ash-electron-titlebar');
-					sessions.add(bindWindowsTitlebarInsets(titlebar.domNode));
-					return titlebar;
-				},
+				registerTitleService: (titlebarContainer, productName, services) =>
+					registerTitleService(titlebarContainer, productName, services, sessions),
 				container,
 			}),
 		);

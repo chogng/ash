@@ -31,6 +31,8 @@ import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHo
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { createTestFileService, registerTestComponentServices, createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
+import { registerTestTitlebarServices } from '../../../workbench/test/common/testTitlebarServices.js';
+import { ITitleService } from '../../../workbench/services/title/browser/titleService.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IFileService, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
@@ -105,6 +107,7 @@ for (const [name, value] of Object.entries({
 }
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
+const { registerTitleService } = await import('../../services/title/browser/titleService.js');
 await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
@@ -398,7 +401,14 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}()));
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
-	const paneServices = registerTestComponentServices(editorServices);
+	const paneServices = registerTestTitlebarServices(registerTestComponentServices(editorServices));
+	dom.window.document.title = 'Ash Sessions';
+	registerTitleService(dom.window.document.body, 'Ash', paneServices);
+	const titleService = paneServices.get(ITitleService);
+	const titlebar = dom.window.document.querySelector('.ash-sessions-titlebar');
+	assert.ok(titlebar);
+	assert.equal(dom.window.document.querySelectorAll('.ash-sessions-titlebar').length, 1);
+	assert.equal(dom.window.document.title, 'Ash Sessions');
 	paneServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
@@ -561,6 +571,10 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	};
 	await part.openInNewWindow(unavailable);
 	assert.ok(popup.window.document.querySelector('.ash-chat-auxiliary-content'));
+	const auxiliaryTitlebar = titleService.getPart(popup.window.document.body);
+	assert.notEqual(auxiliaryTitlebar, titleService.getPart(dom.window.document.body));
+	assert.equal(popup.window.document.title, session.title);
+	assert.ok(popup.window.document.querySelector('.ash-chat-auxiliary-titlebar [aria-label="Return to main window"]'));
 	publishActivity(100);
 	assert.equal(viewService.getLastViewedAt(entry), undefined);
 
@@ -574,6 +588,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	publishActivity(300);
 	assert.equal(viewService.getLastViewedAt(entry), 200);
 	popupClosed.fire();
+	assert.equal(popup.window.document.querySelector('.ash-chat-auxiliary-titlebar'), null);
+	assert.throws(() => titleService.getPart(popup.window.document.body), /no titlebar registered/);
 	const lastViewedAfterClose = viewService.getLastViewedAt(entry);
 	popupFocused = true;
 	publishActivity(Date.now() + 60_000);

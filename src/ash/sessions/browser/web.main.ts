@@ -28,7 +28,7 @@ import { workspaceFromIdentifier } from '../../platform/workspace/common/workspa
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from './workbench.js';
 import { createSessionsWorkbench } from './workbenchFactory.js';
-import { TitlebarPart } from './parts/titlebarPart.js';
+import { registerTitleService } from '../services/title/browser/titleService.js';
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
@@ -170,7 +170,7 @@ export class SessionsBrowserMain extends Disposable {
 				},
 				createContextMenuService: services => services.createInstance(BrowserContextMenuService),
 				createHostColorSchemeService: () => new BrowserHostColorSchemeService(ownerWindow),
-				createTitlebarPart: (titlebarContainer, services) => services.createInstance(TitlebarPart, titlebarContainer, 'application-menu'),
+				registerTitleService,
 				container,
 			});
 			if (this.isDisposed) { workbench.dispose(); this.assertNotDisposed(); }

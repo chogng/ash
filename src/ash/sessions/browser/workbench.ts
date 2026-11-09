@@ -363,7 +363,8 @@ import { IPaneCompositePartService } from '../../workbench/services/panecomposit
 import { SessionsPart, type SessionsPartOptions } from './parts/sessionsPart.js';
 import { ISessionsSidebarFooter, SidebarPart } from './parts/sidebarPart.js';
 import { registerSessionsNavigation } from '../contrib/sessions/browser/views/sessionsView.js';
-import { ISessionsTitlebarService, type TitlebarPart } from './parts/titlebarPart.js';
+import { ITitleService } from '../../workbench/services/title/browser/titleService.js';
+import { getSessionsTitlebarPart } from './parts/titlebarPart.js';
 
 export interface IWorkbenchOptions {
 	/** Host-owned services are borrowed before this window creates its consumers. */
@@ -393,7 +394,7 @@ export interface IWorkbenchOptions {
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
 	readonly createContextMenuService: (services: IInstantiationService) => IContextMenuService & IDisposable;
 	readonly createHostColorSchemeService: (services: IInstantiationService) => IHostColorSchemeService & IDisposable;
-	readonly createTitlebarPart: (container: HTMLElement, services: IInstantiationService) => TitlebarPart;
+	readonly registerTitleService: (container: HTMLElement, productName: string, services: InstantiationService) => void;
 	readonly container: HTMLElement;
 }
 
@@ -840,8 +841,8 @@ export abstract class Workbench extends Disposable {
 		const accountMenu = services.createInstance(SessionsAccountMenu, preferences);
 
 		let auxiliarybar: AuxiliaryBarPart | undefined;
-		const titlebar = this._register(options.createTitlebarPart(this.domNode, services));
-		services.registerInstance(ISessionsTitlebarService, titlebar);
+		options.registerTitleService(this.domNode, options.profile.label, services);
+		const titlebar = getSessionsTitlebarPart(services.get(ITitleService), this.domNode);
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
