@@ -14,7 +14,16 @@
 		var(--ash-sessions-chat-content-bottom, var(--ash-spacing-size120));
 }
 
+/* Anchor the tip above the form without reducing the space for the environment picker. */
+.ash-sessions-chat-tip-anchor {
+	position: relative;
+}
+
 .ash-sessions-chat-tip-slot {
+	position: absolute;
+	inset-block-end: var(--ash-spacing-size80);
+	inset-inline: 0;
+	z-index: 1;
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
 	line-height: 1.5;
@@ -22,6 +31,10 @@
 
 .ash-sessions-chat-tip-slot:empty {
 	display: none;
+}
+
+.ash-sessions-chat-tip-slot[inert] {
+	visibility: hidden;
 }
 
 .ash-sessions-chat-input .ash-chat-input-container {

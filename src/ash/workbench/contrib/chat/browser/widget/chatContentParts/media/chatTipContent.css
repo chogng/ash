@@ -1,6 +1,6 @@
 .ash-chat-input-part .ash-chat-input-tip {
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
 	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size80);
 	border: var(--ash-strokeThickness) solid
@@ -24,6 +24,14 @@
 .ash-chat-input-tip-actions {
 	display: flex;
 	flex: 0 0 auto;
+	/* Reserve the same space and keep the controls in the Tab order. */
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-chat-input-tip:is(:hover, :focus-within) > .ash-chat-input-tip-actions {
+	opacity: 1;
+	pointer-events: auto;
 }
 
 .ash-chat-input-tip:focus-visible {

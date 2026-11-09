@@ -488,7 +488,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.ok(restoredTip);
 	restoredTip.querySelector<HTMLButtonElement>('button[aria-label="Dismiss tip"]')!.click();
 	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
-	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
+	assert.equal(services.get(IChatTipService).getWelcomeTip()?.id, 'plan');
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
 	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };

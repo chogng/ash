@@ -97,6 +97,10 @@ export class OpenAgentsWindowSystemWideKeybindingTip extends Disposable implemen
 		if (id === tipId) this.dismissed.set(true);
 	}
 
+	public clearDismissedTips(): void {
+		this.dismissed.set(false);
+	}
+
 	private readCandidates(): readonly INativeSystemWideKeybinding[] {
 		const bindings = this.keybindings.getKeybindings().flatMap(item => item.userBinding ? [item.userBinding.entry] : []);
 		return selectSystemWideKeybindings(bindings, operatingSystem).candidates;

@@ -1767,6 +1767,50 @@ suite('sessions browser component', () => {
 		await expect(create).toBeFocused();
 	});
 
+	test('Code tips stay above the composer without shifting the new conversation', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&catalog&search&projectPicker&environmentSetup&locale=en');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		const chat = page.locator('.ash-sessions-chat-slot.active .ash-chat');
+		const card = chat.locator('.ash-sessions-environment-card');
+		const form = chat.locator('form.ash-chat-input-container');
+		const tip = chat.locator('.ash-chat-input-tip');
+		await expect(card).toBeVisible();
+		await expect(tip).toBeVisible();
+
+		const cardBounds = (await card.boundingBox())!;
+		const formBounds = (await form.boundingBox())!;
+		const tipBounds = (await tip.boundingBox())!;
+		expect(tipBounds.y + tipBounds.height).toBeLessThan(formBounds.y);
+		expect(tipBounds.x).toBeCloseTo(formBounds.x);
+		expect(tipBounds.width).toBeCloseTo(formBounds.width);
+
+		const dismissTip = tip.getByRole('button', { name: 'Dismiss tip', exact: true });
+		const viewport = page.viewportSize()!;
+		await dismissTip.focus();
+		await page.setViewportSize({ width: 420, height: 270 });
+		await expect(tip).toBeHidden();
+		await expect(form.getByRole('textbox')).toBeFocused();
+		await card.getByRole('button', { name: 'Choose environment', exact: true }).click({ trial: true });
+		await page.setViewportSize(viewport);
+		await expect(tip).toBeVisible();
+
+		await expect(tip).toContainText('Attach text files');
+		await dismissTip.press('Enter');
+		await expect(tip).toBeHidden();
+		await expect(form.getByRole('textbox')).toBeFocused();
+		expect(await card.boundingBox()).toEqual(cardBounds);
+		expect(await form.boundingBox()).toEqual(formBounds);
+
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		await expect(tip).toContainText('Choose Plan');
+		expect((await tip.boundingBox())!.y + (await tip.boundingBox())!.height).toBeLessThan(formBounds.y);
+		expect(await card.boundingBox()).toEqual(cardBounds);
+		expect(await form.boundingBox()).toEqual(formBounds);
+	});
+
 	for (const locale of ['en', 'zh-CN']) test(`Code opens and creates an environment from the new conversation (${locale})`, async () => {
 		const { page, info: testInfo } = browserTests;
 		const chinese = locale === 'zh-CN';
