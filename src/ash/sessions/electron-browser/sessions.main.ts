@@ -395,6 +395,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				api,
 				workspaceSelection: () => workspaceSelection,
 				workspace: () => workspace,
+				bindLocalWorkspaceFolder: api.bindLocalWorkspaceFolder,
 				initialWorkspaceReady,
 				createFileDialogService: services => services.createInstance(FileDialogService),
 				createLifecycleService: services => {

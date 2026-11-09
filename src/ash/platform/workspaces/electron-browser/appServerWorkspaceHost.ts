@@ -8,7 +8,7 @@ import { URI } from '../../../base/common/uri.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
-import { parseWorkspace } from '../../workspace/common/workspace.js';
+import { parseWorkspace, type IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { validateDirectoryPermissionRequest } from '../../workspace/common/workspaceIpc.js';
 import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
@@ -18,6 +18,7 @@ import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, hasDevelopment
 interface WorkspaceDirectoryInitializationOptions {
 	readonly onBindingQueued?: () => void;
 	readonly discardUntrustedWorkspace?: (signal: AbortSignal) => Promise<boolean>;
+	readonly additionalFolders?: readonly IWorkspaceFolder[];
 }
 
 export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi, options: WorkspaceDirectoryInitializationOptions & { readonly remoteHostLabel?: string; } = {}): Promise<void> {
@@ -78,6 +79,17 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 			}
 			assertCurrent();
 			dirs.push({ id: folder.id, path, grant: { type: 'config' } });
+		}
+		// Draft folders already went through selection and authorization. Restore
+		// their routes only while the saved development grant is still in effect.
+		for (const folder of options.additionalFolders ?? []) {
+			const path = folder.uri.fsPath;
+			if (dirs.some(dir => dir.id === folder.id || dir.path === path)) continue;
+			const existing = await trustApi.readDirectory(path).catch(() => undefined);
+			assertCurrent();
+			if (hasDevelopmentPermissions(existing?.permissions)) {
+				dirs.push({ id: folder.id, path, grant: { type: 'config' } });
+			}
 		}
 		if (dirs.length || workspaceTrust.requiresDevelopmentTrust) {
 			const binding = client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs });

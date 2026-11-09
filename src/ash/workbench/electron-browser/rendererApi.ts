@@ -11,6 +11,7 @@ import type {
 	IWorkspaceContextApi,
 } from '../../platform/workspace/common/workspaceIpc.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
+import type { IWorkspaceFolder } from '../../platform/workspace/common/workspace.js';
 import type {
 	INativeHostApi,
 } from '../../platform/native/common/nativeHost.js';
@@ -67,7 +68,7 @@ import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
 import type { IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
 import { createRemoteAgentApi } from '../../platform/remote/electron-browser/remoteAgentApi.js';
 import { createRemoteConnectionApi } from '../../platform/remote/electron-browser/remoteConnectionApi.js';
-import type { IDirectoryPermissionRequestService } from '../../platform/workspace/common/workspaceTrust.js';
+import { hasDevelopmentPermissions, type IDirectoryPermissionRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../../platform/webWorker/browser/webWorkerService.js';
@@ -91,6 +92,7 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 	/** Releases any startup authorization decision once the window is ready. */
 	readonly startWorkspaceDirectories: (options?: WorkspaceStartupOptions) => void;
 	readonly reloadWorkspaceDirectories: () => Promise<void>;
+	readonly bindLocalWorkspaceFolder: (folder: IWorkspaceFolder) => Promise<boolean>;
 }
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
@@ -174,6 +176,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			void workspaceStartupScheduled.complete();
 		}));
 		let workspaceDirectoriesReady = Promise.resolve();
+		// Files and terminals can remain open after switching away from a draft.
+		const additionalFolders = new Map<string, IWorkspaceFolder>();
 		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; needsTrust: boolean; error?: unknown; } | undefined;
 		const trackWorkspaceInitialization = (promise: Promise<void>): NonNullable<typeof workspaceInitialization> => {
 			const attempt: NonNullable<typeof workspaceInitialization> = {
@@ -228,18 +232,26 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						}
 					},
 				};
-				const attempt = trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, {
-					remoteHostLabel,
-					onBindingQueued: finishWorkspaceScheduling,
-					discardUntrustedWorkspace: startup ? async signal => {
-						finishWorkspaceScheduling();
-						const options = await raceCancellationError(workspaceWindowReady.p, signal);
-						if (resources.isDisposed || workspaceInitialization !== attempt) throw new CancellationError();
-						if (!options?.discardUntrustedWorkspace) return false;
-						await options.discardUntrustedWorkspace();
-						return true;
-					} : undefined,
-				}));
+				const generation = client.generation;
+				const previous = workspaceInitialization?.generation === generation ? workspaceInitialization.promise : undefined;
+				const initialize = async (): Promise<void> => {
+					await previous?.catch(() => undefined);
+					if (resources.isDisposed || client.generation !== generation) throw new CancellationError();
+					await initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, {
+						remoteHostLabel,
+						additionalFolders: [...additionalFolders.values()],
+						onBindingQueued: finishWorkspaceScheduling,
+						discardUntrustedWorkspace: startup ? async signal => {
+							finishWorkspaceScheduling();
+							const options = await raceCancellationError(workspaceWindowReady.p, signal);
+							if (resources.isDisposed || workspaceInitialization !== attempt) throw new CancellationError();
+							if (!options?.discardUntrustedWorkspace) return false;
+							await options.discardUntrustedWorkspace();
+							return true;
+						} : undefined,
+					});
+				};
+				const attempt = trackWorkspaceInitialization(initialize());
 				return attempt.promise;
 			}
 			return workspaceInitialization.promise;
@@ -401,6 +413,22 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			workspaceDirectoriesReady,
 			startWorkspaceDirectories: options => { void workspaceWindowReady.complete(options); },
 			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace({ force: true }); },
+			bindLocalWorkspaceFolder: async folder => {
+				if (!enabled || remoteConnection.kind !== 'local') return false;
+				await workspaceDirectoriesReady;
+				if (resources.isDisposed || client.state !== 'ready') return false;
+				if (additionalFolders.has(folder.id) && hasDevelopmentPermissions(await backend.workspaceTrust.readWorkspaceDirectory(folder.id))) return true;
+				const existing = await backend.workspaceTrust.readDirectory(folder.uri.fsPath);
+				if (!hasDevelopmentPermissions(existing.permissions)) return false;
+				additionalFolders.set(folder.id, folder);
+				try {
+					await restoreWorkspace({ force: true });
+					return hasDevelopmentPermissions(await backend.workspaceTrust.readWorkspaceDirectory(folder.id));
+				} catch (error) {
+					if (additionalFolders.get(folder.id) === folder) additionalFolders.delete(folder.id);
+					throw error;
+				}
+			},
 			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};
 	} catch (error) {

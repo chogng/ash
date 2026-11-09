@@ -377,6 +377,7 @@ export interface IWorkbenchOptions {
 	readonly api: IWorkbenchHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
 	readonly workspace: () => IWorkspace;
+	readonly bindLocalWorkspaceFolder?: ISessionsWorkspaceContextService['bindLocalWorkspaceFolder'];
 	readonly initialWorkspaceReady?: Promise<void>;
 	readonly browserFileSystemProvider?: IFileSystemProvider;
 	/** Host-owned extension execution; embedders can supply a disconnected implementation. */
@@ -589,6 +590,7 @@ export abstract class Workbench extends Disposable {
 		const workspace = configurationService;
 		services.registerInstance(ISessionsWorkspaceContextService, {
 			getHostWorkspace: options.workspace,
+			bindLocalWorkspaceFolder: options.bindLocalWorkspaceFolder,
 			updateWorkspace: next => workspace.updateWorkspace(next),
 		});
 		services.registerInstance(IWorkspaceContextService, workspace);
