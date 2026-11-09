@@ -332,7 +332,7 @@ export class SessionsPreferences extends Disposable {
 			}]));
 		const shortcutTitle = localize('sessions.settings.shortcuts', 'Keyboard Shortcuts');
 		management.set('keyboard-shortcuts', managementContent('keyboard-shortcuts', shortcutTitle,
-			localize('sessions.settings.shortcutsDescription', 'View shortcuts that are available only in the Agent Window.'), [{
+			localize('sessions.settings.shortcutsDescription', 'Browse shortcuts available in the Agent Window by category.'), [{
 				id: 'editor', kind: 'action', enabled: true, label: shortcutTitle,
 				run: () => {
 					const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));

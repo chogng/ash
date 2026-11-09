@@ -369,7 +369,6 @@
     "openAgentsWindow.systemWideFailed": "部分系统级快捷键无法注册（{0}）；它们可能已被其他应用占用。",
     "openAgentsWindow.systemWideWhenIgnored": "系统级“打开 Agents 窗口”快捷键会忽略 when 条件（{0}）。",
     "openAgentsWindow.shortcutTipEnabled": "已启用快捷键 {0}。Ash 运行时，可在任何应用中用它打开 Agents 窗口。",
-    "openAgentsWindow.shortcutTipManage": "管理快捷键",
     "openAgentsWindow.shortcutTipEnable": "启用 {0}",
     "openAgentsWindow.shortcutTipPurpose": "即可在 Ash 运行时从任何应用打开 Agents 窗口。",
     "openAgentsWindow.shortcutTipConfigure": "设置系统级快捷键",

@@ -696,7 +696,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await assert.rejects(configuration.updateValue('sessions.design.usePointerCursor', 'false'), /必须是布尔值/u);
 		await preferences.open({ section: 'keyboard-shortcuts' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
-		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('查看仅在 Agent 窗口中生效的快捷键。'));
+		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('按分类浏览 Agent 窗口中可用的快捷键。'));
 		await preferences.open({ section: 'memory' });
 		assert.equal(categoryButton('memory').textContent, '你的 Ash');
 		await new Promise(resolve => setTimeout(resolve, 0));
