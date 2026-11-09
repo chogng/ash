@@ -472,7 +472,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		const nameLabel = localize('projects.nameLabel', 'What are you working on?');
 		const name = h(document, 'input', {
 			attributes: { 'aria-label': nameLabel },
-			properties: { type: 'text', required: true, maxLength: 200, placeholder: nameLabel },
+			properties: { type: 'text', maxLength: 200, placeholder: nameLabel },
 		});
 		const nameField = h(document, 'div', { className: 'ash-project-name' });
 		const appearance = store.add(new ProjectAppearancePicker(container, nameField, Lxicon.folder));
@@ -484,9 +484,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		const materials = new Map<string, ProjectMaterial>();
 		const rows = store.add(new DisposableStore());
 		const sourceLabel = localize('projects.code.sourceFolders', 'Source folders');
-		const list = h(document, 'ul', { className: 'ash-code-project-folder-list', attributes: { 'aria-label': sourceLabel } });
-		const hint = h(document, 'span', localize('projects.code.folderHint', 'Add a folder on this computer'));
-		const panel = h(document, 'div', { className: 'ash-code-project-folder-panel' }, list, hint);
+		const list = h(document, 'ul', { className: 'ash-code-project-folder-list', attributes: { 'aria-label': sourceLabel }, properties: { hidden: true } });
+		const panel = h(document, 'div', { className: 'ash-code-project-folder-panel' }, list);
 		const source = h(document, 'fieldset', { className: 'ash-code-project-source' },
 			h(document, 'legend', sourceLabel), panel);
 		form.append(source, feedback);
@@ -494,11 +493,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		let saving = false;
 		const add = store.add(new Button(panel, {
 			...defaultButtonStyles,
-			label: localize('projects.code.addFolder', 'Add'),
-			ariaLabel: localize('projects.code.addFolderLabel', 'Add source folder'),
+			label: localize('projects.code.addFolder', 'Add folder'),
 			icon: Lxicon.newFolder,
-			presentation: 'secondary',
-			size: 'small',
+			presentation: 'quiet',
 			onClick: async () => {
 				if (picking || saving) return;
 				picking = true;
@@ -512,8 +509,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					if (store.isDisposed) return;
 					for (const resource of folders ?? []) {
 						if (resource.scheme !== 'file' || resource.authority) continue;
+						const folderName = basename(resource);
 						materials.set(extUriBiasedIgnorePathCase.getComparisonKey(resource), {
-							kind: 'folder', resource, name: basename(resource) || resource.fsPath,
+							kind: 'folder', resource, name: folderName.trim() ? folderName : resource.fsPath,
 						});
 					}
 					renderFolders();
@@ -528,15 +526,20 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				}
 			},
 		}));
+		function firstFolderName(): string | undefined {
+			return materials.values().next().value?.name;
+		}
+
 		function renderFolders(): void {
 			rows.clear();
 			list.replaceChildren();
 			list.hidden = materials.size === 0;
-			hint.hidden = !list.hidden;
+			name.placeholder = firstFolderName() ?? nameLabel;
 			for (const [key, material] of materials) {
 				const path = material.resource.fsPath;
-				const row = h(document, 'li', {},
-					h(document, 'span', { attributes: { title: path } }, path));
+				const row = h(document, 'li');
+				appendIcon(Lxicon.folder, row);
+				row.append(h(document, 'span', { className: 'ash-code-project-folder-name', attributes: { title: path } }, material.name));
 				list.append(row);
 				const label = localize('projects.code.removeFolder', 'Remove {0}', path);
 				rows.add(new Button(row, {
@@ -549,12 +552,12 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					onClick: () => {
 						materials.delete(key);
 						renderFolders();
+						updateSubmit();
 						add.focus();
 					},
 				}));
 			}
 		}
-		renderFolders();
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
 		const dialog = store.add(createProjectFormDialog(container, localize('projects.createTitle', 'Create a project'), form, actions, {
 			code: true,
@@ -571,20 +574,24 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			...defaultButtonStyles, label: localize('projects.create', 'Create'), presentation: 'primary', type: 'submit', enabled: false,
 		}));
 		submit.domNode.setAttribute('form', form.id);
+		function projectName(): string | undefined {
+			return name.value.trim() || firstFolderName();
+		}
+
 		function updateSubmit(): void {
-			submit.enabled = !!name.value.trim() && !picking && !saving;
+			submit.enabled = !!projectName() && !picking && !saving;
 		}
 		store.add(addDisposableListener(name, 'input', updateSubmit));
 		store.add(addDisposableListener(form, 'submit', async event => {
 			event.preventDefault();
-			const projectName = name.value.trim();
-			if (picking || saving || !projectName) return;
+			const title = projectName();
+			if (picking || saving || !title) return;
 			saving = name.disabled = source.disabled = true;
 			appearance.enabled = false;
 			feedback.textContent = '';
 			updateSubmit();
 			try {
-				await this.projects.create(id, projectName, '', [...materials.values()], 'code', appearance.appearance);
+				await this.projects.create(id, title, '', [...materials.values()], 'code', appearance.appearance);
 				if (!store.isDisposed) dialog.dispose();
 			} catch (error) {
 				if (store.isDisposed) return;

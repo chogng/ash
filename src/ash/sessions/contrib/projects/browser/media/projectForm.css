@@ -162,7 +162,7 @@
 
 .ash-project-appearance-colors > button:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-project-appearance .ash-icon-select-item[aria-selected="true"] {
@@ -196,37 +196,61 @@
 .ash-code-project-folder-panel {
 	display: flex;
 	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: var(--ash-spacing-size120);
 	box-sizing: border-box;
-	min-block-size: 104px;
-	padding: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size40);
 	border: var(--ash-strokeThickness) solid
 		var(--ash-input-border, var(--ash-widget-border));
 	border-radius: var(--ash-cornerRadius-large);
 	background: var(--ash-input-background);
 }
 
-.ash-code-project-folder-panel > span {
-	color: var(--ash-description-foreground);
+.ash-code-project-folder-panel > .ash-button {
+	justify-content: flex-start;
+	padding-block: var(--ash-spacing-size40);
+	padding-inline-end: var(--ash-spacing-size100);
+	padding-inline-start: calc(
+		(var(--ash-spacing-size360) - var(--ash-lxiconFontSize-large)) / 2 -
+			var(--ash-spacing-size40) - var(--ash-strokeThickness)
+	);
 }
 
 .ash-code-project-folder-list {
-	align-self: stretch;
 	margin: 0;
 	padding: 0;
 	list-style: none;
+	max-block-size: 160px;
+	overflow: auto;
+	border-block-end: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	margin-block-end: var(--ash-spacing-size40);
+	padding-block-end: var(--ash-spacing-size40);
 }
 
 .ash-code-project-folder-list > li {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: var(--ash-spacing-size80);
+	/* Center the folder icons on the name field's icon column. */
+	padding-inline-start: calc(
+		(var(--ash-spacing-size360) - var(--ash-lxiconFontSize-large)) / 2 -
+			var(--ash-spacing-size40)
+	);
 }
 
-.ash-code-project-folder-list > li > span {
+.ash-code-project-folder-list > li,
+.ash-code-project-folder-panel > .ash-button > .ash-button-content {
+	gap: calc(
+		(var(--ash-spacing-size360) - var(--ash-lxiconFontSize-large)) / 2 +
+			var(--ash-spacing-size120)
+	);
+}
+
+.ash-code-project-folder-list > li > .ash-icon {
+	flex: none;
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-code-project-folder-name {
+	flex: 1;
 	min-inline-size: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;

@@ -125,7 +125,7 @@
     "sessions.list.changeGroupIcon": "更改分组图标",
     "sessions.list.changeGroupColor": "更改分组颜色",
     "sessions.list.changeProjectAppearance": "更改项目外观",
-    "sessions.list.workspaceProjectHelp": "在 Code 侧栏中，按 Tab 键可到达“项目”标题旁的“创建项目”。输入名称后，可通过“添加”选择源文件夹。使用名称旁的“更改项目外观”选择图标和颜色。按 Esc 关闭选择器并返回其按钮。右键单击最近会话中的目录分组，或在聚焦时按 Shift+F10，可复制其路径。 在命令面板中运行“将未分配的代码对话关联到文件夹项目”，可检查并选择要关联的对话。",
+    "sessions.list.workspaceProjectHelp": "在 Code 侧栏中，按 Tab 键可到达“项目”标题旁的“创建项目”。使用“添加文件夹”选择源文件夹。项目名称留空时，将使用第一个源文件夹的名称。使用名称旁的“更改项目外观”选择图标和颜色。按 Esc 关闭选择器并返回其按钮。右键单击最近会话中的目录分组，或在聚焦时按 Shift+F10，可复制其路径。 在命令面板中运行“将未分配的代码对话关联到文件夹项目”，可检查并选择要关联的对话。",
     "sessions.list.pinProject": "置顶",
     "sessions.list.unpinProject": "取消置顶",
     "sessions.list.changeProjectIcon": "更改图标…",
