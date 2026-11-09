@@ -849,6 +849,32 @@ suite('sessions browser component', () => {
 		await expect(panel).toBeHidden();
 	});
 
+	test('Inbox marks a review reply read when its visible Bots conversation receives focus', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&sideThreads&inbox&botsInbox');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+		await code.click();
+		const inbox = page.getByRole('button', { name: /^Inbox/ });
+		await expect(inbox).toHaveAccessibleName('Inbox, items needing attention: 2');
+
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Bots', exact: true }).click();
+		const bots = page.locator('.ash-bots-page');
+		await expect(bots.getByRole('heading', { name: 'Follow-up chat' })).toBeVisible();
+		await expect(bots.getByText('I reviewed the change.', { exact: true })).toBeVisible();
+		await expect(inbox).toHaveAccessibleName('Inbox, items needing attention: 2');
+
+		const conversation = bots.getByRole('textbox');
+		await conversation.focus();
+		await expect(conversation).toBeFocused();
+		await expect(inbox).toHaveAccessibleName('Inbox, items needing attention: 1');
+		await page.locator('.ash-bots-sidebar').getByRole('button', { name: 'Back', exact: true }).click();
+		await inbox.press('Enter');
+		const panel = page.getByRole('dialog', { name: 'Inbox', exact: true });
+		await expect(panel.getByRole('button', { name: 'Task from Host B Needs your input' })).toBeVisible();
+		await expect(panel.getByRole('button', { name: /Follow-up chat/ })).toHaveCount(0);
+	});
+
 	test('Activity Bar uses fixed sizes across positions and preserves account ownership', async function () {
 		const { page } = browserTests;
 		const activityBar = page.locator('[data-part="activitybar"]');

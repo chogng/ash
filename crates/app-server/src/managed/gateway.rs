@@ -1354,7 +1354,7 @@ fn selected_execution_target(
         && let Some(params) = params
         && matches!(
             params["request"]["type"].as_str(),
-            Some("changeDirectory" | "clearDirectory")
+            Some("bindDirectory" | "changeDirectory" | "clearDirectory")
         )
     {
         let session_id = SessionId::new(

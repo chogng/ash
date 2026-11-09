@@ -179,8 +179,8 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		return state.projects.filter(project => !project.archived && project.name.toLocaleLowerCase().includes(query))
 			.sort((a, b) => {
 				const pinned = Number(this.isPinned(b.id)) - Number(this.isPinned(a.id));
-				const time = state.sortOrder === 'updated' ? b.updatedAtMs - a.updatedAtMs
-					: state.sortOrder === 'created' ? b.createdAtMs - a.createdAtMs : 0;
+				const time = state.sortOrder === 'updated' ? (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0)
+					: state.sortOrder === 'created' ? (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0) : 0;
 				return pinned || time || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 			});
 	}

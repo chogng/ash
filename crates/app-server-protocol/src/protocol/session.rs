@@ -292,6 +292,10 @@ pub enum SessionRequest {
     ChangeDirectory {
         root: std::path::PathBuf,
     },
+    /// Binds a directory only if the Session still has no execution target.
+    BindDirectory {
+        root: std::path::PathBuf,
+    },
     ClearDirectory,
     /// Copies the selected Thread history into an independent Session without subscribing to it.
     ForkSession {

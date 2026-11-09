@@ -1,4 +1,5 @@
-import { addDisposableListener, Dimension, h, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, Dimension, getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
+import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -7,7 +8,7 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { autorun, observableSignalFromEvent, observableValue } from '../../../../base/common/observable.js';
+import { autorun, observableSignalFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { posix } from '../../../../base/common/path.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
@@ -24,6 +25,7 @@ import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPan
 import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/parts/views/viewPane.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import type { ChatMessagePresentation } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { NewChatView } from '../../chat/browser/chatView.js';
 import { SessionCodeReviewEditor } from './sessionCodeReviewEditor.js';
@@ -195,6 +197,7 @@ export class BotsEditor extends EditorPane {
 	constructor(
 		@ISessionCodeReviewService private readonly reviews: SessionCodeReviewService,
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
+		@ISessionsService private readonly sessionViews: ISessionsService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextKeyService private readonly contexts: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
@@ -284,6 +287,20 @@ export class BotsEditor extends EditorPane {
 			});
 			this.chat.value.setVisible(this.isVisible());
 		}));
+		const markViewed = () => this.markThreadViewed();
+		this._register(this.onDidFocus(markViewed));
+		this._register(addDisposableListener(getWindow(document), 'focus', markViewed));
+		this._register(addDisposableListener(document, 'visibilitychange', markViewed));
+		this._register(autorun(reader => this.markThreadViewed(reader)));
+	}
+
+	private markThreadViewed(reader?: IReader): void {
+		const entry = this.reviews.activeEntry.read(reader);
+		if (!entry || !this.chat.value || !this.isVisible()) return;
+		const document = this.root.ownerDocument;
+		if (!document.hidden && document.hasFocus() && isAncestorOfActiveElement(this.root)) {
+			this.sessionViews.markVisibleThreadViewed({ sessionId: entry.session.sessionId, threadId: entry.threadId });
+		}
 	}
 
 	private messagePresentation(target: CodeReviewTarget): ChatMessagePresentation {
@@ -372,6 +389,7 @@ export class BotsEditor extends EditorPane {
 		super.setVisible(visible);
 		this.chat.value?.setVisible(visible);
 		this.comparisonEditor?.setVisible(visible);
+		if (visible) this.markThreadViewed();
 	}
 	public override focus(): void {
 		if (this.chat.value) this.chat.value.focus();

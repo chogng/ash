@@ -811,9 +811,9 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
     fn change_session_directory_request(
         &self,
         mutation: super::operations::SessionMutation,
-        root: Option<std::path::PathBuf>,
+        change: super::session_operations::SessionDirectoryChange,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, super::RpcError> {
-        self.session_processor().change_directory(mutation, root)
+        self.session_processor().change_directory(mutation, change)
     }
     fn read_host_context(
         &self,

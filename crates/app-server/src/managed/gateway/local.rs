@@ -246,7 +246,7 @@ impl<'scope> LocalTarget<'scope> {
         let switched_session = if request["method"] == "session/request"
             && matches!(
                 request["params"]["request"]["type"].as_str(),
-                Some("changeDirectory" | "clearDirectory")
+                Some("bindDirectory" | "changeDirectory" | "clearDirectory")
             ) {
             request["params"]["sessionId"]
                 .as_str()

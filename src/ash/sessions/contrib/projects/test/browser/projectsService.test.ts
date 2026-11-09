@@ -154,7 +154,7 @@ suite('Projects browsing', () => {
 		await fixture.projectsView.create('a', 'Alpha', '', []);
 		await fixture.projectsView.create('m', 'Middle', '', []);
 		await fixture.projectsView.create('early', 'Early', '', []);
-		const times = { z: { createdAtMs: 100, updatedAtMs: 500 }, a: { createdAtMs: 200, updatedAtMs: 400 }, m: { createdAtMs: 300, updatedAtMs: 300 }, early: { createdAtMs: 50, updatedAtMs: 50 } };
+		const times = { z: { createdAtMs: 100, updatedAtMs: 500 }, a: { createdAtMs: 200, updatedAtMs: 400 }, m: { createdAtMs: 300, updatedAtMs: 300 }, early: { createdAtMs: undefined, updatedAtMs: undefined } };
 		fixture.projects = fixture.projects.map(project => ({ ...project, ...times[project.id as keyof typeof times] }));
 		await fixture.projectsView.reload();
 		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.name), ['Zebra', 'Alpha', 'Middle', 'Early']);

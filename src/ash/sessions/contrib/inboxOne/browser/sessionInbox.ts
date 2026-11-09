@@ -115,7 +115,7 @@ export class SessionInbox extends Disposable {
 					const terminal = activity === 'completed' || activity === 'readyForReview' || activity === 'failed';
 					const timestamp = management && (terminal || activity === 'needsInput') ? management.statusChangedAtUnixMs : thread.updatedAt?.getTime() ?? 0;
 					const seen = active?.sessionId === entry.sessionId && active.threadId === entry.threadId
-						|| timestamp <= (sessions.getLastViewedAt(entry) ?? 0);
+						|| timestamp <= (sessions.getLastViewedAt(entry, reader) ?? 0);
 					const execution = thread.executionStatus;
 					const busy = activity === 'working' || execution === 'queued' || execution === 'running' || execution === 'waiting';
 					let status: InboxItem['status'];

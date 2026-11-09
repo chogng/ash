@@ -58,10 +58,12 @@ pub struct ProjectDto {
     #[ts(type = "number")]
     pub revision: u64,
     /// Unix epoch milliseconds.
-    #[ts(type = "number")]
-    pub created_at_ms: u64,
-    #[ts(type = "number")]
-    pub updated_at_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub created_at_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatusDto,
     pub name: String,
     pub description: String,
@@ -82,10 +84,12 @@ pub struct ProjectSummaryDto {
     pub project_id: ProjectId,
     #[ts(type = "number")]
     pub revision: u64,
-    #[ts(type = "number")]
-    pub created_at_ms: u64,
-    #[ts(type = "number")]
-    pub updated_at_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub created_at_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatusDto,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

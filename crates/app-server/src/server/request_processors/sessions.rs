@@ -27,6 +27,13 @@ use core_api::HookEventRequest;
 use core_api::HookEventScope;
 use core_api::StartThreadRequest;
 use serde_json::Value;
+use std::path::PathBuf;
+
+pub(super) enum SessionDirectoryChange {
+    Bind(PathBuf),
+    Replace(PathBuf),
+    Clear,
+}
 
 /// Coordinates the existing owners needed by the sessions adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
@@ -111,8 +118,15 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
     pub(super) fn change_directory(
         &self,
         mutation: SessionMutation,
-        root: Option<std::path::PathBuf>,
+        change: SessionDirectoryChange,
     ) -> Result<SessionResult, RpcError> {
+        let only_if_unbound = matches!(change, SessionDirectoryChange::Bind(_));
+        let root = match change {
+            SessionDirectoryChange::Bind(root) | SessionDirectoryChange::Replace(root) => {
+                Some(root)
+            }
+            SessionDirectoryChange::Clear => None,
+        };
         let destination = root
             .map(|root| {
                 let runtime = self.context.git_turn_changes_runtime()?;
@@ -180,6 +194,12 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 destination.as_ref().map(|(_, dir, _)| dir.canonical_path()),
                 mutation.command_id,
                 |thread, current_target| {
+                    // Preparation holds the Thread writer lease and is skipped on command replay.
+                    if only_if_unbound && current_target.is_some() {
+                        return Err(core_api::CoreError::InvalidInput(
+                            "The Session already has an execution directory".into(),
+                        ));
+                    }
                     if destination.is_none() {
                         // The gateway selects a runtime before dispatch. Check ownership under
                         // the Thread writer lease in case another window changed the directory.

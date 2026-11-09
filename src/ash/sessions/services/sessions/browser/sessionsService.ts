@@ -32,7 +32,7 @@ export interface ISessionsService {
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
 	readonly recentSessions: readonly SessionRecencyEntry[];
-	getLastViewedAt(entry: SessionRecencyEntry): number | undefined;
+	getLastViewedAt(entry: SessionRecencyEntry, reader?: IReader): number | undefined;
 	markVisibleThreadViewed(entry: SessionRecencyEntry): void;
 	initialize(): Promise<void>;
 	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
@@ -109,7 +109,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 
 	get recentSessions(): readonly SessionRecencyEntry[] { return this.recency.entries.filter((entry): entry is SessionRecencyEntry => !('kind' in entry)); }
-	getLastViewedAt(entry: SessionRecencyEntry): number | undefined { return this.recency.getLastViewedAt(entry); }
+	getLastViewedAt(entry: SessionRecencyEntry, reader?: IReader): number | undefined { return this.recency.getLastViewedAt(entry, reader); }
 
 	markVisibleThreadViewed(entry: SessionRecencyEntry): void {
 		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === entry.sessionId && candidate.status === 'active');

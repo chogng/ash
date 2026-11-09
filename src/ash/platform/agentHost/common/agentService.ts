@@ -165,6 +165,7 @@ export interface IAgentSessionService {
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
 	canChangeDirectory?(): boolean;
 	canClearDirectory?(): boolean;
+	/** Binds an unbound Session to a directory, or clears its current binding. */
 	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string | null; }): Promise<void>;
 	addWorkspaceFolder?(sessionId: string, path: string): Promise<void>;
 	saveEnvironmentProfile?(environmentId: string, variables: Readonly<Record<string, string>>): Promise<void>;

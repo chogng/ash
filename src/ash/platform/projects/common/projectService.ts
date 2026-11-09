@@ -18,8 +18,8 @@ export interface ProjectSummary extends ProjectAppearance {
 	readonly id: string;
 	readonly revision: number;
 	/** Unix epoch milliseconds; undefined for older projects whose time is unknown. */
-	readonly createdAtMs: number;
-	readonly updatedAtMs: number;
+	readonly createdAtMs?: number;
+	readonly updatedAtMs?: number;
 	readonly name: string;
 	readonly archived: boolean;
 	readonly sessionCount: number;

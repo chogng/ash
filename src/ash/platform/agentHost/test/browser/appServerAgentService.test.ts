@@ -955,7 +955,7 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 test('Binding and clearing a directory use the same Session identity', async () => {
 	const requests: unknown[] = [];
 	const connection = {
-		capabilities: { contracts: { changeSessionDirectory: { version: 1 }, clearSessionDirectory: { version: 1 } } },
+		capabilities: { contracts: { bindSessionDirectory: { version: 1 }, clearSessionDirectory: { version: 1 } } },
 		async request(definition: { method: string; }, params: unknown) {
 			requests.push({ method: definition.method, params });
 			return { type: 'session', value: { session: { sessionId: 'saved' } } };
@@ -970,7 +970,7 @@ test('Binding and clearing a directory use the same Session identity', async () 
 	await service.changeDirectory!({ sessionId: 'saved', commandId: 'change', root: '/new' });
 	await service.changeDirectory!({ sessionId: 'saved', commandId: 'clear', root: null });
 	assert.deepEqual(requests, [
-		{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'changeDirectory', root: '/new' } } },
+		{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'bindDirectory', root: '/new' } } },
 		{ method: 'session/request', params: { sessionId: 'saved', commandId: 'clear', request: { type: 'clearDirectory' } } },
 	]);
 });

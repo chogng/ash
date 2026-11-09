@@ -147,11 +147,11 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 		return { sessions: result.sessions.map(session => toAgentSession(session, remoteHost)) };
 	};
 	return {
-		canChangeDirectory: () => !remoteHost && connection.capabilities?.contracts.changeSessionDirectory?.version === 1,
+		canChangeDirectory: () => !remoteHost && connection.capabilities?.contracts.bindSessionDirectory?.version === 1,
 		canClearDirectory: () => !remoteHost && connection.capabilities?.contracts.clearSessionDirectory?.version === 1,
 		async changeDirectory(params) {
 			const result = sessionResult(await appServerRequest(connection, 'session/request', sessionRequest(params,
-				params.root === null ? { type: 'clearDirectory' } : { type: 'changeDirectory', root: params.root })));
+				params.root === null ? { type: 'clearDirectory' } : { type: 'bindDirectory', root: params.root })));
 			if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 		},
 		onDidChangeSession: Event.any((listener, thisArgs) => connection.onNotification(event => {

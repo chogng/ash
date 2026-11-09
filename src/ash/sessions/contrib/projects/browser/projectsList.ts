@@ -93,7 +93,7 @@ export class ProjectsList extends Disposable {
 			});
 			appendIcon((project.icon && getRegisteredIcon(project.icon, document)) || Lxicon.projects, mark);
 			if (project.color) mark.style.color = `var(${colorCssVariable(project.color)})`;
-			card.append(mark, this.renderCardContent(card, project.name, project.updatedAtMs, disposables));
+			card.append(mark, this.renderCardContent(card, project.name, project.updatedAtMs, disposables, project.createdAtMs));
 			const actionsHost = this.renderCardActions(row, project.id, project.name, this.actions.getProjectActions(project), disposables);
 			disposables.add(this.hover.setupDelayedHover(card, { content: project.name }));
 			disposables.add(

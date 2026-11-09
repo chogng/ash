@@ -186,6 +186,7 @@ impl AppServer {
                 "sideChats",
                 "moveThreadToSession",
                 "changeSessionDirectory",
+                "bindSessionDirectory",
                 "clearSessionDirectory",
             ] {
                 capabilities.contracts.insert(

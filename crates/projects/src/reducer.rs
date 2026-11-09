@@ -36,8 +36,8 @@ pub(crate) fn apply(
                 schema_version: PROJECT_SCHEMA_VERSION,
                 project_id: request.project_id.clone(),
                 revision: 1,
-                created_at_ms: now_ms,
-                updated_at_ms: now_ms,
+                created_at_ms: Some(now_ms),
+                updated_at_ms: Some(now_ms),
                 status: ProjectStatus::Active,
                 scope: *scope,
                 name: name.clone(),
@@ -67,7 +67,8 @@ pub(crate) fn apply(
                 .checked_add(1)
                 .ok_or_else(|| ProjectError::InvalidTransition("revision overflow".into()))?;
             // A clock adjustment cannot make a saved update precede an earlier revision.
-            project.updated_at_ms = now_ms.max(project.updated_at_ms);
+            project.updated_at_ms =
+                Some(now_ms.max(project.updated_at_ms.or(project.created_at_ms).unwrap_or(0)));
             project
         }
     };

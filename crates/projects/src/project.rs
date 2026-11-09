@@ -62,9 +62,11 @@ pub struct Project {
     pub schema_version: u32,
     pub project_id: ProjectId,
     pub revision: u64,
-    /// Unix epoch milliseconds.
-    pub created_at_ms: u64,
-    pub updated_at_ms: u64,
+    /// Unix epoch milliseconds, absent in older Project records and receipts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at_ms: Option<u64>,
     pub status: ProjectStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<ProjectScope>,
@@ -112,7 +114,13 @@ impl Project {
                 "Project revision must be positive".into(),
             ));
         }
-        if self.created_at_ms == 0 || self.updated_at_ms < self.created_at_ms {
+        if self.created_at_ms == Some(0)
+            || self.updated_at_ms == Some(0)
+            || self
+                .created_at_ms
+                .zip(self.updated_at_ms)
+                .is_some_and(|(created, updated)| updated < created)
+        {
             return Err(crate::ProjectError::InvalidInput(
                 "invalid Project timestamps".into(),
             ));

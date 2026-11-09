@@ -6,7 +6,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { IAgentExecutionSettingsService } from '../../../src/ash/platform/agentHost/common/agentExecutionSettingsService.js';
-import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../src/ash/platform/storage/common/storage.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { AgentHostAutomationStore } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/agentHostAutomationStore.js';
@@ -25,7 +25,7 @@ import { saveSessionGridState } from '../../../src/ash/sessions/services/session
 import { referenceForSelection } from '../../../src/ash/sessions/services/sessions/browser/visibleSessions.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { buildOpenSessionLinkUri } from '../../../src/ash/platform/agentHost/common/openSessionLink.js';
-import { sessionIdentity, sessionProviderAuthority } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
+import { sessionIdentity, sessionProviderAuthority, threadIdentity } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import type { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 
 const replacementAgent = { name: 'Agent B', sourceId: 'fixture', description: 'An alternative Agent' };
@@ -58,6 +58,7 @@ export function installMultiHostSessionsFixture(): {
 	const sideChatHostSwitch = params.has('sideChatHostSwitch');
 	const background = params.has('backgroundActivities');
 	const comparisonPreview = params.has('comparisonPreview');
+	const botsInbox = params.has('botsInbox');
 	registerWorkbenchServiceContribution({
 		service: createServiceIdentifier<object>('test.multiHostSessionsFixture'),
 		dependencies: [ISessionsProvidersService, ISessionsManagementService, ISessionsService],
@@ -79,7 +80,16 @@ export function installMultiHostSessionsFixture(): {
 					uri: URI.from({ scheme: 'internal', authority: 'skill', path: `/${skillName}/SKILL.md` }),
 				}] : [];
 				const usage: Thread['usage'] = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
-				const read = (sessionId: string, threadId: string): ThreadRead => ({ thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId, threadId, title: name, status: 'active', sequence: 1, usage, turns: [] }, transcript: { sessionId, threadId, durableSequence: 1, revision: 1, entries: [] } });
+				const read = (sessionId: string, threadId: string): ThreadRead => ({
+					thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId, threadId, title: name, status: 'active', sequence: 1, usage, turns: [] },
+					transcript: {
+						sessionId, threadId, durableSequence: 1, revision: 1,
+						entries: botsInbox && name === 'Host A' && threadId === 'side' ? [{
+							type: 'item', entryId: 'review-reply', turnId: 'review-turn', transient: false,
+							item: { type: 'agentMessage', itemId: 'reply', turnId: 'review-turn', text: 'I reviewed the change.' },
+						}] : [],
+					},
+				});
 				const record = (method: string, sessionId: string, threadId: string): void => { if (sessionId !== 'same' || (threadId !== 'same' && !((sideThreads || nestedDraft) && threadId === 'side'))) throw new Error('A qualified identity reached a host'); calls.push({ host: name, method, sessionId, threadId }); };
 				const chat = {
 					onDidSubmitRequest: Event.None, onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidUpdateThreadTranscript: Event.None, onDidUpdateGoal: Event.None, onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None, onDidChangeQueue: Event.None, onDidChangeInteractionOffer: Event.None,
@@ -162,9 +172,28 @@ export function installMultiHostSessionsFixture(): {
 				if (params.has('blockedTitlebar') && name === 'Host B') {
 					session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 1 } };
 				}
-				if (params.has('inbox')) {
+				if (botsInbox && name === 'Host A') {
+					const sessionId = sessionIdentity(name, session.sessionId, 'local-agent-host');
+					const repliedAt = Date.now() - 1000;
+					session = {
+						...session,
+						chats: session.chats.map(thread => thread.threadId === 'side'
+							? { ...thread, management: { status: 'completed', statusChangedAtUnixMs: repliedAt } }
+							: thread),
+					};
+					services.get(IStorageService).store('sessions.codeReview.' + JSON.stringify([sessionId, sessionId]), JSON.stringify({
+						batches: [{
+							id: 'ash-code-review-inbox', threadId: threadIdentity(name, 'side', 'local-agent-host'), createdAt: repliedAt - 1000,
+							files: [{ key: 'file', path: 'file.ts', before: 'old', after: 'new' }],
+							comments: [{ id: 'comment', file: 'file', side: 'modified', line: 1, text: 'Please check this change' }],
+						}],
+					}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				} else if (params.has('inbox')) {
 					const status = name === 'Host A' ? 'completed' : 'needsInput';
-					session = { ...session, management: { status, statusChangedAtUnixMs: Date.now() - 1000 } };
+					const management = { status, statusChangedAtUnixMs: Date.now() - 1000 } as const;
+					session = botsInbox
+						? { ...session, chats: session.chats.map(thread => thread.threadId === 'same' ? { ...thread, management } : thread) }
+						: { ...session, management };
 				}
 				const provider = Object.assign(lifetime.add(new class extends Disposable { }()), {
 					automations,
