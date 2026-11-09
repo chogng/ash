@@ -163,14 +163,14 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					const directory = await localTrust.readDirectory(path);
 					return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
 				},
-				authorize: (path, signal, host) => authorizeSessionFolder(
+				authorize: (path, signal, host, onTrustDeclined) => authorizeSessionFolder(
 					host?.api.workspaceTrust ?? localTrust,
 					listener => {
 						if (!host) return localClient.onStateChange(listener);
 						const subscription = host.api.appServer.onConnectionState(listener);
 						return toDisposable(() => subscription.dispose());
 					},
-					workspaceTrust.confirmFolderTrust, { path, remoteHostLabel: host?.label }, signal),
+					workspaceTrust.confirmFolderTrust, { path, remoteHostLabel: host?.label }, signal, onTrustDeclined),
 			});
 			return registerLocalTranscriptionService(transcriptionServices, localClient);
 		}], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, workspaceTrust, mainProcessService);
@@ -446,6 +446,7 @@ async function authorizeSessionFolder(
 	confirmFolderTrust: (request: DirectoryPermissionRequest, signal: AbortSignal) => Promise<boolean>,
 	request: DirectoryPermissionRequest,
 	signal: AbortSignal,
+	onTrustDeclined?: () => void,
 ): Promise<boolean> {
 	const { path } = request;
 	const controller = new AbortController();
@@ -460,7 +461,11 @@ async function authorizeSessionFolder(
 	if (hasDevelopmentPermissions(permissions)) { return true; }
 
 	const confirmed = await confirmFolderTrust(request, controller.signal);
-	if (!confirmed) { return false; }
+	throwIfCancelled(controller.signal);
+	if (!confirmed) {
+		onTrustDeclined?.();
+		return false;
+	}
 	const grant = await trust.createGrant(path, DEVELOPMENT_DIR_PERMISSIONS);
 	// A concurrent grant wins, and an alias must still identify the folder that was approved.
 	const current = await trust.readDirectory(path);

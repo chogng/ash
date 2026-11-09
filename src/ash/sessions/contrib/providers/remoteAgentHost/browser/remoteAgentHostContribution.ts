@@ -86,10 +86,10 @@ export class RemoteAgentHostContribution extends Disposable {
 				const directory = await api.workspaceTrust.readDirectory(target.root);
 				return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
 			},
-			authorizeWorkspace: folderAuthorization && (async (target: SessionExecutionTarget, signal: AbortSignal) => {
+			authorizeWorkspace: folderAuthorization && (async (target: SessionExecutionTarget, signal: AbortSignal, onTrustDeclined?: () => void) => {
 				// A tunnel borrows its published root grant and cannot widen permissions on the remote host.
 				if (tunnel) return isPublishedWorkspaceTrusted(target);
-				return folderAuthorization.authorize(target.root, signal, { api, label: connection.name });
+				return folderAuthorization.authorize(target.root, signal, { api, label: connection.name }, onTrustDeclined);
 			}),
 		}));
 		resources.add(this.providers.registerProvider(provider));

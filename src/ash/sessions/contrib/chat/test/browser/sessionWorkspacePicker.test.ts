@@ -1,3 +1,4 @@
+import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
@@ -39,6 +40,8 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	lifetime.add(toDisposable(() => dom.window.close()));
 	lifetime.add(setARIAContainer(dom.window.document.body));
 	const services = lifetime.add(new InstantiationService());
+	const folderTrustRetry = new SessionFolderTrustRetryService();
+	services.registerInstance(ISessionFolderTrustRetryService, folderTrustRetry);
 	const contextKeys = lifetime.add(new ContextKeyService());
 	SessionsWorkspaceModeContext.bindTo(contextKeys).set(project ? 'code' : 'chat');
 	services.registerInstance(IContextKeyService, contextKeys);
@@ -126,6 +129,7 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	const control = lifetime.add(services.createInstance(SessionWorkspacePicker, dom.window.document.body, model as unknown as IChatWidgetModel));
 	const button = dom.window.document.querySelector('button')!;
 	return {
+		folderTrustRetry,
 		button, control, model, changed, updated, loaded: loaded.event, dialog, branch, errors, checkout, cloneStarted, cancelled, projects,
 		get history() { return history; },
 		get worktreeRequests() { return worktreeRequests; },
@@ -219,6 +223,55 @@ test('Workspace picker hides when the composer moves from a draft to a session',
 	assert.equal(f.button.disabled, true);
 });
 
+test('Retrying trust reopens the declined folder and completes the original project selection', async () => {
+	const requested: string[] = [];
+	const folder = URI.file('/ash-docs');
+	using f = fixture(undefined, [], [], undefined, { name: 'ash', uri: URI.file('/ash') }, undefined,
+		async (path, _signal, _host, onTrustDeclined) => {
+			requested.push(path);
+			if (requested.length === 3) return true;
+			onTrustDeclined?.();
+			return false;
+		}, undefined, {
+		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
+		materials: [{ kind: 'folder', name: 'ash', resource: URI.file('/ash') }],
+	});
+
+	await f.open();
+	const selection = f.choose('Open Folder…');
+	await f.dialog.complete([folder]);
+	await selection;
+	assert.equal(f.drafts[0]?.projectId, undefined);
+	assert.equal(f.folderTrustRetry.pending.get()?.path, folder.fsPath);
+	await f.folderTrustRetry.pending.get()!.run();
+	assert.equal(f.drafts[0]?.projectId, undefined);
+	assert.equal(f.folderTrustRetry.pending.get()?.path, folder.fsPath);
+	await f.folderTrustRetry.pending.get()!.run();
+	assert.equal(f.folderTrustRetry.pending.get(), undefined);
+	assert.deepEqual(requested, [folder.fsPath, folder.fsPath, folder.fsPath]);
+	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: folder.fsPath });
+	assert.equal(f.projects.find(project => project.id === f.drafts[0]?.projectId)?.materials[0]?.resource.fsPath, folder.fsPath);
+	assert.equal(f.drafts[1]?.projectId, undefined);
+});
+
+test('Changing the active draft discards its declined trust request', async () => {
+	let requests = 0;
+	using f = fixture(undefined, [], [], undefined, undefined, undefined, async (_path, _signal, _host, onTrustDeclined) => {
+		requests++;
+		onTrustDeclined?.();
+		return false;
+	});
+	await f.open();
+	await f.choose('review');
+	const retry = f.folderTrustRetry.pending.get()!;
+	assert.equal(retry.path, '/checkouts/review');
+	f.model.untitledSessionId = 'second';
+	f.updated.fire();
+	assert.equal(f.folderTrustRetry.pending.get(), undefined);
+	await retry.run();
+	assert.equal(requests, 1);
+});
+
 test('A declined worktree grant leaves the draft on its original folder', async () => {
 	const requested: string[] = [];
 	using f = fixture(undefined, [], [], undefined, undefined, undefined, async path => {
@@ -228,6 +281,7 @@ test('A declined worktree grant leaves the draft on its original folder', async 
 	await f.open();
 	await f.choose('review');
 	assert.deepEqual(requested, ['/checkouts/review']);
+	assert.equal(f.folderTrustRetry.pending.get(), undefined);
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/project').fsPath });
 });
 

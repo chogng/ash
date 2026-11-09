@@ -1,3 +1,4 @@
+import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { ISessionContext } from '../../services/sessions/browser/sessionContext.js';
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
@@ -193,6 +194,7 @@ function createInputServices(
 	services.registerInstance(IChatService, chat);
 	services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	services.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
 	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
@@ -1638,6 +1640,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 		editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+		editorServices.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
 		editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 		editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 		editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);

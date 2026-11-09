@@ -1,3 +1,4 @@
+import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { SharedChatInputComposerContribution } from '../../contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import { ISessionsChatViewStateService, SessionsChatViewStateService } from '../../contrib/chat/browser/chatViewStateService.js';
 import { createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
@@ -402,6 +403,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	paneServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	paneServices.registerInstance(ISessionFolderTrustRetryService, new SessionFolderTrustRetryService());
 	paneServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	paneServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);

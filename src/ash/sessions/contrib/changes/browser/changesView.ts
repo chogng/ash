@@ -2,6 +2,7 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import './media/changesView.css';
 import './media/changesViewActions.css';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { URI } from '../../../../base/common/uri.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
@@ -38,7 +39,8 @@ import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { findChangesEditorFileChange, getChangesEditorFileResource } from './changesEditorLabels.js';
 import { SessionChangesStatsCache } from '../../../services/sessions/common/sessionChangesStatsCache.js';
-import { createSessionFileChange } from '../../../services/sessions/common/session.js';
+import { createSessionFileChange, type IActiveSessionThread } from '../../../services/sessions/common/session.js';
+import { IWorkspaceFolderLabelService } from '../../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 
 /** Reviews the current checkpoint or a selected Turn capture for the Code conversation. */
@@ -63,6 +65,7 @@ export class ChangesViewPane extends ViewPane {
 	private owner: string | undefined;
 	private loading = false;
 	private readonly loadingProgress = this._register(new MutableDisposable());
+	private readonly worktreeLabelRequest = this._register(new MutableDisposable());
 	private readonly checks = this._register(new MutableDisposable<ChecksWidget>());
 	private readonly gitActions = this._register(new MutableDisposable<SessionSyncChangesActionViewItem>());
 	private readonly pullRequest = this._register(new MutableDisposable<CreatePullRequestContextView>());
@@ -85,6 +88,7 @@ export class ChangesViewPane extends ViewPane {
 		@IChangesViewService private readonly viewState: IChangesViewService,
 		@ISessionChangesService private readonly changesService: ISessionChangesService,
 		@IStorageService storage: IStorageService,
+		@IWorkspaceFolderLabelService private readonly folderLabels: IWorkspaceFolderLabelService,
 	) {
 		super(container, options);
 		this.statsCache = new SessionChangesStatsCache(storage);
@@ -270,6 +274,7 @@ export class ChangesViewPane extends ViewPane {
 			this.gitActions.clear();
 			this.checks.clear();
 			this.loadingProgress.clear();
+			this.worktreeLabelRequest.clear();
 			this.request++;
 			this.ownerEpoch++;
 		}
@@ -381,6 +386,7 @@ export class ChangesViewPane extends ViewPane {
 	private async refresh(): Promise<void> {
 		if (!this.isVisible() || this.isDisposed) { return; }
 		const request = ++this.request;
+		this.worktreeLabelRequest.clear();
 		this.statusDomNode.hidden = false;
 		this.loadingProgress.clear();
 		this.loading = true;
@@ -463,6 +469,11 @@ export class ChangesViewPane extends ViewPane {
 			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
 			this.changesetPicker.value = this.changesetId ?? '';
 			this.renderRows();
+			if (summary.repositories.length === 1 && this.threadRows.length) {
+				void this.updateWorktreeLabel(active, request).catch(error => {
+					if (request === this.request) this.reportOperationError(error, this.ownerEpoch);
+				});
+			}
 		} catch (error) {
 			if (this.isDisposed || request !== this.request) { return; }
 			this.rows = [];
@@ -481,6 +492,22 @@ export class ChangesViewPane extends ViewPane {
 				this.updatePreviewSelection();
 				this.tree.domNode.removeAttribute('aria-busy');
 			}
+		}
+	}
+
+	private async updateWorktreeLabel(active: IActiveSessionThread, request: number): Promise<void> {
+		using cancellation = new CancellationTokenSource();
+		const lifetime = this.worktreeLabelRequest.value = toDisposable(() => cancellation.cancel());
+		try {
+			const label = await this.folderLabels.readWorktreeLabel(active, cancellation.token);
+			if (!label || cancellation.token.isCancellationRequested || request !== this.request) return;
+			this.threadRows = this.threadRows.map(row => ({ ...row, repositoryLabel: label }));
+			if (!this.changesetId) {
+				this.saveTreeState();
+				this.renderRows();
+			}
+		} finally {
+			if (this.worktreeLabelRequest.value === lifetime) this.worktreeLabelRequest.clear();
 		}
 	}
 

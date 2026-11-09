@@ -46,6 +46,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ChangesViewPane } from '../../../../../sessions/contrib/changes/browser/changesView.js';
+import { SessionsWorkspaceFolderLabelService } from '../../../../../sessions/services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { ISessionsService } from '../../../../../sessions/services/sessions/browser/sessionsService.js';
 import { IChatService, type TurnChangeDetails } from '../../../../services/chat/common/chatService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -267,7 +268,8 @@ const pane = resources.add(view === 'timeline' ? createTimelinePane() : view ===
 							changesServices.get(ISessionsService), changesServices.get(IChatService),
 							editors, configuration, contextKeys, notifications, {} as IQuickInputService,
 							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
-							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
+							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService,
+							storage, changesServices.createInstance(SessionsWorkspaceFolderLabelService))
 						: view === 'console'
 							? replScope.createInstance(Repl, root, { id: 'fixture.console', title: 'Console' })
 							: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,

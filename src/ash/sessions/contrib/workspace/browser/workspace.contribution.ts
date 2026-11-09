@@ -2,6 +2,8 @@ import './media/workspaceTrustDialog.css';
 import { BrowserDialogHandler } from '../../../../workbench/browser/parts/dialogs/dialog.js';
 import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { autorun } from '../../../../base/common/observable.js';
+import { createUuid } from '../../../../base/common/uuid.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -12,10 +14,11 @@ import {
 	type IAppServerConnectionRecovery,
 } from '../../../../platform/agentHost/common/appServerApi.js';
 import { MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import {
 	AccessibleContentProvider,
@@ -35,7 +38,15 @@ import {
 import { MANAGE_TRUST_COMMAND_ID } from '../../../../workbench/contrib/workspace/common/workspace.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { WorkspaceFolderManagementContribution } from './workspaceFolderManagement.js';
+
+const retryFolderTrustCommandId = 'sessions.workspace.retryFolderTrust';
+const folderTrustRetryScope = new RawContextKey<string>('sessions.folderTrustRetryScope', '');
+const noFolderTrustRetry = ContextKeyExpr.not(folderTrustRetryScope.key);
+
+registerSingleton(ISessionFolderTrustRetryService, SessionFolderTrustRetryService, InstantiationType.Delayed);
+CommandsRegistry.register(retryFolderTrustCommandId, accessor => accessor.get(ISessionFolderTrustRetryService).pending.get()?.run());
 
 registerWorkbenchContribution(WorkspaceFolderManagementContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
 	accessor.get(IInstantiationService).createInstance(WorkspaceFolderManagementContribution),
@@ -99,6 +110,7 @@ const connectionRecoveryState = new RawContextKey<WorkspaceRecoveryState>(
 /** Window chrome projects connection and workspace permissions without reserving a notice row. */
 class WorkspaceStatusContribution extends Disposable {
 	private readonly permissionEntry = this._register(new MutableDisposable<IDisposable>());
+	private readonly folderTrustEntry = this._register(new MutableDisposable<IDisposable>());
 	private readonly recoveryNotification = this._register(new MutableDisposable<IDisposable>());
 	private permissionGeneration = 0;
 	private workspaceId: string;
@@ -111,8 +123,29 @@ class WorkspaceStatusContribution extends Disposable {
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ICommandService commands: ICommandService,
 		@INotificationService notifications: INotificationService,
+		@ISessionFolderTrustRetryService folderTrustRetry: ISessionFolderTrustRetryService,
 	) {
 		super();
+		const scope = createUuid();
+		const retryScope = folderTrustRetryScope.bindTo(contextKeys);
+		this._register(toDisposable(() => retryScope.reset()));
+		this._register(autorun(reader => {
+			const retry = folderTrustRetry.pending.read(reader);
+			this.folderTrustEntry.clear();
+			if (!retry) {
+				retryScope.reset();
+				return;
+			}
+			const title = localize('sessions.workspaceStatus.retryFolderTrust', 'Retry trust for {0}', retry.path);
+			this.folderTrustEntry.value = MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
+				group: 'navigation',
+				order: 0,
+				when: folderTrustRetryScope.isEqualTo(scope),
+				command: { id: retryFolderTrustCommandId, title, tooltip: title, icon: Lxicon.lock },
+			});
+			retryScope.set(scope);
+			status(title);
+		}));
 		this.workspaceId = workspace.getWorkspace().id;
 		this._register(
 			trust.onDidChangeTrustedFolders(() => {
@@ -187,7 +220,9 @@ class WorkspaceStatusContribution extends Disposable {
 				MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
 					group: 'navigation',
 					order: 0,
-					when: connectionRecoveryState.isEqualTo(state),
+					when: state === 'workspaceTrust'
+						? ContextKeyExpr.and(connectionRecoveryState.isEqualTo(state), noFolderTrustRetry)
+						: connectionRecoveryState.isEqualTo(state),
 					command: { id: command, title, tooltip, icon },
 				}),
 			);
@@ -261,7 +296,7 @@ class WorkspaceStatusContribution extends Disposable {
 			this.permissionEntry.value = MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
 				group: 'navigation',
 				order: 1,
-				when: SessionsWorkspaceModeContext.isEqualTo('code'),
+				when: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), noFolderTrustRetry),
 				command: {
 					id: MANAGE_TRUST_COMMAND_ID,
 					title: info.isReadOnly
@@ -298,7 +333,7 @@ AccessibleViewRegistry.register({
 		const action = focused.closest<HTMLElement>('.ash-sessions-titlebar [data-action-id]');
 		if (
 			!action ||
-			![MANAGE_TRUST_COMMAND_ID, ReconnectAppServerCommandId, 'workbench.action.reloadWindow'].includes(
+			![MANAGE_TRUST_COMMAND_ID, retryFolderTrustCommandId, ReconnectAppServerCommandId, 'workbench.action.reloadWindow'].includes(
 				action.dataset.actionId ?? '',
 			)
 		)
@@ -310,7 +345,7 @@ AccessibleViewRegistry.register({
 			() =>
 				localize(
 					'sessions.workspaceStatus.help',
-					"Agent window status\nThe title bar shows connection and workspace recovery. Use Tab and Shift+Tab to reach the status actions, and Enter or Space to activate them. Trust this workspace opens the authorization prompt again after you cancel it. Retry workspace restore tries to reopen the workspace. Reconnect Agent Host retries the connection without resending unfinished messages. Agent Host: Reconnect is also available in the Command Palette. Reload Agent Window is offered when the connection cannot be restored. In Code, Read-only workspace or Restricted workspace names this window's workspace. Activate it to open Workspace Trust and review or change that workspace's directory permissions. Other conversations and hosts keep their own permissions. Escape closes this help and returns focus.",
+					"Agent window status\nThe title bar shows connection and workspace recovery. Use Tab and Shift+Tab to reach the status actions, and Enter or Space to activate them. Retry trust for a folder reopens the authorization prompt for the folder you chose. Trust this workspace retries authorization for the window workspace. Retry workspace restore tries to reopen the workspace. Reconnect Agent Host retries the connection without resending unfinished messages. Agent Host: Reconnect is also available in the Command Palette. Reload Agent Window is offered when the connection cannot be restored. In Code, Read-only workspace or Restricted workspace names this window's workspace. Activate it to open Workspace Trust and review or change that workspace's directory permissions. Other conversations and hosts keep their own permissions. Escape closes this help and returns focus.",
 				),
 			() => {
 				if (focused.isConnected) focused.focus();

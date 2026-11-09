@@ -16,8 +16,8 @@ export interface ISessionFolderAuthorizationService {
 	/** Checks existing local directory permissions without prompting or granting access. */
 	isTrusted(path: string): Promise<boolean>;
 
-	/** Returns whether the folder can be selected after the host's directory permission check. */
-	authorize(path: string, signal: AbortSignal, host?: { readonly api: IAgentConnection; readonly label: string; }): Promise<boolean>;
+	/** Checks directory permissions and reports explicit dismissal of the trust prompt via onTrustDeclined. */
+	authorize(path: string, signal: AbortSignal, host?: { readonly api: IAgentConnection; readonly label: string; }, onTrustDeclined?: () => void): Promise<boolean>;
 }
 
 export const ISessionFolderAuthorizationService = createServiceIdentifier<ISessionFolderAuthorizationService>('sessionFolderAuthorizationService');

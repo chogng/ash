@@ -1,3 +1,4 @@
+import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -55,6 +56,8 @@ function createFixture() {
 	const resources = new DisposableStore();
 	resources.add(setARIAContainer(document.body));
 	const services = resources.add(createTestComponentServices());
+	const folderTrustRetry = new SessionFolderTrustRetryService();
+	services.registerInstance(ISessionFolderTrustRetryService, folderTrustRetry);
 	const contexts = resources.add(new ContextKeyService());
 	services.registerInstance(IContextKeyService, contexts);
 	const commands = resources.add(new CommandService(services));
@@ -144,6 +147,7 @@ function createFixture() {
 		resources.dispose();
 	};
 	return {
+		folderTrustRetry,
 		menu,
 		mode,
 		contexts,
@@ -211,7 +215,23 @@ for (const locale of ['en', 'zh-CN']) {
 			assert.equal(trust.tooltip, trustLabel);
 			await trust.run();
 			assert.equal(fixture.effects.retries, 2);
+			fixture.mode.set('code');
+			let folderRetries = 0;
+			using folderRetry = fixture.folderTrustRetry.offer({
+				path: '/ash-docs',
+				run: async () => { folderRetries++; },
+			});
+			const retry = actions(fixture.menu)[0]!;
+			assert.deepEqual(actions(fixture.menu).map(item => item.id), [retry.id]);
+			assert.equal(retry.label, locale === 'en' ? 'Retry trust for /ash-docs' : '重新授权 /ash-docs');
+			assert.equal(retry.tooltip, retry.label);
+			await retry.run();
+			assert.equal(folderRetries, 1);
+			assert.equal(fixture.effects.retries, 2);
+			folderRetry.dispose();
+			assert.equal(actions(fixture.menu)[0]!.label, trustLabel);
 			assert.equal(fixture.notifications.model.getNotifications().length, 0);
+			fixture.mode.set('chat');
 			fixture.setRecovery('idle');
 			assert.deepEqual(actions(fixture.menu), []);
 			fixture.mode.set('code');

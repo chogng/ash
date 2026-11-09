@@ -1,3 +1,4 @@
+import { IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService } from '../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { IChangesViewService } from '../../contrib/changes/common/changesViewService.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { ChangesViewService } from '../../contrib/changes/browser/changesViewService.js';
@@ -140,11 +141,19 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		using view = services.createInstance(ChangesViewPane, browser.window.document.body, { id: 'changes', title: 'Changes' });
 		services.registerInstance(IViewsService, { getViewWithId: (id: string) => id === CHANGES_VIEW_ID ? view : undefined } as unknown as IViewsService);
 		view.setVisible(true);
-		selection = selected('current');
+		selection = selected('current', true);
 		changed.fire();
 		await settle();
 		await old.complete({ changeSets: [] });
 		await settle();
+		const repositoryLabel = locale === 'zh-CN' ? 'source（feature/topic）' : 'source (feature/topic)';
+		assert.match(view.getAccessibleContent(), /feature\/topic/u);
+		const modePicker = view.element.querySelectorAll<HTMLSelectElement>('select')[1]!;
+		modePicker.value = 'tree';
+		modePicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+		assert.ok(Array.from(view.element.querySelectorAll('.ash-sessions-change-path')).some(row => row.textContent === repositoryLabel));
+		modePicker.value = 'list';
+		modePicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		const initialPicker = view.element.querySelector<HTMLSelectElement>('select')!;
 		initialPicker.value = details.summary.changeSetId;
 		initialPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
@@ -247,16 +256,43 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 	} finally { resetNlsResolver(); browser.window.close(); }
 });
 
-function selected(id: string): SessionsViewSelection {
-	return { kind: 'session', active: { threadId: `${id}-thread`, session: { sessionId: id, kind: 'code' as const, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, status: 'active', origin: { type: 'root' } }] } } };
+function selected(id: string, worktree = false): SessionsViewSelection {
+	const threadId = `${id}-thread`;
+	return {
+		kind: 'session',
+		active: {
+			threadId,
+			session: {
+				sessionId: id, kind: 'code', title: id, status: 'active', nextApprovalMode: 'manual',
+				workspace: worktree ? { authorityId: 'local', root: '/source' } : undefined,
+				chats: [{ threadId, status: 'active', origin: { type: 'root' }, workspace: worktree ? { authorityId: 'local', root: '/worktrees/checkout' } : undefined }],
+			},
+		},
+	};
 }
 
 function registerChecksServices(services: InstantiationService, document: Document): void {
+	services.registerSingleton(IWorkspaceFolderLabelService, () => services.createInstance(SessionsWorkspaceFolderLabelService));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(ICustomViewService, () => services.createInstance(CustomViewService));
 	services.registerInstance(ISessionProviderScopeService, {
 		onDidChangeScopes: Event.None,
-		getScope: () => ({ services: { host: { automation: undefined } } }),
+		getScope: () => ({
+			assertCurrent() { },
+			backendIdentity: (id: string) => id,
+			services: {
+				host: {
+					automation: undefined,
+					appServer: { connectionGeneration: 1 },
+					localGit: {
+						readRepositoryContexts: async (directory: { sessionId: string; path: string; }) => {
+							assert.deepEqual(directory, { sessionId: 'current', path: '/worktrees/checkout' });
+							return [{ rootPath: directory.path, head: { type: 'branch', name: 'feature/topic' } }];
+						},
+					},
+				}
+			},
+		}),
 	} as unknown as ISessionProviderScopeService);
 	services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
 		root: document.body,

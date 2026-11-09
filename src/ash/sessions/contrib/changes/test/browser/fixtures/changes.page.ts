@@ -1,3 +1,4 @@
+import { IWorkspaceFolderLabelService, SessionsWorkspaceFolderLabelService } from '../../../../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { setIconResolver } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../../platform/theme/common/iconRegistry.js';
@@ -307,6 +308,7 @@ services.registerInstance(ISessionProviderScopeService, {
 	onDidChange: changed.event, onDidChangeScopes: Event.None, getScopes: () => [scope],
 	getScope: () => scope, getProviderScope: () => scope, createScope: () => services.createChild(),
 });
+services.registerSingleton(IWorkspaceFolderLabelService, () => services.createInstance(SessionsWorkspaceFolderLabelService));
 const container = document.querySelector<HTMLElement>('#changes')!;
 container.style.cssText = 'width: 360px; height: 480px; --ash-spacing-size80: 8px; --ash-fontSize-body1: 13px; --ash-fontSize-body2: 11px; --ash-description-foreground: #666;';
 const viewOwner = resources.add(new MutableDisposable<ChangesViewPane>());
