@@ -9,8 +9,8 @@ export type AppServerConnectionState = 'stopped' | 'starting' | 'initializing' |
 /** Recovery scheduling belongs to the connection owner, independently of protocol state. */
 export interface IAppServerConnectionRecovery {
 	readonly status: 'idle' | 'recovering' | 'failed' | 'suspended' | 'unavailable';
-	/** Distinguishes workspace setup and explicit permission changes from a lost connection. */
-	readonly phase?: 'connection' | 'workspace' | 'permissions';
+	/** Identifies the part of recovery that needs attention, including a declined workspace trust prompt. */
+	readonly phase?: 'connection' | 'workspace' | 'workspaceTrust' | 'permissions';
 	readonly error: string | undefined;
 	readonly onDidChange: Event<void>;
 	reconnect(options?: { readonly reason: 'permissions'; }): Promise<void>;

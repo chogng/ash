@@ -89,7 +89,9 @@ export function createSessionFolderTrustRequestService(
 	};
 }
 
-const connectionRecoveryState = new RawContextKey<IAppServerConnectionRecovery['status']>(
+type WorkspaceRecoveryState = IAppServerConnectionRecovery['status'] | 'workspaceTrust' | 'workspaceFailed' | 'workspacePreparing';
+
+const connectionRecoveryState = new RawContextKey<WorkspaceRecoveryState>(
 	'sessions.connectionRecoveryState',
 	'idle',
 );
@@ -100,8 +102,7 @@ class WorkspaceStatusContribution extends Disposable {
 	private readonly recoveryNotification = this._register(new MutableDisposable<IDisposable>());
 	private permissionGeneration = 0;
 	private workspaceId: string;
-	private recoveryStatus: IAppServerConnectionRecovery['status'] | undefined;
-	private recoveryError: string | undefined;
+	private recoveryStatus: WorkspaceRecoveryState | undefined;
 
 	constructor(
 		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService,
@@ -143,7 +144,7 @@ class WorkspaceStatusContribution extends Disposable {
 			enabled: true,
 			run: () => commands.executeCommand('workbench.action.reloadWindow'),
 		};
-		for (const [state, command, title, tooltip, icon] of [
+		const recoveryActions = [
 			[
 				'recovering',
 				ReconnectAppServerCommandId,
@@ -155,14 +156,33 @@ class WorkspaceStatusContribution extends Disposable {
 				'failed',
 				ReconnectAppServerCommandId,
 				localize('sessions.workspaceStatus.reconnect', 'Reconnect Agent Host'),
-				localize(
-					'appServer.recoveryFailed',
-					'Could not restore the Agent Host connection or workspace. Try again.',
-				),
+				localize('sessions.workspaceStatus.connectionFailed', 'Could not reconnect to the Agent Host. Try again.'),
+				Lxicon.warning,
+			],
+			[
+				'workspaceTrust',
+				ReconnectAppServerCommandId,
+				localize('sessions.workspaceStatus.trust', 'Trust this workspace'),
+				localize('sessions.workspaceStatus.trust', 'Trust this workspace'),
+				Lxicon.lock,
+			],
+			[
+				'workspacePreparing',
+				ReconnectAppServerCommandId,
+				localize('appServer.preparingWorkspace', 'Preparing the workspace…'),
+				localize('appServer.preparingWorkspace', 'Preparing the workspace…'),
+				Lxicon.refresh,
+			],
+			[
+				'workspaceFailed',
+				ReconnectAppServerCommandId,
+				localize('sessions.workspaceStatus.retryWorkspace', 'Retry workspace restore'),
+				localize('sessions.workspaceStatus.workspaceFailed', 'Could not restore the workspace. Try again.'),
 				Lxicon.warning,
 			],
 			['unavailable', 'workbench.action.reloadWindow', reload.label, reload.label, Lxicon.warning],
-		] as const) {
+		] as const;
+		for (const [state, command, title, tooltip, icon] of recoveryActions) {
 			this._register(
 				MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
 					group: 'navigation',
@@ -173,43 +193,38 @@ class WorkspaceStatusContribution extends Disposable {
 			);
 		}
 		const updateConnection = (): void => {
-			const next = recovery.status;
-			if (next === this.recoveryStatus && recovery.error === this.recoveryError) return;
+			const recoveryStatus = recovery.status;
+			const canRetry = recoveryStatus === 'failed' || recoveryStatus === 'recovering';
+			let next: WorkspaceRecoveryState = recoveryStatus;
+			if (canRetry && recovery.phase === 'workspaceTrust') {
+				next = 'workspaceTrust';
+			} else if (canRetry && recovery.phase === 'workspace') {
+				next = recoveryStatus === 'failed' ? 'workspaceFailed' : 'workspacePreparing';
+			}
+			const previous = this.recoveryStatus;
+			if (next === previous) return;
 			contextKeys.bufferChangeEvents(() => {
-				available.set(next === 'failed' || next === 'recovering');
+				available.set(canRetry);
 				connectionState.set(next);
 			});
-			const previous = this.recoveryStatus;
 			this.recoveryStatus = next;
-			this.recoveryError = recovery.error;
 			if (next === 'idle' || next === 'suspended') {
 				this.recoveryNotification.clear();
 				if (next === 'idle' && previous && previous !== 'idle' && previous !== 'suspended') {
-					status(localize('sessions.workspaceStatus.connected', 'Agent Host connection restored.'));
+					const restoredWorkspace = previous === 'workspaceTrust' || previous === 'workspacePreparing' || previous === 'workspaceFailed';
+					status(restoredWorkspace
+						? localize('sessions.workspaceStatus.workspaceRestored', 'Workspace restored.')
+						: localize('sessions.workspaceStatus.connected', 'Agent Host connection restored.'));
 				}
 				return;
 			}
-			const recovering = next === 'recovering';
-			const unavailable = next === 'unavailable';
-			const title = recovering
-				? localize('appServer.recovering', 'Reconnecting to the Agent Host…')
-				: unavailable
-					? reload.label
-					: localize('sessions.workspaceStatus.reconnect', 'Reconnect Agent Host');
-			const message = recovering
-				? title
-				: unavailable
-					? localize(
-						'appServer.recoveryUnavailable',
-						'The Agent Host connection cannot be restored. {0}',
-						recovery.error ?? '',
-					)
-					: localize(
-						'appServer.recoveryFailed',
-						'Could not restore the Agent Host connection or workspace. Try again.',
-					);
-			if (next !== previous) status(message);
-			if (unavailable && previous !== 'unavailable') {
+			if (next === 'unavailable') {
+				const message = localize(
+					'appServer.recoveryUnavailable',
+					'The Agent Host connection cannot be restored. {0}',
+					recovery.error ?? '',
+				);
+				status(message);
 				// A terminal connection failure needs a global recovery action; ordinary reconnects do not.
 				const notification = notifications.notify({
 					severity: Severity.Error,
@@ -218,7 +233,9 @@ class WorkspaceStatusContribution extends Disposable {
 					actions: { primary: [reload] },
 				});
 				this.recoveryNotification.value = toDisposable(() => notification.close());
-			} else if (!unavailable) {
+			} else {
+				const action = recoveryActions.find(([state]) => state === next);
+				if (action) status(action[3]);
 				this.recoveryNotification.clear();
 			}
 		};
@@ -293,7 +310,7 @@ AccessibleViewRegistry.register({
 			() =>
 				localize(
 					'sessions.workspaceStatus.help',
-					"Agent window status\nThe title bar shows Agent Host recovery in every workspace. Use Tab and Shift+Tab to reach the status actions, and Enter or Space to activate them. Reconnect Agent Host retries the connection without resending unfinished messages. Agent Host: Reconnect is also available in the Command Palette. Reload Agent Window is offered when the connection cannot be restored. In Code, Read-only workspace or Restricted workspace names this window's workspace. Activate it to open Workspace Trust and review or change that workspace's directory permissions. Other conversations and hosts keep their own permissions. Escape closes this help and returns focus.",
+					"Agent window status\nThe title bar shows connection and workspace recovery. Use Tab and Shift+Tab to reach the status actions, and Enter or Space to activate them. Trust this workspace opens the authorization prompt again after you cancel it. Retry workspace restore tries to reopen the workspace. Reconnect Agent Host retries the connection without resending unfinished messages. Agent Host: Reconnect is also available in the Command Palette. Reload Agent Window is offered when the connection cannot be restored. In Code, Read-only workspace or Restricted workspace names this window's workspace. Activate it to open Workspace Trust and review or change that workspace's directory permissions. Other conversations and hosts keep their own permissions. Escape closes this help and returns focus.",
 				),
 			() => {
 				if (focused.isConnected) focused.focus();

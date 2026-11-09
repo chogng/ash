@@ -95,9 +95,11 @@ function createFixture() {
 	let managed = 0;
 	const recovery: IAppServerConnectionRecovery & {
 		status: IAppServerConnectionRecovery['status'];
+		phase: IAppServerConnectionRecovery['phase'];
 		error: string | undefined;
 	} = {
 		status: 'idle',
+		phase: 'connection',
 		error: undefined,
 		onDidChange: recoveryChanges.event,
 		reconnect: async () => {
@@ -154,8 +156,9 @@ function createFixture() {
 			permission = value;
 			permissionChanges.fire();
 		},
-		setRecovery(value: IAppServerConnectionRecovery['status']) {
+		setRecovery(value: IAppServerConnectionRecovery['status'], phase: IAppServerConnectionRecovery['phase'] = 'connection') {
 			recovery.status = value;
+			recovery.phase = phase;
 			recovery.error = value === 'unavailable' ? 'fixture authorization expired' : undefined;
 			recoveryChanges.fire();
 		},
@@ -193,9 +196,21 @@ for (const locale of ['en', 'zh-CN']) {
 			fixture.setRecovery('failed');
 			const reconnect = actions(fixture.menu)[0]!;
 			assert.equal(reconnect.label, locale === 'en' ? 'Reconnect Agent Host' : '重新连接 Agent 主机');
+			assert.equal(reconnect.tooltip, locale === 'en' ? 'Could not reconnect to the Agent Host. Try again.' : '无法重新连接 Agent Host。请重试。');
 			assert.equal(reconnect.id, ReconnectAppServerCommandId);
 			await reconnect.run();
 			assert.equal(fixture.effects.retries, 1);
+			fixture.setRecovery('failed', 'workspace');
+			assert.equal(actions(fixture.menu)[0]!.label, locale === 'en' ? 'Retry workspace restore' : '重试恢复工作区');
+			const trustLabel = locale === 'en' ? 'Trust this workspace' : '信任此工作区';
+			fixture.setRecovery('recovering', 'workspaceTrust');
+			assert.equal(actions(fixture.menu)[0]!.label, trustLabel);
+			fixture.setRecovery('failed', 'workspaceTrust');
+			const trust = actions(fixture.menu)[0]!;
+			assert.equal(trust.label, trustLabel);
+			assert.equal(trust.tooltip, trustLabel);
+			await trust.run();
+			assert.equal(fixture.effects.retries, 2);
 			assert.equal(fixture.notifications.model.getNotifications().length, 0);
 			fixture.setRecovery('idle');
 			assert.deepEqual(actions(fixture.menu), []);

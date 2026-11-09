@@ -166,22 +166,11 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			void workspaceWindowReady.complete();
 			void workspaceStartupScheduled.complete();
 		}));
-		// Previously authorized folders can bind while the Workbench is being
-		// restored. Only a new permission prompt needs the window to be ready.
-		const startupTrust: IDirectoryPermissionRequestService = {
-			requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
-			async requestDirectoryPermissions(request, signal) {
-				finishWorkspaceScheduling();
-				await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
-				if (resources.isDisposed) throw new CancellationError();
-				return workspaceTrust.requestDirectoryPermissions(request, signal);
-			},
-		};
 		let workspaceDirectoriesReady = Promise.resolve();
-		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
-		const trackWorkspaceInitialization = (promise: Promise<void>): Promise<void> => {
+		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; needsTrust: boolean; error?: unknown; } | undefined;
+		const trackWorkspaceInitialization = (promise: Promise<void>): NonNullable<typeof workspaceInitialization> => {
 			const attempt: NonNullable<typeof workspaceInitialization> = {
-				generation: client.generation, state: 'restoring', promise,
+				generation: client.generation, state: 'restoring', needsTrust: false, promise,
 			};
 			workspaceInitialization = attempt;
 			workspaceChanges.fire();
@@ -195,7 +184,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				attempt.error = error;
 				workspaceChanges.fire();
 			});
-			return promise;
+			return attempt;
 		};
 		const restoreWorkspace = (retry = false, force = false): Promise<void> => {
 			// Terminals and reconnect listeners share one binding attempt per generation.
@@ -207,7 +196,32 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					remoteHostLabel = remoteConnection.authority;
 				}
 				if (resources.isDisposed) throw new CancellationError();
-				return trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel, onBindingQueued: finishWorkspaceScheduling }));
+				const startupTrust: IDirectoryPermissionRequestService = {
+					requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
+					async requestDirectoryPermissions(request, signal) {
+						finishWorkspaceScheduling();
+						// Only the prompt needs the window. Saved grants can bind during startup.
+						await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
+						if (resources.isDisposed) throw new CancellationError();
+						const setNeedsTrust = (value: boolean): void => {
+							if (workspaceInitialization !== attempt || attempt.generation !== client.generation || attempt.needsTrust === value) return;
+							attempt.needsTrust = value;
+							workspaceChanges.fire();
+						};
+						setNeedsTrust(workspaceTrust.requiresDevelopmentTrust === true);
+						let declined = false;
+						try {
+							const choice = await workspaceTrust.requestDirectoryPermissions(request, signal);
+							declined = choice === 'cancel' && !signal?.aborted;
+							return choice;
+						} finally {
+							// An explicit decline leaves the workspace available to authorize later.
+							if (!declined) setNeedsTrust(false);
+						}
+					},
+				};
+				const attempt = trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel, onBindingQueued: finishWorkspaceScheduling }));
+				return attempt.promise;
 			}
 			return workspaceInitialization.promise;
 		};
@@ -228,8 +242,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const recovery: IAppServerConnectionRecovery = {
 			get phase() {
 				if (permissionRecoveries > 0) return 'permissions';
-				return connection.recovery.status === 'idle' && workspaceInitialization?.generation === client.generation
-					&& workspaceInitialization.state !== 'ready' ? 'workspace' : 'connection';
+				if (connection.recovery.status !== 'idle' || workspaceInitialization?.generation !== client.generation
+					|| workspaceInitialization.state === 'ready') return 'connection';
+				return workspaceInitialization.needsTrust ? 'workspaceTrust' : 'workspace';
 			},
 			get status() {
 				const status = connection.recovery.status;
@@ -238,9 +253,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				return workspaceInitialization.state === 'restoring' ? 'recovering' : workspaceInitialization.state === 'failed' ? 'failed' : 'idle';
 			},
 			get error() {
-				return connection.recovery.status === 'idle' && workspaceInitialization?.generation === client.generation && workspaceInitialization.state === 'failed'
-					? String(workspaceInitialization.error instanceof Error ? workspaceInitialization.error.message : workspaceInitialization.error)
-					: connection.recovery.error;
+				const attempt = workspaceInitialization;
+				if (connection.recovery.status !== 'idle' || attempt?.generation !== client.generation || attempt.state !== 'failed') {
+					return connection.recovery.error;
+				}
+				if (attempt.needsTrust) return undefined;
+				return String(attempt.error instanceof Error ? attempt.error.message : attempt.error);
 			},
 			onDidChange: Event.any(connection.recovery.onDidChange, workspaceChanges.event),
 			reconnect: async options => {
