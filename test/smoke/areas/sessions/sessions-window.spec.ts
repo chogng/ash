@@ -1917,7 +1917,7 @@ test(
 		const catalogSearch = settings.getByRole('combobox', { name: 'Search models', exact: true });
 		await catalogSearch.fill('openai/gpt-6-astra');
 		await expect(modelRows).toHaveCount(1);
-		await expect(modelRows).toContainText(['GPT-6 Astra']);
+		await expect(modelRows).toContainText(['Astra 6']);
 		await expect(catalogSearch).toBeFocused();
 		await expect(apiConnection).toBeVisible();
 		await catalogSearch.fill('');
@@ -2113,7 +2113,7 @@ test(
 				settings.locator('.ash-models-settings-api-row').first().locator('input[type="password"]'),
 			).toBeVisible();
 			await expect(
-				settings.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true }),
+				settings.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true }),
 			).toBeChecked();
 		}
 		await navigation.getByRole('button', { name: 'Appearance' }).click();

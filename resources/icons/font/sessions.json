@@ -51,6 +51,7 @@
     "new-file": [1],
     "new-folder": [1],
     "open-in-window": [1],
+    "openai": [0],
     "open-preview": [2],
     "pdf": [4],
     "refresh": [0],
@@ -68,7 +69,8 @@
   "sourceWidths": {
     "circle": 1.39,
     "debug-pause": 1.5,
-    "bold": 2
+    "bold": 2,
+    "openai": 0.936
   },
   "insetStrokes": {
     "collab": [0, 1],

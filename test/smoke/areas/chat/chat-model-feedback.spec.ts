@@ -16,7 +16,7 @@ for (const surface of ['IDE', 'Agent Window']) {
 		const automatic = page.getByRole('switch', { name: 'Auto', exact: true });
 		await expect(page.locator('.ash-chat-model-picker-footer')).toBeVisible();
 		await automatic.press('Space'); await expect(automatic).not.toBeChecked(); await automatic.press('Escape');
-		await expect(chat.getByRole('button', { name: 'GPT-6.1 Sol', exact: true })).toBeVisible();
+		await expect(chat.getByRole('button', { name: 'Sol 6.1', exact: true })).toBeVisible();
 		await chat.locator('.stanza-editor-input').focus();
 		await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 		await commands.runCommand('workbench.action.chat.openModelFeedbackSurvey');

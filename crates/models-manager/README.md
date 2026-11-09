@@ -106,7 +106,7 @@ ModelsManager::refresh(scope, source)
 
 ## 合并、缓存与失败
 
-当前合并来源是 provider seed 与 provider live observation。Live 的明确字段覆盖 seed；
+当前合并来源是 provider seed 与 provider live observation。Live 的明确字段覆盖 seed。OpenAI、Anthropic 和 xAI 已登记型号的展示名使用 seed 中的 `display_name`，只通过发现取得的型号使用上游名称。
 `ContextWindow::Unknown` 和 `CapabilitySupport::Unknown` 不擦除 known 值。Provenance 与
 `ModelMetadataQuality` 随 snapshot entry 暴露。Static seed 的 availability 是 `Unverified`，不是
 账号 entitlement 证明。

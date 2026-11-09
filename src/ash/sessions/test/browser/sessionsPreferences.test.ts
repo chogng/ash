@@ -1,4 +1,3 @@
-import { IProfileStorageService } from '../../../platform/storage/common/profileStorageService.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import '../../../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { IMemoriesService } from '../../../platform/memories/common/memoriesService.js';

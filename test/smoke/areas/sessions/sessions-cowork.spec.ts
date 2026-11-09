@@ -24,7 +24,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 		const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		const search = picker.getByRole('combobox');
-		await search.fill('GPT-6.1 Sol');
+		await search.fill('Sol 6.1');
 		await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
 		const selectedModelName = await picker.getByRole('menuitemradio').locator('.ash-icon-label-text').innerText();
 		await search.press('Enter');

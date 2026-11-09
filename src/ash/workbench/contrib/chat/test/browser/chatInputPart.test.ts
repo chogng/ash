@@ -3942,13 +3942,28 @@ suite('chatInput browser component', () => {
 	for (const theme of ['light', 'hcDark']) {
 		test(`model menu shows the localized effort inside its trigger in ${theme}`, async function () {
 			const { page } = browserTests;
-			await page.goto(`/chatInput.html?modelMenuConfiguration&locale=zh-CN&theme=${theme}`);
+			await page.goto(`/chatInput.html?modelMenuConfiguration&modelSet=multiple&locale=zh-CN&theme=${theme}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const model = page.getByRole('button', { name: 'Test Model 低', exact: true });
 			const effort = model.locator('.ash-chat-input-model-effort');
 			await expect(effort).toHaveText('低');
 			await model.press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
+			const selected = picker.getByRole('menuitemradio', { name: 'Test Model', exact: true, checked: true });
+			const providerIcon = selected.locator('[data-ash-icon-id="openai"]');
+			const check = selected.locator('[data-ash-icon-id="check"]');
+			await expect(providerIcon).toBeVisible();
+			await expect(check).toBeVisible();
+			const [iconBounds, rowLabelBounds, checkBounds] = await Promise.all([
+				providerIcon.boundingBox(),
+				selected.locator('.ash-action-widget-label').boundingBox(),
+				check.boundingBox(),
+			]);
+			expect(iconBounds!.x + iconBounds!.width).toBeLessThan(rowLabelBounds!.x);
+			expect(rowLabelBounds!.x + rowLabelBounds!.width).toBeLessThan(checkBounds!.x);
+			const alternative = picker.getByRole('menuitemradio', { name: 'Extended model with a longer display name for coding', checked: false });
+			await expect(alternative.locator('[data-ash-icon-id="openai"]')).toBeVisible();
+			await expect(alternative.locator('[data-ash-icon-id="check"]')).toBeHidden();
 			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
 			const effortMenu = page.getByRole('menu', { name: '推理强度' });
 			await expect(effortMenu.getByRole('menuitemradio')).toHaveText(['低', '高']);

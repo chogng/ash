@@ -850,8 +850,8 @@ defaultsTest('Effective effort reaches direct and queued model requests', { tag:
 		await modelButton.press('ArrowDown');
 		const picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
 		await picker.getByRole('combobox').fill(model.model);
-		await picker.getByRole('menuitemradio', { name: 'GPT-6.1 Sol', exact: true }).click();
-		await expect(modelButton).toHaveAccessibleName('GPT-6.1 Sol High');
+		await picker.getByRole('menuitemradio', { name: 'Sol 6.1', exact: true }).click();
+		await expect(modelButton).toHaveAccessibleName('Sol 6.1 High');
 		await modelButton.press('ArrowDown');
 		await picker.getByRole('menuitem', { name: 'Effort', exact: true }).press('ArrowRight');
 		await expect(page.getByRole('menu', { name: 'Effort', exact: true }).getByRole('menuitemradio', { name: 'High', exact: true })).toBeChecked();

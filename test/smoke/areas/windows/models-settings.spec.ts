@@ -8,8 +8,8 @@ import { readUserSettings, writeUserSettings } from '../../../automation/setting
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { expect, test } from '../../../automation/test.js';
 
-const representativeModelNames = ['GPT-6.1 Sol', 'Claude Sonnet 5.5', 'Gemini 3.8 Flash', 'Grok 4.7', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3', 'Muse Spark 1.3'];
-const defaultEnabledModelNames = ['GPT-6.1 Sol', 'GPT-6 Luna', 'GPT-6 Astra', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'Grok 4.7'];
+const representativeModelNames = ['Sol 6.1', 'Sonnet 5.5', 'Gemini 3.8 Flash', 'Grok 4.7', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3', 'Muse Spark 1.3'];
+const defaultEnabledModelNames = ['Sol 6.1', 'Luna 6', 'Astra 6', 'Sonnet 5.5', 'Opus 5.5', 'Grok 4.7'];
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Development credentials persist across Desktop restarts and provider deletion removes their files (${locale})`, { tag: ['@electron-app-server'] }, async () => {
@@ -169,7 +169,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		const search = catalog.getByRole('combobox', { name: 'Search models', exact: true });
 		await search.fill('openai/gpt-6-luna');
 		await expect(catalog.locator('.ash-models-settings-model-row')).toHaveCount(1);
-		const toggle = catalog.getByRole('switch', { name: 'Show GPT-6 Luna in model picker', exact: true });
+		const toggle = catalog.getByRole('switch', { name: 'Show Luna 6 in model picker', exact: true });
 		const before = await toggle.isChecked();
 		await toggle.press('Space');
 		await expect(toggle).toBeChecked({ checked: !before });
@@ -327,11 +327,11 @@ test('Models Settings saves custom model IDs and keys and tests the configured e
 		const search = settings.getByRole('combobox', { name: 'Search models', exact: true });
 		await search.fill('openai/gpt-6-astra');
 		await expect(rows).toHaveCount(1);
-		await expect(rows).toContainText(['GPT-6 Astra']);
+		await expect(rows).toContainText(['Astra 6']);
 		await expect(search).toBeFocused();
 		await search.fill('SONNET 5.5');
 		await expect(rows).toHaveCount(1);
-		await expect(rows).toContainText(['Claude Sonnet 5.5']);
+		await expect(rows).toContainText(['Sonnet 5.5']);
 		await search.fill('no-such-model');
 		await expect(rows).toHaveCount(0);
 		await expect(settings.getByRole('status').filter({ hasText: 'No models found.' })).toBeVisible();
@@ -476,9 +476,9 @@ test('Model descriptions retain provider copy after restarting in Chinese', { ta
 		const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		const search = picker.getByRole('combobox');
-		await search.fill('GPT-6.1 Sol');
+		await search.fill('Sol 6.1');
 		await search.press('ArrowRight');
-		const card = picker.getByRole('region', { name: 'GPT-6.1 Sol', exact: true });
+		const card = picker.getByRole('region', { name: 'Sol 6.1', exact: true });
 		await expect(card).toBeFocused();
 		await expect(card).toHaveText('Latest workhorse model for coding and everyday work.');
 		await expect(card.getByRole('switch')).toHaveCount(0);
@@ -585,7 +585,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		await test.info().attach(`models-overview-${host}`, { body: await page.screenshot({ path: test.info().outputPath(`models-overview-${host}.png`) }), contentType: 'image/png' });
 		const search = catalog.getByRole('combobox', { name: 'Search models', exact: true });
 		await search.fill('@capability:tools');
-		const toolModel = catalog.locator('.ash-models-settings-model-row').filter({ has: page.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true }) });
+		const toolModel = catalog.locator('.ash-models-settings-model-row').filter({ has: page.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true }) });
 		await expect(toolModel).toBeVisible();
 		await expect(toolModel).not.toContainText(/Tools|Image input|Agent mode/);
 		await search.fill('@capability:agent');
@@ -600,7 +600,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		expect(rowBounds!.x + rowBounds!.width).toBeLessThanOrEqual(catalogBounds!.x + catalogBounds!.width);
 		expect(await modelRow.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 
-		const modelSwitch = catalog.getByRole('switch', { name: 'Show GPT-5.6 Terra in model picker', exact: true });
+		const modelSwitch = catalog.getByRole('switch', { name: 'Show Terra 5.6 in model picker', exact: true });
 		await modelSwitch.focus();
 		const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
 		await modelSwitch.press(`${modifier}+k`);
@@ -646,8 +646,8 @@ for (const host of ['Workbench', 'Sessions']) {
 		await search.fill('@provider:openai');
 		await expect(catalog.getByRole('checkbox')).toHaveCount(0);
 		await expect(catalog.locator('.ash-chat-models-selection-actions')).toHaveCount(0);
-		const primary = catalog.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true });
-		const other = catalog.getByRole('switch', { name: 'Show GPT-6 Luna in model picker', exact: true });
+		const primary = catalog.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true });
+		const other = catalog.getByRole('switch', { name: 'Show Luna 6 in model picker', exact: true });
 		const otherVisible = await other.isChecked();
 		await primary.press('Space');
 		await expect(primary).not.toBeChecked();
@@ -659,14 +659,14 @@ for (const host of ['Workbench', 'Sessions']) {
 		await expect(primary).not.toHaveAttribute('aria-busy', 'true');
 		await expect(primary).toBeFocused();
 		await search.fill('openai/gpt-6.1-sol');
-		const modelSwitch = catalog.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true });
+		const modelSwitch = catalog.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true });
 		const visible = await modelSwitch.isChecked();
 		await search.fill('openai/gpt-6.1-sol @capability:vision');
 		await expect(search).toHaveValue('openai/gpt-6.1-sol @capability:vision');
 		await expect(modelSwitch).toBeChecked({ checked: visible });
 		await expect(search).toBeFocused();
 		await expect(catalog.getByRole('combobox', { name: /^Speed for / })).toHaveCount(0);
-		const context = catalog.getByRole('button', { name: 'Context size for GPT-6.1 Sol', exact: true });
+		const context = catalog.getByRole('button', { name: 'Context size for Sol 6.1', exact: true });
 		const originalContext = await context.getAttribute('aria-pressed');
 		await context.click();
 		await expect(context).toHaveAttribute('aria-pressed', originalContext === 'true' ? 'false' : 'true');
@@ -744,7 +744,7 @@ for (const host of ['Workbench', 'Sessions']) {
 			await card.getByRole('button', { name: 'Refresh models', exact: true }).click();
 			await expect(card.getByRole('status')).not.toContainText(/failed|unavailable|rejected/i);
 			await search.fill('');
-			await expect(catalog.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true })).toBeVisible();
+			await expect(catalog.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true })).toBeVisible();
 			await search.fill('@provider:"Managed fixture"');
 			await catalog.getByRole('button', { name: 'Configure model', exact: true }).click();
 			await expect(card.getByRole('spinbutton', { name: 'Context window (tokens)', exact: true })).toBeFocused();
@@ -787,16 +787,16 @@ for (const host of ['Workbench', 'Sessions']) {
 		let picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
 		const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
-		await picker.getByRole('menuitemradio', { name: 'Claude Sonnet 5.5', exact: true }).click();
-		await expect(trigger()).toHaveText('Claude Sonnet 5.5');
+		await picker.getByRole('menuitemradio', { name: 'Sonnet 5.5', exact: true }).click();
+		await expect(trigger()).toHaveText('Sonnet 5.5');
 		await newChat();
-		await expect(trigger()).toHaveText('Claude Sonnet 5.5');
+		await expect(trigger()).toHaveText('Sonnet 5.5');
 		if (host === 'Sessions') { await page.close(); }
 		({ workbench } = await runningApplication.reload('quit'));
 		page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await openCode();
 		await newChat();
-		await expect(trigger()).toHaveText('Claude Sonnet 5.5');
+		await expect(trigger()).toHaveText('Sonnet 5.5');
 		await trigger().press('ArrowDown');
 		picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
 		await picker.getByRole('switch', { name: 'Auto', exact: true }).press('Space');
