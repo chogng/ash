@@ -42,9 +42,14 @@ pub(super) fn project(project: &Project) -> ProjectDto {
             .materials
             .iter()
             .map(|material| match material {
-                ProjectMaterial::File { path, name } => ProjectMaterialDto::File {
+                ProjectMaterial::File {
+                    path,
+                    name,
+                    size_bytes,
+                } => ProjectMaterialDto::File {
                     path: material_path(path),
                     name: name.clone(),
+                    size_bytes: *size_bytes,
                 },
                 ProjectMaterial::Folder { path, name } => ProjectMaterialDto::Folder {
                     path: material_path(path),

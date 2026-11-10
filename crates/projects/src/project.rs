@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use std::path::Component;
 use std::path::PathBuf;
 
-pub const PROJECT_SCHEMA_VERSION: u32 = 1;
+pub const PROJECT_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +46,9 @@ pub enum ProjectMaterial {
     File {
         path: PathBuf,
         name: String,
+        /// Size of the source when it was added to the project.
+        #[serde(rename = "sizeBytes")]
+        size_bytes: u64,
     },
     Folder {
         path: PathBuf,
@@ -173,8 +176,17 @@ impl Project {
         let mut text_ids = BTreeSet::new();
         let mut text_bytes = 0;
         for material in &self.materials {
+            // Project sizes cross the JavaScript API as numbers.
+            if let ProjectMaterial::File { size_bytes, .. } = material
+                && *size_bytes > (1_u64 << 53) - 1
+            {
+                return Err(crate::ProjectError::InvalidInput(
+                    "Project file size exceeds the safe integer range".into(),
+                ));
+            }
             let (name, valid) = match material {
-                ProjectMaterial::File { path, name } | ProjectMaterial::Folder { path, name } => (
+                ProjectMaterial::File { path, name, .. }
+                | ProjectMaterial::Folder { path, name } => (
                     name,
                     path.is_absolute()
                         && !path.components().any(|component| {

@@ -71,7 +71,10 @@ function isPreviewableFile(name: string): boolean {
 }
 
 function materialId(material: ProjectMaterial): string {
-	return material.kind === 'text' ? `text:${material.id}` : material.resource.toString();
+	if (material.kind === 'text') return `text:${material.id}`;
+	const resource = material.resource.toString();
+	// Include the import size to distinguish previews from legacy path-only copies.
+	return material.kind === 'file' ? JSON.stringify([resource, material.sizeBytes]) : resource;
 }
 
 /** Presents project references and delegates their storage and file access to the owning services. */
@@ -212,22 +215,30 @@ export class ProjectMaterials extends Disposable {
 		};
 		const add = async (entries: readonly { resource: URI; file?: File; }[], kind: 'file' | 'folder') => {
 			if (this.isDisposed || !isCurrent()) return;
-			if (localFiles) {
-				await Promise.all(entries.map(async ({ resource, file }) => {
-					if (!file || file.size > previewCopyLimit || !isPreviewableFile(file.name)) return;
+			const additions = await Promise.all(entries.map(async ({ resource, file }) => {
+				const name = basename(resource);
+				if (kind === 'folder') return { material: { resource, name, kind } as const, file };
+				const sourceStat = file ? undefined : await this.fileService.stat(resource).catch(() => undefined);
+				const sizeBytes = file?.size ?? (sourceStat?.kind === FileKind.File ? sourceStat.sizeBytes : undefined);
+				if (sizeBytes === undefined) throw new Error(localize('projects.pickFailed', 'Could not add these materials. Try again.'));
+				const material = { resource, name, kind, sizeBytes } as const;
+				if (localFiles && file && sizeBytes <= previewCopyLimit && isPreviewableFile(file.name)) {
 					const stat = await this.fileService.stat(resource).catch(() => undefined);
-					if (stat?.kind === FileKind.File || !isCurrent()) return;
-					// A picker grants access to these bytes, without authorizing the containing directory.
-					await localFiles.ensure({ id: resource.toString(), name: basename(resource) }, async () => file);
-				}));
-			}
+					if (stat?.kind !== FileKind.File && isCurrent()) {
+						// A picker grants access to these bytes, without authorizing the containing directory.
+						await localFiles.ensure({ id: materialId(material), name }, async () => file);
+					}
+				}
+				return { material, file };
+			}));
 			const current = this.projects.state.get().selected;
 			if (this.isDisposed || !isCurrent() || current?.id !== project.id) return;
 			const materials = [...current.materials];
 			const previews: string[] = [];
-			for (const { resource, file } of entries) {
+			for (const { material, file } of additions) {
+				const { resource } = material;
 				if (materials.some(item => item.kind !== 'text' && item.resource.toString() === resource.toString())) continue;
-				materials.push({ resource, name: basename(resource), kind });
+				materials.push(material);
 				if (file) {
 					const key = previewKey(resource);
 					this.selectedFiles.set(key, file);
@@ -272,6 +283,7 @@ export class ProjectMaterials extends Disposable {
 			},
 			rows: project.materials.map(material => {
 				const id = materialId(material);
+				const sizeBytes = material.kind === 'file' ? material.sizeBytes : undefined;
 				const resolveFile = material.kind === 'file' ? async () => {
 					if (!localFiles || !isPreviewableFile(material.name)) return material.resource;
 					const stat = await this.fileService.stat(material.resource).catch(() => undefined);
@@ -282,7 +294,7 @@ export class ProjectMaterials extends Disposable {
 				return {
 					id, name: material.name, kind: material.kind === 'text' ? 'file' : material.kind,
 					tooltip: material.kind === 'text' ? undefined : material.resource.fsPath,
-					sizeBytes: material.kind === 'text' ? new TextEncoder().encode(material.content).length : undefined,
+					sizeBytes: material.kind === 'text' ? new TextEncoder().encode(material.content).length : sizeBytes,
 					readText: material.kind === 'text' ? async () => material.content : undefined,
 					previewText: material.kind === 'text' ? material.content.slice(0, textThumbnailLength) : undefined,
 					resolveFile,

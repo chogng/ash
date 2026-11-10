@@ -454,9 +454,14 @@ fn material_from_dto(material: ProjectMaterialDto) -> Result<ProjectMaterial, Rp
             .to_path_buf())
     };
     Ok(match material {
-        ProjectMaterialDto::File { path, name } => ProjectMaterial::File {
+        ProjectMaterialDto::File {
+            path,
+            name,
+            size_bytes,
+        } => ProjectMaterial::File {
             path: host_path(path)?,
             name,
+            size_bytes,
         },
         ProjectMaterialDto::Folder { path, name } => ProjectMaterial::Folder {
             path: host_path(path)?,

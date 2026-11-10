@@ -4,7 +4,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 
 /** Project text and source references that never grant file access. */
 export type ProjectMaterial =
-	| { readonly kind: 'file'; readonly name: string; readonly resource: URI; }
+	| { readonly kind: 'file'; readonly name: string; readonly resource: URI; readonly sizeBytes: number; }
 	| { readonly kind: 'folder'; readonly name: string; readonly resource: URI; }
 	| { readonly kind: 'text'; readonly id: string; readonly name: string; readonly content: string; };
 

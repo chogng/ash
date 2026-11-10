@@ -157,7 +157,9 @@ suite('Projects browsing', () => {
 
 	test('creates a project containing multiple material types and restores it through its owner', async () => {
 		using fixture = new ProjectsFixture();
-		const materials: ProjectMaterial[] = ['paper.pdf', 'photo.png', 'budget.xlsx'].map(name => ({ name, resource: URI.file(`/materials/${name}`), kind: 'file' }));
+		const materials: ProjectMaterial[] = ['paper.pdf', 'photo.png', 'budget.xlsx'].map((name, sizeBytes) => ({
+			name, resource: URI.file(`/materials/${name}`), kind: 'file', sizeBytes,
+		}));
 		assert.equal(await fixture.projectsView.create('research', 'Research', 'Compare the evidence', materials), true);
 		assert.deepEqual(fixture.projectsView.state.get().selected?.materials, materials);
 		using restored = fixture.services.createInstance(ProjectsService);

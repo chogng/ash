@@ -42,6 +42,10 @@ pub enum ProjectMaterialDto {
     File {
         path: PathUri,
         name: String,
+        /// Size in bytes at import.
+        #[serde(rename = "sizeBytes")]
+        #[ts(type = "number")]
+        size_bytes: u64,
     },
     Folder {
         path: PathUri,

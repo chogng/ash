@@ -3,6 +3,7 @@ use ash_projects::ProjectCommand;
 use ash_projects::ProjectCommandDisposition;
 use ash_projects::ProjectCommandRequest;
 use ash_projects::ProjectCoordinator;
+use ash_projects::ProjectMaterial;
 use ash_projects::ProjectScope;
 use ash_projects::ProjectStore;
 use ash_protocol::CommandId;
@@ -86,6 +87,77 @@ fn sqlite_projects_reopen_and_replay_with_missing_legacy_timestamps() {
         assert_eq!(replay.disposition, ProjectCommandDisposition::Replayed);
         assert_eq!(replay.project, legacy);
     }
+}
+
+#[test]
+fn sqlite_projects_remove_unsized_file_references_from_records_and_receipts() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let coordinator = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
+    let mut create = create_request();
+    let ProjectCommand::Create { materials, .. } = &mut create.command else {
+        unreachable!()
+    };
+    materials.extend([
+        ProjectMaterial::File {
+            path: directory.path().join("empty.txt"),
+            name: "empty.txt".into(),
+            size_bytes: 0,
+        },
+        ProjectMaterial::Folder {
+            path: directory.path().to_path_buf(),
+            name: "Folder".into(),
+        },
+        ProjectMaterial::Text {
+            id: "note".into(),
+            name: "Note".into(),
+            content: "Text".into(),
+        },
+    ]);
+    let created = coordinator.apply(create.clone()).unwrap().project;
+    drop(coordinator);
+
+    let old_path = directory.path().join("legacy.pdf");
+    std::fs::write(&old_path, "legacy source").unwrap();
+    let old_material = serde_json::json!({"kind": "file", "name": "legacy.pdf", "path": old_path});
+    let mut old_record = serde_json::to_value(&created).unwrap();
+    old_record["schemaVersion"] = 1.into();
+    old_record["materials"]
+        .as_array_mut()
+        .unwrap()
+        .insert(0, old_material.clone());
+    let mut old_request = serde_json::to_value(&create).unwrap();
+    old_request["command"]["materials"]
+        .as_array_mut()
+        .unwrap()
+        .push(old_material);
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "UPDATE projects SET record_json = ?1",
+            [old_record.to_string()],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE project_commands SET result_json = ?1, request_json = ?2",
+            [old_record.to_string(), old_request.to_string()],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE ash_schema_migrations SET version = 1 WHERE component = 'projects'",
+            [],
+        )
+        .unwrap();
+    drop(connection);
+
+    let reopened = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
+    assert_eq!(reopened.read(&create.project_id).unwrap(), created);
+    let replay = reopened.apply(create).unwrap();
+    assert_eq!(replay.disposition, ProjectCommandDisposition::Replayed);
+    assert_eq!(replay.project, created);
+    assert_eq!(std::fs::read_to_string(old_path).unwrap(), "legacy source");
 }
 
 #[test]

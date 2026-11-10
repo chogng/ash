@@ -22,10 +22,16 @@ use std::sync::Mutex;
 
 const MIGRATOR: Migrator<'_> = Migrator::new(
     "projects",
-    &[Migration::sql(
-        1,
-        include_str!("../../migrations/projects/0001_projects.sql"),
-    )],
+    &[
+        Migration::sql(
+            1,
+            include_str!("../../migrations/projects/0001_projects.sql"),
+        ),
+        Migration::sql(
+            2,
+            include_str!("../../migrations/projects/0002_remove_unsized_files.sql"),
+        ),
+    ],
 );
 
 /// SQLite implementation of complete Project records and retry-safe command receipts.

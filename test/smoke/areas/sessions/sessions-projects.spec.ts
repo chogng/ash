@@ -796,7 +796,8 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 	test.setTimeout(90_000);
 	let connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 	const sourcePath = join(testWorkspace.directory, 'retained-project-source.txt');
-	await writeFile(sourcePath, 'Project source bytes are independently owned.');
+	const source = 'Project source bytes are independently owned.';
+	await writeFile(sourcePath, source);
 	try {
 		let { client } = connection;
 		const first = (await client.request(APP_SERVER_METHODS['project/create'], {
@@ -804,7 +805,7 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		})).project;
 		const second = (await client.request(APP_SERVER_METHODS['project/create'], {
 			commandId: randomUUID(), projectId: randomUUID(), name: 'Source archive', description: '',
-			materials: [{ name: 'retained-project-source.txt', kind: 'file', path: pathToFileURL(sourcePath).toString() }],
+			materials: [{ name: 'retained-project-source.txt', kind: 'file', path: pathToFileURL(sourcePath).toString(), sizeBytes: Buffer.byteLength(source) }],
 		})).project;
 		let page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
@@ -870,53 +871,59 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		await expect(rowFor(second.name)).toHaveCount(0);
 		await expect(page.locator('.ash-projects').getByText('Looking to start a project?', { exact: true })).toBeVisible();
 		expect((await client.request(APP_SERVER_METHODS['project/list'], {})).projects.map(project => project.projectId)).toEqual([first.projectId]);
-		expect(await readFile(sourcePath, 'utf8')).toBe('Project source bytes are independently owned.');
+		expect(await readFile(sourcePath, 'utf8')).toBe(source);
 	} finally {
 		await connection.close();
 	}
 });
 
-test('Sessions Projects keeps PDFs and arbitrary file references inside a project', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
-	if (!('windows' in application)) { throw new Error('Expected Electron application'); }
-	const directory = await realpath(testWorkspace.directory);
-	const paths = ['paper.pdf', 'notes.txt', 'data.csv'].map(name => join(directory, name));
-	await Promise.all(paths.map(path => writeFile(path, 'Project source material')));
-	const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+test('Sessions Projects persists imported file sizes across window reopen', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 	try {
-		await application.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, directory);
+		const { client } = connection;
+		const { project } = await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(), name: 'Mixed materials', description: '', materials: [], scope: 'chat',
+		});
+		const directory = await realpath(testWorkspace.directory);
+		const files = [
+			{ name: 'paper.pdf', content: 'Project source material', display: '23B' },
+			{ name: 'notes.txt', content: '季节', display: '6B' },
+			{ name: 'data.csv', content: '', display: '0B' },
+		];
+		await Promise.all(files.map(file => writeFile(join(directory, file.name), file.content)));
 		let page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
-		let projects = page.locator('.ash-projects');
-		await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
-		const dialog = page.getByRole('dialog', { name: 'Create a project' });
-		await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Mixed materials');
-		await dialog.getByRole('button', { name: 'Use a folder', exact: true }).click();
-		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
-		await expect(dialog).toHaveCount(0);
-		await expect(projects.locator('.ash-projects-material')).toHaveCount(1);
-		await application.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, paths);
-		await projects.getByRole('button', { name: 'Add files', exact: true }).click();
-		await expect(projects.locator('.ash-projects-material')).toHaveCount(4);
+		const openFiles = async () => {
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
+			const projects = page.locator('.ash-projects');
+			await projects.getByRole('button', { name: project.name, exact: true }).click();
+			await projects.getByRole('tab', { name: 'Files', exact: true }).click();
+			return projects.getByRole('region', { name: 'Project files', exact: true });
+		};
+		let materials = await openFiles();
+		await materials.getByRole('button', { name: 'Add project materials', exact: true }).click();
+		const chooser = page.waitForEvent('filechooser');
+		await page.getByRole('menuitem', { name: 'Upload or add files', exact: true }).click();
+		await (await chooser).setFiles(files.map(file => join(directory, file.name)));
+		for (const file of files) {
+			await expect(materials.getByRole('button', { name: file.name, exact: true })).toHaveAccessibleDescription(new RegExp(file.display));
+		}
+		const saved = await client.request(APP_SERVER_METHODS['project/read'], { projectId: project.projectId });
+		expect(saved.project.materials).toEqual(expect.arrayContaining(files.map(file => ({
+			name: file.name, kind: 'file', path: pathToFileURL(join(directory, file.name)).toString(), sizeBytes: Buffer.byteLength(file.content),
+		}))));
 		page = await workbench.reopenAgentsWindow(application, page);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
-		projects = page.locator('.ash-projects');
-		await projects.getByRole('button', { name: 'Mixed materials', exact: true }).click();
-		await expect(projects.locator('.ash-projects-material')).toHaveCount(4);
-		await projects.getByRole('button', { name: 'notes.txt', exact: true }).click();
-		await expect(page.getByRole('tabpanel', { name: 'notes.txt', exact: true })).toContainText('Project source material');
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
-		await expect(projects).toBeVisible();
-		await projects.getByRole('button', { name: 'Mixed materials', exact: true }).click();
-		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Mixed materials');
-		await projects.getByRole('button', { name: 'Remove paper.pdf from project', exact: true }).click();
+		materials = await openFiles();
+		for (const file of files) {
+			await expect(materials.getByRole('button', { name: file.name, exact: true })).toHaveAccessibleDescription(new RegExp(file.display));
+		}
+		await materials.getByRole('checkbox', { name: 'Select paper.pdf', exact: true }).check();
+		await materials.getByRole('button', { name: 'Remove selected (1)', exact: true }).click();
 		const confirm = page.getByRole('dialog').filter({ hasText: 'Remove paper.pdf from this project?' });
 		await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
-		await expect(projects.locator('.ash-projects-material')).toHaveCount(3);
-		expect(await readFile(paths[0], 'utf8')).toBe('Project source material');
+		await expect(materials.getByRole('button', { name: 'paper.pdf', exact: true })).toHaveCount(0);
+		expect(await readFile(join(directory, 'paper.pdf'), 'utf8')).toBe(files[0].content);
 	} finally {
-		await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, original);
-		await original.dispose();
+		await connection.close();
 	}
 });
 
@@ -956,7 +963,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const directory = await realpath(testWorkspace.directory);
 			const { client } = connection;
 			const projectId = randomUUID();
-			const material = (name: string) => ({ name, kind: 'file' as const, path: pathToFileURL(join(testWorkspace.directory, name)).toString() });
+			const material = (name: string) => ({ name, kind: 'file' as const, path: pathToFileURL(join(testWorkspace.directory, name)).toString(), sizeBytes: 0 });
 			const retained = material('retained.txt');
 			const removed = material('removed.txt');
 			const added = material('from-other-window.txt');
