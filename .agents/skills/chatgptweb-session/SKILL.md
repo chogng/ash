@@ -43,5 +43,6 @@ description: Integrate ChatGPT Web capabilities into Ash Chat and Sessions throu
 - 涉及 Ash 本地状态时，验证远端不可用时仍可操作该本地状态，并检查不触发远端写入。项目资料验证打开项目后由 Ash 落盘、Settings 更改目录，以及重开窗口后离线打开已保存副本。
 - 入口与恢复查 `src/ash/sessions/contrib/chatgptweb/test/browser/chatGPTWeb.test.ts`。检查打开草稿不发送，以及恢复时选中同一个会话。
 - 列表、归档和外观查同目录的 `chatgptList.test.ts`。用远端请求记录确认只归档目标会话、重试只处理剩余项，以及外观在远端详情不可用时仍可保存并在两个入口显示。
+- 新增或修改 ChatGPT Web 请求时，在 `ChatGPTTransport` 同时检查 IPC 对方法、路径和参数的校验，以及 Chromium 发出请求前的认证头处理。回归测试要经过 Chromium 的认证回调，确认批准的 ChatGPT 路由带有当前账号的认证头，其他来源不携带这些头。模拟响应通过后，从真实 Ash 窗口做一次只读验证。若返回 401，先区分认证头被清除和远端拒绝有效登录，再决定是否检查响应字段。
 - 草稿选项目查 `chatgptBrowser.test.ts`。从侧栏改图标和颜色后，验证两个选择入口及当前项目标签同步更新。选 Ash 项目后发送，确认归属写入 Ash 项目服务，消息仍经 ChatGPT 发送，并检查远端项目归属的写入次数为零。
 - 改动涉及真实桌面入口或切换时，按 `test/smoke/areas/sessions/chatgptNative.spec.ts` 验证混合侧栏、首次发送和恢复，确认同一窗口里两种来源各自沿原身份继续。
