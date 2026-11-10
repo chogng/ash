@@ -34,6 +34,8 @@ import { ISessionsListModelService } from '../../../services/sessions/browser/se
 
 import { sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
 import { NativeConversationShare } from './nativeConversationShare.js';
+import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import type { URI } from '../../../../base/common/uri.js';
 
 export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
@@ -68,6 +70,27 @@ type ProjectHistory =
 	| { readonly state: 'idle' | 'more'; readonly load: () => void; }
 	| { readonly state: 'loading' | 'complete' | 'unavailable' | 'error'; };
 
+export interface ProjectMaterialRow {
+	readonly id: string;
+	readonly name: string;
+	readonly kind: 'file' | 'folder';
+	readonly tooltip?: string;
+	readonly download?: boolean;
+	readonly open?: () => Promise<void>;
+	readonly remove?: () => Promise<void>;
+}
+
+export interface CatalogProjectDetails {
+	readonly key: string;
+	readonly data: IObservable<{
+		readonly description: string;
+		readonly materials: readonly ProjectMaterialRow[] | undefined;
+		readonly canEdit: boolean;
+	} | undefined>;
+	load(signal: AbortSignal): Promise<void>;
+	readonly addFiles?: (resources: readonly URI[]) => Promise<void>;
+}
+
 export interface ChatListProject {
 	/** Stable identity for membership and persisted expansion. */
 	readonly id: string;
@@ -76,6 +99,12 @@ export interface ChatListProject {
 	readonly createdAt?: number;
 	readonly updatedAt?: number;
 	readonly history: ProjectHistory;
+	readonly details?: CatalogProjectDetails;
+	readonly composer?: {
+		/** Opaque draft scope. The catalog owner includes the account and project identity. */
+		readonly key: string;
+		create(isVisible: () => boolean): IChatWidgetModel & { readonly submitted: boolean; };
+	};
 	readonly archived?: boolean;
 	readonly archive?: () => Promise<boolean>;
 	readonly restore?: () => void;

@@ -2,10 +2,12 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isWeb } from '../../../../base/common/platform.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
@@ -15,17 +17,22 @@ import { ISessionProviderScopeService } from '../../../browser/agentHost/session
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ReplyChatInputFactory } from '../../chat/browser/replyChatInput.js';
+import type { ChatListProject } from '../../chat/browser/chatListModel.js';
 import { ProjectChatModel } from './projectChatModel.js';
+
+type CatalogProjectComposer = NonNullable<ChatListProject['composer']>;
 
 /** Retains a Chat draft for the selected project independently of metadata refreshes. */
 export class ProjectChatInput extends Disposable {
 	public readonly element: HTMLElement;
-	private readonly widget: ChatWidget<ProjectChatModel>;
+	private readonly widget: ChatWidget<ReturnType<CatalogProjectComposer['create']>>;
 
 	constructor(
 		ownerDocument: Document,
-		projectId: string,
+		target: { readonly projectId: string; } | CatalogProjectComposer,
 		newChat: () => void,
+		isVisible: () => boolean,
+		@IInstantiationService instantiation: IInstantiationService,
 		@ISessionProviderScopeService scopes: ISessionProviderScopeService,
 		@ISessionsManagementService sessions: ISessionsManagementService,
 		@ICommandService commands: ICommandService,
@@ -37,14 +44,21 @@ export class ProjectChatInput extends Disposable {
 		@IEditorService editors: IEditorService,
 	) {
 		super();
-		const scope = this._register(scopes.createScope(undefined, LOCAL_AGENT_HOST_PROVIDER_ID));
-		// Local Chat Projects provide membership while the Chat draft keeps its usual workspace.
-		const draft = sessions.createUntitledSession(undefined, { type: 'current' }, LOCAL_AGENT_HOST_PROVIDER_ID, false, undefined, {
-			kind: isWeb ? undefined : 'chat',
-			projectId,
-		});
-		this._register(toDisposable(() => sessions.discardUntitledSession(draft.untitledSessionId)));
-		const model = scope.createInstance(ProjectChatModel, draft);
+		const local = 'projectId' in target;
+		let scope = instantiation;
+		let model: ReturnType<CatalogProjectComposer['create']>;
+		if (!local) {
+			model = target.create(isVisible);
+		} else {
+			scope = this._register(scopes.createScope(undefined, LOCAL_AGENT_HOST_PROVIDER_ID));
+			// Local Chat Projects provide membership while the Chat draft keeps its usual workspace.
+			const draft = sessions.createUntitledSession(undefined, { type: 'current' }, LOCAL_AGENT_HOST_PROVIDER_ID, false, undefined, {
+				kind: isWeb ? undefined : 'chat',
+				projectId: target.projectId,
+			});
+			this._register(toDisposable(() => sessions.discardUntitledSession(draft.untitledSessionId)));
+			model = scope.createInstance(ProjectChatModel, draft);
+		}
 		const inputFactory = scope.createInstance(ReplyChatInputFactory);
 		const inputLabel = localize('projects.newChat', 'New chat in project');
 		this.element = h(ownerDocument, 'section', {
@@ -57,15 +71,17 @@ export class ProjectChatInput extends Disposable {
 			if (hint) status(hint);
 		}));
 		try {
-			this.widget = this._register(scope.createInstance<ChatWidget<ProjectChatModel>>(
-				ChatWidget, this.element, `ash-project-chat-${draft.untitledSessionId}`, model, newChat,
+			this.widget = this._register(scope.createInstance<ChatWidget<typeof model>>(
+				ChatWidget, this.element, `ash-project-chat-${model.untitledSessionId ?? generateUuid()}`, model, newChat,
 				menus, contextViews, commands, accessibleViews, notifications, opener, editors, undefined,
-				(container: HTMLElement, delegate: ChatInputDelegate) => inputFactory.create(container, delegate, model, {
+				(container: HTMLElement, delegate: ChatInputDelegate) => inputFactory.create(container, local ? delegate : {
+					...delegate, voiceConversation: undefined, responseProgressInTranscript: false,
+				}, model, {
 					inputLabel,
 					explicitModelSelection: true,
 					literalServerCommands: true,
-					useWorkbenchModelManagement: true,
-					persistentDraftScope: 'ash-chat',
+					useWorkbenchModelManagement: local ? true : undefined,
+					persistentDraftScope: local ? 'ash-chat' : undefined,
 				}),
 				{ showWelcome: false },
 			));

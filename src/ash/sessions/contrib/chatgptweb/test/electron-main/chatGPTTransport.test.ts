@@ -457,6 +457,25 @@ suite('ChatGPT transport', () => {
 		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'POST', 'PATCH', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST', 'PATCH']);
 		assert.deepEqual(calls[2], { method: 'POST', path: '/backend-api/projects' });
 		assert.deepEqual(calls[9], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
+		const projectHeaders = { 'ChatGPT-Project-Id': 'g-p-project' };
+		const upload = { gizmo_id: 'g-p-project', use_case: 'gizmo', mime_type: 'text/plain', file_name: 'notes.txt' };
+		const file = { file_id: 'file-project-notes', location: 'fs', name: 'notes.txt', size: 12, type: 'text/plain', last_modified: 1 };
+		for (const [method, path, headers, body] of [
+			['GET', '/gizmos/g-p-project?include_file_limits=true', {}, undefined],
+			['POST', '/files', projectHeaders, { ...upload, file_size: 12, reset_rate_limits: false, supports_direct_azure_multipart: false, timezone_offset_min: 0 }],
+			['POST', '/files/process_upload_stream', projectHeaders, { ...upload, file_id: file.file_id, entry_surface: 'project_sources', index_for_retrieval: true }],
+			['POST', '/projects/g-p-project/files', {}, { files: [file] }],
+			['DELETE', '/projects/g-p-project/files/file-project-notes', {}, undefined],
+		] as const) {
+			const id = randomUUID();
+			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers, body: body && JSON.stringify(body) }]);
+			await channel.call('', 'cancel', [id]);
+		}
+		assert.equal(calls.length, 18);
+		await assert.rejects(channel.call('', 'request', [randomUUID(), {
+			path: '/service/backend-api/files/process_upload_stream', method: 'POST', headers: projectHeaders,
+			body: JSON.stringify({ ...upload, gizmo_id: 'g-p-other', file_id: file.file_id, entry_surface: 'project_sources', index_for_retrieval: true }),
+		}]), TypeError);
 		for (const [method, path, body] of [
 			['POST', '/pins', '{}'],
 			['POST', '/projects', '{"name":" ","instructions":"","emoji":null,"theme":null}'],
@@ -469,6 +488,9 @@ suite('ChatGPT transport', () => {
 			['DELETE', '/gizmos/g-p-project/conversations', undefined],
 			['DELETE', '/gizmos/g-p-project?all=true', undefined],
 			['DELETE', '/gizmos/g-p-project', '{}'],
+			['GET', '/gizmos/g-p-project?include_file_limits=true&include_file_limits=true', undefined],
+			['POST', '/projects/g-p-project/files', JSON.stringify({ files: [{ ...file, file_id: '../other' }] })],
+			['DELETE', '/projects/g-p-project/files/file-project-notes?all=true', undefined],
 			['DELETE', '/models', undefined], ['POST', '/conversation/chat', '{}'], ['PATCH', '/conversation/chat', '{"is_visible":false}'],
 			['PATCH', '/conversation/chat', '{"is_starred":true,"gizmo_id":"g-p-project"}'],
 			['PATCH', '/conversation/chat', '{"current_node_id":"../other"}'],
@@ -478,7 +500,7 @@ suite('ChatGPT transport', () => {
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 13);
+		assert.equal(calls.length, 18);
 	}));
 
 	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {
