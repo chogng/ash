@@ -1,4 +1,3 @@
-import './filterTabs.css';
 import './sessionsSearchDialog.css';
 import { h } from '../../../base/browser/dom.js';
 import { Button } from '../../../base/browser/ui/button/button.js';

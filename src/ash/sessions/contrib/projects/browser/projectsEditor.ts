@@ -4,12 +4,14 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
+import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
-import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import type { Project } from '../../../../platform/projects/common/projectService.js';
@@ -28,11 +30,24 @@ import { ProjectsList } from './projectsList.js';
 import { ProjectsView } from './projectsView.js';
 import './projects.css';
 
+type ProjectSection = 'overview' | 'chats' | 'files';
+
+interface ProjectDetail extends IDisposable {
+	readonly element: HTMLElement;
+	readonly panels: Record<ProjectSection, HTMLElement>;
+	readonly chats: HTMLElement;
+	readonly card: HTMLElement;
+	readonly instructions: HTMLElement;
+	readonly files: HTMLElement;
+	section: ProjectSection;
+}
+
 /** Hosts the Projects overview and opened project details. */
 export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.projects';
 	public domNode!: HTMLElement;
 	private readonly content = this._register(new DisposableStore());
+	private readonly projectDetail = this._register(new MutableDisposable<ProjectDetail>());
 	private projectMaterials!: ProjectMaterials;
 	private projectList!: ProjectsList;
 	private projectActions!: ProjectsActions;
@@ -178,7 +193,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const data = details?.data.read(reader);
 			const root = this.projectMaterials.fileRoot.read(reader);
 			const shown = this.shown.read(reader);
-			this.projectMaterials.setCatalogProject(shown ? details?.key : undefined, root);
+			const materialsKey = state.selected ? `local:${state.selected.id}` : details?.key;
+			this.projectMaterials.setProject(shown ? materialsKey : undefined, root);
 			const loadedMaterials = shown && load?.key === details?.key && load?.phase === 'loaded'
 				? data?.materials?.filter(file => file.kind === 'file') : undefined;
 			// Chat state can reproject unchanged rows after another window has saved a newer list.
@@ -259,7 +275,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		this.activeProjectInput?.setVisible(visible);
+		this.activeProjectInput?.setVisible(visible && this.projectDetail.value?.section !== 'files');
 		if (!visible && this.activeProjectInput?.submitted) this.activeProjectInput = undefined;
 		this.shown.set(visible, undefined);
 		if (visible) {
@@ -280,7 +296,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 	public override focus(): void {
 		if (this.projects.state.get().selectedId || this.projects.state.get().conversationProjectId !== undefined) {
-			if (this.activeProjectInput) this.activeProjectInput.focus();
+			if (this.activeProjectInput && this.projectDetail.value?.section !== 'files') this.activeProjectInput.focus();
 			else this.focusPage();
 		} else {
 			this.projectsView.focusCreate();
@@ -324,13 +340,19 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
 		const focusedInComposer = this.activeProjectInput?.element.contains(focused) ?? false;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
-		const detail = this.body.querySelector<HTMLElement>('.ash-projects-detail');
-		const sameProject = detail !== null && detail.dataset.projectDetail === projectId;
-		const overview = sameProject ? detail.querySelector<HTMLElement>('.ash-projects-overview') : undefined;
-		const scroller = overview?.scrollTop ? overview : this.domNode;
-		const scrollTop = overview ? scroller.scrollTop : 0;
-		const viewportTop = scrollTop ? scroller.getBoundingClientRect().top : 0;
-		const anchor = scrollTop && overview ? Array.from(overview.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
+		const detail = this.projectDetail.value;
+		const sameProject = detail !== undefined && detail.element.dataset.projectDetail === projectId;
+		if (!sameProject) {
+			this.projectMaterials.clearSelection();
+			this.projectDetail.clear();
+		}
+		const scroller = sameProject
+			? detail.section !== 'files' && detail.chats.scrollTop ? detail.chats : detail.panels[detail.section]
+			: undefined;
+		const scrollTop = scroller?.scrollTop ?? 0;
+		const cardScrollTop = sameProject ? detail.card.scrollTop : 0;
+		const viewportTop = scroller?.getBoundingClientRect().top ?? 0;
+		const anchor = scrollTop && scroller ? Array.from(scroller.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
 			.find(row => row.getBoundingClientRect().bottom > viewportTop) : undefined;
 		const anchorTop = anchor?.getBoundingClientRect().top;
 		this.projectList.stopUpdatingTimes();
@@ -342,7 +364,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				this.projectInputs.deleteAndDispose(key);
 			}
 		}
-		if (projectId === undefined || detail?.dataset.projectDetail !== projectId) this.body.replaceChildren();
+		if (!sameProject) this.body.replaceChildren();
 		this.domNode.classList.toggle('project-detail-open', projectId !== undefined);
 		this.domNode.setAttribute('aria-label', projectName ?? localize('projects.title', 'Projects'));
 		this.message.textContent =
@@ -373,12 +395,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			else this.focusPage();
 		}
 		// Restore the visible row after rebuilding the list, including when new rows appear above it.
-		if (scrollTop && overview) {
-			const replacement = anchor && Array.from(overview.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
+		if (scrollTop && scroller) {
+			const replacement = anchor && Array.from(scroller.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
 				.find(row => row.dataset.projectControl === anchor.dataset.projectControl);
 			scroller.scrollTop = replacement && anchorTop !== undefined
 				? scroller.scrollTop + replacement.getBoundingClientRect().top - anchorTop : scrollTop;
 		}
+		if (cardScrollTop && detail) detail.card.scrollTop = cardScrollTop;
 	}
 
 	private button(parent: HTMLElement, options: IButtonOptions, key?: string): Button {
@@ -391,48 +414,107 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	private renderProject(id: string, chats: readonly ChatListEntry[], conversationProject: ChatListGroup['project'], localProject: Project | undefined,
 		data: ReturnType<CatalogProjectDetails['data']['get']>, detailsPhase: 'loading' | 'loaded' | 'error' | undefined): void {
-		const document = this.domNode.ownerDocument;
-		const layout = this.body.querySelector<HTMLElement>('.ash-projects-detail') ?? h(document, 'div', { className: 'ash-projects-detail' });
+		const detail = this.projectDetail.value ?? this.createProjectDetail(id);
+		const { element: layout, card, chats: chatContent, instructions, files } = detail;
 		const details = conversationProject?.details;
-		layout.dataset.projectDetail = id;
-		layout.classList.toggle('with-detail-card', !!(localProject || details));
-		const detailContent = layout.querySelector<HTMLElement>('.ash-projects-detail-content') ?? h(document, 'div', { className: 'ash-projects-detail-content' });
-		const overview = layout.querySelector<HTMLElement>('.ash-projects-overview') ?? h(document, 'section', { className: 'ash-projects-overview' });
-		overview.querySelector('.ash-projects-conversations')?.remove();
-		this.projectList.renderConversations(overview, chats, conversationProject, this.content);
-		if (overview.parentElement !== detailContent) detailContent.append(overview);
-		if (detailContent.parentElement !== layout) layout.append(detailContent);
-		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject);
-		layout.querySelector('.ash-projects-detail-card')?.remove();
+		chatContent.replaceChildren();
+		this.projectList.renderConversations(chatContent, chats, conversationProject, this.content);
+		files.replaceChildren();
+		card.hidden = !localProject && !details;
+		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject, detail.section !== 'files');
 		if (localProject) {
 			const isCurrent = (reader?: IReader) => this.shown.read(reader) && this.projects.state.read(reader).selectedId === id;
-			detailContent.append(this.renderProjectDetailCard(localProject.description,
-				() => this.showProjectDialog({ project: localProject, instructionsOnly: true }),
-				target => this.projectMaterials.renderLocal(target, localProject, this.projects.state.get().busy, isCurrent, this.content)));
+			instructions.replaceChildren(this.renderProjectInstructions(localProject.description,
+				() => this.showProjectDialog({ project: localProject, instructionsOnly: true })));
+			files.append(this.projectMaterials.renderLocal(files, localProject, this.projects.state.get().busy, isCurrent, this.content));
 		} else if (details) {
 			const failed = detailsPhase === 'error' || detailsPhase === 'loaded' && !data?.materials;
 			const cachedNames = data?.materials === undefined
 				? this.projects.readCatalogMaterialNames(conversationProject.preferenceKey ?? details.key) : undefined;
 			const materialsSnapshot = data?.materials ?? cachedNames?.map(file => ({ ...file, kind: 'file' as const }));
 			const editDetails = conversationProject?.editDetails;
-			const card = this.renderProjectDetailCard(data?.description,
-				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails, true); } : undefined,
-				target => this.projectMaterials.renderCatalog(target, details.key, {
-					rows: materialsSnapshot,
-					upload: data?.canEdit && data.materials ? details.upload : undefined,
-					isCurrent: reader => this.shown.read(reader) && this.projects.state.read(reader).conversationProjectId === id
-						&& this.projectGroups.read(reader).find(group => group.key === id)?.project?.details?.key === details.key,
-					status: !details.load ? undefined : failed ? {
-						text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
-					} : materialsSnapshot ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
-				}, this.content));
-			card.dataset.catalogProjectMaterials = '';
-			detailContent.append(card);
+			instructions.replaceChildren(this.renderProjectInstructions(data?.description,
+				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails, true); } : undefined));
+			files.append(this.projectMaterials.renderCatalog(files, details.key, {
+				rows: materialsSnapshot,
+				upload: data?.canEdit && data.materials ? details.upload : undefined,
+				isCurrent: reader => this.shown.read(reader) && this.projects.state.read(reader).conversationProjectId === id
+					&& this.projectGroups.read(reader).find(group => group.key === id)?.project?.details?.key === details.key,
+				status: !details.load ? undefined : failed ? {
+					text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
+				} : materialsSnapshot ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
+			}, this.content));
+		} else {
+			instructions.replaceChildren();
+			files.append(this.projectMaterials.renderCatalog(files, id, {
+				rows: [], isCurrent: () => false,
+			}, this.content));
 		}
-		if (layout.parentElement !== this.body) this.body.append(layout);
 	}
 
-	private renderProjectComposer(layout: HTMLElement, id: string, composer: NonNullable<ChatListGroup['project']>['composer'], isLocal: boolean): void {
+	private createProjectDetail(id: string): ProjectDetail {
+		const document = this.domNode.ownerDocument;
+		const element = h(document, 'div', { className: 'ash-projects-detail' });
+		element.dataset.projectDetail = id;
+		const navigation = h(document, 'div', { className: 'ash-projects-detail-tabs' });
+		const content = h(document, 'div', { className: 'ash-projects-detail-content' });
+		const prefix = generateUuid();
+		const sections = [
+			{ id: 'overview', label: localize('projects.overviewTab', 'Overview') },
+			{ id: 'chats', label: localize('projects.chatsTab', 'Chats') },
+			{ id: 'files', label: localize('projects.filesTab', 'Files') },
+		] as const;
+		const tabs = sections.map(tab => ({ ...tab, value: tab.id, tabId: `${prefix}-tab-${tab.id}`, panelId: `${prefix}-panel-${tab.id}` }));
+		const panels = {
+			overview: h(document, 'div', { className: 'ash-projects-overview' }),
+			chats: h(document, 'div', { className: 'ash-projects-chats' }),
+			files: h(document, 'div', { className: 'ash-projects-files' }),
+		};
+		const chats = h(document, 'div', { className: 'ash-projects-chat-content' });
+		const instructions = h(document, 'div', { className: 'ash-projects-instructions-content' });
+		const files = h(document, 'div', { className: 'ash-projects-file-content' });
+		const card = h(document, 'div', { className: 'ash-projects-detail-card' }, instructions, files);
+		panels.overview.append(chats, card);
+		const tabList = new TabList<ProjectSection>(navigation, {
+			ariaLabel: localize('projects.sections', 'Project sections'),
+			presentation: 'navigation',
+			onActivate: section => {
+				detail.section = section;
+				tabList.setTabs(tabs, section);
+				// The overview and dedicated tabs share the same controls, selection and preview lifetime.
+				const chatHost = section === 'chats' ? panels.chats : panels.overview;
+				const fileHost = section === 'files' ? panels.files : card;
+				if (chats.parentElement !== chatHost) chatHost.prepend(chats);
+				if (files.parentElement !== fileHost) fileHost.append(files);
+				for (const tab of tabs) panels[tab.value].hidden = tab.value !== section;
+				const composer = this.activeProjectInput;
+				if (composer) {
+					composer.element.hidden = section === 'files';
+					composer.setVisible(this.isVisible() && !composer.element.hidden);
+				}
+			},
+		});
+		tabList.setTabs(tabs, 'overview');
+		for (const tab of tabs) {
+			const panel = panels[tab.value];
+			panel.id = tab.panelId;
+			panel.setAttribute('role', 'tabpanel');
+			panel.setAttribute('aria-labelledby', tab.tabId);
+			panel.tabIndex = 0;
+			panel.hidden = tab.value !== 'overview';
+			content.append(panel);
+		}
+		element.append(navigation, content);
+		this.body.append(element);
+		const detail: ProjectDetail = Object.assign(toDisposable(() => {
+			tabList.dispose();
+			element.remove();
+		}), { element, panels, chats, card, instructions, files, section: 'overview' as const });
+		this.projectDetail.value = detail;
+		return detail;
+	}
+
+	private renderProjectComposer(layout: HTMLElement, id: string, composer: NonNullable<ChatListGroup['project']>['composer'], isLocal: boolean, visible: boolean): void {
 		if (!isLocal && !composer) {
 			this.activeProjectInput?.setVisible(false);
 			this.activeProjectInput = undefined;
@@ -460,13 +542,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			layout.querySelector('.ash-projects-composer')?.remove();
 			layout.append(input.element);
 		}
-		input.setVisible(this.isVisible());
+		input.element.hidden = !visible;
+		input.setVisible(this.isVisible() && visible);
 	}
 
-	private renderProjectDetailCard(
+	private renderProjectInstructions(
 		description: string | undefined,
 		edit: (() => void) | undefined,
-		renderMaterials: (target: HTMLElement) => HTMLElement,
 	): HTMLElement {
 		const document = this.domNode.ownerDocument;
 		const label = localize('projects.instructions', 'Instructions');
@@ -493,14 +575,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}, heading);
 		if (description) {
 			guidance.append(h(document, 'p', { className: 'ash-projects-description' }, description));
-		} else if (description === '' && edit) {
+		} else if (edit) {
 			guidance.append(h(document, 'p', { className: 'ash-projects-muted' },
 				localize('projects.noInstructions', 'Add instructions for this project.')));
 		}
-		const sections = h(document, 'div', { className: 'ash-projects-detail-sections' }, guidance);
-		const card = h(document, 'div', { className: 'ash-projects-detail-card' }, sections);
-		sections.append(renderMaterials(card));
-		return card;
+		return guidance;
 	}
 
 	private renderDetailLoading(): void {
@@ -508,7 +587,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const placeholder = (className = '') =>
 			h(document, 'span', { className: `ash-projects-placeholder ${className}` });
 		const skeleton = h(document, 'div', {
-			className: 'ash-projects-skeleton ash-projects-detail with-detail-card',
+			className: 'ash-projects-skeleton ash-projects-detail',
 			attributes: { 'aria-hidden': 'true' },
 		});
 		const overview = h(
@@ -525,16 +604,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				placeholder('ash-projects-skeleton-short'),
 			),
 		);
-		const card = h(
-			document,
-			'div',
-			{ className: 'ash-projects-detail-card' },
-			h(document, 'div', { className: 'ash-projects-guidance ash-projects-skeleton-lines' },
-				placeholder('ash-projects-skeleton-section-title'), placeholder()),
-			h(document, 'div', { className: 'ash-projects-materials ash-projects-skeleton-lines' },
-				placeholder('ash-projects-skeleton-section-title'), placeholder(), placeholder('ash-projects-skeleton-short')),
-		);
-		skeleton.append(overview, card);
+		skeleton.append(overview);
 		this.body.append(skeleton);
 	}
 

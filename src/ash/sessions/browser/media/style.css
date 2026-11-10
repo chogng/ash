@@ -1,5 +1,7 @@
 /* Agents Window visual defaults and shared-widget presentations.
  * Layout belongs to workbench.css; page-specific appearances stay with their owners. */
+@import "../ui/filterTabs.css";
+
 /* Font rendering is shared; visual weight is owned by the Agents Window. */
 .ash-sessions-window {
 	/* Window-owned type roles also apply to shared widgets and anchored popups. */

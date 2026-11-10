@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 import { suite, test, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { Editor } from '../../../../../../../test/automation/editor.js';
@@ -69,7 +69,15 @@ suite('Projects toolbar', () => {
 			await expect(dialog).toHaveCount(0);
 			await expect(projects).toHaveAttribute('aria-label', 'Local research');
 			await expect(projects.locator('.ash-projects-composer')).toBeVisible();
-			const context = projects.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true });
+			const overview = projects.getByRole('tabpanel', { name: chinese ? '概览' : 'Overview', exact: true });
+			const overviewTab = projects.getByRole('tab', { name: chinese ? '概览' : 'Overview', exact: true });
+			const filesTab = projects.getByRole('tab', { name: chinese ? '文件' : 'Files', exact: true });
+			const overviewContext = overview.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true });
+			await expect(overview.getByRole('heading', { name: chinese ? '项目对话' : 'Project conversations', exact: true })).toBeVisible();
+			await expect(overview.getByRole('region', { name: chinese ? '指令' : 'Instructions', exact: true })).toBeVisible();
+			await expect(overviewContext).toBeVisible();
+			await filesTab.click();
+			const context = projects.getByRole('region', { name: chinese ? '项目文件' : 'Project files', exact: true });
 			await expect(context.getByText(chinese
 				? '添加 PDF、文档或其他文件，供此项目参考。'
 				: 'Add PDFs, documents, or other files to reference in this project.', { exact: true })).toBeVisible();
@@ -158,6 +166,7 @@ suite('Projects toolbar', () => {
 			const card = projects.getByRole('button', { name: 'Renamed research', exact: true });
 			await expect(card.locator('.ash-projects-card-mark [data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
 			await card.click();
+			await filesTab.click();
 			const note = context.getByRole('button', { name: 'Reading notes', exact: true });
 			await expect(note).toBeVisible();
 			await expect(note).toHaveAttribute('aria-haspopup', 'dialog');
@@ -172,6 +181,18 @@ suite('Projects toolbar', () => {
 			await page.keyboard.press('Escape');
 			await expect(preview).toHaveCount(0);
 			await expect(note).toBeFocused();
+			const selectNote = context.getByRole('checkbox', { name: chinese ? '选择 Reading notes' : 'Select Reading notes', exact: true });
+			await selectNote.press('Space');
+			await expect(selectNote).toBeChecked();
+			await overviewTab.click();
+			await expect(overviewContext.getByRole('checkbox', { name: chinese ? '选择 Reading notes' : 'Select Reading notes', exact: true })).toBeChecked();
+			await filesTab.click();
+			await expect(selectNote).toBeChecked();
+			await context.getByRole('button', { name: chinese ? '移除所选（1）' : 'Remove selected (1)', exact: true }).press('Enter');
+			const confirm = page.getByRole('dialog').filter({ hasText: chinese ? '从此项目移除 Reading notes？' : 'Remove Reading notes from this project?' });
+			await confirm.getByRole('button', { name: chinese ? '移除' : 'Remove', exact: true }).click();
+			await expect(note).toHaveCount(0);
+			await expect(addMaterials).toBeFocused();
 			await breadcrumb.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
 			await remote.click();
 			await expect(remoteTitle).toBeDisabled();
@@ -198,6 +219,11 @@ suite('Projects toolbar', () => {
 			const input = editor.input;
 			await editor.waitForEditorFocus();
 			await expect(composer.getByRole('button', { name: chinese ? '项目或文件夹' : 'Project or folder', exact: true })).toHaveCount(0);
+			const tabs = page.getByRole('tablist', { name: chinese ? '项目页签' : 'Project sections', exact: true });
+			const overviewTab = tabs.getByRole('tab', { name: chinese ? '概览' : 'Overview', exact: true });
+			const chatsTab = tabs.getByRole('tab', { name: chinese ? '对话' : 'Chats', exact: true });
+			const filesTab = tabs.getByRole('tab', { name: chinese ? '文件' : 'Files', exact: true });
+			await filesTab.click();
 			const materials = page.locator('.ash-projects-materials');
 			await expect(materials.getByRole('button', { name: chinese ? '使用文件夹' : 'Use a folder' })).toHaveCount(0);
 			const addMaterials = materials.getByRole('button', { name: chinese ? '添加项目资料' : 'Add project materials', exact: true });
@@ -212,6 +238,7 @@ suite('Projects toolbar', () => {
 			await expect(useFolder).toBeFocused();
 			await useFolder.press('Escape');
 			await expect(addMaterials).toBeFocused();
+			await overviewTab.click();
 
 			const editorHost = form.locator('.ash-chat-input-editor-host');
 			const attach = form.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
@@ -282,10 +309,27 @@ suite('Projects toolbar', () => {
 			await expect(card).toBeVisible();
 			await expect(composer).toBeHidden();
 			await page.locator('[data-action-id="sessions.search"] button').click();
-			const search = page.locator('.ash-sessions-search-dialog').getByRole('combobox');
+			const searchDialog = page.locator('.ash-sessions-search-dialog');
+			const search = searchDialog.getByRole('combobox');
+			const tabStyle = (tab: Locator) => tab.evaluate(element => {
+				const item = getComputedStyle(element.parentElement!);
+				const label = getComputedStyle(element);
+				return {
+					height: item.height,
+					borderRadius: item.borderTopLeftRadius,
+					background: item.backgroundColor,
+					gap: getComputedStyle(element.parentElement!.parentElement!).columnGap,
+					padding: label.paddingInlineStart,
+					fontSize: label.fontSize,
+					fontWeight: label.fontWeight,
+				};
+			});
+			const searchStyle = await tabStyle(searchDialog.getByRole('tab', { selected: true }));
+			expect(searchStyle.height).toBe('28px');
 			await search.fill('Search project fixture');
-			await page.locator('.ash-sessions-search-dialog').getByRole('option', { name: /Search project fixture/ }).click();
+			await searchDialog.getByRole('option', { name: /Search project fixture/ }).click();
 			await expect(page.locator('.ash-project-titlebar-name')).toHaveText('Search project fixture');
+			expect(await tabStyle(overviewTab)).toEqual(searchStyle);
 			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
 			expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
@@ -306,33 +350,44 @@ suite('Projects toolbar', () => {
 					expect(bounds.height).toBeGreaterThan(30);
 					expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
 					const detail = (await page.locator('.ash-projects-detail').boundingBox())!;
-					const content = (await page.locator(width === 600 ? '.ash-projects-detail-content' : '.ash-projects-overview').boundingBox())!;
+					const content = (await page.locator('.ash-projects-detail-content').boundingBox())!;
 					expect(bounds.y).toBeGreaterThanOrEqual(content.y + content.height);
 					expect(bounds.y + bounds.height).toBeCloseTo(detail.y + detail.height);
 					expect(bounds.x + bounds.width / 2).toBeCloseTo(detail.x + detail.width / 2);
 					expect(bounds.width).toBeCloseTo(Math.min(detail.width, 902));
 					await expect(composer).toBeInViewport({ ratio: 1 });
-					const detailCard = page.locator('.ash-projects-detail-card');
-					const guidance = detailCard.getByRole('region', { name: chinese ? '指令' : 'Instructions', exact: true });
-					const context = detailCard.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true });
-					const guidanceBounds = (await guidance.boundingBox())!;
-					const contextBounds = (await context.boundingBox())!;
-					expect(contextBounds.y).toBeCloseTo(guidanceBounds.y + guidanceBounds.height);
-					expect(contextBounds.width).toBe(guidanceBounds.width);
-					await expect(context).toHaveCSS('border-block-start-width', '1px');
+					await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+					const chats = page.locator('.ash-projects-overview .ash-projects-chat-content');
+					const card = page.locator('.ash-projects-overview .ash-projects-detail-card');
+					await expect(card.getByRole('region', { name: chinese ? '指令' : 'Instructions', exact: true })).toBeVisible();
+					await expect(card.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true })).toBeVisible();
+					const [chatBounds, cardBounds] = await Promise.all([chats.boundingBox(), card.boundingBox()]);
+					if (width === 600) expect(cardBounds!.y).toBeGreaterThanOrEqual(chatBounds!.y + chatBounds!.height);
+					else {
+						expect(cardBounds!.y).toBeCloseTo(chatBounds!.y);
+						expect(cardBounds!.x).toBeGreaterThan(chatBounds!.x + chatBounds!.width);
+					}
 					await expect(composer.locator('.ash-chat-input-part')).toHaveCSS('padding', '0px');
 					await page.screenshot({ path: info.outputPath(`project-composer-${locale}-${theme}-${width}.png`) });
-					if (width === 600) {
-						const scrollArea = page.locator('.ash-projects-detail-content');
-						expect(await scrollArea.evaluate(element => {
-							element.scrollTop = element.scrollHeight;
-							return element.scrollTop;
-						})).toBeGreaterThan(0);
-						expect((await composer.boundingBox())!.y).toBeCloseTo(bounds.y);
-						await scrollArea.evaluate(element => { element.scrollTop = 0; });
-					}
 				}
 			}
+			await overviewTab.press('ArrowRight');
+			await expect(chatsTab).toBeFocused();
+			await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+			await chatsTab.press('Enter');
+			await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
+			const chatsPanel = page.getByRole('tabpanel', { name: chinese ? '对话' : 'Chats', exact: true });
+			await expect(chatsPanel.getByRole('heading', { name: chinese ? '项目对话' : 'Project conversations', exact: true })).toBeVisible();
+			await expect(chatsPanel.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true })).toHaveCount(0);
+			await chatsTab.press('ArrowRight');
+			await expect(filesTab).toBeFocused();
+			await filesTab.press('Enter');
+			const files = page.getByRole('tabpanel', { name: chinese ? '文件' : 'Files', exact: true });
+			await expect(files.getByRole('region', { name: chinese ? '项目文件' : 'Project files', exact: true })).toBeVisible();
+			await expect(composer).toBeHidden();
+			await overviewTab.click();
+			await expect(composer).toBeVisible();
+			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
 			await thumbnail.focus();
 			await page.keyboard.press('Tab');
 			const remove = form.getByRole('button', { name: chinese ? '移除 image.png' : 'Remove image.png', exact: true });
@@ -1011,12 +1066,8 @@ suite('Projects loading states', () => {
 					await page.setViewportSize({ width, height: 720 });
 					await page.emulateMedia({ reducedMotion: 'reduce' });
 					const overview = (await skeleton.locator('.ash-projects-overview').boundingBox())!;
-					const card = (await skeleton.locator('.ash-projects-detail-card').boundingBox())!;
-					if (width === 720) {
-						expect(card.y).toBeGreaterThanOrEqual(overview.y + overview.height);
-					} else {
-						expect(card.y).toBe(overview.y);
-					}
+					const detail = (await skeleton.boundingBox())!;
+					expect(overview.width).toBeCloseTo(detail.width);
 					expect(await skeleton.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 					expect(await skeleton.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 					await page.screenshot({ path: info.outputPath(`projects-detail-loading-${locale}-${width}.png`) });

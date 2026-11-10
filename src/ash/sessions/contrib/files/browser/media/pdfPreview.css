@@ -1,0 +1,38 @@
+.ash-sessions-pdf-preview {
+	display: grid;
+	grid-template-rows: auto auto minmax(0, 1fr);
+	block-size: 100%;
+	background: var(--ash-editor-background);
+	color: var(--ash-editor-foreground);
+}
+
+.ash-sessions-pdf-controls {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-sessions-pdf-error {
+	margin: 0;
+	padding-inline: var(--ash-spacing-size160);
+	color: var(--ash-error-foreground);
+}
+
+.ash-sessions-pdf-page {
+	overflow: auto;
+	padding: var(--ash-spacing-size120);
+}
+
+.ash-sessions-pdf-page:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-sessions-pdf-page > canvas {
+	display: block;
+	max-inline-size: 100%;
+	block-size: auto;
+	margin-inline: auto;
+}

@@ -1,3 +1,20 @@
+.ash-projects-file-content {
+	position: relative;
+}
+
+.ash-projects-files > .ash-projects-file-content {
+	min-block-size: 100%;
+}
+
+.ash-projects-material-context-title,
+.ash-projects-detail-card .ash-projects-material-files-title {
+	display: none;
+}
+
+.ash-projects-detail-card .ash-projects-material-context-title {
+	display: inline;
+}
+
 section.ash-projects-materials {
 	display: flex;
 	flex-direction: column;
@@ -6,6 +23,16 @@ section.ash-projects-materials {
 
 .ash-projects-materials > .ash-button {
 	align-self: flex-start;
+}
+
+.ash-projects-material-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-projects-material-actions > .ash-button[hidden] {
+	display: none;
 }
 
 .ash-projects-materials-empty {
@@ -92,12 +119,18 @@ section.ash-projects-materials {
 
 .ash-projects-material-list:has(> .ash-projects-material-card) {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 144px), 1fr));
 	gap: var(--ash-spacing-size120);
 	margin-block-start: var(--ash-spacing-size80);
 }
 
+.ash-projects-detail-card
+	.ash-projects-material-list:has(> .ash-projects-material-card) {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .ash-projects.stack-project-details
+	.ash-projects-detail-card
 	.ash-projects-material-list:has(> .ash-projects-material-card) {
 	grid-template-columns: repeat(2, minmax(0, 152px));
 }
@@ -119,7 +152,10 @@ section.ash-projects-materials {
 	flex: 1;
 	min-inline-size: 0;
 	grid-template-columns: minmax(0, 1fr);
-	grid-template-rows: auto auto minmax(0, 1fr) auto;
+	grid-template-rows: auto auto minmax(0, 1fr) minmax(
+			var(--ash-spacing-size240),
+			auto
+		);
 	justify-items: start;
 	align-items: start;
 	gap: var(--ash-spacing-size40);
@@ -139,14 +175,37 @@ section.ash-projects-materials {
 .ash-projects-material-card-open > .ash-file-card-name {
 	grid-row: 1;
 	inline-size: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-projects-material-card-open > .ash-file-card-size {
 	grid-row: 2;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	font-variant-numeric: tabular-nums;
 }
 
 .ash-projects-material-card-open > .ash-file-card-format {
 	grid-row: 4;
+	align-self: center;
+	max-inline-size: 100%;
+}
+
+.ash-file-card-format > .ash-badge.outlined {
+	display: block;
+	max-inline-size: 100%;
+	overflow: hidden;
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-editor-background);
+	box-shadow: var(--ash-sessions-soft-shadow);
+	text-overflow: ellipsis;
+}
+
+.ash-projects-material-card:has(> .ash-projects-material-card-select)
+	.ash-file-card-format {
+	max-inline-size: calc(100% - var(--ash-spacing-size240));
 }
 
 .ash-projects-material-card-open > .ash-file-card-preview {
@@ -183,24 +242,23 @@ section.ash-projects-materials {
 
 :is(.hc-black, .hc-light)
 	.ash-projects-material-card
-	> .ash-projects-material-card-open {
+	> .ash-projects-material-card-open,
+:is(.hc-black, .hc-light) .ash-file-card-format > .ash-badge.outlined {
 	box-shadow: none;
 }
 
-.ash-projects-material-card > .ash-button.ash-projects-material-card-remove {
+.ash-projects-material-card-select {
 	position: absolute;
-	inset-block-start: calc(-1 * var(--ash-spacing-size60));
-	inset-inline-end: calc(-1 * var(--ash-spacing-size60));
-	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, var(--ash-widget-border));
-	border-radius: var(--ash-cornerRadius-circle);
-	background: var(--ash-editor-background);
+	inset-block-end: var(--ash-spacing-size80);
+	inset-inline-end: var(--ash-spacing-size80);
+	place-items: center;
+	inline-size: var(--ash-spacing-size240);
+	block-size: var(--ash-spacing-size240);
 }
 
-.ash-projects-material-card:not(:hover, :focus-within)
-	> .ash-projects-material-card-remove {
-	opacity: 0;
-	pointer-events: none;
+.ash-projects-material-card:has(> .ash-projects-material-card-select.checked)
+	> .ash-projects-material-card-open {
+	border-color: var(--ash-focusBorder);
 }
 
 .ash-projects-drop-overlay {

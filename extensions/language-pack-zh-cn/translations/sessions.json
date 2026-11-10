@@ -1,5 +1,12 @@
 {
   "ash": {
+    "sessions.pdfPreview.title": "PDF 预览",
+    "sessions.pdfPreview.previous": "上一页",
+    "sessions.pdfPreview.next": "下一页",
+    "sessions.pdfPreview.loading": "正在加载 PDF…",
+    "sessions.pdfPreview.page": "第 {0} 页，共 {1} 页",
+    "sessions.pdfPreview.openFailed": "无法预览此 PDF。请检查文件是否可用并可读取。",
+    "sessions.pdfPreview.pageFailed": "无法显示此 PDF 页面。",
     "sessions.requestVersions.run": "另跑一个版本",
     "sessions.requestVersions.compare": "比较结果",
     "sessions.requestVersions.original": "原始版本",

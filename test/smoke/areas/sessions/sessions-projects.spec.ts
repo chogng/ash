@@ -362,6 +362,7 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			await expect(card).toBeVisible();
 			await card.click();
 			await expect(projectTitle).toBeVisible();
+			await projects.getByRole('tab', { name: 'Chats', exact: true }).click();
 		};
 		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).getByRole('button');
 		const sidebar = () => page.locator('.ash-chat-navigation-list');
@@ -745,7 +746,7 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name');
 	await expect(projectTitle).toHaveText('Research workspace');
 	await expect(projectTitle).toHaveAttribute('aria-current', 'page');
-	await expect(projects.getByRole('region', { name: 'Context', exact: true })).toBeVisible();
+	await expect(projects.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await page.screenshot({ path: testInfo.outputPath('projects-detail.png') });
 	await expect(projects.getByText('Collect images, papers and working documents.', { exact: true })).toBeVisible();
 	await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Projects', exact: true }).click();
@@ -784,9 +785,9 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	}
 	await expect(projects).toHaveClass(/narrow/);
 	await expect.poll(() => projects.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-	const overview = await projects.locator('.ash-projects-overview').boundingBox();
-	const materials = await projects.locator('.ash-projects-materials').boundingBox();
-	expect(materials!.y).toBeGreaterThan(overview!.y);
+	await projects.getByRole('tab', { name: 'Files', exact: true }).click();
+	await expect(projects.getByRole('region', { name: 'Project files', exact: true })).toBeVisible();
+	await expect(projects.locator('.ash-projects-composer')).toBeHidden();
 	await page.screenshot({ path: testInfo.outputPath('projects-narrow.png') });
 });
 

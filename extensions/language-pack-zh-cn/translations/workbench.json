@@ -658,7 +658,6 @@
     "processExplorer.verbosityTitle": "进程查看器无障碍帮助",
     "processExplorer.verbosityDescription": "进程查看器获得焦点时，提示如何打开无障碍帮助。",
     "files.invalidDirectoryScope": "文件系统大小写规则超出了授权目录范围。",
-    "files.cardFormat": "文件",
     "sizeB": "{0}B",
     "sizeKB": "{0}KB",
     "sizeMB": "{0}MB",

@@ -4801,9 +4801,6 @@ suite('chatInput browser component', () => {
 				const preparing = page.locator('.ash-chat-staged-file.image.pending');
 				const preparingPreview = preparing.getByRole('button', { name: locale === 'en' ? 'Preview preview.png' : '预览 preview.png', exact: true });
 				await expect(preparingPreview.locator('img')).toBeVisible();
-				await expect(preparing.locator('.ash-file-card-name')).toHaveText('preview.png');
-				await expect(preparing.locator('.ash-file-card-size')).toHaveText(/^\d+B$/u);
-				await expect(preparing.locator('.ash-file-card-format .ash-badge')).toHaveText('PNG');
 				await expect(preparing.getByText(locale === 'en' ? 'Preparing…' : '正在准备…', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
 				const animation = () => preparingPreview.evaluate(element => getComputedStyle(element, '::after').animationName);
 				expect(await animation()).toBe('ash-chat-staged-image-sweep');
