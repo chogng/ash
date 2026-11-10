@@ -176,6 +176,7 @@ export const lxiconsLibrary = {
 	issueDraft: registerLxicon("issue-draft", 0xe14f),
 	issueReopened: registerLxicon("issue-reopened", 0xe150),
 	issues: registerLxicon("issues", 0xe095),
+	italic: registerLxicon("italic", 0xe173),
 	italics: registerLxicon("italics", 0xe096),
 	kebabVertical: registerLxicon("kebab-vertical", 0xe097),
 	keyboardTab: registerLxicon("keyboard-tab", 0xe098),

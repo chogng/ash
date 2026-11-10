@@ -862,6 +862,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "italic",
+      "file": "italic.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "italics",
       "file": "italics.svg",
       "rendering": "symbolic"

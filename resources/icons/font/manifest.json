@@ -370,7 +370,8 @@
     "gemini": "E16F",
     "grok": "E170",
     "new-chat-session": "E171",
-    "paintbrush": "E172"
+    "paintbrush": "E172",
+    "italic": "E173"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -395,7 +396,7 @@
     "bell-slash-dot": "a041a4804c2c73def9632a79e4fc703df72502809ab14a34a75a31ae80befc0b",
     "bell-slash": "dab7cfcfd5b7bb0b7b43e0299f5beaf50c7092fdb593a2989099fe52f98e5818",
     "bell": "aa7dc9b90f1a7a3266f17ba727232663aa2894f9ec8c2e787527a1d8d75ea2b0",
-    "bold": "e1f92ba521215eb1de99b3387ccd1db5f02e72c51d121d63b6c942a54c44e476",
+    "bold": "64f64ae60468a50e2d220473720f2cb69668e237a0388aa5b403ce8c29cd7493",
     "book": "c8a4e917269adb6c983dee9c5725880ca95173dc7fe8bf78748be6dccc10f044",
     "books": "aeb95114c6f28dfa78ba9278b4a238802c5f5a5591f78604efab2ed4e0dfadaf",
     "bot": "5d6a7f315f8a6a0c97b301fcd4f99cadfb9f8c28aef958035b361114f32987db",
@@ -545,6 +546,7 @@
     "issue-draft": "e0ed832579f75eacea32f79b3281e026ab54f6ec2b7d2b7c1985c82ebd8271c9",
     "issue-reopened": "98468e943e5e651f54e01f26ecc51437fdd89651eab7c13c6f77c98bfce68289",
     "issues": "395b8c3063d79730c29631a307870b05a9a53fb76a031c7acefb611d3490889e",
+    "italic": "aa83357788097407ebd6ff8494697f322dd5bdc3d6b2f9636cf126f0f30a889e",
     "italics": "21bc1a379f91dab6943cd24086b5e5e8bc9d3944b04b4ebe05117dc685d0cff9",
     "kebab-vertical": "3406c85d1c928683ae6f4140cc891fb24ae9e12cd959f67098b5efee5efdfd4f",
     "keyboard-tab": "de33482d3f27e9f5ee44da3afbc6d375ad2b0039170f10303046bed224f93b6f",
