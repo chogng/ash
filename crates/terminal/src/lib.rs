@@ -1,18 +1,9 @@
-//! Terminal emulation state and command/output block modeling.
+//! Terminal emulation for CLI PTY tests.
 
-mod block_list;
 mod emulator;
 mod grid;
-mod input;
-mod mouse;
 mod screen;
 
-pub use block_list::{BlockId, BlockList, BlockStatus, TerminalBlock};
 pub use emulator::TerminalCore;
 pub use grid::{Cell, CellStyle, GridSize, TerminalColor, TerminalGrid, TerminalLine};
-pub use input::{KeyModifiers, TerminalKey};
-pub use mouse::{
-    MouseModifiers, TerminalMouseButton, TerminalMouseButtonState, TerminalMouseEvent,
-    TerminalMouseEventKind, TerminalMousePosition,
-};
 pub use screen::{CursorKeyMode, MouseEncoding, MouseTrackingMode, ScreenBuffer, TerminalModes};

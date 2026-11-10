@@ -145,13 +145,6 @@ impl TerminalScreen {
         *self = Self::new(size);
     }
 
-    pub(crate) fn process_exited(&mut self) {
-        if self.active == ScreenBuffer::Alternate {
-            self.active = ScreenBuffer::Primary;
-        }
-        self.modes = TerminalModes::default();
-    }
-
     pub(crate) fn apply_private_mode(&mut self, mode: u16, change: ModeChange) {
         match (mode, change) {
             (1, ModeChange::Set) => self.modes.cursor_keys = CursorKeyMode::Application,
