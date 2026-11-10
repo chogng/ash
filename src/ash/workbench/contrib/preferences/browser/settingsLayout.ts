@@ -699,7 +699,7 @@ export const SettingsNavigation = [
 						id: 'chat-conversation-display',
 						label: localize('settings.chatConversationDisplay.label', 'Conversation'),
 						description: localize('settings.chatConversationDisplay.description', 'Choose how Chat displays and follows the conversation.'),
-						settings: ['chat.autoFollowReplies', 'chat.stickyScroll.enabled', 'sessions.chatTimeline.display', 'chat.tips.enabled'],
+						settings: ['chat.autoFollowReplies', 'chat.showAgentReplyTimestamps', 'chat.stickyScroll.enabled', 'sessions.chatTimeline.display', 'chat.tips.enabled'],
 					},
 				],
 			},

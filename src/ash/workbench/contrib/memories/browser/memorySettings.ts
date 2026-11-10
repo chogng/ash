@@ -1,6 +1,5 @@
 import { localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { MemoryTurnSource } from '../../../../platform/memories/common/memoriesService.js';
 import type { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 
 export const OPEN_MEMORIES_COMMAND_ID = 'ash.memories.open';
@@ -11,9 +10,7 @@ export function memorySettingsTitle(): string {
 	return localize({ bundle: 'ash.settings', key: 'categories.memory.label' }, 'Your Ash');
 }
 
-type MemorySettingsRequest =
-	| { readonly kind: 'draft'; readonly origin: MemoryTurnSource; readonly text: string; }
-	| { readonly kind: 'reference'; readonly reference: string; };
+interface MemorySettingsRequest { readonly kind: 'reference'; readonly reference: string; }
 
 export const IMemorySettingsNavigation = createServiceIdentifier<MemorySettingsNavigation>('memorySettingsNavigation');
 

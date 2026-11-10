@@ -433,13 +433,8 @@ for (const mode of ['chat', 'code'] as const) {
 					assert.deepEqual(rows, [...draftRows, ...sessions.map(session => `session:${session.sessionId}`)]);
 				};
 				assertRows();
-				if (mode === 'code') {
-					for (const grouping of ['none', 'projects'] as const) {
-						listModel.setGrouping(grouping);
-						assert.match(list.domNode.querySelector('[data-item="session:saved"]')?.getAttribute('data-parent-section') ?? '', /^workspace:/u);
-						assert.equal(list.domNode.querySelector('[data-item="session:standalone"]')?.getAttribute('data-parent-section'), 'recent');
-						assert.ok(list.domNode.querySelector('[data-section^="workspace:"][data-parent-section="recent"]'));
-					}
+				for (const session of sessions) {
+					assert.equal(list.domNode.querySelector(`[data-item="session:${session.sessionId}"]`)?.getAttribute('data-parent-section'), 'recent');
 				}
 				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
 				assertRows();
@@ -998,13 +993,15 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.deepEqual(rows(chat), [...catalog].sort((left, right) => right.title.localeCompare(left.title)).map(session => session.sessionId));
 
 	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
+	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').checked, true);
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
 	const working = chat.domNode.querySelector('[data-section="grouping:status:working"]')!;
 	assert.equal(working.querySelector('h3 button')?.textContent, '进行中');
 	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:status:working"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
 	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
 	assert.equal(repositoryReads.length, 0);
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
-	assert.equal(chat.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'grouping:projects:release');
+	assert.equal(chat.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'recent');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
 	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
@@ -1029,7 +1026,8 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	});
 	const parent = () => contributed.domNode.querySelector('[data-item="catalog-manual"]')?.getAttribute('data-parent-section');
 	assert.equal(parent(), 'recent');
-	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
+	assert.equal(submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
+	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
 	assert.equal(parent(), 'grouping:status:working');
 	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
 	assert.equal(parent(), 'grouping:environment:local');
@@ -1037,27 +1035,34 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(parent(), 'grouping:repository:["git.example","team","repo"]');
 	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
-	assert.equal(parent(), 'grouping:projects:');
+	assert.equal(parent(), 'recent');
 	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
 	assert.equal(parent(), 'recent');
 });
 
-test('The previous shared sidebar sort seeds both modes once', async () => {
+test('The previous shared sidebar preferences seed both modes once', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	storage.store('sessions.list.sortMode', 'created', StorageScope.PROFILE, StorageTarget.USER);
 	storage.store('sessions.list.sortDirection', 'ascending', StorageScope.PROFILE, StorageTarget.USER);
+	storage.store('sessions.list.grouping', 'repository', StorageScope.PROFILE, StorageTarget.USER);
 	const model = new SessionsListModelService(storage);
 	assert.deepEqual(model.getSort('chat'), { field: 'created', direction: 'ascending' });
 	assert.deepEqual(model.getSort('code'), { field: 'created', direction: 'ascending' });
+	assert.equal(model.getGrouping('chat'), 'repository');
+	assert.equal(model.getGrouping('code'), 'repository');
 	await storage.flush();
+	assert.equal(storage.get('sessions.list.grouping', StorageScope.PROFILE), undefined);
 	assert.equal(storage.get('sessions.list.sortMode', StorageScope.PROFILE), undefined);
 	assert.equal(storage.get('sessions.list.sortDirection', StorageScope.PROFILE), undefined);
 
 	model.setSortMode('chat', 'name');
 	model.setSortDirection('code', 'descending');
+	model.setGrouping('chat', 'none');
 	const reopened = new SessionsListModelService(storage);
+	assert.equal(reopened.getGrouping('chat'), 'none');
+	assert.equal(reopened.getGrouping('code'), 'repository');
 	assert.deepEqual(reopened.getSort('chat'), { field: 'name', direction: 'ascending' });
 	assert.deepEqual(reopened.getSort('code'), { field: 'created', direction: 'descending' });
 });

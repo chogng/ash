@@ -23,7 +23,10 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 	public readonly type = AccessibleViewType.View;
 	private readonly labels = new ChatAccessibilityProvider();
 
-	constructor(private readonly source: ChatResponseSource) { }
+	constructor(
+		private readonly source: ChatResponseSource,
+		private readonly showAgentReplyTimestamps = () => true,
+	) { }
 
 	public getProvider(): AccessibleContentProvider | undefined {
 		const focused = this.source.getFocusedElement();
@@ -41,7 +44,9 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 
 	private messageText(item: IChatListItem): string {
 		const sections = [this.labels.getAriaLabel(item)];
-		if (item.timestamp !== undefined) sections.push(formatChatMessageTime(item.timestamp));
+		if (item.timestamp !== undefined && item.type === 'agentMessage' && this.showAgentReplyTimestamps()) {
+			sections.push(formatChatMessageTime(item.timestamp));
+		}
 		const invocation = item.toolInvocation;
 		if (invocation) {
 			const { call, output, result, stopped, waitingFor, executionStarted } = invocation;

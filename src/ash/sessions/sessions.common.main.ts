@@ -131,4 +131,4 @@ registerOutputView(SessionsViewRegistry);
 
 registerCollabViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));
 registerCallView(SessionsViewRegistry);
-registerMemoryManagement(SessionsWorkspaceModeContext.isEqualTo('chat'));
+registerMemoryManagement();

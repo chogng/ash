@@ -8,7 +8,7 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { IMemoriesService, type Memory, type MemoryConversationSource, type MemoryNamespace, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary, type MemoryTurnSource } from '../../../../platform/memories/common/memoriesService.js';
+import { IMemoriesService, type Memory, type MemoryConversationSource, type MemoryNamespace, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary } from '../../../../platform/memories/common/memoriesService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -63,7 +63,6 @@ export class MemoriesEditor extends Disposable {
 	private dirty = false;
 	private showingReference = false;
 	private referenceOrigin: MemoryConversationSource | undefined;
-	private draftOrigin: MemoryTurnSource | undefined;
 	private contextId = '';
 	private mutationId = generateUuid();
 
@@ -227,7 +226,7 @@ export class MemoriesEditor extends Disposable {
 		this.save = this.button(detailActions, localize('memories.saveAction', 'Save memory'), () => this.saveMemory(), 'primary');
 		this.remove = this.button(detailActions, localize({ bundle: 'ash.settings', key: 'memory.delete' }, 'Delete memory'), () => this.deleteMemory(), 'danger');
 		this.openSource = this.button(detailActions, localize('memories.openSource', 'Open source conversation'), async () => {
-			const origin = this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin;
+			const origin = this.selected?.origin ?? this.referenceOrigin;
 			if (!origin || !await this.discardDraft()) { return; }
 			if (await this.closeSettings() === false) { return; }
 			await this.sessions.openConversation(origin.sessionId, origin.threadId);
@@ -306,33 +305,6 @@ export class MemoriesEditor extends Disposable {
 		return confirmed;
 	}
 
-	public async openProjectDraft(origin: MemoryTurnSource, text: string): Promise<void> {
-		while (this.operation) { await this.operation; }
-		await this.perform(async () => {
-			const scopes = await this.memories.scopes(origin.threadId);
-			const projects = scopes.filter(entry => this.isProjectScope(entry.policy.scope));
-			if (!projects.length) {
-				this.status.textContent = localize('memories.projectRequired', 'This conversation needs to belong to a project before you can save a project memory.');
-				return;
-			}
-			if (!await this.discardDraft() || this.isDisposed) { return; }
-			this.refreshContexts();
-			if (!this.context.options.some(option => option.value === origin.threadId)) {
-				this.context.setOptions([...this.context.options, { label: localize('memories.sourceConversation', 'Source conversation'), value: origin.threadId }]);
-			}
-			this.context.value = this.contextId = origin.threadId;
-			this.setScopes(projects, projects.length === 1 ? 0 : -1);
-			this.clearDetail();
-			this.openDetail(localize({ bundle: 'ash.settings', key: 'memory.new' }, 'New memory'));
-			this.draftOrigin = origin;
-			this.body.value = text;
-			this.dirty = true;
-			this.titleInput.focus();
-			await this.loadList();
-			this.status.textContent = localize('memories.projectDraft', 'Confirm the project, enter a title, and review the text before saving.');
-		});
-	}
-
 	public async openReference(reference: string): Promise<void> {
 		while (this.operation) { await this.operation; }
 		await this.perform(() => this.readReference(reference));
@@ -369,9 +341,6 @@ export class MemoriesEditor extends Disposable {
 		const candidate = previous || active || '';
 		this.context.value = this.contextId = options.has(candidate) ? candidate : '';
 	}
-	private isProjectScope(scope: MemoryPolicy['scope']): boolean {
-		return scope.type === (this.namespace === 'chat' ? 'chatProject' : 'project');
-	}
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
 		const [availableScopes] = await Promise.all([
@@ -379,12 +348,12 @@ export class MemoriesEditor extends Disposable {
 			this.refreshModelMemory(),
 		]);
 		if (this.isDisposed || generation !== this.generation) { return; }
-		const scopes = this.draftOrigin || this.namespace === 'chat'
-			? availableScopes.filter(entry => this.isProjectScope(entry.policy.scope))
+		const scopes = this.namespace === 'chat'
+			? availableScopes.filter(entry => entry.policy.scope.type === 'chatProject')
 			: availableScopes.filter(entry => entry.policy.scope.type !== 'chatProject');
 		const current = this.policy && JSON.stringify(this.policy.scope);
 		const index = scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === current);
-		this.setScopes(scopes, !scopes.length || this.draftOrigin ? index : Math.max(index, 0));
+		this.setScopes(scopes, scopes.length ? Math.max(index, 0) : -1);
 		await this.loadList();
 		const selected = this.selected;
 		if (selected && !this.dirty && this.policy && !this.isDisposed) {
@@ -415,13 +384,6 @@ export class MemoriesEditor extends Disposable {
 	}
 	private async selectScope(): Promise<void> {
 		const nextPolicy = this.scope.value ? this.scopes[Number(this.scope.value)]?.policy : undefined;
-		if (this.draftOrigin && (!nextPolicy || this.isProjectScope(nextPolicy.scope))) {
-			this.policy = nextPolicy;
-			this.mutationId = generateUuid();
-			this.renderPolicy();
-			await this.loadList();
-			return;
-		}
 		if (!await this.discardDraft()) {
 			const index = this.scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === JSON.stringify(this.policy?.scope));
 			this.scope.value = index < 0 ? '' : String(index);
@@ -499,7 +461,6 @@ export class MemoriesEditor extends Disposable {
 		this.detail.hidden = false;
 	}
 	private showMemory(memory: Memory): void {
-		this.draftOrigin = undefined;
 		this.referenceOrigin = undefined;
 		this.mutationId = generateUuid();
 		this.selected = memory;
@@ -525,7 +486,6 @@ export class MemoriesEditor extends Disposable {
 		this.readGeneration++;
 		this.mutationId = generateUuid();
 		this.selected = undefined;
-		this.draftOrigin = undefined;
 		this.referenceOrigin = undefined;
 		this.showingReference = false;
 		this.titleInput.value = '';
@@ -543,7 +503,7 @@ export class MemoriesEditor extends Disposable {
 		}
 		const result = this.selected
 			? await this.memories.update(this.selected, this.titleInput.value, this.body.value, this.mutationId)
-			: await this.memories.add(this.policy.scope, this.titleInput.value, this.body.value, this.mutationId, this.draftOrigin);
+			: await this.memories.add(this.policy.scope, this.titleInput.value, this.body.value, this.mutationId);
 		if (this.isDisposed) { return; }
 		this.showMemory(result);
 		await this.loadList();
@@ -745,7 +705,7 @@ export class MemoriesEditor extends Disposable {
 		this.reading.enabled = !(this.working || !this.policy);
 		this.saving.enabled = !(this.working || !this.policy);
 		this.openSource.enabled = !this.working;
-		this.openSource.domNode.hidden = !(this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin);
+		this.openSource.domNode.hidden = !(this.selected?.origin ?? this.referenceOrigin);
 	}
 	private field(container: HTMLElement, text: string, control: HTMLElement): void {
 		const label = h(this.element.ownerDocument, 'label');

@@ -119,7 +119,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(cross).toHaveCSS('color', 'rgb(161, 38, 13)');
 	});
 
-	test('shows the original time beside each dated history message in the current language', async () => {
+	test('toggles localized Agent reply times and omits user message times', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		const messages = [
@@ -136,16 +136,19 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await page.goto('/chatgptNavigation.html?locale=zh-CN');
 		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 		const rows = page.locator('.ash-chat-transcript');
-		for (const [body, dateTime] of [
-			['Dated question', '2026-11-09T17:30:00.000Z'],
-			['Dated answer', '2026-11-09T17:32:00.125Z'],
-		]) {
-			const row = rows.locator('.ash-chat-item').filter({ hasText: body });
-			const time = row.locator('.ash-chat-message-actions > [role="toolbar"] + time');
-			await expect(time).toBeVisible();
-			await expect(time).toHaveAttribute('datetime', dateTime);
-			await expect(time).toHaveText(/2026年11月/);
-		}
+		const time = (body: string) => rows.locator('.ash-chat-item').filter({ hasText: body }).locator('.ash-chat-message-actions > [role="toolbar"] + time');
+		const requestTime = rows.locator('.ash-chat-item-userMessage').filter({ hasText: 'Dated question' }).locator('time');
+		const replyTime = time('Dated answer');
+		await expect(requestTime).toHaveCount(0);
+		await expect(replyTime).toBeVisible();
+		await expect(replyTime).toHaveText(/2026年11月/);
+		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('chat.showAgentReplyTimestamps', false));
+		await expect(replyTime).toBeHidden();
+		await expect(requestTime).toHaveCount(0);
+		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('chat.showAgentReplyTimestamps', true));
+		await expect(replyTime).toBeVisible();
+		await expect(replyTime).toHaveAttribute('datetime', '2026-11-09T17:32:00.125Z');
+		await expect(requestTime).toHaveCount(0);
 		const older = rows.locator('.ash-chat-item-agentMessage').filter({ hasText: 'Older reply without a timestamp' });
 		await expect(older).toBeVisible();
 		await expect(older.locator('time')).toBeHidden();

@@ -1722,7 +1722,8 @@ suite('sessions browser component', () => {
 			await expect(group).toBeFocused();
 			await group.press('ArrowRight');
 			await expect(page.getByRole('menuitemradio', { name: chinese ? '状态' : 'Status', exact: true })).toBeVisible();
-			const selected = page.getByRole('menuitemradio', { checked: true });
+			await expect(page.getByRole('menuitemradio', { name: chinese ? '平铺' : 'Flat List', exact: true })).toBeVisible();
+			const selected = page.getByRole('menuitemradio', { name: chinese ? '项目' : 'Projects', exact: true, checked: true });
 			await expect(selected).toBeVisible();
 			const label = (await selected.locator('.ash-button-label').boundingBox())!;
 			const check = (await selected.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]').boundingBox())!;
@@ -2143,6 +2144,12 @@ suite('sessions browser component', () => {
 		await follow.press('Space');
 		await expect(follow).toHaveAttribute('aria-checked', 'true');
 		await expect(follow).toBeEnabled();
+		const timestamps = settings.getByRole('switch', { name: chinese ? '显示 Agent 回复时间' : 'Show Agent reply timestamps', exact: true });
+		await expect(timestamps).toHaveAttribute('aria-checked', 'true');
+		await timestamps.press('Space');
+		await expect(timestamps).toHaveAttribute('aria-checked', 'false');
+		await timestamps.press('Space');
+		await expect(timestamps).toHaveAttribute('aria-checked', 'true');
 		await settings.getByRole('searchbox').fill('@id:chat.input.fontSize');
 		const fontSize = settings.locator('[data-settings-item-id="chat.input.fontSize"]').getByRole('spinbutton');
 		await expect(fontSize).toHaveValue('14');

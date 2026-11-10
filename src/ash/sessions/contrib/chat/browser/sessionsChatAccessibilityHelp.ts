@@ -1,10 +1,11 @@
 import { localize } from '../../../../nls.js';
-import { getSessionsListAttentionHelp } from '../../sessions/browser/views/sessionsListActions.js';
+import { getSessionsListAttentionHelp, getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
 
 /** Product-specific help appended by the shared input's accessibility provider. */
 export function getSessionsChatAccessibilityHelp(): string {
 	return [
 		localize('sessions.chat.tipCarouselHelp', 'In a new Code session, use Previous tip and Next tip to browse the tips above the input. Dismiss tip closes the card.'),
+		getSessionsListGroupingHelp(),
 		getSessionsListAttentionHelp(),
 		localize({ bundle: 'ash.sessions', key: 'sessions.github.newFromPullRequestHelp' }, 'In Code, choose New Session from Pull Request in the Command Palette. Select a local GitHub checkout and a pull request. The new session opens when its worktree and snapshot are ready. Use Tab to reach the pull request attachment and Enter to open it in a browser. Sending the first message saves the attachment with that message.'),
 		localize({ bundle: 'ash', key: 'sessions.closeSplitHelp' }, 'When conversations are side by side, use Tab to reach Close Session in the pane you want to close. Press Enter or Space to close it and move focus to the remaining conversation.'),
@@ -20,7 +21,7 @@ export function getSessionsChatAccessibilityHelp(): string {
 		localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearchHelp' }, 'With focus in the Sessions sidebar, press Control+F or Command+F to search. Use Down Arrow or Enter to focus the first result. Escape closes search and restores the previous sidebar view.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChatHelp' }, 'On a conversation in the Sessions sidebar, press Shift+F10. If Move Conversation to Session is available, choose it, select a destination and press Enter. Escape cancels the picker.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.directory.setHelp' }, 'For a saved conversation without a workspace, open More Sessions Actions beside the title or focus the conversation in the sidebar and press Shift+F10. Choose Set Workspace once running work and pending approvals have finished. The input footer shows the bound folder.'),
-		localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequiredHelp' }, 'In Code, choose a project before sending in a new conversation. You can edit the draft while choosing. The first message saves the conversation under that project in the sidebar. You can continue saved Ash conversations in Code or the IDE, including conversations without a folder.'),
+		localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequiredHelp' }, 'In Code, choose a project before sending in a new conversation. You can edit the draft while choosing. The first message saves the conversation to that project. You can continue saved Ash conversations in Code or the IDE, including conversations without a folder.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.code.modelAvailabilityHelp' }, 'If the current model is unavailable, the input status explains why sending is paused. Keep editing the draft or use Tab to reach the model picker, then choose another model to continue.'),
 		localize('sessions.hover.help', 'Focus a session row or conversation link and use <keybinding:workbench.action.showHover> to open its summary. Use <keybinding:editor.action.accessibleView> to read the summary as text.'),
 		localize('sessions.titlebar.help', 'In the Sessions window, focus the session title in the title bar and press Enter to edit it in place. Press Enter to save, or press Escape or leave the field to cancel. Use <keybinding:workbench.action.showHover> on the title to read the full title if it is truncated, or the workspace path if it fits. Tab to More session actions beside the title and press Enter to open the menu. Open Show Session History from the Command Palette.'),

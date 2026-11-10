@@ -4,6 +4,10 @@ import { localize } from '../../../../../nls.js';
 import type { IProjectService } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionsListModelService, SessionSortDirection, SessionSortMode, SessionsListMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
 
+export function getSessionsListGroupingHelp(): string {
+	return localize('sessions.list.groupingHelp', 'Use Tab to reach More Sessions Actions beside Projects or Recents and press Enter. Under Group By, choose Projects to browse conversations by project or Flat List to browse recent conversations together. Chat and Code remember their choices separately. Sort By changes the order of conversations.');
+}
+
 export function getSessionsListAttentionHelp(): string {
 	return localize('sessions.list.attentionHelp', 'In More Sessions Actions, choose Show, then Needs Attention to group background sessions waiting for input or with failing checks. Press Enter on a row to open the conversation that needs attention.');
 }

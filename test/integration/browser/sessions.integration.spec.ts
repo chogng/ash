@@ -936,8 +936,7 @@ test('Code binds the selected project folder and lists associated conversations 
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 	const sidebar = page.locator('.ash-sessions-list');
 	await expect(sidebar.locator('[data-row-order-id][data-parent-project-id="code-project"]')).toContainText('Task from Host A');
-	await expect(sidebar.locator('[data-section^="workspace:"][data-parent-section="projects"]')).toHaveText('host-b');
-	await expect(sidebar.locator('[data-row-order-id][data-parent-section^="workspace:"]')).toContainText('Task from Host B');
+	await expect(sidebar.locator('[data-row-order-id][data-parent-section="recent"]')).toContainText('Task from Host B');
 	await expect(sidebar.getByRole('button', { name: 'Search project fixture', exact: true })).toHaveCount(0);
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	const chooser = page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker');
@@ -1490,8 +1489,8 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
 		await projectToggle.press('ArrowRight');
 		await expect(taskA).toBeVisible();
-		const workspaceRows = list.locator('[data-parent-section^="workspace:"]');
-		await expect(workspaceRows.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+		const recentRows = list.locator('[data-parent-section="recent"]');
+		await expect(recentRows.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
 		await chatMode.click();
 		await chatProject.click();
 		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Search project fixture');

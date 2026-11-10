@@ -47,6 +47,7 @@ import type { Icon } from '../../../../../base/common/icon.js';
 import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
 import { ChatLoadedSkillsActionViewItem, ChatTurnChangesPill } from './chatTurnPills.js';
 import { ChatRequestActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
+import { ChatConfiguration } from '../../common/constants.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { EditChatRequestActionId, RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
 
@@ -155,7 +156,7 @@ export class ChatListItemRenderer extends Disposable {
 		const contentPart: IChatContentPart | undefined = this.toolPart ?? this.markdownPart;
 		const same = sameItem(this.item, item);
 		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
-			const timeChanged = this.item.timestamp !== item.timestamp;
+			const timeChanged = !!this.messageTime && this.item.timestamp !== item.timestamp;
 			if (timeChanged) beforeLayout();
 			this.item = item;
 			if (timeChanged) this.updateMessageTime();
@@ -295,7 +296,7 @@ export class ChatListItemRenderer extends Disposable {
 	private createMessageActions(): HTMLElement {
 		const actions = h(this.element.ownerDocument, 'div');
 		actions.className = 'ash-chat-message-actions';
-		if (this.item.type === 'userMessage' || this.item.type === 'agentMessage') {
+		if (this.item.type === 'agentMessage') {
 			this.messageTime = h(this.element.ownerDocument, 'time');
 			this.messageTime.className = 'ash-chat-message-time';
 			actions.append(this.messageTime);
@@ -304,10 +305,11 @@ export class ChatListItemRenderer extends Disposable {
 		return actions;
 	}
 
-	private updateMessageTime(): void {
+	public updateMessageTime(): void {
 		const time = this.messageTime;
 		if (!time) return;
-		const { timestamp } = this.item;
+		const timestamp = this.configurationService.getValue<boolean>(ChatConfiguration.ShowAgentReplyTimestamps) === false
+			? undefined : this.item.timestamp;
 		time.hidden = timestamp === undefined;
 		if (timestamp === undefined) {
 			if (time.dateTime) {

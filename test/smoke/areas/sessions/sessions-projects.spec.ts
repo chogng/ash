@@ -180,6 +180,14 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		const activity = page.getByRole('toolbar', { name: /^Navigation\b/ });
 		const mode = page.locator('.ash-window-mode-control');
 		const menus = new Menus(page);
+		const grouping = async (list: ReturnType<typeof page.locator>, selected: string, next: string) => {
+			const trigger = list.getByRole('button', { name: 'More Sessions Actions', exact: true });
+			await trigger.press('Enter');
+			await page.getByRole('menuitem', { name: 'Group By', exact: true }).press('ArrowRight');
+			await expect(page.getByRole('menuitemradio', { name: selected, exact: true, checked: true })).toBeVisible();
+			await page.getByRole('menuitemradio', { name: next, exact: true }).press('Enter');
+			await expect(trigger).toBeFocused();
+		};
 		const newMenu = () => menus.inspect(application, () => activity.getByRole('button', { name: 'New', exact: true }).click({ button: 'right' }));
 		const expectConversationMenu = async (mode: 'chat' | 'code', pin = 'Pin') => {
 			for (const name of [pin, 'Rename', 'Add to project', 'Move to group', 'Move to project', 'Remove from project', 'Archive', 'Delete']) {
@@ -201,6 +209,8 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		const firstProject = chat.getByRole('button', { name: first.name, exact: true });
 		const secondProject = chat.getByRole('button', { name: second.name, exact: true });
 		await expect(firstProject).toBeVisible();
+		await expect(chat.locator('[data-parent-section="recent"]').getByRole('button', { name: chatSession.title, exact: true })).toBeVisible();
+		await expect(chat.getByText('No Project', { exact: true })).toHaveCount(0);
 		await firstProject.hover();
 		await expect(firstProject.locator('.ash-sessions-list-project-chevron')).toHaveCount(0);
 		await firstProject.click();
@@ -238,8 +248,14 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect.poll(() => members(first.projectId)).toEqual([]);
 		await expect(firstProject).not.toHaveAttribute('aria-expanded');
 		await expect(secondProject).toHaveAttribute('aria-expanded', 'false');
+		await grouping(chat, 'Projects', 'Flat List');
+		await expect(projects).toHaveCount(0);
+		await expect(chat.locator('[data-section="recent"]').getByRole('toolbar')).toBeVisible();
+		await expect(chat.locator('[data-parent-section="recent"]').getByRole('button', { name: chatSession.title, exact: true })).toBeVisible();
+		await expect(row).toHaveCount(1);
 
-		await mode.getByRole('button', { name: 'Code', exact: true }).click();
+		const codeMode = mode.getByRole('button', { name: 'Code', exact: true });
+		await codeMode.click();
 		await expect(chat).toBeHidden();
 		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toHaveCount(0);
 		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toHaveCount(0);
@@ -247,11 +263,18 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		expect((await newMenu()).some(item => item.label.startsWith('ChatGPT'))).toBe(false);
 		const code = page.locator('.ash-sessions-list[data-mode="code"]');
 		const codeProject = code.getByRole('button', { name: codeWorkspace.name, exact: true });
-		await code.getByRole('button', { name: 'More Sessions Actions', exact: true }).press('Enter');
-		await page.getByRole('menuitem', { name: 'Group By', exact: true }).press('ArrowRight');
-		await page.getByRole('menuitemradio', { name: 'Projects', exact: true }).click();
 		const codeRow = code.locator(`[data-row-order-id="${session.sessionId}"]`);
 		const conversation = codeRow.locator(':scope > button.ash-sessions-list-item');
+		await expect(codeRow).toHaveAttribute('data-parent-project-id', codeWorkspace.projectId);
+		await grouping(code, 'Projects', 'Flat List');
+		await expect(code.locator('[data-section="projects"]')).toHaveCount(0);
+		await expect(codeRow).toHaveAttribute('data-parent-section', 'recent');
+		await grouping(code, 'Flat List', 'Projects');
+		await mode.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+		await expect(projects).toHaveCount(0);
+		await grouping(chat, 'Flat List', 'Projects');
+		await expect(secondProject).toHaveAttribute('aria-expanded', 'false');
+		await codeMode.click();
 		await expect(codeRow).toHaveAttribute('data-parent-project-id', codeWorkspace.projectId);
 		await expect(code.getByRole('button', { name: second.name, exact: true })).toHaveCount(0);
 		await expect(code.getByRole('button', { name: chatSession.title, exact: true })).toHaveCount(0);
@@ -274,20 +297,14 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect.poll(() => members(codeWorkspace.projectId)).toEqual([]);
 		expect(await members(second.projectId)).toEqual([chatSession.sessionId]);
 		await expect(codeRow).not.toHaveAttribute('data-parent-project-id');
-		const workspace = code.locator('[data-section^="workspace:"]').getByRole('button', { name: basename(testWorkspace.directory), exact: true });
-		await expect(workspace).toHaveAttribute('aria-expanded', 'true');
-		await expect(codeRow).toHaveAttribute('data-parent-section', /^workspace:/);
+		await expect(codeRow).toHaveAttribute('data-parent-section', 'recent');
 		const previousRow = code.locator(`[data-row-order-id="${previous.sessionId}"]`);
 		await expect(previousRow).toHaveAttribute('data-parent-project-id', /.+/u);
-		await workspace.press('ArrowLeft');
-		await expect(conversation).toBeHidden();
-		await workspace.press('ArrowRight');
-		await expect(conversation).toBeVisible();
 		await conversation.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Pin', exact: true }).click();
 		await expect(codeRow).toHaveAttribute('data-parent-section', 'pinned');
 		await codeRow.dragTo(code.getByRole('button', { name: 'Recents', exact: true }));
-		await expect(codeRow).toHaveAttribute('data-parent-section', /^workspace:/);
+		await expect(codeRow).toHaveAttribute('data-parent-section', 'recent');
 	} finally {
 		await connection.close();
 	}
@@ -511,7 +528,7 @@ test.describe('Code folder projects in Simplified Chinese', () => {
 			page = await workbench.reopenAgentsWindow(application, page);
 			await openCode();
 			for (const id of sessionIds) {
-				await expect(page.locator(`[data-item="session:${id}"]`)).toHaveAttribute('data-parent-section', /^workspace:/u);
+				await expect(page.locator(`[data-item="session:${id}"]`)).toHaveAttribute('data-parent-section', 'recent');
 			}
 			expect(await codeProjects()).toEqual([]);
 		} finally {

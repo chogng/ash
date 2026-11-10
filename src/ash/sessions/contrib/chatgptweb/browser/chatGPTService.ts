@@ -229,7 +229,7 @@ export interface IChatGPTService {
 	selectMessageVersion(conversationId: string, messageId: string, expectedHead: string, head: string): Promise<void>;
 	stop(): Promise<void>;
 	readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob>;
-	getAccessibleContent(): string;
+	getAccessibleContent(showAgentReplyTimestamps?: boolean): string;
 }
 export const IChatGPTService = createServiceIdentifier<IChatGPTService>('chatGPTService');
 export const IChatGPTNativeService = createServiceIdentifier<IChatGPTService>('chatGPTNativeService');
@@ -984,11 +984,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob> {
 		return this.client.readResource(resource, conversationId, messageId, signal);
 	}
-	public getAccessibleContent(): string {
+	public getAccessibleContent(showAgentReplyTimestamps = true): string {
 		const state = this.model.get();
 		const messages = state.messages.filter(message => !message.activity).map(message => {
 			return [message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
-			message.timestamp === undefined ? undefined : formatChatMessageTime(message.timestamp),
+			message.timestamp !== undefined && message.role === 'assistant' && showAgentReplyTimestamps ? formatChatMessageTime(message.timestamp) : undefined,
 			message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text,
 			message.resources?.map(resource => resource.name).join('\n')].filter(Boolean).join('\n');
 		});

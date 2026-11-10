@@ -293,6 +293,22 @@ configurationRegistry.registerConfiguration<boolean>({
 });
 
 configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.ShowAgentReplyTimestamps,
+	defaultValue: true,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.showAgentReplyTimestamps.invalid', 'The Agent reply timestamp setting must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.showAgentReplyTimestamps.title', 'Show Agent reply timestamps'); },
+		get description() { return localize('chat.showAgentReplyTimestamps.description', 'Show the time below each Agent reply.'); },
+	},
+});
+
+configurationRegistry.registerConfiguration<boolean>({
 	key: ChatConfiguration.TipsEnabled,
 	defaultValue: true,
 	scope: ConfigurationScope.APPLICATION,
