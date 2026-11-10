@@ -16,7 +16,11 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly cancelledEntityDetails: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void; };
+	var ashNativeFixture: {
+		advance(): void; readonly sends: number; readonly cancelledEntityDetails: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void;
+		seedProjectMemory(versions: readonly string[]): void;
+		readonly projectMemoryBodies: readonly string[];
+	};
 }
 
 interface FixtureReply {
@@ -44,6 +48,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let heldUploads = 0;
 		const now = Date.now;
 		const uploadedFiles: Record<string, string> = {};
+		const projectMemory = new Map<string, { file_id: string; name: string; body: string; }>();
 		const initializing = new Set<() => void>();
 		const pendingUploads = new Set<() => void>();
 		const message = (id: string, role: string, text: string, create_time?: number) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] }, create_time });
@@ -73,6 +78,14 @@ async function installService(application: ElectronApplication, holdInitializati
 			},
 			get heldUploads() { return heldUploads; },
 			get uploadedFiles() { return uploadedFiles; },
+			seedProjectMemory(versions) {
+				for (const [index, body] of versions.entries()) {
+					const file_id = `file-memory-seed-${index}`;
+					const name = `Ash project memory ${1_000_000_000_000 + index}-00000000-0000-0000-0000-000000000000.md`;
+					projectMemory.set(file_id, { file_id, name, body: `<!-- ash-project-memory:g-p-files-fixture -->\n${body}` });
+				}
+			},
+			get projectMemoryBodies() { return [...projectMemory.values()].map(file => file.body); },
 			releaseInitialization() {
 				holdInitialization = false;
 				for (const release of [...initializing]) { release(); }
@@ -156,6 +169,23 @@ async function installService(application: ElectronApplication, holdInitializati
 				}
 				if (url.pathname === '/backend-api/conversations') { recentHistoryRequests++; }
 				if (offline) { return new Response(null, { status: 503 }); }
+				const projectFilePath = '/backend-api/projects/g-p-files-fixture/files';
+				if (projectFiles && url.pathname === projectFilePath && init?.method === 'POST') {
+					const [{ file_id, name }] = JSON.parse(String(init.body)).files;
+					const body = uploadedFiles[name];
+					if (body === undefined) return new Response(null, { status: 400 });
+					projectMemory.set(file_id, { file_id, name, body });
+					return new Response(null, { status: 204 });
+				}
+				if (projectFiles && url.pathname.startsWith(`${projectFilePath}/`) && init?.method === 'DELETE') {
+					const removed = projectMemory.delete(url.pathname.split('/').at(-1)!);
+					return new Response(null, { status: removed ? 204 : 404 });
+				}
+				if (projectFiles && url.pathname === '/backend-api/files/process_upload_stream' && init?.method === 'POST') {
+					return new Response(JSON.stringify({ event: 'file.processing.completed', file_id: JSON.parse(String(init.body)).file_id }) + '\n', {
+						headers: { 'Content-Type': 'application/x-ndjson' },
+					});
+				}
 				if (url.pathname.endsWith('/files') && init?.method === 'POST') {
 					const { file_name: name } = JSON.parse(String(init.body));
 					if (uploadsHeld) {
@@ -191,11 +221,16 @@ async function installService(application: ElectronApplication, holdInitializati
 				if (projectFiles && url.pathname === '/backend-api/gizmos/g-p-files-fixture') {
 					return Response.json({
 						gizmo: { id: 'g-p-files-fixture', display: { name: 'File project fixture' } },
-						files: [{ file_id: 'file-fixture-notes', name: 'project-fixture.txt' }, { file_id: 'file-fixture-other', name: 'other-fixture.txt' }],
+						files: [{ file_id: 'file-fixture-notes', name: 'project-fixture.txt' }, { file_id: 'file-fixture-other', name: 'other-fixture.txt' },
+						...[...projectMemory.values()].map(({ file_id, name }) => ({ file_id, name }))],
 					});
 				}
 				if (projectFiles && url.pathname.startsWith('/backend-api/files/download/file-fixture-')) {
 					return new Response(url.pathname.endsWith('-notes') ? 'Saved project material fixture' : 'Second project file');
+				}
+				if (projectFiles && url.pathname.startsWith('/backend-api/files/download/')) {
+					const file = projectMemory.get(url.pathname.split('/').at(-1)!);
+					if (file) return new Response(file.body);
 				}
 				if (url.pathname.endsWith('/conversations')) {
 					if (recentHistoryRateLimited) return new Response(null, { status: 429 });
@@ -1413,6 +1448,49 @@ test.describe('Ash project file copies', () => {
 		await restored.getByRole('region', { name: '项目文件', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
 		const restoredEditor = restored.getByRole('tabpanel', { name: 'project-fixture.txt', exact: true });
 		await new Editor(restoredEditor).waitForEditorContents(text => text === 'Saved project material fixture');
+	});
+});
+
+test.describe('ChatGPT project memory', () => {
+	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('keeps the draft and offers every saved version after a project memory conflict', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, '', false, true);
+		const page = await workbench.openAgentsWindow('electron');
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+		const projects = page.locator('.ash-projects');
+		await projects.getByRole('button', { name: 'File project fixture', exact: true }).click();
+		const view = projects.getByRole('button', { name: '查看记忆', exact: true });
+		const dialog = page.getByRole('dialog', { name: '项目记忆', exact: true });
+		const editor = new Editor(dialog);
+		const save = dialog.getByRole('button', { name: '保存', exact: true });
+		await view.press('Enter');
+		await expect(editor.input).toBeEditable();
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('当前草稿');
+		await application.evaluate(() => ashNativeFixture.seedProjectMemory(['较早版本', '另一个窗口保存的版本']));
+		await save.press('Enter');
+		await expect(dialog.getByRole('alert')).toHaveText('编辑期间，项目记忆已更改。你的草稿仍保留在编辑器中。');
+		await editor.waitForEditorContents(text => text === '当前草稿');
+		const latest = dialog.getByText('已保存的版本 1 另一个窗口保存的版本', { exact: true });
+		const older = dialog.getByText('已保存的版本 2 较早版本', { exact: true });
+		await expect(latest).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(older).toBeFocused();
+		expect(await application.evaluate(() => ashNativeFixture.projectMemoryBodies)).toHaveLength(2);
+
+		const merged = '当前草稿\n另一个窗口保存的版本\n较早版本';
+		await editor.waitForEditorFocus();
+		await editor.input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(merged);
+		await editor.waitForEditorContents(text => text === merged);
+		await save.press('Enter');
+		await expect(dialog).toBeHidden();
+		expect(await application.evaluate(() => ashNativeFixture.projectMemoryBodies)).toEqual([`<!-- ash-project-memory:g-p-files-fixture -->\n${merged}`]);
+		await view.press('Enter');
+		await editor.waitForEditorContents(text => text === merged);
+		await expect(older).toBeHidden();
 	});
 });
 

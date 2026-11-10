@@ -256,6 +256,94 @@ suite('ChatGPT shared service', () => {
 		assert.equal(otherAccount.projectDetails.get().get(id), undefined);
 	});
 
+	test('serializes first project memory saves across windows and returns saved versions for recovery', async () => {
+		const id = 'g-p-project';
+		const scope = 'a'.repeat(64);
+		const marker = `<!-- ash-project-memory:${id} -->\n`;
+		const projectFiles = `/service/backend-api/projects/${id}/files`;
+		const contents = new Map<string, string>();
+		const files = new Map<string, string>();
+		const started = new DeferredPromise<void>();
+		const attach = new DeferredPromise<void>();
+		let uploads = 0;
+		const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest) => {
+			const url = new URL(path, 'https://fixture.test');
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				return Response.json({ items: [{ gizmo: { id, display: { name: 'Project' } } }], cursor: null });
+			}
+			if (url.pathname.endsWith(`/gizmos/${id}`)) {
+				return Response.json({ gizmo: { id, display: { name: 'Project' } }, files: [...files].map(([file_id, name]) => ({ file_id, name })) });
+			}
+			if (url.pathname === '/service/backend-api/files' && request.method === 'POST') {
+				const file = `file-memory-${++uploads}`;
+				return Response.json({ file_id: file, upload_url: `https://fixture.test/${file}` });
+			}
+			if (url.pathname === '/service/.upload') {
+				assert.ok(request.body instanceof VSBuffer);
+				contents.set(new URL(url.searchParams.get('url')!).pathname.slice(1), request.body.toString());
+				return new Response(null, { status: 204 });
+			}
+			if (url.pathname === '/service/backend-api/files/process_upload_stream') {
+				assert.equal(typeof request.body, 'string');
+				return new Response(JSON.stringify({ event: 'file.processing.completed', file_id: JSON.parse(String(request.body)).file_id }));
+			}
+			if (url.pathname === projectFiles && request.method === 'POST') {
+				const [{ file_id, name }] = JSON.parse(String(request.body)).files;
+				if (file_id === 'file-memory-1') {
+					void started.complete();
+					await attach.p;
+				}
+				files.set(file_id, name);
+				return new Response(null, { status: 204 });
+			}
+			if (url.pathname.startsWith(`${projectFiles}/`) && request.method === 'DELETE') {
+				assert.ok(files.delete(url.pathname.split('/').at(-1)!));
+				return new Response(null, { status: 204 });
+			}
+			if (url.pathname === '/service/.resource') {
+				const file = new URL(url.searchParams.get('url')!).pathname.split('/').at(-1)!;
+				assert.ok(files.has(file));
+				return new Response(contents.get(file));
+			}
+			return response(path);
+		};
+		using firstWindow = fixture(respond);
+		using secondWindow = fixture(respond);
+		await Promise.all([firstWindow.reload(), secondWindow.reload()]);
+		const signal = new AbortController().signal;
+		const [first, second] = await Promise.all([firstWindow.editProjectMemory(id, scope, signal), secondWindow.editProjectMemory(id, scope, signal)]);
+		assert.deepEqual(first.versions, []);
+		assert.deepEqual(second.versions, []);
+		const firstSave = first.save!('First draft');
+		const secondSave = second.save!('Second draft');
+		const saves = Promise.all([firstSave, secondSave]);
+		try {
+			await Promise.race([started.p, saves]);
+		} finally {
+			void attach.complete();
+		}
+		const [saved, conflict] = await saves;
+		assert.equal(saved, undefined);
+		assert.deepEqual(conflict?.versions, ['First draft']);
+		assert.ok(conflict?.save);
+		assert.equal(uploads, 1);
+		assert.deepEqual([...files.keys()], ['file-memory-1']);
+
+		// A previously hidden, older source changes the version set even when the current file is unchanged.
+		files.set('file-legacy', 'Ash project memory 0000000000001-00000000-0000-0000-0000-000000000000.md');
+		contents.set('file-legacy', `${marker}Recovered draft`);
+		const recovery = await conflict.save('First draft\nSecond draft');
+		assert.deepEqual(recovery?.versions, ['First draft', 'Recovered draft']);
+		assert.ok(recovery?.save);
+		assert.equal(uploads, 1);
+		assert.deepEqual((await secondWindow.editProjectMemory(id, scope, signal)).versions, recovery.versions);
+		const merged = 'First draft\nSecond draft\nRecovered draft';
+		assert.equal(await recovery.save(merged), undefined);
+		assert.deepEqual([...files.keys()], ['file-memory-2']);
+		assert.equal(contents.get('file-memory-2'), marker + merged);
+		assert.deepEqual((await firstWindow.editProjectMemory(id, scope, signal)).versions, [merged]);
+	});
+
 	test('refreshes a stale project from the head and verifies omitted conversations before removing them', async () => {
 		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
 		using clock = toDisposable(() => mock.timers.reset());

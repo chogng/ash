@@ -102,9 +102,11 @@ export interface ProjectMaterialRow {
 }
 
 export interface CatalogProjectMemoryEditor {
-	readonly body: string;
+	/** Saved versions, with the current version first. */
+	readonly versions: readonly string[];
 	readonly storageDescription: string;
-	readonly save?: (body: string) => Promise<void>;
+	/** On conflict, returns the latest editor so the caller can review its versions and retry. */
+	readonly save?: (body: string) => Promise<CatalogProjectMemoryEditor | undefined>;
 }
 
 export interface CatalogProjectDetails {

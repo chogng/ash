@@ -40,6 +40,7 @@ const projectFreshnessMs = 60_000;
 const projectMembershipCheckLimit = 12;
 const projectMemoryFile = /^Ash project memory (\d{13})-[a-f0-9-]{36}\.md$/u;
 const projectMemoryBodyLimit = 16384;
+type ProjectMemorySource = NonNullable<ChatGPTProjectDetails['files']>[number] & { readonly body: string; };
 
 function projectInstructionsKey(scope: string, id: string): string {
 	return `sessions.chatgpt.projectInstructions.v1:${scope}:${id}`;
@@ -598,7 +599,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	private async readProjectMemorySources(id: string, details: ChatGPTProjectDetails, signal: AbortSignal) {
+	private async readProjectMemorySources(id: string, details: ChatGPTProjectDetails, signal: AbortSignal): Promise<ProjectMemorySource[]> {
 		if (!details.files) throw new Error(localize('sessions.chatgpt.projectMemoryReadFailed', 'Could not read the project memory sources.'));
 		const header = `<!-- ash-project-memory:${id} -->\n`;
 		const sizeLimit = projectMemoryBodyLimit + header.length;
@@ -615,16 +616,19 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	public async editProjectMemory(id: string, scope: string, signal: AbortSignal): Promise<CatalogProjectMemoryEditor> {
-		const { details, current } = await this.queueProjectRequest(id, async () => {
+		return this.queueProjectRequest(id, async () => {
 			const request = AbortSignal.any([signal, this.projectRequest(id, scope, 30_000)]);
 			const details = await this.client.projectDetails(id, request, true);
-			const [current] = await this.readProjectMemorySources(id, details, request);
+			const sources = await this.readProjectMemorySources(id, details, request);
 			this.publishProjectDetails(id, scope, details);
-			return { details, current };
+			return this.createProjectMemoryEditor(id, scope, details, sources);
 		});
-		let expectedId = current?.id;
+	}
+
+	private createProjectMemoryEditor(id: string, scope: string, details: ChatGPTProjectDetails, sources: readonly ProjectMemorySource[]): CatalogProjectMemoryEditor {
+		const expectedIds = new Set(sources.map(source => source.id));
 		return {
-			body: current?.body ?? '',
+			versions: sources.map(source => source.body),
 			storageDescription: details.canWrite
 				? localize('sessions.chatgpt.projectMemoryStorage', 'Saved as a Markdown file in this project’s sources.')
 				: localize('sessions.chatgpt.projectReadOnly', 'You only have view access to this ChatGPT project.'),
@@ -633,46 +637,64 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					throw new Error(localize('sessions.chatgpt.projectMemoryTooLong', 'Keep the project memory to 16 KiB or less.'));
 				}
 				const request = this.projectRequest(id, scope, 90_000, true);
-				let latest = await this.client.projectDetails(id, request, true);
-				if (!latest.canWrite) throw new Error(localize('sessions.chatgpt.projectReadOnly', 'You only have view access to this ChatGPT project.'));
-				const sources = await this.readProjectMemorySources(id, latest, request);
-				const previous = sources[0];
-				if (previous?.id !== expectedId && previous?.body !== body) {
-					throw new Error(localize('sessions.chatgpt.projectMemoryConflict', 'The project memory changed. Reopen it before saving your edits.'));
-				}
-				let keep = previous?.id;
-				if (previous?.body !== body) {
-					const timestamp = Math.max(Date.now(), Number(projectMemoryFile.exec(previous?.name ?? '')?.[1] ?? 0) + 1);
-					const name = `Ash project memory ${String(timestamp).padStart(13, '0')}-${generateUuid()}.md`;
-					const file = new File([`<!-- ash-project-memory:${id} -->\n`, body], name, { type: 'text/markdown' });
-					keep = await this.client.addProjectFile(id, file, request);
-					latest = await this.client.projectDetails(id, request, true);
-					if (!latest.files?.some(source => source.id === keep && source.name === name)) {
-						throw new Error(localize('sessions.chatgpt.projectFileNotAdded', 'ChatGPT did not confirm that the file was added to the project.'));
-					}
-				}
-				expectedId = keep;
-				const retired = sources.filter(source => source.id !== keep);
-				// Retain the previous content until ChatGPT confirms the new source is attached.
-				for (const source of retired) {
-					try {
-						await this.client.removeProjectFile(id, source.id, request);
-					} catch (error) {
-						latest = await this.client.projectDetails(id, request, true);
-						if (!latest.files || latest.files.some(file => file.id === source.id)) {
-							this.publishProjectDetails(id, scope, latest);
-							throw error;
-						}
-					}
-				}
-				if (retired.length) latest = await this.client.projectDetails(id, request, true);
-				request.throwIfAborted();
-				this.publishProjectDetails(id, scope, latest);
-				if (!latest.files?.some(file => file.id === keep) || latest.files.some(file => retired.some(source => source.id === file.id))) {
-					throw new Error(localize('sessions.chatgpt.projectMemorySaveUnconfirmed', 'Could not confirm that ChatGPT saved the project memory.'));
-				}
+				const locks = globalThis.navigator?.locks;
+				if (!locks) throw new Error(localize('sessions.chatgpt.projectMemorySaveUnavailable', 'Project memory cannot be saved in this window.'));
+				// Agents windows share this lock even though each has its own service and project queue.
+				return locks.request(`ash:chatgpt:project-memory:${id}`, { signal: request },
+					() => this.saveProjectMemory(id, scope, expectedIds, body, request));
 			}) : undefined,
 		};
+	}
+
+	private async saveProjectMemory(id: string, scope: string, expectedIds: Set<string>, body: string, request: AbortSignal): Promise<CatalogProjectMemoryEditor | undefined> {
+		request.throwIfAborted();
+		let latest = await this.client.projectDetails(id, request, true);
+		if (!latest.canWrite) throw new Error(localize('sessions.chatgpt.projectReadOnly', 'You only have view access to this ChatGPT project.'));
+		const sources = await this.readProjectMemorySources(id, latest, request);
+		const previous = sources[0];
+		if (sources.length !== expectedIds.size || sources.some(source => !expectedIds.has(source.id))) {
+			this.publishProjectDetails(id, scope, latest);
+			// A retry with the same content is already complete if there is a single saved version.
+			return sources.length === 1 && previous?.body === body ? undefined : this.createProjectMemoryEditor(id, scope, latest, sources);
+		}
+		let keep = previous?.id;
+		if (previous?.body !== body) {
+			const timestamp = Math.max(Date.now(), Number(projectMemoryFile.exec(previous?.name ?? '')?.[1] ?? 0) + 1);
+			const name = `Ash project memory ${String(timestamp).padStart(13, '0')}-${generateUuid()}.md`;
+			const file = new File([`<!-- ash-project-memory:${id} -->\n`, body], name, { type: 'text/markdown' });
+			keep = await this.client.addProjectFile(id, file, request);
+			latest = await this.client.projectDetails(id, request, true);
+			if (!latest.files?.some(source => source.id === keep && source.name === name)) {
+				throw new Error(localize('sessions.chatgpt.projectFileNotAdded', 'ChatGPT did not confirm that the file was added to the project.'));
+			}
+			expectedIds.add(keep);
+		}
+		const retired = sources.filter(source => source.id !== keep);
+		// Retain the reviewed versions until ChatGPT confirms the replacement is attached.
+		for (const source of retired) {
+			try {
+				await this.client.removeProjectFile(id, source.id, request);
+			} catch (error) {
+				latest = await this.client.projectDetails(id, request, true);
+				if (!latest.files || latest.files.some(file => file.id === source.id)) {
+					this.publishProjectDetails(id, scope, latest);
+					throw error;
+				}
+			}
+			expectedIds.delete(source.id);
+		}
+		if (retired.length) latest = await this.client.projectDetails(id, request, true);
+		request.throwIfAborted();
+		this.publishProjectDetails(id, scope, latest);
+		if (!latest.files?.some(file => file.id === keep) || latest.files.some(file => retired.some(source => source.id === file.id))) {
+			throw new Error(localize('sessions.chatgpt.projectMemorySaveUnconfirmed', 'Could not confirm that ChatGPT saved the project memory.'));
+		}
+		// A client outside this lock can still attach a source. Leave it available for review.
+		if (latest.files.some(file => file.id !== keep && projectMemoryFile.test(file.name))) {
+			const confirmed = await this.readProjectMemorySources(id, latest, request);
+			if (confirmed.length > 1) return this.createProjectMemoryEditor(id, scope, latest, confirmed);
+		}
+		return undefined;
 	}
 
 	public removeProjectFile(id: string, scope: string, fileId: string): Promise<void> {
