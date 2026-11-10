@@ -104,6 +104,7 @@ suite('Projects toolbar', () => {
 			await card.click();
 			const composer = page.locator('.ash-projects-composer');
 			await expect(composer).toHaveAccessibleName(chinese ? '在项目中新建聊天' : 'New chat in project');
+			await expect(page.locator('.ash-projects-detail-content + .ash-projects-composer')).toBeVisible();
 			const form = composer.locator('.ash-chat-input-adaptive');
 			await expect(form).toBeVisible();
 			const editor = new Editor(composer);
