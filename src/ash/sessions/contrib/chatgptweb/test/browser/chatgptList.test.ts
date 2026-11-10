@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { EOL } from 'node:os';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -921,6 +922,73 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(previousKeys(await storageKeys())).toEqual([]);
 	});
 
+	for (const phase of ['loaded', 'loading'] as const) {
+		test(`closes a ${phase} ChatGPT project Markdown preview when the account changes`, async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			const id = 'g-p-research';
+			const name = 'Project notes.md';
+			let project = 'First account project';
+			let text = 'First account notes';
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: { items: [{ gizmo: { id, display: { name: project } } }], cursor: null },
+			}));
+			await page.route(`**/service/backend-api/gizmos/${id}*`, route => {
+				if (!new URL(route.request().url()).pathname.endsWith(id)) return route.fallback();
+				return route.fulfill({ json: { gizmo: { id, display: { name: project } }, files: [{ file_id: 'file-notes', name }] } });
+			});
+			await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/markdown', body: text }));
+			await page.goto('/chatgptNavigation.html?projects&projectMaterials');
+			const projects = page.locator('.ash-projects');
+			await projects.getByRole('button', { name: project, exact: true }).click();
+			const note = projects.getByRole('button', { name, exact: true });
+			const preview = page.getByRole('dialog', { name, exact: true });
+			await expect(note.locator('.ash-projects-material-card-excerpt')).toHaveText(text);
+			if (phase === 'loading') {
+				await page.evaluate(name => window.ashChatGPTIntegration.pauseMaterialRead(name), name);
+			}
+			await note.press('Enter');
+			if (phase === 'loading') {
+				await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.isMaterialReadPaused())).toBe(true);
+				await expect(preview.getByRole('status')).toBeVisible();
+				await expect(preview.locator('.stanza-editor')).toHaveCount(0);
+			} else {
+				await expect(preview.getByText(text, { exact: true })).toBeVisible();
+				await page.evaluate(() => window.ashChatGPTIntegration.setOffline(true));
+				await expect(preview.getByText(text, { exact: true })).toBeVisible();
+				await page.evaluate(() => window.ashChatGPTIntegration.setOffline(false));
+			}
+
+			const oldText = text;
+			project = 'Second account project';
+			text = 'Second account notes';
+			await page.evaluate(() => window.ashChatGPTIntegration.switchAccount());
+			await expect(page.locator('.ash-project-text-preview')).toHaveCount(0);
+			await expect(projects).toBeVisible();
+			if (phase === 'loading') {
+				await page.evaluate(async () => {
+					await window.ashChatGPTIntegration.resumeMaterialRead();
+					await new Promise(requestAnimationFrame);
+				});
+				await expect(page.locator('.ash-project-text-preview')).toHaveCount(0);
+			}
+
+			await expect(projects).toHaveAttribute('aria-label', project);
+			await expect(note.locator('.ash-projects-material-card-excerpt')).toHaveText(text);
+			await note.press('Enter');
+			await expect(preview.getByText(text, { exact: true })).toBeVisible();
+			await expect(preview.getByText(oldText, { exact: true })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await expect(note).toBeFocused();
+			if (phase === 'loaded') {
+				await note.press('Enter');
+				await expect(preview.getByText(text, { exact: true })).toBeVisible();
+				await page.evaluate(() => window.ashChatGPTIntegration.toggleArchivedProjects());
+				await expect(page.locator('.ash-project-text-preview')).toHaveCount(0);
+			}
+		});
+	}
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Projects creates a ChatGPT project from the shared project form (${locale})`, async () => {
 			const { page } = browserTests;
@@ -1364,14 +1432,16 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(fileCard.locator('.ash-file-card-size')).toHaveText('13B');
 			await expect(fileCard.locator('.ash-projects-material-card-excerpt')).toHaveText('New remote file');
 			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('notes.txt'))).toBe('New remote file');
-			upload = { id: 'file-markdown', name: 'Project notes.md', type: 'text/markdown', content: '# Notes\n\n- 第二行\n' };
+			const markdown = '# Notes\n\n- 第二行\n';
+			// The editor serializes the new document with the platform's line endings.
+			upload = { id: 'file-markdown', name: 'Project notes.md', type: 'text/markdown', content: markdown.replaceAll('\n', EOL) };
 			await addMaterials.click();
 			await page.getByRole('menuitem', { name: zh ? '添加文本内容' : 'Add text content', exact: true }).click();
 			const textDialog = page.getByRole('dialog', { name: zh ? '添加文本内容' : 'Add text content', exact: true });
 			await textDialog.getByRole('textbox', { name: zh ? '标题' : 'Title', exact: true }).fill('Project notes');
 			const textEditor = new Editor(textDialog);
 			await textEditor.waitForEditorFocus();
-			await page.keyboard.insertText(upload.content);
+			await page.keyboard.insertText(markdown);
 			await textDialog.getByRole('button', { name: zh ? '添加内容' : 'Add Content', exact: true }).click();
 			await expect(textDialog).toHaveCount(0);
 			await expect(addMaterials).toBeFocused();

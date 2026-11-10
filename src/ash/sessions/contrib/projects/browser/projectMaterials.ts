@@ -11,7 +11,7 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { LRUCache } from '../../../../base/common/map.js';
-import { observableFromEvent } from '../../../../base/common/observable.js';
+import { observableFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { isWeb } from '../../../../base/common/platform.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -53,7 +53,7 @@ interface ProjectMaterialsContent {
 	readonly pickFolders?: () => Promise<void>;
 	readonly addText?: (id: string, title: string, content: string) => Promise<void>;
 	readonly dropFiles?: (transfer: DataTransfer) => Promise<void>;
-	readonly isCurrent: () => boolean;
+	readonly isCurrent: (reader?: IReader) => boolean;
 }
 
 type CatalogMaterialUpload = NonNullable<CatalogProjectDetails['upload']>;
@@ -184,7 +184,7 @@ export class ProjectMaterials extends Disposable {
 		}
 	}
 
-	renderLocal(target: HTMLElement, project: Project, busy: boolean, isCurrent: () => boolean, content: DisposableStore): HTMLElement {
+	renderLocal(target: HTMLElement, project: Project, busy: boolean, isCurrent: ProjectMaterialsContent['isCurrent'], content: DisposableStore): HTMLElement {
 		const previewKey = (resource: URI) => JSON.stringify([project.id, resource.toString()]);
 		const add = async (entries: readonly { resource: URI; file?: File; }[], kind: 'file' | 'folder') => {
 			const current = this.projects.state.get().selected;
@@ -363,13 +363,13 @@ export class ProjectMaterials extends Disposable {
 		return materials;
 	}
 
-	private renderFileCard(row: HTMLElement, material: ProjectMaterialPresentation, isCurrent: () => boolean,
+	private renderFileCard(row: HTMLElement, material: ProjectMaterialPresentation, isCurrent: ProjectMaterialsContent['isCurrent'],
 		content: DisposableStore, token: CancellationToken): void {
 		const document = row.ownerDocument;
 		const { name, readText, open, resolveFile, previewText, selectedFile } = material;
 		const sizeBytes = material.sizeBytes ?? selectedFile?.size;
 		const run = readText ? () => {
-			this.projectDialogs.showTextPreview(this.owner, name, readText, () => {
+			this.projectDialogs.showTextPreview(this.owner, name, readText, isCurrent, () => {
 				if (!isCurrent()) return;
 				const controls = this.owner.querySelectorAll<HTMLButtonElement>('[data-project-control]');
 				Array.from(controls).find(control => control.dataset.projectControl === material.id)?.focus();

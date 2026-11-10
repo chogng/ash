@@ -6,6 +6,7 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { autorun, type IReader } from '../../../../base/common/observable.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -78,7 +79,7 @@ interface CodeProjectEdit {
 export interface IProjectDialogService {
 	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit, creator?: CatalogProjectCreator): void;
 	showAddTextDialog(owner: HTMLElement, restoreFocus: () => void, save: (title: string, content: string) => Promise<void>): void;
-	showTextPreview(owner: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, restoreFocus: () => void): void;
+	showTextPreview(owner: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, isCurrent: (reader?: IReader) => boolean, restoreFocus: () => void): void;
 	showCodeProjectDialog(owner: HTMLElement, edit?: CodeProjectEdit): Promise<void>;
 	close(owner: HTMLElement): void;
 }
@@ -128,12 +129,16 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		return project;
 	}
 
-	showTextPreview(container: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, restoreFocus: () => void): void {
+	showTextPreview(container: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, isCurrent: (reader?: IReader) => boolean, restoreFocus: () => void): void {
+		if (!isCurrent()) return;
 		const active = this.begin(container);
 		if (!active) return;
 		const { store } = active;
 		const controller = new AbortController();
 		store.add(toDisposable(() => controller.abort()));
+		store.add(autorun(reader => {
+			if (!isCurrent(reader)) this.active.clear();
+		}));
 		const host = h(container.ownerDocument, 'div', { className: 'ash-project-text-preview-editor', properties: { hidden: true } });
 		const message = h(container.ownerDocument, 'p', { attributes: { role: 'status' } }, localize('projects.loadingTextPreview', 'Loading content…'));
 		const dialog = store.add(new Dialog(container, title, [], createWorkbenchDialogOptions({
@@ -150,7 +155,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			}
 		});
 		void read(controller.signal).then(text => {
-			if (store.isDisposed) return;
+			// A cached file read can finish after its preview has been closed.
+			if (store.isDisposed || !isCurrent()) return;
 			host.hidden = false;
 			const model = store.add(this.models.createModel(text, this.languages.createById('markdown'), undefined, true));
 			store.add(this.instantiation.createInstance(CodeEditorWidget, {
@@ -174,7 +180,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			}));
 			message.hidden = true;
 		}).catch(() => {
-			if (!store.isDisposed) {
+			if (!store.isDisposed && isCurrent()) {
 				host.hidden = true;
 				message.textContent = localize('projects.textPreviewFailed', 'Could not open this content.');
 			}

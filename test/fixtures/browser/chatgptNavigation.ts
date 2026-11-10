@@ -28,6 +28,7 @@ import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
@@ -121,11 +122,19 @@ import { AccessibilityService } from '../../../src/ash/platform/accessibility/br
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; readSavedMaterial(name: string): string | undefined; openedMaterial(): string | undefined; setOffline(offline: boolean): void; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; showFind(): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
+	interface Window {
+		ashChatGPTIntegration: {
+			newChat(): void; draft(): string; readSavedMaterial(name: string): string | undefined; openedMaterial(): string | undefined; setOffline(offline: boolean): void; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; showFind(): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>;
+			switchAccount(): void;
+			pauseMaterialRead(name: string): void;
+			isMaterialReadPaused(): boolean;
+			resumeMaterialRead(): Promise<void>;
+		};
+	}
 }
 
 const parameters = new URLSearchParams(location.search);
-const chatGPTCacheScope = 'a'.repeat(64);
+let chatGPTCacheScope = 'a'.repeat(64);
 registerChatGPTResponseActions();
 // The renderer widgets consume the containing Sessions host's visual defaults.
 document.body.classList.add('ash-workbench');
@@ -135,6 +144,7 @@ sessionsRoot.style.flexDirection = 'row';
 sessionsRoot.append(document.getElementById('navigation')!, document.getElementById('editor')!);
 document.body.append(sessionsRoot);
 const resources = new DisposableStore();
+const authenticationChanged = resources.add(new Emitter<void>());
 if (parameters.has('dictation')) resources.add(installTestDictationAudio(window));
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const theme = resources.add(new TestThemeService(themes[(parameters.get('theme') ?? 'dark') as keyof typeof themes]));
@@ -168,6 +178,8 @@ const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new TestNotificationService());
 if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
 const savedMaterials = new Map<string, string>();
+let pausedMaterialRead: { name: string; started: boolean; release: DeferredPromise<void> } | undefined;
+resources.add(toDisposable(() => void pausedMaterialRead?.release.complete()));
 let openedMaterial: string | undefined;
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	...getSingletonServiceDescriptors().filter(([id]) =>
@@ -183,6 +195,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
 	[IChatGPTTransport, {
 		async getCacheScope() { return chatGPTCacheScope; },
+		onDidChangeAuthentication: authenticationChanged.event,
 		async request(id, request) {
 			const controller = new AbortController();
 			const pending = { controller, reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
@@ -244,6 +257,16 @@ registerTestComponentServices(services);
 if (parameters.has('projectMaterials')) {
 	Object.assign(services.get(IWorkbenchEnvironmentService), { userRoamingDataHome: URI.file('/fixture-profile') });
 	const provider = new class extends MemoryFileService {
+		override async readFile(resource: URI) {
+			const result = await super.readFile(resource);
+			const pause = pausedMaterialRead;
+			if (pause && !pause.started && resource.path.endsWith(`/${pause.name}`)) {
+				pause.started = true;
+				await pause.release.p;
+			}
+			return result;
+		}
+
 		override async writeFile(...args: Parameters<MemoryFileService['writeFile']>) {
 			const written = await super.writeFile(...args);
 			savedMaterials.set(args[0].path.split('/').at(-1)!, this.text(args[0]));
@@ -314,6 +337,16 @@ window.ashChatGPTIntegration = {
 	newChat: () => chat.newChat(),
 	draft: () => chat.state.get().draft,
 	readSavedMaterial: name => savedMaterials.get(name),
+	switchAccount: () => {
+		chatGPTCacheScope = (chatGPTCacheScope[0] === 'a' ? 'b' : 'a').repeat(64);
+		authenticationChanged.fire();
+	},
+	pauseMaterialRead: name => { pausedMaterialRead = { name, started: false, release: new DeferredPromise<void>() }; },
+	isMaterialReadPaused: () => pausedMaterialRead?.started === true,
+	resumeMaterialRead: async () => {
+		await pausedMaterialRead?.release.complete();
+		pausedMaterialRead = undefined;
+	},
 	openedMaterial: () => openedMaterial,
 	setOffline: offline => chat.setNetworkAvailable(!offline),
 	storageKeys: () => storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE),

@@ -8,7 +8,7 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, derived, observableValue } from '../../../../base/common/observable.js';
+import { autorun, derived, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -405,7 +405,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject);
 		layout.querySelector('.ash-projects-detail-card')?.remove();
 		if (localProject) {
-			const isCurrent = () => this.shown.get() && this.projects.state.get().selectedId === id;
+			const isCurrent = (reader?: IReader) => this.shown.read(reader) && this.projects.state.read(reader).selectedId === id;
 			detailContent.append(this.renderProjectDetailCard(localProject.description,
 				() => this.showProjectDialog({ project: localProject, instructionsOnly: true }),
 				target => this.projectMaterials.renderLocal(target, localProject, this.projects.state.get().busy, isCurrent, this.content)));
@@ -420,8 +420,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				target => this.projectMaterials.renderCatalog(target, details.key, {
 					rows: materialsSnapshot,
 					upload: data?.canEdit && data.materials ? details.upload : undefined,
-					isCurrent: () => this.shown.get() && this.projects.state.get().conversationProjectId === id
-						&& this.projectGroups.get().find(group => group.key === id)?.project?.details?.key === details.key,
+					isCurrent: reader => this.shown.read(reader) && this.projects.state.read(reader).conversationProjectId === id
+						&& this.projectGroups.read(reader).find(group => group.key === id)?.project?.details?.key === details.key,
 					status: !details.load ? undefined : failed ? {
 						text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
 					} : materialsSnapshot ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
