@@ -10,6 +10,15 @@
 	margin-bottom: 0;
 }
 
+.ash-chat-file-link-icon {
+	display: inline-block;
+	margin-inline-end: var(--ash-spacing-size40);
+}
+
+.ash-chat-file-link-icon > .ash-icon-label-inline-icon {
+	margin: 0;
+}
+
 .ash-chat-media-attachments {
 	min-width: 0;
 }

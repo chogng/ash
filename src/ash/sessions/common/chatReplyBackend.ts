@@ -22,7 +22,7 @@ export interface ChatReplyAttachment {
 export interface ChatReplyResource {
 	readonly uri: string;
 	readonly name: string;
-	readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html';
+	readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html' | 'chart';
 	readonly mimeType?: string;
 	readonly frameOrigin?: string;
 }

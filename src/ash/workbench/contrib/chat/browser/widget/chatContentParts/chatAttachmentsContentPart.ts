@@ -7,6 +7,7 @@ import type { URI } from '../../../../../../base/common/uri.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { decodeBase64 } from '../../../../../../base/common/buffer.js';
 import { getMediaMime } from '../../../../../../base/common/mime.js';
+import { htmlAttributeEncodeValue } from '../../../../../../base/common/strings.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
@@ -23,13 +24,14 @@ import { IContextKeyService } from '../../../../../../platform/contextkey/browse
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import { ImagePreviewPopup } from '../../../../mediaPreview/browser/imagePreviewPopup.js';
 import { ImageAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
+import { renderChatChartDocument } from './chatChartDocument.js';
 
 /** A provider-owned resource; only its reader knows authentication or protocol coordinates. */
 export interface IChatAttachmentResource {
 	readonly type: 'resource';
 	readonly resource: URI;
 	readonly name: string;
-	readonly presentation: 'image' | 'audio' | 'video' | 'document' | 'html';
+	readonly presentation: 'image' | 'audio' | 'video' | 'document' | 'html' | 'chart';
 	readonly mimeType?: string;
 	readonly frameOrigin?: string;
 }
@@ -393,7 +395,20 @@ export class ChatAttachmentsContentPart extends Disposable {
 	}
 
 	private async readResource(part: IChatAttachmentResource, signal: AbortSignal): Promise<Blob | undefined> {
+		if (part.frameOrigin && part.resource.scheme === 'https') {
+			const url = new URL(part.resource.toString());
+			if (url.origin !== part.frameOrigin || url.username || url.password) {
+				throw new Error(localize('chat.media.wrongType', 'The attachment has an unexpected media type.'));
+			}
+			const html = `<iframe src="${htmlAttributeEncodeValue(url.href)}" title="${htmlAttributeEncodeValue(part.name)}" style="border:0;width:100%;height:100vh" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>`;
+			return new Blob([html], { type: 'text/html' });
+		}
 		const blob = await this.options.readResource?.(part.resource, signal);
+		if (blob && part.presentation === 'chart') {
+			const html = renderChatChartDocument(part.name, await blob.text());
+			if (!html) throw new Error(localize('chat.media.wrongType', 'The attachment has an unexpected media type.'));
+			return new Blob([html], { type: 'text/html' });
+		}
 		const inferred = this.useImagePopup && part.presentation === 'image' && (!part.mimeType || part.mimeType === 'application/octet-stream')
 			? getMediaMime(part.name) : part.mimeType;
 		return blob && inferred && (!blob.type || blob.type === 'application/octet-stream')

@@ -1,0 +1,145 @@
+import { renderAsPlaintext, renderWorkbenchMarkdown } from '../../../../../base/browser/markdownRenderer.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { getLxiconDefinition } from '../../../../../base/common/lxiconsUtil.js';
+import { Marked, type MarkedExtension, type Token } from '../../../../../base/common/marked/marked.js';
+import { extname } from '../../../../../base/common/path.js';
+import { escapeRegExpCharacters, htmlAttributeEncodeValue as escapeHTML } from '../../../../../base/common/strings.js';
+import { localize } from '../../../../../nls.js';
+import type { ChatMarkdownRichContent, ChatMarkdownRichPart, ChatMarkdownRichStyle } from '../../common/model/chatMarkdownRichContent.js';
+
+export const CHAT_RESPONSE_DOWNLOAD_SCHEME = 'chat-response-download';
+
+const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
+const iconAliases = new Map([
+	['arrow-down-up', Lxicon.sort.id],
+	['minus', Lxicon.remove.id],
+	['plus', Lxicon.add.id],
+	['x', Lxicon.close.id],
+]);
+const fileIcons = new Map([
+	['.csv', Lxicon.csvGreen],
+	['.doc', Lxicon.docxBlue],
+	['.docx', Lxicon.docxBlue],
+	['.pdf', Lxicon.pdfRed],
+	['.xls', Lxicon.xlsGreen],
+	['.xlsx', Lxicon.xlsGreen],
+]);
+
+function colorClass(property: 'background' | 'border', value: string | undefined): string | undefined {
+	const match = value && /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
+	if (!match || match.slice(1, 4).some(channel => Number(channel) > 255)) return undefined;
+	return `${property}-rgba-${match[1]}-${match[2]}-${match[3]}-${(match[4] ?? '1').replace('.', 'p')}`;
+}
+
+function classes(kind: 'box' | 'row' | 'text' | 'icon', style: ChatMarkdownRichStyle): string {
+	const result = ['ash-chat-rich', `ash-chat-rich-${kind}`];
+	const variants: ReadonlyArray<readonly [keyof ChatMarkdownRichStyle, readonly string[]]> = [
+		['radius', ['sm', 'md', 'lg']], ['padding', ['0', '1', '2', '3', '4']], ['gap', ['0', '1', '2', '3', '4']],
+		['align', ['start', 'center', 'end', 'stretch']], ['justify', ['start', 'center', 'end']],
+		['background', ['surface', 'surface-secondary']], ['color', kind === 'icon' ? ['secondary', 'success', 'danger'] : ['secondary']], ['size', ['xs', 'sm', 'lg']],
+	];
+	for (const [name, allowed] of variants) {
+		const value = style[name];
+		if (value && allowed.includes(value)) result.push(`${name}-${value}`);
+	}
+	if (style.border) result.push('border');
+	const background = colorClass('background', style.background);
+	const border = colorClass('border', style.borderColor);
+	if (background) result.push(background);
+	if (border) result.push(border);
+	return result.join(' ');
+}
+
+const link = (href: string, label: string): string => `<a href="${escapeHTML(href)}">${escapeHTML(label)}</a>`;
+
+function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inLink: boolean, textOnly: boolean): string {
+	switch (part.kind) {
+		case 'markdown': return body;
+		case 'textLiteral': return escapeHTML(part.label);
+		case 'link': return inLink ? escapeHTML(part.link.label) : link(part.link.href, part.link.label);
+		case 'resource': {
+			const label = body || escapeHTML(part.label);
+			if (textOnly) return `<span>${label}</span>${part.data ? `<pre>${escapeHTML(part.data)}</pre>` : ''}`;
+			if (inLink || !part.uri) return label;
+			const href = CHAT_RESPONSE_DOWNLOAD_SCHEME + ':' + index;
+			const title = part.title ? ` title="${escapeHTML(part.title)}"` : '';
+			const icon = fileIcons.get(extname(part.label).toLowerCase()) ?? Lxicon.file;
+			return `<a href="${href}"${title}><span class="ash-chat-file-link-icon">$(${icon.id})</span>${label}</a>`;
+		}
+		case 'box':
+		case 'row':
+		case 'text': {
+			const tag = part.block ? 'div' : 'span';
+			const fallback = part.fallback && link(part.fallback.href, part.fallback.label);
+			return `<${tag} class="${classes(part.kind, part.style)}">${body || fallback || ''}</${tag}>`;
+		}
+		case 'icon': {
+			const label = iconText.get(part.name) ?? (part.label || part.name);
+			const iconId = iconAliases.get(part.name) ?? part.name;
+			const content = !textOnly && getLxiconDefinition(iconId)
+				? `$(${iconId})<span class="ash-chat-rich-icon-text">${escapeHTML(label)}</span>`
+				: label ? escapeHTML(label) : link(part.fallback.href, part.fallback.label);
+			return `<span class="${classes('icon', part.style)}">${content}</span>`;
+		}
+		case 'details':
+			return `<details class="ash-chat-rich" open><summary>${escapeHTML(part.label || localize('chat.richContent.details', 'Content'))}</summary>${body}${part.data ? `<pre><code>${escapeHTML(part.data)}</code></pre>` : ''}</details>`;
+		case 'citations':
+			return `<details class="ash-chat-citation"><summary>${part.entries.map(entry => `[${entry.number}]`).join(' ')}</summary>${part.entries.map(entry => `<div>${link(entry.url, entry.title)}<p>${escapeHTML(entry.snippet)}</p></div>`).join('')}</details>`;
+		case 'unavailableMedia':
+			return `<span class="ash-chat-markdown-media">${localize('chat.markdown.mediaUnavailable', 'Media content is unavailable here.')} ${link(part.fallback.href, part.fallback.label)}</span>`;
+	}
+}
+
+/** Renders the referenced part after Markdown has established the enclosing list, paragraph or table cell. */
+export function chatMarkdownRichContentExtension(content: ChatMarkdownRichContent, textOnly = false): MarkedExtension {
+	const pattern = escapeRegExpCharacters(content.markerPrefix) + '(\\d+):>';
+	const marker = new RegExp('^' + pattern, 'u');
+	const blockMarkers = new RegExp('\n' + pattern, 'gu');
+	return {
+		extensions: (['block', 'inline'] as const).map(level => ({
+			name: level === 'block' ? 'chatRichBlock' : 'chatRichInline',
+			level,
+			start(source) {
+				if (level === 'inline') return source.indexOf(content.markerPrefix);
+				// A block reference can interrupt only from the start of a line.
+				for (const match of source.matchAll(blockMarkers)) {
+					if (content.parts[Number(match[1])]?.block) return match.index + 1;
+				}
+				return undefined;
+			},
+			tokenizer(source) {
+				if (this.lexer.state.inRawBlock) return undefined;
+				const match = marker.exec(source);
+				const index = Number(match?.[1]);
+				const part = content.parts[index];
+				if (!match || !part || level === 'block' && !part.block) return undefined;
+				const inLink = this.lexer.state.inLink;
+				const tokens = 'markdown' in part && part.markdown
+					? part.block ? this.lexer.blockTokens(part.markdown) : this.lexer.inlineTokens(part.markdown)
+					: [];
+				return { type: level === 'block' ? 'chatRichBlock' : 'chatRichInline', raw: match[0], part, index, tokens, inLink };
+			},
+			childTokens: ['tokens'],
+			renderer(token) {
+				const part = token.part as ChatMarkdownRichPart;
+				const tokens = token.tokens as Token[];
+				const body = part.block ? this.parser.parse(tokens) : this.parser.parseInline(tokens);
+				return renderPart(part, token.index as number, body, token.inLink === true, textOnly);
+			},
+		})),
+	};
+}
+
+export function renderChatRichContentText(markdown: string, content: ChatMarkdownRichContent | undefined): string {
+	if (!content) return renderAsPlaintext(markdown, { useLinkFormatter: true });
+	const html = renderWorkbenchMarkdown({ value: markdown, supportHtml: true }, false, { markedExtensions: [chatMarkdownRichContentExtension(content, true)] });
+	return renderAsPlaintext(html, { useLinkFormatter: true });
+}
+
+/** Expands only the rich references so ordinary Markdown keeps its original formatting on copy. */
+export function expandChatRichContentForCopy(markdown: string, content: ChatMarkdownRichContent | undefined): string {
+	if (!content) return markdown;
+	const parser = new Marked(chatMarkdownRichContentExtension(content, true));
+	const markers = new RegExp(escapeRegExpCharacters(content.markerPrefix) + '\\d+:>', 'gu');
+	return markdown.replace(markers, marker => parser.parseInline(marker, { async: false }).replaceAll('\n', '&#10;').replaceAll('|', '&#124;'));
+}

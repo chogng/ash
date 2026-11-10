@@ -868,7 +868,7 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 					parent: null, message: {
 						id: 'reply', author: { role: 'assistant' }, content: {
 							content_type: 'text', parts: [
-								`Source <Cite refs={[["turn0search1"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n[report.csv](sandbox:/mnt/data/report.csv)`
+								`Source <Cite refs={[["turn0search1"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report)`
 							]
 						}, metadata: { search_result_groups: [{ entries: [{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }] }] },
 					}
@@ -897,13 +897,20 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await chart.locator('canvas').focus(); await chart.locator('canvas').press('ArrowRight');
 	await expect(chart.locator('#point')).toContainText('June');
 	expect(await page.locator('body').getAttribute('data-escaped')).toBeNull();
-	const file = page.locator('.ash-chat-media').filter({ has: page.locator('figcaption', { hasText: 'report.csv' }) });
+	const fileLink = page.getByRole('link', { name: '实验结果.csv', exact: true });
+	await expect(fileLink).toHaveAttribute('href', /^chat-response-download:\d+$/u);
+	await expect(fileLink.locator('[data-ash-icon-id="csv-green"][aria-hidden="true"]')).toBeVisible();
+	await expect(fileLink.locator('..').locator('strong')).toHaveText('完整可筛选表格：');
+	await expect(page.getByRole('link', { name: '在线查看', exact: true })).toHaveAttribute('href', 'https://example.com/report');
+	const file = page.locator('.ash-chat-media').filter({ has: page.locator('figcaption', { hasText: '实验结果.csv' }) });
 	await expect(file.locator('pre')).toContainText('May,42');
-	const downloadEvent = page.waitForEvent('download');
-	await file.getByRole('button', { name: '下载', exact: true }).click();
-	const download = await downloadEvent;
-	expect(download.suggestedFilename()).toBe('report.csv');
-	expect(readFileSync((await download.path())!, 'utf8')).toContain('May,42');
+	for (const trigger of [fileLink, file.getByRole('button', { name: '下载', exact: true })]) {
+		const downloadEvent = page.waitForEvent('download');
+		await trigger.press('Enter');
+		const download = await downloadEvent;
+		expect(download.suggestedFilename()).toBe('实验结果.csv');
+		expect(readFileSync((await download.path())!, 'utf8')).toContain('May,42');
+	}
 	await page.evaluate(() => window.ashChatGPTIntegration.newChat());
 	await expect(page.locator('.ash-chat-media')).toHaveCount(0);
 	await expect(page.locator('iframe')).toHaveCount(0);
@@ -922,6 +929,7 @@ test('ChatGPT waits for the streamed conversation ID before resolving a sandbox 
 	await fillMessage(page, 'Synthetic rich content probe');
 	await page.getByRole('button', { name: '发送', exact: true }).click();
 	await expect(page.locator('.ash-chat-media pre')).toContainText('May,42');
+	await expect(page.getByRole('link', { name: 'report.csv', exact: true })).toHaveAttribute('href', 'chat-response-download:0');
 	expect(paths).toHaveLength(1);
 	expect(paths[0]).toContain('/conversation/late-chat/interpreter/download');
 });
@@ -1116,6 +1124,61 @@ test('ChatGPT streaming reuses math while prose grows and renders one new ordere
 	expect(counters).toEqual({ lists: 1, renders: 2 });
 });
 
+
+test('ChatGPT streaming applies corrected rich content without splitting its table row', async ({ page }) => {
+	const table = (value: string) => [
+		'| Framework | Notes |',
+		'| --- | --- |',
+		'| <Entity data={' + JSON.stringify({ value }) + '}/> | Same row |',
+	].join('\n');
+	const corrected = table('Corrected value');
+	await page.addInitScript(initial => {
+		const fetcher = globalThis.fetch.bind(globalThis);
+		globalThis.fetch = async (input, init) => {
+			if (String(input) !== '/service/backend-api/f/conversation') return fetcher(input, init);
+			return new Response(new ReadableStream({
+				start(controller) {
+					const push = (text: string) => {
+						const message = { id: 'structured-stream', author: { role: 'assistant' }, content: { parts: [text] } };
+						controller.enqueue(new TextEncoder().encode('data: ' + JSON.stringify({ conversation_id: 'fixture-chat', message }) + '\n\n'));
+					};
+					Reflect.set(globalThis, 'pushStructuredReply', push);
+					Reflect.set(globalThis, 'finishStructuredReply', () => {
+						controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+						controller.close();
+					});
+					push(initial);
+				},
+			}), { headers: { 'Content-Type': 'text/event-stream' } });
+		};
+	}, table('First value'));
+	await chatPage(page);
+	await fillMessage(page, 'Synthetic structured reply');
+	await page.getByRole('button', { name: '发送', exact: true }).click();
+	const rows = page.locator('.ash-chat-item-agentMessage .ash-chat-markdown-part tbody tr');
+	const details = rows.locator('td details');
+	await expect(rows).toHaveCount(1);
+	await expect(details).toContainText('First value');
+	await page.evaluate(text => Reflect.get(globalThis, 'pushStructuredReply')(text), corrected);
+	await expect(details).toContainText('Corrected value');
+	await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
+		json: {
+			title: 'Synthetic conversation',
+			current_node: 'structured-stream',
+			mapping: {
+				'structured-stream': {
+					parent: null,
+					message: { id: 'structured-stream', author: { role: 'assistant' }, content: { parts: [corrected] } },
+				},
+			},
+		},
+	}));
+	await page.evaluate(() => Reflect.get(globalThis, 'finishStructuredReply')());
+	await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
+	await expect(rows).toHaveCount(1);
+	await expect(rows.locator('td:last-child')).toHaveText('Same row');
+	await expect(details).toContainText('Corrected value');
+});
 
 test('ChatGPT retains semantic content and gives custom cards and charts local interaction', async ({ page }, testInfo) => {
 	test.setTimeout(600000);

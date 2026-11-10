@@ -88,8 +88,6 @@ export interface IChatWidgetModel extends IDisposable {
 		stop(): Promise<void>;
 	};
 	readResponseResource?(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob>;
-	/** The model can supply link handling for rows that belong to a different conversation backend. */
-	getResponseLinkOpener?(item: IChatListItem): ((target: string) => Promise<void>) | undefined;
 	getResponseActions?(item: IChatListItem): ChatResponseActions | undefined;
 	submitRequestEdit?(item: IChatListItem, text: string, commandId: string): Promise<void>;
 	getRequestVersions?(item: IChatListItem): Promise<readonly import('../chat.js').ChatRequestVersion[]>;
@@ -272,7 +270,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
 			virtualizeHistoryFrom: this.viewOptions?.virtualizeHistoryFrom,
 			readResponseResource: model.readResponseResource?.bind(model),
-			getResponseLinkOpener: model.getResponseLinkOpener?.bind(model),
 			getResponseActions: model.getResponseActions?.bind(model),
 			openTurnChanges,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),

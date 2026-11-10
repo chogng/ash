@@ -1,3 +1,9 @@
+import { triggerDownload } from '../../../../../base/browser/fileAccess.js';
+import { isPortableLinkTarget } from '../../../../../base/common/htmlContent.js';
+import { equals } from '../../../../../base/common/objects.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { openLinkFromMarkdown } from '../../../../../platform/markdown/browser/markdownRenderer.js';
+import { CHAT_RESPONSE_DOWNLOAD_SCHEME, chatMarkdownRichContentExtension } from './chatMarkdownRichContent.js';
 import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
@@ -93,7 +99,6 @@ interface ChatListItemRendererOptions {
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly onDidRequestLink?: (target: string) => void;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
-	readonly getResponseLinkOpener?: (item: IChatListItem) => ((target: string) => Promise<void>) | undefined;
 	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
@@ -146,6 +151,7 @@ export class ChatListItemRenderer extends Disposable {
 		@IMenuService private readonly menus: IMenuService,
 		@IActionViewItemService private readonly actionViewItems: IActionViewItemService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super();
 		this.element = h(ownerDocument, 'article');
@@ -199,11 +205,11 @@ export class ChatListItemRenderer extends Disposable {
 			this.toolPart.render(item.toolInvocation, item.attachmentSource);
 			this.item = item;
 			this.updateState();
-		} else if (this.thinkingPart && item.type === 'reasoning') {
+		} else if (this.thinkingPart && item.type === 'reasoning' && equals(this.item.markdown, item.markdown)) {
 			this.thinkingPart.updateThinking(item);
 			this.item = item;
 			this.updateState();
-		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && this.item.markdown?.supportHtml === item.markdown?.supportHtml && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
+		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && equals(this.item.markdown, item.markdown) && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
 			&& (this.item.text === item.text && this.item.transient === item.transient
 				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
 			this.item = item;
@@ -781,8 +787,29 @@ export class ChatListItemRenderer extends Disposable {
 		}));
 	}
 
+	private async openResponseLink(target: string, externalLinks: boolean, signal: AbortSignal): Promise<void> {
+		if (target.startsWith(CHAT_RESPONSE_DOWNLOAD_SCHEME + ':')) {
+			const item = this.item;
+			const index = target.slice(CHAT_RESPONSE_DOWNLOAD_SCHEME.length + 1);
+			if (!/^\d+$/u.test(index)) return;
+			const part = item.markdown?.richContent?.parts[Number(index)];
+			const resource = part?.kind === 'resource' && item.resources?.find(resource => resource.uri === part.uri);
+			if (!resource || !this.options.readResponseResource || signal.aborted) return;
+			const blob = await this.options.readResponseResource(item, URI.parse(resource.uri), signal);
+			if (!signal.aborted) triggerDownload(blob, resource.name, this.element.ownerDocument);
+			return;
+		}
+		if (externalLinks) {
+			if (isPortableLinkTarget(target)) await this.opener.open(target, { openExternal: true, fromUserGesture: true });
+		} else if (this.options.onDidRequestLink) {
+			this.options.onDidRequestLink(target);
+		} else {
+			await openLinkFromMarkdown(this.opener, target, false);
+		}
+	}
+
 	private renderMemoryReferences(): void {
-		if (!this.options.onDidRequestMemoryReference || this.options.getResponseLinkOpener?.(this.item)) return;
+		if (!this.options.onDidRequestMemoryReference || this.item.markdown?.linkPolicy === 'external') return;
 		const references = [...new Set(this.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => parseMemoryReference(reference, this.options.memoryNamespace ?? 'code')).slice(0, 8);
 		for (const [reference] of this.memoryReferences) {
 			if (!references.includes(reference)) this.memoryReferences.deleteAndDispose(reference);
@@ -892,7 +919,11 @@ export class ChatListItemRenderer extends Disposable {
 		let markdownPart: ChatMarkdownContentPart | undefined;
 		let requestText: HTMLElement | undefined;
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
-			const openResponseLink = this.options.getResponseLinkOpener?.(item);
+			const { richContent, linkPolicy } = item.markdown ?? {};
+			const canDownload = !!this.options.readResponseResource && !!richContent?.parts.some(part => part.kind === 'resource' && part.uri);
+			const externalLinks = linkPolicy === 'external';
+			const linkLifetime = canDownload || externalLinks ? new AbortController() : undefined;
+			if (linkLifetime) disposables.add(toDisposable(() => linkLifetime.abort()));
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				getChatItem: () => this.item,
@@ -903,13 +934,24 @@ export class ChatListItemRenderer extends Disposable {
 				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
-				fileReferenceDirectory: !openResponseLink && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
-				actionHandler: openResponseLink
-					? (target: string) => { void openResponseLink(target).catch(error => this.instantiationService.getOptional(INotificationService)?.error(String(error))); }
+				markedExtensions: richContent && [chatMarkdownRichContentExtension(richContent)],
+				fileReferenceDirectory: !externalLinks && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
+				actionHandler: linkLifetime
+					? (target: string) => {
+						const { signal } = linkLifetime;
+						void this.openResponseLink(target, externalLinks, signal).catch(error => {
+							if (!signal.aborted && !isCancellationError(error)) this.notifications.error(String(error));
+						});
+					}
 					: this.options.onDidRequestLink,
-				sanitizerConfig: openResponseLink ? undefined : {
-					allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] },
-					resolveFileLink: item.type === 'agentMessage' && this.options.onDidRequestLink
+				sanitizerConfig: {
+					allowedLinkSchemes: {
+						augment: [
+							...(externalLinks ? [] : [OPEN_SESSION_LINK_SCHEME]),
+							...(canDownload ? [CHAT_RESPONSE_DOWNLOAD_SCHEME] : []),
+						]
+					},
+					resolveFileLink: !externalLinks && item.type === 'agentMessage' && this.options.onDidRequestLink
 						? (href: string) => parseInlineFileReference(href) ? href : undefined
 						: undefined,
 				},
@@ -1068,7 +1110,7 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& (left.loadedSkills?.every((skill, index) => skill === right.loadedSkills?.[index]) ?? true)
 		&& left.hookPart?.run === right.hookPart?.run
 		&& sameFileReferenceDirectory(left, right)
-		&& left.resources === right.resources && left.markdown?.supportHtml === right.markdown?.supportHtml
+		&& left.resources === right.resources && equals(left.markdown, right.markdown)
 		&& left.contextEntries === right.contextEntries
 		&& left.conversationLink?.sessionId === right.conversationLink?.sessionId
 		&& left.conversationLink?.threadId === right.conversationLink?.threadId

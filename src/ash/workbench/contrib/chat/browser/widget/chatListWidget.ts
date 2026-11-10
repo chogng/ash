@@ -59,7 +59,6 @@ interface ChatListWidgetOptions {
 	readonly showPromptTimeline?: boolean;
 	readonly virtualizeHistoryFrom?: IObservable<number | undefined>;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
-	readonly getResponseLinkOpener?: (item: IChatListItem) => ((target: string) => Promise<void>) | undefined;
 	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly onDidChangeFindVisibility?: (visible: boolean) => void;
@@ -136,7 +135,7 @@ export class ChatListWidget extends DomWidget {
 	private visible = true;
 	private shouldFollow = true;
 	private pausedReplyScrollTop: number | undefined;
-	private activeRequestEdit: { readonly id: string; readonly close: (restoreFocus: boolean) => boolean } | undefined;
+	private activeRequestEdit: { readonly id: string; readonly close: (restoreFocus: boolean) => boolean; } | undefined;
 	private readonly refreshAfterRequestEdit = this._register(new RunOnceScheduler(() => this.render(this.items, this.working), 0));
 	private readingPosition: ReadingAnchor | undefined;
 	private layingOut = false;
@@ -148,9 +147,9 @@ export class ChatListWidget extends DomWidget {
 	private readonly refreshViewport = this._register(new RunOnceScheduler(() => this.refreshRowViewports(), 0));
 	private virtualRows: ChatVirtualRows | undefined;
 	private virtualPadding = 0;
-	private virtualWindow: { readonly start: number; readonly end: number } | undefined;
+	private virtualWindow: { readonly start: number; readonly end: number; } | undefined;
 	private virtualPins: readonly number[] = [];
-	private readonly virtualGaps = new Map<number, { readonly end: number; readonly element: HTMLDivElement }>();
+	private readonly virtualGaps = new Map<number, { readonly end: number; readonly element: HTMLDivElement; }>();
 	private readonly rowResizeObserver: ResizeObserver | undefined;
 	private selectionStart: string | undefined;
 	private readonly refreshSelection = this._register(new RunOnceScheduler(() => this.refreshVirtualWindow(), 0));
@@ -795,7 +794,7 @@ export class ChatListWidget extends DomWidget {
 		return parseFloat(this.transcript.ownerDocument.defaultView!.getComputedStyle(this.transcript).paddingTop) || 0;
 	}
 
-	private windowAt(rows: ChatVirtualRows, top: number): { readonly start: number; readonly end: number } {
+	private windowAt(rows: ChatVirtualRows, top: number): { readonly start: number; readonly end: number; } {
 		const start = top - this.virtualPadding;
 		const end = start + (this.scrollable.state.height || this.scrollable.scrollableElement.clientHeight || 800);
 		const window = this.virtualWindow;
@@ -808,7 +807,7 @@ export class ChatListWidget extends DomWidget {
 		};
 	}
 
-	private pinnedRows(rows: ChatVirtualRows, window: { readonly start: number; readonly end: number }): number[] {
+	private pinnedRows(rows: ChatVirtualRows, window: { readonly start: number; readonly end: number; }): number[] {
 		const document = this.transcript.ownerDocument;
 		const indexOf = (node: Node | null) => {
 			const id = this.rowId(node);

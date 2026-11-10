@@ -2,14 +2,12 @@ import { Emitter } from '../../../../base/common/event.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { canceled } from '../../../../base/common/errors.js';
-import { isPortableLinkTarget } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
 import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
@@ -74,7 +72,6 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	constructor(
 		@IChatGPTService private readonly backend: IChatGPTService,
-		@IOpenerService private readonly opener: IOpenerService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ICommandService private readonly commands: ICommandService,
 	) {
@@ -247,17 +244,6 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	interrupt(): Promise<void> { return this.backend.stop(); }
 
-	getResponseLinkOpener(item: IChatListItem): ((target: string) => Promise<void>) | undefined {
-		// Embedded Cowork output has a real Ash source. Web replies use the adapter's link policy.
-		return item.attachmentSource ? undefined : this.openWebResponseLink;
-	}
-
-	private readonly openWebResponseLink = async (target: string): Promise<void> => {
-		if (isPortableLinkTarget(target)) {
-			await this.opener.open(target, { openExternal: true, fromUserGesture: true });
-		}
-	};
-
 	getResponseActionTarget(item: IChatListItem) {
 		const state = this.backend.state.get();
 		const source = this.sources.get(item.id);
@@ -324,10 +310,13 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		}
 	}
 
-	readResponseResource(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob> {
+	async readResponseResource(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob> {
 		const source = this.sources.get(item.id);
-		if (!source || this.isDisposed) return Promise.reject(canceled());
-		return this.backend.readResource(resource.toString(), source.conversationId, source.messageId, signal);
+		if (!source || this.isDisposed || signal.aborted) throw canceled();
+		const blob = await this.backend.readResource(resource.toString(), source.conversationId, source.messageId, signal);
+		const current = this.sources.get(item.id);
+		if (this.isDisposed || signal.aborted || current?.messageId !== source.messageId || current.conversationId !== source.conversationId) throw canceled();
+		return blob;
 	}
 
 	async submitRequestEdit(item: IChatListItem, text: string, commandId: string): Promise<void> {
@@ -390,7 +379,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 					type: message.role === 'user' ? 'userMessage' : 'agentMessage',
 					text,
 					timestamp: message.timestamp,
-					markdown: decoded && { supportHtml: true },
+					markdown: decoded && { supportHtml: true, richContent: decoded.richContent, linkPolicy: 'external' },
 					label: message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 					resources,
 					transient: message === latest,

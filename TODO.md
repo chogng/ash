@@ -150,6 +150,8 @@
 
 ## Chat / Speech · TODO
 
+- [ ] **Ash 产品 · 补齐聊天行内文件图标** · 下载链接已经由 Ash 的共享聊天渲染器处理。Word、Excel、CSV 和 PDF 已用彩色图标，TXT、压缩包和源代码文件仍显示通用文件图标。在 Ash 复用现有的文本、归档和代码图标，按文件名后缀匹配并保留通用回退。数据源继续提供文件名和可读取的引用。用同一条聊天回复验证各类文件图标、链接的可访问名称和键盘下载。
+
 - [ ] **验收 · 听写模型最终版桌面安装** · 已撤掉开发态的一次性迁移。25 项 Rust 测试通过，空缓存已实测 Paraformer 下载、校验、加载和复用。当前 `pnpm prepare:backend` 卡在 `crates/automation/src/store.rs:101`，该处仍引用已不存在的 `AutomationSession::NewChat`。待 Automation 修复后重新构建 Ash，在空模型缓存的隔离桌面 profile 中从「设置 → 语音」安装 Paraformer，核对下载进度、安装完成后显示已就绪，以及重开设置后仍能选用该模型。通过后移除此条。
 
 - [ ] **共享宿主前置 · widgetHosts 窗口归位** · 上游独立 Chat 窗口沿 `chatMoveActions.ts` 进入公共 `browser/parts/editor/auxiliaryEditorPart.ts` 与 titlebar，Quick Chat 外框由 Quick Input 承担。迁移本地 `widgetHosts/chatAuxiliaryWindow.ts` 及其样式前，先闭合非编辑器 Chat／Cowork 组件在公共窗口中的挂载、焦点、置顶、关闭归还和释放契约；现有 `ITitleService.createAuxiliaryTitlebarPart` 要求编辑器分组，不能用虚构分组或转调壳承接。`widgetHosts/media/chatQuick.css` 的外框迁移也先补公共 QuickWidget 外框 owner，保留 Chat 自身的标题与内容布局。随后迁移真实调用方并验证同一组件／草稿与关闭归还。

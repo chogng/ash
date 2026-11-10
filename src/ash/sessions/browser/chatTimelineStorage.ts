@@ -26,7 +26,7 @@ function isMessage(value: unknown): value is ChatReplyMessage {
 		&& (value.references === undefined || Array.isArray(value.references) && value.references.every(item => isRecord(item)
 			&& typeof item.id === 'string' && typeof item.url === 'string' && typeof item.title === 'string' && typeof item.snippet === 'string'))
 		&& (value.resources === undefined || Array.isArray(value.resources) && value.resources.every(item => isRecord(item)
-			&& typeof item.uri === 'string' && typeof item.name === 'string' && ['image', 'audio', 'video', 'document', 'html'].includes(String(item.kind))
+			&& typeof item.uri === 'string' && typeof item.name === 'string' && ['image', 'audio', 'video', 'document', 'html', 'chart'].includes(String(item.kind))
 			&& (item.mimeType === undefined || typeof item.mimeType === 'string') && (item.frameOrigin === undefined || typeof item.frameOrigin === 'string')))
 		&& (value.activity === undefined || isRecord(value.activity) && ['call', 'result', 'progress'].includes(String(value.activity.kind))
 			&& typeof value.activity.failed === 'boolean' && (value.activity.tool === undefined || typeof value.activity.tool === 'string'));

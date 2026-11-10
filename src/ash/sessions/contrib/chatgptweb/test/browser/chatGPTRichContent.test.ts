@@ -11,7 +11,8 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ChatContentMarkdownRenderer } from '../../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
-import { decodeChatGPTReply, getChatGPTRichContentText } from '../../browser/chatGPTRichContent.js';
+import { chatMarkdownRichContentExtension, renderChatRichContentText } from '../../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
+import { decodeChatGPTReply } from '../../browser/chatGPTRichContent.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { ChatGPTReference } from '../../browser/chatGPTClient.js';
 
@@ -22,8 +23,16 @@ function render(value: string, references?: readonly ChatGPTReference[]): string
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
 	using resultRenderer = services.createInstance(ChatContentMarkdownRenderer);
-	using result = resultRenderer.render({ value: decodeChatGPTReply(value, references, 'fixture').text, supportHtml: true, supportThemeIcons: true, isTrusted: false });
+	const reply = decodeChatGPTReply(value, references, 'fixture');
+	using result = resultRenderer.render({ value: reply.text, supportHtml: true, supportThemeIcons: true, isTrusted: false }, {
+		markedExtensions: reply.richContent && [chatMarkdownRichContentExtension(reply.richContent)],
+	});
 	return result.element.innerHTML;
+}
+
+function getChatGPTRichContentText(source: string, references?: readonly ChatGPTReference[]): string {
+	const reply = decodeChatGPTReply(source, references);
+	return renderChatRichContentText(reply.text, reply.richContent);
 }
 
 suite('ChatGPT rich content', () => {
@@ -155,8 +164,8 @@ suite('ChatGPT rich content', () => {
 		const root = document.createElement('div'); root.innerHTML = html;
 		assert.match(root.textContent ?? '', /Panel title[\s\S]*Card body[\s\S]*Sales[\s\S]*Tail/u);
 		const chart = decodeChatGPTReply(source).resources[0]!;
-		const chartHtml = decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1));
-		assert.match(chartHtml, /"month":"May","amount":42/u);
+		assert.equal(chart.kind, 'chart');
+		assert.deepEqual(JSON.parse(decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1))), [{ month: 'May', amount: 42 }]);
 		assert.equal(root.querySelectorAll('details').length, 2);
 		assert.doesNotMatch(html, /ash-chat-rich-fallback/u);
 		assert.doesNotMatch(html, /<\/?(?:FuturePanel|FutureCard|Chart)\b/u);
@@ -169,9 +178,7 @@ suite('ChatGPT rich content', () => {
 		root.innerHTML = render(source);
 		assert.match(root.textContent ?? '', /Score[\s\S]*42[\s\S]*missingValues\(\)/u);
 		const chart = decodeChatGPTReply(source).resources[0]!;
-		const html = decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1));
-		assert.match(html, /Retained caption/u);
-		assert.match(html, /&quot;points&quot;[\s\S]*&quot;May&quot;: 42/u);
+		assert.deepEqual(JSON.parse(decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1))), { points: { May: 42 }, caption: 'Retained caption' });
 	});
 
 	test('keeps semantic tables, disclosure text, subscript, superscript and Markdown formulas', () => {
@@ -180,6 +187,27 @@ suite('ChatGPT rich content', () => {
 		assert.match(html, /H<sub>2<\/sub>O and x<sup>2<\/sup>/u);
 		assert.match(html, /<td>1<\/td>[\s\S]*<td>2<\/td>/u);
 		assert.match(html, /data-latex="x\^2 \+ y\^2 = z\^2"/u);
+	});
+
+	test('keeps rich content and its formatted data in one Markdown table cell', () => {
+		const source = [
+			'| Framework | Notes |',
+			'| --- | --- |',
+			String.raw`| Zed \| Rust <Entity data={{"category":"software","value":"GPUI","disambig":"Zed \| Rust"}}/> | Original row |`,
+			'| Zed | Rust |',
+		].join('\n');
+		const decoded = decodeChatGPTReply(source);
+		assert.doesNotMatch(decoded.text, /<details|<pre|&#10;/u);
+		assert.equal(decoded.richContent?.parts[0]?.kind, 'details');
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const rows = [...root.querySelectorAll('tbody tr')];
+		assert.equal(rows.length, 2);
+		assert.equal(rows[0]?.children.length, 2);
+		assert.equal(rows[0]?.children[1]?.textContent, 'Original row');
+		assert.equal(rows[1]?.children[0]?.textContent, 'Zed');
+		const data = rows[0]?.querySelector('td details pre code')?.textContent;
+		assert.equal(data, JSON.stringify({ category: 'software', value: 'GPUI', disambig: 'Zed | Rust' }, null, 2));
 	});
 
 	test('shows media and opaque components without running or loading their source', () => {

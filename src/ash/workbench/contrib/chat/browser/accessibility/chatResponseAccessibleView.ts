@@ -9,6 +9,7 @@ import type { ChatContentPart } from '../../../../services/chat/common/chatServi
 import { formatChatMessageTime, formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
 import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
+import { renderChatRichContentText } from '../widget/chatMarkdownRichContent.js';
 
 interface ChatResponseSource {
 	readonly getItems: () => readonly IChatListItem[];
@@ -99,7 +100,8 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 			}
 		} else {
 			const markdown = item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor';
-			sections.push(markdown ? renderAsPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
+			const rich = item.markdown?.richContent;
+			sections.push(markdown ? rich ? renderChatRichContentText(item.text, rich) : renderAsPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
 			sections.push(...this.attachments(item.content ?? []));
 			if (item.loadedSkills?.length) {
 				sections.push(localize('chat.skills.loadedTitle', 'Skills loaded in this turn'));

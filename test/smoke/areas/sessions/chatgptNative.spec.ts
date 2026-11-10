@@ -391,6 +391,29 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(thumbnail).toBeFocused();
 	});
 
+	test('renders colored file icons and quiet links in the conversation', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
+		await installService(application as ElectronApplication, false, '\n\n**完整可筛选表格：**[实验结果.xlsx](sandbox:/mnt/data/report.xlsx) · [在线查看](https://example.com/report)');
+		const page = await workbench.openAgentsWindow('electron');
+		await page.locator('[data-item="chatgpt:history-one"] .ash-sessions-list-item').click();
+		const fileLink = page.getByRole('link', { name: '实验结果.xlsx', exact: true });
+		const webLink = page.getByRole('link', { name: '在线查看', exact: true });
+		const paragraph = fileLink.locator('..');
+		await expect(paragraph.locator('strong')).toHaveText('完整可筛选表格：');
+		await expect(fileLink.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
+		for (const link of [fileLink, webLink]) {
+			await expect(link).toHaveCSS('text-decoration-line', 'underline');
+			await expect(link).toHaveCSS('text-decoration-style', 'dotted');
+			await expect(link).toHaveCSS('color', await paragraph.evaluate(element => getComputedStyle(element).color));
+		}
+		await paragraph.screenshot({ path: testInfo.outputPath('conversation-file-link.png') });
+		await fileLink.hover();
+		await expect(fileLink).toHaveCSS('text-decoration-style', 'solid');
+		await fileLink.focus();
+		await page.keyboard.press('Tab');
+		await expect(webLink).toBeFocused();
+		await expect(webLink).toHaveCSS('outline-style', 'solid');
+	});
+
 	test('renders the shared code card for Ash and ChatGPT replies', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }, testInfo) => {
 		const application = browser as ElectronApplication;
 		const lines = ['const label: string = "Ash code card";', 'const count = 42;'];

@@ -1,3 +1,4 @@
+import type { ChatMarkdownRichContent } from './chatMarkdownRichContent.js';
 import type { FileSearchDirectory } from '../../../../../platform/search/common/fileSearch.js';
 import type { IChatToolInvocation } from '../chatService/chatService.js';
 import type { IChatHookPart, ChatContentPart, LoadedTurnSkill, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
@@ -67,11 +68,11 @@ export interface IChatListItem {
 	readonly resources?: readonly {
 		readonly uri: string;
 		readonly name: string;
-		readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html';
+		readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html' | 'chart';
 		readonly mimeType?: string;
 		readonly frameOrigin?: string;
 	}[];
-	readonly markdown?: { readonly supportHtml: boolean; };
+	readonly markdown?: { readonly supportHtml: boolean; readonly richContent?: ChatMarkdownRichContent; readonly linkPolicy?: 'external'; };
 	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; readonly kind: 'item' | 'toolResult'; };
 	readonly hookPart?: IChatHookPart;
 	readonly toolInvocation?: IChatToolInvocation;

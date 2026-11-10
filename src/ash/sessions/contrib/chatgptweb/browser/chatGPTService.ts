@@ -27,7 +27,8 @@ import { ChatGPTAuthenticationError, IChatGPTNativeTransport, IChatGPTTransport 
 import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTBranchSource, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTProjectDetails, type ChatGPTHistory } from './chatGPTClient.js';
 import { ChatGPTDraftAttachmentStorage, type ChatGPTAttachment } from './chatGPTDraftAttachmentStorage.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
-import { getChatGPTRichContentText } from './chatGPTRichContent.js';
+import { decodeChatGPTReply } from './chatGPTRichContent.js';
+import { renderChatRichContentText } from '../../../../workbench/contrib/chat/browser/widget/chatMarkdownRichContent.js';
 import type { ChatGPTVoiceSession } from './chatGPTVoiceSession.js';
 
 const catalogKey = 'sessions.chatgpt.catalog.v1';
@@ -1282,9 +1283,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public getAccessibleContent(showAgentReplyTimestamps = true): string {
 		const state = this.model.get();
 		const messages = state.messages.filter(message => !message.activity).map(message => {
+			const reply = message.role === 'assistant' ? decodeChatGPTReply(message.text, message.references) : undefined;
 			return [message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 			message.timestamp !== undefined && message.role === 'assistant' && showAgentReplyTimestamps ? formatChatMessageTime(message.timestamp) : undefined,
-			message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text,
+			reply ? renderChatRichContentText(reply.text, reply.richContent) : message.text,
 			message.resources?.map(resource => resource.name).join('\n')].filter(Boolean).join('\n');
 		});
 		const cowork = state.coworkTasks.map(task => [task.prompt, coworkTaskStatus(task), task.error ?? task.readError,
