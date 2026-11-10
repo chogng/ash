@@ -169,6 +169,18 @@ async function installService(application: ElectronApplication, holdInitializati
 					if (body.conversation_id !== 'fixture-live' || body.current_node_id !== head) return Response.json({ error: 'Wrong share target' }, { status: 400 });
 					return Response.json({ share_url: 'https://chatgpt.com/share/fixture-live' });
 				}
+				if (url.pathname.endsWith('/conversation/new_branch') && init?.method === 'POST') {
+					const body = JSON.parse(String(init.body));
+					if (body.conversation_id !== 'fixture-live' || body.message_id !== 'reply-live-1') {
+						return Response.json({ error: 'Wrong fork target' }, { status: 400 });
+					}
+					return Response.json({
+						conversation: {
+							title: 'Fork preview', current_node: body.message_id,
+							mapping: { ...live, [body.message_id]: { parent: live[body.message_id]!.parent, message: message(body.message_id, 'assistant', 'Fork history from ChatGPT') } },
+						}
+					});
+				}
 				if (url.pathname.includes('/conversation/history-')) {
 					const first = url.pathname.endsWith('history-one');
 					const question = historyImage && first ? {
@@ -1027,6 +1039,15 @@ test.describe('Unified Chat sidebar', () => {
 		});
 		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(2);
 		expect(ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+		const responseActions = editor.getByRole('toolbar', { name: '回复操作', exact: true }).first();
+		await responseActions.getByRole('button', { name: '更多操作', exact: true }).press('Enter');
+		await page.getByRole('menuitem', { name: '分叉', exact: true }).press('Enter');
+		await expect(editor).toContainText('Fork history from ChatGPT');
+		await expect(editor).not.toContainText('Follow up with ChatGPT');
+		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(2);
+		await chatGPTRow.click();
+		await expect(editor).toContainText('Follow up with ChatGPT');
+		await expect(editor).not.toContainText('Fork history from ChatGPT');
 		await more.press('Enter');
 		await page.getByRole('menuitem', { name: '删除', exact: true }).press('Enter');
 		const deleteConfirmation = page.getByRole('dialog');

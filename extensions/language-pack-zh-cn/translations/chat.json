@@ -619,7 +619,7 @@
     "chat.edit.description": "发送后将从此请求之前创建新聊天，并保留其上下文和附件；原聊天与草稿仍可使用。",
     "chat.edit.failed": "无法发送编辑后的请求：{0}",
     "chat.forkConversation.label": "分叉对话",
-    "chat.forkConversation.response": "从此回复创建分支",
+    "chat.forkConversation.response": "分叉",
     "chat.forkConversation.tooltip": "从此处创建分支对话",
     "chat.forkConversation.running": "正在创建分支对话",
     "chat.forkConversation.failed": "无法创建分支对话：{0}",

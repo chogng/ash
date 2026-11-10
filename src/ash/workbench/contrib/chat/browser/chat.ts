@@ -56,7 +56,7 @@ export interface ChatRequestVersion {
 	select(): Promise<void>;
 }
 
-/** Limits reply playback to the row's lifetime. */
+/** Binds reply actions and playback to the row's lifetime. */
 export class ChatResponseActionContext extends ChatMessageActionContext {
 	private playback: AbortController | undefined;
 	private status: HTMLElement | undefined;
@@ -67,9 +67,11 @@ export class ChatResponseActionContext extends ChatMessageActionContext {
 		readonly window: Window & typeof globalThis,
 		isVisible: () => boolean,
 		private readonly setReading: (reading: boolean) => void,
+		private readonly getFork?: () => (() => Promise<void>) | undefined,
 	) { super(item, actions, isVisible); }
 
 	get isReading(): boolean { return !!this.playback; }
+	get fork(): (() => Promise<void>) | undefined { return this.visible ? this.getFork?.() : undefined; }
 
 	override update(item: IChatListItem): void {
 		const previous = this.item;

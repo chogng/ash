@@ -164,7 +164,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	private get voiceAvailable(): boolean {
 		const state = this.backend.state.get();
-		return state.connected && state.networkAvailable && !state.pendingCreation && !state.busy && !state.sending
+		return state.connected && state.networkAvailable && !state.branch && !state.pendingCreation && !state.busy && !state.sending
 			&& !state.managing && !state.uncertain;
 	}
 
@@ -273,9 +273,21 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	getResponseActions(item: IChatListItem): ChatResponseActions | undefined {
 		const target = this.getResponseActionTarget(item);
 		if (!target) return undefined;
+		const state = this.backend.state.get();
+		const canFork = target.online && !state.busy && !state.sending && !state.managing && state.voice === 'idle';
 		return {
 			menuContext: target.online ? onlineResponseContext : availableResponseContext,
+			fork: canFork ? () => this.forkResponse(item) : undefined,
 		};
+	}
+
+	private async forkResponse(item: IChatListItem): Promise<void> {
+		// Resolve against the current projection so a stale row cannot fork a different conversation.
+		const target = this.currentItems.includes(item) ? this.getResponseActionTarget(item) : undefined;
+		if (!target?.online) {
+			return;
+		}
+		await this.backend.fork(target.conversationId, target.messageId);
 	}
 
 	async readResponseAloud(conversationId: string, messageId: string, window: Window & typeof globalThis, signal: AbortSignal): Promise<void> {
@@ -333,6 +345,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	private projectTranscript(state: ChatGPTState): readonly IChatListItem[] {
 		const result: IChatListItem[] = [];
 		const sources = this.sources = new Map();
+		const resourceConversationId = state.conversationId ?? state.branch?.conversationId;
 		const id = (kind: string, value: string): string => JSON.stringify([state.localConversationId, kind, value]);
 		const anchors = new Set(state.messages.map(message => message.id));
 		const appendTasks = (anchor: string | undefined, orphaned = false): void => {
@@ -359,10 +372,10 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		for (const message of state.messages) {
 			if (!message.activity) {
 				const itemId = id('message', message.id);
-				const decoded = message.role === 'assistant' ? this.decodeReply(message, state.conversationId) : undefined;
+				const decoded = message.role === 'assistant' ? this.decodeReply(message, resourceConversationId) : undefined;
 				const candidates = [...decoded?.resources ?? [], ...message.resources ?? []];
-				const resources = candidates.length ? mergeChatGPTResources(candidates.filter(resource => !resource.uri.startsWith('sandbox:') || state.conversationId)) : undefined;
-				sources.set(itemId, { messageId: message.id, conversationId: state.conversationId });
+				const resources = candidates.length ? mergeChatGPTResources(candidates.filter(resource => !resource.uri.startsWith('sandbox:') || resourceConversationId)) : undefined;
+				sources.set(itemId, { messageId: message.id, conversationId: resourceConversationId });
 				const text = message.role === 'user' && resources?.some(resource => resource.kind === 'image')
 					? message.editableText ?? message.text : decoded?.text ?? message.text;
 				if (message.role === 'user' || text.trim() || resources?.length) result.push({

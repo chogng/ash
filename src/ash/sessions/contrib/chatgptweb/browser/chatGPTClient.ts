@@ -8,6 +8,15 @@ import { SSEParser } from '../../../../base/common/sseParser.js';
 import { chatGPTHistoryCooldownMs, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
 
 const projectFileId = /^file[-_][A-Za-z0-9_-]{1,240}$/u;
+export interface ChatGPTBranchSource {
+	readonly conversationId: string;
+	readonly messageId: string;
+	readonly projectId?: string;
+}
+
+export interface ChatGPTReplyRequest extends ChatReplyRequest {
+	readonly branch?: ChatGPTBranchSource;
+}
 export interface ChatGPTConversation {
 	readonly id: string;
 	readonly title: string;
@@ -433,6 +442,28 @@ export class ChatGPTClient {
 	async history(id: string, signal: AbortSignal): Promise<ChatGPTHistory> {
 		if (this.native) { return this.nativeHistory(id, signal); }
 		const { value, mapping, head } = await this.conversationGraph(id, signal);
+		return { id, ...this.readGraphHistory(value, mapping, head, id) };
+	}
+
+	async fork(id: string, messageId: string, signal: AbortSignal): Promise<Omit<ChatGPTHistory, 'id'> & { readonly projectId?: string; }> {
+		const result: unknown = await (await this.request('/conversation/new_branch', signal, {
+			method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversation_id: id, message_id: messageId }),
+		})).json();
+		signal.throwIfAborted();
+		const value = isRecord(result) ? result.conversation : undefined;
+		if (!isRecord(value) || !isRecord(value.mapping) || typeof value.current_node !== 'string'
+			|| !/^[A-Za-z0-9_-]{1,240}$/u.test(value.current_node) || !Object.hasOwn(value.mapping, value.current_node)) {
+			throw this.invalidResponse();
+		}
+		const history = this.readGraphHistory(value, value.mapping, value.current_node, id);
+		if (!history.messages.length) {
+			throw this.invalidResponse();
+		}
+		const projectId = typeof value.gizmo_id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(value.gizmo_id) ? value.gizmo_id : undefined;
+		return { ...history, projectId };
+	}
+
+	private readGraphHistory(value: Record<string, unknown>, mapping: Record<string, unknown>, head: string, id: string): Omit<ChatGPTHistory, 'id'> {
 		const messages: ChatGPTMessage[] = [];
 		let thinkingEffort: string | undefined;
 		for (const node of activeNodes(mapping, head)) {
@@ -452,7 +483,7 @@ export class ChatGPTClient {
 			}
 		}
 		return {
-			id, title: typeof value.title === 'string' ? value.title : 'ChatGPT', parentId: head,
+			title: typeof value.title === 'string' ? value.title : 'ChatGPT', parentId: head,
 			...(value.is_archived === true ? { archived: true } : {}),
 			model: typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined, thinkingEffort, messages: messages.reverse(),
 		};
@@ -621,7 +652,7 @@ export class ChatGPTClient {
 		}
 	}
 
-	async *send(input: ChatReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatGPTStreamUpdate> {
+	async *send(input: ChatGPTReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatGPTStreamUpdate> {
 		const images = input.files?.filter(file => file.width !== undefined && file.height !== undefined) ?? [];
 		const content = images.length ? {
 			content_type: 'multimodal_text', parts: [
@@ -634,12 +665,17 @@ export class ChatGPTClient {
 			// ChatGPT Web uses its catalog's values, not the public API's reasoning.effort enum.
 			...(input.thinkingEffort !== undefined ? { thinking_effort: input.thinkingEffort } : {}),
 			...(input.conversationId ? { conversation_id: input.conversationId } : {}),
+			...(input.branch ? {
+				branching_from_conversation_id: input.branch.conversationId,
+				branching_from_message_id: input.branch.messageId,
+			} : {}),
 			messages: [{
 				id: input.messageId, author: { role: 'user' }, content, create_time: Date.now() / 1000,
 				...(input.files?.length ? { metadata: { attachments: input.files.map(file => ({ id: file.id, name: file.name, mime_type: file.mimeType, size: file.size, ...(file.width ? { width: file.width, height: file.height } : {}) })) } } : {}),
 			}],
 			timezone_offset_min: new Date().getTimezoneOffset(), history_and_training_disabled: false,
-			conversation_mode: { kind: 'primary_assistant' }, supports_buffering: true,
+			conversation_mode: input.branch?.projectId ? { kind: 'gizmo_interaction', gizmo_id: input.branch.projectId } : { kind: 'primary_assistant' },
+			supports_buffering: true,
 		};
 		const preparation = await (await this.request('/f/conversation/prepare', signal, {
 			method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

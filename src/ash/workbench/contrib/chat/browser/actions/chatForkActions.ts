@@ -12,7 +12,7 @@ import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { getCompletedChatResponseSource } from '../../common/model/chatViewModel.js';
-import { IChatWidgetService, unwrapChatResponseActionContext } from '../chat.js';
+import { ChatResponseActionContext, IChatWidgetService, unwrapChatResponseActionContext } from '../chat.js';
 
 export const ForkConversationActionId = 'workbench.action.chat.forkConversation';
 
@@ -32,7 +32,7 @@ export class ForkConversationAction extends Action2 {
 		super({
 			id: ForkConversationActionId,
 			title: localize2('chat.forkConversation.label', 'Fork Conversation'),
-			shortTitle: localize2('chat.forkConversation.response', 'Fork from this reply'),
+			shortTitle: localize2('chat.forkConversation.response', 'Fork'),
 			icon: Lxicon.fork,
 			precondition: ChatContextKeys.enabled.isEqualTo(true),
 			f1: true,
@@ -46,6 +46,15 @@ export class ForkConversationAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		if (context instanceof ChatResponseActionContext) {
+			if (!context.visible) {
+				return;
+			}
+			const fork = context.fork;
+			if (fork) {
+				return fork();
+			}
+		}
 		context = unwrapChatResponseActionContext(context);
 		const navigation = accessor.get(IChatSessionNavigationService);
 		const reply = context && typeof context === 'object' && 'canForkAfterResponse' in context && context.canForkAfterResponse === true

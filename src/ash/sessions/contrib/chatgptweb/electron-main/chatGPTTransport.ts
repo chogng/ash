@@ -13,10 +13,11 @@ import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAut
 
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
 const createProjectPath = '/backend-api/projects';
-const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', createProjectPath, '/realtime/vp']);
+const forkPath = '/backend-api/conversation/new_branch';
+const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', createProjectPath, forkPath, '/realtime/vp']);
 const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
 const nativeHistoryPath = (path: string): boolean => /^\/backend-api\/conversations\/[A-Za-z0-9_-]{1,240}(?:\/messages)?$/u.test(path);
-const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
+const conversationPath = (path: string): boolean => path !== forkPath && /^\/backend-api\/conversation\/[^/]+$/u.test(path);
 const projectDetailsPath = (path: string): boolean => /^\/backend-api\/gizmos\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
 const projectUpdatePath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
 const projectFilesPath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}\/files$/u.test(path);
@@ -372,7 +373,7 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 		}
 		return value as unknown as ChatGPTRequest;
 	}
-	if (value.method === 'PATCH' || renamePath(url.pathname) || url.pathname === '/backend-api/share/v2/create') {
+	if (value.method === 'PATCH' || renamePath(url.pathname) || url.pathname === '/backend-api/share/v2/create' || url.pathname === forkPath) {
 		let body: unknown;
 		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
 		catch { throw new TypeError('Invalid ChatGPT conversation update'); }
@@ -383,8 +384,9 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 				|| body.gizmo_id === null || (typeof body.gizmo_id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(body.gizmo_id)))
 			: renamePath(url.pathname)
 				? Object.keys(body).length === 1 && typeof body.title === 'string' && !!body.title.trim() && body.title.length <= 256
-				: Object.keys(body).length === 3 && body.is_anonymous === true && typeof body.conversation_id === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(body.conversation_id)
-				&& typeof body.current_node_id === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(body.current_node_id);
+				: url.pathname === forkPath
+					? value.method === 'POST' && Object.keys(body).length === 2 && validIdentifier(body.conversation_id) && validIdentifier(body.message_id)
+					: Object.keys(body).length === 3 && body.is_anonymous === true && validIdentifier(body.conversation_id) && validIdentifier(body.current_node_id);
 		if (!valid) { throw new TypeError('Invalid ChatGPT conversation update'); }
 	}
 	return value as unknown as ChatGPTRequest;

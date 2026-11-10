@@ -1,4 +1,5 @@
 import './chatFixtureLocalization.js';
+import '../../../src/ash/sessions/browser/actions/sessionsChatActions.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../../src/ash/sessions/contrib/projects/browser/projects.contribution.js';
 import { IProjectDialogService } from '../../../src/ash/sessions/contrib/projects/browser/projectDialogService.js';

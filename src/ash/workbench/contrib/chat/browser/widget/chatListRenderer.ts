@@ -60,6 +60,8 @@ import { INotificationService } from '../../../../../platform/notification/commo
 export interface ChatResponseActions {
 	/** Context keys that are true for this row. Reuse the array while the capabilities are unchanged. */
 	readonly menuContext?: readonly string[];
+	/** Forks the conversation through this reply using its provider. */
+	readonly fork?: () => Promise<void>;
 }
 
 interface ChatListItemRendererOptions {
@@ -399,6 +401,7 @@ export class ChatListItemRenderer extends Disposable {
 		ChatContextKeys.responseUsesNativeSpeech.bindTo(context).set(!this.options.getResponseActions);
 		const reading = ChatContextKeys.responseIsReadingAloud.bindTo(context);
 		const targetWindow = getWindow(this.element);
+		const getActions = () => this.options.getResponseActions?.(this.item);
 		let footer: MenuWorkbenchToolBar | undefined;
 		const response = this.responseActionContext = lifetime.add(new ChatResponseActionContext(
 			this.item, actions, targetWindow, this.options.isVisible, value => {
@@ -412,9 +415,11 @@ export class ChatListItemRenderer extends Disposable {
 				// Read and Stop share a slot but have separate command IDs.
 				if (toolbar && index >= 0 && toolbar.getItemAction(index)?.id !== focusedAction?.id) toolbar.focus(index);
 			},
+			this.options.getResponseActions && (() => getActions()?.fork),
 		));
 		let menuContext: readonly string[] | undefined;
-		const updateMenuContext = (nextMenuContext?: readonly string[]) => {
+		let canProviderFork = false;
+		const updateMenuContext = (available?: ChatResponseActions) => {
 			hasText.set(!!this.item.text);
 			canRead.set(!this.item.transient && !!this.item.text);
 			const hasCompletedSource = !!this.item.feedbackSource && !this.item.transient && !this.item.isError;
@@ -422,9 +427,11 @@ export class ChatListItemRenderer extends Disposable {
 			hasConversationLink.set(hasCompletedSource);
 			requestClientId.set(hasCompletedSource ? this.item.requestClientId ?? '' : '');
 			hasLoadedSkills.set(!!this.item.loadedSkills?.length);
-			canFork.set(hasCompletedSource && this.item.canForkAfterResponse === true);
+			canProviderFork = !!available?.fork;
+			canFork.set(canProviderFork || (hasCompletedSource && this.item.canForkAfterResponse === true));
 			canCompareResults.set(hasCompletedSource && this.item.canCompareResults === true);
 			updateVote();
+			const nextMenuContext = available?.menuContext;
 			if (nextMenuContext === menuContext) return;
 			for (const key of menuContext ?? []) {
 				if (!nextMenuContext?.includes(key)) context.removeContext(key);
@@ -432,8 +439,7 @@ export class ChatListItemRenderer extends Disposable {
 			for (const key of nextMenuContext ?? []) context.setContext(key, true);
 			menuContext = nextMenuContext;
 		};
-		const getActions = () => this.options.getResponseActions?.(this.item);
-		updateMenuContext(getActions()?.menuContext);
+		updateMenuContext(getActions());
 		const toolbar = footer = this.createMessageToolbar(actions, MenuId.ChatMessageFooter, localize('chat.message.actions', 'Response actions'), context, lifetime);
 		toolbar.context = response;
 		actions.prepend(toolbar.element);
@@ -441,14 +447,14 @@ export class ChatListItemRenderer extends Disposable {
 		const update = (beforeLayout?: () => void): boolean => {
 			if (this.isDisposed) return false;
 			const available = getActions();
-			const menuChanged = available?.menuContext !== menuContext;
+			const menuChanged = available?.menuContext !== menuContext || !!available?.fork !== canProviderFork;
 			const previousSkillCount = response.item.loadedSkills?.length;
 			const skillCount = this.item.loadedSkills?.length;
 			const refreshSkillCount = !!previousSkillCount && !!skillCount && previousSkillCount !== skillCount;
 			if (menuChanged || refreshSkillCount) beforeLayout?.();
 			context.bufferChangeEvents(() => {
 				response.update(this.item);
-				updateMenuContext(available?.menuContext);
+				updateMenuContext(available);
 				if (menuChanged) response.stop();
 			});
 			if (refreshSkillCount) toolbar.refresh();

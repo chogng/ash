@@ -69,26 +69,6 @@ export function registerChatGPTResponseActions(): void {
 		}
 	});
 
-	registerAction2(class ForkChatGPTResponseAction extends Action2 {
-		constructor() {
-			super({
-				id: 'sessions.chatgpt.response.fork',
-				title: localize2('sessions.chatgpt.forkResponse', 'Fork in ChatGPT'),
-				icon: Lxicon.fork,
-				menu: { id: MenuId.ChatMessageFooter, group: '1_conversation', order: 1, when: online },
-			});
-		}
-
-		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
-			const target = responseTarget(accessor, context);
-			if (!target?.online) return;
-			const url = `https://chatgpt.com/branch/${encodeURIComponent(target.conversationId)}/${encodeURIComponent(target.messageId)}`;
-			if (!await accessor.get(IOpenerService).open(url, { openExternal: true })) {
-				throw new Error(localize('sessions.chatgpt.openForkFailed', 'Could not open the conversation branch in ChatGPT.'));
-			}
-		}
-	});
-
 	registerAction2(class ShareChatGPTResponseAction extends Action2 {
 		constructor() {
 			super({

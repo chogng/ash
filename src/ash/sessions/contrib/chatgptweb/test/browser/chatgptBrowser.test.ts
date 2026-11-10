@@ -580,7 +580,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			const messages = Array.from({ length: count }, (_, index) => {
 				const id = `long-${index}`;
 				const role = index % 2 ? 'assistant' : 'user';
-			const text = role === 'user' ? `Prompt ${index}` : `## Reply ${index}\n\n${'Long reply content. '.repeat(65 + index % 13)}\n\nDetail ${index}.`;
+				const text = role === 'user' ? `Prompt ${index}` : `## Reply ${index}\n\n${'Long reply content. '.repeat(65 + index % 13)}\n\nDetail ${index}.`;
 				return [id, { parent: index ? `long-${index - 1}` : null, message: { id, author: { role }, content: { content_type: 'text', parts: [text] } } }];
 			});
 			return route.fulfill({ json: { title: 'Synthetic conversation', current_node: `long-${count - 1}`, mapping: Object.fromEntries(messages) } });
@@ -670,6 +670,22 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		});
 		let read: URLSearchParams | undefined;
 		let share: unknown;
+		let forkRequest: unknown;
+		let continuation: unknown;
+		const branchMapping = {
+			'previous-reply': { parent: null, message: { id: 'previous-reply', author: { role: 'assistant' }, content: { parts: ['Branch history returned by ChatGPT'] } } },
+		};
+		await page.route('**/service/backend-api/conversation/new_branch', route => {
+			forkRequest = route.request().postDataJSON();
+			return route.fulfill({ json: { conversation: { title: 'Branch preview', current_node: 'previous-reply', mapping: branchMapping } } });
+		});
+		await page.route('**/service/backend-api/f/conversation', route => {
+			continuation = route.request().postDataJSON();
+			return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"conversation_id":"fixture-branch"}\n\ndata: [DONE]\n\n' });
+		});
+		await page.route('**/service/backend-api/conversation/fixture-branch', route => route.fulfill({
+			json: { title: 'Saved ChatGPT branch', current_node: 'previous-reply', mapping: branchMapping },
+		}));
 		await page.route('**/service/backend-api/synthesize?*', route => {
 			read = new URL(route.request().url()).searchParams;
 			return route.fulfill({ contentType: 'audio/mpeg', body: 'synthetic' });
@@ -694,7 +710,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		const copy = toolbar.getByRole('button', { name: '复制消息' });
 		const readAloud = toolbar.getByRole('button', { name: '朗读', exact: true });
 		const more = toolbar.getByRole('button', { name: '更多操作', exact: true });
-		const fork = page.getByRole('menuitem', { name: '在 ChatGPT 中创建分支' });
+		const fork = page.getByRole('menuitem', { name: '分叉', exact: true });
 		const shareResponse = toolbar.getByRole('button', { name: '分享 ChatGPT 回复' });
 		const openOriginal = toolbar.getByRole('button', { name: '在 ChatGPT 中打开对话' });
 		await expect(toolbar.getByRole('button')).toHaveCount(5);
@@ -712,8 +728,8 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await page.keyboard.press('ArrowRight');
 		await expect(more).toBeFocused();
 		await more.press('Enter');
-		await fork.click();
-		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/branch/fixture-chat/previous-reply');
+		await expect(fork).toBeFocused();
+		await page.keyboard.press('Escape');
 		await readAloud.press('Enter');
 		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'true');
 		expect(read?.get('conversation_id')).toBe('fixture-chat');
@@ -747,6 +763,25 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(openOriginal).toBeFocused();
 		expect(await markdown.evaluate((node, previous) => node === previous, retained)).toBe(true);
 		await retained?.dispose();
+
+		await more.press('Enter');
+		await expect(fork).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(chat).toContainText('Branch history returned by ChatGPT');
+		await expect(reply).toHaveCount(0);
+		expect(forkRequest).toEqual({ conversation_id: 'fixture-chat', message_id: 'previous-reply' });
+		expect(continuation).toBeUndefined();
+		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/c/fixture-chat');
+		await chat.getByRole('textbox', { name: '询问 ChatGPT', exact: true }).focus();
+		await page.keyboard.insertText('Continue the branch');
+		await chat.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Saved ChatGPT branch', exact: true })).toHaveAttribute('aria-current', 'page');
+		expect(continuation).toMatchObject({
+			branching_from_conversation_id: 'fixture-chat', branching_from_message_id: 'previous-reply', parent_message_id: 'previous-reply',
+		});
+		expect(continuation).not.toHaveProperty('conversation_id');
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		await expect(reply).toBeVisible();
 	});
 
 	test('ChatGPT saves an offline first message and automatically sends it after reconnection', async () => {

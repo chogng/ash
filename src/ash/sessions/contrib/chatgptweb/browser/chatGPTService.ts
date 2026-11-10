@@ -24,7 +24,7 @@ import { INotificationService, Severity, type INotificationActions, type INotifi
 import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ChatGPTAuthenticationError, IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
-import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTProjectDetails, type ChatGPTHistory } from './chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTBranchSource, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTProjectDetails, type ChatGPTHistory } from './chatGPTClient.js';
 import { ChatGPTDraftAttachmentStorage, type ChatGPTAttachment } from './chatGPTDraftAttachmentStorage.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
 import { getChatGPTRichContentText } from './chatGPTRichContent.js';
@@ -173,6 +173,8 @@ export interface ChatGPTState {
 	/** An explicit draft choice must still resolve before a new message can be queued. */
 	readonly explicitDraftModel?: boolean;
 	readonly conversationId?: string;
+	/** ChatGPT's branch preview has no remote conversation ID until the first send. */
+	readonly branch?: ChatGPTBranchSource;
 	readonly title: string;
 	readonly parentId: string;
 	readonly olderCursor?: string;
@@ -191,7 +193,7 @@ export function selectedChatConversationId(state: ChatGPTState): string | undefi
 }
 
 export function canQueueChatGPTCreation(state: ChatGPTState): boolean {
-	return state.canQueue && !selectedChatConversationId(state) && !state.uncertain && !!state.draft.trim() && !state.attachments.length
+	return state.canQueue && !state.branch && !selectedChatConversationId(state) && !state.uncertain && !!state.draft.trim() && !state.attachments.length
 		&& (!state.explicitDraftModel || state.models.some(model => model.id === state.model));
 }
 
@@ -234,6 +236,7 @@ export interface IChatGPTService {
 	moveToProject(id: string, projectId: string | null): Promise<void>;
 	createProjectAndMove(id: string, name: string): Promise<void>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
+	fork(id: string, messageId: string): Promise<void>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
 	editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit>;
 	loadProjectDetails(id: string, scope: string, signal: AbortSignal): Promise<void>;
@@ -881,6 +884,29 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public share(id: string, messageId?: string): Promise<string | undefined> { return this.manage(id, signal => this.client.share(id, signal, messageId)); }
 
+	public async fork(id: string, messageId: string): Promise<void> {
+		const state = this.model.get();
+		if (state.conversationId !== id || state.uncertain || !state.networkAvailable
+			|| !state.messages.some(message => message.id === messageId && message.role === 'assistant' && !message.activity)) {
+			return;
+		}
+		await this.manage(id, async signal => {
+			const history = await this.client.fork(id, messageId, signal);
+			signal.throwIfAborted();
+			const projectId = history.projectId ?? state.conversations.find(conversation => conversation.id === id)?.projectId;
+			this.cancelReads();
+			this.taskWatchers.clear();
+			this.update({
+				conversationId: undefined, branch: { conversationId: id, messageId, projectId },
+				localConversationId: crypto.randomUUID(), title: history.title, parentId: history.parentId,
+				messages: history.messages, coworkTasks: [], draft: '', attachments: [],
+				uncertain: false, stopped: false, ...this.historyModel(history),
+			});
+			this.rememberConversation(undefined);
+			this.setHistoryFailure('conversation', undefined);
+		});
+	}
+
 	public readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob> {
 		return this.client.readResponseAudio(id, messageId, AbortSignal.any([signal, this.management.signal, AbortSignal.timeout(30_000)]));
 	}
@@ -955,7 +981,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async startVoice(window: Window & typeof globalThis): Promise<void> {
 		const state = this.model.get();
-		if (this.isDisposed || !state.connected || !state.networkAvailable || state.pendingCreation || state.busy || state.sending || state.uncertain || state.voice !== 'idle' || state.draft.trim() || state.attachments.length) { return; }
+		if (this.isDisposed || !state.connected || !state.networkAvailable || state.branch || state.pendingCreation || state.busy || state.sending || state.uncertain || state.voice !== 'idle' || state.draft.trim() || state.attachments.length) { return; }
 		if (!window.navigator.userActivation?.isActive) { return; }
 		this.refreshOperation?.abort();
 		if (state.conversationId) this.historyValidations.delete(state.conversationId);
@@ -1580,6 +1606,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.isDisposed) { return; }
 		const previous = this.model.get();
 		const next = { ...previous, ...change };
+		if (previous.branch && next.localConversationId !== previous.localConversationId && !this.projectSubmission) {
+			this.forgetDraft(previous.localConversationId);
+		}
+		if (next.conversationId || next.localConversationId !== previous.localConversationId) {
+			next.branch = change.branch;
+		}
 		if (next.conversationId !== previous.conversationId) {
 			this.olderRead?.abort();
 			next.olderCursor = change.olderCursor;
@@ -1589,6 +1621,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const draft = this.drafts.get(next.localConversationId);
 		this.model.set({
 			...next, catalogScope: this.cacheScope, canQueue: !!this.outbox, pendingSync: this.outbox?.hasPending() === true,
+			sendingDraft: this.stream?.kind === 'draft',
 			uncertain: next.uncertain || this.pendingVoiceHistory.has(next.localConversationId),
 			pendingCreation: creation && !creation.cancelled ? creation.submittedAgainst ? 'submitted' : 'queued' : undefined,
 			explicitDraftModel: !next.conversationId && !!draft?.selection,
@@ -1621,7 +1654,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (!scope) { return; }
 		const previous = this.draftAttachments.read(localId);
 		if (previous && previous.scope !== scope) {
-			sendingDraft: this.stream?.kind === 'draft',
 			this.trackAttachmentWrite(this.deleteAttachmentFiles(previous.scope, previous.attachments.map(attachment => attachment.id)));
 		}
 		// An upload is only restorable once its original bytes have committed.
@@ -2298,14 +2330,17 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		account.throwIfAborted();
 		const result = this.model.get();
 		if (result.localConversationId !== draftId) throw canceled();
-		if (result.conversationId) return result.conversationId;
+		if (result.conversationId) {
+			if (previous.branch) { this.forgetDraft(previous.localConversationId); }
+			return result.conversationId;
+		}
 
 		// A rejected first send keeps the project draft in its composer and restores the prior chat.
 		this.forgetDraft(draftId);
-		const { conversationId, localConversationId, parentId, title, messages, coworkTasks, draft, attachments,
+		const { conversationId, branch, localConversationId, parentId, title, messages, coworkTasks, draft, attachments,
 			olderCursor, uncertain, stopped, error } = previous;
 		this.update({
-			conversationId, localConversationId, parentId, title, messages, coworkTasks, draft, attachments,
+			conversationId, branch, localConversationId, parentId, title, messages, coworkTasks, draft, attachments,
 			olderCursor, uncertain, stopped, error, model: previous.model, modelPreset: previous.modelPreset
 		});
 		this.watchCoworkTasks();
@@ -2338,8 +2373,16 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		let projectMove: { readonly id: string; readonly result: ReturnType<ChatGPTService['assignNewConversationToProject']>; } | undefined;
 		this.update({ sending: true, stopped: false, error: '', messages: [...state.messages, { id: messageId, role: 'user', text, resources: files.map(file => ({ uri: `file-service://${file.id}`, name: file.name, kind: file.mimeType.startsWith('image/') ? 'image' : 'document', mimeType: file.mimeType })) }] });
 		try {
-			for await (const event of this.replyBackend.streamReply({ text, model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId, conversationId: state.conversationId, messageId, files }, controller.signal, async () => { stream.submitted = true; })) {
+			for await (const event of this.replyBackend.streamReply({
+				text, model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId,
+				conversationId: state.conversationId, branch: state.branch, messageId, files,
+			}, controller.signal, async () => { stream.submitted = true; })) {
 				if (this.isDisposed || this.stream !== stream) { return; }
+				if (state.branch && !acknowledged) {
+					// The preview stays a draft until the server identifies the separate conversation.
+					if (!event.conversationId) { continue; }
+					if (event.conversationId === state.branch.conversationId) { break; }
+				}
 				if (!acknowledged) {
 					acknowledged = true;
 					this.forgetDraft(draftKey);
@@ -2371,13 +2414,16 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					};
 				}
 			}
+			if (state.branch && !acknowledged) {
+				throw new ChatReplyError(localize('sessions.chatgpt.forkUnconfirmed', 'ChatGPT did not confirm the new branch. Check recent chats before sending again.'), 'uncertain', false, {});
+			}
 			this.forgetDraft(draftKey);
 			this.update({ draft: '', attachments: [] });
 			const current = this.model.get();
 			const currentId = current.conversationId;
 			if (currentId && !controller.signal.aborted && this.stream === stream) {
 				this.persistHistory({ id: currentId, title: current.title, parentId: current.parentId, messages: current.messages, olderCursor: current.olderCursor });
-				this.rememberHistory({ id: currentId, title: current.title }, { acceptedAt: Date.now() });
+				this.rememberHistory({ id: currentId, title: current.title }, { acceptedAt: Date.now(), projectId: state.branch?.projectId });
 				try {
 					const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
 					const history = this.retainNativeHistory(await this.client.history(currentId, signal), this.timelineFor(currentId).read(currentId)?.history);
@@ -2403,7 +2449,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				const rejected = error instanceof ChatReplyError && error.outcome === 'rejected' || projectFiles !== undefined && !stream.submitted;
 				this.update({
 					error: this.errorText(error), uncertain: !rejected,
-					...(rejected ? { messages: state.messages, parentId: state.parentId } : {}),
+					...(rejected || state.branch && !acknowledged ? { messages: state.messages, parentId: state.parentId } : {}),
 					...(error instanceof ChatReplyError && error.disconnected ? { connected: false } : {}),
 				});
 			}
@@ -2416,7 +2462,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				const current = this.model.get();
 				if (projectMove && move?.projectId) this.rememberHistory({ id: projectMove.id, title: current.title }, { projectId: move.projectId });
 				this.stream = undefined;
-				this.update({ sending: false, ...(move?.error && !current.error ? { error: move.error } : {}) });
+				this.update({
+					sending: false,
+					...(state.branch && !acknowledged && controller.signal.aborted ? { messages: state.messages, parentId: state.parentId } : {}),
+					...(move?.error && !current.error ? { error: move.error } : {}),
+				});
 			}
 		}
 	}

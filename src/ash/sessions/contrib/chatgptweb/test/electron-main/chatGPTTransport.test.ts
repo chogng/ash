@@ -466,12 +466,13 @@ suite('ChatGPT transport', () => {
 			['POST', '/share/v2/create', { conversation_id: 'chat', current_node_id: 'reply', is_anonymous: true }],
 			['POST', '/f/conversation/resume', { conversation_id: 'chat', offset: 0 }],
 			['PATCH', '/conversation/chat', { current_node_id: 'reply-original' }],
+			['POST', '/conversation/new_branch', { conversation_id: 'chat', message_id: 'reply-original' }],
 		] as const) {
 			const id = randomUUID();
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers: {}, ...(body ? { body: JSON.stringify(body) } : {}) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'POST', 'PATCH', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST', 'PATCH']);
+		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'POST', 'PATCH', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST', 'PATCH', 'POST']);
 		assert.deepEqual(calls[2], { method: 'POST', path: '/backend-api/projects' });
 		assert.deepEqual(calls[9], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
 		const projectHeaders = { 'ChatGPT-Project-Id': 'g-p-project' };
@@ -488,7 +489,7 @@ suite('ChatGPT transport', () => {
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers, body: body && JSON.stringify(body) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.equal(calls.length, 18);
+		assert.equal(calls.length, 19);
 		await assert.rejects(channel.call('', 'request', [randomUUID(), {
 			path: '/service/backend-api/files/process_upload_stream', method: 'POST', headers: projectHeaders,
 			body: JSON.stringify({ ...upload, gizmo_id: 'g-p-other', file_id: file.file_id, entry_surface: 'project_sources', index_for_retrieval: true }),
@@ -512,12 +513,15 @@ suite('ChatGPT transport', () => {
 			['PATCH', '/conversation/chat', '{"is_starred":true,"gizmo_id":"g-p-project"}'],
 			['PATCH', '/conversation/chat', '{"current_node_id":"../other"}'],
 			['PATCH', '/conversation/chat', '{"current_node_id":"reply","is_archived":true}'],
+			['POST', '/conversation/new_branch', '{"conversation_id":"chat","message_id":"../other"}'],
+			['POST', '/conversation/new_branch', '{"conversation_id":"chat","message_id":"reply","unexpected":true}'],
+			['PATCH', '/conversation/new_branch', '{"current_node_id":"reply"}'],
 			['PATCH', '/conversation/chat', '{"gizmo_id":"../../other"}'], ['DELETE', '/conversation/id/chat', '{}'],
 			['GET', '/f/conversation/resume', undefined], ['POST', '/f/conversation/resume/other', '{}'],
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 18);
+		assert.equal(calls.length, 19);
 	}));
 
 	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {
