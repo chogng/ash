@@ -863,7 +863,13 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 						const files = base.materials.filter(material => material.kind !== 'folder');
 						base = await this.projects.update(base, title, base.description, [...files, ...materials.values()]);
 					}
-					base = await this.saveProjectAppearance(base, appearance.appearance, 'code');
+					// Keep each committed revision so a retry only saves the remaining draft fields.
+					const draft = appearance.appearance;
+					for (const field of ['icon', 'color'] as const) {
+						if (base[field] !== draft[field]) {
+							base = await this.projects.setAppearance(base, field, draft[field]);
+						}
+					}
 				} else {
 					await this.projects.create(id, title, '', [...materials.values()], 'code', appearance.appearance);
 				}

@@ -104,11 +104,12 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
-	public async setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void> {
+	public async setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<Project> {
 		try {
-			await appServerRequest(this.connection, 'project/appearance/update', {
+			const result = await appServerRequest(this.connection, 'project/appearance/update', {
 				commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, field, value: value ?? null,
 			});
+			return fromDto(result.project);
 		} catch (error) { throw projectError(error); }
 	}
 

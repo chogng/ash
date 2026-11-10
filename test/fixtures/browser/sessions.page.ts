@@ -179,7 +179,14 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 	const projects = new Map<string, Project>();
 	const scopes = new Map<string, ProjectScope>();
 	const codeProjectCreation = new URL(location.href).searchParams.has('codeProjectCreation');
+	const codeProjectEdit = new URL(location.href).searchParams.has('codeProjectEdit');
 	let failCodeSave = codeProjectCreation;
+	let failColorSave = codeProjectEdit;
+	if (codeProjectEdit) {
+		const id = 'code-project';
+		projects.set(id, { id, name: 'Code project', description: '', materials: [], revision: 1, archived: false, sessionCount: 0, sessionIds: [] });
+		scopes.set(id, 'code');
+	}
 	if (codeProjectCreation) {
 		const { FileDialogService } = await import('../../../src/ash/workbench/services/dialogs/browser/fileDialogService.js');
 		let folder = 0;
@@ -224,6 +231,19 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 			update: async (project, name, description, materials) => {
 				if (projects.get(project.id)?.revision !== project.revision) throw new Error('Unexpected project revision');
 				const saved = { ...project, name, description, materials, revision: project.revision + 1 };
+				projects.set(saved.id, saved);
+				projectChanges.fire();
+				return saved;
+			},
+			setAppearance: async (project, field, value) => {
+				const current = projects.get(project.id);
+				if (!current || current.revision !== project.revision) throw new Error('Unexpected project revision');
+				if (current[field] === value) throw new Error('Appearance field is already saved');
+				if (field === 'color' && failColorSave) {
+					failColorSave = false;
+					throw new Error('Synthetic color save failure');
+				}
+				const saved = { ...current, [field]: value, revision: current.revision + 1 };
 				projects.set(saved.id, saved);
 				projectChanges.fire();
 				return saved;

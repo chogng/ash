@@ -47,7 +47,8 @@ export interface IProjectService {
 	/** Organizes an account-scoped provider conversation without creating an Ash Thread. */
 	moveExternalConversation(conversationId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
-	setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void>;
+	/** Returns the saved project and its revision for subsequent edits. */
+	setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<Project>;
 	archive(project: ProjectSummary): Promise<Project>;
 	restore(project: ProjectSummary): Promise<Project>;
 	/** Removes the project and its references, preserving conversations and source files. */
