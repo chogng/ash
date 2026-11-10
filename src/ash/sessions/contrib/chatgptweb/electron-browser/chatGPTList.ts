@@ -248,7 +248,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					canEdit,
 					materials: details.files?.map(file => ({
 						...file, kind: 'file' as const,
-						read: online ? () => this.chat.readProjectFile(id, scope, file.id) : undefined,
+						read: online ? signal => this.chat.readProjectFile(id, scope, file.id, signal) : undefined,
 						remove: canEdit ? () => this.chat.removeProjectFile(id, scope, file.id) : undefined,
 					})),
 				};

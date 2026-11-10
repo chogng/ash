@@ -12,6 +12,7 @@ import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
 import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import shareWorker from '../../../../services/chat-share/worker.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
@@ -1125,6 +1126,7 @@ test.describe('Ash project file copies', () => {
 		const chosenFolder = testInfo.outputPath('chosen-project-files');
 		await mkdir(chosenFolder, { recursive: true });
 		const destination = await realpath(chosenFolder);
+		const configuredDestination = URI.file(destination).fsPath;
 		const saved = async (root: string, name: string): Promise<string | undefined> => {
 			const paths = await readdir(root, { recursive: true }).catch(() => []);
 			const path = paths.find(path => basename(path) === name);
@@ -1147,7 +1149,7 @@ test.describe('Ash project file copies', () => {
 		await new QuickAccess(page).runCommand('workbench.action.openSettings');
 		const settings = page.locator('.ash-sessions-settings-dialog');
 		const folderSetting = settings.locator('[data-settings-item-id="sessions.projects.localFilesLocation"]');
-		await expect(folderSetting).toContainText(originalRoot);
+		await expect(folderSetting).toContainText(URI.file(originalRoot).fsPath);
 		const change = folderSetting.getByRole('button', { name: '更改', exact: true });
 		await settings.screenshot({ path: testInfo.outputPath('project-files-settings-zh-CN.png') });
 		await expect(change).toHaveClass(/\bash-button-secondary\b/u);
@@ -1155,11 +1157,11 @@ test.describe('Ash project file copies', () => {
 		try {
 			await application.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, destination);
 			await change.press('Enter');
-			await expect(folderSetting).toContainText(destination);
+			await expect(folderSetting).toContainText(configuredDestination);
 		} finally {
 			await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, originalDialog);
 		}
-		await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['sessions.projects.localFilesLocation']).toBe(destination);
+		await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['sessions.projects.localFilesLocation']).toBe(configuredDestination);
 		await page.keyboard.press('Escape');
 		await expect(settings).toBeHidden();
 		await application.evaluate(() => ashNativeFixture.setOffline(false));

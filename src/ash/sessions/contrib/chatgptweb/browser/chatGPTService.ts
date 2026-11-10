@@ -256,7 +256,7 @@ export interface IChatGPTService {
 	loadProjectDetails(id: string, scope: string, signal: AbortSignal): Promise<void>;
 	addProjectFiles(id: string, scope: string, files: readonly File[]): Promise<void>;
 	removeProjectFile(id: string, scope: string, fileId: string): Promise<void>;
-	readProjectFile(id: string, scope: string, fileId: string): Promise<Blob>;
+	readProjectFile(id: string, scope: string, fileId: string, signal: AbortSignal): Promise<Blob>;
 	archiveProjectConversations(id: string): Promise<boolean>;
 	archiveProjectMembers(references: ReadonlySet<string>): Promise<ReadonlySet<string>>;
 	deleteProject(id: string): Promise<void>;
@@ -591,8 +591,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	public readProjectFile(id: string, scope: string, fileId: string): Promise<Blob> {
-		return this.client.readProjectFile(id, fileId, this.projectRequest(id, scope, 60_000));
+	public readProjectFile(id: string, scope: string, fileId: string, signal: AbortSignal): Promise<Blob> {
+		return this.client.readProjectFile(id, fileId, AbortSignal.any([signal, this.projectRequest(id, scope, 60_000)]));
 	}
 
 	public async archiveProjectConversations(id: string): Promise<boolean> {

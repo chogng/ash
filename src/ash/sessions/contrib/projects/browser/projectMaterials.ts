@@ -2,7 +2,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { streamToBuffer } from '../../../../base/common/buffer.js';
-import { Disposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable, type DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
@@ -38,7 +38,8 @@ type CatalogMaterialUpload = NonNullable<CatalogProjectDetails['upload']>;
 /** Presents project references and delegates their storage and file access to the owning services. */
 export class ProjectMaterials extends Disposable {
 	readonly fileRoot;
-	private readonly localFiles: ProjectMaterialFiles;
+	private readonly localFiles = this._register(new MutableDisposable<ProjectMaterialFiles>());
+	private catalogFileScope: string | undefined;
 
 	constructor(
 		private readonly reportError: (message: string) => void,
@@ -52,7 +53,6 @@ export class ProjectMaterials extends Disposable {
 		@IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService,
 	) {
 		super();
-		this.localFiles = new ProjectMaterialFiles(fileService);
 		this.fileRoot = observableFromEvent(this, listener => configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(projectMaterialFilesLocation)) listener(event);
 		}), () => {
@@ -62,14 +62,23 @@ export class ProjectMaterials extends Disposable {
 		});
 	}
 
-	renderCatalog(document: Document, key: string, root: URI | undefined,
+	setCatalogProject(key: string | undefined, root: URI | undefined): void {
+		const scope = key !== undefined && root ? JSON.stringify([key, root.toString()]) : undefined;
+		if (scope === this.catalogFileScope) return;
+		this.catalogFileScope = scope;
+		this.localFiles.value = key !== undefined && root ? new ProjectMaterialFiles(this.fileService, root, key) : undefined;
+	}
+
+	renderCatalog(document: Document,
 		model: Omit<ProjectMaterialsContent, 'addFiles' | 'addFolders'> & { readonly upload?: CatalogMaterialUpload; readonly isCurrent: () => boolean; },
 		content: DisposableStore): HTMLElement {
-		const rows = root ? model.rows?.map(file => ({
+		const localFiles = this.localFiles.value;
+		const rows = localFiles ? model.rows?.map(file => ({
 			...file,
 			open: file.open ?? (file.kind === 'file' ? async () => {
-				const isCurrent = () => !this.isDisposed && model.isCurrent() && this.fileRoot.get()?.toString() === root.toString();
-				const resource = await this.localFiles.ensure(root, key, file, isCurrent, file.read);
+				const isCurrent = () => this.localFiles.value === localFiles && model.isCurrent();
+				if (!isCurrent()) return;
+				const resource = await localFiles.ensure(file, file.read);
 				if (isCurrent()) await this.editors.openEditor({ resource, readOnly: true, showBreadcrumbs: false });
 			} : undefined),
 		})) : model.rows;
@@ -97,10 +106,11 @@ export class ProjectMaterials extends Disposable {
 		await upload.addFiles(files);
 	}
 
-	async syncCatalog(key: string, root: URI, rows: readonly ProjectMaterialRow[], isVisible: () => boolean): Promise<void> {
-		const isCurrent = () => !this.isDisposed && this.fileRoot.get()?.toString() === root.toString();
-		const results = await Promise.allSettled(rows.map(row => this.localFiles.ensure(root, key, row, isCurrent, row.read)));
-		if (isCurrent() && isVisible() && results.some(result => result.status === 'rejected' && !isCancellationError(result.reason))) {
+	async syncCatalog(rows: readonly ProjectMaterialRow[]): Promise<void> {
+		const localFiles = this.localFiles.value;
+		if (!localFiles) return;
+		const results = await Promise.allSettled(rows.map(row => localFiles.ensure(row, row.read)));
+		if (this.localFiles.value === localFiles && results.some(result => result.status === 'rejected' && !isCancellationError(result.reason))) {
 			this.reportError(localize('projects.localFilesSyncFailed', 'Could not save all project files. Open the project again to retry.'));
 		}
 	}

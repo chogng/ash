@@ -178,6 +178,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const data = details?.data.read(reader);
 			const root = this.projectMaterials.fileRoot.read(reader);
 			const shown = this.shown.read(reader);
+			this.projectMaterials.setCatalogProject(shown ? details?.key : undefined, root);
 			const loadedMaterials = shown && load?.key === details?.key && load?.phase === 'loaded'
 				? data?.materials?.filter(file => file.kind === 'file') : undefined;
 			// Chat state can reproject unchanged rows after another window has saved a newer list.
@@ -196,7 +197,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			if (materialSyncKey !== this.catalogMaterialSyncKey) {
 				this.catalogMaterialSyncKey = materialSyncKey;
 				if (root && details && readableMaterials?.length) {
-					void this.projectMaterials.syncCatalog(details.key, root, readableMaterials, () => this.shown.get() && this.projects.state.get().conversationProjectId === id);
+					void this.projectMaterials.syncCatalog(readableMaterials);
 				}
 			}
 			if (shown && details?.load && load?.key !== details.key) {
@@ -411,7 +412,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const cachedNames = data?.materials === undefined
 				? this.projects.readCatalogMaterialNames(conversationProject.preferenceKey ?? details.key) : undefined;
 			const materialsSnapshot = data?.materials ?? cachedNames?.map(file => ({ ...file, kind: 'file' as const }));
-			const materials = this.projectMaterials.renderCatalog(document, details.key, this.projectMaterials.fileRoot.get(), {
+			const materials = this.projectMaterials.renderCatalog(document, {
 				rows: materialsSnapshot,
 				upload: data?.canEdit && data.materials ? details.upload : undefined,
 				isCurrent: () => this.shown.get() && this.projects.state.get().conversationProjectId === id
