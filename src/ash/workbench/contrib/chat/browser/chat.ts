@@ -41,9 +41,19 @@ export class ChatMessageActionContext extends Disposable {
 }
 
 export class ChatRequestActionContext extends ChatMessageActionContext {
-	constructor(item: IChatListItem, actions: HTMLElement, isVisible: () => boolean, readonly startEditing: (requestId: string) => void | Promise<void>) {
+	constructor(
+		item: IChatListItem, actions: HTMLElement, isVisible: () => boolean,
+		readonly startEditing: (requestId: string) => void | Promise<void>,
+		readonly getVersions?: (item: IChatListItem) => Promise<readonly ChatRequestVersion[]>,
+	) {
 		super(item, actions, isVisible);
 	}
+}
+
+export interface ChatRequestVersion {
+	readonly text: string;
+	readonly selected: boolean;
+	select(): Promise<void>;
 }
 
 /** Limits reply playback to the row's lifetime. */

@@ -365,6 +365,7 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 		if (!isRecord(body)) { throw new TypeError('Invalid ChatGPT conversation update'); }
 		const valid = value.method === 'PATCH'
 			? Object.keys(body).length === 1 && (typeof body.is_starred === 'boolean' || body.is_archived === true
+				|| validIdentifier(body.current_node_id)
 				|| body.gizmo_id === null || (typeof body.gizmo_id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(body.gizmo_id)))
 			: renamePath(url.pathname)
 				? Object.keys(body).length === 1 && typeof body.title === 'string' && !!body.title.trim() && body.title.length <= 256

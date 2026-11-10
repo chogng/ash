@@ -26,6 +26,10 @@ records and supplies ordered sections and row operations. The view owns
 rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
 host's contracts. The [catalog project ownership contract](SESSIONS_LIST.md#catalog-project-ownership)
 defines which actions reach a provider.
+The Workbench message editor shares editing and resubmission between Ash Chat
+and Code. App Server owns their Thread rewrites. The ChatGPT adapter supplies
+the same editor with remote message capabilities and uses the web backend to
+confirm edits and switch versions within the existing remote conversation.
 In an eligible new Chat draft, selecting an Ash model asks the
 adapter for the current unsent text after model validation. The host opens an
 independent Ash Chat draft without sending a message. Its first send creates a

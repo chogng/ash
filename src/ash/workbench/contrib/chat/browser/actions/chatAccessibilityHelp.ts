@@ -44,6 +44,10 @@ export class PanelChatAccessibilityHelp implements IAccessibleViewImplementation
 	}
 }
 
+export function getChatRequestAccessibilityHelp(): string {
+	return localize('chat.request.actionsHelp', 'Use Tab to reach Message actions below a sent message. Use Left or Right to choose Copy message or, when available, Edit message. Press Enter or Space to activate the action. You can also press Enter on a focused editable message. The editor opens in place. Press Tab to reach Cancel and Send, or use Control+Enter or Command+Enter to send the edit. Escape cancels and returns focus to Edit message.');
+}
+
 /** Shared input operations; product composers append their own layout and session help. */
 export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryToolbarVisible: boolean, slashCommands: boolean): string {
 	return [
@@ -51,7 +55,8 @@ export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryT
 		localize('dictation.downloadHelp', 'The dictation button shows when the local model is downloading. Activate it again, or press Escape in the input to cancel. The microphone opens after the model is ready.'),
 		localize('chat.response.fileLinksHelp', 'Use Tab to reach a file link in a reply and Enter to open the file at the referenced line.'),
 		localize('chat.message.actionsHelp', 'Use Tab to reach Response actions below a reply. Press Left or Right to move between actions, then Enter or Space to activate the focused action.'),
-		localize('chat.request.actionsHelp', 'Use Tab to reach Message actions below a sent message. Use Left or Right to choose Copy message or, when available, Edit message. Press Enter or Space to activate the action. You can also press Enter on a focused editable message. The editor opens in place. Press Tab to reach Cancel and Send, or use Control+Enter or Command+Enter to send the edit. Escape cancels and returns focus to Edit message. In Code, right-click an eligible message or press Shift+F10 on its row to open Run another version.'),
+		getChatRequestAccessibilityHelp(),
+		localize('chat.request.codeVersionsHelp', 'In Code, right-click an eligible message or press Shift+F10 on its row to open Run another version.'),
 		localize('chat.modelPicker.sliderHelp', 'In the Chat model picker, press Enter or Space on the model name to expand or collapse the model list. The current thinking level appears below the model name. Use the arrow keys on the slider to change the level.'),
 		localize('chat.modelPicker.ultraSliderHelp', 'In the Chat model picker, Ultra can move the effort slider to the level used for requests. Selecting a different level while this override is active turns off Ultra and applies your choice. Turning Ultra off with its button restores your previous choice. On models that accept your chosen effort during Ultra, the slider applies your selection with Ultra still on.'),
 		localize('chat.code.applyHelp', 'Use Apply to editor on a completed reply to ask its model to merge a code block into the open text file. This creates a side chat and keeps the source conversation and draft. Changes appear in the existing file review controls, where you can accept or reject them. Cancel from the progress notification to stop receiving edits; changes already received remain reviewable. Editing or closing the target file stops further edits.'),

@@ -66,7 +66,7 @@ export type ChatWidgetSelection =
  * entries arrive already assembled by App Server and are applied by stable ID.
  */
 export class ChatWidgetModel extends Disposable {
-	private readonly chatService: IChatService;
+	protected readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<ChatStreamingResponseUpdate | void>());
 	private readonly historyBindingFinished = this._register(new Emitter<SessionHistoryBindingDiagnostic>());

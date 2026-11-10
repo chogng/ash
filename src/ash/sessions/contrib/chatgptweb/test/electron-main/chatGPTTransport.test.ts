@@ -448,12 +448,13 @@ suite('ChatGPT transport', () => {
 			['DELETE', '/gizmos/g-p-project', undefined],
 			['POST', '/share/v2/create', { conversation_id: 'chat', current_node_id: 'reply', is_anonymous: true }],
 			['POST', '/f/conversation/resume', { conversation_id: 'chat', offset: 0 }],
+			['PATCH', '/conversation/chat', { current_node_id: 'reply-original' }],
 		] as const) {
 			const id = randomUUID();
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers: {}, ...(body ? { body: JSON.stringify(body) } : {}) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'POST', 'PATCH', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST']);
+		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'POST', 'PATCH', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST', 'PATCH']);
 		assert.deepEqual(calls[2], { method: 'POST', path: '/backend-api/projects' });
 		assert.deepEqual(calls[9], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
 		for (const [method, path, body] of [
@@ -470,12 +471,14 @@ suite('ChatGPT transport', () => {
 			['DELETE', '/gizmos/g-p-project', '{}'],
 			['DELETE', '/models', undefined], ['POST', '/conversation/chat', '{}'], ['PATCH', '/conversation/chat', '{"is_visible":false}'],
 			['PATCH', '/conversation/chat', '{"is_starred":true,"gizmo_id":"g-p-project"}'],
+			['PATCH', '/conversation/chat', '{"current_node_id":"../other"}'],
+			['PATCH', '/conversation/chat', '{"current_node_id":"reply","is_archived":true}'],
 			['PATCH', '/conversation/chat', '{"gizmo_id":"../../other"}'], ['DELETE', '/conversation/id/chat', '{}'],
 			['GET', '/f/conversation/resume', undefined], ['POST', '/f/conversation/resume/other', '{}'],
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 12);
+		assert.equal(calls.length, 13);
 	}));
 
 	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {

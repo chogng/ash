@@ -18,6 +18,7 @@ export namespace ChatContextKeys {
 	export const responseHasText = new RawContextKey<boolean>('chatResponseHasText', false);
 	export const requestHasText = new RawContextKey<boolean>('chatRequestHasText', false);
 	export const requestCanEdit = new RawContextKey<boolean>('chatRequestCanEdit', false);
+	export const requestHasVersions = new RawContextKey<boolean>('chatRequestHasVersions', false);
 	export const responseHasFeedbackSurvey = new RawContextKey<boolean>('chatSessionResponseHasFeedbackSurvey', false);
 	export const responseVote = new RawContextKey<ChatResponseVote | undefined>('chatResponseVote', undefined);
 	export const responseHasLoadedSkills = new RawContextKey<boolean>('chatResponseHasLoadedSkills', false);

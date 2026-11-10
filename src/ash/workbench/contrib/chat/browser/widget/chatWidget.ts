@@ -91,6 +91,8 @@ export interface IChatWidgetModel extends IDisposable {
 	/** The model can supply link handling for rows that belong to a different conversation backend. */
 	getResponseLinkOpener?(item: IChatListItem): ((target: string) => Promise<void>) | undefined;
 	getResponseActions?(item: IChatListItem): ChatResponseActions | undefined;
+	submitRequestEdit?(item: IChatListItem, text: string, commandId: string): Promise<void>;
+	getRequestVersions?(item: IChatListItem): Promise<readonly import('../chat.js').ChatRequestVersion[]>;
 	readonly historyStatus?: IChatSessionHistoryStatus;
 	readonly olderHistory?: { readonly loading: boolean; readonly error?: string; };
 	loadOlderHistory?(): Promise<void>;
@@ -262,6 +264,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
 			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
 			canEditRequest: () => !this.isTranscriptProgressActive,
+			submitRequestEdit: model.submitRequestEdit?.bind(model),
+			getRequestVersions: model.getRequestVersions?.bind(model),
 			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
 			messagePresentation: this.viewOptions?.messagePresentation,
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,

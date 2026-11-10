@@ -213,6 +213,9 @@ impl Directory {
             .map_err(|_| DirPathError::InvalidRelativePath(relative_path.to_path_buf()))?;
         // Return the actual parent spelling even when the leaf does not exist. Path policy owners
         // must see a symlink's destination instead of a lexical alias that hides a denied subtree.
+        if suffix.as_os_str().is_empty() {
+            return Ok(canonical_parent);
+        }
         Ok(canonical_parent.join(suffix))
     }
 

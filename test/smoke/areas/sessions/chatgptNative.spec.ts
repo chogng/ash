@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { mkdir, realpath } from 'node:fs/promises';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ElectronApplication, Page } from '@playwright/test';
@@ -319,6 +319,66 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
+	test('edits a native Ash Chat message in a new Thread and reopens the original draft', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+		const application = browser as ElectronApplication;
+		await installService(application);
+		const modelRequests: string[] = [];
+		await using catalog = createAshModelServer(modelRequests);
+		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const { client, close } = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		try {
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'native-edit-session', title: 'Native message editing', kind: 'chat',
+				executionTarget: null, agent: { type: 'default' },
+			});
+			const { sessionId } = session;
+			const { threadId } = session.threads[0];
+			const read = async (id = threadId) => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId: id })).thread;
+			for (const [index, text] of ['Original prompt', 'Original follow-up'].entries()) {
+				await client.request(APP_SERVER_METHODS['session/request'], {
+					commandId: `native-edit-seed-${index}`, sessionId, request: {
+						type: 'startTurn', threadId, expectedSequence: (await read()).sequence,
+						model: ashFixtureModel, mode: 'agent', approvalMode: 'manual',
+						input: [{ type: 'text', text }],
+					},
+				});
+				await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('completed');
+			}
+			const page = await workbench.openAgentsWindow(target.kind);
+			const row = page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`);
+			await row.press('Enter');
+			const chat = page.locator('.ash-native-chat-widget .ash-chat');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			await expect(chat).toContainText('Original follow-up');
+			const composer = new Editor(chat);
+			await composer.waitForEditorFocus();
+			await composer.waitForTypeInEditor('Keep the original draft');
+			const prompt = chat.locator('.ash-chat-item-userMessage').filter({ hasText: 'Original prompt' });
+			await prompt.getByRole('button', { name: '编辑消息', exact: true }).press('Enter');
+			const edit = chat.getByRole('textbox', { name: '编辑请求', exact: true });
+			await edit.fill('/init revised as literal Chat text');
+			await edit.press('Control+Enter');
+			await expect(chat).not.toHaveAttribute('data-thread-id', threadId);
+			await expect(chat).toContainText('/init revised as literal Chat text');
+			await expect(chat).not.toContainText('Original follow-up');
+			const rewrittenId = (await chat.getAttribute('data-thread-id'))!;
+			await expect.poll(async () => (await read(rewrittenId)).turns.map(turn => turn.status)).toEqual(['completed']);
+			expect((await read(rewrittenId)).turns[0].instructions?.id).not.toBe('instructions/init');
+			expect((await read()).turns).toHaveLength(2);
+			expect(modelRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model, ashFixtureModel.model]);
+			expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(0);
+			await row.press('Enter');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			await expect(chat).toContainText('Original follow-up');
+			await composer.waitForEditorContents(text => text === 'Keep the original draft');
+			await row.press('Shift+F10');
+			await page.getByRole('menuitem', { name: '对话版本', exact: true }).press('ArrowRight');
+			await page.getByText('版本 1', { exact: true }).click();
+			await expect(chat).toHaveAttribute('data-thread-id', rewrittenId);
+			await expect(chat).toContainText('/init revised as literal Chat text');
+		} finally { await close(); }
+	});
+
 	test('continues a workspace-bound native Chat in Code on the original Thread', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
@@ -354,6 +414,7 @@ test.describe('Unified Chat sidebar', () => {
 			const workspaceActions = page.getByRole('menuitem', { name: /^(设置工作区…|更换工作区…|解除工作区)$/ });
 			const folder = join(testWorkspace.directory, 'initial-workspace');
 			await mkdir(folder);
+			await writeFile(join(folder, 'baseline.txt'), 'workspace baseline');
 			const canonicalFolder = await realpath(folder);
 			const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 			try {
@@ -380,12 +441,16 @@ test.describe('Unified Chat sidebar', () => {
 			await expect(code).toContainText('Original Chat message');
 			await expect(code).toContainText('Answer from Ash');
 			await expect(code.locator('.ash-session-workspace-status')).toHaveCount(0);
+			const originalDirectory = (await readConversation()).directory!.root;
+			const originalFile = join(originalDirectory, 'baseline.txt');
+			await writeFile(originalFile, 'at submission');
 			const composer = new Editor(code);
 			await composer.waitForEditorFocus();
 			await composer.waitForTypeInEditor('Follow up from Code');
 			await composer.input.press('Enter');
 			await expect.poll(async () => (await readThread()).turns.map(turn => turn.status)).toEqual(['completed', 'completed']);
 			await expect(code).toContainText('Follow up from Code');
+			await writeFile(originalFile, 'after submission');
 			const saved = (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session;
 			expect(saved?.kind).toBe('chat');
 			expect(saved?.executionTarget).toEqual({ type: 'local', root: canonicalFolder });
@@ -397,13 +462,34 @@ test.describe('Unified Chat sidebar', () => {
 			await expect(workspaceActions).toHaveCount(0);
 			await page.keyboard.press('Escape');
 			await expect(titleMenu).toBeFocused();
+			const editInCode = async (text: string, editedText: string, turnCount: number, expectedFile: string) => {
+				const prompt = code.locator('.ash-chat-item-userMessage').filter({ hasText: text });
+				await prompt.getByRole('button', { name: '编辑消息', exact: true }).press('Enter');
+				const edit = code.getByRole('textbox', { name: '编辑请求', exact: true });
+				await edit.fill(editedText);
+				await edit.press('Control+Enter');
+				await expect(code).not.toHaveAttribute('data-thread-id', threadId);
+				await expect(code).toContainText(editedText);
+				await expect(code).not.toContainText(text);
+				const editedThreadId = (await code.getAttribute('data-thread-id'))!;
+				const read = () => client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId: editedThreadId });
+				await expect.poll(async () => (await read()).thread.turns.map(turn => turn.status)).toEqual(Array(turnCount).fill('completed'));
+				const { directory } = await read();
+				expect(directory!.root).not.toBe(originalDirectory);
+				expect(await readFile(join(directory!.root, 'baseline.txt'), 'utf8')).toBe(expectedFile);
+				expect(await readFile(originalFile, 'utf8')).toBe('after submission');
+			};
+			await editInCode('Follow up from Code', 'Edited Code follow-up', 2, 'at submission');
 			const mode = page.locator('.ash-window-mode-control');
 			await mode.getByRole('button', { name: '聊天 / Agents', exact: true }).click();
 			await row.press('Enter');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
 			await expect(chat).toContainText('Follow up from Code');
 			await expect(workspace).toHaveText(basename(folder));
-			await mode.getByRole('button', { name: '代码', exact: true }).click();
+			await row.press('Shift+F10');
+			await continueInCode.press('Enter');
+			await expect(code).toHaveAttribute('data-thread-id', threadId);
+			await editInCode('Original Chat message', 'Edited pre-workspace message', 1, 'workspace baseline');
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const draft = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat[data-untitled-session-id]');
 			await expect(draft.locator('.ash-sessions-workspace-picker')).toBeVisible();

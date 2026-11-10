@@ -12,6 +12,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
+import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
@@ -179,7 +180,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			},
 			mode: 'ask',
 			phase: loading ? 'loading' : state.sending ? 'submitting' : 'ready',
-			inputBlocked: !canSend || state.busy || state.managing || voice,
+			inputBlocked: !canSend || state.busy || state.sending || state.managing || voice,
 			canInterrupt: state.sending,
 			interruptKind: 'reply',
 			error: state.error || undefined,
@@ -305,6 +306,25 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return this.backend.readResource(resource.toString(), source.conversationId, source.messageId, signal);
 	}
 
+	async submitRequestEdit(item: IChatListItem, text: string, commandId: string): Promise<void> {
+		const source = this.sources.get(item.id);
+		if (this.isDisposed || !item.requestEdit || !source?.conversationId) throw canceled();
+		await this.backend.editMessage(source.conversationId, source.messageId, text, commandId);
+	}
+
+	async getRequestVersions(item: IChatListItem): Promise<readonly ChatRequestVersion[]> {
+		const source = this.sources.get(item.id);
+		if (this.isDisposed || !source?.conversationId) return [];
+		const { conversationId, messageId } = source;
+		const expectedHead = this.backend.state.get().parentId;
+		const versions = await this.backend.messageVersions(conversationId, messageId);
+		return versions.map(version => ({
+			text: version.text,
+			selected: version.selected,
+			select: () => this.backend.selectMessageVersion(conversationId, messageId, expectedHead, version.head),
+		}));
+	}
+
 	private projectTranscript(state: ChatGPTState): readonly IChatListItem[] {
 		const result: IChatListItem[] = [];
 		const sources = this.sources = new Map();
@@ -349,6 +369,13 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 					label: message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 					resources,
 					transient: message === latest,
+					requestHasVersions: !!state.conversationId && message.role === 'user' && message.hasVersions === true,
+					...(state.conversationId && message.role === 'user' && message !== latest && typeof message.editableText === 'string' && {
+						requestEdit: {
+							text: message.editableText,
+							description: localize('sessions.chatgpt.editDescription', 'Sending starts a new version from before this message. Your draft stays available.'),
+						},
+					}),
 				});
 			}
 			appendTasks(message.id);

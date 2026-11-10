@@ -5904,6 +5904,41 @@ fn provider_context_budget_metadata_round_trips_through_the_rpc() {
     let _ = std::fs::remove_file(format!("{}-wal", path.display()));
 }
 
+fn wait_for_offered_approval(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    thread_id: &ash_protocol::ThreadId,
+) -> ash_core::ThreadSnapshot {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut offered = std::collections::HashSet::new();
+    loop {
+        for notice in server.drain_notifications(connection) {
+            let notice: serde_json::Value = serde_json::from_str(&notice).unwrap();
+            if notice["method"] == "agent/request"
+                && let Some(request_id) = notice["params"]["interaction"]["requestId"].as_str()
+            {
+                offered.insert(request_id.to_owned());
+            }
+        }
+        let snapshot = server.threads().read_thread(thread_id).unwrap();
+        let turn = snapshot.turns.last().unwrap();
+        // The durable snapshot can precede the connection's ownership offer.
+        if turn.status == TurnStatus::WaitingForApproval
+            && let Some(pending) = &turn.pending_interaction
+            && offered.contains(pending.request_id.as_str())
+        {
+            return snapshot;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Turn did not offer approval: {:?} {:?}",
+            turn.status,
+            snapshot.items
+        );
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+
 #[test]
 fn protected_file_approval_is_reused_by_the_running_app_server() {
     struct FileModel(AtomicUsize);
@@ -5974,6 +6009,15 @@ fn protected_file_approval_is_reused_by_the_running_app_server() {
         1,
     );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let subscribed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+        }),
+    );
+    assert!(subscribed["result"].is_object(), "{subscribed}");
     let started = call(
         &server,
         &mut connection,
@@ -5985,24 +6029,7 @@ fn protected_file_approval_is_reused_by_the_running_app_server() {
     );
     assert!(started.get("error").is_none(), "{started}");
     let typed_thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
-    let wait_for_approval = || {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            let snapshot = server.threads().read_thread(&typed_thread_id).unwrap();
-            let turn = snapshot.turns.last().unwrap();
-            if turn.status == TurnStatus::WaitingForApproval {
-                return snapshot;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "Turn did not request approval: {:?} {:?}",
-                turn.status,
-                snapshot.items
-            );
-            thread::sleep(Duration::from_millis(1));
-        }
-    };
-    let snapshot = wait_for_approval();
+    let snapshot = wait_for_offered_approval(&server, &mut connection, &typed_thread_id);
     let turn = snapshot.turns.last().unwrap();
     let first = turn.pending_interaction.as_ref().unwrap();
     let AgentRequest::Approval { request } = &first.request else {
@@ -6029,7 +6056,7 @@ fn protected_file_approval_is_reused_by_the_running_app_server() {
         }),
     );
     assert!(resolved.get("error").is_none(), "{resolved}");
-    let snapshot = wait_for_approval();
+    let snapshot = wait_for_offered_approval(&server, &mut connection, &typed_thread_id);
     let pending = snapshot
         .turns
         .last()
@@ -6119,6 +6146,15 @@ fn shell_review_session_prefix_reuses_git_status_but_waits_for_the_next_subcomma
         1,
     );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let subscribed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+        }),
+    );
+    assert!(subscribed["result"].is_object(), "{subscribed}");
     let started = call(
         &server,
         &mut connection,
@@ -6130,24 +6166,7 @@ fn shell_review_session_prefix_reuses_git_status_but_waits_for_the_next_subcomma
     );
     assert!(started.get("error").is_none(), "{started}");
     let typed_thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
-    let wait_for_approval = || {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            let snapshot = server.threads().read_thread(&typed_thread_id).unwrap();
-            let turn = snapshot.turns.last().unwrap();
-            if turn.status == TurnStatus::WaitingForApproval {
-                return snapshot;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "Turn did not request shell approval: {:?} {:?}",
-                turn.status,
-                snapshot.items
-            );
-            thread::sleep(Duration::from_millis(1));
-        }
-    };
-    let first = wait_for_approval();
+    let first = wait_for_offered_approval(&server, &mut connection, &typed_thread_id);
     let turn = first.turns.last().unwrap();
     let pending = turn.pending_interaction.as_ref().unwrap();
     let AgentRequest::Approval { request } = &pending.request else {
@@ -6171,7 +6190,7 @@ fn shell_review_session_prefix_reuses_git_status_but_waits_for_the_next_subcomma
         }),
     );
     assert!(approved.get("error").is_none(), "{approved}");
-    let later = wait_for_approval();
+    let later = wait_for_offered_approval(&server, &mut connection, &typed_thread_id);
     let pending = later
         .turns
         .last()
@@ -10678,18 +10697,29 @@ fn browser_tcp_half_close_keeps_the_response_readable() {
     std::io::Write::write_all(&mut socket, b"reply").unwrap();
     socket.shutdown(std::net::Shutdown::Write).unwrap();
     let deadline = Instant::now() + Duration::from_secs(2);
+    let mut request_id = 4;
+    let mut received = Vec::new();
     loop {
         let response = call(
             &server,
             &mut owner,
-            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"browser/tcp/read","params":{"streamId":"stream"}}),
+            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"browser/tcp/read","params":{"streamId":"stream"}}),
         );
         assert!(response.get("error").is_none(), "{response}");
-        if response["result"]["dataBase64"] == "cmVwbHk=" {
+        let chunk: ash_app_server_protocol::protocol::browser::BrowserTcpReadResult =
+            serde_json::from_value(response["result"].clone()).unwrap();
+        received.extend(
+            base64::engine::general_purpose::STANDARD
+                .decode(chunk.data_base64)
+                .unwrap(),
+        );
+        if chunk.eof {
             break;
         }
         assert!(Instant::now() < deadline, "{response}");
+        request_id += 1;
         std::thread::sleep(Duration::from_millis(1));
     }
+    assert_eq!(received, b"reply");
     server.close_connection(owner);
 }

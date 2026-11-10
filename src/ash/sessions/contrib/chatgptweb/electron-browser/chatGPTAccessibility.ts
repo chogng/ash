@@ -5,6 +5,7 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
 import { experimentalChatGPTSelected } from '../common/chatGPTNative.js';
 import { CHAT_NAVIGATION_FOCUS_CONTEXT } from '../../chat/common/constants.js';
 import { getSessionsListAttentionHelp } from '../../sessions/browser/views/sessionsListActions.js';
@@ -39,6 +40,8 @@ export function registerChatGPTAccessibility(focusContext: string, contentServic
 						+ '\n\n' + localize('sessions.chatgpt.promptTimelineHelp', 'The prompt timeline appears when the conversation has at least two prompts and the pane is wide enough. In the left gutter, click a mark to jump to the prompt it previews. Focus Show prompts and press Enter or Space to open the list with the keyboard. Use Up and Down Arrow, Home or End to move between prompts. In Overview ruler mode, Tab to a marker and activate it to see its prompts. Activate a prompt to jump to its original message. Escape closes the list and returns focus to its control.')
 						+ '\n\n' + localize('sessions.chatgpt.offlineHelp', 'While offline, Send in a new chat saves its first text message on this device. Delete removes a conversation from the sidebar. Ash syncs these changes when the connection returns. A saved chat is read-only until ChatGPT confirms it.')
 						+ '\n\n' + localize('sessions.chat.coworkHelp', 'Use the same input to ask questions or describe work to do. Clear text requests for actions or deliverables may run with Cowork. Progress and results appear in the conversation. Select Open Cowork task when the task needs input.'))
+					+ '\n\n' + getChatRequestAccessibilityHelp()
+					+ '\n\n' + localize('sessions.chatgpt.messageVersionsHelp', 'For a message with alternate versions, use Message versions in its toolbar. Use Up or Down Arrow to select a version and Enter to open it. Escape closes the picker.')
 					+ '\n\n' + localize('sessions.chatgpt.codeModelsHelp', 'In a new Chat without attachments, the model list also includes available Ash models. Selecting one opens an Ash Chat draft with your unsent text.')
 					+ '\n\n' + localize('sessions.titlebar.chatGPTHelp', 'For a saved chat, focus its title and press Enter to rename it. Use More Sessions Actions beside the title to pin, archive, or delete it. Share at the right of the title bar asks for confirmation before creating and copying a link to the entire conversation.')
 					: content.getAccessibleContent(), () => focused?.focus(), AccessibilityVerbositySettingId.ChatGPT);

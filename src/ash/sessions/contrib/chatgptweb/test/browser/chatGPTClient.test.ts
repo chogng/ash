@@ -353,6 +353,9 @@ suite('Bundled ChatGPT client', () => {
 		}) as typeof fetch);
 		const history = await client.history('chat-one', signal());
 		assert.deepEqual(history.messages.map(item => item.text), ['Question', 'Selected answer']);
+		assert.deepEqual(await client.prepareMessageEdit('chat-one', 'user', 'reply-two', signal()), { parentId: 'root', files: [] });
+		await assert.rejects(client.prepareMessageEdit('chat-one', 'user', 'reply-one', signal()), /Reload the ChatGPT conversation/u);
+		await assert.rejects(client.prepareMessageEdit('chat-one', 'reply-one', 'reply-two', signal()), /unavailable for editing/u);
 		const output = await collect(client.send({ text: 'Follow up', model: 'fixture-model', parentId: history.parentId, conversationId: history.id, messageId: 'new-user' }, signal()));
 		assert.equal(output[0]!.message!.text, 'Next answer');
 		const sent = calls.at(-1)!;
@@ -418,7 +421,7 @@ suite('Bundled ChatGPT client', () => {
 		}) as typeof fetch);
 		const history = await client.history('fixture', signal());
 		assert.deepEqual(history.messages, [
-			{ id: 'user', role: 'user', text: 'Question' },
+			{ id: 'user', role: 'user', text: 'Question', editableText: 'Question' },
 			{ id: 'reply', role: 'assistant', text: '  Answer\n' },
 			{ id: 'attachment', role: 'user', text: '[View this content in ChatGPT](https://chatgpt.com/c/fixture)' },
 		]);

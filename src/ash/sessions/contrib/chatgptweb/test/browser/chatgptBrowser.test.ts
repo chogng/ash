@@ -23,6 +23,84 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe(text);
 	}
 
+	test('edits a historical ChatGPT message and switches server versions without touching the draft', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
+		const attachment = { id: 'file-original', name: 'original.txt', size: 10, mime_type: 'text/plain' };
+		const mapping: Record<string, { parent: string | null; children: string[]; message: object | null; }> = {
+			root: { parent: null, children: ['question'], message: null },
+			question: { parent: 'root', children: ['answer'], message: { ...message('question', 'user', 'Original prompt'), metadata: { attachments: [attachment] } } },
+			answer: { parent: 'question', children: ['followup'], message: message('answer', 'assistant', 'Original reply') },
+			followup: { parent: 'answer', children: ['final'], message: message('followup', 'user', 'Original follow-up') },
+			final: { parent: 'followup', children: [], message: message('final', 'assistant', 'Original ending') },
+		};
+		let head = 'final';
+		const submitted: { parent_message_id: string; conversation_id: string; messages: { id: string; content: { parts: string[]; }; metadata: { attachments: unknown[]; }; }[]; }[] = [];
+		const selections: string[] = [];
+		await page.route('**/service/backend-api/conversation/fixture-chat', async route => {
+			if (route.request().method() === 'PATCH') {
+				head = route.request().postDataJSON().current_node_id;
+				selections.push(head);
+				return route.fulfill({ json: { success: true } });
+			}
+			await route.fulfill({ json: { title: 'Synthetic conversation', current_node: head, mapping } });
+		});
+		await page.route('**/service/backend-api/f/conversation', async route => {
+			const request = route.request().postDataJSON();
+			submitted.push(request);
+			if (submitted.length === 1) return route.fulfill({ status: 400, json: {} });
+			const replacement = request.messages[0];
+			const reply = message('revised-answer', 'assistant', 'Revised reply');
+			mapping.root.children.push(replacement.id);
+			mapping[replacement.id] = { parent: 'root', children: [reply.id], message: replacement };
+			mapping[reply.id] = { parent: replacement.id, children: [], message: reply };
+			head = reply.id;
+			await route.fulfill({
+				contentType: 'text/event-stream',
+				body: `data: ${JSON.stringify({ conversation_id: 'fixture-chat', message: reply })}\n\ndata: [DONE]\n\n`,
+			});
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		const chat = page.locator('#editor');
+		const row = (text: string) => chat.locator('.ash-chat-item-userMessage').filter({ hasText: text });
+		await expect(chat.getByText('Original ending', { exact: true })).toBeVisible();
+		await fillMessage(page, 'Unsent follow-up');
+		const edit = row('Original prompt').getByRole('button', { name: '编辑消息', exact: true });
+		await edit.focus();
+		await edit.press('Enter');
+		const editor = chat.getByRole('textbox', { name: '编辑请求' });
+		await expect(editor).toBeFocused();
+		await editor.fill('Revised prompt');
+		await editor.press('Control+Enter');
+		await expect(chat.locator('.ash-chat-request-edit-feedback')).toContainText('无法发送编辑后的请求');
+		await expect(editor).toHaveValue('Revised prompt');
+		await expectDraft(page, 'Unsent follow-up');
+		await editor.press('Control+Enter');
+		await expect(chat.getByText('Revised reply', { exact: true })).toBeVisible();
+		await expect(chat.getByText('Original ending', { exact: true })).toHaveCount(0);
+		expect(submitted).toHaveLength(2);
+		expect(submitted[1].conversation_id).toBe('fixture-chat');
+		expect(submitted[1].parent_message_id).toBe('root');
+		expect(submitted[1].messages[0].id).toBe(submitted[0].messages[0].id);
+		expect(submitted[1].messages[0].content.parts).toEqual(['Revised prompt']);
+		expect(submitted[1].messages[0].metadata.attachments).toEqual([attachment]);
+
+		await row('Revised prompt').getByRole('button', { name: '消息版本', exact: true }).click();
+		await expect(page.getByRole('combobox', { name: '选择消息版本' })).toBeFocused();
+		await page.getByRole('option', { name: 'Original prompt', exact: true }).click();
+		await expect(chat.getByText('Original ending', { exact: true })).toBeVisible();
+		expect(selections).toEqual(['final']);
+		await expectDraft(page, 'Unsent follow-up');
+
+		// Another client can select a branch on the same server record.
+		head = 'revised-answer';
+		await page.reload();
+		await expect(chat.getByText('Revised reply', { exact: true })).toBeVisible();
+		await expectDraft(page, 'Unsent follow-up');
+	});
+
 	test('renders colored status icons from ChatGPT history', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page, '| 状态 |\n| --- |\n| <icon name="check" color="success" inline/> 允许 |\n| <icon name="x" color="danger" inline/> 禁止 |');

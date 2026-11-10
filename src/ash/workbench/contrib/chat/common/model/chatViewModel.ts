@@ -54,6 +54,9 @@ export interface IChatListItem {
 	readonly historyRedoTarget?: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; };
 	/** Initial accepted request identity; presentation entry IDs are not backend item IDs. */
 	readonly requestSource?: { readonly sessionId: string; readonly threadId: string; readonly turnId: string; readonly itemId: string; };
+	/** Editable text supplied by a conversation model that owns its own submission route. */
+	readonly requestEdit?: { readonly text: string; readonly description: string; };
+	readonly requestHasVersions?: boolean;
 	readonly canForkBeforeRequest?: boolean;
 	readonly canRunAnotherVersion?: boolean;
 	readonly canCompareResults?: boolean;

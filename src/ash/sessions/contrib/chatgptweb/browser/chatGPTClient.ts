@@ -1,5 +1,5 @@
-import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage as ChatGPTMessage, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
-export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage as ChatGPTMessage, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
+import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
+export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
@@ -67,6 +67,12 @@ export interface ChatGPTVoiceUpdate {
 	readonly conversationId?: string;
 	readonly parentId?: string;
 	readonly message?: ChatGPTMessage;
+}
+export type ChatGPTMessage = ChatReplyMessage & { readonly editableText?: string; readonly hasVersions?: boolean; };
+export interface ChatGPTMessageVersion {
+	readonly head: string;
+	readonly text: string;
+	readonly selected: boolean;
 }
 export interface ChatGPTHistory {
 	readonly id: string;
@@ -339,29 +345,84 @@ export class ChatGPTClient {
 
 	async history(id: string, signal: AbortSignal): Promise<ChatGPTHistory> {
 		if (this.native) { return this.nativeHistory(id, signal); }
-		const value = await this.json(`/conversation/${encodeURIComponent(id)}`, signal, 'conversation');
-		if (!isRecord(value) || !isRecord(value.mapping) || typeof value.current_node !== 'string') { throw this.invalidResponse(); }
+		const { value, mapping, head } = await this.conversationGraph(id, signal);
 		const messages: ChatGPTMessage[] = [];
-		const visited = new Set<string>();
 		let thinkingEffort: string | undefined;
-		let nodeId: string | undefined = value.current_node;
-		while (nodeId && !visited.has(nodeId)) {
-			visited.add(nodeId);
-			const node: unknown = value.mapping[nodeId];
-			if (!isRecord(node)) { break; }
+		for (const node of activeNodes(mapping, head)) {
 			const message = readMessage(node.message, id);
 			if (thinkingEffort === undefined && isRecord(node.message) && isRecord(node.message.author) && node.message.author.role === 'assistant'
 				&& isRecord(node.message.metadata) && typeof node.message.metadata.thinking_effort === 'string') {
 				thinkingEffort = node.message.metadata.thinking_effort;
 			}
-			if (message && (message.activity || message.text.trim() || message.resources?.length)) { messages.push(message); }
-			nodeId = typeof node.parent === 'string' ? node.parent : undefined;
+			if (message && (message.activity || message.text.trim() || message.resources?.length)) {
+				const siblings = message.role === 'user' && nodeChildren(mapping, node.parent);
+				const hasVersions = siblings && siblings.some(id => {
+					const sibling = mapping[id];
+					return isRecord(sibling) && isRecord(sibling.message) && sibling.message.id !== message.id
+						&& isRecord(sibling.message.author) && sibling.message.author.role === 'user';
+				});
+				messages.push(hasVersions ? { ...message, hasVersions } : message);
+			}
 		}
 		return {
-			id, title: typeof value.title === 'string' ? value.title : 'ChatGPT', parentId: value.current_node,
+			id, title: typeof value.title === 'string' ? value.title : 'ChatGPT', parentId: head,
 			...(value.is_archived === true ? { archived: true } : {}),
 			model: typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined, thinkingEffort, messages: messages.reverse(),
 		};
+	}
+
+	private async conversationGraph(id: string, signal: AbortSignal) {
+		const value = await this.json(`/conversation/${encodeURIComponent(id)}`, signal, 'conversation');
+		if (!isRecord(value) || !isRecord(value.mapping) || typeof value.current_node !== 'string') { throw this.invalidResponse(); }
+		return { value, mapping: value.mapping, head: value.current_node };
+	}
+
+	async prepareMessageEdit(id: string, messageId: string, expectedHead: string, signal: AbortSignal): Promise<{ parentId: string; files: readonly ChatGPTFile[]; }> {
+		const { node, parentId } = await this.messageVersionGraph(id, messageId, expectedHead, signal);
+		const edit = readEditableMessage(node);
+		if (edit) return { parentId, files: edit.files };
+		throw new Error(localize('sessions.chatgpt.editUnavailable', 'This ChatGPT message is unavailable for editing.'));
+	}
+
+	private async messageVersionGraph(id: string, messageId: string, expectedHead: string, signal: AbortSignal) {
+		const { mapping, head, value } = await this.conversationGraph(id, signal);
+		if (head !== expectedHead || value.is_archived === true) {
+			throw new Error(localize('sessions.chatgpt.editHistoryChanged', 'Reload the ChatGPT conversation before editing this message.'));
+		}
+		for (const node of activeNodes(mapping, head)) {
+			if (isRecord(node.message) && node.message.id === messageId && typeof node.parent === 'string' && Object.hasOwn(mapping, node.parent)) {
+				return { mapping, head, node: node.message, parentId: node.parent };
+			}
+		}
+		throw new Error(localize('sessions.chatgpt.editUnavailable', 'This ChatGPT message is unavailable for editing.'));
+	}
+
+	async messageVersions(id: string, messageId: string, expectedHead: string, signal: AbortSignal): Promise<readonly ChatGPTMessageVersion[]> {
+		const { mapping, head, parentId } = await this.messageVersionGraph(id, messageId, expectedHead, signal);
+		return nodeChildren(mapping, parentId).flatMap(child => {
+			const sibling = mapping[child];
+			const message = isRecord(sibling) ? readMessage(sibling.message, id) : undefined;
+			if (message?.role !== 'user' || !message.text.trim()) return [];
+			const selected = message.id === messageId;
+			const leaf = selected ? head : latestBranchLeaf(mapping, child);
+			return leaf ? [{ head: leaf, text: message.editableText ?? message.text, selected }] : [];
+		});
+	}
+
+	async selectMessageVersion(id: string, head: string, signal: AbortSignal): Promise<void> {
+		await this.consume(`/conversation/${encodeURIComponent(id)}`, signal, 'PATCH', { current_node_id: head });
+	}
+
+	async confirmMessageEdit(id: string, replacementId: string, previousHead: string, signal: AbortSignal): Promise<ChatGPTHistory> {
+		const deadline = Date.now() + 4_000;
+		while (true) {
+			const history = await this.history(id, signal);
+			if (history.messages.some(message => message.id === replacementId && message.role === 'user')) return history;
+			if (history.parentId !== previousHead || Date.now() >= deadline) {
+				throw new Error(localize('sessions.chatgpt.editUnconfirmed', 'Reload the conversation to check whether ChatGPT accepted the edit.'));
+			}
+			await waitForChatGPTProcessing(signal);
+		}
 	}
 
 	private async nativeHistory(id: string, signal: AbortSignal): Promise<ChatGPTHistory> {
@@ -431,7 +492,7 @@ export class ChatGPTClient {
 				return { id: metadata.file_id, name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, ...dimensions };
 			}
 			if (confirmed.status !== 'pending' && confirmed.status !== 'processing') { throw this.invalidResponse(); }
-			await waitForUpload(signal);
+			await waitForChatGPTProcessing(signal);
 		}
 		throw new Error(localize('sessions.chatgpt.uploadNotReady', 'The file is still processing. Retry the attachment.'));
 	}
@@ -465,7 +526,7 @@ export class ChatGPTClient {
 				if (!(error instanceof ChatGPTRequestError) || error.status !== 404 || !messageId) { throw error; }
 			}
 			if (Date.now() >= deadline) { throw new Error(localize('sessions.chatgpt.voiceHistoryPending', 'The voice conversation has not finished saving. Reload it before sending another message.')); }
-			await waitForUpload(signal);
+			await waitForChatGPTProcessing(signal);
 		}
 	}
 
@@ -473,7 +534,7 @@ export class ChatGPTClient {
 		const images = input.files?.filter(file => file.width !== undefined && file.height !== undefined) ?? [];
 		const content = images.length ? {
 			content_type: 'multimodal_text', parts: [
-				...images.map(file => ({ content_type: 'image_asset_pointer', asset_pointer: `file-service://${file.id}`, size_bytes: file.size, width: file.width, height: file.height })),
+				...images.map(file => ({ content_type: 'image_asset_pointer', asset_pointer: `${file.id.startsWith('file_') ? 'sediment' : 'file-service'}://${file.id}`, size_bytes: file.size, width: file.width, height: file.height })),
 				...(input.text ? [input.text] : []),
 			],
 		} : { content_type: 'text', parts: [input.text] };
@@ -627,6 +688,76 @@ export function readChatGPTVoiceUpdate(data: unknown): ChatGPTVoiceUpdate | unde
 	return { conversationId, message: readMessage(payload.message, conversationId) };
 }
 
+function nodeChildren(mapping: Record<string, unknown>, id: unknown): readonly string[] {
+	const node = typeof id === 'string' && Object.hasOwn(mapping, id) ? mapping[id] : undefined;
+	return isRecord(node) && Array.isArray(node.children)
+		? node.children.filter((child): child is string => {
+			const entry = typeof child === 'string' && Object.hasOwn(mapping, child) ? mapping[child] : undefined;
+			return isRecord(entry) && entry.parent === id;
+		})
+		: [];
+}
+
+function latestBranchLeaf(mapping: Record<string, unknown>, id: string): string | undefined {
+	const visited = new Set<string>();
+	while (!visited.has(id)) {
+		visited.add(id);
+		const next = nodeChildren(mapping, id).at(-1);
+		if (!next) return id;
+		id = next;
+	}
+	return undefined;
+}
+
+function* activeNodes(mapping: Record<string, unknown>, head: string): Iterable<Record<string, unknown>> {
+	const visited = new Set<string>();
+	let id: string | undefined = head;
+	while (id && !visited.has(id) && Object.hasOwn(mapping, id)) {
+		visited.add(id);
+		const node: unknown = mapping[id];
+		if (!isRecord(node)) return;
+		yield node;
+		id = typeof node.parent === 'string' ? node.parent : undefined;
+	}
+}
+
+function readEditableMessage(message: Record<string, unknown>): { text: string; files: readonly ChatGPTFile[]; } | undefined {
+	if (!isRecord(message.author) || message.author.role !== 'user' || !isRecord(message.content)
+		|| message.status !== undefined && message.status !== 'finished_successfully'
+		|| ![undefined, 'text', 'multimodal_text'].includes(message.content.content_type as string | undefined)
+		|| !Array.isArray(message.content.parts)) return undefined;
+	const metadata = isRecord(message.metadata) ? message.metadata : undefined;
+	if (metadata?.is_visually_hidden_from_conversation === true || metadata?.targeted_reply != null
+		|| metadata?.targeted_reply_label != null || Array.isArray(metadata?.system_hints) && metadata.system_hints.length) return undefined;
+	const attachments = metadata?.attachments ?? [];
+	if (!Array.isArray(attachments)) return undefined;
+	const files = new Map<string, ChatGPTFile>();
+	for (const attachment of attachments) {
+		if (!isRecord(attachment) || attachment.is_big_paste === true || attachment.cloud_doc_url != null || attachment.library_file_id != null) return undefined;
+		const { id, name, mime_type: mimeType, size } = attachment;
+		if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,240}$/u.test(id) || files.has(id)
+			|| typeof name !== 'string' || typeof mimeType !== 'string'
+			|| typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) return undefined;
+		files.set(id, { id, name, mimeType, size });
+	}
+	const parts: string[] = [];
+	for (const part of message.content.parts) {
+		if (typeof part === 'string') {
+			parts.push(part);
+			continue;
+		}
+		if (!isRecord(part) || part.content_type !== 'image_asset_pointer' || typeof part.asset_pointer !== 'string') return undefined;
+		const fileId = /^(?:file-service|sediment):\/\/([A-Za-z0-9_-]{1,240})$/u.exec(part.asset_pointer)?.[1];
+		const file = fileId ? files.get(fileId) : undefined;
+		const { width, height } = part;
+		if (!file || typeof width !== 'number' || !Number.isSafeInteger(width) || width <= 0
+			|| typeof height !== 'number' || !Number.isSafeInteger(height) || height <= 0) return undefined;
+		files.set(file.id, { ...file, width, height });
+	}
+	const text = parts.join('\n');
+	return text.trim() ? { text, files: [...files.values()] } : undefined;
+}
+
 function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {
 	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant', 'tool'].includes(value.author.role as string)
 		|| !isRecord(value.content)) { return undefined; }
@@ -722,8 +853,11 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		}
 	}
 	const timestamp = conversationTimestamp(value.create_time);
+	const edit = readEditableMessage(value);
 	return {
 		id: value.id, role: value.author.role as 'user' | 'assistant', text,
+		...(edit && { editableText: edit.text }),
+		...(isRecord(value.metadata) && value.metadata.has_versions === true && { hasVersions: true }),
 		...(timestamp !== undefined && Number.isFinite(new Date(timestamp).getTime()) ? { timestamp } : {}),
 		...(resources.length ? { resources } : {}), ...(references.length ? { references } : {})
 	};
@@ -817,7 +951,7 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 	} finally { signal.removeEventListener('abort', cancel); await reader.cancel().catch(() => { }); reader.releaseLock(); }
 }
 
-function waitForUpload(signal: AbortSignal): Promise<void> {
+function waitForChatGPTProcessing(signal: AbortSignal): Promise<void> {
 	signal.throwIfAborted();
 	return new Promise((resolve, reject) => {
 		const abort = (): void => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(signal.reason); };

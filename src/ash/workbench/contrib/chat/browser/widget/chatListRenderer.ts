@@ -65,6 +65,8 @@ interface ChatListItemRendererOptions {
 	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
 	readonly onDidRequestEdit: (requestId: string) => void | Promise<void>;
 	readonly canEditRequest: () => boolean;
+	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;
+	readonly getRequestVersions?: (item: IChatListItem) => Promise<readonly import('../chat.js').ChatRequestVersion[]>;
 	readonly cancelRequestEdit: () => boolean;
 	readonly refreshRequestAfterEdit: () => void;
 	readonly deferCodeBlockModels: boolean;
@@ -166,8 +168,11 @@ export class ChatListItemRenderer extends Disposable {
 			return timeChanged ? 'updated' : 'unchanged';
 		}
 		const source = this.item.requestSource;
-		if (this.edit.value && source && item.type === 'userMessage' && item.requestSource?.sessionId === source.sessionId
-			&& item.requestSource.threadId === source.threadId && item.requestSource.turnId === source.turnId && item.requestSource.itemId === source.itemId) {
+		const sameRequest = source
+			? item.requestSource?.sessionId === source.sessionId && item.requestSource.threadId === source.threadId
+			&& item.requestSource.turnId === source.turnId && item.requestSource.itemId === source.itemId
+			: item.requestEdit && this.item.requestEdit && item.id === this.item.id;
+		if (this.edit.value && item.type === 'userMessage' && sameRequest) {
 			// Keep the editor mounted across presentation updates to the same request.
 			this.deferredRequestUpdate = true;
 			return 'unchanged';
@@ -341,10 +346,12 @@ export class ChatListItemRenderer extends Disposable {
 		const actions = this.createMessageActions();
 		const context = lifetime.add(this.contextKeys.createScoped(actions));
 		ChatContextKeys.requestHasText.bindTo(context).set(!!this.item.text);
-		ChatContextKeys.requestCanEdit.bindTo(context).set(!!this.item.requestSource);
+		const editable = !!this.item.requestSource || !!(this.item.requestEdit && this.options.submitRequestEdit);
+		ChatContextKeys.requestCanEdit.bindTo(context).set(editable);
+		ChatContextKeys.requestHasVersions.bindTo(context).set(!!(this.item.requestHasVersions && this.options.getRequestVersions));
 		const toolbar = this.createMessageToolbar(actions, MenuId.ChatMessageTitle, localize('chat.request.actions', 'Message actions'), context, lifetime);
-		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible, this.options.onDidRequestEdit));
-		if (this.item.requestSource) {
+		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible, this.options.onDidRequestEdit, this.options.getRequestVersions));
+		if (editable) {
 			this.installRequestEditor(requestText, lifetime, actions, () => {
 				toolbar.element.querySelector<HTMLButtonElement>(`[data-action-id="${EditChatRequestActionId}"] > button`)?.focus({ preventScroll: true });
 			});
@@ -624,17 +631,20 @@ export class ChatListItemRenderer extends Disposable {
 		bubble.append(requestText);
 		requestText.classList.add('ash-chat-request-editable');
 		this.openRequestEditor = () => {
-			if (this.edit.value || !this.item.requestSource || !this.options.isVisible() || !this.options.canEditRequest()) return;
-			const source = this.item.requestSource;
+			if (this.edit.value || !this.options.isVisible() || !this.options.canEditRequest()) return;
+			const item = this.item;
+			const source = item.requestSource;
+			const submit = this.options.submitRequestEdit;
+			if (!source && !(item.requestEdit && submit)) return;
 			const store = new DisposableStore();
 			const document = this.element.ownerDocument;
 			const input = h(document, 'textarea', { className: 'ash-chat-request-editor' });
-			input.value = this.item.text;
+			input.value = item.requestEdit?.text ?? item.text;
 			input.setAttribute('aria-label', localize('chat.edit.input', 'Edit request'));
 			const explanation = h(document, 'span');
 			explanation.id = createUuid();
 			explanation.hidden = true;
-			explanation.textContent = localize('chat.edit.description', 'Sending creates a new chat from before this request. Its context and attachments are kept; the original chat and draft stay available.');
+			explanation.textContent = item.requestEdit?.description ?? localize('chat.edit.description', 'Sending creates a new chat from before this request. Its context and attachments are kept; the original chat and draft stay available.');
 			input.setAttribute('aria-describedby', explanation.id);
 			const feedback = h(document, 'div', { className: 'ash-chat-request-edit-feedback' });
 			feedback.setAttribute('role', 'status');
@@ -703,10 +713,11 @@ export class ChatListItemRenderer extends Disposable {
 				cancel.enabled = false;
 				feedback.textContent = '';
 				try {
-					await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, text, commandId: attempt.commandId });
+					if (submit) await submit(item, text, attempt.commandId);
+					else await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, text, commandId: attempt.commandId });
 					if (this.edit.value === store) close(true, true);
 				} catch (error) {
-					if (this.edit.value === store) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
+					if (this.edit.value === store && !isCancellationError(error)) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
 				} finally {
 					if (this.edit.value === store) {
 						pending = false;
@@ -1025,6 +1036,8 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& left.turnChanges?.deletions === right.turnChanges?.deletions
 		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId
 		&& left.requestSource?.turnId === right.requestSource?.turnId && left.requestSource?.itemId === right.requestSource?.itemId
+		&& left.requestEdit?.text === right.requestEdit?.text && left.requestEdit?.description === right.requestEdit?.description
+		&& left.requestHasVersions === right.requestHasVersions
 		&& left.canForkBeforeRequest === right.canForkBeforeRequest
 		&& left.loadedSkills?.length === right.loadedSkills?.length
 		&& (left.loadedSkills?.every((skill, index) => skill === right.loadedSkills?.[index]) ?? true)

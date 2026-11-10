@@ -5,6 +5,7 @@ import type { Thread } from '../../../../workbench/services/chat/common/chatServ
 import { formatChatMessageTime } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatReplyError } from '../../../common/chatReplyBackend.js';
+import { canceled } from '../../../../base/common/errors.js';
 import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
 import { ChatGPTOutbox, type PendingChatGPTCreation } from './chatGPTOutbox.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -22,7 +23,7 @@ import { INotificationService, Severity, type INotificationActions, type INotifi
 import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ChatGPTAuthenticationError, IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
-import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTHistory } from './chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, isChatGPTRateLimit, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTMessageVersion, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTHistory } from './chatGPTClient.js';
 import { ChatGPTDraftAttachmentStorage, type ChatGPTAttachment } from './chatGPTDraftAttachmentStorage.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
 import { getChatGPTRichContentText } from './chatGPTRichContent.js';
@@ -38,6 +39,11 @@ function isCachedTimestamp(value: unknown): value is number {
 }
 
 type HistoryValidation = Pick<ChatGPTHistory, 'parentId' | 'model' | 'thinkingEffort'> & { readonly validatedAt: number; };
+interface ChatGPTReplyStream {
+	readonly controller: AbortController;
+	submitted: boolean;
+	replyId?: string;
+}
 interface ProjectHistory {
 	readonly status: 'loading' | 'ready' | 'error';
 	readonly cursor?: ChatGPTProjectCursor;
@@ -217,6 +223,9 @@ export interface IChatGPTService {
 	startVoice(window: Window & typeof globalThis): Promise<void>;
 	stopVoice(): Promise<void>;
 	send(): Promise<void>;
+	editMessage(conversationId: string, messageId: string, text: string, replacementId: string): Promise<void>;
+	messageVersions(conversationId: string, messageId: string): Promise<readonly ChatGPTMessageVersion[]>;
+	selectMessageVersion(conversationId: string, messageId: string, expectedHead: string, head: string): Promise<void>;
 	stop(): Promise<void>;
 	readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob>;
 	getAccessibleContent(): string;
@@ -269,7 +278,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private outbox: ChatGPTOutbox | undefined;
 	private syncingOutbox: Promise<void> | undefined;
 	private activeOutboxCreation: { readonly outbox: ChatGPTOutbox; readonly localId: string; readonly controller: AbortController; } | undefined;
-	private stream: AbortController | undefined;
+	private stream: ChatGPTReplyStream | undefined;
 	private stopping: Promise<void> | undefined;
 	private generation = 0;
 	private management = new AbortController();
@@ -320,7 +329,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.historyConnection.abort();
 			this.closeHistoryNotice();
 			void this.endVoice(false);
-			this.generation++; this.operation?.abort(); this.refreshOperation?.abort(); this.stream?.abort(); this.drafts.clear();
+			this.generation++; this.operation?.abort(); this.refreshOperation?.abort(); this.stream?.controller.abort(); this.drafts.clear();
 			for (const upload of this.uploads.values()) { upload.abort(); }
 			this.uploads.clear(); this.attachmentFiles.clear();
 		}));
@@ -331,7 +340,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.isDisposed) { return; }
 		const draft = this.model.get().draft;
 		this.generation++;
-		this.operation?.abort(); this.stream?.abort(); this.stream = undefined;
+		this.operation?.abort(); this.stream?.controller.abort(); this.stream = undefined;
 		this.refreshOperation?.abort();
 		this.management.abort();
 		this.olderRead?.abort();
@@ -1935,6 +1944,81 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 	}
 
+	public async messageVersions(conversationId: string, messageId: string): Promise<readonly ChatGPTMessageVersion[]> {
+		const state = this.model.get();
+		if (this.isDisposed || !state.connected || !state.networkAvailable || state.conversationId !== conversationId || state.uncertain) return [];
+		return this.client.messageVersions(conversationId, messageId, state.parentId, AbortSignal.any([this.management.signal, AbortSignal.timeout(15_000)]));
+	}
+
+	public async selectMessageVersion(conversationId: string, messageId: string, expectedHead: string, head: string): Promise<void> {
+		const state = this.model.get();
+		if (state.conversationId !== conversationId || state.parentId !== expectedHead || state.uncertain || !state.networkAvailable) return;
+		await this.manage(conversationId, async signal => {
+			const versions = await this.client.messageVersions(conversationId, messageId, expectedHead, signal);
+			if (!versions.some(version => !version.selected && version.head === head)) return;
+			this.olderRead?.abort();
+			this.historyValidations.delete(conversationId);
+			this.update({ uncertain: true });
+			await this.client.selectMessageVersion(conversationId, head, signal);
+			const history = await this.client.history(conversationId, signal);
+			signal.throwIfAborted();
+			this.restoreHistory(history, true);
+		});
+	}
+
+	public async editMessage(conversationId: string, messageId: string, text: string, replacementId: string): Promise<void> {
+		const state = this.model.get();
+		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
+		if (this.isDisposed || this.stream || state.conversationId !== conversationId || !preset
+			|| !state.connected || !state.networkAvailable || state.busy || state.managing || state.uncertain || state.voice !== 'idle'
+			|| !state.messages.some(message => message.id === messageId && message.role === 'user' && typeof message.editableText === 'string')
+			|| !text.trim() || !isUuid(replacementId)) {
+			throw new Error(localize('sessions.chatgpt.editUnavailable', 'This ChatGPT message is unavailable for editing.'));
+		}
+		this.refreshOperation?.abort();
+		this.olderRead?.abort();
+		const stream: ChatGPTReplyStream = { controller: new AbortController(), submitted: false };
+		this.stream = stream;
+		const { signal } = stream.controller;
+		this.update({ sending: true, stopped: false, error: '' });
+		try {
+			const { parentId, files } = await this.client.prepareMessageEdit(conversationId, messageId, state.parentId, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
+			signal.throwIfAborted();
+			const request = { text, model: preset.model, thinkingEffort: preset.thinkingEffort, conversationId, parentId, messageId: replacementId, files };
+			for await (const event of this.replyBackend.streamReply(request, signal, async () => { stream.submitted = true; })) {
+				if (event.conversationId && event.conversationId !== conversationId) {
+					throw new Error(localize('sessions.chatgpt.editUnconfirmed', 'Reload the conversation to check whether ChatGPT accepted the edit.'));
+				}
+				if (event.message?.role === 'assistant' && !event.message.activity) stream.replyId = event.message.id;
+			}
+			signal.throwIfAborted();
+			const history = await this.client.confirmMessageEdit(conversationId, replacementId, state.parentId, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
+			signal.throwIfAborted();
+			// Leave the old transcript in place until the server identifies the new branch.
+			// The independent composer draft belongs to the conversation, not to either branch.
+			this.restoreHistory(history, true);
+			this.rememberHistory(history, { acceptedAt: Date.now() });
+			this.setHistoryFailure('conversation', undefined);
+		} catch (error) {
+			if (this.stream !== stream) throw canceled();
+			if (stream.submitted && !(error instanceof ChatReplyError && error.outcome === 'rejected')) {
+				this.historyValidations.delete(conversationId);
+				this.update({ uncertain: true });
+			}
+			if (signal.aborted) throw canceled();
+			if (error instanceof ChatReplyError && error.disconnected || error instanceof ChatGPTAuthenticationError) {
+				this.update({ connected: false });
+			}
+			throw error;
+		} finally {
+			await this.stopping;
+			if (this.stream === stream) {
+				this.stream = undefined;
+				this.update({ sending: false });
+			}
+		}
+	}
+
 	public async send(): Promise<void> {
 		const state = this.model.get();
 		const text = state.draft.trim();
@@ -1949,17 +2033,18 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (creation && (!state.connected || !state.networkAvailable)) { await this.queueCreation(creation); return; }
 		if (!preset || !state.connected || !state.networkAvailable || state.uncertain || (!text && !state.attachments.length) || state.attachments.some(attachment => attachment.status !== 'ready') || !state.model) { return; }
 		if (state.conversationId) this.historyValidations.delete(state.conversationId);
-		const controller = this.stream = new AbortController();
+		const stream: ChatGPTReplyStream = { controller: new AbortController(), submitted: false };
+		this.stream = stream;
+		const { controller } = stream;
 		const messageId = creation?.messageId ?? crypto.randomUUID();
 		const draftKey = this.draftKey();
 		const files = state.attachments.flatMap(attachment => attachment.file ? [attachment.file] : []);
 		let acknowledged = false;
-		let submitted = false;
 		let projectMove: { readonly id: string; readonly result: ReturnType<ChatGPTService['assignNewConversationToProject']>; } | undefined;
 		this.update({ sending: true, stopped: false, error: '', messages: [...state.messages, { id: messageId, role: 'user', text, resources: files.map(file => ({ uri: `file-service://${file.id}`, name: file.name, kind: file.mimeType.startsWith('image/') ? 'image' : 'document', mimeType: file.mimeType })) }] });
 		try {
-			for await (const event of this.replyBackend.streamReply({ text, model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId, conversationId: state.conversationId, messageId, files }, controller.signal, async () => { submitted = true; })) {
-				if (this.isDisposed || this.stream !== controller) { return; }
+			for await (const event of this.replyBackend.streamReply({ text, model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId, conversationId: state.conversationId, messageId, files }, controller.signal, async () => { stream.submitted = true; })) {
+				if (this.isDisposed || this.stream !== stream) { return; }
 				if (!acknowledged) {
 					acknowledged = true;
 					this.forgetDraft(draftKey);
@@ -1973,6 +2058,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				let messages = current.messages;
 				if (event.message) {
 					const message = event.message;
+					stream.replyId = message.role === 'assistant' ? message.id : undefined;
 					const index = messages.findIndex(item => item.id === message.id);
 					// A later stream snapshot may omit the time already sent for this message.
 					messages = index < 0 ? [...messages, message] : messages.map((item, i) => i === index
@@ -1994,13 +2080,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.update({ draft: '', attachments: [] });
 			const current = this.model.get();
 			const currentId = current.conversationId;
-			if (currentId && !controller.signal.aborted && this.stream === controller) {
+			if (currentId && !controller.signal.aborted && this.stream === stream) {
 				this.persistHistory({ id: currentId, title: current.title, parentId: current.parentId, messages: current.messages, olderCursor: current.olderCursor });
 				this.rememberHistory({ id: currentId, title: current.title }, { acceptedAt: Date.now() });
 				try {
 					const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
 					const history = this.retainNativeHistory(await this.client.history(currentId, signal), this.timelineFor(currentId).read(currentId)?.history);
-					if (this.stream !== controller || controller.signal.aborted) { return; }
+					if (this.stream !== stream || controller.signal.aborted) { return; }
 					this.persistHistory(history);
 					this.markHistoryValidated(history);
 					this.update({ title: history.title, parentId: history.parentId, messages: history.messages, olderCursor: history.olderCursor });
@@ -2015,7 +2101,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			}
 		} catch (error) {
 			if (!controller.signal.aborted) {
-				if (creation && !submitted && error instanceof ChatReplyError && error.outcome === 'uncertain') {
+				if (creation && !stream.submitted && error instanceof ChatReplyError && error.outcome === 'uncertain') {
 					await this.queueCreation(creation);
 					return;
 				}
@@ -2031,7 +2117,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			// must not overlap a new send in the same conversation.
 			await this.stopping;
 			const move = await projectMove?.result;
-			if (this.stream === controller) {
+			if (this.stream === stream) {
 				const current = this.model.get();
 				if (projectMove && move?.projectId) this.rememberHistory({ id: projectMove.id, title: current.title }, { projectId: move.projectId });
 				this.stream = undefined;
@@ -2041,21 +2127,26 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	public async stop(): Promise<void> {
-		const controller = this.stream;
-		if (!controller || this.stopping) { return; }
+		const stream = this.stream;
+		if (!stream || this.stopping) { return; }
 		const state = this.model.get();
-		const message = state.messages.at(-1);
 		this.stopping = Promise.resolve().then(async () => {
 			try {
-				if (state.conversationId && message?.role === 'assistant') {
-					await this.replyBackend.stopReply(state.conversationId, message.id, AbortSignal.timeout(10_000));
+				if (state.conversationId && stream.replyId) {
+					await this.replyBackend.stopReply(state.conversationId, stream.replyId, AbortSignal.timeout(10_000));
+					if (this.stream === stream) this.update({ stopped: true });
+				} else if (this.stream === stream && stream.submitted) {
+					this.update({ uncertain: true, error: localize('sessions.chatgpt.stopUnconfirmed', 'The request was interrupted before ChatGPT confirmed this reply. Reload the conversation or check recent conversations before sending it again.') });
+				} else if (this.stream === stream) {
 					this.update({ stopped: true });
-				} else { this.update({ uncertain: true, error: localize('sessions.chatgpt.stopUnconfirmed', 'The request was interrupted before ChatGPT confirmed this reply. Reload the conversation or check recent conversations before sending it again.') }); }
-			} catch (error) { this.update({ uncertain: true, error: this.errorText(error) }); }
+				}
+			} catch (error) {
+				if (this.stream === stream) this.update({ uncertain: true, error: this.errorText(error) });
+			}
 		});
 		// Cancellation must reach preparation and verification before any remote stop I/O.
 		// Otherwise finishing verification while stop is pending could still send the draft.
-		controller.abort();
+		stream.controller.abort();
 		try { await this.stopping; }
 		finally { this.stopping = undefined; }
 	}

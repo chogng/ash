@@ -173,6 +173,7 @@ mod execution {
                     arguments: arguments.to_vec(),
                     working_directory: ".".into(),
                     input: CommandInput::Closed,
+                    environment: Default::default(),
                 },
                 CommandExecutionAuthority::Sandboxed(policy),
                 &CancellationSource::new().token(),
@@ -525,6 +526,7 @@ mod execution {
                         ],
                         working_directory: ".".into(),
                         input: CommandInput::Closed,
+                        environment: Default::default(),
                     },
                     CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                         FileSystemAccess::DirectoryWrite,
@@ -580,6 +582,7 @@ mod execution {
             program: "/bin/sh".into(),
             arguments: vec!["-c".into(), "test \"${NO_PROXY+x}\" = x || exit 7; printf '%s\\n' \"$HTTP_PROXY\" \"$HTTPS_PROXY\" \"$ALL_PROXY\" \"$NO_PROXY\" \"$WS_PROXY\"".into()],
             working_directory: ".".into(), input: CommandInput::Closed,
+            environment: Default::default(),
         }, CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Managed)), &CancellationSource::new().token(), None, Some(&network)).unwrap();
         let CommandExecutionOutcome::Completed(output) = outcome else {
             panic!("{outcome:?}");

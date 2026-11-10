@@ -21,7 +21,7 @@ import { IProjectsService } from '../../projects/browser/projectsService.js';
 import type { ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
-import { Separator, type IAction } from '../../../../base/common/actions.js';
+import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { derived, observableFromEvent, observableSignalFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
@@ -175,6 +175,11 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 				const title = session.title || localize('sessions.list.untitled', 'Untitled Session');
 				const selectedThreadId = selectedId === id && active?.kind === 'thread' ? active.threadId : undefined;
 				const isPinned = list.isSessionPinned(session);
+				const open = async (signal: AbortSignal, threadId = thread.threadId) => {
+					await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
+					if (signal.aborted) return;
+					view.selectChatThread(id, threadId);
+				};
 				rows.push({
 					id: `ash:${id}`,
 					title,
@@ -189,18 +194,25 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 					pinned: isPinned,
 					setPinned: pinned => pinned ? list.pinSession(session) : list.unpinSession(session),
 					moveToGroup: group => groups.move(id, group),
-					open: async (signal, threadId = thread.threadId) => {
-						await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
-						if (signal.aborted) return;
-						view.selectChatThread(id, threadId);
-					},
+					open,
 					rename: title => management.renameSession(id, title),
 					remove: () => commands.executeCommand('agentSession.delete', id),
 					share: () => sharing.share(id, selectedThreadId ?? thread.threadId, title),
-					getActions: () => {
+					getActions: signal => {
 						const saved = management.sessions.find(session => session.sessionId === id);
 						const savedThread = saved?.chats.find(chat => chat.threadId === thread.threadId);
 						const workspaceActions = createSessionWorkspaceActions(id, thread.threadId, management, commands);
+						// The catalog projects both forks and rewrites as branches.
+						const branches = saved?.chats.filter(chat => chat.status === 'active' && (chat.origin.type === 'fork' || chat.origin.type === 'rewind')) ?? [];
+						if (thread.origin.type === 'root' && branches.length) {
+							workspaceActions.push(new SubmenuAction('sessions.chat.versions', localize('sessions.chat.versions', 'Conversation versions'),
+								[thread, ...branches].map((version, index) => ({
+									id: `sessions.chat.version.${version.threadId}`,
+									label: index ? localize('sessions.chat.versionNumber', 'Version {0}', index) : localize('sessions.chat.originalVersion', 'Original conversation'),
+									tooltip: '', enabled: true, checked: version.threadId === selectedThreadId,
+									run: () => open(signal, version.threadId),
+								}))));
+						}
 						if (saved?.status === 'active' && savedThread && canOpenThreadInCode(saved, savedThread)) {
 							workspaceActions.push({
 								id: 'sessions.workspace.continueInCode',

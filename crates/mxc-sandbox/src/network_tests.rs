@@ -60,6 +60,7 @@ fn execute(
                 arguments,
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::DirectoryWrite,

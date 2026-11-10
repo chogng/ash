@@ -1346,7 +1346,9 @@ fn run_gateway_file_tools(document_mode: crate::client_host::TextDocumentMode) {
                     for change in message["params"]["changes"].as_array().unwrap() {
                         assert_eq!(change["kind"], "update");
                         let path = &snapshots[change["snapshot"].as_str().unwrap()];
-                        std::fs::write(path, change["text"].as_str().unwrap()).unwrap();
+                        std::fs::write(path, change["text"].as_str().unwrap()).unwrap_or_else(
+                            |error| panic!("could not write {}: {error}", path.display()),
+                        );
                         applied += 1;
                     }
                     json!({"kind":"applied"})

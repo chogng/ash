@@ -5,6 +5,7 @@ use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureDto;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
 use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
+use ash_async_utils::CancellationToken;
 use ash_login::LoginService;
 use ash_protocol::ModelConnectionId;
 use ash_subscriptions::ExternalModelsUpdate;
@@ -45,8 +46,9 @@ impl SubscriptionCatalog<ModelCatalogEntry, ModelCatalogRefreshError> for Catalo
     fn refresh(
         &self,
         connection: &ModelConnectionId,
+        cancellation: &CancellationToken,
     ) -> Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError> {
-        self.0.refresh(connection)
+        self.0.refresh_with_cancellation(connection, cancellation)
     }
 }
 

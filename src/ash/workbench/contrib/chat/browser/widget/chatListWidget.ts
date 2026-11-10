@@ -49,6 +49,8 @@ interface ChatListWidgetOptions {
 	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
 	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
 	readonly canEditRequest?: () => boolean;
+	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;
+	readonly getRequestVersions?: (item: IChatListItem) => Promise<readonly import('../chat.js').ChatRequestVersion[]>;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly showPromptTimeline?: boolean;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
@@ -509,7 +511,8 @@ export class ChatListWidget extends DomWidget {
 		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
 		const focusedReferenceId = isHTMLElement(active) ? active.dataset.chatReferenceId : undefined;
 		const focusedActionRowId = focusedRow?.element.contains(active)
-			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
+			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.requestEdit || focusedRow.item.requestHasVersions
+				|| focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
 			? focusedRow.item.id : undefined;
 		const focusedActionId = focusedActionRowId ? active?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 		const imageFocus = isHTMLElement(active) && [...this.imageBatches].some(([, entry]) => entry.part.domNode.contains(active)) ? active : undefined;

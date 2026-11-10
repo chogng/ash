@@ -1,6 +1,8 @@
 use ash_app_server_protocol::protocol::model::ModelAvailabilityResult;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_app_server_protocol::protocol::model::ModelExecutionAvailability;
+use ash_async_utils::CancellationSource;
+use ash_async_utils::CancellationToken;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelRef;
 use core_api::CoreError;
@@ -75,7 +77,15 @@ pub(crate) trait ModelCatalog: Send + Sync {
     ) -> Result<ash_config::ConfigCommandResult, ModelPreferencesError>;
     fn refresh(
         &self,
+        connection: &ash_protocol::ModelConnectionId,
+    ) -> Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError> {
+        self.refresh_with_cancellation(connection, &CancellationSource::new().token())
+    }
+
+    fn refresh_with_cancellation(
+        &self,
         _connection: &ash_protocol::ModelConnectionId,
+        _cancellation: &CancellationToken,
     ) -> Result<Vec<ModelCatalogEntry>, ModelCatalogRefreshError> {
         Err(ModelCatalogRefreshError::Unsupported)
     }

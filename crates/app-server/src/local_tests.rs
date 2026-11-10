@@ -2022,6 +2022,29 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
         }),
     );
     assert!(subscribed["result"].is_object(), "{subscribed}");
+    let wait_for_approval = |connection: &mut _| {
+        let deadline = Instant::now() + Duration::from_secs(8);
+        let mut offers = Vec::new();
+        loop {
+            let snapshot = server.threads().read_thread(&thread_id_typed).unwrap();
+            offers.extend(server.drain_notifications(connection));
+            if let Some(pending) = &snapshot.turns.last().unwrap().pending_interaction
+                && offers.iter().any(|notice| {
+                    let notice: serde_json::Value = serde_json::from_str(notice).unwrap();
+                    notice["method"] == "agent/request"
+                        && notice["params"]["interaction"]["requestId"]
+                            == pending.request_id.as_str()
+                })
+            {
+                return (snapshot.sequence, pending.clone());
+            }
+            assert!(
+                Instant::now() < deadline,
+                "approval was not delivered: {snapshot:#?}"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+    };
     for (index, decision, expected_status) in [(0, "approveOnce", 0), (1, "decline", 22)] {
         let before = server.threads().read_thread(&thread_id_typed).unwrap();
         let started = local_call(
@@ -2038,18 +2061,25 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
         let turn_id = started["result"]["value"]["turnId"]
             .as_str()
             .unwrap_or_else(|| panic!("{started}"));
-        let deadline = Instant::now() + Duration::from_secs(8);
-        let pending = loop {
-            let snapshot = server.threads().read_thread(&thread_id_typed).unwrap();
-            if let Some(pending) = snapshot.turns.last().unwrap().pending_interaction.clone() {
-                break (snapshot.sequence, pending);
-            }
-            assert!(
-                Instant::now() < deadline,
-                "network approval missing: {snapshot:#?}"
-            );
-            thread::sleep(Duration::from_millis(5));
+        // The compound shell invocation needs a launch approval before the running
+        // process can reach the independent network approval at the proxy.
+        let launch = wait_for_approval(&mut connection);
+        let ash_protocol::AgentRequest::Approval { request } = &launch.1.request else {
+            panic!("expected shell launch approval");
         };
+        assert!(request.capabilities.iter().any(|capability| {
+            capability.kind == ash_protocol::ActionApprovalCapabilityKind::ProcessSpawn
+        }));
+        let launched = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":30+index,"method":"session/request","params":{"commandId":format!("shell-approval-{index}"),"sessionId":session_id,
+                    "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":turn_id,"expectedSequence":launch.0,"requestId":launch.1.request_id,"response":{"type":"approval","response":{"decision":"approveOnce"}}}}
+            }),
+        );
+        assert!(launched["result"].is_object(), "{launched}");
+        let pending = wait_for_approval(&mut connection);
         let ash_protocol::AgentRequest::Approval { request } = &pending.1.request else {
             panic!("expected network approval");
         };
@@ -2064,18 +2094,6 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
         );
         assert!(request.sandbox_denial.is_none());
         digests.push(request.action_digest.clone());
-        // The interaction is committed before its subscription notification is delivered.
-        while !server
-            .drain_notifications(&mut connection)
-            .iter()
-            .any(|notification| notification.contains("agent/request"))
-        {
-            assert!(
-                Instant::now() < deadline,
-                "network approval notification missing"
-            );
-            thread::sleep(Duration::from_millis(5));
-        }
         let resolved = local_call(
             &server,
             &mut connection,
