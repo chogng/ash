@@ -29,6 +29,7 @@ export const ChatGPTResponseAvailableContext = 'sessions.chatgpt.responseAvailab
 export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
 const availableResponseContext = [ChatGPTResponseAvailableContext];
 const onlineResponseContext = [ChatGPTResponseAvailableContext, ChatGPTResponseOnlineContext];
+const emptyDraftFiles = [] as const;
 
 export function canUseAshModels(state: ChatGPTState): boolean {
 	// Existing conversations and drafts with provider-owned attachments keep their reply route.
@@ -176,7 +177,9 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return {
 			draftIdentity: { id: state.localConversationId, generation: this.generation },
 			draft: {
-				text: state.draft, files: state.attachments,
+				// The service retains the submitted draft until ChatGPT acknowledges it.
+				text: state.sendingDraft ? '' : state.draft,
+				files: state.sendingDraft ? emptyDraftFiles : state.attachments,
 				readOnly: state.busy || state.sending || !!state.pendingCreation || voice,
 				canAttachFiles: state.connected && state.networkAvailable && !state.pendingCreation && !state.busy && !state.sending && !state.managing && !voice,
 			},

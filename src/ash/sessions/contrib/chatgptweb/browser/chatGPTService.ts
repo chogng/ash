@@ -46,6 +46,7 @@ function isCachedTimestamp(value: unknown): value is number {
 type HistoryValidation = Pick<ChatGPTHistory, 'parentId' | 'model' | 'thinkingEffort'> & { readonly validatedAt: number; };
 interface ChatGPTReplyStream {
 	readonly controller: AbortController;
+	readonly kind: 'draft' | 'edit';
 	submitted: boolean;
 	replyId?: string;
 }
@@ -160,6 +161,7 @@ export interface ChatGPTState {
 	/** Distinguishes content reads from sending, uploads and voice operations. */
 	readonly loading?: { readonly kind: 'history'; } | { readonly kind: 'conversation'; readonly id: string; };
 	readonly sending: boolean;
+	readonly sendingDraft?: boolean;
 	readonly conversations: readonly ChatGPTConversation[];
 	readonly projects: readonly ChatGPTProject[];
 	readonly projectHistory: ReadonlyMap<string, ProjectHistory>;
@@ -1619,6 +1621,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (!scope) { return; }
 		const previous = this.draftAttachments.read(localId);
 		if (previous && previous.scope !== scope) {
+			sendingDraft: this.stream?.kind === 'draft',
 			this.trackAttachmentWrite(this.deleteAttachmentFiles(previous.scope, previous.attachments.map(attachment => attachment.id)));
 		}
 		// An upload is only restorable once its original bytes have committed.
@@ -2209,7 +2212,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 		this.refreshOperation?.abort();
 		this.olderRead?.abort();
-		const stream: ChatGPTReplyStream = { controller: new AbortController(), submitted: false };
+		const stream: ChatGPTReplyStream = { controller: new AbortController(), kind: 'edit', submitted: false };
 		this.stream = stream;
 		const { signal } = stream.controller;
 		this.update({ sending: true, stopped: false, error: '' });
@@ -2326,7 +2329,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const files = projectFiles ?? state.attachments.flatMap(attachment => attachment.file ? [attachment.file] : []);
 		if (!preset || !state.connected || !state.networkAvailable || state.uncertain || (!text && !files.length) || state.attachments.some(attachment => attachment.status !== 'ready') || !state.model) { return; }
 		if (state.conversationId) this.historyValidations.delete(state.conversationId);
-		const stream: ChatGPTReplyStream = { controller: new AbortController(), submitted: false };
+		const stream: ChatGPTReplyStream = { controller: new AbortController(), kind: 'draft', submitted: false };
 		this.stream = stream;
 		const { controller } = stream;
 		const messageId = creation?.messageId ?? crypto.randomUUID();

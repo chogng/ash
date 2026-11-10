@@ -3,6 +3,7 @@ import { expect, type Page } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Color } from '../../../../../base/common/color.js';
 import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { sessionsConversationBackground } from '../../../../common/theme.js';
@@ -22,6 +23,36 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 	async function expectDraft(page: Page, text: string): Promise<void> {
 		await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe(text);
 	}
+
+	test('clears the ChatGPT composer before the first reply and restores a rejected draft', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		const rejectSend = new DeferredPromise<void>();
+		await page.route('**/service/backend-api/f/conversation', async route => {
+			await rejectSend.p;
+			await route.fulfill({ status: 400, json: {} });
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		const chat = page.locator('.ash-chatgpt-widget .ash-chat');
+		await expect(chat.getByText('Synthetic answer', { exact: true })).toBeVisible();
+		const text = '发送后清空输入框';
+		const inputLines = chat.locator('.stanza-editor-line-text');
+		const visibleDraft = async () => (await inputLines.allTextContents()).join('\n').trim();
+		const sentMessage = chat.locator('.ash-chat-item-userMessage').getByText(text, { exact: true });
+		try {
+			await fillMessage(page, text);
+			await expect.poll(visibleDraft).toBe(text);
+			await chat.getByRole('button', { name: '发送', exact: true }).click();
+			await expect(sentMessage).toBeVisible();
+			await expect(chat.getByRole('button', { name: '停止', exact: true })).toBeVisible();
+			await expect.poll(visibleDraft).toBe('');
+		} finally {
+			await rejectSend.complete();
+		}
+		await expect(sentMessage).toHaveCount(0);
+		await expect.poll(visibleDraft).toBe(text);
+	});
 
 	test('edits a historical ChatGPT message and switches server versions without touching the draft', async () => {
 		const { page } = browserTests;
