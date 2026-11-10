@@ -63,6 +63,11 @@ export class SessionsView extends ViewPane {
 			presentation = {
 				catalog: input,
 				accessibility: presentation.accessibility,
+				createProjectForConversation: (creator, restoreFocus) => {
+					if (!this.isBodyVisible()) return;
+					restoreFocus();
+					this.projectDialogs.showChatProjectDialog(this.element, restoreFocus, undefined, creator);
+				},
 				editProject: async (read: (signal: AbortSignal) => Promise<ChatProjectEdit>, restoreFocus: () => void) => {
 					if (!this.isBodyVisible()) return;
 					const controller = new AbortController();

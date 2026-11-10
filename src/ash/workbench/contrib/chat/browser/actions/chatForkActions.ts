@@ -5,7 +5,7 @@ import { Action2, MenuId } from '../../../../../platform/actions/common/actions.
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
-import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, type ContextKeyExpression } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
@@ -28,7 +28,12 @@ export class ForkConversationAction extends Action2 {
 	protected readonly target: 'session' | 'thread' = 'session';
 	private readonly pending = new Map<string, Promise<void>>();
 
-	constructor() {
+	constructor(placement?: { readonly primaryWhen: ContextKeyExpression; readonly secondaryWhen: ContextKeyExpression; }) {
+		const canFork = ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.responseCanFork.isEqualTo(true));
+		const secondary = {
+			id: MenuId.ChatMessageFooter, group: '1_conversation', order: 1,
+			when: ContextKeyExpr.and(canFork, placement?.secondaryWhen),
+		};
 		super({
 			id: ForkConversationActionId,
 			title: localize2('chat.forkConversation.label', 'Fork Conversation'),
@@ -36,12 +41,10 @@ export class ForkConversationAction extends Action2 {
 			icon: Lxicon.fork,
 			precondition: ChatContextKeys.enabled.isEqualTo(true),
 			f1: true,
-			menu: {
-				id: MenuId.ChatMessageFooter,
-				group: '1_conversation',
-				order: 1,
-				when: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.responseCanFork.isEqualTo(true)),
-			},
+			menu: placement ? [secondary, {
+				id: MenuId.ChatMessageFooter, group: 'navigation', order: 11.5,
+				when: ContextKeyExpr.and(canFork, placement.primaryWhen),
+			}] : secondary,
 		});
 	}
 

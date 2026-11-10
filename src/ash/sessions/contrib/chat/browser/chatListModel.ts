@@ -18,7 +18,7 @@ import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWor
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { CatalogProjectCreator, ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
@@ -142,6 +142,7 @@ export interface ChatListProject {
 
 export interface ChatListSnapshot {
 	readonly entries: readonly ChatListEntry[];
+	readonly projectCreator?: CatalogProjectCreator;
 	/** Threads within an existing session appear as shortcuts in its fork tree. */
 	readonly forkEntries?: readonly ChatListEntry[];
 	readonly projects?: readonly ChatListProject[];

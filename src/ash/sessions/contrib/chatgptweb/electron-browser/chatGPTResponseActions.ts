@@ -6,13 +6,14 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { ChatResponseActionContext, IChatWidgetService, unwrapChatResponseActionContext } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { ChatResponseActionContext, IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
-import { ChatGPTWidgetModel, ChatGPTResponseAvailableContext, ChatGPTResponseOnlineContext } from './chatGPTWidgetModel.js';
+import { ChatGPTWidgetModel, ChatGPTResponseCanOpenOriginalContext, ChatGPTResponseOnlineContext } from './chatGPTWidgetModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 
 function responseTarget(accessor: ServicesAccessor, context: unknown) {
-	const row = unwrapChatResponseActionContext(context);
+	if (!(context instanceof ChatResponseActionContext) || !context.visible) return undefined;
+	const row = context.item;
 	for (const widget of accessor.get(IChatWidgetService).getAllWidgets()) {
 		const model = widget.model;
 		if (!widget.visible || !(model instanceof ChatGPTWidgetModel)) continue;
@@ -26,8 +27,9 @@ function responseTarget(accessor: ServicesAccessor, context: unknown) {
 }
 
 export function registerChatGPTResponseActions(): void {
-	const available = ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ContextKeyExpr.has(ChatGPTResponseAvailableContext));
-	const online = ContextKeyExpr.and(available, ContextKeyExpr.has(ChatGPTResponseOnlineContext));
+	const enabled = ChatContextKeys.enabled.isEqualTo(true);
+	const canOpenOriginal = ContextKeyExpr.and(enabled, ContextKeyExpr.has(ChatGPTResponseCanOpenOriginalContext));
+	const online = ContextKeyExpr.and(enabled, ContextKeyExpr.has(ChatGPTResponseOnlineContext));
 
 	registerAction2(class ReadChatGPTResponseAction extends Action2 {
 		constructor() {
@@ -93,13 +95,13 @@ export function registerChatGPTResponseActions(): void {
 				id: 'sessions.chatgpt.response.openOriginal',
 				title: localize2('sessions.chatgpt.openConversationOnWeb', 'Open conversation in ChatGPT'),
 				icon: Lxicon.openai,
-				menu: { id: MenuId.ChatMessageFooter, group: 'navigation', order: 12, when: available },
+				menu: { id: MenuId.ChatMessageFooter, group: '1_conversation', order: 1, when: canOpenOriginal },
 			});
 		}
 
 		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
 			const target = responseTarget(accessor, context);
-			if (!target) return;
+			if (!target?.canOpenOriginal) return;
 			const url = `https://chatgpt.com/c/${encodeURIComponent(target.conversationId)}`;
 			if (!await accessor.get(IOpenerService).open(url, { openExternal: true, fromUserGesture: true })) {
 				throw new Error(localize('sessions.chatgpt.openConversationOnWebFailed', 'Could not open the conversation in ChatGPT.'));

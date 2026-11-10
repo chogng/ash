@@ -33,7 +33,7 @@ import { AshChatModel } from '../browser/ashChatModel.js';
 import { SessionWorkspaceStatus } from '../browser/sessionWorkspaceStatus.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
 import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../browser/chatListModel.js';
-import { registerNativeConversationShareConfiguration } from '../browser/nativeConversationShare.js';
+import { registerNativeConversationSharing } from '../browser/nativeConversationShare.js';
 import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
 import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
@@ -148,7 +148,7 @@ export function registerChatWorkspace(source: {
 }): void {
 	registerReplyChatEditor({ ...ashChatEditor, model: new SyncDescriptor(NativeReplyEditorModel, [source.draftModels]) });
 	registerAshChatAccessibility();
-	registerNativeConversationShareConfiguration();
+	registerNativeConversationSharing();
 	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
 		source.catalog,
 		...(source.additionalCatalog ? [source.additionalCatalog] : []),
@@ -259,6 +259,7 @@ function registerAshChatAccessibility(): void {
 						? localize('sessions.chat.ashAccessibilityHelp', 'Ash Chat has its own conversation history and drafts. Use Tab to reach the model picker and Enter to open it. In an unsent draft, selecting a ChatGPT model opens the ChatGPT draft. Enter sends a message, Shift+Enter inserts a line break, and Stop interrupts a reply. Open Accessible View to read the transcript. The Chat sidebar opens saved conversations. New starts a new draft.') + '\n\n' + localize({ bundle: 'ash.sessions', key: 'sessions.workspace.chatMenuHelp' }, 'For a saved conversation without a workspace, focus it in the sidebar and press Shift+F10, then choose Set Workspace. The input footer shows the bound folder. Once a folder is set, choose Continue in Code from the same menu to open the conversation and its history in Code.')
 						+ '\n\n' + getSessionsListGroupingHelp()
 						+ '\n\n' + getChatRequestAccessibilityHelp(true)
+						+ '\n\n' + localize('sessions.chat.ashResponseActionsHelp', 'Use Tab to reach the response toolbar, then use the arrow keys to move between actions. Share asks for confirmation before sharing the conversation through this response. Fork starts a new Ash conversation through this response.')
 						+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
 						+ '\n\n' + localize('sessions.chat.versionsHelp', 'For a conversation with edits, open More actions on its sidebar row and choose Conversation versions. Use Right Arrow to open the submenu and Enter to open a version.')
 						+ '\n\n' + localize('sessions.list.forkSidebarHelp', 'In the sidebar, Tab to the Fork icon and press Enter to open its source conversation. Focus Conversation branches and press Enter to expand or collapse the tree. On the conversation row, Right Arrow expands the tree or moves to its first branch, and Left Arrow collapses it.')

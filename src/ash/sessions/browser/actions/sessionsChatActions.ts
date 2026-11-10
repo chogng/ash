@@ -2,6 +2,7 @@ import { applyAgentHostCompletionAction } from '../../../workbench/contrib/chat/
 import { localize2, localize } from '../../../nls.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
@@ -13,9 +14,17 @@ import { ForkConversationAction } from '../../../workbench/contrib/chat/browser/
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ModelReasoningEffort } from '../../../workbench/services/chat/common/modelCatalog.js';
+import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 
 registerAction2(class extends ForkConversationAction {
 	protected override readonly target = 'thread' as const;
+
+	constructor() {
+		super({
+			primaryWhen: SessionsWorkspaceModeContext.isEqualTo('chat'),
+			secondaryWhen: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'chat'),
+		});
+	}
 });
 
 registerAction2(class ChoosePermission extends Action2 {

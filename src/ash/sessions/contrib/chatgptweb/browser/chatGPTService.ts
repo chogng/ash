@@ -248,7 +248,7 @@ export interface IChatGPTService {
 	archive(id: string): Promise<boolean>;
 	deleteConversation(id: string): Promise<void>;
 	moveToProject(id: string, projectId: string | null): Promise<void>;
-	createProjectAndMove(id: string, name: string): Promise<void>;
+	createProject(details: ChatGPTProjectEdit['details'], conversationId?: string): Promise<{ readonly id: string; readonly moveFailed?: boolean; }>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
 	fork(id: string, messageId: string): Promise<void>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
@@ -921,21 +921,27 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));
 	}
 
-	public async createProjectAndMove(id: string, name: string): Promise<void> {
-		const moved = await this.manage(id, async signal => {
-			const project = await this.client.createProject(name, signal);
+	public async createProject(details: ChatGPTProjectEdit['details'], conversationId?: string): Promise<{ readonly id: string; readonly moveFailed?: boolean; }> {
+		const account = this.management.signal;
+		const created = this.model.get().networkAvailable && await this.manage(conversationId, async signal => {
+			const project = await this.client.createProject(details.name, details.description, signal);
 			signal.throwIfAborted();
 			this.updateCatalog({
 				projects: [project, ...this.model.get().projects.filter(item => item.id !== project.id)],
 			});
-			try {
-				await this.assignConversationToProject(id, project.id, signal);
-			} catch {
-				throw new Error(localize('sessions.chatgpt.projectCreatedMoveFailed', 'Created {0}. Choose it from Move to project to try the move again.', project.title));
+			if (conversationId) {
+				try {
+					await this.assignConversationToProject(conversationId, project.id, signal);
+				} catch {
+					account.throwIfAborted();
+					return { id: project.id, moveFailed: true };
+				}
 			}
-			return true;
+			return { id: project.id };
 		});
-		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectCreateMoveFailed', 'Could not create a project and move this conversation. Try again.'));
+		if (account.aborted) throw canceled();
+		if (!created) throw new Error(localize('sessions.chatgpt.projectCreateFailed', 'Could not create the ChatGPT project. Try again.'));
+		return created;
 	}
 
 	private async assignConversationToProject(id: string, projectId: string | null, signal: AbortSignal): Promise<void> {
@@ -990,9 +996,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	/** Serialize writes independently of history reads; navigation must not abort a possibly accepted mutation. */
-	private async manage<T>(id: string, operation: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+	private async manage<T>(id: string | undefined, operation: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
 		const state = this.model.get();
-		if (this.isDisposed || !state.connected || state.busy || state.sending || state.managing || state.voice !== 'idle' || !state.conversations.some(item => item.id === id)) { return undefined; }
+		if (this.isDisposed || !state.connected || state.busy || state.sending || state.managing || state.voice !== 'idle'
+			|| (id !== undefined && !state.conversations.some(item => item.id === id))) { return undefined; }
 		this.refreshOperation?.abort();
 		this.update({ managing: true, error: '' });
 		const management = this.management;

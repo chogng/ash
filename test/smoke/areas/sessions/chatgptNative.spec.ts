@@ -313,6 +313,9 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 		const savedChat = page.locator('[data-item="chatgpt-native:history-one"] .ash-sessions-list-item');
 		await savedChat.click();
 		await expect(native).toContainText('Experimental history answer');
+		const experimentalReplyActions = native.getByRole('toolbar', { name: '回复操作', exact: true }).first();
+		await expect(experimentalReplyActions.getByRole('button', { name: '分享 ChatGPT 回复', exact: true })).toBeVisible();
+		await expect(experimentalReplyActions.getByRole('button', { name: '更多操作', exact: true })).toHaveCount(0);
 		await expect(native.getByText('Experimental earlier question', { exact: true })).toHaveCount(0);
 		await native.locator('.ash-chat-history-pagination').getByRole('button').click();
 		await expect(native).toContainText('Experimental earlier question');
@@ -1023,6 +1026,28 @@ test.describe('Unified Chat sidebar', () => {
 			await reader.dispose();
 		}
 
+		const ashResponseActions = ash.getByRole('toolbar', { name: '回复操作', exact: true }).first();
+		const ashShareReply = ashResponseActions.getByRole('button', { name: '分享 Ash 回复', exact: true });
+		await ashResponseActions.getByRole('button', { name: '更多操作', exact: true }).press('Enter');
+		await expect(page.getByRole('menuitem', { name: '在 ChatGPT 中打开对话', exact: true })).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await ashShareReply.press('Enter');
+		await expect(nativeShare).toContainText('分享截至这条回复的对话？');
+		expect(shareService.records.size).toBe(1);
+		await nativeShare.getByRole('button', { name: '分享', exact: true }).click();
+		await expect.poll(copied).not.toBe(link);
+		await expect.poll(() => shareService.records.size).toBe(2);
+		const replyShare = JSON.parse([...shareService.records.values()].at(-1)!);
+		expect(replyShare.messages.map((message: { text: string; }) => message.text)).toEqual(['First Ash message', 'Answer from Ash']);
+		const originalThreadId = (await ash.getAttribute('data-thread-id'))!;
+		await ashResponseActions.getByRole('button', { name: '分叉', exact: true }).press('Enter');
+		await expect(ash).not.toHaveAttribute('data-thread-id', originalThreadId);
+		await expect(ash).toContainText('First Ash message');
+		await expect(ash).not.toContainText('Follow up with Ash');
+		await ashTitle.press('Enter');
+		await expect(ash).toHaveAttribute('data-thread-id', originalThreadId);
+		await expect(ash).toContainText('Follow up with Ash');
+
 		await ashTitle.focus();
 		await ashRow.getByRole('button', { name: '置顶聊天', exact: true }).press('Enter');
 		await expect(ashRow).toHaveAttribute('data-parent-section', 'pinned');
@@ -1061,7 +1086,9 @@ test.describe('Unified Chat sidebar', () => {
 		expect(ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
 		const responseActions = editor.getByRole('toolbar', { name: '回复操作', exact: true }).first();
 		await responseActions.getByRole('button', { name: '更多操作', exact: true }).press('Enter');
-		await page.getByRole('menuitem', { name: '分叉', exact: true }).press('Enter');
+		await expect(page.getByRole('menuitem', { name: '在 ChatGPT 中打开对话', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await responseActions.getByRole('button', { name: '分叉', exact: true }).press('Enter');
 		await expect(editor).toContainText('Fork history from ChatGPT');
 		await expect(editor).not.toContainText('Follow up with ChatGPT');
 		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(2);
@@ -1359,8 +1386,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(history.getByRole('button', { name: 'Second native history', exact: true })).toBeVisible();
 			await expect(history.getByRole('button', { name: 'Pinned native history', exact: true })).toBeVisible();
 			await expect(editor).toContainText('History one answer');
-			const openOriginal = editor.getByRole('button', { name: locale === 'en' ? 'Open conversation in ChatGPT' : '在 ChatGPT 中打开对话', exact: true });
+			const responseActions = editor.getByRole('toolbar', { name: locale === 'en' ? 'Response actions' : '回复操作', exact: true }).first();
+			await responseActions.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true }).press('Enter');
+			const openOriginal = reopened.getByRole('menuitem', { name: locale === 'en' ? 'Open conversation in ChatGPT' : '在 ChatGPT 中打开对话', exact: true });
 			await expect(openOriginal).toBeVisible();
+			await reopened.keyboard.press('Escape');
 			const readAloud = editor.getByRole('button', { name: locale === 'en' ? 'Read aloud' : '朗读', exact: true });
 			await expect(readAloud).toHaveCount(0);
 			await new Editor(editor).waitForEditorContents(text => text === 'Unsent native follow-up');

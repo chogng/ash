@@ -25,10 +25,11 @@ import { ISessionPrimaryProviderServices, type SessionProviderServices } from '.
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
-export const ChatGPTResponseAvailableContext = 'sessions.chatgpt.responseAvailable';
+export const ChatGPTResponseCanOpenOriginalContext = 'sessions.chatgpt.responseCanOpenOriginal';
 export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
-const availableResponseContext = [ChatGPTResponseAvailableContext];
-const onlineResponseContext = [ChatGPTResponseAvailableContext, ChatGPTResponseOnlineContext];
+const openOriginalResponseContext = [ChatGPTResponseCanOpenOriginalContext];
+const onlineResponseContext = [ChatGPTResponseOnlineContext];
+const onlineWebResponseContext = [ChatGPTResponseOnlineContext, ChatGPTResponseCanOpenOriginalContext];
 const emptyDraftFiles = [] as const;
 
 export function canUseAshModels(state: ChatGPTState): boolean {
@@ -260,12 +261,15 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	getResponseActionTarget(item: IChatListItem) {
 		const state = this.backend.state.get();
 		const source = this.sources.get(item.id);
-		if (this.isDisposed || item.type !== 'agentMessage' || item.transient || item.isError || !source?.conversationId || source.conversationId !== state.conversationId) return undefined;
+		// An unsent branch can borrow its parent's resources, but it has no saved conversation of its own.
+		if (this.isDisposed || item.type !== 'agentMessage' || item.transient || item.isError
+			|| !source?.conversationId || source.conversationId !== state.conversationId || !/^[A-Za-z0-9_-]{1,240}$/u.test(source.conversationId)) return undefined;
 		return {
 			backend: this.backend,
 			conversationId: source.conversationId,
 			messageId: source.messageId,
 			title: state.title,
+			canOpenOriginal: !this.backend.native,
 			online: state.connected && state.networkAvailable && state.loading?.kind !== 'conversation' && !state.uncertain,
 		};
 	}
@@ -275,8 +279,11 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		if (!target) return undefined;
 		const state = this.backend.state.get();
 		const canFork = target.online && !state.busy && !state.sending && !state.managing && state.voice === 'idle';
+		const menuContext = target.canOpenOriginal
+			? (target.online ? onlineWebResponseContext : openOriginalResponseContext)
+			: (target.online ? onlineResponseContext : undefined);
 		return {
-			menuContext: target.online ? onlineResponseContext : availableResponseContext,
+			menuContext,
 			fork: canFork ? () => this.forkResponse(item) : undefined,
 		};
 	}

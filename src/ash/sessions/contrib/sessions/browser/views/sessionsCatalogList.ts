@@ -59,6 +59,12 @@ export interface ConversationProjectEditor {
 	save(details: ConversationProjectEditor['details']): Promise<void>;
 }
 
+export interface CatalogProjectCreator {
+	readonly label: string;
+	readonly description: string;
+	create(details: ConversationProjectEditor['details']): Promise<{ readonly id: string; readonly preferenceKey?: string; readonly warning?: string; }>;
+}
+
 export interface SessionsCatalogProjectOperations {
 	readonly editDetails?: (signal: AbortSignal) => Promise<ConversationProjectEditor>;
 	readonly archive?: () => Promise<boolean>;

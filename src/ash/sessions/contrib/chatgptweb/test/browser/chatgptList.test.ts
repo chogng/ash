@@ -922,6 +922,52 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`Projects creates a ChatGPT project from the shared project form (${locale})`, async () => {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			await mockChatGPTRequests(page);
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: { items: [{ gizmo: { id: 'g-p-existing', display: { name: 'Existing project' } } }], cursor: null },
+			}));
+			const writes: unknown[] = [];
+			await page.route('**/service/backend-api/projects', route => {
+				expect(route.request().method()).toBe('POST');
+				writes.push(route.request().postDataJSON());
+				return route.fulfill({ json: { gizmo: { id: 'g-p-created' } } });
+			});
+			await page.route('**/service/backend-api/gizmos/g-p-created*', route => route.fulfill({
+				json: { gizmo: { id: 'g-p-created', instructions: 'Keep an experiment log.', display: { name: 'Cloud project' } } },
+			}));
+			await page.goto(`/chatgptNavigation.html?projects&locale=${locale}`);
+			const projects = page.locator('.ash-projects');
+			await expect(projects.getByRole('button', { name: 'Existing project', exact: true })).toBeVisible();
+			await projects.getByRole('button', { name: zh ? '新建项目' : 'New project', exact: true }).click();
+			const dialog = page.getByRole('dialog', { name: zh ? '创建项目' : 'Create a project', exact: true });
+			const source = dialog.getByRole('combobox', { name: zh ? '项目来源' : 'Project source', exact: true });
+			const folder = dialog.getByRole('button', { name: zh ? '使用文件夹' : 'Use a folder', exact: true });
+			const name = dialog.getByRole('textbox').first();
+			const instructions = dialog.getByRole('textbox', { name: zh ? '指令' : 'Instructions', exact: true });
+			await expect(source).toHaveValue('Ash');
+			await expect(folder).toBeVisible();
+			await expect(name).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(instructions).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(folder).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(source).toBeFocused();
+			await source.selectOption({ label: 'ChatGPT' });
+			await expect(source).toHaveAccessibleDescription(zh ? '保存到当前 ChatGPT 账号。' : 'Saved to your current ChatGPT account.');
+			await expect(folder).toBeHidden();
+			await name.fill('Cloud project');
+			await instructions.fill('Keep an experiment log.');
+			await dialog.getByRole('button', { name: zh ? '创建' : 'Create', exact: true }).click();
+			await expect(dialog).toBeHidden();
+			await expect(projects).toHaveAttribute('aria-label', 'Cloud project');
+			await expect(projects.getByText('Keep an experiment log.', { exact: true })).toBeVisible();
+			expect(writes).toEqual([{ name: 'Cloud project', instructions: 'Keep an experiment log.', emoji: null, theme: null }]);
+		});
+
 		test(`Projects More reuses Edit details and saves through the project adapter (${locale})`, async function () {
 			const { page } = browserTests;
 			const zh = locale === 'zh-CN';
@@ -1456,6 +1502,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			}));
 			const writes: { method: string; path: string; body?: Record<string, unknown>; }[] = [];
 			let projectReads = 0;
+			let failNewProjectMove = zh;
 			await page.route('**/service/backend-api/**', async route => {
 				const request = route.request();
 				const url = new URL(request.url());
@@ -1465,6 +1512,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 					await route.fulfill({ json: { items: [{ gizmo: { id: next ? 'g-p-two' : 'g-p-one', display: { name: next ? 'Project Two' : 'Project One' } } }], cursor: next ? null : 'next' } });
 				} else if (request.method() !== 'GET') {
 					writes.push({ method: request.method(), path: url.pathname, ...(request.postData() ? { body: request.postDataJSON() } : {}) });
+					if (failNewProjectMove && writes.at(-1)?.body?.gizmo_id === 'g-p-three') {
+						failNewProjectMove = false;
+						await route.fulfill({ status: 503 });
+						return;
+					}
 					await route.fulfill({
 						json: url.pathname.endsWith('/share/v2/create') ? { share_url: 'https://chatgpt.com/share/fixture-link' }
 							: url.pathname.endsWith('/backend-api/projects') ? { gizmo: { id: 'g-p-three' } } : { success: true }
@@ -1587,19 +1639,33 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await openProjectMenu();
 			await expect(projectMenu.getByRole('menuitem', { name: 'Project Two', exact: true })).toHaveCount(0);
 			await newProject.press('Enter');
-			const projectName = page.locator('.ash-quick-input-host').getByRole('textbox');
+			const projectForm = page.getByRole('dialog', { name: zh ? '创建项目' : 'Create a project', exact: true });
+			const projectName = projectForm.getByRole('textbox').first();
+			const source = projectForm.getByRole('combobox', { name: zh ? '项目来源' : 'Project source', exact: true });
+			await expect(source).toHaveValue('ChatGPT');
+			await expect(source).toBeDisabled();
 			await expect(projectName).toBeFocused();
 			await projectName.press('Escape');
+			await expect(projectForm).toBeHidden();
 			expect(writes.filter(write => write.path.endsWith('/backend-api/projects'))).toHaveLength(0);
 			await openProjectMenu();
 			await newProject.press('Enter');
 			await projectName.fill('  Project Three  ');
-			await projectName.press('Enter');
+			await projectForm.getByRole('textbox', { name: zh ? '指令' : 'Instructions', exact: true }).fill('Keep track of sources.');
+			await projectForm.getByRole('button', { name: zh ? '创建' : 'Create', exact: true }).click();
 			await expect.poll(() => writes.slice(-2)).toEqual([
-				{ method: 'POST', path: '/service/backend-api/projects', body: { name: 'Project Three', instructions: '', emoji: null, theme: null } },
+				{ method: 'POST', path: '/service/backend-api/projects', body: { name: 'Project Three', instructions: 'Keep track of sources.', emoji: null, theme: null } },
 				{ method: 'PATCH', path: '/service/backend-api/conversation/fixture-chat', body: { gizmo_id: 'g-p-three' } },
 			]);
+			await expect(projectForm).toBeHidden();
 			await expect(page.getByRole('button', { name: 'Project Three', exact: true })).toBeVisible();
+			if (zh) {
+				await expect.poll(() => historyNotices(page)).toContain('已创建“Project Three”。请从“移至项目”中选择该项目，再试一次。');
+				await openProjectMenu();
+				await projectMenu.getByRole('menuitem', { name: 'Project Three', exact: true }).click();
+				await expect.poll(() => writes.filter(write => write.body?.gizmo_id === 'g-p-three')).toHaveLength(2);
+				expect(writes.filter(write => write.path.endsWith('/backend-api/projects'))).toHaveLength(1);
+			}
 			await openMore();
 			await page.getByRole('menuitem', { name: zh ? '从项目中移除' : 'Remove from project', exact: true }).click();
 			await expect.poll(() => writes.some(write => write.body?.gizmo_id === null)).toBe(true);
@@ -1679,6 +1745,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			expect(writes.map(write => [write.method, write.path])).toEqual([
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
 				['POST', '/service/backend-api/projects'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
+				...(zh ? [['PATCH', '/service/backend-api/conversation/fixture-chat']] : []),
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
 				['POST', '/service/backend-api/conversation/id/fixture-chat/rename'], ['POST', '/service/backend-api/share/v2/create'],
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['DELETE', '/service/backend-api/conversation/id/third'],

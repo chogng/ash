@@ -3,6 +3,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import type { IProjectService } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionsListModelService, SessionSortDirection, SessionSortMode, SessionsListMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import type { CatalogProjectCreator } from './sessionsCatalogList.js';
 
 export function getSessionsListGroupingHelp(): string {
 	return localize('sessions.list.groupingHelp', 'Use Tab to reach More Sessions Actions beside Projects or Recents and press Enter. Under Group By, choose Projects to browse conversations by project or Flat List to browse recent conversations together. Chat and Code remember their choices separately. Sort By changes the order of conversations.');
@@ -15,7 +16,7 @@ export function getSessionsListAttentionHelp(): string {
 export interface SessionListProjectOrganization {
 	readonly current?: string;
 	readonly destinations: readonly { readonly id: string; readonly title: string; }[];
-	readonly createAndMove?: (name: string) => Promise<void>;
+	readonly creator?: CatalogProjectCreator;
 	move(projectId: string | undefined): Promise<void>;
 }
 
@@ -43,21 +44,17 @@ export function sessionListProjectActions(
 	mode: SessionsListMode,
 	project: SessionListProjectOrganization,
 	run: (operation: () => Promise<void>) => Promise<void>,
-	promptName: () => Promise<string | undefined>,
+	createProject?: () => void,
 ): readonly IAction[] {
 	const projectIcon = mode === 'code' ? Lxicon.folder : Lxicon.projects;
 	const targets = project.destinations.filter(({ id }) => id !== project.current).map(({ id, title }): IAction => ({
 		id: `sessions.list.moveToProject.${id}`, label: title, tooltip: title,
 		icon: projectIcon, enabled: true, run: () => run(() => project.move(id)),
 	}));
-	const createAndMove = project.createAndMove;
 	const newProject = localize('sessions.list.newProject', 'New project');
-	const create = createAndMove ? [{
+	const create = createProject ? [{
 		id: 'sessions.list.createProjectAndMove', label: newProject, tooltip: newProject, icon: Lxicon.add, enabled: true,
-		run: () => run(async () => {
-			const name = await promptName();
-			if (name) await createAndMove(name);
-		}),
+		run: createProject,
 	}] : [];
 	const destinations = Separator.join(create, targets);
 	const actions: IAction[] = [];

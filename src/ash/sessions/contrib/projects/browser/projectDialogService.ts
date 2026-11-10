@@ -11,10 +11,12 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService, type Project, type ProjectAppearance, type ProjectMaterial, type ProjectScope } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
-import type { ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
+import { IChatListCatalog } from '../../chat/browser/chatListModel.js';
+import type { CatalogProjectCreator, ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ProjectAppearancePicker } from './projectAppearancePicker.js';
 import { IProjectsService, type CatalogProjectAppearance } from './projectsService.js';
 import './media/projectForm.css';
@@ -24,7 +26,7 @@ function createProjectFormDialog(
 	title: string,
 	form: HTMLFormElement,
 	actions: HTMLElement,
-	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; instructionsOnly?: boolean; },
+	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; instructionsOnly?: boolean; withSource?: boolean; },
 ): Dialog {
 	return new Dialog(container, title, [], createWorkbenchDialogOptions({
 		extraClasses: [
@@ -32,6 +34,7 @@ function createProjectFormDialog(
 			...(options.code ? ['ash-code-project-dialog'] : []),
 			...(options.appearanceOnly ? ['ash-project-appearance-dialog'] : []),
 			...(options.instructionsOnly ? ['ash-project-instructions-dialog'] : []),
+			...(options.withSource ? ['ash-project-source-dialog'] : []),
 		],
 		layout: 'form',
 		modal: false,
@@ -68,7 +71,7 @@ interface CodeProjectEdit {
 }
 
 export interface IProjectDialogService {
-	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit): void;
+	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit, creator?: CatalogProjectCreator): void;
 	showCodeProjectDialog(owner: HTMLElement, edit?: CodeProjectEdit): Promise<void>;
 	close(owner: HTMLElement): void;
 }
@@ -88,6 +91,8 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		@IProjectsService private readonly chatProjects: IProjectsService,
 		@IProjectService private readonly projects: IProjectService,
 		@IFileDialogService private readonly files: IFileDialogService,
+		@IChatListCatalog private readonly catalog: IChatListCatalog,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 	}
@@ -113,7 +118,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		return project;
 	}
 
-	showChatProjectDialog(container: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit): void {
+	showChatProjectDialog(container: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit, creator?: CatalogProjectCreator): void {
 		const active = this.begin(container);
 		if (!active) return;
 		const { store } = active;
@@ -216,6 +221,25 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				},
 			}),
 		);
+		const catalogCreators = edit ? [] : creator ? [creator] : this.catalog.sources.flatMap(source => {
+			const available = source.snapshot.get().projectCreator;
+			return available ? [available] : [];
+		});
+		const sourceHint = h(document, 'p', { className: 'ash-project-instructions-intro', attributes: { 'aria-live': 'polite' } });
+		sourceHint.id = generateUuid();
+		const sourceChoice = catalogCreators.length ? h(document, 'select', {
+			attributes: { 'aria-describedby': sourceHint.id }, properties: { disabled: !!creator },
+		}, ...(creator ? [] : [h(document, 'option', 'Ash')]), ...catalogCreators.map(source => h(document, 'option', source.label))) : undefined;
+		const selectedCreator = () => creator ?? (sourceChoice ? catalogCreators[sourceChoice.selectedIndex - 1] : undefined);
+		if (sourceChoice) {
+			const updateSource = () => {
+				const selected = selectedCreator();
+				folderRow.hidden = !!selected;
+				sourceHint.textContent = selected?.description ?? localize('projects.localCreationDescription', 'Saved locally in Ash.');
+			};
+			store.add(addDisposableListener(sourceChoice, 'change', updateSource));
+			updateSource();
+		}
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
 		if (instructionsOnly) {
@@ -229,6 +253,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			form.append(nameGroup);
 			if (!appearanceEdit) form.append(h(document, 'label', {}, instructionsLabel, description));
 			if (!conversation && !appearanceEdit) form.append(folderRow);
+			if (sourceChoice) {
+				form.append(h(document, 'label', {}, localize('projects.source', 'Project source'), sourceChoice), sourceHint);
+			}
 		}
 		form.append(feedback, conflicts);
 		let didSave = false;
@@ -243,6 +270,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				{
 					appearanceOnly: !!appearanceEdit,
 					instructionsOnly,
+					withSource: !!sourceChoice,
 					canClose: () => !name.disabled && !pickingFolder,
 					shouldConfirmDiscard: () => name.value !== (base?.name ?? initialName) ||
 						instructionsChanged() ||
@@ -449,9 +477,10 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					}
 					return;
 				}
+				const remote = selectedCreator();
 				if (
 					name.disabled || pickingFolder || (instructionsOnly ? !instructionsChanged() : !name.value.trim()) ||
-					this.chatProjects.state.get().busy ||
+					(!remote && this.chatProjects.state.get().busy) ||
 					needsMerge ||
 					unresolved.size ||
 					offerMerge()
@@ -463,15 +492,26 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				name.disabled = true;
 				description.disabled = true;
 				folder.enabled = false;
+				if (sourceChoice) sourceChoice.disabled = true;
 				if (appearance) appearance.enabled = false;
 				const details = instructionsOnly
 					? { name: name.value, description: description.value }
 					: { name: name.value.trim(), description: description.value.trim() };
+				let creationWarning: string | undefined;
 				const save = async (): Promise<boolean> => {
 					try {
 						if (conversation) {
 							if (details.name !== initialName || details.description !== initialDescription) await conversation.save(details);
 							if (catalogAppearance && appearance && appearanceChanged()) catalogAppearance.save(appearance.appearance);
+							return true;
+						}
+						if (remote) {
+							const { id, preferenceKey, warning } = await remote.create(details);
+							if (preferenceKey && appearance && appearanceChanged()) {
+								this.chatProjects.getCatalogProjectAppearance(preferenceKey).save(appearance.appearance);
+							}
+							if (!creator && !store.isDisposed) this.chatProjects.openConversationProject(id);
+							creationWarning = warning;
 							return true;
 						}
 						if (!base) return this.chatProjects.create(id, details.name, details.description, materials, appearance?.appearance);
@@ -495,12 +535,14 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					if (saved) {
 						didSave = true;
 						dialog.dispose();
+						if (creationWarning) this.notifications.warn(creationWarning);
 					} else {
 						const message = this.chatProjects.state.get().message;
-						if (!conversation && message && !feedback.textContent) feedback.textContent = message;
+						if (!conversation && !remote && message && !feedback.textContent) feedback.textContent = message;
 						name.disabled = false;
 						description.disabled = false;
 						folder.enabled = true;
+						if (sourceChoice) sourceChoice.disabled = !!creator;
 						if (appearance) appearance.enabled = true;
 						updateSubmit();
 						if (!offerMerge() && getActiveElement(document) === document.body) (instructionsOnly ? description : name).focus();

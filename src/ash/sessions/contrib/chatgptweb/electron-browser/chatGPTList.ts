@@ -20,6 +20,7 @@ import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../chat/common/constants.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { CatalogProjectDetails, ChatListEntry, ChatListForkReference, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
+import type { CatalogProjectCreator } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 import { ChatGPTProjectDraftModel } from './chatGPTProjectDraftModel.js';
 import { chatGPTAttachmentLimitMessage, chatGPTAttachmentLimits, chatGPTProjectConversationId, chatGPTProjectPreferenceKey, IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
@@ -171,10 +172,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					project: !conversation.local && !id.startsWith('pending:') && (!projectId || currentProject) && state.connected && state.networkAvailable ? {
 						current: currentProject,
 						destinations,
-						createAndMove: async name => {
-							if (state.catalogScope !== this.chat.state.get().catalogScope) throw new CancellationError();
-							await this.chat.createProjectAndMove(id, name);
-						},
+						creator: this.projectCreator(state.catalogScope, id),
 						move: async destination => {
 							if (state.catalogScope !== this.chat.state.get().catalogScope) {
 								throw new Error(localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));
@@ -192,6 +190,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			});
 			return {
 				entries,
+				projectCreator: state.connected && state.networkAvailable ? this.projectCreator(state.catalogScope) : undefined,
 				projects: state.projects.map((project): ChatListProject => {
 					const scope = state.catalogScope;
 					const online = state.connected && state.networkAvailable;
@@ -238,6 +237,23 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				loading: state.loading?.kind === 'history',
 			};
 		});
+	}
+
+	private projectCreator(scope: string | undefined, conversationId?: string): CatalogProjectCreator {
+		return {
+			label: 'ChatGPT',
+			description: localize('sessions.chatgpt.projectCreationDescription', 'Saved to your current ChatGPT account.'),
+			create: async details => {
+				if (this.chat.state.get().catalogScope !== scope) throw new CancellationError();
+				const project = await this.chat.createProject(details, conversationId);
+				if (this.chat.state.get().catalogScope !== scope) throw new CancellationError();
+				return {
+					id: project.id,
+					preferenceKey: chatGPTProjectPreferenceKey(scope, project.id),
+					warning: project.moveFailed ? localize('sessions.chatgpt.projectCreatedMoveFailed', 'Created {0}. Choose it from Move to project to try the move again.', details.name) : undefined,
+				};
+			},
+		};
 	}
 
 	private projectDetails(id: string, scope: string, online: boolean): CatalogProjectDetails {

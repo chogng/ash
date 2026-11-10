@@ -239,10 +239,10 @@ export class ChatGPTClient {
 		await this.consume(`/gizmos/${encodeURIComponent(id)}`, signal, 'DELETE');
 	}
 
-	async createProject(name: string, signal: AbortSignal): Promise<ChatGPTProject> {
+	async createProject(name: string, description: string, signal: AbortSignal): Promise<ChatGPTProject> {
 		const response = await this.request('/projects', signal, {
 			method: 'POST', headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, instructions: '', emoji: null, theme: null }),
+			body: JSON.stringify({ name, instructions: description, emoji: null, theme: null }),
 		});
 		const value: unknown = await response.json();
 		signal.throwIfAborted();

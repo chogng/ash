@@ -50,7 +50,6 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { IProjectService, type Project, type ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../../platform/contextview/browser/contextView.js';
-import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
 import { readCatalogProjectEdit, type ChatProjectEdit } from '../../../projects/browser/projectDialogService.js';
@@ -118,6 +117,7 @@ export type SessionsListPresentation = 'chat' | 'code'
 	| { readonly openCommand: string; readonly activeContext: string; }
 	| {
 		readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility;
+		readonly createProjectForConversation?: (creator: NonNullable<SessionListProjectOrganization['creator']>, restoreFocus: () => void) => void;
 		readonly editProject?: (read: (signal: AbortSignal) => Promise<ChatProjectEdit>, restoreFocus: () => void) => Promise<void>;
 	};
 
@@ -246,6 +246,7 @@ export class SessionsList extends DomWidget {
 	private readonly projectLoadNotice = this._register(new MutableDisposable());
 	private readonly empty: HTMLParagraphElement;
 	private readonly catalog: SessionsCatalogListInput | undefined;
+	private readonly createProjectForConversation: ((creator: NonNullable<SessionListProjectOrganization['creator']>, restoreFocus: () => void) => void) | undefined;
 	private readonly menuContext: IScopedContextKeyService | undefined;
 	private readonly attention: IObservable<ReadonlyMap<string, IBlockedSession>>;
 	private readonly catalogViewport: HTMLElement | null | undefined;
@@ -285,7 +286,6 @@ export class SessionsList extends DomWidget {
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
 		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
-		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@ILogService private readonly logService: ILogService,
 		@IProjectsService private readonly projectPreferences: IProjectsService,
@@ -299,6 +299,7 @@ export class SessionsList extends DomWidget {
 		super();
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
+		this.createProjectForConversation = contributed?.createProjectForConversation;
 		this.editCatalogProject = contributed?.editProject;
 		const code = typeof presentation !== 'string' && 'createProject' in presentation ? presentation : undefined;
 		this.editCodeProject = code?.editProject;
@@ -676,25 +677,20 @@ export class SessionsList extends DomWidget {
 	}
 
 	private projectActions(item: SessionListItem, project: SessionListProjectOrganization): readonly IAction[] {
+		const restoreFocus = () => {
+			if (!this.isDisposed) this.tree.focusRow(item.domNode);
+		};
+		const creator = project.creator;
+		const createProject = this.createProjectForConversation;
 		return sessionListProjectActions(this.mode, project, async run => {
 			try {
 				await run();
 			} catch (error) {
 				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
 			} finally {
-				if (!this.isDisposed) this.tree.focusRow(item.domNode);
+				restoreFocus();
 			}
-		}, async () => {
-			const name = (await this.quickInput.input({
-				title: localize('sessions.list.newProject', 'New project'),
-				validateInput: async value => {
-					if (!value.trim()) return localize('sessions.list.projectNameRequired', 'Enter a project name.');
-					if (value.trim().length > 200) return localize('sessions.list.projectNameTooLong', 'Use at most {0} characters for the project name.', 200);
-					return undefined;
-				},
-			}))?.trim();
-			return this.isDisposed ? undefined : name;
-		});
+		}, creator && createProject ? () => createProject(creator, restoreFocus) : undefined);
 	}
 
 	private showRowMenu(item: SessionListItem, anchor: ContextMenuAnchor,

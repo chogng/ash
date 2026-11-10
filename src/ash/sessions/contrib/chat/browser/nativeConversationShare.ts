@@ -1,13 +1,22 @@
-import { localize } from '../../../../nls.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { localize, localize2 } from '../../../../nls.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { conversationShareId, conversationShareMaxBytes, conversationShareMaxMessages, conversationShareRetentionDays, type ConversationShare, type ConversationShareMessage } from '../../../../platform/chat/common/conversationShare.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { ChatResponseActionContext } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { toPortableMarkdown } from '../../../../workbench/contrib/chat/browser/widget/chatClipboard.js';
+import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
+import type { ChatResponseFeedbackTarget } from '../../../../workbench/contrib/chat/common/chatResponseFeedback.js';
+import { getCompletedChatResponseSource } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { shareConversationLink } from './conversationShareDialog.js';
 
 const shareServiceSetting = 'sessions.chat.shareServiceUrl';
@@ -24,7 +33,7 @@ function shareServiceOrigin(value: unknown): string {
 	throw new TypeError(localize('sessions.chat.shareServiceInvalid', 'Enter an HTTPS service origin or an HTTP loopback origin for local testing.'));
 }
 
-export function registerNativeConversationShareConfiguration(): void {
+export function registerNativeConversationSharing(): void {
 	Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 		key: shareServiceSetting,
 		defaultValue: defaultShareService,
@@ -37,9 +46,29 @@ export function registerNativeConversationShareConfiguration(): void {
 			placeholder: defaultShareService,
 		},
 	});
+	registerAction2(class ShareAshResponseAction extends Action2 {
+		constructor() {
+			super({
+				id: 'sessions.chat.response.share',
+				title: localize2('sessions.chat.shareResponse', 'Share Ash response'),
+				icon: Lxicon.share,
+				menu: {
+					id: MenuId.ChatMessageFooter, group: 'navigation', order: 11,
+					when: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('chat'), ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.responseHasConversationLink.isEqualTo(true)),
+				},
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			const source = context instanceof ChatResponseActionContext && context.visible && getCompletedChatResponseSource(context.item);
+			if (!source) return;
+			const sharing = accessor.get(IInstantiationService).createInstance(NativeConversationShare);
+			await sharing.share(source.sessionId, source.threadId, source);
+		}
+	});
 }
 
-/** Publishes the current branch's complete message history from its owning Ash connection. */
+/** Publishes the branch's message history from its owning Ash connection. */
 export class NativeConversationShare {
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -49,12 +78,13 @@ export class NativeConversationShare {
 		@IClipboardService private readonly clipboard: IClipboardService,
 	) { }
 
-	async share(sessionId: string, threadId: string, title: string): Promise<void> {
+	async share(sessionId: string, threadId: string, target: string | Pick<ChatResponseFeedbackTarget, 'turnId' | 'itemId'>): Promise<void> {
 		const origin = shareServiceOrigin(this.configuration.getValue(shareServiceSetting));
 		using connection = this.navigation.captureConnection?.(sessionId);
 		if (!connection) throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
 		await shareConversationLink(this.dialogs, this.clipboard, {
-			message: localize('sessions.chat.shareConfirm', 'Share “{0}”?', title),
+			message: typeof target === 'string' ? localize('sessions.chat.shareConfirm', 'Share “{0}”?', target)
+				: localize('sessions.chat.shareResponseConfirm', 'Share through this response?'),
 			detail: localize('sessions.chat.shareDetail', 'Share a copy of the conversation text with anyone who has the link. The copy is stored at {0} for {1} days.', origin, conversationShareRetentionDays),
 		}, async () => {
 			await connection.assertCurrent();
@@ -63,8 +93,16 @@ export class NativeConversationShare {
 			if (conversation.thread.sessionId !== sessionId || conversation.thread.threadId !== threadId) {
 				throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
 			}
+			const entries = conversation.transcript.entries;
+			let sharedEntries = entries;
+			if (typeof target !== 'string') {
+				const reply = entries.findIndex(entry => entry.type === 'item' && !entry.transient && entry.turnId === target.turnId
+					&& entry.item.type === 'agentMessage' && entry.item.itemId === target.itemId);
+				if (reply < 0) throw new Error(localize('sessions.chat.shareResponseMissing', 'This response is no longer available to share.'));
+				sharedEntries = entries.slice(0, reply + 1);
+			}
 			const messages: ConversationShareMessage[] = [];
-			for (const entry of conversation.transcript.entries) {
+			for (const entry of sharedEntries) {
 				if (entry.type === 'item' && !entry.transient && (entry.item.type === 'userMessage' || entry.item.type === 'agentMessage')) {
 					messages.push({
 						role: entry.item.type === 'userMessage' ? 'user' : 'assistant',
@@ -76,7 +114,7 @@ export class NativeConversationShare {
 				}
 			}
 			if (!messages.length) throw new Error(localize('sessions.chat.shareEmpty', 'This conversation has no messages to share yet.'));
-			const snapshot: ConversationShare = { version: 1, title, messages };
+			const snapshot: ConversationShare = { version: 1, title: typeof target === 'string' ? target : conversation.thread.title, messages };
 			const body = new TextEncoder().encode(JSON.stringify(snapshot));
 			if (messages.length > conversationShareMaxMessages || body.byteLength > conversationShareMaxBytes) {
 				throw new Error(localize('sessions.chat.shareTooLarge', 'This conversation is too large to share. The limit is 10 MB and 10,000 messages.'));

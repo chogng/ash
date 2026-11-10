@@ -1409,7 +1409,7 @@ suite('ChatGPT shared service', () => {
 		});
 		await chat.reload();
 		const originalProject = chat.state.get().conversations.find(item => item.id === 'one')?.projectId;
-		await assert.rejects(chat.createProjectAndMove('one', 'New project'), /Created New project/);
+		assert.deepEqual(await chat.createProject({ name: 'New project', description: '' }, 'one'), { id: 'g-p-new', moveFailed: true });
 		assert.ok(chat.state.get().projects.some(project => project.id === 'g-p-new'));
 		assert.equal(chat.state.get().conversations.find(item => item.id === 'one')?.projectId, originalProject);
 		rejectMove = false;
