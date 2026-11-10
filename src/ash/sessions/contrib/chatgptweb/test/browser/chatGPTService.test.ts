@@ -1418,6 +1418,23 @@ suite('ChatGPT shared service', () => {
 		assert.equal(creates, 1);
 	});
 
+	test('does not move a conversation when ChatGPT creates a project with a different memory mode', async () => {
+		let moves = 0;
+		using chat = fixture(async (path, _signal, request) => {
+			if (request.method === 'POST' && path.endsWith('/projects')) {
+				return Response.json({ resource: { gizmo: { id: 'g-p-new', memory_scope: 'global' } } });
+			}
+			if (request.method === 'PATCH' && path.endsWith('/conversation/one')) moves++;
+			return response(path);
+		});
+		await chat.reload();
+		const created = await chat.createProject({ name: 'Private project', description: '', memoryMode: 'projectOnly' }, 'one');
+		assert.equal(created.id, 'g-p-new');
+		assert.ok(created.warning);
+		assert.ok(chat.state.get().projects.some(project => project.id === created.id));
+		assert.equal(moves, 0);
+	});
+
 	test('pending management fences duplicate writes and navigation without aborting the accepted request', async () => {
 		let finish!: () => void;
 		let entered!: () => void;

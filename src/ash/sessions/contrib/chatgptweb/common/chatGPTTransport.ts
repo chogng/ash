@@ -16,6 +16,10 @@ export function readChatGPTGalleryImageUrl(value: unknown): URL | undefined {
 		&& (!url.search || /^\?purpose=[A-Za-z0-9_-]{1,40}$/u.test(url.search)) ? url : undefined;
 }
 
+export function isChatGPTProjectMemoryScope(value: unknown): value is 'global' | 'project_v2' {
+	return value === 'global' || value === 'project_v2';
+}
+
 /** A local sign-in failure, carried by name across IPC without exposing credential contents. */
 export class ChatGPTAuthenticationError extends Error {
 	public override readonly name = 'ChatGPTAuthenticationError';

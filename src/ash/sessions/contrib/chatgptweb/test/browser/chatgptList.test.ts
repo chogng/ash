@@ -1001,7 +1001,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.route('**/service/backend-api/projects', route => {
 				expect(route.request().method()).toBe('POST');
 				writes.push(route.request().postDataJSON());
-				return route.fulfill({ json: { gizmo: { id: 'g-p-created' } } });
+				return route.fulfill({ json: { resource: { gizmo: { id: 'g-p-created', memory_scope: 'project_v2' } }, error: null } });
 			});
 			await page.route('**/service/backend-api/gizmos/g-p-created*', route => route.fulfill({
 				json: { gizmo: { id: 'g-p-created', instructions: 'Keep an experiment log.', display: { name: 'Cloud project' } } },
@@ -1027,13 +1027,14 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await source.selectOption({ label: 'ChatGPT' });
 			await expect(source).toHaveAccessibleDescription(zh ? '保存到当前 ChatGPT 账号。' : 'Saved to your current ChatGPT account.');
 			await expect(folder).toBeHidden();
+			await dialog.getByRole('combobox', { name: zh ? '项目记忆' : 'Project memory' }).selectOption('projectOnly');
 			await name.fill('Cloud project');
 			await instructions.fill('Keep an experiment log.');
 			await dialog.getByRole('button', { name: zh ? '创建' : 'Create', exact: true }).click();
 			await expect(dialog).toBeHidden();
 			await expect(projects).toHaveAttribute('aria-label', 'Cloud project');
 			await expect(projects.getByText('Keep an experiment log.', { exact: true })).toBeVisible();
-			expect(writes).toEqual([{ name: 'Cloud project', instructions: 'Keep an experiment log.', emoji: null, theme: null }]);
+			expect(writes).toEqual([{ name: 'Cloud project', instructions: 'Keep an experiment log.', emoji: null, theme: null, memory_scope: 'project_v2' }]);
 		});
 
 		test(`Projects More reuses Edit details and saves through the project adapter (${locale})`, async function () {
@@ -1649,6 +1650,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			expect(sends).toHaveLength(2);
 			expect(uploads).toEqual(['project note', 'project note']);
 			for (const request of sends) expect(request).toMatchObject({
+				conversation_mode: { kind: 'gizmo_interaction', gizmo_id: 'g-p-writing' },
 				messages: [{ content: { parts: ['Start in Writing'] }, metadata: { attachments: [{ id: 'file-project-note', name: 'note.txt' }] } }],
 			});
 			await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
@@ -1695,7 +1697,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 					}
 					await route.fulfill({
 						json: url.pathname.endsWith('/share/v2/create') ? { share_url: 'https://chatgpt.com/share/fixture-link' }
-							: url.pathname.endsWith('/backend-api/projects') ? { gizmo: { id: 'g-p-three' } } : { success: true }
+							: url.pathname.endsWith('/backend-api/projects') ? { gizmo: { id: 'g-p-three', memory_scope: 'global' } } : { success: true }
 					});
 				} else { await route.fallback(); }
 			});
@@ -1830,7 +1832,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await projectForm.getByRole('textbox', { name: zh ? '指令' : 'Instructions', exact: true }).fill('Keep track of sources.');
 			await projectForm.getByRole('button', { name: zh ? '创建' : 'Create', exact: true }).click();
 			await expect.poll(() => writes.slice(-2)).toEqual([
-				{ method: 'POST', path: '/service/backend-api/projects', body: { name: 'Project Three', instructions: 'Keep track of sources.', emoji: null, theme: null } },
+				{ method: 'POST', path: '/service/backend-api/projects', body: { name: 'Project Three', instructions: 'Keep track of sources.', emoji: null, theme: null, memory_scope: 'global' } },
 				{ method: 'PATCH', path: '/service/backend-api/conversation/fixture-chat', body: { gizmo_id: 'g-p-three' } },
 			]);
 			await expect(projectForm).toBeHidden();

@@ -54,14 +54,17 @@ export interface SessionsCatalogProject {
 	readonly loadMore?: () => void;
 }
 
+export type CatalogProjectMemoryMode = 'default' | 'projectOnly';
+
 export interface ConversationProjectEditor {
-	readonly details: { readonly name: string; readonly description: string; };
+	readonly details: { readonly name: string; readonly description: string; readonly memoryMode?: CatalogProjectMemoryMode; };
 	save(details: ConversationProjectEditor['details']): Promise<void>;
 }
 
 export interface CatalogProjectCreator {
 	readonly label: string;
 	readonly description: string;
+	readonly supportsMemoryMode?: boolean;
 	create(details: ConversationProjectEditor['details']): Promise<{ readonly id: string; readonly preferenceKey?: string; readonly warning?: string; }>;
 }
 

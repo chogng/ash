@@ -6,7 +6,7 @@ import type { Event } from '../../../../base/common/event.js';
 import { isRecord } from '../../../../base/common/types.js';
 import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ChatGPTAuthenticationError, chatGPTEntityDetailPath, chatGPTPrepareTokenHeader, readChatGPTGalleryImageUrl, type ChatGPTRequest, type ChatGPTResponse } from '../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, chatGPTEntityDetailPath, chatGPTPrepareTokenHeader, isChatGPTProjectMemoryScope, readChatGPTGalleryImageUrl, type ChatGPTRequest, type ChatGPTResponse } from '../common/chatGPTTransport.js';
 import type { ChatGPTRecentHistoryGate } from './chatGPTRecentHistoryGate.js';
 import type { ChatGPTRequestHeaderHandler, IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAuthentication.js';
@@ -14,7 +14,8 @@ import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAut
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
 const createProjectPath = '/backend-api/projects';
 const forkPath = '/backend-api/conversation/new_branch';
-const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', createProjectPath, forkPath, '/realtime/vp', chatGPTEntityDetailPath]);
+const conversationSendPaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume']);
+const writePaths = new Set([...conversationSendPaths, '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', createProjectPath, forkPath, '/realtime/vp', chatGPTEntityDetailPath]);
 const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
 const nativeHistoryPath = (path: string): boolean => /^\/backend-api\/conversations\/[A-Za-z0-9_-]{1,240}(?:\/messages)?$/u.test(path);
 const conversationPath = (path: string): boolean => path !== forkPath && /^\/backend-api\/conversation\/[^/]+$/u.test(path);
@@ -157,10 +158,16 @@ export class ChatGPTTransport extends Disposable {
 				const runtime = this.getRuntime(context);
 				const response = await this.fetchAuthorized(runtime, url, { method: request.method, headers: request.headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal }, authorization);
 				if (!response.ok) {
+					const isConversationSend = conversationSendPaths.has(url.pathname);
 					this.logService.warn('chatgpt', 'ChatGPT rejected an HTTP request', {
 						status: response.status, method: request.method,
-						// Keep conversation and file identifiers out of diagnostic logs.
-						path: readPaths.has(url.pathname) ? url.pathname : undefined,
+						// Record only fixed paths and normalized response signals.
+						path: readPaths.has(url.pathname) || isConversationSend ? url.pathname : undefined,
+						...(isConversationSend && response.status === 403 ? {
+							channel: this.options.native ? 'native' : 'web',
+							cloudflareChallenge: response.headers.get('cf-mitigated') === 'challenge',
+							isHtml: /^text\/html(?:;|$)/iu.test(response.headers.get('content-type') ?? ''),
+						} : {}),
 					});
 				}
 				return response;
@@ -372,9 +379,11 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 		let body: unknown;
 		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
 		catch { throw new TypeError('Invalid ChatGPT project creation'); }
-		if (!isRecord(body) || Object.keys(body).length !== 4
+		if (!isRecord(body) || Object.keys(body).length !== (body.memory_scope === undefined ? 4 : 5)
 			|| typeof body.name !== 'string' || !body.name.trim() || body.name.length > 200
-			|| body.instructions !== '' || body.emoji !== null || body.theme !== null) {
+			|| typeof body.instructions !== 'string' || body.instructions.length > 20000
+			|| (body.memory_scope !== undefined && !isChatGPTProjectMemoryScope(body.memory_scope))
+			|| body.emoji !== null || body.theme !== null) {
 			throw new TypeError('Invalid ChatGPT project creation');
 		}
 	}
@@ -382,9 +391,10 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 		let body: unknown;
 		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
 		catch { throw new TypeError('Invalid ChatGPT project update'); }
-		if (!isRecord(body) || Object.keys(body).length !== 4
+		if (!isRecord(body) || Object.keys(body).length !== (body.memory_scope === undefined ? 4 : 5)
 			|| typeof body.name !== 'string' || !body.name.trim() || body.name.length > 200
 			|| typeof body.instructions !== 'string' || body.instructions.length > 20000
+			|| (body.memory_scope !== undefined && !isChatGPTProjectMemoryScope(body.memory_scope))
 			|| !(body.emoji === null || typeof body.emoji === 'string' && body.emoji.length <= 256)
 			|| !(body.theme === null || typeof body.theme === 'string' && body.theme.length <= 256)) {
 			throw new TypeError('Invalid ChatGPT project update');

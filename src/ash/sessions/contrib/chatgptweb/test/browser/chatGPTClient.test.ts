@@ -129,6 +129,19 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(cursors, [null, 'next-page']);
 	});
 
+	test('creates a project from the ChatGPT resource response', async () => {
+		const createdAt = '2026-05-01T12:00:00Z';
+		const client = new ChatGPTClient((async (input, init) => {
+			assert.equal(input, '/service/backend-api/projects');
+			assert.equal(init?.method, 'POST');
+			assert.deepEqual(JSON.parse(String(init?.body)), { name: 'Research', instructions: 'Keep an experiment log.', emoji: null, theme: null });
+			return json({ resource: { gizmo: { id: 'g-p-created', created_at: createdAt }, files: [], tools: [] }, error: null });
+		}) as typeof fetch);
+		assert.deepEqual(await client.createProject('Research', 'Keep an experiment log.', signal()), {
+			id: 'g-p-created', title: 'Research', createdAt: Date.parse(createdAt),
+		});
+	});
+
 	test('filters and pages accessible history when the project route rejects the sign-in', async () => {
 		const projectId = 'g-p-research';
 		const requests: string[] = [];

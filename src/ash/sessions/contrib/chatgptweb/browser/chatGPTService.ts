@@ -74,8 +74,14 @@ type HistoryFailure = { readonly error: unknown; readonly retry: () => Promise<v
 type HistoryNotice = 'offline' | 'limited' | 'failed';
 
 interface ChatGPTProjectEdit {
-	readonly details: Pick<ChatGPTProjectDetails, 'name' | 'description'>;
+	readonly details: Pick<ChatGPTProjectDetails, 'name' | 'description' | 'memoryMode'>;
 	save(details: ChatGPTProjectEdit['details']): Promise<void>;
+}
+
+interface ChatGPTProjectCreation {
+	readonly id: string;
+	readonly moveFailed?: boolean;
+	readonly warning?: string;
 }
 
 function isMissingConversation(error: unknown): boolean {
@@ -249,7 +255,7 @@ export interface IChatGPTService {
 	archive(id: string): Promise<boolean>;
 	deleteConversation(id: string): Promise<void>;
 	moveToProject(id: string, projectId: string | null): Promise<void>;
-	createProject(details: ChatGPTProjectEdit['details'], conversationId?: string): Promise<{ readonly id: string; readonly moveFailed?: boolean; }>;
+	createProject(details: ChatGPTProjectEdit['details'], conversationId?: string): Promise<ChatGPTProjectCreation>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
 	fork(id: string, messageId: string): Promise<void>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
@@ -500,10 +506,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			return details;
 		});
 		if (!details.canWrite) throw new Error(localize('sessions.chatgpt.projectReadOnly', 'You only have view access to this ChatGPT project.'));
+		const memoryMode = details.canEditMemoryMode ? details.memoryMode : undefined;
 		return {
-			details: { name: details.name, description: details.description },
+			details: { name: details.name, description: details.description, memoryMode },
 			save: edited => this.queueProjectRequest(id, async () => {
-				if (edited.name === details.name && edited.description === details.description) return;
+				const editedMemoryMode = edited.memoryMode !== memoryMode ? edited.memoryMode : undefined;
+				if (edited.name === details.name && edited.description === details.description && !editedMemoryMode) return;
 				const request = AbortSignal.any([account, AbortSignal.timeout(30_000)]);
 				request.throwIfAborted();
 				if (scope !== this.cacheScope) throw canceled();
@@ -511,14 +519,17 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				request.throwIfAborted();
 				if (scope !== this.cacheScope) throw canceled();
 				if (!latest.canWrite) throw new Error(localize('sessions.chatgpt.projectReadOnly', 'You only have view access to this ChatGPT project.'));
+				if (editedMemoryMode && !latest.canEditMemoryMode) throw new Error(localize('sessions.chatgpt.projectMemoryReadOnly', 'This ChatGPT project no longer allows changes to its memory mode.'));
 				const updated = {
 					...latest,
 					name: edited.name === details.name ? latest.name : edited.name,
 					description: edited.description === details.description ? latest.description : edited.description,
 				};
-				await this.client.updateProjectDetails(id, updated, request);
+				await this.client.updateProjectDetails(id, { ...updated, memoryMode: editedMemoryMode }, request);
+				const confirmed = editedMemoryMode ? await this.client.projectDetails(id, request) : updated;
 				request.throwIfAborted();
-				this.publishProjectDetails(id, scope, updated);
+				this.publishProjectDetails(id, scope, confirmed);
+				if (editedMemoryMode && confirmed.memoryMode !== editedMemoryMode) throw new Error(localize('sessions.chatgpt.projectMemoryUpdateUnconfirmed', 'Could not confirm the new ChatGPT project memory mode. Reopen the project settings to check it.'));
 			}),
 		};
 	}
@@ -923,14 +934,21 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));
 	}
 
-	public async createProject(details: ChatGPTProjectEdit['details'], conversationId?: string): Promise<{ readonly id: string; readonly moveFailed?: boolean; }> {
+	public async createProject(details: ChatGPTProjectEdit['details'], conversationId?: string): Promise<ChatGPTProjectCreation> {
 		const account = this.management.signal;
 		const created = this.model.get().networkAvailable && await this.manage(conversationId, async signal => {
-			const project = await this.client.createProject(details.name, details.description, signal);
+			const { memoryMode, ...project } = await this.client.createProject(details.name, details.description, signal, details.memoryMode);
 			signal.throwIfAborted();
 			this.updateCatalog({
 				projects: [project, ...this.model.get().projects.filter(item => item.id !== project.id)],
 			});
+			if (details.memoryMode && details.memoryMode !== memoryMode) {
+				return {
+					id: project.id, warning: conversationId
+						? localize('sessions.chatgpt.projectMemoryCreateMoveUnconfirmed', 'Created {0}, but its memory mode could not be confirmed. The conversation was not moved.', details.name)
+						: localize('sessions.chatgpt.projectMemoryCreateUnconfirmed', 'Created {0}, but its memory mode could not be confirmed. Check the project settings.', details.name)
+				};
+			}
 			if (conversationId) {
 				try {
 					await this.assignConversationToProject(conversationId, project.id, signal);
@@ -2342,7 +2360,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		try {
 			const { parentId, files } = await this.client.prepareMessageEdit(conversationId, messageId, state.parentId, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
 			signal.throwIfAborted();
-			const request = { text, model: preset.model, thinkingEffort: preset.thinkingEffort, conversationId, parentId, messageId: replacementId, files };
+			const projectId = this.conversationProjectId(state, conversationId);
+			const request = { text, model: preset.model, thinkingEffort: preset.thinkingEffort, conversationId, projectId, parentId, messageId: replacementId, files };
 			for await (const event of this.replyBackend.streamReply(request, signal, async () => { stream.submitted = true; })) {
 				if (event.conversationId && event.conversationId !== conversationId) {
 					throw new Error(localize('sessions.chatgpt.editUnconfirmed', 'Reload the conversation to check whether ChatGPT accepted the edit.'));
@@ -2409,7 +2428,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const submissionState = this.projectSubmission = { previousDraft: previous.draft };
 		this.drafts.set(draftId, { text, attachments: [], target: { projectId } });
 		this.update({
-			localConversationId: draftId, conversationId: undefined, parentId: crypto.randomUUID(),
+			localConversationId: draftId, conversationId: undefined, branch: undefined, parentId: crypto.randomUUID(),
 			title: 'ChatGPT', messages: [], coworkTasks: [], draft: text, attachments: [], model, modelPreset,
 			uncertain: false, stopped: false, loading: undefined, error: ''
 		});
@@ -2447,6 +2466,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.refreshOperation?.abort();
 		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
 		const target = isChatGPTNewDraft(state) ? state.draftTarget : undefined;
+		const projectId = target?.projectId ?? this.conversationProjectId(state, state.conversationId);
 		const creation = !projectFiles && canQueueChatGPTCreation(state) ? {
 			localId: state.localConversationId, text, messageId: crypto.randomUUID(), parentId: state.parentId,
 			model: preset?.model, thinkingEffort: preset?.thinkingEffort, projectId: target?.projectId, ashProjectId: target?.ashProjectId,
@@ -2466,7 +2486,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		try {
 			for await (const event of this.replyBackend.streamReply({
 				text, model: preset.model, thinkingEffort: preset.thinkingEffort, parentId: state.parentId,
-				conversationId: state.conversationId, branch: state.branch, messageId, files,
+				conversationId: state.conversationId, branch: state.branch, projectId, messageId, files,
 			}, controller.signal, async () => { stream.submitted = true; })) {
 				if (this.isDisposed || this.stream !== stream) { return; }
 				if (state.branch && !acknowledged) {
@@ -2561,6 +2581,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				});
 			}
 		}
+	}
+
+	private conversationProjectId(state: ChatGPTState, conversationId: string | undefined): string | undefined {
+		const projectId = state.conversations.find(conversation => conversation.id === conversationId)?.projectId;
+		return state.projects.some(project => project.id === projectId) ? projectId : undefined;
 	}
 
 	public async stop(): Promise<void> {

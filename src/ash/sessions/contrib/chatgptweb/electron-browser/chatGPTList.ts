@@ -243,6 +243,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return {
 			label: 'ChatGPT',
 			description: localize('sessions.chatgpt.projectCreationDescription', 'Saved to your current ChatGPT account.'),
+			supportsMemoryMode: true,
 			create: async details => {
 				if (this.chat.state.get().catalogScope !== scope) throw new CancellationError();
 				const project = await this.chat.createProject(details, conversationId);
@@ -250,7 +251,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				return {
 					id: project.id,
 					preferenceKey: chatGPTProjectPreferenceKey(scope, project.id),
-					warning: project.moveFailed ? localize('sessions.chatgpt.projectCreatedMoveFailed', 'Created {0}. Choose it from Move to project to try the move again.', details.name) : undefined,
+					warning: project.warning ?? (project.moveFailed ? localize('sessions.chatgpt.projectCreatedMoveFailed', 'Created {0}. Choose it from Move to project to try the move again.', details.name) : undefined),
 				};
 			},
 		};

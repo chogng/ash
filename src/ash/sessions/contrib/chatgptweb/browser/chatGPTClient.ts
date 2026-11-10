@@ -6,6 +6,7 @@ import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { SSEParser } from '../../../../base/common/sseParser.js';
 import { chatGPTEntityDetailPath, chatGPTHistoryCooldownMs, chatGPTPrepareTokenHeader, readChatGPTGalleryImageUrl, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
+import type { CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
 
 const projectFileId = /^file[-_][A-Za-z0-9_-]{1,240}$/u;
 export interface ChatGPTBranchSource {
@@ -16,6 +17,7 @@ export interface ChatGPTBranchSource {
 
 export interface ChatGPTReplyRequest extends ChatReplyRequest {
 	readonly branch?: ChatGPTBranchSource;
+	readonly projectId?: string;
 }
 export interface ChatGPTConversation {
 	readonly id: string;
@@ -40,6 +42,8 @@ export interface ChatGPTProjectDetails {
 	readonly description: string;
 	readonly emoji: string | null;
 	readonly theme: string | null;
+	readonly memoryMode?: CatalogProjectMemoryMode;
+	readonly canEditMemoryMode: boolean;
 	readonly canWrite: boolean;
 	readonly files?: readonly { readonly id: string; readonly name: string; readonly sizeBytes?: number; }[];
 }
@@ -66,6 +70,14 @@ function projectTimestamps(gizmo: Record<string, unknown>): Pick<ChatGPTProject,
 		...(Number.isFinite(createdAt) ? { createdAt } : {}),
 		...(Number.isFinite(updatedAt) ? { updatedAt } : {}),
 	};
+}
+
+function readProjectMemoryMode(scope: unknown): CatalogProjectMemoryMode | undefined {
+	return scope === 'global' ? 'default' : scope === 'project_v2' ? 'projectOnly' : undefined;
+}
+
+function projectMemoryScope(mode: CatalogProjectMemoryMode | undefined): 'global' | 'project_v2' | undefined {
+	return mode === undefined ? undefined : mode === 'default' ? 'global' : 'project_v2';
 }
 
 /** A product model family and its selectable presets from the web model picker. */
@@ -246,16 +258,18 @@ export class ChatGPTClient {
 		await this.consume(`/gizmos/${encodeURIComponent(id)}`, signal, 'DELETE');
 	}
 
-	async createProject(name: string, description: string, signal: AbortSignal): Promise<ChatGPTProject> {
+	async createProject(name: string, description: string, signal: AbortSignal, memoryMode?: CatalogProjectMemoryMode): Promise<ChatGPTProject & { readonly memoryMode?: CatalogProjectMemoryMode; }> {
 		const response = await this.request('/projects', signal, {
 			method: 'POST', headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, instructions: description, emoji: null, theme: null }),
+			body: JSON.stringify({ name, instructions: description, emoji: null, theme: null, memory_scope: projectMemoryScope(memoryMode) }),
 		});
 		const value: unknown = await response.json();
 		signal.throwIfAborted();
-		const gizmo = isRecord(value) && isRecord(value.gizmo) ? value.gizmo : undefined;
+		const resource = isRecord(value) && isRecord(value.resource) ? value.resource : value;
+		const gizmo = isRecord(resource) && isRecord(resource.gizmo) ? resource.gizmo : undefined;
 		if (typeof gizmo?.id !== 'string' || !/^g-p-[A-Za-z0-9_-]{1,240}$/u.test(gizmo.id)) throw this.invalidResponse();
-		return { id: gizmo.id, title: name, ...projectTimestamps(gizmo) };
+		const savedMemoryMode = readProjectMemoryMode(gizmo.memory_scope);
+		return { id: gizmo.id, title: name, ...projectTimestamps(gizmo), ...(savedMemoryMode && { memoryMode: savedMemoryMode }) };
 	}
 
 	async projectDetails(id: string, signal: AbortSignal, includeFiles = false): Promise<ChatGPTProjectDetails> {
@@ -278,6 +292,8 @@ export class ChatGPTClient {
 		}
 		return {
 			name: display.name, description: gizmo.instructions ?? '', emoji: display.emoji ?? null, theme: display.theme ?? null,
+			memoryMode: readProjectMemoryMode(gizmo.memory_scope),
+			canEditMemoryMode: gizmo.share_recipient === 'private',
 			canWrite: !isRecord(gizmo.current_user_permission) || gizmo.current_user_permission.can_write !== false,
 			files: isRecord(value) && Array.isArray(value.files) ? [...files.values()] : undefined,
 		};
@@ -337,10 +353,10 @@ export class ChatGPTClient {
 		return this.readResource(url, undefined, '', signal);
 	}
 
-	async updateProjectDetails(id: string, details: { name: string; description: string; emoji: string | null; theme: string | null; }, signal: AbortSignal): Promise<void> {
+	async updateProjectDetails(id: string, details: Pick<ChatGPTProjectDetails, 'name' | 'description' | 'emoji' | 'theme' | 'memoryMode'>, signal: AbortSignal): Promise<void> {
 		const response = await this.request(`/projects/${encodeURIComponent(id)}`, signal, {
 			method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name: details.name, instructions: details.description, emoji: details.emoji, theme: details.theme }),
+			body: JSON.stringify({ name: details.name, instructions: details.description, emoji: details.emoji, theme: details.theme, memory_scope: projectMemoryScope(details.memoryMode) }),
 		});
 		const text = await response.text();
 		signal.throwIfAborted();
@@ -700,6 +716,7 @@ export class ChatGPTClient {
 	}
 
 	async *send(input: ChatGPTReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatGPTStreamUpdate> {
+		const projectId = input.branch?.projectId ?? input.projectId;
 		const images = input.files?.filter(file => file.width !== undefined && file.height !== undefined) ?? [];
 		const content = images.length ? {
 			content_type: 'multimodal_text', parts: [
@@ -721,7 +738,7 @@ export class ChatGPTClient {
 				...(input.files?.length ? { metadata: { attachments: input.files.map(file => ({ id: file.id, name: file.name, mime_type: file.mimeType, size: file.size, ...(file.width ? { width: file.width, height: file.height } : {}) })) } } : {}),
 			}],
 			timezone_offset_min: new Date().getTimezoneOffset(), history_and_training_disabled: false,
-			conversation_mode: input.branch?.projectId ? { kind: 'gizmo_interaction', gizmo_id: input.branch.projectId } : { kind: 'primary_assistant' },
+			conversation_mode: projectId ? { kind: 'gizmo_interaction', gizmo_id: projectId } : { kind: 'primary_assistant' },
 			supports_buffering: true,
 		};
 		const preparation = await (await this.request('/f/conversation/prepare', signal, {

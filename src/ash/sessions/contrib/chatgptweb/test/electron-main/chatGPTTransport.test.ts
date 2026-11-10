@@ -385,6 +385,28 @@ suite('ChatGPT transport', () => {
 		assert.doesNotMatch(JSON.stringify(warnings), /fixture-one|Private owner failure/u);
 	}));
 
+	test('logs the conversation send stage and challenge signal for a 403 without request or response contents', async () => fixture(async auth => {
+		const warnings: unknown[][] = [];
+		const logger = new class extends NullLoggerService { public override warn(...args: unknown[]): void { warnings.push(args); } };
+		using transport = new ChatGPTTransport({
+			native: true, authentication: auth, readVerificationScript: async () => '', createRuntime: () => runtime(async input => {
+				return String(input).endsWith('/prepare')
+					? new Response('Private HTML', { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'cf-mitigated': 'challenge' } })
+					: Response.json({ message: 'Private service error' }, { status: 403 });
+			}),
+		}, logger);
+		const fetcher = createChatGPTFetch(adapt(transport, auth));
+		for (const path of ['/backend-api/f/conversation/prepare', '/backend-api/f/conversation']) {
+			const response = await fetcher(`/service${path}`, { method: 'POST', body: 'Private prompt' });
+			assert.equal(response.status, 403);
+			await response.text();
+		}
+		assert.deepEqual(warnings, [
+			['chatgpt', 'ChatGPT rejected an HTTP request', { status: 403, method: 'POST', path: '/backend-api/f/conversation/prepare', channel: 'native', cloudflareChallenge: true, isHtml: true }],
+			['chatgpt', 'ChatGPT rejected an HTTP request', { status: 403, method: 'POST', path: '/backend-api/f/conversation', channel: 'native', cloudflareChallenge: false, isHtml: false }],
+		]);
+	}));
+
 	test('account changes revoke active HTTP streams, retire verification cookies and reject a stale context', async () => fixture(async auth => {
 		let disposed = 0;
 		using transport = new ChatGPTTransport({
@@ -575,7 +597,7 @@ suite('ChatGPT transport', () => {
 		for (const [method, path, body] of [
 			['GET', '/pins?item_type=conversation', undefined],
 			['GET', '/gizmos/g-p-project/conversations?limit=20&owned_only=false&cursor=next%2Bpage', undefined],
-			['POST', '/projects', { name: 'Project', instructions: '', emoji: null, theme: null }],
+			['POST', '/projects', { name: 'Project', instructions: 'Keep an experiment log.', emoji: null, theme: null, memory_scope: 'project_v2' }],
 			['POST', '/conversation/id/chat/rename', { title: 'Renamed' }],
 			['PATCH', '/conversation/chat', { is_starred: true }],
 			['PATCH', '/conversation/chat', { is_archived: true }],
@@ -600,6 +622,7 @@ suite('ChatGPT transport', () => {
 		const file = { file_id: 'file-project-notes', location: 'fs', name: 'notes.txt', size: 12, type: 'text/plain', last_modified: 1 };
 		for (const [method, path, headers, body] of [
 			['GET', '/gizmos/g-p-project?include_file_limits=true', {}, undefined],
+			['PATCH', '/projects/g-p-project', {}, { name: 'Project', instructions: '', emoji: null, theme: null, memory_scope: 'global' }],
 			['POST', '/files', projectHeaders, { ...upload, file_size: 12, reset_rate_limits: false, supports_direct_azure_multipart: false, timezone_offset_min: 0 }],
 			['POST', '/files/process_upload_stream', projectHeaders, { ...upload, file_id: file.file_id, entry_surface: 'project_sources', index_for_retrieval: true }],
 			['POST', '/projects/g-p-project/files', {}, { files: [file] }],
@@ -609,7 +632,7 @@ suite('ChatGPT transport', () => {
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers, body: body && JSON.stringify(body) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.equal(calls.length, 19);
+		assert.equal(calls.length, 20);
 		await assert.rejects(channel.call('', 'request', [randomUUID(), {
 			path: '/service/backend-api/files/process_upload_stream', method: 'POST', headers: projectHeaders,
 			body: JSON.stringify({ ...upload, gizmo_id: 'g-p-other', file_id: file.file_id, entry_surface: 'project_sources', index_for_retrieval: true }),
@@ -617,6 +640,10 @@ suite('ChatGPT transport', () => {
 		for (const [method, path, body] of [
 			['POST', '/pins', '{}'],
 			['POST', '/projects', '{"name":" ","instructions":"","emoji":null,"theme":null}'],
+			['POST', '/projects', '{"name":"Project","instructions":2,"emoji":null,"theme":null}'],
+			['POST', '/projects', JSON.stringify({ name: 'Project', instructions: '', emoji: null, theme: null, memory_scope: 'unknown' })],
+			['PATCH', '/projects/g-p-project', JSON.stringify({ name: 'Project', instructions: '', emoji: null, theme: null, memory_scope: null })],
+			['POST', '/projects', JSON.stringify({ name: 'Project', instructions: 'x'.repeat(20001), emoji: null, theme: null })],
 			['POST', '/projects', '{"name":"Project","instructions":"","emoji":null,"theme":null,"owner":"other"}'],
 			['POST', '/projects?unexpected=true', '{"name":"Project","instructions":"","emoji":null,"theme":null}'],
 			['POST', '/gizmos/g-p-project/conversations', '{}'],
@@ -641,7 +668,7 @@ suite('ChatGPT transport', () => {
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 19);
+		assert.equal(calls.length, 20);
 	}));
 
 	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {

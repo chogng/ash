@@ -384,10 +384,27 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			attributes: { 'aria-describedby': sourceHint.id }, properties: { disabled: !!creator },
 		}, ...(creator ? [] : [h(document, 'option', 'Ash')]), ...catalogCreators.map(source => h(document, 'option', source.label))) : undefined;
 		const selectedCreator = () => creator ?? (sourceChoice ? catalogCreators[sourceChoice.selectedIndex - 1] : undefined);
+		const initialMemoryMode = instructionsOnly ? undefined : conversation?.details.memoryMode;
+		const memoryChoice = initialMemoryMode || catalogCreators.some(source => source.supportsMemoryMode)
+			? h(document, 'select', {},
+				h(document, 'option', { properties: { value: 'default' } }, localize('projects.defaultMemory', 'Default memory')),
+				h(document, 'option', { properties: { value: 'projectOnly' } }, localize('projects.projectOnlyMemory', 'Project-only memory')))
+			: undefined;
+		const memoryField = memoryChoice ? h(document, 'div', {}, h(document, 'label', {}, localize('projects.memoryMode', 'Project memory'), memoryChoice)) : undefined;
+		if (memoryChoice) memoryChoice.value = initialMemoryMode ?? 'default';
+		const memoryMode = (): ConversationProjectEditor['details']['memoryMode'] => {
+			const value = memoryChoice?.value;
+			return !memoryField?.hidden && (value === 'default' || value === 'projectOnly') ? value : undefined;
+		};
+		const memoryModeChanged = () => {
+			const mode = memoryMode();
+			return mode !== undefined && mode !== (initialMemoryMode ?? 'default');
+		};
 		if (sourceChoice) {
 			const updateSource = () => {
 				const selected = selectedCreator();
 				folderRow.hidden = !!selected;
+				if (memoryField) memoryField.hidden = !selected?.supportsMemoryMode;
 				sourceHint.textContent = selected?.description ?? localize('projects.localCreationDescription', 'Saved locally in Ash.');
 			};
 			store.add(addDisposableListener(sourceChoice, 'change', updateSource));
@@ -410,6 +427,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				form.append(h(document, 'label', {}, localize('projects.source', 'Project source'), sourceChoice), sourceHint);
 			}
 		}
+		if (memoryField) form.append(memoryField);
 		form.append(feedback, conflicts);
 		let didSave = false;
 		const dialog = store.add(
@@ -427,7 +445,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					canClose: () => !name.disabled && !pickingFolder,
 					shouldConfirmDiscard: () => name.value !== (base?.name ?? initialName) ||
 						instructionsChanged() ||
-						!!chosenFolder || appearanceChanged() || unresolved.size > 0,
+						!!chosenFolder || appearanceChanged() || memoryModeChanged() || unresolved.size > 0,
 				},
 			),
 		);
@@ -646,15 +664,16 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				description.disabled = true;
 				folder.enabled = false;
 				if (sourceChoice) sourceChoice.disabled = true;
+				if (memoryChoice) memoryChoice.disabled = true;
 				if (appearance) appearance.enabled = false;
 				const details = instructionsOnly
 					? { name: name.value, description: description.value }
-					: { name: name.value.trim(), description: description.value.trim() };
+					: { name: name.value.trim(), description: description.value.trim(), memoryMode: memoryMode() };
 				let creationWarning: string | undefined;
 				const save = async (): Promise<boolean> => {
 					try {
 						if (conversation) {
-							if (details.name !== initialName || details.description !== initialDescription) await conversation.save(details);
+							if (details.name !== initialName || details.description !== initialDescription || memoryModeChanged()) await conversation.save(details);
 							if (catalogAppearance && appearance && appearanceChanged()) catalogAppearance.save(appearance.appearance);
 							return true;
 						}
@@ -696,6 +715,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 						description.disabled = false;
 						folder.enabled = true;
 						if (sourceChoice) sourceChoice.disabled = !!creator;
+						if (memoryChoice) memoryChoice.disabled = false;
 						if (appearance) appearance.enabled = true;
 						updateSubmit();
 						if (!offerMerge() && getActiveElement(document) === document.body) (instructionsOnly ? description : name).focus();
