@@ -1,3 +1,5 @@
+import { raceCancellationError, RunOnceScheduler } from '../../../../base/common/async.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -6,6 +8,8 @@ import { StorageScope, StorageTarget, type IStorageService } from '../../../../p
 import type { ChatListEntry, ChatListForkEvidence, ChatListForkReference, ChatListSource } from './chatListModel.js';
 
 const storagePrefix = 'sessions.chat.forkSource:';
+const recoveryBatchSize = 4;
+const recoveryRetryDelay = 60_000;
 
 /** Owns Ash's local lineage for sources that don't expose it in their catalog. */
 export class ChatListForks extends Disposable {
@@ -29,12 +33,32 @@ export class ChatListForks extends Disposable {
 				}));
 			}
 			const checked = new Map<string, number>();
-			let running = false;
+			let activeRecovery: AbortController | undefined;
+			const recovery = this._register(new RunOnceScheduler(() => {
+				const entries = source.snapshot.get().entries;
+				activeRecovery = new AbortController();
+				const signal = AbortSignal.any([this.lifetime.signal, activeRecovery.signal]);
+				void this.recover(source, entries, checked, signal).finally(() => {
+					activeRecovery = undefined;
+				}).then(nextRunAt => {
+					if (this.lifetime.signal.aborted) return;
+					// Recheck candidates after a catalog change or a brief loss of access.
+					const current = source.snapshot.get().entries;
+					if (signal.aborted || current !== entries) {
+						if (current.some(entry => entry.loadForkEvidence)) recovery.schedule();
+					} else if (Number.isFinite(nextRunAt)) {
+						recovery.schedule(Math.max(0, nextRunAt - Date.now()));
+					}
+				}).catch(onUnexpectedError);
+			}, 0));
 			this._register(autorun(reader => {
 				const entries = source.snapshot.read(reader).entries;
-				if (running || !entries.some(entry => entry.loadForkEvidence)) return;
-				running = true;
-				void this.recover(source, entries, checked).finally(() => { running = false; });
+				if (!entries.some(entry => entry.loadForkEvidence)) {
+					recovery.cancel();
+					activeRecovery?.abort();
+				} else if (!activeRecovery) {
+					recovery.schedule();
+				}
 			}));
 		}
 	}
@@ -59,22 +83,24 @@ export class ChatListForks extends Disposable {
 		});
 	}
 
-	private async recover(catalog: ChatListSource, entries: readonly ChatListEntry[], checked: Map<string, number>): Promise<void> {
+	private async recover(catalog: ChatListSource, entries: readonly ChatListEntry[], checked: Map<string, number>, cancellation: AbortSignal): Promise<number> {
 		const byTitle = new Map<string, ChatListEntry | undefined>();
 		for (const entry of entries) byTitle.set(entry.title, byTitle.has(entry.title) ? undefined : entry);
 		const reads = new Map<string, Promise<ChatListForkEvidence>>();
-		const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(15_000)]);
+		const signal = AbortSignal.any([cancellation, AbortSignal.timeout(15_000)]);
 		const evidence = (entry: ChatListEntry) => {
+			signal.throwIfAborted();
 			let read = reads.get(entry.id);
 			if (!read) {
-				read = entry.loadForkEvidence!(signal);
+				read = raceCancellationError(entry.loadForkEvidence!(signal), signal);
 				reads.set(entry.id, read);
 			}
 			return read;
 		};
+		let nextRunAt = Infinity;
 		let count = 0;
 		for (const entry of entries) {
-			if (signal.aborted || count === 4) break;
+			if (cancellation.aborted) return Infinity;
 			const key = entry.preferenceKey;
 			const separator = entry.title.indexOf(' · ');
 			const parent = separator > 0 ? byTitle.get(entry.title.slice(separator + 3)) : undefined;
@@ -82,7 +108,12 @@ export class ChatListForks extends Disposable {
 				|| entry.forkSource || this.read(key)) continue;
 			// Titles narrow the lookup. A provider marker and shared history establish the relationship.
 			const pair = JSON.stringify([key, parent.preferenceKey]);
-			if ((checked.get(pair) ?? 0) > Date.now()) continue;
+			const retryAt = checked.get(pair) ?? 0;
+			if (retryAt > Date.now()) {
+				nextRunAt = Math.min(nextRunAt, retryAt);
+				continue;
+			}
+			if (count === recoveryBatchSize || signal.aborted) return 0;
 			count++;
 			try {
 				const child = await evidence(entry);
@@ -97,20 +128,23 @@ export class ChatListForks extends Disposable {
 						source = { id: parent.id, title: parent.title, preferenceKey: parent.preferenceKey };
 					}
 				}
-				if (signal.aborted) break;
-				checked.set(pair, Infinity);
+				signal.throwIfAborted();
 				const current = catalog.snapshot.get().entries;
-				if (source && source.id !== entry.id && !this.read(key)
-					&& current.some(row => row.preferenceKey === key && (child.source || row.title === entry.title))
-					&& (child.source || current.some(row => row.preferenceKey === parent.preferenceKey && row.title === parent.title))) {
+				if (!current.some(row => row.preferenceKey === key && (child.source || row.title === entry.title))
+					|| (!child.source && !current.some(row => row.preferenceKey === parent.preferenceKey && row.title === parent.title))) continue;
+				if (source && source.id !== entry.id && !this.read(key)) {
 					this.save(key, source);
 				}
+				checked.set(pair, Infinity);
 			} catch {
-				// A background lookup cannot make an otherwise usable catalog fail.
-				if (!signal.aborted) checked.set(pair, Date.now() + 60_000);
-				break;
+				if (cancellation.aborted) return Infinity;
+				// Cool down this pair while allowing other candidates to recover.
+				const retryAt = Date.now() + recoveryRetryDelay;
+				checked.set(pair, retryAt);
+				nextRunAt = Math.min(nextRunAt, retryAt);
 			}
 		}
+		return nextRunAt;
 	}
 
 	private read(key: string): ChatListForkReference | undefined {

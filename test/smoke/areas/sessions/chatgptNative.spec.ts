@@ -973,9 +973,10 @@ test.describe('Unified Chat sidebar', () => {
 		const titleBounds = (await titlebar.locator('.ash-sessions-titlebar-title').boundingBox())!;
 		const shareBounds = (await share.boundingBox())!;
 		const bar = page.locator('.ash-sessions-titlebar');
-		const barBounds = (await bar.boundingBox())!;
+		// The session content ends before any window actions and native caption controls.
+		const contentBounds = (await bar.locator('.ash-sessions-titlebar-session-content').boundingBox())!;
 		expect(titleBounds.x + titleBounds.width).toBeLessThan(shareBounds.x);
-		expect(barBounds.x + barBounds.width - shareBounds.x - shareBounds.width).toBeLessThan(40);
+		expect(shareBounds.x + shareBounds.width).toBeCloseTo(contentBounds.x + contentBounds.width, 0);
 		await test.info().attach('chat-conversation-title-bar', { body: await bar.screenshot(), contentType: 'image/png' });
 
 		await ashTitle.press('Enter');
