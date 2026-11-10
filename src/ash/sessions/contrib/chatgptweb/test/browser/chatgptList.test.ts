@@ -10,6 +10,59 @@ const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试�
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
+	test('local project archive includes native and older ChatGPT members and retries partial failure', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		const writes: string[] = [];
+		const pages: string[] = [];
+		const archived = new Set<string>();
+		let failOlder = true;
+		await page.route('**/service/backend-api/conversations?*', route => {
+			const query = new URL(route.request().url()).searchParams;
+			const offset = Number(query.get('offset'));
+			const visibility = query.get('is_archived');
+			pages.push(`${visibility}:${offset}`);
+			const available = ['first', 'unrelated', 'older'];
+			const ids = visibility === null ? ['first', 'unrelated'].filter(id => !archived.has(id))
+				: available.filter(id => archived.has(id) === (visibility === 'true'));
+			const items = ids.slice(offset, offset + 1).map(id => ({ id, title: id, is_archived: archived.has(id) }));
+			return route.fulfill({ json: { items, total: ids.length } });
+		});
+		await page.route('**/service/backend-api/conversation/*', route => {
+			if (route.request().method() !== 'PATCH') return route.fallback();
+			const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+			expect(route.request().postDataJSON()).toEqual({ is_archived: true });
+			writes.push(id);
+			if (id === 'older' && failOlder) {
+				failOlder = false;
+				return route.fulfill({ status: 503 });
+			}
+			archived.add(id);
+			return route.fulfill({ status: 204 });
+		});
+		await page.goto('/chatgptNavigation.html?mixedProjectArchive&locale=zh-CN');
+		const sidebar = page.locator('.ash-chat-navigation-list');
+		const project = sidebar.getByRole('button', { name: 'Local Ash project', exact: true });
+		await expect(project).toBeVisible();
+		expect(pages).toEqual([]);
+		const archive = async () => {
+			await project.press('Shift+F10');
+			await page.getByRole('menuitem', { name: '归档', exact: true }).click();
+			await page.getByRole('dialog').getByRole('button', { name: '归档', exact: true }).click();
+		};
+		await archive();
+		await expect.poll(() => historyNotices(page)).toContain('未能完成“Local Ash project”的归档。请重试以继续。');
+		await expect(project).toBeVisible();
+		await expect(page.locator('body')).toHaveAttribute('data-archived-ash', 'fixture-chat');
+		expect(writes).toEqual(['first', 'older']);
+
+		await archive();
+		await expect(project).toHaveCount(0);
+		expect(writes).toEqual(['first', 'older', 'older']);
+		expect([...archived]).toEqual(['first', 'older']);
+		expect(pages).toEqual(['false:0', 'false:1', 'false:2', 'false:0', 'false:1', 'true:0']);
+	});
+
 	test('project archive visits every page and retries the remaining ChatGPT conversations', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);

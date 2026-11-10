@@ -36,7 +36,7 @@ import { BrowserStorageService } from '../../../src/ash/workbench/services/stora
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
-import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
+import { ChatGPTService, IChatGPTService, chatGPTProjectConversationId } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
 import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
@@ -120,6 +120,7 @@ declare global {
 }
 
 const parameters = new URLSearchParams(location.search);
+const chatGPTCacheScope = 'a'.repeat(64);
 registerChatGPTResponseActions();
 // The renderer widgets consume the containing Sessions host's visual defaults.
 document.body.classList.add('ash-workbench');
@@ -174,7 +175,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IImageEditorService, {} as IImageEditorService],
 	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
 	[IChatGPTTransport, {
-		async getCacheScope() { return 'a'.repeat(64); },
+		async getCacheScope() { return chatGPTCacheScope; },
 		async request(id, request) {
 			const controller = new AbortController();
 			const pending = { controller, reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
@@ -307,12 +308,23 @@ let ashProject: Project = {
 	archived: false, sessionCount: 0, description: '', materials: [], sessionIds: [],
 	icon: 'chat', color: 'terminal.ansiBlue',
 };
+const mixedProjectArchive = parameters.has('mixedProjectArchive');
+const withArchiveMembers = (project: Project): Project => {
+	if (!mixedProjectArchive) return project;
+	const externalConversationIds = ['first', 'older'].map(id => chatGPTProjectConversationId(chatGPTCacheScope, id)!);
+	return { ...project, sessionIds: ['fixture-chat'], externalConversationIds, sessionCount: 3 };
+};
 const projectChanged = resources.add(new Emitter<void>());
 services.registerInstance(IProjectService, {
-	list: async () => parameters.has('ashProjectPicker') ? [ashProject] : [],
+	list: async () => parameters.has('ashProjectPicker') || mixedProjectArchive ? [withArchiveMembers(ashProject)] : [],
 	read: async (id: string) => {
-		if (parameters.has('ashProjectPicker') && id === ashProject.id) return ashProject;
+		if ((parameters.has('ashProjectPicker') || mixedProjectArchive) && id === ashProject.id) return withArchiveMembers(ashProject);
 		throw new Error('Unknown fixture project');
+	},
+	archive: async (project: Project) => {
+		ashProject = { ...project, archived: true, revision: project.revision + 1 };
+		projectChanged.fire();
+		return ashProject;
 	},
 	moveExternalConversation: async (id: string, _from: string | undefined, to: string | undefined) => {
 		if (to !== ashProject.id) throw new Error('Unknown destination project');
@@ -327,17 +339,24 @@ services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None, getOrder: (_mode, ids) => ids } as ISessionSectionOrderService);
 
 services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService);
+const localChat = {
+	sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
+	management: { status: 'idle' },
+	chats: [{ threadId: 'fixture-thread', status: 'active', origin: { type: 'root' }, createdAt: new Date(1) }],
+};
 services.registerInstance(ISessionsManagementService, {
-	state: 'ready', onDidChange: Event.None, untitledSessions: [],
+	state: 'ready', primaryCatalogReady: true, onDidChange: Event.None, untitledSessions: [],
 	async initialize() { },
+	async refresh() { },
+	async archiveSession(id: string) {
+		if (id !== localChat.sessionId || localChat.status !== 'active') throw new Error('Unexpected Ash conversation archive');
+		localChat.status = 'archived';
+		document.body.dataset.archivedAsh = id;
+	},
 	sessions: parameters.has('mixedCatalog') ? [{
 		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', kind: 'code',
 		chats: [{ threadId: 'fixture-code', status: 'active', origin: { type: 'root' } }],
-	}, {
-		sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
-		management: { status: 'idle' },
-		chats: [{ threadId: 'fixture-thread', status: 'active', origin: { type: 'root' }, createdAt: new Date(1) }],
-	}] : [],
+	}, localChat] : mixedProjectArchive ? [localChat] : [],
 } as unknown as ISessionsManagementService);
 const chatSelection = observableValue<import('../../../src/ash/sessions/services/sessions/browser/sessionGridState.js').StoredChatSelection | undefined>('fixture chat', undefined);
 services.registerInstance(ISessionsService, {
@@ -400,6 +419,6 @@ resources.add(services.createInstance(ProjectTitleBarContribution));
 const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
 resize.observe(host);
 resources.add(toDisposable(() => resize.disconnect()));
-chat.initialize();
+if (!mixedProjectArchive) chat.initialize();
 if (parameters.has('focus')) { widget.focus(); }
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

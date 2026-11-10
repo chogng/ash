@@ -96,6 +96,8 @@ export interface ChatListSnapshot {
 export interface ChatListSource {
 	readonly snapshot: IObservable<ChatListSnapshot>;
 	readonly onDidRetirePreferenceIdentity?: Event<{ readonly key: string; readonly replacementKey?: string; }>;
+	/** Returns the project member references this source confirmed archived. */
+	archiveProjectMembers?(references: ReadonlySet<string>): Promise<ReadonlySet<string>>;
 	attach?(window: Window & typeof globalThis, isVisible: () => boolean): IDisposable;
 	loadMore?(): void;
 }

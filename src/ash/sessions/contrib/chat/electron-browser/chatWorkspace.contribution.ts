@@ -193,8 +193,7 @@ export class ChatWorkspaceContribution extends Disposable {
 	) {
 		super();
 		const newDraft = view.chatSelection.map(current => current?.kind === 'draft');
-		const showAshChat = async (source?: unknown): Promise<void> => {
-			await view.restoreChatSelection();
+		const openAshChat = async (source?: unknown): Promise<void> => {
 			if (this.isDisposed) throw canceled();
 			await layout.openEntry({
 				id: 'ashChat', workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
@@ -208,7 +207,10 @@ export class ChatWorkspaceContribution extends Disposable {
 			}, undefined, source === 'restore' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
-		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, (_accessor, source) => showAshChat(source)));
+		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, async (_accessor, source) => {
+			await view.restoreChatSelection();
+			await openAshChat(source);
+		}));
 		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, (accessor, source) => {
 			const command = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'ash' ? SHOW_ASH_CHAT_COMMAND : openContributedChatCommand;
 			return accessor.get(ICommandService).executeCommand(command, source);
@@ -234,10 +236,9 @@ export class ChatWorkspaceContribution extends Disposable {
 					await sessions.prepareThread(address.sessionId, address.threadId);
 					if (this.isDisposed || previous !== view.chatSelection.get() || entryCommand !== layout.newSessionCommand) throw canceled();
 				}
-				await showAshChat();
-				if (!this.isDisposed && (previous === view.chatSelection.get() || previous === undefined)) {
-					view.selectChatThread(address.sessionId, address.threadId);
-				}
+				// The editor needs a selection during construction. An explicit link supplies its own.
+				view.selectChatThread(address.sessionId, address.threadId);
+				await openAshChat();
 				return true;
 			},
 		}));

@@ -14,6 +14,7 @@ export interface ChatGPTConversation {
 	readonly pinned?: boolean;
 	readonly projectId?: string;
 	readonly local?: boolean;
+	readonly archived?: boolean;
 	/** This row was discovered outside the window's recent-history pagination. */
 	readonly projectOnly?: boolean;
 }
@@ -154,15 +155,24 @@ export class ChatGPTClient {
 		return { models, defaultModel: models.find(model => defaultModelSlug !== undefined && model.modelIds.includes(defaultModelSlug))?.id ?? models[0]!.id };
 	}
 
-	async conversations(offset: number, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; nextOffset: number; }> {
+	async conversations(offset: number, signal: AbortSignal, visibility?: 'active' | 'archived'): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; nextOffset: number; }> {
 		const limit = this.native ? 20 : 50;
 		const query = this.native
 			? `exclude_conversation_origin=tpp&expand=false&is_archived=false&is_starred=false&limit=${limit}&order=updated&offset=${offset}`
 			: `offset=${offset}&limit=${limit}&order=updated&hide_snorlax=false`;
-		const value = await this.json(`/conversations?${query}`, signal, this.native ? undefined : 'recent');
+		const filters = new URLSearchParams(query);
+		if (visibility) {
+			filters.set('is_archived', String(visibility === 'archived'));
+			filters.delete('is_starred');
+		}
+		const value = await this.json(`/conversations?${filters}`, signal, this.native ? undefined : 'recent');
 		if (!isRecord(value) || !Array.isArray(value.items)) { throw this.invalidResponse(); }
 		const items = value.items.flatMap(item => isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string'
-			? [{ id: item.id, title: item.title, ...conversationTimestamps(item), pinned: item.is_starred === true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : []);
+			? [{
+				id: item.id, title: item.title, ...conversationTimestamps(item), pinned: item.is_starred === true,
+				projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined,
+				...(visibility && item.is_archived === true ? { archived: true } : {}),
+			}] : []);
 		return { items, nextOffset: offset + value.items.length, hasMore: value.items.length > 0 && (typeof value.total === 'number' ? offset + value.items.length < value.total : value.items.length === limit) };
 	}
 

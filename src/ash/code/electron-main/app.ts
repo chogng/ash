@@ -2363,6 +2363,7 @@ export class AshApplication extends Disposable {
 		const host = this.windowsMainService.getWindowById(window.id)!;
 		if (this.appServerStartupMode !== 'disabled') await host.ready();
 		const current = session.workspaceContext.getWorkspace();
+		if (getWorkspaceRemoteAuthority(current) !== getWorkspaceRemoteAuthority(resolvedWorkspace)) return false;
 		if (current.id === workspace.id) return true;
 		if (this.appServerStartupMode !== 'disabled' && resolvedWorkspace.folders.length > 0) {
 			const channel = this.mainProcessIpcServer.getChannel(AGENTS_WINDOW_WORKSPACE_CHANNEL, client => client.ctx === `window:${window.id}`);

@@ -211,6 +211,10 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return { state: 'more', load: () => this.chat.loadProjectConversations(projectId, true) };
 	}
 
+	archiveProjectMembers(references: ReadonlySet<string>): Promise<ReadonlySet<string>> {
+		return this.chat.archiveProjectMembers(references);
+	}
+
 	attach(window: Window & typeof globalThis, isVisible: () => boolean): DisposableStore {
 		const store = new DisposableStore();
 		const reconnect = store.add(new MutableDisposable());
@@ -324,4 +328,8 @@ export class ChatGPTNativeList extends Disposable implements ChatListSource {
 	}
 
 	loadMore(): void { this.delegate.loadMore(); }
+
+	archiveProjectMembers(references: ReadonlySet<string>): Promise<ReadonlySet<string>> {
+		return this.delegate.archiveProjectMembers(references);
+	}
 }

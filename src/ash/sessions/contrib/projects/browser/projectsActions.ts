@@ -84,6 +84,7 @@ CommandsRegistry.register(ARCHIVE_PROJECT_COMMAND, async (accessor, id: unknown,
 	}
 	const projects = accessor.get(IProjectService);
 	const view = scope === 'chat' ? accessor.get(IProjectsService) : undefined;
+	const catalog = scope === 'chat' ? accessor.get(IChatListCatalog) : undefined;
 	const sessions = accessor.get(ISessionsManagementService);
 	const project = await projects.read(id, scope);
 	if (project.archived || !await confirmProjectArchive(dialogs, project.name)) return false;
@@ -103,6 +104,27 @@ CommandsRegistry.register(ARCHIVE_PROJECT_COMMAND, async (accessor, id: unknown,
 				if (!session.backendSessionId && session.status === 'active' && members.has(session.sessionId)) {
 					await sessions.archiveSession(session.sessionId);
 				}
+			}
+		}
+		const external = new Set(current.externalConversationIds);
+		if (external.size) {
+			const latest = await projects.read(id, scope);
+			if (latest.archived) return true;
+			if (latest.revision !== current.revision) return false;
+			let failure: unknown;
+			for (const source of catalog?.sources ?? []) {
+				if (!source.archiveProjectMembers) continue;
+				try {
+					const archived = await source.archiveProjectMembers(external);
+					for (const reference of archived) external.delete(reference);
+				} catch (error) {
+					failure ??= error;
+				}
+				if (!external.size) break;
+			}
+			if (external.size) {
+				if (failure) throw failure;
+				return false;
 			}
 		}
 		if (view) return view.archive(current);

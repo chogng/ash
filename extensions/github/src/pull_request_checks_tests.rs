@@ -7,16 +7,26 @@ use std::sync::Arc;
 
 const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const BASE: &str = "release/stable";
+const MERGE: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 fn rollup(head: &str, checks: Vec<Value>, cursor: Option<&str>) -> Value {
     json!({
         "data": {"repository": {"pullRequest": {
             "baseRefName": BASE, "headRefOid": head,
-            "commits": {"nodes": [{"commit": {"oid": head, "statusCheckRollup": {
-                "contexts": {"nodes": checks, "pageInfo": {"hasNextPage": cursor.is_some(), "endCursor": cursor}}
-            }}}]}
+            "commits": {"nodes": [{"commit": commit(head, checks, cursor)}]}
         }}}
     })
+}
+
+fn commit(oid: &str, checks: Vec<Value>, cursor: Option<&str>) -> Value {
+    json!({"oid": oid, "statusCheckRollup": {
+        "contexts": {"nodes": checks, "pageInfo": {"hasNextPage": cursor.is_some(), "endCursor": cursor}}
+    }})
+}
+
+fn with_merge(mut pr: Value, merge: Value) -> Value {
+    pr["data"]["repository"]["pullRequest"]["potentialMergeCommit"] = merge;
+    pr
 }
 
 fn check(name: &str, conclusion: &str, required: bool) -> Value {
@@ -83,10 +93,95 @@ async fn passing_required_checks_ignore_optional_failures_across_rollup_pages() 
     assert_eq!(status.latest_check_at_unix_ms, Some(30_000));
     let requests = http.requests.lock().unwrap();
     let query: Value = serde_json::from_slice(requests[1].body()).unwrap();
-    assert_eq!(query["variables"]["cursor"], "next");
+    assert_eq!(query["variables"]["headCursor"], "next");
+    assert!(query["variables"]["mergeCursor"].is_null());
     assert_eq!(query["variables"]["number"], 7);
     let query = query["query"].as_str().unwrap();
     assert!(query.contains("completedAt startedAt"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn uses_the_test_merge_checks_and_paginates_them_independently() {
+    let http = Arc::new(FakeHttp::default());
+    http.push(
+        200,
+        with_merge(
+            rollup(HEAD, vec![check("build", "SUCCESS", true)], Some("head")),
+            commit(MERGE, vec![check("build", "FAILURE", true)], Some("merge")),
+        ),
+    );
+    let mut required = check("gate", "SUCCESS", true);
+    required["completedAt"] = json!("1970-01-01T00:00:10Z");
+    http.push(
+        200,
+        with_merge(
+            rollup(HEAD, vec![check("build", "SUCCESS", true)], Some("head")),
+            commit(MERGE, vec![required], None),
+        ),
+    );
+    http.push(200, json!({"name": BASE}));
+    http.push(200, json!([]));
+    let status = github(http.clone())
+        .pull_request_checks(&repository(), 7, HEAD)
+        .await
+        .unwrap();
+    assert_eq!(status.status, PullRequestChecksStatus::Failure);
+    assert_eq!(status.latest_check_at_unix_ms, Some(10_000));
+    let requests = http.requests.lock().unwrap();
+    let query: Value = serde_json::from_slice(requests[1].body()).unwrap();
+    assert!(
+        query["query"]
+            .as_str()
+            .unwrap()
+            .contains("potentialMergeCommit")
+    );
+    assert_eq!(query["variables"]["mergeCursor"], "merge");
+    assert!(query["variables"]["headCursor"].is_null());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn an_empty_test_merge_rollup_uses_the_head_checks() {
+    let http = Arc::new(FakeHttp::default());
+    http.push(
+        200,
+        with_merge(
+            rollup(HEAD, vec![check("build", "SUCCESS", true)], None),
+            commit(MERGE, Vec::new(), None),
+        ),
+    );
+    http.push(200, json!({"name": BASE}));
+    http.push(200, json!([]));
+    let status = github(http)
+        .pull_request_checks(&repository(), 7, HEAD)
+        .await
+        .unwrap();
+    assert_eq!(status.status, PullRequestChecksStatus::Success);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn drops_partial_checks_when_the_test_merge_commit_changes() {
+    let http = Arc::new(FakeHttp::default());
+    http.push(
+        200,
+        with_merge(
+            rollup(HEAD, Vec::new(), None),
+            commit(MERGE, vec![check("build", "FAILURE", true)], Some("next")),
+        ),
+    );
+    http.push(
+        200,
+        with_merge(
+            rollup(HEAD, Vec::new(), None),
+            commit(&"c".repeat(40), vec![check("gate", "SUCCESS", true)], None),
+        ),
+    );
+    let status = github(http.clone())
+        .pull_request_checks(&repository(), 7, HEAD)
+        .await
+        .unwrap();
+    assert_eq!(status.status, PullRequestChecksStatus::Pending);
+    assert_eq!(status.latest_check_at_unix_ms, None);
+    assert_eq!(http.requests.lock().unwrap().len(), 2);
 }
 
 #[tokio::test(flavor = "current_thread")]

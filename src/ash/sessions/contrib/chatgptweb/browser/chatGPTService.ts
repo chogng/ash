@@ -213,6 +213,7 @@ export interface IChatGPTService {
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
 	editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit>;
 	archiveProjectConversations(id: string): Promise<boolean>;
+	archiveProjectMembers(references: ReadonlySet<string>): Promise<ReadonlySet<string>>;
 	deleteProject(id: string): Promise<void>;
 	setDraft(value: string): void;
 	setDraftTarget(change: Partial<ChatGPTDraftTarget>): void;
@@ -475,6 +476,63 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			}
 			account.throwIfAborted();
 			return true;
+		} finally {
+			if (!account.aborted) {
+				this.update({ managing: false });
+				const selected = this.model.get().conversationId;
+				if (selected && archived.has(selected)) this.newChat();
+			}
+		}
+	}
+
+	public async archiveProjectMembers(references: ReadonlySet<string>): Promise<ReadonlySet<string>> {
+		const state = this.model.get();
+		const confirmed = new Set<string>();
+		if (this.isDisposed || !state.networkAvailable
+			|| state.busy || state.sending || state.managing || state.voice !== 'idle') return confirmed;
+
+		const account = this.management.signal;
+		const signal = AbortSignal.any([account, AbortSignal.timeout(30_000)]);
+		const archived = new Set<string>();
+		this.refreshOperation?.abort();
+		this.update({ managing: true });
+		try {
+			// Projects can be opened before the ChatGPT editor or its history has loaded.
+			const scope = state.catalogScope ?? await this.transport.getCacheScope();
+			signal.throwIfAborted();
+			if (!scope) return confirmed;
+			if (!state.catalogScope) this.restoreCatalog(scope);
+
+			const unresolved = new Set(references);
+			const active = new Map<string, string>();
+			const findMembers = (items: readonly ChatGPTConversation[]) => {
+				for (const { id, archived } of items) {
+					const reference = chatGPTProjectConversationId(scope, id);
+					if (!reference || !unresolved.delete(reference)) continue;
+					if (archived) confirmed.add(reference);
+					else active.set(reference, id);
+				}
+			};
+			findMembers(this.model.get().conversations.filter(item => !item.local && !item.id.startsWith('pending:')));
+			// Project references outlive the loaded history and must also resolve after a partial archive.
+			for (const visibility of ['active', 'archived'] as const) {
+				let offset = 0;
+				while (unresolved.size) {
+					const page = await this.client.conversations(offset, signal, visibility);
+					signal.throwIfAborted();
+					findMembers(page.items);
+					if (!page.hasMore) break;
+					offset = page.nextOffset;
+				}
+			}
+			// Resolve members before writing so removals cannot shift the history pages being searched.
+			for (const [reference, id] of active) {
+				signal.throwIfAborted();
+				await this.removeRemoteConversation(id, false, signal);
+				archived.add(id);
+				confirmed.add(reference);
+			}
+			return confirmed;
 		} finally {
 			if (!account.aborted) {
 				this.update({ managing: false });
