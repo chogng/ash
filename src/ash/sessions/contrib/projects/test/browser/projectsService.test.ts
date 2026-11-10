@@ -113,6 +113,19 @@ suite('Projects browsing', () => {
 		assert.equal(appearance('other-account').color, undefined);
 	});
 
+	test('restores existing offline material names under their catalog account and replaces removed names', () => {
+		using fixture = new ProjectsFixture();
+		const key = 'account:project';
+		const material = { id: 'file-existing', name: 'notes.txt' };
+		fixture.storage.store('sessions.chatgpt.projectFiles.v1:' + key, JSON.stringify([material]), StorageScope.PROFILE, StorageTarget.MACHINE);
+		assert.deepEqual(fixture.projectsView.readCatalogMaterialNames(key), [material]);
+		assert.equal(fixture.projectsView.readCatalogMaterialNames('other-account:project'), undefined);
+
+		fixture.projectsView.rememberCatalogMaterialNames(key, []);
+		using restored = fixture.services.createInstance(ProjectsService);
+		assert.deepEqual(restored.readCatalogMaterialNames(key), []);
+	});
+
 	test('pinning is profile state shared by retained views and sorts pinned projects first', async () => {
 		using fixture = new ProjectsFixture();
 		await fixture.projectsView.create('a', 'Alpha', '', []);

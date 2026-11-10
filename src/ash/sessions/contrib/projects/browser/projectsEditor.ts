@@ -43,6 +43,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private readonly projectInputs = this._register(new DisposableMap<string, ProjectChatInput>());
 	private readonly catalogDetailsRequest = this._register(new MutableDisposable());
 	private readonly catalogDetailsLoad = observableValue<{ readonly key: string; readonly phase: 'loading' | 'loaded' | 'error'; } | undefined>(this, undefined);
+	private catalogMaterialSnapshotKey: string | undefined;
+	private catalogMaterialSyncKey: string | undefined;
 	private activeProjectInput: ProjectChatInput | undefined;
 	private readonly conversationProjects = derived(reader =>
 		this.chatCatalog.sources.map(source => source.snapshot.read(reader)));
@@ -163,10 +165,30 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const details = selected?.project?.details;
 			const load = this.catalogDetailsLoad.read(reader);
 			const data = details?.data.read(reader);
+			const root = this.projectMaterials.fileRoot.read(reader);
+			const shown = this.shown.read(reader);
+			const loadedMaterials = shown && load?.key === details?.key && load?.phase === 'loaded'
+				? data?.materials?.filter(file => file.kind === 'file') : undefined;
+			// Chat state can reproject unchanged rows after another window has saved a newer list.
+			const snapshotKey = details && loadedMaterials
+				? JSON.stringify([details.key, loadedMaterials.map(file => [file.id, file.name])]) : undefined;
+			if (snapshotKey !== this.catalogMaterialSnapshotKey) {
+				this.catalogMaterialSnapshotKey = snapshotKey;
+				if (details && loadedMaterials) this.projects.rememberCatalogMaterialNames(selected?.project?.preferenceKey ?? details.key, loadedMaterials);
+			}
 			const projectChats = state.selected
 				? getProjectSessionRows(snapshots.flatMap(snapshot => snapshot.entries), state.selected.sessionIds, state.selected.externalConversationIds) : [];
 			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined, projectChats, data, load?.key === details?.key ? load?.phase : undefined);
-			if (this.shown.read(reader) && details?.load && load?.key !== details.key) {
+			const readableMaterials = loadedMaterials?.filter(file => file.read);
+			const materialSyncKey = root && details && readableMaterials?.length
+				? JSON.stringify([root.toString(), details.key, readableMaterials.map(file => [file.id, file.name])]) : undefined;
+			if (materialSyncKey !== this.catalogMaterialSyncKey) {
+				this.catalogMaterialSyncKey = materialSyncKey;
+				if (root && details && readableMaterials?.length) {
+					void this.projectMaterials.syncCatalog(details.key, root, readableMaterials, () => this.shown.get() && this.projects.state.get().conversationProjectId === id);
+				}
+			}
+			if (shown && details?.load && load?.key !== details.key) {
 				this.projectActions.cancelPendingEdit();
 				this.loadCatalogDetails(details);
 			} else if (!details?.load && load) {
@@ -348,9 +370,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				() => this.showProjectDialog({ project: localProject, instructionsOnly: true })));
 		} else if (details) {
 			const failed = detailsPhase === 'error' || detailsPhase === 'loaded' && !data?.materials;
-			const materials = this.projectMaterials.render(document, {
-				rows: data?.materials,
-				addFiles: data?.canEdit && data.materials ? details.addFiles : undefined,
+			const cachedNames = data?.materials === undefined
+				? this.projects.readCatalogMaterialNames(conversationProject.preferenceKey ?? details.key) : undefined;
+			const materials = this.projectMaterials.renderCatalog(document, details.key, this.projectMaterials.fileRoot.get(), {
+				rows: data?.materials ?? cachedNames?.map(file => ({ ...file, kind: 'file' })),
+				upload: data?.canEdit && data.materials ? details.upload : undefined,
+				isCurrent: () => this.shown.get() && this.projects.state.get().conversationProjectId === id
+					&& this.projectGroups.get().find(group => group.key === id)?.project?.details?.key === details.key,
 				status: !details.load ? undefined : failed ? {
 					text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
 				} : data?.materials ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },

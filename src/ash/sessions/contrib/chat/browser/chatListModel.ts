@@ -75,7 +75,8 @@ export interface ProjectMaterialRow {
 	readonly name: string;
 	readonly kind: 'file' | 'folder';
 	readonly tooltip?: string;
-	readonly download?: (target: URI) => Promise<void>;
+	/** Reads the provider's source bytes. Ash owns the lifecycle of any local copy. */
+	readonly read?: () => Promise<Blob>;
 	readonly open?: () => Promise<void>;
 	readonly remove?: () => Promise<void>;
 }
@@ -88,7 +89,11 @@ export interface CatalogProjectDetails {
 		readonly canEdit: boolean;
 	} | undefined>;
 	readonly load?: (signal: AbortSignal) => Promise<void>;
-	readonly addFiles?: (resources: readonly URI[]) => Promise<void>;
+	readonly upload?: {
+		readonly limits: { readonly count: number; readonly fileBytes: number; readonly totalBytes: number; };
+		readonly limitMessage: string;
+		readonly addFiles: (files: readonly File[]) => Promise<void>;
+	};
 }
 
 export interface ChatListProject {

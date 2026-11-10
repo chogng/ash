@@ -1,20 +1,27 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { streamToBuffer } from '../../../../base/common/buffer.js';
 import { Disposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
-import { isValidBasename } from '../../../../base/common/extpath.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
+import { getMediaOrTextMime } from '../../../../base/common/mime.js';
+import { observableFromEvent } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { basename } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { projectMaterialFilesLocation, projectMaterialFilesRoot, projectMaterialFilesScheme } from '../../../../platform/projects/common/projectMaterialFiles.js';
 import type { Project, ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import type { ProjectMaterialRow } from '../../chat/browser/chatListModel.js';
+import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
+import type { CatalogProjectDetails, ProjectMaterialRow } from '../../chat/browser/chatListModel.js';
+import { ProjectMaterialFiles } from './projectMaterialFiles.js';
 import { IProjectsService } from './projectsService.js';
 import './media/projectMaterials.css';
 
@@ -26,8 +33,13 @@ interface ProjectMaterialsContent {
 	readonly addFolders?: (resources: readonly URI[]) => Promise<unknown>;
 }
 
+type CatalogMaterialUpload = NonNullable<CatalogProjectDetails['upload']>;
+
 /** Presents project references and delegates their storage and file access to the owning services. */
 export class ProjectMaterials extends Disposable {
+	readonly fileRoot;
+	private readonly localFiles: ProjectMaterialFiles;
+
 	constructor(
 		private readonly reportError: (message: string) => void,
 		@IProjectsService private readonly projects: IProjectsService,
@@ -35,8 +47,62 @@ export class ProjectMaterials extends Disposable {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IEditorService private readonly editors: IEditorService,
 		@IHoverService private readonly hover: IHoverService,
+		@IFileService private readonly fileService: IFileService,
+		@IConfigurationService configuration: IConfigurationService,
+		@IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService,
 	) {
 		super();
+		this.localFiles = new ProjectMaterialFiles(fileService);
+		this.fileRoot = observableFromEvent(this, listener => configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(projectMaterialFilesLocation)) listener(event);
+		}), () => {
+			const profile = environment.userRoamingDataHome;
+			return profile && fileService.hasProvider(URI.from({ scheme: projectMaterialFilesScheme }))
+				? projectMaterialFilesRoot(profile, configuration.getValue<string>(projectMaterialFilesLocation)) : undefined;
+		});
+	}
+
+	renderCatalog(document: Document, key: string, root: URI | undefined,
+		model: Omit<ProjectMaterialsContent, 'addFiles' | 'addFolders'> & { readonly upload?: CatalogMaterialUpload; readonly isCurrent: () => boolean; },
+		content: DisposableStore): HTMLElement {
+		const rows = root ? model.rows?.map(file => ({
+			...file,
+			open: file.open ?? (file.kind === 'file' ? async () => {
+				const isCurrent = () => !this.isDisposed && model.isCurrent() && this.fileRoot.get()?.toString() === root.toString();
+				const resource = await this.localFiles.ensure(root, key, file, isCurrent, file.read);
+				if (isCurrent()) await this.editors.openEditor({ resource, readOnly: true, showBreadcrumbs: false });
+			} : undefined),
+		})) : model.rows;
+		const { upload } = model;
+		return this.render(document, {
+			rows, busy: model.busy, status: model.status,
+			addFiles: upload ? resources => this.uploadCatalogFiles(resources, upload, model.isCurrent) : undefined,
+		}, content);
+	}
+
+	private async uploadCatalogFiles(resources: readonly URI[], upload: CatalogMaterialUpload, isCurrent: () => boolean): Promise<void> {
+		const { limits } = upload;
+		if (resources.length > limits.count) throw new Error(upload.limitMessage);
+		const files: File[] = [];
+		let remaining = limits.totalBytes;
+		for (const resource of resources) {
+			if (this.isDisposed || !isCurrent() || resource.scheme !== 'file' || resource.authority) throw new CancellationError();
+			const name = basename(resource);
+			const content = await this.fileService.readFileStream(resource, { limits: { size: Math.min(limits.fileBytes, remaining) } });
+			const bytes = await streamToBuffer(content.value);
+			remaining -= bytes.byteLength;
+			files.push(new File([new Uint8Array(bytes.buffer)], name, { type: getMediaOrTextMime(name), lastModified: content.modifiedAtMillis }));
+		}
+		if (this.isDisposed || !isCurrent()) throw new CancellationError();
+		await upload.addFiles(files);
+	}
+
+	async syncCatalog(key: string, root: URI, rows: readonly ProjectMaterialRow[], isVisible: () => boolean): Promise<void> {
+		const isCurrent = () => !this.isDisposed && this.fileRoot.get()?.toString() === root.toString();
+		const results = await Promise.allSettled(rows.map(row => this.localFiles.ensure(root, key, row, isCurrent, row.read)));
+		if (isCurrent() && isVisible() && results.some(result => result.status === 'rejected' && !isCancellationError(result.reason))) {
+			this.reportError(localize('projects.localFilesSyncFailed', 'Could not save all project files. Open the project again to retry.'));
+		}
 	}
 
 	renderLocal(document: Document, project: Project, busy: boolean, content: DisposableStore): HTMLElement {
@@ -94,14 +160,12 @@ export class ProjectMaterials extends Disposable {
 		const list = h(document, 'ul', { className: 'ash-projects-material-list' });
 		for (const material of model.rows ?? []) {
 			const row = h(document, 'li', { className: 'ash-projects-material' });
-			const { download, open, remove } = material;
-			const activate = download ? () => this.saveMaterial(material.name, download) : open;
-			if (activate) {
+			const { open, remove } = material;
+			if (open) {
 				const button = this.action(content, row, material.id, {
 					label: material.name,
-					ariaLabel: download ? localize('projects.downloadMaterial', 'Download {0}', material.name) : undefined,
 					icon: material.kind === 'folder' ? Lxicon.folders : Lxicon.file,
-				}, activate);
+				}, open);
 				content.add(this.hover.setupDelayedHover(button.domNode, { content: material.tooltip ?? material.name }));
 			} else {
 				row.append(h(document, 'span', { className: 'ash-projects-material-name', properties: { title: material.name } }, material.name));
@@ -160,11 +224,6 @@ export class ProjectMaterials extends Disposable {
 			throw new Error(localize('projects.pickFailed', 'Could not add these materials. Try again.'));
 		}
 		if (resources?.length && !this.isDisposed) await add(resources);
-	}
-
-	private async saveMaterial(name: string, download: (target: URI) => Promise<void>): Promise<void> {
-		const target = await this.files.showSaveDialog({ defaultUri: isValidBasename(name) ? URI.file('/' + name) : undefined });
-		if (target && !this.isDisposed) await download(target);
 	}
 
 	private async openMaterial(material: ProjectMaterial): Promise<void> {

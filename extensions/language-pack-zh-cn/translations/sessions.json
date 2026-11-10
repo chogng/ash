@@ -351,6 +351,7 @@
     "automations.hostHelp": "计划来自多个宿主时，每张卡片都会标明宿主。请先选择“运行于”，再选择目录或对话。切换宿主会清空之前的目录和对话，列表只提供所选宿主的对话。",
     "sessions.chatgpt.defaultBackend": "默认 ChatGPT 入口",
     "sessions.chatgpt.defaultBackendDescription": "选择新建聊天时打开的 ChatGPT 入口。ChatGPT（实验性）使用你现有的 Codex 登录。",
+    "sessions.settings.projectFilesHelp": "在「通用」下，「项目文件」会显示本地保存目录。选择「更改」可切换目录。",
     "sessions.settings.chatGPTBackendHelp": "在桌面端设置的“通用”类别中，可用“默认 ChatGPT 入口”选择新建聊天时打开的入口。",
     "sessions.chatgpt.experimentalTitle": "ChatGPT（实验性）",
     "sessions.chatgpt.experimentalPrompt": "询问 ChatGPT（实验性）",

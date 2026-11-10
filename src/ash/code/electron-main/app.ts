@@ -65,6 +65,8 @@ import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platfo
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../platform/browserView/electron-main/browserViewMainService.js';
+import { projectMaterialFilesChannel } from '../../platform/projects/common/projectMaterialFiles.js';
+import { ProjectMaterialFilesChannel } from '../../platform/projects/electron-main/projectMaterialFilesChannel.js';
 import { ChatGPTMain } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTMain.js';
 import { readFile } from 'node:fs/promises';
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
@@ -621,6 +623,10 @@ export class AshApplication extends Disposable {
 		this._register(profileFiles.onDidWatchError(error => this.logService.error('files', 'Failed to watch user profile files', error)));
 		this._register(profileFiles.watch(URI.file(this.profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
 		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(profileFiles, URI.file(this.profileRoot), URI.file(app.getPath('home')))));
+		this.mainProcessIpcServer.registerChannel(projectMaterialFilesChannel, this._register(this.windowServices.createInstance(
+			ProjectMaterialFilesChannel, URI.file(this.profileRoot),
+			(context: string) => context === `window:${this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id}`,
+		)));
 		this.mainProcessIpcServer.registerChannel('keyboardLayout', keyboardLayoutChannel(this.nativeKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));

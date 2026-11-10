@@ -1,3 +1,6 @@
+import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
+import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
+import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import './chatFixtureLocalization.js';
 import '../../../src/ash/sessions/browser/actions/sessionsChatActions.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
@@ -117,7 +120,7 @@ import { AccessibilityService } from '../../../src/ash/platform/accessibility/br
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; readDownloadedMaterial(name: string): Promise<string | undefined>; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; showFind(): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; readSavedMaterial(name: string): string | undefined; openedMaterial(): string | undefined; setOffline(offline: boolean): void; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; showFind(): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -163,6 +166,8 @@ configurationRegistry.registerConfiguration({ key: 'markdown.math.macros', defau
 const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new TestNotificationService());
 if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
+const savedMaterials = new Map<string, string>();
+let openedMaterial: string | undefined;
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	...getSingletonServiceDescriptors().filter(([id]) =>
 		id === IChatWidgetService || id === IActionViewItemService || id === IChatSlashCommandService
@@ -208,7 +213,12 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 		if (options?.openExternal) document.body.dataset.openedExternal = url;
 		return true;
 	} } as unknown as IOpenerService],
-	[IEditorService, { focusActiveEditor: () => widget.focus() } as unknown as IEditorService],
+	[IEditorService, {
+		focusActiveEditor: () => widget.focus(),
+		openEditor: async ({ resource }: { resource: URI }) => {
+			openedMaterial = (await services.get(IFileService).readFile(resource)).content;
+		},
+	} as unknown as IEditorService],
 	[IAgentThreadService, {} as IAgentThreadService],
 	[IChatService, {} as IChatService],
 	[IChatSessionNavigationService, {} as IChatSessionNavigationService],
@@ -230,6 +240,18 @@ const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
 registerTestVoiceInputServices(services);
 registerTestComponentServices(services);
+if (parameters.has('projectMaterials')) {
+	Object.assign(services.get(IWorkbenchEnvironmentService), { userRoamingDataHome: URI.file('/fixture-profile') });
+	const provider = new class extends MemoryFileService {
+		override async writeFile(...args: Parameters<MemoryFileService['writeFile']>) {
+			const written = await super.writeFile(...args);
+			savedMaterials.set(args[0].path.split('/').at(-1)!, this.text(args[0]));
+			return written;
+		}
+	}([]);
+	resources.add(services.get(IFileService).registerProvider(projectMaterialFilesScheme, provider));
+}
+
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
 	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: configuration,
 })));
@@ -246,9 +268,6 @@ services.registerInstance(IFileDialogService, {
 		if (options.canSelectFolders) return [attachmentFolder];
 		if (options.defaultUri?.toString() === attachmentFolder.toString()) return [attachmentFile];
 		return undefined;
-	},
-	async showSaveDialog(options) {
-		return parameters.has('projectMaterials') && options.defaultUri ? URI.joinPath(attachmentFolder, 'saved-' + options.defaultUri.path.slice(1)) : undefined;
 	},
 } as IFileDialogService);
 const menuService = new MenuService(commands, services.get(IContextKeyService));
@@ -294,8 +313,9 @@ window.ashChatGPTIntegration = {
 	setMathMacros: macros => services.get(IConfigurationService).updateValue('markdown.math.macros', macros),
 	newChat: () => chat.newChat(),
 	draft: () => chat.state.get().draft,
-	readDownloadedMaterial: name => services.get(IFileService).readFile(URI.joinPath(attachmentFolder, 'saved-' + name))
-		.then(file => file.content, () => undefined),
+	readSavedMaterial: name => savedMaterials.get(name),
+	openedMaterial: () => openedMaterial,
+	setOffline: offline => chat.setNetworkAvailable(!offline),
 	storageKeys: () => storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE),
 	dictate: (text, final) => transcript?.(text, final),
 	dictationStops: () => dictationStops,

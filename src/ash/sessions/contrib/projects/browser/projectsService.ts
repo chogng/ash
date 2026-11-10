@@ -1,5 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
+import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
 import { IProjectService, type Project, type ProjectAppearance, type ProjectMaterial, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -8,8 +9,14 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 export type ProjectSortOrder = 'updated' | 'created' | 'name';
 
 const sortOrderStorageKey = 'sessions.projects.sortOrder';
-// Preserve the existing profile keys when reading and writing catalog project preferences.
+// Keep the existing profile keys so upgrades retain catalog preferences and offline material names.
 const catalogAppearancePrefix = 'sessions.chatgpt.projectAppearance:';
+const catalogMaterialsPrefix = 'sessions.chatgpt.projectFiles.v1:';
+
+interface CatalogMaterialName {
+	readonly id: string;
+	readonly name: string;
+}
 
 export interface CatalogProjectAppearance extends ProjectAppearance {
 	save(draft: ProjectAppearance): void;
@@ -43,6 +50,8 @@ export interface IProjectsService {
 	restore(project: ProjectSummary): Promise<boolean>;
 	remove(project: ProjectSummary): Promise<boolean>;
 	getCatalogProjectAppearance(key: string): CatalogProjectAppearance;
+	readCatalogMaterialNames(key: string): readonly CatalogMaterialName[] | undefined;
+	rememberCatalogMaterialNames(key: string, materials: readonly CatalogMaterialName[]): void;
 	isPinned(id: string): boolean;
 	togglePinned(id: string): void;
 	getProjects(): readonly ProjectSummary[];
@@ -96,6 +105,34 @@ export class ProjectsService extends Disposable implements IProjectsService {
 			},
 		};
 	}
+
+	public readCatalogMaterialNames(key: string): readonly CatalogMaterialName[] | undefined {
+		const raw = this.storage.get(catalogMaterialsPrefix + key, StorageScope.PROFILE);
+		if (raw === undefined) return undefined;
+		try {
+			const value: unknown = JSON.parse(raw);
+			if (!Array.isArray(value)) return undefined;
+			const names = new Map<string, CatalogMaterialName>();
+			for (const item of value) {
+				if (isRecord(item) && typeof item.id === 'string' && item.id.length > 0 && item.id.length <= 1024
+					&& typeof item.name === 'string' && item.name.trim() && item.name.length <= 1024) {
+					names.set(item.id, { id: item.id, name: item.name });
+				}
+			}
+			return [...names.values()];
+		} catch {
+			return undefined;
+		}
+	}
+
+	public rememberCatalogMaterialNames(key: string, materials: readonly CatalogMaterialName[]): void {
+		const storageKey = catalogMaterialsPrefix + key;
+		const value = JSON.stringify(materials.map(({ id, name }) => ({ id, name })));
+		if (value !== this.storage.get(storageKey, StorageScope.PROFILE)) {
+			this.storage.store(storageKey, value, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}
+	}
+
 	public isPinned(id: string): boolean { return this.storage.getBoolean(`sessions.projects.pinned.${id}`, StorageScope.PROFILE, false); }
 	public togglePinned(id: string): void {
 		this.storage.store(`sessions.projects.pinned.${id}`, !this.isPinned(id), StorageScope.PROFILE, StorageTarget.USER);

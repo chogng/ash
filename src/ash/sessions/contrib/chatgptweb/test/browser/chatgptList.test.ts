@@ -1249,13 +1249,13 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				projectFiles = projectFiles.filter(file => file.file_id !== 'file-existing');
 				return route.fulfill({ status: 204 });
 			});
-			let downloaded = false;
+			const downloads: string[] = [];
 			await page.route('**/service/.resource?*', route => {
 				const url = new URL(new URL(route.request().url()).searchParams.get('url')!);
-				expect(url.pathname).toBe('/backend-api/files/download/file-existing');
 				expect(url.searchParams.get('gizmo_id')).toBe(id);
-				downloaded = true;
-				return route.fulfill({ contentType: 'text/plain', body: 'Saved remote file' });
+				const file = url.pathname.split('/').at(-1)!;
+				downloads.push(file);
+				return route.fulfill({ contentType: 'text/plain', body: file === 'file-existing' ? 'Saved remote file' : 'New remote file' });
 			});
 			await page.goto(`/chatgptNavigation.html?projects&projectMaterials&locale=${locale}`);
 			const projects = page.locator('.ash-projects');
@@ -1278,23 +1278,28 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await save.click();
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 			await expect(editInstructions).toBeFocused();
-			const download = materials.getByRole('button', { name: zh ? '下载 Existing.txt' : 'Download Existing.txt', exact: true });
-			await download.click();
-			await expect.poll(() => downloaded).toBe(true);
-			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readDownloadedMaterial('Existing.txt'))).toBe('Saved remote file');
+			const existing = materials.getByRole('button', { name: 'Existing.txt', exact: true });
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Existing.txt'))).toBe('Saved remote file');
+			expect(downloads).toEqual(['file-existing']);
+			await page.evaluate(() => window.ashChatGPTIntegration.setOffline(true));
+			await existing.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.openedMaterial())).toBe('Saved remote file');
+			expect(downloads).toEqual(['file-existing']);
+			await page.evaluate(() => window.ashChatGPTIntegration.setOffline(false));
 			await materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true }).click();
 			await expect(materials.getByText('notes.txt', { exact: true })).toBeVisible();
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('notes.txt'))).toBe('New remote file');
 			await materials.getByRole('button', { name: zh ? '从项目中移除 Existing.txt' : 'Remove Existing.txt from project', exact: true }).click();
 			const confirm = page.getByRole('dialog').filter({ hasText: zh ? '从此项目移除 Existing.txt？' : 'Remove Existing.txt from this project?' });
 			await confirm.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click();
-			await expect(download).toHaveCount(0);
+			await expect(existing).toHaveCount(0);
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 			canWrite = false;
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await projects.getByRole('button', { name: 'Research', exact: true }).click();
 			await expect(materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true })).toHaveCount(0);
 			await expect(editInstructions).toHaveCount(0);
-			await expect(materials.getByRole('button', { name: zh ? '下载 notes.txt' : 'Download notes.txt', exact: true })).toBeVisible();
+			await expect(materials.getByRole('button', { name: 'notes.txt', exact: true })).toBeVisible();
 
 			let releaseDetails!: () => void;
 			holdDetails = new Promise<void>(resolve => { releaseDetails = resolve; });
@@ -1305,6 +1310,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				await projects.getByRole('button', { name: 'Research', exact: true }).click();
 				await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 				await expect(editInstructions).toHaveCount(0);
+				await expect(materials.getByRole('button', { name: 'notes.txt', exact: true })).toBeVisible();
 			} finally {
 				releaseDetails();
 			}

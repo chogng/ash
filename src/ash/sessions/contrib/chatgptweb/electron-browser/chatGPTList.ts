@@ -1,5 +1,4 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { streamToBuffer } from '../../../../base/common/buffer.js';
 import { disposableWindowInterval, disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { CancellationError } from '../../../../base/common/errors.js';
@@ -8,8 +7,6 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { autorun, derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import { getMediaOrTextMime } from '../../../../base/common/mime.js';
-import { basename } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
@@ -18,7 +15,6 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
@@ -73,7 +69,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IStorageService private readonly storage: IStorageService,
-		@IFileService private readonly files: IFileService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
@@ -230,36 +225,17 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					canEdit,
 					materials: details.files?.map(file => ({
 						...file, kind: 'file' as const,
-						download: online ? (target: URI) => this.downloadProjectFile(id, scope, file.id, target) : undefined,
+						read: online ? () => this.chat.readProjectFile(id, scope, file.id) : undefined,
 						remove: canEdit ? () => this.chat.removeProjectFile(id, scope, file.id) : undefined,
 					})),
 				};
 			}),
-			addFiles: online ? resources => this.addProjectFiles(id, scope, resources) : undefined,
+			upload: online ? {
+				limits: chatGPTAttachmentLimits,
+				limitMessage: chatGPTAttachmentLimitMessage(),
+				addFiles: files => this.chat.addProjectFiles(id, scope, files),
+			} : undefined,
 		};
-	}
-
-	private async addProjectFiles(id: string, scope: string, resources: readonly URI[]): Promise<void> {
-		const limits = chatGPTAttachmentLimits;
-		if (resources.length > limits.count) throw new Error(chatGPTAttachmentLimitMessage());
-		const files: File[] = [];
-		let total = 0;
-		for (const resource of resources) {
-			if (resource.scheme !== 'file' || resource.authority || this.chat.state.get().catalogScope !== scope) throw new CancellationError();
-			const name = basename(resource);
-			const content = await this.files.readFileStream(resource, { limits: { size: Math.min(limits.fileBytes, limits.totalBytes - total) } });
-			const bytes = await streamToBuffer(content.value);
-			total += bytes.byteLength;
-			files.push(new File([new Uint8Array(bytes.buffer)], name, { type: getMediaOrTextMime(name), lastModified: content.modifiedAtMillis }));
-		}
-		await this.chat.addProjectFiles(id, scope, files);
-	}
-
-	private async downloadProjectFile(id: string, scope: string, fileId: string, target: URI): Promise<void> {
-		const blob = await this.chat.readProjectFile(id, scope, fileId);
-		const bytes = new Uint8Array(await blob.arrayBuffer());
-		if (this.chat.state.get().catalogScope !== scope) return;
-		await this.files.writeFileBytes(target, bytes, { create: true, overwrite: true });
 	}
 
 	private projectHistory(projectId: string, state: ChatGPTState): ChatListProject['history'] {

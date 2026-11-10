@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
@@ -19,8 +19,8 @@ declare global {
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
-async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix = '', historyImage = false): Promise<void> {
-	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage }) => {
+async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix = '', historyImage = false, projectFiles = false): Promise<void> {
+	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage, projectFiles }) => {
 		const fs = process.getBuiltinModule('fs/promises');
 		const path = process.getBuiltinModule('path');
 		const home = path.join(process.env.HOME!, '.codex');
@@ -127,7 +127,18 @@ async function installService(application: ElectronApplication, holdInitializati
 					return Response.json(catalog);
 				}
 				if (url.pathname.endsWith('/pins')) { return Response.json([{ item: { id: 'history-pin', title: 'Pinned native history' } }]); }
-				if (url.pathname.endsWith('/gizmos/snorlax/sidebar')) { return Response.json({ items: [], cursor: null }); }
+				if (url.pathname.endsWith('/gizmos/snorlax/sidebar')) {
+					return Response.json({ items: projectFiles ? [{ gizmo: { id: 'g-p-files-fixture', display: { name: 'File project fixture' } } }] : [], cursor: null });
+				}
+				if (projectFiles && url.pathname === '/backend-api/gizmos/g-p-files-fixture') {
+					return Response.json({
+						gizmo: { id: 'g-p-files-fixture', display: { name: 'File project fixture' } },
+						files: [{ file_id: 'file-fixture-notes', name: 'project-fixture.txt' }, { file_id: 'file-fixture-other', name: 'other-fixture.txt' }],
+					});
+				}
+				if (projectFiles && url.pathname.startsWith('/backend-api/files/download/file-fixture-')) {
+					return new Response(url.pathname.endsWith('-notes') ? 'Saved project material fixture' : 'Second project file');
+				}
 				if (url.pathname.endsWith('/conversations')) {
 					if (recentHistoryRateLimited) return new Response(null, { status: 429 });
 					const items = [{ id: 'history-one', title: 'First native history' }, { id: 'history-two', title: 'Second native history' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `history-extra-${index}`, title: `Additional history ${index}` }))];
@@ -214,7 +225,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		};
 		install(session.defaultSession); for (const contents of webContents.getAllWebContents()) { install(contents.session); }
 		app.on('session-created', install);
-	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization, historyReplySuffix, historyImage });
+	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization, historyReplySuffix, historyImage, projectFiles });
 }
 
 const ashFixtureModel = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
@@ -1092,6 +1103,77 @@ test.describe('Unified Chat sidebar', () => {
 			await window.evaluate(window => window.close());
 			await closed;
 		});
+	});
+});
+
+test.describe('Ash project file copies', () => {
+	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('saves project files locally and changes their Ash folder while ChatGPT is unavailable', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, '', false, true);
+		const page = await workbench.openAgentsWindow('electron');
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const originalRoot = join(profile, 'Project Files');
+		const chosenFolder = testInfo.outputPath('chosen-project-files');
+		await mkdir(chosenFolder, { recursive: true });
+		const destination = await realpath(chosenFolder);
+		const saved = async (root: string, name: string): Promise<string | undefined> => {
+			const paths = await readdir(root, { recursive: true }).catch(() => []);
+			const path = paths.find(path => basename(path) === name);
+			return path ? readFile(join(root, path), 'utf8') : undefined;
+		};
+
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+		const project = page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true });
+		await expect(project).toBeVisible();
+		expect(await saved(originalRoot, 'project-fixture.txt')).toBeUndefined();
+		await project.click();
+		const materials = page.getByRole('region', { name: '上下文', exact: true });
+		const file = materials.getByRole('button', { name: 'project-fixture.txt', exact: true });
+		await expect(file).toBeVisible();
+		await expect.poll(() => saved(originalRoot, 'project-fixture.txt')).toBe('Saved project material fixture');
+		await expect.poll(() => saved(originalRoot, 'other-fixture.txt')).toBe('Second project file');
+
+		await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
+		await application.evaluate(() => ashNativeFixture.setOffline(true));
+		await new QuickAccess(page).runCommand('workbench.action.openSettings');
+		const settings = page.locator('.ash-sessions-settings-dialog');
+		const folderSetting = settings.locator('[data-settings-item-id="sessions.projects.localFilesLocation"]');
+		await expect(folderSetting).toContainText(originalRoot);
+		const change = folderSetting.getByRole('button', { name: '更改', exact: true });
+		await settings.screenshot({ path: testInfo.outputPath('project-files-settings-zh-CN.png') });
+		await expect(change).toHaveClass(/\bash-button-secondary\b/u);
+		const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+		try {
+			await application.evaluate(({ dialog }, folder) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] }); }, destination);
+			await change.press('Enter');
+			await expect(folderSetting).toContainText(destination);
+		} finally {
+			await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, originalDialog);
+		}
+		await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['sessions.projects.localFilesLocation']).toBe(destination);
+		await page.keyboard.press('Escape');
+		await expect(settings).toBeHidden();
+		await application.evaluate(() => ashNativeFixture.setOffline(false));
+		await project.click();
+		await expect.poll(() => saved(destination, 'project-fixture.txt')).toBe('Saved project material fixture');
+		await expect.poll(() => saved(destination, 'other-fixture.txt')).toBe('Second project file');
+
+		await application.evaluate(() => ashNativeFixture.setOffline(true));
+		await file.press('Enter');
+		const editor = page.getByRole('tabpanel', { name: 'project-fixture.txt', exact: true });
+		await new Editor(editor).waitForEditorContents(text => text === 'Saved project material fixture');
+
+		const restored = await workbench.reopenAgentsWindow(application, page);
+		await restored.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true }).click();
+		const showSidebar = restored.getByRole('button', { name: '显示侧边栏', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await restored.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click({ timeout: 5000 });
+		await restored.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		await restored.getByRole('region', { name: '上下文', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
+		const restoredEditor = restored.getByRole('tabpanel', { name: 'project-fixture.txt', exact: true });
+		await new Editor(restoredEditor).waitForEditorContents(text => text === 'Saved project material fixture');
 	});
 });
 
