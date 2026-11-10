@@ -231,7 +231,8 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 					share: () => sharing.share(id, selectedThreadId ?? thread.threadId, title),
 					getActions: signal => {
 						const saved = management.sessions.find(session => session.sessionId === id);
-						const savedThread = saved?.chats.find(chat => chat.threadId === thread.threadId);
+						const codeThreadId = selectedThreadId ?? thread.threadId;
+						const codeThread = saved?.chats.find(chat => chat.threadId === codeThreadId);
 						const workspaceActions = createSessionWorkspaceActions(id, thread.threadId, management, commands);
 						// The catalog projects both forks and rewrites as branches.
 						const branches = saved?.chats.filter(chat => chat.status === 'active' && (chat.origin.type === 'fork' || chat.origin.type === 'rewind')) ?? [];
@@ -244,12 +245,12 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 									run: () => open(signal, version.threadId),
 								}))));
 						}
-						if (saved?.status === 'active' && savedThread && canOpenThreadInCode(saved, savedThread)) {
+						if (saved?.status === 'active' && codeThread && canOpenThreadInCode(saved, codeThread)) {
 							workspaceActions.push({
 								id: 'sessions.workspace.continueInCode',
 								label: localize({ bundle: 'ash.sessions', key: 'sessions.workspace.continueInCode' }, 'Continue in Code'),
 								tooltip: '', enabled: true,
-								run: () => view.openSession(id, thread.threadId, { reveal: 'code' }),
+								run: () => view.openSession(id, codeThreadId, { reveal: 'code' }),
 							});
 						}
 						return workspaceActions;

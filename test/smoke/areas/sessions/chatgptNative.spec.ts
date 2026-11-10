@@ -491,7 +491,7 @@ test.describe('Unified Chat sidebar', () => {
 		} finally { await close(); }
 	});
 
-	test('continues a workspace-bound native Chat in Code on the original Thread', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+	test('continues the selected version of a workspace-bound native Chat in Code', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
 		const modelRequests: string[] = [];
@@ -590,14 +590,28 @@ test.describe('Unified Chat sidebar', () => {
 				expect(directory!.root).not.toBe(originalDirectory);
 				expect(await readFile(join(directory!.root, 'baseline.txt'), 'utf8')).toBe(expectedFile);
 				expect(await readFile(originalFile, 'utf8')).toBe('after submission');
+				return editedThreadId;
 			};
-			await editInCode('Follow up from Code', 'Edited Code follow-up', 2, 'at submission');
+			const editedThreadId = await editInCode('Follow up from Code', 'Edited Code follow-up', 2, 'at submission');
 			const mode = page.locator('.ash-window-mode-control');
 			await mode.getByRole('button', { name: '聊天 / Agents', exact: true }).click();
 			await row.press('Enter');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
 			await expect(chat).toContainText('Follow up from Code');
 			await expect(workspace).toHaveText(basename(folder));
+			await row.press('Shift+F10');
+			await page.getByRole('menuitem', { name: '对话版本', exact: true }).press('ArrowRight');
+			await page.getByText('版本 1', { exact: true }).click();
+			await expect(chat).toHaveAttribute('data-thread-id', editedThreadId);
+			await expect(chat).toContainText('Edited Code follow-up');
+			await row.press('Shift+F10');
+			await continueInCode.press('Enter');
+			await expect(code).toHaveAttribute('data-session-id', sessionId);
+			await expect(code).toHaveAttribute('data-thread-id', editedThreadId);
+			await expect(code).toContainText('Edited Code follow-up');
+			await mode.getByRole('button', { name: '聊天 / Agents', exact: true }).click();
+			await row.press('Enter');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
 			await row.press('Shift+F10');
 			await continueInCode.press('Enter');
 			await expect(code).toHaveAttribute('data-thread-id', threadId);
