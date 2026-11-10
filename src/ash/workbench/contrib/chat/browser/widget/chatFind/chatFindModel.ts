@@ -1,5 +1,6 @@
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
+import type { ChatMarkdownRichContent } from '../../../common/model/chatMarkdownRichContent.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { getChatFindTextParts, type IChatFindTextPart } from './chatFindContent.js';
 
@@ -25,7 +26,12 @@ export interface IChatFindMatch {
 export class ChatFindModel extends Disposable {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
-	private readonly parts = new Map<string, { readonly text: string; readonly type: IChatListItem['type']; readonly parts: readonly IChatFindTextPart[]; }>();
+	private readonly parts = new Map<string, {
+		readonly text: string;
+		readonly type: IChatListItem['type'];
+		readonly richContent: ChatMarkdownRichContent | undefined;
+		readonly parts: readonly IChatFindTextPart[];
+	}>();
 	private search = '';
 	private settings: IChatFindOptions = { isRegex: false, matchCase: false, wholeWord: false };
 	private pattern: RegExp | undefined;
@@ -87,9 +93,11 @@ export class ChatFindModel extends Disposable {
 		if (this.pattern) {
 			outer: for (const item of this.getItems()) {
 				live.add(item.id);
+				// Markdown markers can stay the same when their referenced rich content changes.
+				const richContent = item.type === 'agentMessage' ? item.markdown?.richContent : undefined;
 				let cached = this.parts.get(item.id);
-				if (!cached || cached.text !== item.text || cached.type !== item.type) {
-					cached = { text: item.text, type: item.type, parts: getChatFindTextParts(item) };
+				if (!cached || cached.text !== item.text || cached.type !== item.type || cached.richContent !== richContent) {
+					cached = { text: item.text, type: item.type, richContent, parts: getChatFindTextParts(item) };
 					this.parts.set(item.id, cached);
 				}
 				for (const [partIndex, part] of cached.parts.entries()) {
