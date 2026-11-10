@@ -252,9 +252,9 @@ export class ChatListItemRenderer extends Disposable {
 		}
 	}
 
-	public override dispose(): void {
 	get hasActivePlayback(): boolean { return this.responseActionContext?.isReading === true || this.media.value?.isPlaying === true; }
 
+	public override dispose(): void {
 		if (this.isDisposed) return;
 		this.layoutTrace.trace('disposeElement', () => `type=${this.item.type}`);
 		this.element.remove();
