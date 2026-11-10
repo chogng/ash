@@ -10,8 +10,10 @@ use crate::records::HookRunRecord;
 use ash_async_utils::CancellationToken;
 use ash_config::HookEnablement;
 use ash_config::HooksConfig;
-use ash_file_access::Authorization;
 use ash_file_access::Dir;
+use ash_file_access::Grant;
+use ash_file_access::GrantSubject;
+use ash_file_access::Permission;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use core_api::ActionPolicyService;
@@ -27,14 +29,19 @@ use core_api::HookService;
 use core_api::NoHookExecutionObserver;
 use core_api::TurnCompletedHookRequest;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::sync::RwLock;
 
 struct SessionHookBinding {
     config: HooksConfig,
-    discovery: Authorization,
-    execution: Authorization,
-    process: Arc<dyn HookProcessExecutor>,
+    process: LocalHookProcessExecutor,
+}
+
+#[derive(Default)]
+struct SessionHookBindings {
+    pending_refresh: Option<Arc<()>>,
+    bindings: Vec<Arc<SessionHookBinding>>,
 }
 
 struct ThreadDirHookBinding {
@@ -52,7 +59,7 @@ pub struct DeclarativeHookRuntime {
     policy: Arc<dyn ActionPolicyService>,
     process: RwLock<Option<Arc<dyn HookProcessExecutor>>>,
     thread_dir_bindings: RwLock<BTreeMap<ThreadId, ThreadDirHookBinding>>,
-    session_bindings: RwLock<BTreeMap<SessionId, Vec<SessionHookBinding>>>,
+    session_bindings: RwLock<BTreeMap<SessionId, SessionHookBindings>>,
     execution_observer: RwLock<Arc<dyn HookExecutionObserver>>,
     run_observer: RwLock<Option<Arc<dyn core_api::HookRunObserver>>>,
     runs: HookRunLog,
@@ -73,7 +80,7 @@ impl DeclarativeHookRuntime {
                 "Workflow Hook timeout must be positive".into(),
             ));
         }
-        let authority = execution_authority(hook, &dir, self.policy.as_ref(), cancellation)?;
+        let authority = execution_authority(hook, &dir, None, self.policy.as_ref(), cancellation)?;
         LocalHookProcessExecutor::execute_process(dir, hook, authority, timeout, cancellation)
     }
 
@@ -174,42 +181,79 @@ impl DeclarativeHookRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(observer);
     }
 
-    /// Replaces session-dir Hook bindings for one Session.
-    pub fn replace_session_dirs(
+    /// Loads and replaces one Session's Hook bindings. A failed refresh retains live bindings.
+    pub fn refresh_session_dirs(
         &self,
-        session_id: SessionId,
-        workspaces: Vec<(HooksConfig, Authorization, Authorization)>,
+        session_id: &SessionId,
+        load: impl FnOnce() -> Result<Vec<(HooksConfig, Grant)>, String>,
     ) -> Result<(), HookDirBindingError> {
-        let mut bindings = Vec::new();
-        for (config, discovery, execution) in workspaces {
-            discovery
-                .ensure_active()
-                .map_err(|error| HookDirBindingError {
-                    message: error.to_string(),
-                })?;
-            execution
-                .ensure_active()
-                .map_err(|error| HookDirBindingError {
-                    message: error.to_string(),
-                })?;
-            let process = Arc::new(LocalHookProcessExecutor::new(execution.dir().clone()));
-            bindings.push(SessionHookBinding {
-                config,
-                discovery,
-                execution,
-                process,
-            });
+        // Only the latest refresh may publish. Removing the entry also invalidates a refresh
+        // already reading the filesystem, without holding the cache lock across that read.
+        let ticket = Arc::new(());
+        {
+            let mut sessions = self
+                .session_bindings
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let session = sessions.entry(session_id.clone()).or_default();
+            session
+                .bindings
+                .retain(|binding| binding.process.is_authorized());
+            session.pending_refresh = Some(Arc::clone(&ticket));
         }
+        let bindings = load()
+            .map_err(|message| HookDirBindingError { message })
+            .and_then(|workspaces| Self::prepare_session_dirs(session_id, workspaces));
         let mut sessions = self
             .session_bindings
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if bindings.is_empty() {
-            sessions.remove(&session_id);
-        } else {
-            sessions.insert(session_id, bindings);
+        let Entry::Occupied(mut entry) = sessions.entry(session_id.clone()) else {
+            return Ok(());
+        };
+        let session = entry.get_mut();
+        if session
+            .pending_refresh
+            .take_if(|pending| Arc::ptr_eq(pending, &ticket))
+            .is_none()
+        {
+            return Ok(());
         }
-        Ok(())
+        let result = bindings.map(|bindings| session.bindings = bindings);
+        session
+            .bindings
+            .retain(|binding| binding.process.is_authorized());
+        if session.bindings.is_empty() {
+            entry.remove();
+        }
+        result
+    }
+
+    fn prepare_session_dirs(
+        session_id: &SessionId,
+        workspaces: Vec<(HooksConfig, Grant)>,
+    ) -> Result<Vec<Arc<SessionHookBinding>>, HookDirBindingError> {
+        let mut bindings = Vec::with_capacity(workspaces.len());
+        let subject = GrantSubject::SessionTree(session_id.clone());
+        for (config, grant) in workspaces {
+            if grant.subject() != &subject {
+                return Err(HookDirBindingError {
+                    message: "Hook directory grant belongs to another subject".into(),
+                });
+            }
+            grant
+                .authorize(Permission::DiscoverHooks)
+                .map_err(|error| HookDirBindingError {
+                    message: error.to_string(),
+                })?;
+            let process = LocalHookProcessExecutor::for_session_grant(&grant).map_err(|error| {
+                HookDirBindingError {
+                    message: error.to_string(),
+                }
+            })?;
+            bindings.push(Arc::new(SessionHookBinding { config, process }));
+        }
+        Ok(bindings)
     }
 
     pub fn remove_session(&self, session_id: &SessionId) {
@@ -217,6 +261,14 @@ impl DeclarativeHookRuntime {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(session_id);
+    }
+
+    /// Releases every Session binding after the host clears its directory grants.
+    pub fn clear_session_dirs(&self) {
+        self.session_bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
     }
 
     /// Returns the bounded, non-durable projection of recent Hook invocations.
@@ -290,23 +342,22 @@ impl DeclarativeHookRuntime {
                 return Ok(decision);
             }
         }
-        let sessions = self
-            .session_bindings
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(bindings) = invocation.session_id().and_then(|id| sessions.get(id)) {
+        if let Some(session_id) = invocation.session_id() {
+            // The process checks its lease at launch. Keep the cache unlocked while running Hooks
+            // and calling observers so reconciliation and watcher shutdown can make progress.
+            let bindings = self
+                .session_bindings
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(session_id)
+                .map(|session| session.bindings.clone())
+                .unwrap_or_default();
             for binding in bindings {
-                if binding.discovery.ensure_active().is_err()
-                    || binding.execution.ensure_active().is_err()
-                {
+                if !binding.process.is_authorized() {
                     continue;
                 }
-                let decision = self.run_config(
-                    &binding.config,
-                    binding.process.as_ref(),
-                    invocation,
-                    cancellation,
-                )?;
+                let decision =
+                    self.run_config(&binding.config, &binding.process, invocation, cancellation)?;
                 if matches!(decision, HookDecision::Deny { .. }) {
                     return Ok(decision);
                 }
@@ -352,8 +403,13 @@ impl DeclarativeHookRuntime {
                 if let Some(observer) = &run_observer {
                     observer.updated(&scope, &started.record, None)?;
                 }
-                let authority =
-                    execution_authority(hook, process.dir(), self.policy.as_ref(), cancellation)?;
+                let authority = execution_authority(
+                    hook,
+                    process.dir(),
+                    process.sandbox_scope(),
+                    self.policy.as_ref(),
+                    cancellation,
+                )?;
                 let input = encode_input(hook, invocation, process.dir().canonical_path())?;
                 evidence.input = String::from_utf8_lossy(&input).into_owned();
                 let observer = self
@@ -448,13 +504,14 @@ impl HookService for DeclarativeHookRuntime {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .values()
-            .flatten()
+            .flat_map(|session| &session.bindings)
             .any(|binding| {
                 binding
                     .config
                     .hooks
                     .values()
                     .any(|hook| hook.enablement == HookEnablement::Enabled && hook.event == event)
+                    && binding.process.is_authorized()
             })
     }
 

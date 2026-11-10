@@ -126,9 +126,11 @@ fn snapshots_include_only_dirs_granting_the_requested_permission() {
     let dir_temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(dir_temp.path()).unwrap();
     let mut access = Access::new(GrantSubject::Environment(EnvId::local()));
+    let policy =
+        crate::PathAccessPolicy::for_exact_file(std::path::Path::new("allowed.txt")).unwrap();
     access
         .add(
-            grant(dir.clone(), file_permissions()),
+            grant(dir.clone(), file_permissions()).with_path_policy(policy.clone()),
             DirSource::SessionRequest,
         )
         .unwrap();
@@ -159,6 +161,13 @@ fn snapshots_include_only_dirs_granting_the_requested_permission() {
     );
     assert_eq!(access.revision().get(), 2);
     assert!(write_authorization.ensure_active().is_err());
+    assert_eq!(
+        access
+            .authorize(&dir, Permission::ReadFiles)
+            .unwrap()
+            .path_policy(),
+        &policy
+    );
     assert!(
         access
             .snapshot(Permission::WriteFiles)

@@ -1167,6 +1167,49 @@ program = "test-hook"
     .unwrap();
     contributions.refresh_session_hooks(&session);
     assert!(hooks.has_enabled_event(ash_protocol::HookEvent::BeforeTool));
+    let hook_bindings = super::super::environment_runtime::session_hook_bindings;
+    let [(_, original)] = hook_bindings(&contributions.dir_grants, &session)
+        .unwrap()
+        .try_into()
+        .unwrap();
+    assert!(
+        !original
+            .permissions()
+            .allows(ash_file_access::Permission::WriteFiles)
+    );
+    contributions
+        .dir_grants
+        .set_permissions(
+            &session,
+            root.canonical_path(),
+            1,
+            ash_file_access::Permissions::new([
+                ash_file_access::Permission::DiscoverHooks,
+                ash_file_access::Permission::ExecuteCommands,
+                ash_file_access::Permission::WatchFiles,
+                ash_file_access::Permission::ReadFiles,
+                ash_file_access::Permission::WriteFiles,
+            ]),
+        )
+        .unwrap();
+    assert!(!original.is_active());
+    assert!(!hooks.has_enabled_event(ash_protocol::HookEvent::BeforeTool));
+    let [(_, updated)] = hook_bindings(&contributions.dir_grants, &session)
+        .unwrap()
+        .try_into()
+        .unwrap();
+    assert!(
+        updated
+            .permissions()
+            .allows(ash_file_access::Permission::ReadFiles)
+    );
+    assert!(
+        updated
+            .permissions()
+            .allows(ash_file_access::Permission::WriteFiles)
+    );
+    contributions.refresh_session_hooks(&session);
+    assert!(hooks.has_enabled_event(ash_protocol::HookEvent::BeforeTool));
     fs::write(&config, "[broken").unwrap();
     assert!(
         super::super::environment_runtime::session_hook_bindings(

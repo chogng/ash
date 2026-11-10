@@ -1394,6 +1394,8 @@ fn directory_grants_are_revision_bound_and_filter_capability_snapshots() {
             .is_empty()
     );
 
+    std::fs::create_dir(session_dir.path.join(".ash")).unwrap();
+    std::fs::write(session_dir.path.join(".ash/config.toml"), "[broken").unwrap();
     let activated: serde_json::Value = serde_json::from_str(
         &server.handle_json(
             &mut connection,
@@ -1405,7 +1407,7 @@ fn directory_grants_are_revision_bound_and_filter_capability_snapshots() {
                     "sessionId": session.session_id,
                     "path": session_dir.path,
                     "expectedRevision": 2,
-                    "permissions": ["readFiles", "executeCommands", "watchFiles", "loadInstructions"]
+                    "permissions": ["readFiles", "executeCommands", "watchFiles", "loadInstructions", "discoverHooks"]
                 }
             })
             .to_string(),

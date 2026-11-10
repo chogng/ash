@@ -1978,6 +1978,7 @@ impl AppServer {
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             current.dir_grants.clear();
+            host.hooks.clear_session_dirs();
             let executor = current
                 .turn_executor
                 .clone()
@@ -2365,7 +2366,7 @@ impl AppServer {
             Arc::clone(&runtime.dir_grants)
         };
         let mutation = dir_grants.remove_dir(session_id, root);
-        self.reconcile_session_dir_consumers(session_id)?;
+        let reconciled = self.reconcile_session_dir_consumers(session_id);
         if let Some(contributions) = self
             .env_runtime
             .read()
@@ -2376,6 +2377,7 @@ impl AppServer {
             contributions.forget_ungranted_session_directory(session_id);
         }
         self.terminate_revoked_terminal_sessions();
+        reconciled?;
         let snapshots = session_dir_snapshots(&dir_grants, session_id);
         Ok((mutation, snapshots))
     }
@@ -2410,8 +2412,9 @@ impl AppServer {
                 }
                 other => EnvRuntimeError::Failed(other.to_string()),
             })?;
-        self.reconcile_session_dir_consumers(session_id)?;
+        let reconciled = self.reconcile_session_dir_consumers(session_id);
         self.terminate_revoked_terminal_sessions();
+        reconciled?;
         let snapshots = session_dir_snapshots(&dir_grants, session_id);
         Ok((mutation, snapshots))
     }
@@ -2430,6 +2433,9 @@ impl AppServer {
                 runtime._dir_contributions.clone(),
             )
         };
+        if let Some(host) = &self.local_env_host {
+            refresh_session_hooks(&host.hooks, &access, session_id);
+        }
         let instruction_dirs = access
             .snapshot_for(session_id, Permission::LoadInstructions)
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
@@ -2440,12 +2446,6 @@ impl AppServer {
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
             .map(|snapshot| snapshot.authorizations().to_vec())
             .unwrap_or_default();
-        if let Some(host) = &self.local_env_host {
-            let hook_dirs = session_hook_bindings(&access, session_id)?;
-            host.hooks
-                .replace_session_dirs(session_id.clone(), hook_dirs)
-                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-        }
         let language_roots = language_roots_for(
             &self
                 .env_runtime
@@ -2722,6 +2722,7 @@ impl AppServer {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         current.dir_grants.clear();
+        host.hooks.clear_session_dirs();
         let next = EnvRuntime {
             selected_grant: Some(authorization),
             selected_file_system: Some(file_system),
@@ -3002,6 +3003,7 @@ impl AppServer {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         current.dir_grants.clear();
+        host.hooks.clear_session_dirs();
         let next = EnvRuntime {
             selected_grant: Some(authorization),
             selected_file_system: Some(file_system),
@@ -3947,32 +3949,45 @@ impl AppServer {
     }
 }
 
+pub(super) fn refresh_session_hooks(
+    hooks: &DeclarativeHookRuntime,
+    access: &DirGrants,
+    session_id: &SessionId,
+) {
+    // Hook declarations are a projection of committed directory grants. A broken config
+    // cannot prevent the other grant consumers from reconciling or invalidate the mutation.
+    if let Err(error) = hooks.refresh_session_dirs(session_id, || {
+        session_hook_bindings(access, session_id).map_err(|error| error.to_string())
+    }) {
+        log::warn!("failed to refresh directory Hooks: {error}");
+    }
+}
+
 /// Loads the complete authorized Hook set before either registration or filesystem refresh
 /// commits it. A rejected document must not be interpreted as an empty declaration set.
 pub(super) fn session_hook_bindings(
     access: &DirGrants,
     session_id: &SessionId,
-) -> Result<Vec<(ash_config::HooksConfig, Authorization, Authorization)>, EnvRuntimeError> {
-    let discoveries = access
-        .snapshot_for(session_id, Permission::DiscoverHooks)
-        .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+) -> Result<Vec<(ash_config::HooksConfig, Grant)>, EnvRuntimeError> {
     let mut bindings = Vec::new();
-    for discovery in discoveries
-        .into_iter()
-        .flat_map(|snapshot| snapshot.authorizations().to_vec())
-    {
-        let Some(execution) = access
-            .authorize(
-                session_id,
-                discovery.dir().canonical_path(),
-                Permission::ExecuteCommands,
-            )
-            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?
-        else {
+    for grant in access.session_grants(session_id) {
+        if !grant.permissions().allows(Permission::DiscoverHooks)
+            || !grant.permissions().allows(Permission::ExecuteCommands)
+        {
             continue;
-        };
-        let document = read_dir_config(discovery.dir())?;
-        bindings.push((document.hooks, discovery, execution));
+        }
+        let discovery = grant
+            .authorize(Permission::DiscoverHooks)
+            .map_err(|_| EnvRuntimeError::PermissionRequired)?;
+        let document = discovery
+            .execute(
+                grant.subject(),
+                grant.dir(),
+                Permission::DiscoverHooks,
+                || read_dir_config(grant.dir()),
+            )
+            .map_err(|_| EnvRuntimeError::PermissionRequired)??;
+        bindings.push((document.hooks, grant));
     }
     Ok(bindings)
 }

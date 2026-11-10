@@ -420,30 +420,23 @@ impl DirContributions {
             .dirs
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(catalog) = dirs
+        if let Some(catalog) = dirs
             .get_mut(session_id)
             .and_then(|catalogs| catalogs.get_mut(root))
-        else {
-            drop(dirs);
-            if refresh_hooks {
-                self.refresh_session_hooks(session_id);
-            }
-            return;
-        };
-        if catalog.authorization.ensure_active().is_err() {
-            return;
-        }
-        match changed {
-            FsChanged::RescanRequired { .. } => {
-                catalog.instructions.refresh();
-                catalog.agents.refresh();
-            }
-            FsChanged::PathsChanged { paths, .. } => {
-                if paths.iter().any(|path| affects_instructions(path)) {
+            .filter(|catalog| catalog.authorization.is_active())
+        {
+            match changed {
+                FsChanged::RescanRequired { .. } => {
                     catalog.instructions.refresh();
-                }
-                if paths.iter().any(|path| affects(path, ".ash/agents")) {
                     catalog.agents.refresh();
+                }
+                FsChanged::PathsChanged { paths, .. } => {
+                    if paths.iter().any(|path| affects_instructions(path)) {
+                        catalog.instructions.refresh();
+                    }
+                    if paths.iter().any(|path| affects(path, ".ash/agents")) {
+                        catalog.agents.refresh();
+                    }
                 }
             }
         }
@@ -512,17 +505,7 @@ impl DirContributions {
         else {
             return;
         };
-        let authorizations =
-            match super::environment_runtime::session_hook_bindings(&self.dir_grants, session_id) {
-                Ok(bindings) => bindings,
-                Err(error) => {
-                    log::warn!("failed to refresh directory Hooks: {error}");
-                    return;
-                }
-            };
-        if let Err(error) = hooks.replace_session_dirs(session_id.clone(), authorizations) {
-            log::warn!("failed to refresh directory Hooks: {error}");
-        }
+        super::environment_runtime::refresh_session_hooks(&hooks, &self.dir_grants, session_id);
     }
 
     fn refresh_instructions(&self) {
