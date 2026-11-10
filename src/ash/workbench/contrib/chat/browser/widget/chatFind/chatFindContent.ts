@@ -1,6 +1,7 @@
 import { renderAsPlaintext } from '../../../../../../base/browser/markdownRenderer.js';
 import { Marked, type Token, type Tokens } from '../../../../../../base/common/marked/marked.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
+import { renderChatRichContentText } from '../chatMarkdownRichContent.js';
 
 export interface IChatFindTextPart {
 	readonly text: string;
@@ -16,6 +17,8 @@ export function getChatFindTextParts(item: IChatListItem): readonly IChatFindTex
 		return [];
 	}
 	const parts: IChatFindTextPart[] = [];
+	const richContent = item.markdown?.richContent;
+	const asText = (value: string) => richContent ? renderChatRichContentText(value, richContent) : renderAsPlaintext(value);
 	let codeBlockIndex = 0;
 	const visit = (tokens: readonly Token[]): void => {
 		for (const token of tokens) {
@@ -31,11 +34,11 @@ export function getChatFindTextParts(item: IChatListItem): readonly IChatFindTex
 				const table = token as Tokens.Table;
 				for (const row of [table.header, ...table.rows]) {
 					for (const cell of row) {
-						parts.push({ text: renderAsPlaintext(cell.text) });
+						parts.push({ text: asText(cell.text) });
 					}
 				}
 			} else if (token.type !== 'space' && token.type !== 'hr' && token.type !== 'def') {
-				const text = renderAsPlaintext(token.raw);
+				const text = asText(token.raw);
 				if (text) {
 					parts.push({ text });
 				}

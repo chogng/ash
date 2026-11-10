@@ -418,6 +418,32 @@ suite('Session GitHub associations', () => {
 		assert.deepEqual(merged, ['b'.repeat(40)]);
 	});
 
+	test('a required check that has not reported blocks immediate merge but leaves auto-merge available', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
+		let waiting = true;
+		using context = fixture({
+			listSessionPullRequests: async () => [reference],
+			readPullRequest: async () => ({ ...pullRequest, mergeable: true }),
+			readRepository: async () => ({ defaultBranch: 'main', fullName: 'team/repo', allowMergeCommit: true, allowSquashMerge: false, allowRebaseMerge: false, allowAutoMerge: true }),
+			readPullRequestChecks: async () => waiting ? { status: 'pending', unreportedRequiredChecks: ['gate'] } : { status: 'success' },
+			mergePullRequest: async () => { assert.fail('A blocked merge must not be dispatched'); },
+		});
+		const [request] = await context.load();
+		await context.service.invokePullRequestArtifact('session', request, async binding => {
+			assert.match(binding.unavailableReason!, /required checks to report: gate/);
+			assert.deepEqual(binding.actions.map(action => action.id), ['autoMerge:merge']);
+			return undefined;
+		});
+		waiting = false;
+		await assert.rejects(context.service.invokePullRequestArtifact('session', request, async binding => {
+			assert.equal(binding.unavailableReason, undefined);
+			const merge = binding.actions.find(action => action.id === 'merge:merge');
+			assert.ok(merge);
+			waiting = true;
+			return merge;
+		}), /required checks to report: gate/);
+	});
+
 	test('recorded PRs survive branch changes and duplicate discovery is merged', async () => {
 		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 };
 		let associated = true;

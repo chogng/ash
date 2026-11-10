@@ -25,6 +25,8 @@ const codeFeatures = registerTestCodeEditorFeatures();
 import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
+import { IWebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
@@ -326,6 +328,10 @@ services.registerInstance(IHostService, {
 		getWindows: async () => [],
 	hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, reload: async () => { }, openWindow: async () => { },
 	showToast: async () => ({ supported: false, clicked: false }),
+	...(new URLSearchParams(location.search).has('imageApp') ? {
+		openImage: async () => { throw new Error('Unexpected external image open'); },
+		listImageOpeningApplications: async () => [{ id: 'photos', name: 'Photos', isDefault: true, icon: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }],
+	} : {}),
 	async getScreenshot() {
 		screenshotCalls++;
 		screenshotVisibleOverlays.push([...document.querySelectorAll('dialog[open], [role="dialog"]')].filter(element => element.checkVisibility()).length);
@@ -425,6 +431,7 @@ const gitHubContextService: Pick<IGitHubService, 'listAccounts' | 'listIssues' |
 services.registerInstance(IGitHubService, gitHubContextService as unknown as IGitHubService);
 services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
+services.registerInstance(IWebWorkerService, new WebWorkerService());
 services.registerInstance(ILabelService, { getUriLabel: resource => resource.scheme === 'file' ? resource.fsPath : resource.toString() } as ILabelService);
 services.registerSingleton(IContextMenuService, () => new BrowserContextMenuService(
 	services.get(IMenuService), contextKeys,
@@ -1195,8 +1202,10 @@ window.ashChatInputIntegration = {
 	},
 	contextAccessibility: () => {
 		const content = (type: AccessibleViewType): string | undefined => {
-			for (const entry of AccessibleViewRegistry.getImplementations()) {
-				if (entry.type !== type || !entry.name.startsWith(inlineCode ? 'chatAttachments-' : 'chatContextUsage-')) continue;
+			const implementations = AccessibleViewRegistry.getImplementations()
+				.filter(entry => entry.type === type && (entry.name.startsWith('imagePreviewPopup-') || entry.name.startsWith(inlineCode ? 'chatAttachments-' : 'chatContextUsage-')))
+				.sort((left, right) => right.priority - left.priority);
+			for (const entry of implementations) {
 				const provider = entry.getProvider(services);
 				if (!provider) continue;
 				try { return provider.provideContent(); }

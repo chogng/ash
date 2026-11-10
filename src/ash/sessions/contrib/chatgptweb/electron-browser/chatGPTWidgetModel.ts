@@ -2,31 +2,36 @@ import { Emitter } from '../../../../base/common/event.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { canceled } from '../../../../base/common/errors.js';
-import { isPortableLinkTarget } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
+import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import type { ChatMarkdownEntity } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
 import { decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
-import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
+import { mergeChatGPTResources } from '../browser/chatGPTClient.js';
+import type { ChatGPTMessage } from '../browser/chatGPTClient.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
+import { IChatGPTEntityDetails, type ChatGPTEntityDetails } from './chatGPTEntityDetails.js';
 
-export const ChatGPTResponseAvailableContext = 'sessions.chatgpt.responseAvailable';
+export const ChatGPTResponseCanOpenOriginalContext = 'sessions.chatgpt.responseCanOpenOriginal';
 export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
-const availableResponseContext = [ChatGPTResponseAvailableContext];
-const onlineResponseContext = [ChatGPTResponseAvailableContext, ChatGPTResponseOnlineContext];
+const openOriginalResponseContext = [ChatGPTResponseCanOpenOriginalContext];
+const onlineResponseContext = [ChatGPTResponseOnlineContext];
+const onlineWebResponseContext = [ChatGPTResponseOnlineContext, ChatGPTResponseCanOpenOriginalContext];
+const emptyDraftFiles = [] as const;
 
 export function canUseAshModels(state: ChatGPTState): boolean {
 	// Existing conversations and drafts with provider-owned attachments keep their reply route.
@@ -64,17 +69,20 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	private ashCatalogRequest = 0;
 	private currentItems: readonly IChatListItem[] = [];
 	private transcriptState: ChatGPTState | undefined;
-	private readonly decoded = new WeakMap<ChatReplyMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
+	private readonly decoded = new WeakMap<ChatGPTMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
 	private sources = new Map<string, { readonly messageId: string; readonly conversationId: string | undefined; }>();
 	private readonly playback = this._register(new MutableDisposable());
+	readonly inspectResponseEntity?: IReplyChatEditorModel['inspectResponseEntity'];
 
 	constructor(
 		@IChatGPTService private readonly backend: IChatGPTService,
-		@IOpenerService private readonly opener: IOpenerService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ICommandService private readonly commands: ICommandService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		const entityDetails = instantiation.getOptional(IChatGPTEntityDetails);
+		if (entityDetails) this.inspectResponseEntity = (item, entity, anchor) => this.inspectEntity(entityDetails, item, entity, anchor);
 		const ashModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
 		this.webEntries = chatGPTModelEntries(backend);
 		this.ashEntries = derived(reader => {
@@ -142,6 +150,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	readonly draft: NonNullable<IReplyChatEditorModel['draft']> = {
 		setText: text => this.backend.setDraft(text),
 		attachFiles: files => this.backend.attachFiles(files),
+		readImage: id => this.backend.readDraftImage(id),
 		retryFile: id => this.backend.retryAttachment(id),
 		removeFile: id => this.backend.removeAttachment(id),
 	};
@@ -160,7 +169,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	private get voiceAvailable(): boolean {
 		const state = this.backend.state.get();
-		return state.connected && state.networkAvailable && !state.pendingCreation && !state.busy && !state.sending
+		return state.connected && state.networkAvailable && !state.branch && !state.pendingCreation && !state.busy && !state.sending
 			&& !state.managing && !state.uncertain;
 	}
 
@@ -173,13 +182,15 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return {
 			draftIdentity: { id: state.localConversationId, generation: this.generation },
 			draft: {
-				text: state.draft, files: state.attachments,
+				// The service retains the submitted draft until ChatGPT acknowledges it.
+				text: state.sendingDraft ? '' : state.draft,
+				files: state.sendingDraft ? emptyDraftFiles : state.attachments,
 				readOnly: state.busy || state.sending || !!state.pendingCreation || voice,
 				canAttachFiles: state.connected && state.networkAvailable && !state.pendingCreation && !state.busy && !state.sending && !state.managing && !voice,
 			},
 			mode: 'ask',
 			phase: loading ? 'loading' : state.sending ? 'submitting' : 'ready',
-			inputBlocked: !canSend || state.busy || state.managing || voice,
+			inputBlocked: !canSend || state.busy || state.sending || state.managing || voice,
 			canInterrupt: state.sending,
 			interruptKind: 'reply',
 			error: state.error || undefined,
@@ -240,26 +251,18 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	interrupt(): Promise<void> { return this.backend.stop(); }
 
-	getResponseLinkOpener(item: IChatListItem): ((target: string) => Promise<void>) | undefined {
-		// Embedded Cowork output has a real Ash source. Web replies use the adapter's link policy.
-		return item.attachmentSource ? undefined : this.openWebResponseLink;
-	}
-
-	private readonly openWebResponseLink = async (target: string): Promise<void> => {
-		if (isPortableLinkTarget(target)) {
-			await this.opener.open(target, { openExternal: true, fromUserGesture: true });
-		}
-	};
-
 	getResponseActionTarget(item: IChatListItem) {
 		const state = this.backend.state.get();
 		const source = this.sources.get(item.id);
-		if (this.isDisposed || item.type !== 'agentMessage' || item.transient || item.isError || !source?.conversationId || source.conversationId !== state.conversationId) return undefined;
+		// An unsent branch can borrow its parent's resources, but it has no saved conversation of its own.
+		if (this.isDisposed || item.type !== 'agentMessage' || item.transient || item.isError
+			|| !source?.conversationId || source.conversationId !== state.conversationId || !/^[A-Za-z0-9_-]{1,240}$/u.test(source.conversationId)) return undefined;
 		return {
 			backend: this.backend,
 			conversationId: source.conversationId,
 			messageId: source.messageId,
 			title: state.title,
+			canOpenOriginal: !this.backend.native,
 			online: state.connected && state.networkAvailable && state.loading?.kind !== 'conversation' && !state.uncertain,
 		};
 	}
@@ -267,9 +270,24 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	getResponseActions(item: IChatListItem): ChatResponseActions | undefined {
 		const target = this.getResponseActionTarget(item);
 		if (!target) return undefined;
+		const state = this.backend.state.get();
+		const canFork = target.online && !state.busy && !state.sending && !state.managing && state.voice === 'idle';
+		const menuContext = target.canOpenOriginal
+			? (target.online ? onlineWebResponseContext : openOriginalResponseContext)
+			: (target.online ? onlineResponseContext : undefined);
 		return {
-			menuContext: target.online ? onlineResponseContext : availableResponseContext,
+			menuContext,
+			fork: canFork ? () => this.forkResponse(item) : undefined,
 		};
+	}
+
+	private async forkResponse(item: IChatListItem): Promise<void> {
+		// Resolve against the current projection so a stale row cannot fork a different conversation.
+		const target = this.currentItems.includes(item) ? this.getResponseActionTarget(item) : undefined;
+		if (!target?.online) {
+			return;
+		}
+		await this.backend.fork(target.conversationId, target.messageId);
 	}
 
 	async readResponseAloud(conversationId: string, messageId: string, window: Window & typeof globalThis, signal: AbortSignal): Promise<void> {
@@ -299,15 +317,45 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		}
 	}
 
-	readResponseResource(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob> {
+	async readResponseResource(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob> {
 		const source = this.sources.get(item.id);
-		if (!source || this.isDisposed) return Promise.reject(canceled());
-		return this.backend.readResource(resource.toString(), source.conversationId, source.messageId, signal);
+		if (!source || this.isDisposed || signal.aborted) throw canceled();
+		const blob = await this.backend.readResource(resource.toString(), source.conversationId, source.messageId, signal);
+		const current = this.sources.get(item.id);
+		if (this.isDisposed || signal.aborted || current?.messageId !== source.messageId || current.conversationId !== source.conversationId) throw canceled();
+		return blob;
+	}
+
+	private async inspectEntity(details: ChatGPTEntityDetails, item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement): Promise<void> {
+		const source = this.sources.get(item.id);
+		if (source?.conversationId) {
+			await details.open(this.backend, { conversationId: source.conversationId, messageId: source.messageId }, entity, anchor);
+		}
+	}
+
+	async submitRequestEdit(item: IChatListItem, text: string, commandId: string): Promise<void> {
+		const source = this.sources.get(item.id);
+		if (this.isDisposed || !item.requestEdit || !source?.conversationId) throw canceled();
+		await this.backend.editMessage(source.conversationId, source.messageId, text, commandId);
+	}
+
+	async getRequestVersions(item: IChatListItem): Promise<readonly ChatRequestVersion[]> {
+		const source = this.sources.get(item.id);
+		if (this.isDisposed || !source?.conversationId) return [];
+		const { conversationId, messageId } = source;
+		const expectedHead = this.backend.state.get().parentId;
+		const versions = await this.backend.messageVersions(conversationId, messageId);
+		return versions.map(version => ({
+			text: version.text,
+			selected: version.selected,
+			select: () => this.backend.selectMessageVersion(conversationId, messageId, expectedHead, version.head),
+		}));
 	}
 
 	private projectTranscript(state: ChatGPTState): readonly IChatListItem[] {
 		const result: IChatListItem[] = [];
 		const sources = this.sources = new Map();
+		const resourceConversationId = state.conversationId ?? state.branch?.conversationId;
 		const id = (kind: string, value: string): string => JSON.stringify([state.localConversationId, kind, value]);
 		const anchors = new Set(state.messages.map(message => message.id));
 		const appendTasks = (anchor: string | undefined, orphaned = false): void => {
@@ -334,21 +382,28 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		for (const message of state.messages) {
 			if (!message.activity) {
 				const itemId = id('message', message.id);
-				const decoded = message.role === 'assistant' ? this.decodeReply(message, state.conversationId) : undefined;
+				const decoded = message.role === 'assistant' ? this.decodeReply(message, resourceConversationId) : undefined;
 				const candidates = [...decoded?.resources ?? [], ...message.resources ?? []];
-				const resources = candidates.length ? candidates.filter((resource, index) =>
-					(!resource.uri.startsWith('sandbox:') || state.conversationId) && candidates.findIndex(candidate => candidate.uri === resource.uri) === index) : undefined;
-				sources.set(itemId, { messageId: message.id, conversationId: state.conversationId });
-				const text = decoded?.text ?? message.text;
+				const resources = candidates.length ? mergeChatGPTResources(candidates.filter(resource => !resource.uri.startsWith('sandbox:') || resourceConversationId)) : undefined;
+				sources.set(itemId, { messageId: message.id, conversationId: resourceConversationId });
+				const text = message.role === 'user' && resources?.some(resource => resource.kind === 'image')
+					? message.editableText ?? message.text : decoded?.text ?? message.text;
 				if (message.role === 'user' || text.trim() || resources?.length) result.push({
 					id: itemId,
 					type: message.role === 'user' ? 'userMessage' : 'agentMessage',
 					text,
 					timestamp: message.timestamp,
-					markdown: decoded && { supportHtml: true },
+					markdown: decoded && { supportHtml: true, richContent: decoded.richContent, linkPolicy: 'external' },
 					label: message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 					resources,
 					transient: message === latest,
+					requestHasVersions: !!state.conversationId && message.role === 'user' && message.hasVersions === true,
+					...(state.conversationId && message.role === 'user' && message !== latest && typeof message.editableText === 'string' && {
+						requestEdit: {
+							text: message.editableText,
+							description: localize('sessions.chatgpt.editDescription', 'Sending starts a new version from before this message. Your draft stays available.'),
+						},
+					}),
 				});
 			}
 			appendTasks(message.id);
@@ -360,10 +415,10 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return result;
 	}
 
-	private decodeReply(message: ChatReplyMessage, conversationId: string | undefined): ReturnType<typeof decodeChatGPTReply> {
+	private decodeReply(message: ChatGPTMessage, conversationId: string | undefined): ReturnType<typeof decodeChatGPTReply> {
 		const cached = this.decoded.get(message);
 		if (cached && cached.conversationId === conversationId) return cached.reply;
-		const reply = decodeChatGPTReply(message.text, message.references, conversationId);
+		const reply = decodeChatGPTReply(message.text, message.references, conversationId, message.imageGroups);
 		this.decoded.set(message, { conversationId, reply });
 		return reply;
 	}

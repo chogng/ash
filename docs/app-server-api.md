@@ -616,6 +616,9 @@ HEAD 的 branch/detached/unborn
 状态、可选 upstream ahead/behind，以及每个 directory-relative path 的 index/worktree status、
 rename original path、conflict 和 submodule flags。Revision 表示 App Server 观察到的投影版本，
 不是 durable CAS token，客户端不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。
+完整工作树的快照在合并、变基或拣选进行时还会返回 `integration`。Changes 使用其中的
+操作类型和同一快照的冲突文件展示进度。发出 Continue 或 Abort 时，客户端将该步骤的
+`version` 作为 `expectedVersion` 传给 `git/command`，后端执行前重新核对 Git 元数据。
 当授权 `Dir` 是更大 repository 的子目录时，server 会过滤 `Dir` 外 change，并将保留路径
 重新映射为 `Dir`-relative；写操作再把已校验路径映射为 repository-relative。
 
@@ -700,6 +703,9 @@ Rust service 负责最终边界校验和 repository-relative 映射。Commit mes
 upstream 名称和 ahead/behind 数量不参与比较。目标必须是已有提交；非法目标返回 `InvalidParams`。
 现有仓库 operation lock 内使用实际 snapshot，在任何 `add` 前拒绝过期目标并返回 `GitOperationFailed`，
 保留 HEAD、index 和工作文件。省略该字段的既有调用继续兼容。
+`git/stagedCommitPreview` 返回全 checkout 的状态和基于 HEAD、暂存路径、模式及对象 ID 的版本。
+读取预览差异后重新比对该版本，避免混用不同批次的暂存内容。`git/commit` 的可选 `expectedStagedVersion`
+在执行前复核该版本，仅适用于创建暂存提交。失配返回 `GitIndexChanged`。工作文件的修改不参与版本计算。
 这是执行前条件，operation lock 只串行化 Ash 操作；它不是阻止所有外部 Git 并发写入的原子 CAS。
 服务端在暂存前检查整个 checkout 的 `MutateRepository` 授权及未解决冲突；仅有子目录授权时拒绝提交，
 包括 index-only 请求，因为 index 可能含目录外的更改。选项为闭合枚举，不接受任意 Git argv。

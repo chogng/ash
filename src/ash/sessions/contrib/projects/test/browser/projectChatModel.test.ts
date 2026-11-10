@@ -3,14 +3,16 @@ import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { observableValue } from '../../../../../base/common/observable.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { TestConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
 import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -19,26 +21,23 @@ import {
 	type StartTurnOptions,
 	type ThreadRead,
 } from '../../../../../workbench/services/chat/common/chatService.js';
+import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { SessionsManagementService } from '../../../../services/sessions/browser/sessionsManagementService.js';
+import { SessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import type { IActiveSessionThread, IUntitledChatSession } from '../../../../services/sessions/common/session.js';
+import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
+import type { IActiveSessionThread } from '../../../../services/sessions/common/session.js';
 import { ProjectChatModel } from '../../browser/projectChatModel.js';
-import { ILanguageModelsConfigurationService } from '../../../cowork/common/languageModelsConfiguration.js';
 
 class ProjectChatFixture extends Disposable {
 	readonly services = this._register(new InstantiationService());
-	readonly draft: IUntitledChatSession = {
-		untitledSessionId: 'draft',
-		title: 'New Chat',
-		workspace: { type: 'current' },
-		model: undefined,
-		agent: undefined,
-	};
 	readonly revealed = new DeferredPromise<void>();
 	readonly reading = new DeferredPromise<void>();
 	readonly calls: string[] = [];
 	readonly turns: StartTurnOptions[] = [];
-	readonly preferredModel = { provider: 'fixture', model: 'cowork-default' };
+	readonly creationIds: (string | undefined)[] = [];
+	readonly preferredModel = { provider: 'fixture', model: 'chat-fixture' };
 	project: Project = {
 		id: 'project',
 		name: 'Project',
@@ -60,7 +59,7 @@ class ProjectChatFixture extends Disposable {
 		super();
 		const active: IActiveSessionThread = {
 			session: {
-				sessionId: 'session', kind: 'code' as const,
+				sessionId: 'session', kind: 'chat' as const,
 				title: 'New Chat',
 				status: 'active',
 				nextApprovalMode: 'manual',
@@ -96,7 +95,7 @@ class ProjectChatFixture extends Disposable {
 				entries: [],
 			},
 		};
-		this.services.registerInstance(IChatService, {
+		const chat = {
 			onDidUpdateThread: Event.None,
 			onDidUpdateThreadTranscript: Event.None,
 			onDidUpdateGoal: Event.None,
@@ -125,47 +124,17 @@ class ProjectChatFixture extends Disposable {
 				if (this.sendFailure) throw this.sendFailure;
 				this.turns.push(options);
 			},
-		} as unknown as IChatService);
-		this.services.registerInstance(ISessionsManagementService, {
-			untitledSessions: [this.draft],
-			materializedSessions: observableValue('materialized projects', new Map()),
-			setUntitledSessionDefaultModel() { },
-			setUntitledSessionReasoningEffort() { },
-			materializeUntitledSession: async () => {
-				this.calls.push('create');
-				return active;
-			},
-			promoteUntitledSession() { },
-		} as unknown as ISessionsManagementService);
-		this.services.registerInstance(IPromptsService, {
+		} as unknown as IChatService;
+		const prompts = {
 			onDidChangeSkills: Event.None,
 			findAgentSkills: async () => [],
-		} as unknown as IPromptsService);
-		this.services.registerInstance(ILanguageModelsService, {
+		} as unknown as IPromptsService;
+		const models = {
 			onDidChangeModels: Event.None,
-			listModels: async () => [
-				{
-					model: this.preferredModel,
-					displayName: 'Cowork default',
-					longContext: null,
-				},
-			],
-			listModelCatalog: async () => [],
-			getDefaultNewChatModel: () => undefined,
-			readModelDefaults: async () => ({
-				revision: 1,
-				model: null,
-				reasoningEffort: null,
-			}),
-		} as unknown as ILanguageModelsService);
-		this.services.registerInstance(ILanguageModelsConfigurationService, {
-			onDidChangeModels: Event.None,
-			getDefaultNewChatModel: () => this.preferredModel,
-			rememberSelectedModel() { },
+			listModelCatalog: async () => [{ model: this.preferredModel, displayName: 'Chat fixture', longContext: null }],
 			isModelVisible: () => true,
-			setModelVisible: async () => { },
-		});
-		this.services.registerInstance(IAgentExecutionSettingsService, {
+		} as unknown as ILanguageModelsService;
+		const execution: IAgentExecutionSettingsService = {
 			onDidChange: Event.None,
 			read: async () => ({
 				revision: 1,
@@ -176,10 +145,15 @@ class ProjectChatFixture extends Disposable {
 				},
 			}),
 			configure: async () => { },
-		});
+		};
+		this.services.registerInstance(ISessionPrimaryProviderServices, { chat, prompts, models, execution } as SessionProviderServices);
+		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
+		this.services.registerInstance(IStorageService, { get: () => undefined } as unknown as IStorageService);
 		this.services.registerInstance(IConfigurationService, this._register(new TestConfigurationService()));
-		this.services.registerInstance(IProjectService, {
-			read: async () => {
+		const projects = {
+			read: async (id: string, scope?: string) => {
+				assert.equal(id, this.project.id);
+				assert.equal(scope, 'chat');
 				if (!this.reading.isSettled) await this.reading.complete();
 				return this.pendingRead ? this.pendingRead.p : this.project;
 			},
@@ -194,23 +168,37 @@ class ProjectChatFixture extends Disposable {
 				};
 				return this.project;
 			},
-		} as unknown as IProjectService);
-		this.services.registerInstance(ISessionsService, {
-			openSession: async (session: string, thread: string) => { this.calls.push(`open:${session}/${thread}`); },
-		} as unknown as ISessionsService);
-		this.services.registerInstance(ICommandService, {
-			executeCommand: async (command: string) => {
-				this.calls.push(command);
-				await this.revealed.complete();
+		} as unknown as IProjectService;
+		const providers = this._register(new SessionsProvidersService());
+		const provider: Partial<ISessionsProvider> = {
+			id: 'local', order: 0, onDidChangeCatalog: Event.None, onDidChangeSession: Event.None,
+			currentWorkspace: () => ({ type: 'current' }),
+			create: async (_title, workspace, _agent, creationId, options) => {
+				assert.deepEqual(workspace, { type: 'current' });
+				assert.equal(options?.kind, 'chat');
+				this.creationIds.push(creationId);
+				if (this.creationIds.length === 1) this.calls.push('create');
+				return active;
 			},
-		} as unknown as ICommandService);
+		};
+		this._register(providers.registerProvider(provider as ISessionsProvider));
+		const management = this._register(new SessionsManagementService('local', providers, undefined, undefined, undefined, projects));
+		this.services.registerInstance(ISessionsManagementService, management);
+		const draft = management.createUntitledSession(undefined, { type: 'current' }, 'local', false, undefined, { kind: 'chat', projectId: this.project.id });
+		management.setUntitledSessionModel(draft.untitledSessionId, this.preferredModel);
+		this.services.registerInstance(ISessionsService, {} as ISessionsService);
+		this.services.registerInstance(ICommandService, {} as ICommandService);
 		this.services.registerInstance(INotificationService, {
-			error: (error: Error) => {
-				throw error;
-			},
+			error: (error: Error) => { throw error; },
 		} as unknown as INotificationService);
-		this.services.registerInstance(IOpenerService, { open: async () => false } as unknown as IOpenerService);
-		this.model = this._register(this.services.createInstance(ProjectChatModel, 'project', this.draft));
+		this.services.registerInstance(IOpenerService, {
+			open: async () => {
+				this.calls.push('open');
+				await this.revealed.complete();
+				return true;
+			},
+		} as unknown as IOpenerService);
+		this.model = this._register(this.services.createInstance(ProjectChatModel, management.untitledSessions[0]!));
 		this._register(
 			toDisposable(() => {
 				if (this.pendingRead && !this.pendingRead.isSettled) void this.pendingRead.complete(this.project);
@@ -223,10 +211,9 @@ suite('Project chat submission', () => {
 	for (const text of ['/advisor Question', '/advisor off', '/compact', '/config', '/init', '/develop Request', '/team Request', '/unknown']) {
 		test(`project sends ${text} as a literal first message with membership and navigation`, async () => {
 			using fixture = new ProjectChatFixture();
-			assert.equal('executeServerCommand' in fixture.model, false);
-			await fixture.model.send(text);
+			await fixture.model.send(text, 'agent');
 			await fixture.revealed.p;
-			assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'open:session/thread', 'sessions.open.chat']);
+			assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'open']);
 			assert.equal(fixture.turns[0]!.text, text);
 			assert.equal(fixture.turns[0]!.commandInterpretation, 'literal');
 		});
@@ -234,7 +221,7 @@ suite('Project chat submission', () => {
 
 	test('empty input does not create a conversation or link a project', async () => {
 		using fixture = new ProjectChatFixture();
-		await fixture.model.send('   ');
+		await fixture.model.send('   ', 'agent');
 		assert.deepEqual(fixture.calls, []);
 		assert.equal(fixture.model.submitted, false);
 	});
@@ -244,9 +231,9 @@ suite('Project chat submission', () => {
 		fixture.project = { ...fixture.project, revision: 8 };
 		await fixture.model.send('First project task', 'ask', undefined, [{ name: 'Notes', content: 'Attached notes' }]);
 		await fixture.revealed.p;
-		assert.deepEqual(fixture.calls, ['create', 'link:8', 'send', 'open:session/thread', 'sessions.open.chat']);
+		assert.deepEqual(fixture.calls, ['create', 'link:8', 'send', 'open']);
 		assert.equal(fixture.turns[0].text, 'First project task');
-		assert.equal(fixture.turns[0].mode, 'ask');
+		assert.equal(fixture.turns[0].mode, 'agent');
 		assert.deepEqual(fixture.turns[0].model, fixture.preferredModel);
 		assert.deepEqual(fixture.turns[0].contexts, [{ name: 'Notes', content: 'Attached notes' }]);
 		assert.equal(fixture.model.submitted, true);
@@ -255,32 +242,45 @@ suite('Project chat submission', () => {
 	test('association failure sends nothing and retry reuses the same durable conversation', async () => {
 		using fixture = new ProjectChatFixture();
 		fixture.linkFailure = new Error('Revision conflict');
-		await assert.rejects(fixture.model.send('Keep my draft'), /Revision conflict/);
+		await assert.rejects(fixture.model.send('Keep my draft', 'agent'), /Revision conflict/);
 		assert.deepEqual(fixture.calls, ['create', 'link:1']);
 		assert.equal(fixture.model.submitted, false);
 		fixture.linkFailure = undefined;
 		fixture.project = { ...fixture.project, revision: 2 };
-		await fixture.model.send('Keep my draft');
+		await fixture.model.send('Keep my draft', 'agent');
 		await fixture.revealed.p;
 		assert.deepEqual(fixture.calls, [
 			'create',
 			'link:1',
 			'link:2',
 			'send',
-			'open:session/thread',
-			'sessions.open.chat',
+			'open',
 		]);
+		assert.equal(fixture.creationIds.length, 2);
+		assert.ok(fixture.creationIds[0]);
+		assert.equal(fixture.creationIds[0], fixture.creationIds[1]);
 	});
 
 	test('a failed send keeps project membership and retries without creating or linking again', async () => {
 		using fixture = new ProjectChatFixture();
 		fixture.sendFailure = new Error('Request unavailable');
-		await assert.rejects(fixture.model.send('Retry this task'), /Request unavailable/);
+		await assert.rejects(fixture.model.send('Retry this task', 'agent'), /Request unavailable/);
 		assert.equal(fixture.model.submitted, false);
 		fixture.sendFailure = undefined;
-		await fixture.model.send('Retry this task');
+		await fixture.model.send('Retry this task', 'agent');
 		await fixture.revealed.p;
-		assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'send', 'open:session/thread', 'sessions.open.chat']);
+		assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'send', 'open']);
+	});
+
+	test('voice prepares a project-owned conversation before any task is sent', async () => {
+		using fixture = new ProjectChatFixture();
+		const conversation = await fixture.model.prepareConversation();
+		assert.deepEqual(conversation, { sessionId: 'session', threadId: 'thread' });
+		assert.deepEqual(fixture.calls, ['create', 'link:1']);
+		assert.equal(fixture.model.submitted, false);
+		await fixture.model.send('Voice task', 'agent', undefined, undefined, { source: conversation });
+		await fixture.revealed.p;
+		assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'open']);
 	});
 
 	test('navigation during project lookup cancels the request before linking or sending', async () => {
@@ -292,6 +292,7 @@ suite('Project chat submission', () => {
 		controller.abort();
 		await fixture.pendingRead.complete(fixture.project);
 		await assert.rejects(pending);
+		assert.deepEqual(fixture.calls, []);
 		assert.deepEqual(fixture.turns, []);
 		assert.equal(fixture.model.submitted, false);
 	});

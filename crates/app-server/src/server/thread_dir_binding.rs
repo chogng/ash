@@ -1,7 +1,9 @@
 use super::git_turn_changes_runtime::GitRuntimeHandle;
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
 use ash_protocol::ThreadId;
+use ash_protocol::ThreadItem;
 use ash_protocol::ThreadOrigin;
+use ash_protocol::WorkspaceCheckpoint;
 use core_api::CoreError;
 use core_api::ThreadWorktreeBinder;
 use core_api::ThreadWorktreeBindingRequest;
@@ -413,12 +415,18 @@ impl GitTurnChangesRuntime {
         let parent = self.binding(parent_id).ok_or_else(|| {
             CoreError::Journal(format!("parent Thread {parent_id} has no dir binding"))
         })?;
+        if let ThreadOrigin::Rewind { before_turn_id, .. } = origin
+            && let Some(source) =
+                self.rewind_directory_source(&parent, parent_id, before_turn_id)?
+        {
+            return Ok((source, ManagedDirTarget::SourceHead));
+        }
         let source = match (origin, parent.kind()) {
             (ThreadOrigin::Message { .. }, _) => unreachable!("message source returned above"),
-            (ThreadOrigin::Rewind { .. }, ManagedDirKind::Directory) => {
-                return Err(CoreError::Journal(
-                    "non-Git Threads do not have immutable Turn checkpoints".into(),
-                ));
+            (ThreadOrigin::Rewind { before_turn_id, .. }, ManagedDirKind::Directory) => {
+                return Err(CoreError::Journal(format!(
+                    "rewind Turn {before_turn_id} has no usable directory checkpoint"
+                )));
             }
             (ThreadOrigin::Comparison { .. }, ManagedDirKind::Directory) => {
                 return Err(CoreError::InvalidInput(
@@ -511,6 +519,72 @@ impl GitTurnChangesRuntime {
             },
         };
         Ok((source, target))
+    }
+
+    fn rewind_directory_source(
+        &self,
+        parent: &ManagedDirBinding,
+        parent_id: &ThreadId,
+        before_turn_id: &ash_protocol::TurnId,
+    ) -> Result<Option<ManagedDirSource>, CoreError> {
+        let snapshot = self.threads.read_thread(parent_id)?;
+        let prompt = snapshot.items.iter().find_map(|item| match item {
+            ThreadItem::UserMessage {
+                item_id, turn_id, ..
+            } if turn_id == before_turn_id => Some(item_id),
+            _ => None,
+        });
+        let Some(prompt) = prompt else {
+            return Ok(None);
+        };
+        let checkpoint = self
+            .threads
+            .message_checkpoints(parent_id)?
+            .into_iter()
+            .find(|point| &point.item_id == prompt);
+        let location = match checkpoint {
+            Some(point) => match point.workspace {
+                WorkspaceCheckpoint::Directory {
+                    source_dir_id,
+                    digest,
+                } if parent.kind() == ManagedDirKind::Directory
+                    && source_dir_id == self.dirs.id.as_str() =>
+                {
+                    return Ok(Some(ManagedDirSource::DirectoryCheckpoint {
+                        source_directory: self.dirs.root.clone(),
+                        digest,
+                    }));
+                }
+                WorkspaceCheckpoint::Git { source_dir_id, .. }
+                    if source_dir_id == self.dirs.id.as_str() =>
+                {
+                    // Git rewinds use the existing immutable Turn change records.
+                    return Ok(None);
+                }
+                _ => Some((point.source_thread_id, point.source_sequence)),
+            },
+            None if snapshot.origin.is_root() => snapshot
+                .item_sequences
+                .get(prompt)
+                .map(|sequence| (parent_id.clone(), *sequence)),
+            None => None,
+        };
+        if snapshot.kind == ash_protocol::SessionKind::Chat
+            && let Some((thread_id, sequence)) = location
+            && self
+                .threads
+                .read_thread_at_sequence(&thread_id, sequence)?
+                .execution_target
+                .is_none()
+        {
+            // Unbound Chat can record checkpoints in an internal scratch directory.
+            // A newly attached workspace starts from its own source, never the scratch
+            // snapshot or the parent Thread's later workspace edits.
+            return Ok(Some(ManagedDirSource::CurrentDirectory {
+                source_directory: self.dirs.root.clone(),
+            }));
+        }
+        Ok(None)
     }
 
     fn trees_at_sequence(

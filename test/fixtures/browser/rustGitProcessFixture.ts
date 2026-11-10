@@ -5,19 +5,26 @@ import type { Page } from '@playwright/test';
 
 /** Real SDK executable; only the browser's public client services are simulated. The
  * supervisor's authority and crash handling have separate Rust process tests. */
-export async function attachRustGit(page: Page): Promise<() => Promise<void>> {
+export async function attachRustGit(page: Page, startProcess = () => {
+	const executable = process.env.ASH_TEST_GIT_EXTENSION ?? resolve(process.env.CARGO_TARGET_DIR?.trim() || '.build/cargo', 'ci-test', `ash-git-extension${process.platform === 'win32' ? '.exe' : ''}`);
+	return spawn(executable, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+}): Promise<() => Promise<void>> {
 	let child: ChildProcessWithoutNullStreams | undefined;
 	let incarnation = 0, requestId = 0;
 	let stderr = '';
 
 	const pending = new Map<number, { resolve(value: unknown): void; reject(error: unknown): void; timer: ReturnType<typeof setTimeout>; }>();
-	const write = (value: unknown) => child!.stdin.write(`${JSON.stringify(value)}\n`);
 	async function request(method: string, params?: unknown): Promise<unknown> {
+		const current = child;
+		if (!current?.stdin.writable || current.exitCode !== null || current.signalCode !== null) {
+			throw new Error(`Rust Git connection is closed: ${stderr}`);
+		}
 		const id = ++requestId;
 		return new Promise((resolvePromise, reject) => {
 			const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Rust Git ${method} timed out: ${stderr}`)); }, 15000);
 			pending.set(id, { resolve: resolvePromise, reject, timer });
-			write({ protocolVersion: 1, requestId: id, incarnation, activationGeneration: incarnation, method, ...(params === undefined ? {} : { params }) });
+			const frame = { protocolVersion: 1, requestId: id, incarnation, activationGeneration: incarnation, method, ...(params === undefined ? {} : { params }) };
+			current.stdin.write(`${JSON.stringify(frame)}\n`);
 		});
 	}
 	let stopping: Promise<void> | undefined;
@@ -29,13 +36,14 @@ export async function attachRustGit(page: Page): Promise<() => Promise<void>> {
 	async function stopChild(): Promise<void> {
 		if (!child) return;
 		const previous = child;
-		if (previous.exitCode !== null) { child = undefined; return; }
+		if (previous.exitCode !== null || previous.signalCode !== null) { child = undefined; return; }
 		try { await request('shutdown'); } finally {
 			if (child === previous) child = undefined;
 			previous.stdin.end();
 			await new Promise<void>(resolvePromise => {
-				if (previous.exitCode !== null) resolvePromise();
-				else { previous.once('exit', () => resolvePromise()); setTimeout(() => previous.kill(), 3000).unref(); }
+				if (previous.exitCode !== null || previous.signalCode !== null) { resolvePromise(); return; }
+				const timer = setTimeout(() => previous.kill(), 3000).unref();
+				previous.once('exit', () => { clearTimeout(timer); resolvePromise(); });
 			});
 		}
 	}
@@ -45,21 +53,24 @@ export async function attachRustGit(page: Page): Promise<() => Promise<void>> {
 		if (method === 'start') {
 			await stop();
 			incarnation++; requestId = 0; stderr = '';
-			const executable = process.env.ASH_TEST_GIT_EXTENSION ?? resolve(process.env.CARGO_TARGET_DIR?.trim() || '.build/cargo', 'ci-test', `ash-git-extension${process.platform === 'win32' ? '.exe' : ''}`);
-			const current = child = spawn(executable, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+			const current = child = startProcess();
 			current.once('error', error => {
 				if (child === current) child = undefined;
 				for (const job of pending.values()) { clearTimeout(job.timer); job.reject(error); }
 				pending.clear();
 			});
-			current.stderr.on('data', value => { stderr = (stderr + String(value)).slice(-8192); });
+			current.stderr.setEncoding('utf8');
+			current.stderr.on('data', value => {
+				if (child === current) stderr = (stderr + String(value)).slice(-8192);
+			});
 			current.stdin.on('error', error => {
 				if (child !== current || stopping) return;
 				for (const job of pending.values()) { clearTimeout(job.timer); job.reject(error); }
 				pending.clear();
 			});
-			current.once('exit', code => {
-				for (const job of pending.values()) { clearTimeout(job.timer); job.reject(new Error(`Rust Git exited ${code}: ${stderr}`)); }
+			current.once('exit', (code, signal) => {
+				if (child !== current) return;
+				for (const job of pending.values()) { clearTimeout(job.timer); job.reject(new Error(`Rust Git exited (${signal ?? `code ${code}`}): ${stderr}`)); }
 				pending.clear();
 			});
 			createInterface({ input: current.stdout }).on('line', async line => {
@@ -72,7 +83,9 @@ export async function attachRustGit(page: Page): Promise<() => Promise<void>> {
 					} catch (error) { outcome = { Err: { code: 'cancelled', message: String(error) } }; }
 					// Shutdown cancels SDK callbacks; browser work that finishes later
 					// must not write to the retired process's pipe.
-					if (child === current && !stopping && current.exitCode === null && !current.killed && current.stdin.writable) current.stdin.write(`${JSON.stringify({ context: frame.context, callId: frame.callId, outcome })}\n`);
+					if (child === current && !stopping && !current.killed && current.exitCode === null && current.signalCode === null && current.stdin.writable) {
+						current.stdin.write(`${JSON.stringify({ context: frame.context, callId: frame.callId, outcome })}\n`);
+					}
 				} else if (frame.requestId) {
 					const job = pending.get(frame.requestId);
 					if (!job) return;

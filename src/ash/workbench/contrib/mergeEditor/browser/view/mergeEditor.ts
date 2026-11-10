@@ -227,7 +227,14 @@ export class MergeEditor extends Disposable {
 		this.resultPlaceholderDomNode.textContent = result ?? '';
 	}
 
+	public showResultOnly(placeholder: string | undefined): void {
+		this.domNode.classList.add('result-only');
+		this.resultPlaceholderDomNode.hidden = placeholder === undefined;
+		this.resultPlaceholderDomNode.textContent = placeholder ?? '';
+	}
+
 	public clearInput(): void {
+		this.domNode.classList.remove('result-only');
 		this.alignmentScheduler.cancel();
 		this.clearZones();
 		for (const editor of this.sourceEditors.values()) editor.setModel(null);
@@ -288,11 +295,13 @@ export class MergeEditor extends Disposable {
 
 	public getAccessibleContent(): string {
 		const model = this.model;
+		const result = model?.result.getValue() ?? this.resultEditor.getControl()?.getValue() ?? this.resultPlaceholderDomNode.textContent ?? '';
+		if (this.domNode.classList.contains('result-only')) return result;
 		return [
 			`${sideLabel('base')}\n${model?.base.getValue() ?? this.sourceEditors.get('base')?.getModel()?.getValue() ?? ''}`,
 			`${sideLabel('current')}\n${model?.current.getValue() ?? this.sourceEditors.get('current')?.getModel()?.getValue() ?? ''}`,
 			`${sideLabel('incoming')}\n${model?.incoming.getValue() ?? this.sourceEditors.get('incoming')?.getModel()?.getValue() ?? ''}`,
-			`${localize({ bundle: 'ash', key: 'mergeEditor.result' }, 'Result')}\n${model?.result.getValue() ?? this.resultEditor.getControl()?.getValue() ?? this.resultPlaceholderDomNode.textContent ?? ''}`,
+			`${localize({ bundle: 'ash', key: 'mergeEditor.result' }, 'Result')}\n${result}`,
 		].join('\n\n');
 	}
 

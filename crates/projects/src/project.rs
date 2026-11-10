@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use std::path::Component;
 use std::path::PathBuf;
 
-pub const PROJECT_SCHEMA_VERSION: u32 = 1;
+pub const PROJECT_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,20 +39,26 @@ pub struct ProjectRoot {
     pub purpose: String,
 }
 
-/// A user-selected file or folder reference. It never grants file access or owns the source bytes.
+/// Project-owned text or a reference that grants no access to its source.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectMaterial {
-    pub path: PathBuf,
-    pub name: String,
-    pub kind: ProjectMaterialKind,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ProjectMaterialKind {
-    File,
-    Folder,
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ProjectMaterial {
+    File {
+        path: PathBuf,
+        name: String,
+        /// Size of the source when it was added to the project.
+        #[serde(rename = "sizeBytes")]
+        size_bytes: u64,
+    },
+    Folder {
+        path: PathBuf,
+        name: String,
+    },
+    Text {
+        id: String,
+        name: String,
+        content: String,
+    },
 }
 
 /// Long-lived weak associations for opening multi-root work.
@@ -167,16 +173,45 @@ impl Project {
             ));
         }
         let mut paths = BTreeSet::new();
+        let mut text_ids = BTreeSet::new();
+        let mut text_bytes = 0;
         for material in &self.materials {
-            validate_text("Project material name", &material.name)?;
-            if material.name.len() > 1024
-                || !material.path.is_absolute()
-                || material
-                    .path
-                    .components()
-                    .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
-                || !paths.insert(&material.path)
+            // Project sizes cross the JavaScript API as numbers.
+            if let ProjectMaterial::File { size_bytes, .. } = material
+                && *size_bytes > (1_u64 << 53) - 1
             {
+                return Err(crate::ProjectError::InvalidInput(
+                    "Project file size exceeds the safe integer range".into(),
+                ));
+            }
+            let (name, valid) = match material {
+                ProjectMaterial::File { path, name, .. }
+                | ProjectMaterial::Folder { path, name } => (
+                    name,
+                    path.is_absolute()
+                        && !path.components().any(|component| {
+                            matches!(component, Component::ParentDir | Component::CurDir)
+                        })
+                        && paths.insert(path),
+                ),
+                ProjectMaterial::Text { id, name, content } => {
+                    text_bytes += content.len();
+                    (
+                        name,
+                        !id.is_empty()
+                            && id.len() <= 128
+                            && id
+                                .bytes()
+                                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+                            && text_ids.insert(id)
+                            && !content.trim().is_empty()
+                            && content.len() <= 80_000
+                            && text_bytes <= 1_000_000,
+                    )
+                }
+            };
+            validate_text("Project material name", name)?;
+            if name.len() > 1024 || !valid {
                 return Err(crate::ProjectError::InvalidInput(
                     "invalid or duplicate Project material".into(),
                 ));

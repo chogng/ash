@@ -10,11 +10,11 @@ suite('Chat title commands', () => {
 	test('the public helpful command records the captured response once and rejects invalid targets', () => {
 		using registration = registerChatTitleActions();
 		using services = new InstantiationService();
-		const values = new Map<string, boolean>();
+		const values = new Map<string, string>();
 		let writes = 0;
 		services.registerInstance(IStorageService, {
-			getBoolean: (key: string, _scope: unknown, fallback: boolean) => values.get(key) ?? fallback,
-			store: (key: string, value: boolean) => { values.set(key, value); writes++; },
+			get: (key: string) => values.get(key),
+			store: (key: string, value: boolean) => { values.set(key, String(value)); writes++; },
 		} as unknown as IStorageService);
 		const target = { sessionId: 'session', threadId: 'thread', turnId: 'turn', itemId: 'item' };
 		const command = CommandsRegistry.getCommand(MarkHelpfulActionId)!;

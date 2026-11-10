@@ -57,8 +57,7 @@ export class MemorySettingsRenderer extends SettingsPageRenderer<SettingsSection
 				this.editor = this._register(this.instantiation.createInstance(MemoriesEditor, this.namespace(), this.element, this.closeSettings, this.revealEditor));
 				this.editor.initialize();
 			}
-			if (request?.kind === 'draft') { void this.editor.openProjectDraft(request.origin, request.text); }
-			if (request?.kind === 'reference') { void this.editor.openReference(request.reference); }
+			if (request) { void this.editor.openReference(request.reference); }
 		});
 	}
 }

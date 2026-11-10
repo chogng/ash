@@ -84,6 +84,68 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+test('the popup image presentation uses sent thumbnails and the built-in viewer', async ({ page }) => {
+	await page.goto('/chatTranscript.html?sentImageViewer&locale=zh-CN');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.showMedia(false));
+	const row = page.locator('[data-item-id="image"]');
+	const thumbnail = row.locator('.ash-chat-image-attachment-thumbnail').getByRole('button');
+	await expect(row.locator('img')).toHaveCount(1);
+	await expect(row.locator('figure, pre')).toHaveCount(0);
+	await expect(thumbnail).toBeEnabled();
+	await thumbnail.press('Enter');
+	const dialog = page.getByRole('dialog').filter({ has: page.locator('.ash-image-preview-popup-viewport') });
+	await expect(dialog.locator('.ash-image-viewer-image')).toBeVisible();
+	await expect(row.getByRole('button')).toHaveCount(1);
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests)).toEqual([
+		{ sessionId: 'media-session', threadId: 'media-thread', itemId: 'image' },
+	]);
+	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(false))).toBe(true);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/图片预览：.*[\s\S]*尺寸：/u);
+	await page.keyboard.press('Escape');
+	await expect(dialog.getByRole('button', { name: '关闭图片预览', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(dialog).toHaveCount(0);
+	await expect(thumbnail).toBeFocused();
+	const tool = page.locator('.ash-chat-tool-invocation');
+	await tool.locator(':scope > summary').click();
+	await tool.getByRole('button', { name: '加载图片', exact: true }).click();
+	const image = tool.locator('.ash-chat-media-preview-trigger');
+	await expect(image).toBeVisible();
+	await image.press('Enter');
+	await expect(dialog.locator('.ash-image-viewer-image')).toBeVisible();
+	await expect(tool.getByRole('button', { name: '打开图片', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(image).toBeFocused();
+});
+
+test('standalone IDE chat keeps its code toolbar and copy tooltip', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.showCopiedMessage('Example:\n\n```bash\necho example\n```'));
+	const reply = page.locator('[data-item-id="copy-response"]');
+	const toolbar = reply.getByRole('toolbar', { name: 'Code block 1 actions', exact: true });
+	await expect(toolbar.getByRole('button', { name: 'Apply to editor', exact: true })).toBeVisible();
+	await expect(reply.locator('.ash-chat-code-block-card')).toHaveCount(0);
+	const copy = reply.getByRole('button', { name: 'Copy message', exact: true });
+	await expect(copy).toHaveAttribute('title', 'Copy message');
+});
+
+test('Agent Window copy feedback works in the inline code toolbar', async ({ page }) => {
+	await page.goto('/chatTranscript.html?sessions&sessionsCopyFeedback');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.showCopiedMessage('```bash\necho example\n```'));
+	const reply = page.locator('[data-item-id="copy-response"]');
+	const toolbar = reply.getByRole('toolbar', { name: 'Code block 1 actions', exact: true });
+	const copy = toolbar.getByRole('button', { name: 'Copy', exact: true });
+	await copy.focus();
+	await copy.press('Enter');
+	await expect(copy.locator('.ash-icon-check')).toBeVisible();
+	await expect(copy).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('echo example');
+	await copy.press('ArrowRight');
+	await expect(toolbar.getByRole('button', { name: 'Apply to editor', exact: true })).toBeFocused();
+	const copyMessage = reply.getByRole('button', { name: 'Copy message', exact: true });
+	await expect(copyMessage).toHaveAttribute('title', 'Copy');
+});
+
 test('removing an attachment cancels its read and rejects a late media result', async ({ page }) => {
 	await page.goto('/chatTranscript.html');
 	await page.evaluate(() => window.ashChatTranscriptIntegration.showMedia(true));
@@ -912,8 +974,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await images.first().getByRole('button', { name: locale === 'en' ? 'Load image' : '加载图片', exact: true }).click();
 		const openImage = page.getByRole('button', { name: locale === 'en' ? 'Open image' : '打开图片', exact: true }).first();
 		await openImage.focus(); await openImage.press('Enter');
-		await expect(page.locator('.ash-image-preview-image')).toBeVisible();
-		await expect(page.locator('.ash-image-preview-viewport')).toBeFocused();
+		await expect(page.locator('.ash-image-preview .ash-image-viewer-image')).toBeVisible();
+		await expect(page.locator('.ash-image-preview .ash-image-viewer')).toBeFocused();
 		const image = await page.evaluate(() => window.ashChatTranscriptIntegration.mediaPreviewState());
 		expect(image).toMatchObject({ readonly: true, resource: expect.stringMatching(/^chat-response-resource:.*\.png$/) });
 		expect(image.content).toContain('2 × 1');

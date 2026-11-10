@@ -17,6 +17,7 @@ use ash_remote::SshHost;
 
 const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
 const READINESS_STABILITY: Duration = Duration::from_millis(50);
+const READINESS_CONNECT_TIMEOUT: Duration = Duration::from_millis(250);
 
 /// Selects a currently unused TCP port on the local loopback interface.
 ///
@@ -210,7 +211,7 @@ impl SshTunnel {
             return Err(SshTunnelError::ProcessExited(status));
         }
         let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, self.local_port.get());
-        if TcpStream::connect(address).is_err() {
+        if TcpStream::connect_timeout(&address.into(), READINESS_CONNECT_TIMEOUT).is_err() {
             self.listener_observed_at = None;
             return Ok(SshTunnelReadiness::Pending);
         }

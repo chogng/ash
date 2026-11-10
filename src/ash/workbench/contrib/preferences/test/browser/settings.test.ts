@@ -4287,13 +4287,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(memoryBody.value, 'Exact source text');
 	assert.equal(memoryBody.readOnly, true);
-	await memoryNavigation.open(preferences, {
-		kind: 'draft', origin: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', itemId: 'item-1' },
-		text: 'Draft from a chat message',
-	});
-	await nextTurn();
-	assert.equal(memoryBody.value, 'Draft from a chat message');
-	assert.equal(memoryBody.readOnly, false);
 	assert.equal(detail.hidden, false);
 	assert.equal(host.hidden, false);
 	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close button')?.click();

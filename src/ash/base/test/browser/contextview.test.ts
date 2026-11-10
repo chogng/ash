@@ -43,6 +43,7 @@ suiteTeardown(() => {
 });
 
 const { ContextView, ContextViewFocusRestore, ContextViewHideReason } = await import('../../browser/ui/contextview/contextview.js');
+const { Hover } = await import('../../browser/ui/hover/hover.js');
 
 test('ContextView positions next to its anchor and flips within the viewport', () => {
 	const container = requiredElement<HTMLElement>('main');
@@ -369,6 +370,37 @@ test('ContextView Escape unwinds nested views through their own focus targets', 
 	assert.deepEqual({ focused: environment.window.document.activeElement, parentVisible: fixture.contextView.visible, attempts: fixture.focusAttempts(), reasons: fixture.reasons }, {
 		focused: fixture.anchor, parentVisible: false, attempts: 1, reasons: [ContextViewHideReason.Escape],
 	});
+});
+
+test('ContextView Escape closes an interactive hover before its preview dialog and restores both triggers', () => {
+	using fixture = createFocusFixture();
+	const document = environment.window.document;
+	const hoverTrigger = h(document, 'button', undefined, 'Preview details');
+	fixture.content.append(hoverTrigger);
+	fixture.anchor.focus();
+	assert.equal(fixture.contextView.show({
+		anchor: fixture.anchor,
+		content: fixture.content,
+		presentation: 'dialog',
+		focusRestore: ContextViewFocusRestore.Previous,
+	}), true);
+	hoverTrigger.focus();
+
+	using hoverView = new ContextView(fixture.host);
+	const hoverAction = h(document, 'button', undefined, 'Copy details');
+	using hover = new Hover({ target: hoverTrigger, content: hoverAction, contextViewProvider: hoverView });
+	hover.show();
+	hoverAction.focus();
+	assert.equal(document.activeElement, hoverAction);
+
+	hoverAction.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(hover.visible, false);
+	assert.equal(fixture.contextView.visible, true);
+	assert.equal(document.activeElement, hoverTrigger);
+
+	hoverTrigger.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(fixture.contextView.visible, false);
+	assert.equal(document.activeElement, fixture.anchor);
 });
 
 test('ContextView does not reclaim focus owned by a child hosted inside its content', () => {

@@ -14,6 +14,8 @@
 	min-height: 100%;
 	width: max-content;
 	height: max-content;
+	/* A transient pinch must not change the enclosing scroll range. */
+	overflow: clip;
 }
 
 .ash-image-viewer-image {
@@ -27,6 +29,26 @@
 		transparent 0
 	);
 	background-size: var(--ash-spacing-size160) var(--ash-spacing-size160);
+}
+
+.ash-image-viewer-media {
+	position: relative;
+	flex: 0 0 auto;
+	transform-origin: top left;
+}
+
+.ash-image-annotation {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.ash-image-annotation.drawing {
+	pointer-events: auto;
+	touch-action: none;
+	cursor: crosshair;
 }
 
 .ash-image-viewer-image.pixelated {

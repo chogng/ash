@@ -7,6 +7,7 @@ import type { ICodeEditor } from '../../../../../../editor/browser/editorBrowser
 import type { SlashCommandCatalog } from '../../../common/slashCommands.js';
 import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
+import type { IChatImageAnnotationTarget } from '../../attachments/chatAttachmentWidgets.js';
 
 export const CHAT_INPUT_DEFAULT_MAX_HEIGHT = 314;
 
@@ -21,6 +22,7 @@ export interface ChatInputEditorOptions {
 	readonly submitWithModifier?: boolean;
 	/** Backend discovery is registered by the owning composer. */
 	readonly hostCompletions?: boolean;
+	readonly imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined;
 	readonly height?: { readonly minimum?: number; readonly maximum?: number; };
 	/** Move to the next control with Tab instead of inserting indentation. */
 	readonly tabFocusMode?: boolean;

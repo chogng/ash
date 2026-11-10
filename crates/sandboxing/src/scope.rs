@@ -5,9 +5,11 @@ use crate::filesystem::SandboxPathRule;
 use ash_file_access::Dir;
 use std::collections::BTreeSet;
 
-/// Filesystem authority granted to one directory inside a sandboxed process.
+/// Filesystem authority for one bound directory inside a sandboxed process.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SandboxDirAccess {
+    /// Keep the directory as the command's anchor while denying access to its contents.
+    Denied,
     ReadOnly,
     ReadWrite,
 }

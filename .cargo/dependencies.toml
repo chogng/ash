@@ -8,9 +8,14 @@ versions = ["0.13.1", "0.21.7", "0.22.1", "0.23.1"]
 reason = "0.13 via spm_precompiled; 0.21 via LiveKit signaling and pbjson; 0.22 via application APIs and rtc-stun; 0.23 via rmcp and rtc-shared -> rcgen -> pem 4."
 
 [[multiple_versions]]
+name = "bit-set"
+versions = ["0.5.3", "0.8.0"]
+reason = "0.5.3 is retained by Ratatui's optional Termwiz backend through fancy-regex 0.11. Syntect and tokenizers use 0.8.0 through newer fancy-regex releases."
+
+[[multiple_versions]]
 name = "bit-vec"
-versions = ["0.8.0", "0.9.1"]
-reason = "Current upstream API families: 0.8.0 via bit-set; 0.9.1 via bit-set, wgpu-core. Review the introducing packages together before changing this set."
+versions = ["0.6.3", "0.8.0", "0.9.1"]
+reason = "0.6.3 and 0.8.0 follow the reviewed bit-set families. Yasna uses 0.9.1."
 
 [[multiple_versions]]
 name = "bitflags"
@@ -26,11 +31,6 @@ reason = "Current upstream API families: 0.10.4 via digest; 0.12.1 via digest. R
 name = "cfg_aliases"
 versions = ["0.1.1", "0.2.2"]
 reason = "Current upstream API families: 0.1.1 via nix; 0.2.2 via naga, nix, quinn and other importers. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
-name = "compact_str"
-versions = ["0.8.2", "0.9.1"]
-reason = "Current upstream API families: 0.8.2 via ratatui; 0.9.1 via tokenizers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "core-foundation"
@@ -69,8 +69,8 @@ reason = "Current upstream API families: 0.10.7 via ecdsa, elliptic-curve, hmac 
 
 [[multiple_versions]]
 name = "fancy-regex"
-versions = ["0.16.2", "0.17.0"]
-reason = "Current upstream API families: 0.16.2 via syntect; 0.17.0 via tokenizers. Review the introducing packages together before changing this set."
+versions = ["0.11.0", "0.16.2", "0.17.0"]
+reason = "0.11.0 remains in the lockfile through Ratatui's optional Termwiz backend. Syntect uses 0.16.2 and tokenizers uses 0.17.0."
 
 [[multiple_versions]]
 name = "foldhash"
@@ -95,7 +95,7 @@ reason = "Current upstream API families: 0.4.1 via glib-macros; 0.5.0 via clap_d
 [[multiple_versions]]
 name = "itertools"
 versions = ["0.11.0", "0.12.1", "0.13.0", "0.14.0", "0.15.0"]
-reason = "0.11 via LiveKit pbjson-build; 0.12 via LiveKit prost 0.12; 0.13 via bindgen/ratatui; 0.14 via prost 0.14/tokenizers; 0.15 via the Liquid upstream fix that removes anymap2."
+reason = "LiveKit's pbjson-build and prost 0.12 use itertools 0.11 and 0.12 respectively. Bindgen uses 0.13. Ratatui, prost 0.14 and tokenizers use 0.14. The Liquid upstream fix that removes anymap2 uses 0.15."
 
 [[multiple_versions]]
 name = "jni-sys"
@@ -108,11 +108,6 @@ versions = ["0.12.1", "0.4.15"]
 reason = "Current upstream API families: 0.12.1 via rustix; 0.4.15 via rustix. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
-name = "lru"
-versions = ["0.12.5", "0.18.3"]
-reason = "Current upstream API families: 0.12.5 via ratatui; 0.18.3 via ash-utils-cache. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
 name = "nix"
 versions = ["0.28.0", "0.29.0", "0.31.3"]
 reason = "Current upstream API families: 0.28.0 via portable-pty; 0.29.0 via mxc-sdk and other importers; 0.31.3 via process-wrap. Review the introducing packages together before changing this set."
@@ -120,7 +115,7 @@ reason = "Current upstream API families: 0.28.0 via portable-pty; 0.29.0 via mxc
 [[multiple_versions]]
 name = "nom"
 versions = ["7.1.3", "8.0.0"]
-reason = "Current upstream API families: 7.1.3 via ansi-to-tui, cexpr, spm_precompiled; 8.0.0 via tree_magic_mini. Review the introducing packages together before changing this set."
+reason = "Cexpr, spm_precompiled and the certificate parsers use 7.1.3. Ansi-to-tui and tree_magic_mini use 8.0.0."
 
 [[multiple_versions]]
 name = "pollster"
@@ -155,7 +150,7 @@ reason = "Current upstream API families: 0.5.18 via parking_lot_core; 0.9.1 via 
 [[multiple_versions]]
 name = "rustix"
 versions = ["0.38.44", "1.1.5"]
-reason = "0.38.44 serves calloop/crossterm consumers. zbus 6's zruntime requires 1.1.5, shared with existing Ash and filesystem consumers; no new major API family is introduced."
+reason = "Which uses 0.38.44. Zbus 6's zruntime requires 1.1.5, shared with Crossterm and Ash's filesystem consumers."
 
 [[multiple_versions]]
 name = "security-framework"
@@ -179,23 +174,23 @@ reason = "Current upstream API families: 2.2.0 via ecdsa; 3.0.0 via ed25519. Rev
 
 [[multiple_versions]]
 name = "strum"
-versions = ["0.26.3", "0.27.2", "0.28.0"]
-reason = "Current upstream API families: 0.26.3 via ratatui; 0.27.2 via ash-tui, biblatex; 0.28.0 via katex-rs. Review the introducing packages together before changing this set."
+versions = ["0.27.2", "0.28.0"]
+reason = "Ash TUI uses 0.27.2. Ratatui and katex-rs use 0.28.0."
 
 [[multiple_versions]]
 name = "strum_macros"
-versions = ["0.26.4", "0.27.2", "0.28.0"]
-reason = "Current upstream API families: 0.26.4 via strum; 0.27.2 via ash-tui, strum; 0.28.0 via katex-rs and strum 0.28. Review the introducing packages together before changing this set."
+versions = ["0.27.2", "0.28.0"]
+reason = "Derive macros for Ash TUI's Strum 0.27 and the Strum 0.28 used by Ratatui and katex-rs."
 
 [[multiple_versions]]
 name = "syn"
-versions = ["2.0.119", "3.0.3"]
-reason = "Current upstream API families: 2.0.119 via async-recursion, bindgen, bytemuck_derive and other importers; 3.0.3 via async-trait, clap_derive, darling_core and other importers. Review the introducing packages together before changing this set."
+versions = ["1.0.109", "2.0.119", "3.0.3"]
+reason = "1.0.109 remains in the lockfile through Termwiz's wezterm-dynamic-derive. Bindgen and bytemuck_derive use 2.0.119. Async-trait and clap_derive use 3.0.3."
 
 [[multiple_versions]]
 name = "thiserror"
 versions = ["1.0.69", "2.0.21"]
-reason = "Current upstream API families: 1.0.69 via ansi-to-tui, cairo-rs, calloop and other importers; 2.0.21 via android-activity, mxc-sdk, ash-attachments and other importers. Review the introducing packages together before changing this set."
+reason = "ASN.1 and JNI consumers use 1.0.69. Ansi-to-tui, Ratatui, mxc-sdk and Ash attachments use 2.0.21."
 
 [[multiple_versions]]
 name = "thiserror-impl"
@@ -206,11 +201,6 @@ reason = "Current upstream API families: 1.0.69 via thiserror; 2.0.21 via thiser
 name = "toml_datetime"
 versions = ["0.7.5+spec-1.1.0", "1.1.2+spec-1.1.0"]
 reason = "0.7.5 serves existing toml 0.9 consumers; 1.1.2 is required by rust-analyzer's toml 1.1 and is shared with toml_edit."
-
-[[multiple_versions]]
-name = "unicode-width"
-versions = ["0.1.14", "0.2.0"]
-reason = "Current upstream API families: 0.1.14 via unicode-truncate; 0.2.0 via ash-editor, ash-terminal, ash-terminal-runtime and other importers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
 name = "ureq"
@@ -400,13 +390,28 @@ reason = "0.16 through rtc-dtls; 0.18 through rcgen. Certificate parsing remains
 
 [[multiple_versions]]
 name = "phf"
-versions = ["0.12.1", "0.14.0"]
-reason = "0.12.1 via chrono-tz; katex-rs requires 0.14.0 for generated symbol and metric tables."
+versions = ["0.11.3", "0.12.1", "0.14.0"]
+reason = "0.11.3 remains in the lockfile through Ratatui's optional Termwiz backend. Chrono-tz uses 0.12.1 and katex-rs uses 0.14.0."
+
+[[multiple_versions]]
+name = "phf_codegen"
+versions = ["0.11.3", "0.14.0"]
+reason = "Termwiz's optional terminfo dependency and katex-rs generate tables for their respective PHF versions."
+
+[[multiple_versions]]
+name = "phf_generator"
+versions = ["0.11.3", "0.14.0"]
+reason = "Code generation for the PHF 0.11.3 and 0.14.0 families."
+
+[[multiple_versions]]
+name = "phf_macros"
+versions = ["0.11.3", "0.14.0"]
+reason = "Macros for the PHF 0.11.3 and 0.14.0 families."
 
 [[multiple_versions]]
 name = "phf_shared"
-versions = ["0.12.1", "0.14.0"]
-reason = "Matches phf 0.12.1 (chrono-tz) and phf 0.14.0 (katex-rs and its build-time generators)."
+versions = ["0.11.3", "0.12.1", "0.14.0"]
+reason = "Shared implementation for the reviewed PHF families used by Termwiz, chrono-tz and katex-rs."
 
 [[multiple_versions]]
 name = "prettyplease"

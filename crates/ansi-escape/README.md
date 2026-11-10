@@ -35,7 +35,7 @@ parser state，或依赖 `ash-terminal`。完整 PTY terminal emulation 属于
 | `expand_tabs`           | private             | 固定把 tab 投影为四空格，避免 transcript gutter 碰撞   | 同步检查 tab 测试和调用方 gutter contract       |
 | `ansi_to_tui::IntoText` | dependency boundary | 解析 SGR、过滤非展示 escape sequence、生成 owned spans | 升级时必须与 workspace Ratatui 版本保持类型兼容 |
 
-当前依赖 `ansi-to-tui 7`，对应 workspace 的 Ratatui `0.29` 类型。若升级 Ratatui，必须先验证
+当前依赖 `ansi-to-tui 8.0.1`，对应 workspace 的 Ratatui `0.30` 类型。若升级 Ratatui，必须先验证
 `Text`/`Line` 类型仍来自同一 Ratatui generation，不能在调用方做跨版本转换。
 
 ## 测试

@@ -21,7 +21,10 @@ export function renderInlineRenameInput(container: HTMLElement, options: InlineR
 	if (options.description) input.setAttribute('aria-description', options.description);
 	if (options.maxLength !== undefined) input.maxLength = options.maxLength;
 	container.append(input);
-	store.add(addDisposableListener(input, 'input', () => input.setCustomValidity('')));
+	store.add(addDisposableListener(input, 'input', () => {
+		input.setCustomValidity('');
+		input.removeAttribute('aria-invalid');
+	}));
 	store.add(addDisposableListener(input, 'keydown', event => {
 		// A surrounding toolbar must leave text navigation to the input.
 		if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {

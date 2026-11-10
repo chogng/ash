@@ -113,7 +113,7 @@ suite('github browser component', () => {
 		await page.keyboard.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashGitHubIntegration.opened)).toEqual(['https://github.com/team/repo/issues/7']);
 		await expect(pr).toHaveText('Fix GitHub links · #8 · team/repo · Draft');
-		expect(await page.evaluate(() => window.ashGitHubIntegration.requests.filter(request => request.method === 'github/checks').length)).toBe(0);
+		expect(await page.evaluate(() => window.ashGitHubIntegration.requests.filter(request => request.method === 'github/pullRequest/checks').length)).toBe(0);
 		await pr.focus();
 		await page.keyboard.press('F2');
 		await page.keyboard.press('Tab');
@@ -230,6 +230,20 @@ suite('github browser component', () => {
 		await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('mixed'));
 		await expect(pr).toContainText('Checks failed');
 		await expect(pr.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'git-pull-request-error');
+		await expect(page.locator('.ash-github-resource-hover')).toContainText('Waiting for required checks to report: gate');
+	});
+
+	test('a required check that has not reported appears as pending in Chinese', async function () {
+		const { page } = browserTests;
+		await page.goto('/github.html?prState=open&locale=zh-CN');
+		const pr = page.locator('main a[href="https://github.com/team/repo/pull/8"]');
+		await pr.focus();
+		await page.keyboard.press('F2');
+		await page.evaluate(() => window.ashGitHubIntegration.releaseChecks('pending'));
+		await expect(pr).toContainText('检查进行中');
+		const card = page.locator('.ash-github-resource-hover');
+		await expect(card).toContainText('正在等待必需检查上报：gate');
+		await expect(card).toHaveAttribute('data-github-content', /正在等待必需检查上报：gate/);
 	});
 
 	test('Cowork uses the same PR icon and preserves keyboard focus when checks resolve', async function () {

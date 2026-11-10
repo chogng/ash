@@ -14,7 +14,7 @@ export function installChatGPTVerification(): void {
 		return originalFetch(input, init);
 	};
 	type Phase = 'discovery' | 'import' | 'requirements' | 'headers';
-	const prepare = async (setPhase: (phase: Phase) => void): Promise<Record<string, string>> => {
+	const prepare = async (sidebar: boolean, setPhase: (phase: Phase) => void): Promise<Record<string, string>> => {
 		let moduleUrl: string | undefined;
 		let inspectedEntry: string | undefined;
 		// Discover the resource loaded by the current official page, rather than pinning a
@@ -60,12 +60,19 @@ export function installChatGPTVerification(): void {
 		const api: unknown = Object.values(module).find(value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function');
 		if (!api || typeof api !== 'object' || !('finalizeChatRequirements' in api) || typeof api.finalizeChatRequirements !== 'function') { throw new Error('Verification API is unavailable'); }
 		setPhase('requirements');
-		const value: unknown = await api.finalizeChatRequirements({ requestSignal: new AbortController().signal });
+		// Ash supplies authenticated request headers to this otherwise signed-out document.
+		// The sidebar accepts the SDK's prepared result and completes verification with its request.
+		if (sidebar) {
+			if (!('primeChatRequirements' in api) || typeof api.primeChatRequirements !== 'function') { throw new Error('ChatGPT preparation API is unavailable'); }
+			api.primeChatRequirements(true);
+		}
+		const value: unknown = await api.finalizeChatRequirements({ allowPreparedOnly: sidebar, requestSignal: new AbortController().signal });
 		setPhase('headers');
 		if (!value || typeof value !== 'object') { throw new Error('Invalid verification result'); }
 		const headers: Record<string, string> = {};
 		for (const [field, header] of [
 			['chatRequirementsToken', 'OpenAI-Sentinel-Chat-Requirements-Token'],
+			['chatRequirementsPrepareToken', 'OpenAI-Sentinel-Chat-Requirements-Prepare-Token'],
 			['proofToken', 'OpenAI-Sentinel-Proof-Token'],
 			['turnstileToken', 'OpenAI-Sentinel-Turnstile-Token'],
 		] as const) {
@@ -75,14 +82,15 @@ export function installChatGPTVerification(): void {
 				headers[header] = token;
 			}
 		}
-		if (!headers['OpenAI-Sentinel-Chat-Requirements-Token']) { throw new Error('Verification did not finish'); }
+		const required = sidebar ? 'OpenAI-Sentinel-Chat-Requirements-Prepare-Token' : 'OpenAI-Sentinel-Chat-Requirements-Token';
+		if (!headers[required]) { throw new Error('Verification did not finish'); }
 		return headers;
 	};
-	const target = globalThis as typeof globalThis & { __ashPrepareChatGPTHeaders?: () => Promise<Record<string, string> | { failedPhase: Phase; }>; };
-	target.__ashPrepareChatGPTHeaders = async () => {
+	const target = globalThis as typeof globalThis & { __ashPrepareChatGPTHeaders?: (sidebar?: boolean) => Promise<Record<string, string> | { failedPhase: Phase; }>; };
+	target.__ashPrepareChatGPTHeaders = async (sidebar = false) => {
 		let phase: Phase = 'discovery';
 		try {
-			return await prepare(next => { phase = next; });
+			return await prepare(sidebar, next => { phase = next; });
 		} catch {
 			// Report the fixed stage, never an SDK error that could include request data.
 			return { failedPhase: phase };

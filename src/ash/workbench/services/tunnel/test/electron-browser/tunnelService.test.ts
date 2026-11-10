@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import type { ChildProcess } from 'node:child_process';
+import type { ChildProcessByStdio } from 'node:child_process';
+import { PassThrough, type Readable, type Writable } from 'node:stream';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
@@ -161,20 +162,19 @@ test('Desktop TunnelService rejects malformed Main tunnel data before exposing h
 
 test('Desktop tunnels cross the Main channel into the window SSH owner and close its process', async () => {
 	using resources = new DisposableStore();
-	const children: TestSshChild[] = [];
+	const children: TestForwardChild[] = [];
 	const hosts: string[] = [];
 	const owner = (host: string): SshPortForwardingService => resources.add(new SshPortForwardingService({
 		getWorkspace: () => ({ id: host, remoteAuthority: `ssh+${host}` }),
+		forwardExecutable: () => 'ash-remote-host',
 		sshExecutable: 'ssh',
 		localEnvironment: { SSH_AUTH_SOCK: '/private/agent.sock' },
-		reserveLocalPort: async () => 13000,
 		spawnProcess: (_executable, args) => {
-			hosts.push(args.at(-1)!);
-			const child = new TestSshChild();
+			hosts.push(args[1]!);
+			const child = new TestForwardChild(13000);
 			children.push(child);
-			return child as unknown as ChildProcess;
+			return child as unknown as ChildProcessByStdio<Writable, Readable, null>;
 		},
-		probeLoopbackListener: async () => 'ready',
 	}));
 	const firstOwner = owner('first-host');
 	const secondOwner = owner('second-host');
@@ -217,16 +217,19 @@ test('Desktop tunnels cross the Main channel into the window SSH owner and close
 	});
 });
 
-class TestSshChild extends EventEmitter {
+class TestForwardChild extends EventEmitter {
+	readonly stdin = new PassThrough();
+	readonly stdout = new PassThrough();
 	public exitCode: number | null = null;
-	public signalCode: NodeJS.Signals | null = null;
-	public kill(): boolean {
-		if (this.exitCode === null) {
+
+	constructor(localPort: number) {
+		super();
+		queueMicrotask(() => this.stdout.write(JSON.stringify({ kind: 'ready', localPort }) + '\n'));
+		this.stdin.once('finish', () => {
 			this.exitCode = 0;
-			this.emit('exit', 0, null);
+			this.stdout.end();
 			this.emit('close', 0, null);
-		}
-		return true;
+		});
 	}
 }
 
@@ -313,19 +316,17 @@ function registerMainProcess(services: InstantiationService, owner: TestChannelO
 }
 
 function fixture() {
-	const children: Child[] = [];
+	const children: TestForwardChild[] = [];
 	const host = new SshPortForwardingService({
 		getWorkspace: () => ({ id: 'remote', remoteAuthority: 'ssh+fixture' }),
+		forwardExecutable: () => 'ash-remote-host',
 		sshExecutable: 'ssh',
 		localEnvironment: {},
-		reserveLocalPort: async () => 41_234,
 		spawnProcess: () => {
-			const child = new Child();
+			const child = new TestForwardChild(41_234);
 			children.push(child);
-			return child as unknown as ChildProcess;
+			return child as unknown as ChildProcessByStdio<Writable, Readable, null>;
 		},
-		probeLoopbackListener: async () => 'ready',
-		wait: async () => { },
 	});
 	const channel = remotePortForwardingChannel(() => host);
 	const call = <T>(method: string, params?: unknown): Promise<T> => channel.call<T>('window:1', `ash:remote:tunnel:${method}`, params);
@@ -394,16 +395,3 @@ test('host close IPC validates identities before changing ownership', async () =
 	await assert.rejects(f.call('close', { id: 'one', host: 'public.example' }), /id/);
 	assert.equal(f.children.length, 0);
 });
-
-class Child extends EventEmitter {
-	public exitCode: number | null = null;
-	public signalCode: NodeJS.Signals | null = null;
-	public kill(): boolean {
-		if (this.exitCode === null) {
-			this.exitCode = 0;
-			this.emit('exit', 0);
-			this.emit('close', 0);
-		}
-		return true;
-	}
-}

@@ -17,6 +17,49 @@ async function chooseWorkspaceProject(page: Page, directory: string): Promise<vo
 	await expect(chooser).toHaveText(folder);
 }
 
+test('Ash Chat opens persisted fork Threads from its sidebar tree', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+	const { client, close } = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+	try {
+		const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+			commandId: 'sidebar-fork-origin', kind: 'chat', title: 'Native fork origin', agent: { type: 'default' }, executionTarget: null,
+		});
+		const { sessionId } = session;
+		const root = session.threads[0]!.threadId;
+		const fork = async (parentThreadId: string, title: string) => {
+			const result = await client.request(APP_SERVER_METHODS['session/request'], {
+				commandId: title, sessionId, request: { type: 'forkThread', parentThreadId, title },
+			});
+			if (result.type !== 'thread') throw new Error('Expected a persisted fork Thread');
+			return result.value.threadId;
+		};
+		const child = await fork(root, 'First native fork');
+		const grandchild = await fork(child, 'Nested native fork');
+		const page = await workbench.openAgentsWindow(target.kind);
+		const sidebar = page.locator('[data-view-container-id="sessions.chatgpt.navigation"]');
+		const original = sidebar.locator(`[data-item="ash:${sessionId}"]`);
+		const title = original.getByRole('button', { name: 'Native fork origin', exact: true });
+		const branches = original.getByRole('button', { name: 'Conversation branches', exact: true });
+		const nested = sidebar.getByRole('button', { name: 'Nested native fork', exact: true });
+		const chat = page.locator('.ash-native-chat-widget .ash-chat');
+		await expect(original.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+		await expect(nested).toHaveCount(0);
+		await title.press('ArrowRight');
+		await expect(branches).toHaveAttribute('aria-expanded', 'true');
+		await nested.click();
+		await expect(chat).toHaveAttribute('data-thread-id', grandchild);
+		const parent = sidebar.getByRole('button', { name: 'Forked from: First native fork', exact: true });
+		await expect(parent.locator('[data-ash-icon-id="fork"]')).toBeVisible();
+		await parent.click();
+		await expect(chat).toHaveAttribute('data-thread-id', child);
+		await sidebar.getByRole('button', { name: 'Forked from: Native fork origin', exact: true }).click();
+		await expect(chat).toHaveAttribute('data-thread-id', root);
+		await title.press('ArrowLeft');
+		await expect(nested).toHaveCount(0);
+	} finally {
+		await close();
+	}
+});
+
 test('Agents reload restores the live terminal for the selected session', { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }) => {
 	const { client, close } = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 	try {

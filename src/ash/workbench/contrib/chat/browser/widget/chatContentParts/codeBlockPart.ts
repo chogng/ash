@@ -1,23 +1,39 @@
 import './media/codeBlockPart.css';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
-import { addDisposableListener, h, stopEvent } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, stopEvent } from '../../../../../../base/browser/dom.js';
+import type { ActionViewItemOptions } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { getWindowId } from '../../../../../../base/browser/window.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
+import { getHoverDelegate } from '../../../../../../base/browser/ui/hover/hoverDelegate.js';
+import { appendIcon } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
+import type { IAction } from '../../../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
-import { isCancellationError } from '../../../../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
+import { Event } from '../../../../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../../base/common/uri.js';
 import { CodeEditorWidget } from '../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../../editor/common/config/fontInfo.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { PLAINTEXT_LANGUAGE_ID } from '../../../../../../editor/common/languages/modesRegistry.js';
+import { ITreeSitterLibraryService } from '../../../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { localize } from '../../../../../../nls.js';
+import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
+import { MenuId } from '../../../../../../platform/actions/common/actions.js';
+import { WorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
+import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
+import { createTreeSitterSyntaxSession } from '../../../../../services/treeSitter/browser/treeSitterLibraryService.js';
 import { CodeEditorConfiguration } from '../../../../codeEditor/common/editorConfiguration.js';
+import { CopyCodeBlockActionId } from '../../actions/chatCodeblockActions.js';
 import { ChatEditorConfiguration } from '../../../common/constants.js';
 
 export interface ICodeBlockActionContext {
@@ -43,94 +59,185 @@ export interface ICodeBlockData {
 	readonly getActionContext?: () => Pick<ICodeBlockActionContext, 'element' | 'chatSessionResource'>;
 }
 
+type CodeBlockAction = Pick<IAction, 'id' | 'label' | 'icon'> & { readonly announcement?: string; };
+
 /** Owns a read-only Stanza document; actions operate on its source text, never rendered markup. */
 export class CodeBlockPart extends Disposable {
 	public readonly element: HTMLElement;
-	public readonly editor: CodeEditorWidget;
 	private readonly documentModel = this._register(new MutableDisposable<TextModel>());
 	private readonly editorContainer: HTMLElement;
 	private readonly toolbar: HTMLElement;
 	private readonly language: HTMLElement;
-	private readonly buttons: Button[] = [];
-	private readonly pendingActions = new Set<Button>();
+	private readonly pendingActions = new Set<string>();
 	private data: ICodeBlockData | undefined;
+	private languageId = PLAINTEXT_LANGUAGE_ID;
 	private readonly relayout: RunOnceScheduler;
+	private editor: CodeEditorWidget | undefined;
+	private layoutWidth: number | undefined;
 	private visible = true;
 	private measuredHeight = false;
 	private viewState: ReturnType<CodeEditorWidget['saveViewState']> | undefined;
 
 	constructor(
 		document: Document,
-		@IInstantiationService instantiationService: IInstantiationService,
+		private readonly presentation: 'card' | undefined,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ILanguageService private readonly languages: ILanguageService,
+		@IContextMenuService contextMenus: IContextMenuService,
+		@IActionViewItemService private readonly actionViewItems: IActionViewItemService,
+		@ITreeSitterLibraryService private readonly syntax: ITreeSitterLibraryService,
+		@IThemeService private readonly themes: IThemeService,
 	) {
 		super();
 		this.element = h(document, 'div');
 		this.element.className = 'ash-chat-code-block';
-		this.toolbar = h(document, 'div');
-		this.toolbar.className = 'ash-chat-code-block-toolbar';
-		this.toolbar.setAttribute('role', 'toolbar');
-		this.toolbar.setAttribute('aria-label', localize('chat.code.actions', 'Code block actions'));
+		const header = h(document, 'div', { className: 'ash-chat-code-block-toolbar' });
+		const toolbarLabel = localize('chat.code.actions', 'Code block actions');
 		this.language = h(document, 'span');
 		this.language.className = 'ash-chat-code-block-language';
-		this.toolbar.append(this.language);
-		for (const [command, label, announcement] of [
-			['workbench.action.chat.copyCodeBlock', localize('chat.code.copy', 'Copy'), localize('chat.code.copied', 'Code copied.')],
-			['workbench.action.chat.applyInEditor', localize('chat.code.apply', 'Apply to editor'), undefined],
-			['workbench.action.chat.insertCodeBlock', localize('chat.code.insert', 'Insert at cursor'), undefined],
-			['workbench.action.chat.insertIntoNewFile', localize('chat.code.newFile', 'Open in new file'), undefined],
-		] as const) {
-			const button = this._register(new Button(this.toolbar, {
-				...defaultButtonStyles,
-				label,
-				size: 'small',
+		const copied = localize('chat.code.copied', 'Code copied.');
+		const copy: CodeBlockAction = {
+			id: CopyCodeBlockActionId,
+			label: localize('chat.code.copy', 'Copy'),
+			icon: Lxicon.copy,
+			announcement: copied,
+		};
+		const apply: CodeBlockAction = { id: 'workbench.action.chat.applyInEditor', label: localize('chat.code.apply', 'Apply to editor') };
+		const edits: CodeBlockAction[] = [
+			apply,
+			{ id: 'workbench.action.chat.insertCodeBlock', label: localize('chat.code.insert', 'Insert at cursor') },
+			{ id: 'workbench.action.chat.insertIntoNewFile', label: localize('chat.code.newFile', 'Open in new file') },
+		];
+		if (presentation === 'card') {
+			this.element.classList.add('ash-chat-code-block-card');
+			appendIcon(Lxicon.code, header);
+			header.append(this.language);
+			this._register(getHoverDelegate().setupDelayedHover(this.language, () => ({
+				content: this.language.textContent ?? '',
+			})));
+			const toolbar = this._register(new WorkbenchToolBar(header, contextMenus, {
+				ariaLabel: toolbarLabel,
+				tabNavigation: 'each-action',
+				moreActionsPlacement: { beforeActionId: copy.id },
+				actionViewItemProvider: (entry, options) => entry.id === copy.id ? this.createCopyView(entry, options, header) : undefined,
 			}));
-			this.buttons.push(button);
-			this._register(button.onDidClick(() => {
+			const canApply = () => {
 				const data = this.data;
-				if (!data || this.pendingActions.has(button)) return;
-				const context: ICodeBlockActionContext = {
-					code: data.text,
-					languageId: this.documentModel.value?.getLanguageId(),
-					codeBlockIndex: data.codeBlockIndex,
-					element: data.element,
-					chatSessionResource: data.chatSessionResource,
-					...data.getActionContext?.(),
-				};
-				this.pendingActions.add(button);
-				button.domNode.setAttribute('aria-busy', 'true');
-				void this.commands.executeCommand(command, context).then(() => {
-					if (!this.isDisposed && announcement) status(announcement);
-				}, error => {
-					if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.code.failed', 'Could not perform the code block action: {0}', String(error)));
-				}).finally(() => {
-					this.pendingActions.delete(button);
-					if (!this.isDisposed) button.domNode.removeAttribute('aria-busy');
-				});
-			}));
+				return !!(data?.getActionContext?.().chatSessionResource ?? data?.chatSessionResource);
+			};
+			const action = (entry: CodeBlockAction): IAction => ({
+				...entry,
+				get enabled() { return entry !== apply || canApply(); },
+				get tooltip() {
+					return this.enabled ? entry.label : localize('chat.code.applyUnavailable', 'Available on completed replies that support applying code.');
+				},
+				run: () => this.runAction(entry),
+			});
+			toolbar.setActions([action(copy)], edits.map(action));
+			this.toolbar = toolbar.element;
+		} else {
+			this.toolbar = header;
+			header.setAttribute('role', 'toolbar');
+			header.setAttribute('aria-label', toolbarLabel);
+			header.append(this.language);
+			this.createInlineActions(header, [copy, ...edits]);
 		}
-		this.editorContainer = h(document, 'div');
-		this._register(addDisposableListener(this.toolbar, 'keydown', event => {
-			const current = this.buttons.findIndex(button => button.domNode === document.activeElement);
+		this.editorContainer = h(document, 'div', { className: 'ash-chat-code-block-editor' });
+		this.element.append(header, this.editorContainer);
+		this.relayout = this._register(new RunOnceScheduler(() => this.layout(), 0));
+		this._register(this.languages.onDidChange(() => {
+			if (this.data) this.updateLanguage(this.data.languageId);
+		}));
+		this._register(toDisposable(() => this.element.remove()));
+	}
+
+	private createCopyView(action: IAction, options: ActionViewItemOptions, host: HTMLElement) {
+		const factory = this.actionViewItems.lookUp(MenuId.ChatCodeBlockToolbar, action.id);
+		return factory?.({
+			...action,
+			run: () => {
+				if (!this.data) throw new CancellationError();
+				return this.executeAction(action.id, this.data);
+			},
+		}, options, this.instantiationService, getWindowId(getWindow(host)) ?? 0);
+	}
+
+	private createInlineActions(toolbar: HTMLElement, actions: readonly CodeBlockAction[]): void {
+		const buttons = actions.map(action => {
+			if (action.id === CopyCodeBlockActionId) {
+				const view = this.createCopyView({ ...action, tooltip: action.label, enabled: true, run: () => this.runAction(action) },
+					{ buttonStyles: defaultButtonStyles, iconOnly: false }, toolbar);
+				if (view) {
+					const host = h(toolbar.ownerDocument, 'span');
+					toolbar.append(host);
+					this._register(view).render(host);
+					return { element: host, focus: () => view.focus() };
+				}
+			}
+			const button = this._register(new Button(toolbar, { ...defaultButtonStyles, label: action.label, size: 'small' }));
+			this._register(button.onDidClick(() => { void this.runAction(action, button.domNode); }));
+			return { element: button.domNode, focus: () => button.focus() };
+		});
+		this._register(addDisposableListener(toolbar, 'keydown', event => {
+			const current = buttons.findIndex(button => button.element.contains(toolbar.ownerDocument.activeElement));
 			if (current < 0) return;
-			const next = event.key === 'ArrowRight' ? (current + 1) % this.buttons.length
-				: event.key === 'ArrowLeft' ? (current + this.buttons.length - 1) % this.buttons.length
-					: event.key === 'Home' ? 0 : event.key === 'End' ? this.buttons.length - 1 : undefined;
+			const next = event.key === 'ArrowRight' ? (current + 1) % buttons.length
+				: event.key === 'ArrowLeft' ? (current + buttons.length - 1) % buttons.length
+					: event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : undefined;
 			if (next === undefined) return;
 			stopEvent(event);
-			this.buttons[next]?.focus();
+			buttons[next]?.focus();
 		}));
-		this.editorContainer.className = 'ash-chat-code-block-editor';
-		this.element.append(this.toolbar, this.editorContainer);
-		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
+	}
+
+	private executeAction(id: string, data: ICodeBlockData): Promise<unknown> {
+		const context: ICodeBlockActionContext = {
+			code: data.text,
+			languageId: this.documentModel.value?.getLanguageId(),
+			codeBlockIndex: data.codeBlockIndex,
+			element: data.element,
+			chatSessionResource: data.chatSessionResource,
+			...data.getActionContext?.(),
+		};
+		return this.commands.executeCommand(id, context);
+	}
+
+	private reportActionError(error: unknown): void {
+		if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.code.failed', 'Could not perform the code block action: {0}', String(error)));
+	}
+
+	private async runAction(action: CodeBlockAction, trigger?: HTMLElement): Promise<void> {
+		const data = this.data;
+		if (!data || this.pendingActions.has(action.id)) return;
+		this.pendingActions.add(action.id);
+		trigger?.setAttribute('aria-busy', 'true');
+		try {
+			await this.executeAction(action.id, data);
+			if (!this.isDisposed && action.announcement) status(action.announcement);
+		} catch (error) {
+			this.reportActionError(error);
+		} finally {
+			this.pendingActions.delete(action.id);
+			if (!this.isDisposed) trigger?.removeAttribute('aria-busy');
+		}
+	}
+
+	public get model(): TextModel | undefined { return this.documentModel.value; }
+
+	private createEditor(): CodeEditorWidget {
+		// Offscreen history only needs the toolbar and reserved block height.
+		const editor = this._register(this.instantiationService.createInstance(CodeEditorWidget, {
 			container: this.editorContainer,
 			model: null,
 			readOnly: true,
 			ariaLabel: localize('chat.code.content', 'Response code block'),
 			presentation: 'embedded',
+			// The block supplies its measured width and capped height after attaching
+			// the model. Skip the interim synchronous paint at the old dimensions.
+			dimension: { width: 0, height: 0 },
 			glyphMargin: false,
 			lineDecorationsWidth: 0,
 			folding: false,
@@ -139,24 +246,40 @@ export class CodeBlockPart extends Disposable {
 			scrollBeyondLastLine: false,
 			contributions: [],
 		}));
-		this.relayout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(this.configuration.onDidChangeConfiguration(event => {
 			const keys = [...Object.values(ChatEditorConfiguration), ...Object.values(CodeEditorConfiguration)];
 			if (keys.some(key => event.affectsConfiguration(key))) {
-				this.updateOptions();
+				this.updateOptions(editor);
 				this.relayout.schedule();
 			}
 		}));
-		this._register(this.editor.onDidLayoutChange(() => this.relayout.schedule()));
-		const resize = new ResizeObserver(() => this.relayout.schedule());
+		this._register(editor.onDidContentSizeChange(event => {
+			if (event.contentHeightChanged) this.relayout.schedule();
+		}));
+		const resize = new ResizeObserver(([entry]) => {
+			if (this.model && Math.round(entry.contentRect.width) !== this.layoutWidth) this.relayout.schedule();
+		});
 		resize.observe(this.editorContainer);
 		this._register(toDisposable(() => resize.disconnect()));
-		this._register(toDisposable(() => this.element.remove()));
+		return editor;
 	}
 
-	public render(data: ICodeBlockData, width: number): void {
+	private updateLanguage(info: string): void {
+		const resolved = this.languages.getRegisteredLanguageIds().includes(info) ? info : this.languages.getLanguageIdByLanguageName(info);
+		this.languageId = resolved ?? PLAINTEXT_LANGUAGE_ID;
+		let label = info;
+		if (this.presentation === 'card') {
+			const name = resolved ? this.languages.getLanguageName(resolved) : null;
+			label = info ? name ?? (info.charAt(0).toUpperCase() + info.slice(1)) : localize('chat.code.plainLabel', 'Code');
+		}
+		if (this.language.textContent !== label) this.language.textContent = label;
+		const model = this.documentModel.value;
+		if (model && model.getLanguageId() !== this.languageId) model.setLanguage(this.languageId);
+	}
+
+	public render(data: ICodeBlockData, width?: number): void {
+		if (this.data?.languageId !== data.languageId) this.updateLanguage(data.languageId);
 		this.data = data;
-		this.language.textContent = data.languageId;
 		this.toolbar.setAttribute('aria-label', localize('chat.code.numberedActions', 'Code block {0} actions', data.codeBlockIndex + 1));
 		if (!this.visible) {
 			if (!this.measuredHeight) {
@@ -169,30 +292,33 @@ export class CodeBlockPart extends Disposable {
 			}
 			return;
 		}
-		// Fence info can be empty, incomplete, or an alias rather than a valid registry ID.
-		const languageId = this.languages.getRegisteredLanguageIds().includes(data.languageId) ? data.languageId
-			: this.languages.getLanguageIdByLanguageName(data.languageId) ?? 'plaintext';
+		const editor = this.editor ??= this.createEditor();
 		const model = this.documentModel.value;
 		if (!model) {
-			const created = new TextModel(data.text, { languageId });
-			this.editor.setModel(created);
+			const created = new TextModel(data.text, {
+				languageId: this.languageId,
+				tokenization: {
+					createSyntaxSession: model => createTreeSitterSyntaxSession(model, this.configuration, this.syntax, this.themes),
+					onDidChangeSyntaxBackend: this.syntax.onDidChange,
+					onDidChangeLanguageSupport: Event.map(this.themes.onDidColorThemeChange, () => undefined),
+				},
+			});
+			editor.setModel(created);
 			this.documentModel.value = created;
 		} else {
-			// A completed language fence changes highlighting, not the response document's lifetime.
-			if (model.getLanguageId() !== languageId) model.setLanguage(languageId);
 			const previous = model.getValue();
 			if (previous !== data.text) {
-				const selections = this.editor.getSelections();
+				const selections = editor.getSelections();
 				if (model.getEOL() === '\n' && !data.text.includes('\r') && data.text.startsWith(previous)) {
 					// Streamed appends keep the existing buffer and invalidate only the added text.
 					// Reset corrections and other EOL inputs so the model still detects/normalizes their EOL.
 					const end = model.getPositionAt(previous.length);
 					model.applyEdits([{ range: Range.fromPositions(end), text: data.text.slice(previous.length) }]);
 				} else { model.setValue(data.text); }
-				if (selections) this.editor.setSelections(selections);
+				if (selections) editor.setSelections(selections);
 			}
 		}
-		this.updateOptions();
+		this.updateOptions(editor);
 		this.layout(width);
 	}
 
@@ -202,38 +328,42 @@ export class CodeBlockPart extends Disposable {
 	public focus(): void {
 		if (this.isDisposed) { return; }
 		this.setVisible(true);
-		this.editor.focus();
+		this.editor?.focus();
 	}
 
 	public setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
 		if (!visible) {
-			this.viewState = this.editor.saveViewState() ?? undefined;
+			this.viewState = this.editor?.saveViewState() ?? undefined;
 			this.relayout.cancel();
-			this.editor.setModel(null);
+			this.editor?.setModel(null);
 			this.documentModel.clear();
 		} else if (this.data) {
 			this.render(this.data, this.editorContainer.clientWidth);
-			this.editor.restoreViewState(this.viewState ?? null);
+			this.editor?.restoreViewState(this.viewState ?? null);
 			this.viewState = undefined;
 		}
 	}
 
-	public layout(width = this.editorContainer.clientWidth): void {
-		if (this.isDisposed || !this.documentModel.value) return;
+	public layout(width?: number): void {
+		const model = this.model;
+		const editor = this.editor;
+		if (this.isDisposed || !model || !editor) return;
+		width ??= this.editorContainer.clientWidth;
+		this.layoutWidth = width;
 		const font = this.font();
 		const maximum = this.data?.renderOptions?.maxHeightInLines ?? 20;
-		const contentHeight = this.editor.getContentHeight() || this.documentModel.value.lineCount * font.lineHeight + 16;
+		const contentHeight = editor.getContentHeight() || model.lineCount * font.lineHeight + 16;
 		const height = Math.max(font.lineHeight + 16, Math.min(contentHeight, maximum * font.lineHeight + 16));
 		this.editorContainer.style.height = `${height}px`;
 		this.measuredHeight = true;
-		this.editor.layout({ width, height });
+		editor.layout({ width, height });
 	}
 
-	private updateOptions(): void {
+	private updateOptions(editor: CodeEditorWidget): void {
 		const font = this.font();
-		this.editor.updateOptions({
+		editor.updateOptions({
 			fontFamily: font.getMassagedFontFamily(), fontSize: font.fontSize, lineHeight: font.lineHeight,
 			wordWrap: this.configuration.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on' ? 'on' : 'off',
 		});

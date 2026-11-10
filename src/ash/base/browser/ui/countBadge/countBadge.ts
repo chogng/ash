@@ -11,27 +11,27 @@ export interface ICountBadgeStyles {
 	readonly badgeBorder: string | undefined;
 }
 
-export interface ICountBadgeOptions {
-	readonly count?: number;
-	readonly countFormat?: string;
-	readonly titleFormat?: string;
-	/** Outlined counts remain visually secondary alongside labels. */
+interface IBadgeOptions {
+	/** Outlined badges remain visually secondary alongside labels. */
 	readonly presentation?: 'default' | 'accent' | 'outlined';
 	readonly size?: 'default' | 'small';
 }
 
-/**
- * A non-interactive count that owns its formatted text, description, hover and presentation.
- * The host owns its container's layout, visibility and cross-component associations; the badge node stays private.
- */
-export class CountBadge extends Disposable {
-	private readonly element: HTMLSpanElement;
-	private readonly hover: IManagedHover | undefined;
+export interface ICountBadgeOptions extends IBadgeOptions {
+	readonly count?: number;
+	readonly countFormat?: string;
+	readonly titleFormat?: string;
+}
 
-	constructor(container: HTMLElement, private readonly options: ICountBadgeOptions = {}, styles?: ICountBadgeStyles) {
+/** A non-interactive badge whose host controls layout and accessible associations. */
+export class Badge extends Disposable {
+	protected readonly element: HTMLSpanElement;
+
+	constructor(container: HTMLElement, label: string, options: IBadgeOptions = {}, styles?: ICountBadgeStyles) {
 		super();
 		this.element = h(container.ownerDocument, 'span');
-		this.element.className = 'ash-count-badge';
+		this.element.className = 'ash-badge';
+		this.element.textContent = label;
 		if (styles) {
 			const colors = {
 				'--ash-badge-style-badge-background': styles.badgeBackground,
@@ -47,6 +47,16 @@ export class CountBadge extends Disposable {
 		this.element.classList.toggle('small', options.size === 'small');
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
+	}
+}
+
+/** A badge that keeps its formatted count, accessible description and hover in sync. */
+export class CountBadge extends Badge {
+	private readonly hover: IManagedHover | undefined;
+
+	constructor(container: HTMLElement, private readonly options: ICountBadgeOptions = {}, styles?: ICountBadgeStyles) {
+		super(container, '', options, styles);
+		this.element.classList.add('ash-count-badge');
 		if (options.titleFormat) {
 			this.hover = this._register(getHoverDelegate().setupHover({ target: this.element, content: '' }));
 		}

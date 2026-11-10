@@ -10,8 +10,10 @@ import {
 import { isNode } from '../../../base/browser/dom.js';
 import {
 	AnchorPosition,
+	ContextView,
 	ContextViewFocusRestore,
 	type ContextViewHideReason,
+	type IContextViewProvider,
 } from '../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { ActionRunner, type IAction } from '../../../base/common/actions.js';
@@ -64,6 +66,7 @@ export class ContextMenuHandler extends Disposable {
 		let didHide = false;
 		let shown = false;
 		let mounting = false;
+		let view: IContextViewProvider = this.contextViewService;
 		let pendingHide: { readonly reason: ContextViewHideReason | undefined; } | undefined;
 		const notifyHide = (reason?: ContextViewHideReason): void => {
 			if (this.activeMenu === request) { this.activeMenu = undefined; }
@@ -85,7 +88,7 @@ export class ContextMenuHandler extends Disposable {
 		const request = {
 			hide: (): void => {
 				if (this.activeMenu !== request || didHide) { return; }
-				if (shown) { this.contextViewService.hide(); }
+				if (shown) { view.hide(); }
 				else { finish(); }
 			},
 		};
@@ -109,11 +112,18 @@ export class ContextMenuHandler extends Disposable {
 		if (didHide) { return false; }
 		const anchor = toContextViewAnchor(delegate.getAnchor());
 		if (didHide) { return false; }
-		const menu = new Menu(this.contextViewService.container, actions, {
+		const dialog = isNode(anchor) ? ContextView.getContainingDialog(anchor) : undefined;
+		const container = dialog?.element ?? this.contextViewService.container;
+		if (dialog) {
+			// An action menu anchored in a dialog must leave the dialog mounted.
+			view = disposables.add(new ContextView(container));
+			disposables.add(dialog.onDidHide(() => request.hide()));
+		}
+		const menu = new Menu(container, actions, {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			openSubmenusImmediatelyOnHover: delegate.openSubmenusImmediatelyOnHover,
-			contextViewContainer: this.contextViewService.container,
+			contextViewContainer: container,
 			layer: delegate.layer ?? 10,
 			className: delegate.getMenuClassName?.(),
 			submenuClassName: delegate.submenuClassName,
@@ -131,13 +141,13 @@ export class ContextMenuHandler extends Disposable {
 		disposables.add(menu.onDidCancel(() => request.hide()));
 		disposables.add(menu.onDidBlur(() => request.hide()));
 		// Replacement callbacks can cancel this request or open a successor before it mounts.
-		this.contextViewService.hide();
+		if (!dialog) this.contextViewService.hide();
 		if (didHide) { return false; }
 		// Mounting owns the host before synchronous layout callbacks can cancel this request.
 		shown = true;
 		mounting = true;
 		try {
-			shown = this.contextViewService.show({
+			shown = view.show({
 				anchor,
 				content: menu.getContainer(),
 				anchorAxisAlignment: delegate.anchorAxisAlignment,

@@ -862,6 +862,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "italic",
+      "file": "italic.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "italics",
       "file": "italics.svg",
       "rendering": "symbolic"
@@ -1077,6 +1082,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "new-chat-session",
+      "file": "new-chat-session.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "new-file",
       "file": "new-file.svg",
       "rendering": "symbolic"
@@ -1109,6 +1119,11 @@
     {
       "id": "origin",
       "file": "origin.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "paintbrush",
+      "file": "paintbrush.svg",
       "rendering": "symbolic"
     },
     {

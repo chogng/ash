@@ -204,7 +204,7 @@ test('Choose project authorizes its folder and binds only the current Code draft
 	await f.dialog.complete([URI.file('/recent')]);
 	await folder;
 	const folderProject = f.projects.find(project => project.id === f.drafts[0]!.projectId);
-	assert.equal(folderProject?.materials[0]?.resource.fsPath, URI.file('/recent').fsPath);
+	assert.equal(folderProject?.materials.find(material => material.kind === 'folder')?.resource.fsPath, URI.file('/recent').fsPath);
 	await f.open();
 	assert.equal(f.labels.filter(label => label === 'recent').length, 1);
 	assert.equal(f.items.find(item => item.label === 'recent')?.checked, true);
@@ -250,7 +250,8 @@ test('Retrying trust reopens the declined folder and completes the original proj
 	assert.equal(f.folderTrustRetry.pending.get(), undefined);
 	assert.deepEqual(requested, [folder.fsPath, folder.fsPath, folder.fsPath]);
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: folder.fsPath });
-	assert.equal(f.projects.find(project => project.id === f.drafts[0]?.projectId)?.materials[0]?.resource.fsPath, folder.fsPath);
+	const selectedProject = f.projects.find(project => project.id === f.drafts[0]?.projectId);
+	assert.equal(selectedProject?.materials.find(material => material.kind === 'folder')?.resource.fsPath, folder.fsPath);
 	assert.equal(f.drafts[1]?.projectId, undefined);
 });
 

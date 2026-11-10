@@ -16,8 +16,12 @@ use ash_protocol::CapabilityKind;
 use ash_protocol::CapabilitySet;
 use ash_protocol::ProcessInvocationKind;
 use ash_sandboxing::FileSystemAccess;
+use ash_sandboxing::FileSystemIsolation;
+use ash_sandboxing::HostAclChanges;
 use ash_sandboxing::NetworkAccess;
+use ash_sandboxing::SandboxDirAccess;
 use ash_sandboxing::SandboxPolicy;
+use ash_sandboxing::SandboxScope;
 use ash_tool_executor::CommandExecutionAuthority;
 use core_api::ActionPolicyService;
 use core_api::CoreError;
@@ -25,11 +29,12 @@ use core_api::CoreError;
 pub(crate) fn execution_authority(
     hook: &HookConfig,
     dir: &Dir,
+    scope: Option<&SandboxScope>,
     policy: &dyn ActionPolicyService,
     cancellation: &CancellationToken,
 ) -> Result<CommandExecutionAuthority, CoreError> {
     let provenance = ActionProvenance::new(ActionSource::User, hook.id.as_str());
-    let review = review_request(hook, dir, policy.revision_for(&provenance))?;
+    let review = review_request(hook, dir, scope, policy.revision_for(&provenance))?;
     let decision = policy.decide(&review, cancellation)?;
     match decision {
         ExecutionDecision::RunSandboxed(policy) => Ok(CommandExecutionAuthority::Sandboxed(policy)),
@@ -71,6 +76,38 @@ pub(crate) fn execution_authority(
     }
 }
 
+/// An action decision can approve execution but cannot widen a Session directory grant.
+pub(crate) fn session_authority(
+    authority: CommandExecutionAuthority,
+    scope: &SandboxScope,
+) -> CommandExecutionAuthority {
+    let policy = match authority {
+        CommandExecutionAuthority::Sandboxed(policy) => policy,
+        CommandExecutionAuthority::Unrestricted => {
+            SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
+                .with_host_acl_changes(HostAclChanges::Scoped)
+        }
+    };
+    let files = if policy.file_system() == FileSystemAccess::ReadOnly {
+        FileSystemAccess::ReadOnly
+    } else {
+        session_file_access(scope)
+    };
+    CommandExecutionAuthority::Sandboxed(
+        SandboxPolicy::new(files, policy.network())
+            .with_host_acl_changes(policy.host_acl_changes())
+            .with_file_system_isolation(FileSystemIsolation::Strict),
+    )
+}
+
+fn session_file_access(scope: &SandboxScope) -> FileSystemAccess {
+    if scope.grants()[0].access() == SandboxDirAccess::ReadWrite {
+        FileSystemAccess::DirectoryWrite
+    } else {
+        FileSystemAccess::ReadOnly
+    }
+}
+
 fn validate_grant(hook: &HookConfig, matches: bool, grant_kind: &str) -> Result<(), CoreError> {
     if matches {
         return Ok(());
@@ -84,39 +121,56 @@ fn validate_grant(hook: &HookConfig, matches: bool, grant_kind: &str) -> Result<
 pub(crate) fn review_request(
     hook: &HookConfig,
     dir: &Dir,
+    scope: Option<&SandboxScope>,
     policy_revision: String,
 ) -> Result<ActionReviewRequest, CoreError> {
     let HookAction::Process { program, args } = &hook.action;
-    let canonical = serde_json::to_vec(&serde_json::json!({
+    let mut action = serde_json::json!({
         "execution_contract": "sandbox-v2-scoped-host-acl",
         "hook_id": hook.id.as_str(),
         "program": program,
         "arguments": args,
         "working_directory": dir.canonical_path(),
-    }))
-    .map_err(|error| CoreError::Policy(format!("could not canonicalize Hook action: {error}")))?;
-    let capabilities = CapabilitySet::new([
-        Capability::new(
+    });
+    if let Some(scope) = scope {
+        action["sandbox_scope"] = scope.policy_identity().into();
+    }
+    let canonical = serde_json::to_vec(&action).map_err(|error| {
+        CoreError::Policy(format!("could not canonicalize Hook action: {error}"))
+    })?;
+    let access = scope.map_or(SandboxDirAccess::ReadWrite, |scope| {
+        scope.grants()[0].access()
+    });
+    let mut capabilities = vec![Capability::new(
+        CapabilityKind::ProcessSpawn,
+        program.clone(),
+    )];
+    if access != SandboxDirAccess::Denied {
+        capabilities.push(Capability::new(
             CapabilityKind::FileRead,
             dir.canonical_path().display().to_string(),
-        ),
-        Capability::new(
+        ));
+    }
+    if access == SandboxDirAccess::ReadWrite {
+        capabilities.push(Capability::new(
             CapabilityKind::FileWrite,
             dir.canonical_path().display().to_string(),
-        ),
-        Capability::new(CapabilityKind::ProcessSpawn, program.clone()),
-    ]);
+        ));
+    }
     Ok(ActionReviewRequest::new(
         ResolvedAction::new(
             ActionDigest::from_canonical_bytes(canonical),
             ActionKind::LocalProcess(ProcessInvocationKind::Direct),
             format!("run configured Hook '{}'", hook.id),
-            capabilities,
+            CapabilitySet::new(capabilities),
         ),
         ActionProvenance::new(ActionSource::User, hook.id.as_str()),
         SandboxCompatibility::Supported(
-            SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
-                .with_host_acl_changes(ash_sandboxing::HostAclChanges::Scoped),
+            SandboxPolicy::new(
+                scope.map_or(FileSystemAccess::DirectoryWrite, session_file_access),
+                NetworkAccess::Denied,
+            )
+            .with_host_acl_changes(HostAclChanges::Scoped),
         ),
         ActionPolicyRevision::new(policy_revision),
     ))

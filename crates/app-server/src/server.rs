@@ -4805,6 +4805,9 @@ impl AppServer {
                 .git_processor()
                 .git_clone_cancel(connection, &request.params),
             Some(ClientMethod::GitStatus) => self.git_processor().git_status(&request.params),
+            Some(ClientMethod::GitStagedCommitPreview) => self
+                .git_processor()
+                .git_staged_commit_preview(&request.params),
             Some(ClientMethod::GitTransport) => self
                 .git_processor()
                 .git_transport(&request.params, cancellation),

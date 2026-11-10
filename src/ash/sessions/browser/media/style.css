@@ -1,5 +1,7 @@
 /* Agents Window visual defaults and shared-widget presentations.
  * Layout belongs to workbench.css; page-specific appearances stay with their owners. */
+@import "../ui/filterTabs.css";
+
 /* Font rendering is shared; visual weight is owned by the Agents Window. */
 .ash-sessions-window {
 	/* Window-owned type roles also apply to shared widgets and anchored popups. */
@@ -42,6 +44,37 @@
 
 .ash-sessions-window[data-interface-font="system"] {
 	--ash-font-family: var(--ash-system-font-family);
+}
+
+.ash-sessions-window .ash-chat-sent-image-thumbnails:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size40);
+	margin-block-end: var(--ash-spacing-size40);
+}
+
+.ash-sessions-window .ash-chat-markdown-part a[href] {
+	color: inherit;
+	text-decoration-style: dotted;
+	text-decoration-color: var(--ash-description-foreground);
+	text-underline-offset: 0.18em;
+}
+
+.ash-sessions-window
+	.ash-chat-markdown-part
+	a[href]:is(:hover, :focus-visible) {
+	text-decoration-style: solid;
+	text-decoration-color: currentColor;
+}
+
+.ash-sessions-window .ash-chat-markdown-part a[href]:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-sessions-window .ash-copy-action-succeeded .ash-icon-check {
+	color: var(--ash-success-foreground);
 }
 
 .ash-sessions-window .ash-workbench-sidebar {
@@ -283,6 +316,35 @@
 	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
 }
 
+.ash-sessions-window
+	:is(
+		.ash-chat-message-actions,
+		.ash-chat-code-block-card > .ash-chat-code-block-toolbar
+	) {
+	--ash-toolbar-actionSize: var(--ash-spacing-size240);
+	--ash-button-border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-sessions-window .ash-chat-message-actions > .ash-button.icon-only {
+	box-sizing: border-box;
+	inline-size: var(--ash-toolbar-actionSize);
+	min-inline-size: var(--ash-toolbar-actionSize);
+	block-size: var(--ash-toolbar-actionSize);
+	min-block-size: var(--ash-toolbar-actionSize);
+	padding: 0;
+}
+
+@media (pointer: coarse) {
+	.ash-sessions-window
+		:is(
+			.ash-chat-message-actions,
+			.ash-chat-code-block-card > .ash-chat-code-block-toolbar
+		) {
+		--ash-toolbar-actionSize: 44px;
+		--ash-button-border-radius: var(--ash-cornerRadius-large);
+	}
+}
+
 .ash-sessions-window .ash-button-primary {
 	border-color: var(--ash-contrastBorder, transparent);
 }
@@ -374,7 +436,8 @@
 		:where(.ash-sessions-window)
 			:is(
 				.ash-dialog-close-confirmation,
-				.ash-dialog-destructive-confirmation
+				.ash-dialog-destructive-confirmation,
+				.ash-dialog-form-confirmation
 			),
 		.ash-sessions-directory-permission-dialog
 	)
@@ -392,7 +455,8 @@
 		:where(.ash-sessions-window)
 			:is(
 				.ash-dialog-close-confirmation,
-				.ash-dialog-destructive-confirmation
+				.ash-dialog-destructive-confirmation,
+				.ash-dialog-form-confirmation
 			),
 		.ash-sessions-directory-permission-dialog
 	)

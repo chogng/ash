@@ -24,6 +24,8 @@ Modules may import their own layer and lower layers; they must not import, refer
 ## Module Boundaries
 
 - When a local VS Code counterpart exists, use its module responsibilities, public contract and call path to guide Ash's boundaries.
+- Before changing behavior that crosses modules, trace the production entry point to the state owner, then trace how consumers read or observe the resulting state. If the host already offers an equivalent action, compare the paths and locate the divergence before changing the UI or adding a path.
+- Keep shared interaction and confirmation with the host. Reuse its command or public API to invoke the operation, and have adapters implement source-specific capabilities behind that contract. Consumers that need updates observe changes published by the state owner.
 - Compose modules through semantic inputs and public APIs. Keep rendering helpers that depend on a component's internal structure with that component.
 
 ## Target Environments

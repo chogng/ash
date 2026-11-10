@@ -1,6 +1,7 @@
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { ChatMarkdownRichContentBuilder } from '../../../common/model/chatMarkdownRichContent.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { ChatFindModel, MAX_FIND_MATCHES, type IChatFindOptions } from '../../../browser/widget/chatFind/chatFindModel.js';
 
@@ -80,6 +81,26 @@ suite('ChatFindModel', () => {
 		items = [item('live', 'agentMessage', 'corrected')];
 		model.recompute();
 		assert.deepEqual(model.matches, []);
+	});
+
+	test('refreshes rich content matches when the same reply keeps its Markdown marker', () => {
+		const richReply = (label: string): IChatListItem => {
+			const builder = new ChatMarkdownRichContentBuilder('');
+			const text = builder.add({ kind: 'textLiteral', label, block: false });
+			return { ...item('reply', 'agentMessage', text), markdown: { supportHtml: true, richContent: builder.content } };
+		};
+		let reply = richReply('old label and old label');
+		using model = new ChatFindModel(() => [reply]);
+		model.setQuery('old label', defaults);
+		assert.equal(model.matches.length, 2);
+
+		const updated = richReply('new label');
+		assert.equal(updated.text, reply.text);
+		reply = updated;
+		model.recompute();
+		assert.equal(model.matches.length, 0);
+		model.setQuery('new label', defaults);
+		assert.deepEqual(model.matches.map(match => match.text), ['new label']);
 	});
 
 	test('caps matches and releases the derived index on clear', () => {

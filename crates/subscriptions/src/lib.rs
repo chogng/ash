@@ -25,7 +25,11 @@ const REMOTE_CHECK_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// Implementations perform provider-specific discovery and return only model
 /// metadata. The observer binds the result to the account it observed.
 pub trait SubscriptionCatalog<M, E>: Send + Sync {
-    fn refresh(&self, connection: &ModelConnectionId) -> Result<Vec<M>, E>;
+    fn refresh(
+        &self,
+        connection: &ModelConnectionId,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<M>, E>;
     /// Reads a file-owned external credential scope without contacting its endpoint.
     fn external_scope(&self, connection: &ModelConnectionId) -> Result<Option<String>, E>;
 }
@@ -160,7 +164,12 @@ impl Drop for SubscriptionObserver {
 }
 
 impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
-    fn check_external(&mut self, sources: &Sources<M, E>, remote_due: bool) {
+    fn check_external(
+        &mut self,
+        sources: &Sources<M, E>,
+        remote_due: bool,
+        cancellation: &CancellationToken,
+    ) {
         for &connection in &sources.external_connections {
             let id = ModelConnectionId::new(connection).expect("registered external connection ID");
             let scope = match sources.catalog.external_scope(&id) {
@@ -191,7 +200,10 @@ impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
             if scope.is_none() || (!changed && !remote_due) {
                 continue;
             }
-            let result = sources.catalog.refresh(&id);
+            let result = sources.catalog.refresh(&id, cancellation);
+            if cancellation.is_cancelled() {
+                return;
+            }
             // An external application can rotate or delete its credentials during a request.
             // The manager isolates old results; the observer must also suppress their events.
             if sources.catalog.external_scope(&id) != Ok(scope.clone()) {
@@ -215,7 +227,13 @@ impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
         remote_due: bool,
         cancellation: &CancellationToken,
     ) {
-        self.check_external(sources, remote_due);
+        if cancellation.is_cancelled() {
+            return;
+        }
+        self.check_external(sources, remote_due, cancellation);
+        if cancellation.is_cancelled() {
+            return;
+        }
         let Ok(state) = sources.login.refresh_providers(&sources.connections) else {
             log::warn!("Subscription account observation failed");
             return;
@@ -252,6 +270,9 @@ impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
             ) {
                 log::warn!("Subscription account refresh failed: {error}");
             }
+        }
+        if cancellation.is_cancelled() {
+            return;
         }
         let Ok(state) = sources.login.read() else {
             log::warn!("Subscription account observation failed after metadata refresh");
@@ -293,7 +314,10 @@ impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
             self.model_attempts.insert(connection.into(), identity);
             let id = ModelConnectionId::new(connection.to_owned())
                 .expect("registered subscription provider ID");
-            let result = sources.catalog.refresh(&id);
+            let result = sources.catalog.refresh(&id, cancellation);
+            if cancellation.is_cancelled() {
+                return;
+            }
             if let Err(error) = &result {
                 log::warn!("Subscription model refresh failed: {error:?}");
             }

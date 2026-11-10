@@ -83,7 +83,6 @@ class SessionsKeyboardShortcutsDialog extends Disposable {
 				updateResults();
 			},
 		}));
-		this.categories.element.classList.add('ash-sessions-filter-tabs');
 		this.panel = h(document, 'section', {
 			className: 'ash-sessions-shortcut-panel',
 			attributes: { role: 'tabpanel' },

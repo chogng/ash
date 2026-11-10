@@ -129,6 +129,19 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(cursors, [null, 'next-page']);
 	});
 
+	test('creates a project from the ChatGPT resource response', async () => {
+		const createdAt = '2026-05-01T12:00:00Z';
+		const client = new ChatGPTClient((async (input, init) => {
+			assert.equal(input, '/service/backend-api/projects');
+			assert.equal(init?.method, 'POST');
+			assert.deepEqual(JSON.parse(String(init?.body)), { name: 'Research', instructions: 'Keep an experiment log.', emoji: null, theme: null });
+			return json({ resource: { gizmo: { id: 'g-p-created', created_at: createdAt }, files: [], tools: [] }, error: null });
+		}) as typeof fetch);
+		assert.deepEqual(await client.createProject('Research', 'Keep an experiment log.', signal()), {
+			id: 'g-p-created', title: 'Research', createdAt: Date.parse(createdAt),
+		});
+	});
+
 	test('filters and pages accessible history when the project route rejects the sign-in', async () => {
 		const projectId = 'g-p-research';
 		const requests: string[] = [];
@@ -317,6 +330,67 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(reply.references?.map(reference => [reference.id, reference.title, reference.snippet]), [['turn0search0', 'CSV', ''], ['turn0search1', 'Writer', 'Writer documentation']]);
 	});
 
+	test('associates a grouped citation with its explicitly supplied safe URLs', async () => {
+		const citation = '\uE200cite\uE202turn0search2\uE201';
+		const url = 'https://example.test/docs';
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						...message('reply', 'assistant', `See the documentation ${citation}.`),
+						metadata: { content_references: [{ type: 'grouped_webpages', matched_text: citation, safe_urls: ['javascript:alert(1)', url] }] },
+					}
+				}
+			}
+		})) as typeof fetch);
+		const reply = (await client.history('conversation', signal())).messages[0]!;
+		assert.deepEqual(reply.references, [{ id: url, url, title: 'example.test', snippet: '' }]);
+		assert.equal(reply.text, `See the documentation \uE200cite\uE202${url}\uE201.`);
+	});
+
+	test('keeps trusted image results associated with their markers and components in history', async () => {
+		const marker = '\uE200image_group\uE202{"query":["project screenshots"]}\uE201';
+		const image = 'https://images.openai.com/static-rsc-4/fixture-image?purpose=fullsize';
+		const source = 'https://example.test/docs';
+		const entry = { image_result: { content_url: image, title: 'Project screenshot', url: source } };
+		const query = 'Saved screenshot search';
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						...message('reply', 'assistant', `${marker}\n\n<AsyncImage query="${query}"/>\n\nProject summary`),
+						metadata: {
+							model_dil_v2: {
+								appData: {
+									opGenui: {
+										componentResults: {
+											component: { componentName: 'AsyncImage', state: { images: [{ ...entry.image_result, image_search_query: query }] } },
+										}
+									}
+								}
+							},
+							content_references: [{
+								type: 'image_group', matched_text: marker, images: [
+									entry, entry,
+									{ image_result: { content_url: 'https://images.openai.com.example.test/static-rsc-4/wrong' } },
+									{ image_result: { content_url: 'https://images.openai.com/static-rsc-4/other', title: 'Another screenshot', url: 'javascript:alert(1)' } },
+								],
+							}]
+						},
+					}
+				},
+			}
+		})) as typeof fetch);
+		const reply = (await client.history('conversation', signal())).messages[0]!;
+		assert.deepEqual(reply.imageGroups, [{ query, images: [{ uri: image, label: 'Project screenshot', source }] }, {
+			marker, images: [
+				{ uri: image, label: 'Project screenshot', source },
+				{ uri: 'https://images.openai.com/static-rsc-4/other', label: 'Another screenshot', source: undefined },
+			]
+		}]);
+		assert.equal(reply.resources, undefined);
+	});
+
 	test('resolves a sandbox file through the web download endpoint and signed resource bytes', async () => {
 		const requests: string[] = [];
 		const client = new ChatGPTClient((async input => {
@@ -353,6 +427,9 @@ suite('Bundled ChatGPT client', () => {
 		}) as typeof fetch);
 		const history = await client.history('chat-one', signal());
 		assert.deepEqual(history.messages.map(item => item.text), ['Question', 'Selected answer']);
+		assert.deepEqual(await client.prepareMessageEdit('chat-one', 'user', 'reply-two', signal()), { parentId: 'root', files: [] });
+		await assert.rejects(client.prepareMessageEdit('chat-one', 'user', 'reply-one', signal()), /Reload the ChatGPT conversation/u);
+		await assert.rejects(client.prepareMessageEdit('chat-one', 'reply-one', 'reply-two', signal()), /unavailable for editing/u);
 		const output = await collect(client.send({ text: 'Follow up', model: 'fixture-model', parentId: history.parentId, conversationId: history.id, messageId: 'new-user' }, signal()));
 		assert.equal(output[0]!.message!.text, 'Next answer');
 		const sent = calls.at(-1)!;
@@ -418,7 +495,7 @@ suite('Bundled ChatGPT client', () => {
 		}) as typeof fetch);
 		const history = await client.history('fixture', signal());
 		assert.deepEqual(history.messages, [
-			{ id: 'user', role: 'user', text: 'Question' },
+			{ id: 'user', role: 'user', text: 'Question', editableText: 'Question' },
 			{ id: 'reply', role: 'assistant', text: '  Answer\n' },
 			{ id: 'attachment', role: 'user', text: '[View this content in ChatGPT](https://chatgpt.com/c/fixture)' },
 		]);
@@ -442,6 +519,30 @@ suite('Bundled ChatGPT client', () => {
 		assert.equal(messages[2]!.text, 'Transcript\n\n[View this content in ChatGPT](https://chatgpt.com/c/fixture)');
 		assert.match(messages[3]!.text, /View this content in ChatGPT/u);
 		assert.match(messages[4]!.text, /File caption\n\nAttachment: &lt;report&gt;\\\[1\\\]\.pdf\n\n\[View this content/u);
+	});
+
+	test('joins a sent image pointer with its named attachment without injecting a caption', async () => {
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'user', mapping: {
+				user: {
+					parent: null, message: {
+						id: 'user', author: { role: 'user' },
+						content: {
+							content_type: 'multimodal_text', parts: [
+								{ content_type: 'image_asset_pointer', asset_pointer: 'sediment://file_diagram', width: 32, height: 32 },
+								'What is this?',
+							]
+						},
+						metadata: { attachments: [{ id: 'file_diagram', name: 'diagram.svg', mime_type: 'image/svg+xml', size: 80 }] },
+					}
+				},
+			},
+		})) as typeof fetch);
+		const { messages } = await client.history('fixture', signal());
+		assert.equal(messages[0]?.text, 'What is this?');
+		assert.deepEqual(messages[0]?.resources, [{
+			uri: 'sediment://file_diagram', name: 'diagram.svg', kind: 'image', mimeType: 'image/svg+xml',
+		}]);
 	});
 
 	test('retains a structured part arriving in a streaming reply', async () => {

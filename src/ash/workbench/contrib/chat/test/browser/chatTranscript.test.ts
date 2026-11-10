@@ -4,6 +4,50 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('chatTranscript browser component', () => {
 	const browserTests = useBrowserTests();
+	test('long Code history restores tool disclosures and retains focused code while scrolling', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=en');
+		const chat = page.locator('#app-chat');
+		const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const articles = viewport.locator('article[data-item-id]');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(20, true));
+		await expect(viewport.getByText('Final result 19.', { exact: true })).toBeInViewport();
+		await expect(viewport.locator('[data-item-id="code-reply-0"]')).toHaveCount(0);
+		expect(await articles.count()).toBeLessThan(40);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(120, true));
+		const latest = viewport.getByText('Final result 119.', { exact: true });
+		const firstTool = viewport.locator('[data-tool-call-id="code-tool-1"] > details');
+		await expect(latest).toBeInViewport();
+		await expect(firstTool).toHaveCount(0);
+		expect(await articles.count()).toBeLessThan(40);
+
+		const jump = (latest: boolean) => viewport.evaluate((element, end) => { element.scrollTop = end ? element.scrollHeight : 0; }, latest);
+		await jump(false);
+		await expect(firstTool).toHaveAttribute('open', '');
+		await firstTool.locator(':scope > summary').press('Enter');
+		await expect(firstTool).not.toHaveAttribute('open');
+		await viewport.locator('.ash-chat-transcript-content').focus();
+		await jump(true);
+		await expect(firstTool).toHaveCount(0);
+		await jump(false);
+		await expect(firstTool).toBeAttached();
+		await expect(firstTool).not.toHaveAttribute('open');
+		await firstTool.locator(':scope > summary').press('Enter');
+		await expect(firstTool).toContainText('Tool evidence 1, line 0');
+		const codeInput = viewport.locator('[data-item-id="code-reply-0"] .ash-chat-code-block .stanza-editor-input');
+		await codeInput.focus();
+		await expect(codeInput).toBeFocused();
+		await codeInput.press('ControlOrMeta+A');
+		const selection = await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection);
+		expect(selection).toMatchObject({ startLineNumber: 1, endLineNumber: 14 });
+		await jump(true);
+		await expect(latest).toBeInViewport();
+		await expect(codeInput).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
+		await expect(firstTool).toHaveAttribute('open', '');
+		expect(await articles.count()).toBeLessThan(40);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`active request progress follows streamed messages inside the transcript in ${locale}`, async () => {
 			const { page } = browserTests;
@@ -578,6 +622,27 @@ suite('chatTranscript browser component', () => {
 			expect(Math.abs((await row.boundingBox())!.y - rowTop)).toBeLessThan(1);
 			expect(Math.abs((await composer.boundingBox())!.y - composerTop)).toBeLessThan(1);
 		}
+		const bottomFrames = await viewport.evaluate(async element => {
+			const chat = element.closest('.ash-chat')!;
+			const input = chat.querySelector('.ash-chat-input-container')!;
+			const rail = element.parentElement!.querySelector('.ash-scrollbar-track-vertical')!;
+			element.scrollTop = element.scrollHeight;
+			const frames: { railOverlap: number; remaining: number; }[] = [];
+			for (let frame = 0; frame < 6; frame++) {
+				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+				frames.push({
+					railOverlap: rail.getBoundingClientRect().bottom - input.getBoundingClientRect().top,
+					remaining: element.scrollHeight - element.clientHeight - element.scrollTop,
+				});
+			}
+			return frames;
+		});
+		for (const frame of bottomFrames) {
+			expect(frame.railOverlap).toBeLessThanOrEqual(1);
+			expect(frame.remaining).toBeLessThanOrEqual(1);
+		}
+		await viewport.evaluate(element => { element.scrollTop -= 140; });
+		await expect(jump).toBeVisible();
 		await jump.click();
 		await expect(row).toBeHidden();
 		expect(await edgeFade()).toBe('none');
@@ -745,6 +810,59 @@ suite('chatTranscript browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Response code card keeps its editor actions reachable in ${locale}`, async () => {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			const source = 'printf "%s\\n" hello';
+			await page.goto(`/chatTranscript.html?codeCard&locale=${locale}`);
+			await page.evaluate(source => {
+				document.querySelector('main')!.style.width = '220px';
+				window.ashChatTranscriptIntegration.renderItems([{ id: 'reply', type: 'agentMessage', text: '```bash\n' + source + '\n```', transient: false }]);
+			}, source);
+			const card = page.locator('.ash-chat-code-block-card');
+			const toolbar = card.getByRole('toolbar', { name: zh ? '代码块 1 操作' : 'Code block 1 actions' });
+			const more = toolbar.getByRole('button', { name: zh ? '更多操作' : 'More Actions' });
+			const copy = toolbar.getByRole('button', { name: zh ? '复制' : 'Copy', exact: true });
+			await expect(card.locator('.ash-chat-code-block-language')).toHaveText('Bash');
+			await expect(toolbar.getByRole('button')).toHaveCount(2);
+			expect((await more.boundingBox())!.x).toBeLessThan((await copy.boundingBox())!.x);
+			expect((await more.boundingBox())!.y).toBe((await copy.boundingBox())!.y);
+			const icon = card.locator('.ash-chat-code-block-toolbar > .ash-icon');
+			const line = card.locator('.stanza-editor-line-text').first();
+			expect((await icon.boundingBox())!.x).toBe((await line.boundingBox())!.x);
+
+			await more.focus();
+			await more.press('ArrowRight');
+			await expect(copy).toBeFocused();
+			await copy.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(source);
+			await expect(copy.locator('[data-ash-icon-id="check"]')).toBeVisible();
+			await expect(copy).toBeFocused();
+			await copy.press('ArrowLeft');
+			await expect(more).toBeFocused();
+			await more.press('ArrowDown');
+			const menu = page.getByRole('menu');
+			await expect(menu.getByRole('menuitem', { name: zh ? '应用到编辑器' : 'Apply to editor' })).toBeDisabled();
+			await expect(menu.getByRole('menuitem', { name: zh ? '插入到光标处' : 'Insert at cursor' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(menu).toHaveCount(0);
+			await expect(more).toBeFocused();
+			await expect(copy.locator('[data-ash-icon-id="copy"]')).toBeVisible();
+			await more.press('Enter');
+			await menu.getByRole('menuitem', { name: zh ? '在新文件中打开' : 'Open in new file' }).click();
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state())).toMatchObject({ file: source, resource: expect.stringContaining('untitled:') });
+
+			const editor = card.locator('.stanza-editor');
+			for (const palette of ['light', 'dark', 'hc'] as const) {
+				await page.evaluate(value => window.ashChatTranscriptIntegration.setTheme(value), palette);
+				const surface = await card.evaluate(element => getComputedStyle(element).backgroundColor);
+				await expect(editor).toHaveCSS('background-color', surface);
+				await expect(card).toHaveCSS('border-top-width', '1px');
+			}
+		});
+	}
+
 	test('Response code blocks preserve nodes and selections through wrapping and theme updates and stay read-only', async function () {
 		const { page } = browserTests;
 
@@ -778,12 +896,12 @@ suite('chatTranscript browser component', () => {
 	test('Response code blocks cap their viewport while copying the complete long source', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/chatTranscript.html');
+		await page.goto('/chatTranscript.html?codeCard');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setCodeLineHeight(24));
 		const code = await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCode());
 		const editor = page.locator('.ash-chat-code-block-editor');
 		await expect.poll(() => editor.evaluate(element => element.getBoundingClientRect().height)).toBe(496);
-		await page.locator('.ash-chat-code-block').getByRole('button', { name: 'Copy', exact: true }).click();
+		await page.locator('.ash-chat-code-block-card').getByRole('button', { name: 'Copy', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(code);
 	});
 

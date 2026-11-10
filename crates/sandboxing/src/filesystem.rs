@@ -201,14 +201,19 @@ pub(crate) fn resolve(
             .private_ipc_dirs()
             .iter()
             .any(|dir| dir == grant.dir());
-        if private_runtime
-            || (access != FileSystemAccess::ReadOnly
-                && grant.access() == SandboxDirAccess::ReadWrite)
-        {
-            readwrite.insert(root.clone());
-            readonly.extend(protected_metadata(grant.dir())?);
-        } else {
-            readonly.insert(root);
+        match grant.access() {
+            SandboxDirAccess::Denied => {
+                denied.insert(root);
+            }
+            SandboxDirAccess::ReadWrite
+                if private_runtime || access != FileSystemAccess::ReadOnly =>
+            {
+                readwrite.insert(root);
+                readonly.extend(protected_metadata(grant.dir())?);
+            }
+            SandboxDirAccess::ReadOnly | SandboxDirAccess::ReadWrite => {
+                readonly.insert(root);
+            }
         }
     }
     denied.extend(

@@ -103,6 +103,7 @@ export class MenuId {
 	static readonly ChatTitle = new MenuId('ChatTitle');
 	static readonly ChatMessageTitle = new MenuId('ChatMessageTitle');
 	static readonly ChatMessageFooter = new MenuId('ChatMessageFooter');
+	static readonly ChatCodeBlockToolbar = new MenuId('ChatCodeBlockToolbar');
 	static readonly ChatMessageCheckpoint = new MenuId('ChatMessageCheckpoint');
 	static readonly ChatExecute = new MenuId('ChatExecute');
 	static readonly ChatExecuteQueue = new MenuId('ChatExecuteQueue');

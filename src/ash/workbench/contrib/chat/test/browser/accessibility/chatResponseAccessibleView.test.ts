@@ -6,10 +6,29 @@ import { Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { ChatResponseAccessibleView } from '../../../browser/accessibility/chatResponseAccessibleView.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../../common/model/chatViewModel.js';
+import { chatTranscriptListItems, formatChatMessageTime, type IChatListItem } from '../../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry, Turn } from '../../../../../services/chat/common/chatService.js';
 
 suite('ChatResponseAccessibleView', () => {
+	test('only includes Agent reply times and respects the display setting', () => {
+		const requestTime = Date.UTC(2026, 10, 9, 17, 30);
+		const replyTime = Date.UTC(2026, 10, 9, 17, 32);
+		const items: readonly IChatListItem[] = [
+			{ id: 'request', type: 'userMessage', text: 'Question', transient: false, timestamp: requestTime },
+			{ id: 'reply', type: 'agentMessage', text: 'Answer', transient: false, timestamp: replyTime },
+		];
+		let showAgentReplyTimestamps = true;
+		const implementation = new ChatResponseAccessibleView({
+			getItems: () => items,
+			getFocusedElement: () => document.body,
+			onDidChangeContent: () => toDisposable(() => { }),
+		}, () => showAgentReplyTimestamps);
+		using provider = implementation.getProvider()!;
+		assert.equal(provider.provideContent(), `You\n\nQuestion\n\nAsh\n\n${formatChatMessageTime(replyTime)}\n\nAnswer`);
+		showAgentReplyTimestamps = false;
+		assert.equal(provider.provideContent(), 'You\n\nQuestion\n\nAsh\n\nAnswer');
+	});
+
 	test('reads current model order, plain Markdown, exact context and complete code without rendered rows', () => {
 		using resources = new DisposableStore();
 		const changes = resources.add(new Emitter<void>());

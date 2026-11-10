@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 import { suite, test, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { Editor } from '../../../../../../../test/automation/editor.js';
@@ -11,7 +11,7 @@ suite('Projects toolbar', () => {
 
 	for (const locale of ['en', 'zh-CN']) {
 		test(`sidebar creation keeps the remote project on cancel and renames the new local project on save (${locale})`, async () => {
-			const { page } = browser;
+			const { page, info } = browser;
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?projectCreation&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
@@ -69,6 +69,90 @@ suite('Projects toolbar', () => {
 			await expect(dialog).toHaveCount(0);
 			await expect(projects).toHaveAttribute('aria-label', 'Local research');
 			await expect(projects.locator('.ash-projects-composer')).toBeVisible();
+			const overview = projects.getByRole('tabpanel', { name: chinese ? '概览' : 'Overview', exact: true });
+			const overviewTab = projects.getByRole('tab', { name: chinese ? '概览' : 'Overview', exact: true });
+			const filesTab = projects.getByRole('tab', { name: chinese ? '文件' : 'Files', exact: true });
+			const overviewContext = overview.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true });
+			await expect(overview.getByRole('heading', { name: chinese ? '项目对话' : 'Project conversations', exact: true })).toBeVisible();
+			await expect(overview.getByRole('region', { name: chinese ? '指令' : 'Instructions', exact: true })).toBeVisible();
+			await expect(overviewContext).toBeVisible();
+			await filesTab.click();
+			const context = projects.getByRole('region', { name: chinese ? '项目文件' : 'Project files', exact: true });
+			await expect(context.getByText(chinese
+				? '添加 PDF、文档或其他文件，供此项目参考。'
+				: 'Add PDFs, documents, or other files to reference in this project.', { exact: true })).toBeVisible();
+			const addMaterials = context.getByRole('button', { name: chinese ? '添加项目资料' : 'Add project materials', exact: true });
+			await addMaterials.press('Enter');
+			const upload = page.getByRole('menuitem', { name: chinese ? '上传或添加文件' : 'Upload or add files', exact: true });
+			await expect(upload).toBeFocused();
+			await upload.press('ArrowDown');
+			const addText = page.getByRole('menuitem', { name: chinese ? '添加文本内容' : 'Add text content', exact: true });
+			await expect(addText).toBeFocused();
+			await addText.press('Enter');
+			const textDialog = page.getByRole('dialog', { name: chinese ? '添加文本内容' : 'Add text content', exact: true });
+			const title = textDialog.getByRole('textbox', { name: chinese ? '标题' : 'Title', exact: true });
+			const editor = new Editor(textDialog);
+			const addContent = textDialog.getByRole('button', { name: chinese ? '添加内容' : 'Add Content', exact: true });
+			await expect(title).toBeFocused();
+			await expect(addContent).toBeDisabled();
+			await page.screenshot({ path: info.outputPath(`project-add-text-${locale}.png`) });
+			await title.fill('  Reading notes  ');
+			await expect(addContent).toBeDisabled();
+			const fieldHeader = textDialog.locator('.ash-project-text-field-header');
+			await expect(fieldHeader.getByRole('button')).toHaveCount(0);
+			const source = textDialog.locator('.ash-project-text-source');
+			const placeholder = source.locator('.stanza-editor-placeholder-text');
+			await expect(placeholder).toBeVisible();
+			const [sourceBox, placeholderBox] = await Promise.all([source.boundingBox(), placeholder.boundingBox()]);
+			expect(placeholderBox!.x - sourceBox!.x).toBeGreaterThanOrEqual(10);
+			expect(placeholderBox!.y - sourceBox!.y).toBeGreaterThanOrEqual(10);
+			await editor.waitForEditorFocus();
+			const formatting = textDialog.locator('.ash-project-text-selection-toolbar');
+			const blockStyle = formatting.getByRole('button', { name: chinese ? /^段落样式：/u : /^Block style: /u });
+			await page.keyboard.press('Shift+F10');
+			await expect(blockStyle).toBeFocused();
+			await blockStyle.press('Enter');
+			await page.getByRole('menuitemradio', { name: chinese ? '一级标题' : 'Heading 1', exact: true }).click();
+			await expect(editor.input).toBeFocused();
+			await page.keyboard.insertText('Reading list\n\n第一章');
+			await source.locator('.view-line').last().click({ button: 'right' });
+			await expect(blockStyle).toBeVisible();
+			await blockStyle.press('Enter');
+			await page.getByRole('menuitemradio', { name: chinese ? '编号列表' : 'Numbered list', exact: true }).press('Enter');
+			await editor.waitForEditorContents(text => text === '# Reading list\n\n1. 第一章');
+			for (let index = 0; index < 3; index++) await page.keyboard.press('Shift+ArrowLeft');
+			await expect(formatting).toBeVisible();
+			await page.keyboard.press('Alt+F10');
+			const insertLink = formatting.getByRole('button', { name: chinese ? '插入链接' : 'Insert link', exact: true });
+			await expect(insertLink).toBeFocused();
+			const bold = formatting.getByRole('button', { name: chinese ? '粗体' : 'Bold', exact: true });
+			const inactiveColor = await bold.evaluate(button => getComputedStyle(button).color);
+			await bold.click();
+			await editor.waitForEditorContents(text => text.endsWith('1. **第一章**'));
+			await expect(bold).toHaveAttribute('aria-pressed', 'true');
+			expect(await bold.evaluate(button => getComputedStyle(button).color)).not.toBe(inactiveColor);
+			await formatting.getByRole('button', { name: chinese ? '斜体' : 'Italic', exact: true }).click();
+			await editor.waitForEditorContents(text => text.endsWith('1. **_第一章_**'));
+			await page.keyboard.press('ControlOrMeta+z');
+			await editor.waitForEditorContents(text => text.endsWith('1. **第一章**'));
+			await insertLink.click();
+			const url = formatting.getByRole('textbox', { name: chinese ? '链接地址' : 'Link URL', exact: true });
+			await expect(url).toBeFocused();
+			await expect(bold).toBeHidden();
+			await url.press('Escape');
+			await expect(insertLink).toBeFocused();
+			await insertLink.click();
+			await url.fill('not-a-url');
+			await url.press('Enter');
+			await expect(url).toHaveAttribute('aria-invalid', 'true');
+			await url.fill('https://example.com/chapter');
+			await formatting.getByRole('button', { name: chinese ? '应用链接' : 'Apply link', exact: true }).click();
+			await editor.waitForEditorContents(text => text.endsWith('1. **[第一章](https://example.com/chapter)**'));
+			await expect(addContent).toBeEnabled();
+			await addContent.press('Enter');
+			await expect(textDialog).toHaveCount(0);
+			await expect(addMaterials).toBeFocused();
+			await expect(context.getByRole('button', { name: 'Reading notes', exact: true })).toBeVisible();
 			const renameLabel = chinese ? '重命名项目' : 'Rename project';
 			await breadcrumb.getByRole('button', { name: `${renameLabel} Local research`, exact: true }).press('Enter');
 			const input = breadcrumb.getByRole('textbox');
@@ -81,6 +165,35 @@ suite('Projects toolbar', () => {
 			await breadcrumb.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
 			const card = projects.getByRole('button', { name: 'Renamed research', exact: true });
 			await expect(card.locator('.ash-projects-card-mark [data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
+			await card.click();
+			await filesTab.click();
+			const note = context.getByRole('button', { name: 'Reading notes', exact: true });
+			await expect(note).toBeVisible();
+			await expect(note).toHaveAttribute('aria-haspopup', 'dialog');
+			await expect(note.getByText(chinese ? '文本' : 'TEXT', { exact: true })).toBeVisible();
+			await expect(note.locator('.ash-projects-material-card-excerpt')).toContainText('# Reading list');
+			await note.press('Enter');
+			const preview = page.getByRole('dialog', { name: 'Reading notes', exact: true });
+			await expect(projects).toBeVisible();
+			await expect(preview.locator('.line-numbers').first()).toHaveText('1');
+			await expect(preview.getByText('第一章').first()).toBeVisible();
+			await expect(preview.locator('.stanza-editor-input')).toHaveAttribute('aria-readonly', 'true');
+			await page.keyboard.press('Escape');
+			await expect(preview).toHaveCount(0);
+			await expect(note).toBeFocused();
+			const selectNote = context.getByRole('checkbox', { name: chinese ? '选择 Reading notes' : 'Select Reading notes', exact: true });
+			await selectNote.press('Space');
+			await expect(selectNote).toBeChecked();
+			await overviewTab.click();
+			await expect(overviewContext.getByRole('checkbox', { name: chinese ? '选择 Reading notes' : 'Select Reading notes', exact: true })).toBeChecked();
+			await filesTab.click();
+			await expect(selectNote).toBeChecked();
+			await context.getByRole('button', { name: chinese ? '移除所选（1）' : 'Remove selected (1)', exact: true }).press('Enter');
+			const confirm = page.getByRole('dialog').filter({ hasText: chinese ? '从此项目移除 Reading notes？' : 'Remove Reading notes from this project?' });
+			await confirm.getByRole('button', { name: chinese ? '移除' : 'Remove', exact: true }).click();
+			await expect(note).toHaveCount(0);
+			await expect(addMaterials).toBeFocused();
+			await breadcrumb.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
 			await remote.click();
 			await expect(remoteTitle).toBeDisabled();
 		});
@@ -88,20 +201,99 @@ suite('Projects toolbar', () => {
 		test(`returns to the Projects overview and retains the draft when a project is reopened (${locale})`, async () => {
 			const { page, info } = browser;
 			const chinese = locale === 'zh-CN';
-			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await page.goto(`/sessions.html?search&catalog&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('models.hidden', [
+				{ provider: 'fixture', model: 'layout-model', visible: true },
+			]));
 			const projectsEntry = page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item');
 			const card = page.locator('.ash-projects-card');
 			await projectsEntry.click();
 			await card.click();
 			const composer = page.locator('.ash-projects-composer');
 			await expect(composer).toHaveAccessibleName(chinese ? '在项目中新建聊天' : 'New chat in project');
-			await expect(composer.locator('.ash-sessions-cowork-input.embedded-composer')).toBeVisible();
-			await expect(composer.locator('.ash-sessions-chat-input')).toHaveCount(0);
+			await expect(page.locator('.ash-projects-detail-content + .ash-projects-composer')).toBeVisible();
+			const form = composer.locator('.ash-chat-input-adaptive');
+			await expect(form).toBeVisible();
 			const editor = new Editor(composer);
 			const input = editor.input;
 			await editor.waitForEditorFocus();
+			await expect(composer.getByRole('button', { name: chinese ? '项目或文件夹' : 'Project or folder', exact: true })).toHaveCount(0);
+			const tabs = page.getByRole('tablist', { name: chinese ? '项目页签' : 'Project sections', exact: true });
+			const overviewTab = tabs.getByRole('tab', { name: chinese ? '概览' : 'Overview', exact: true });
+			const chatsTab = tabs.getByRole('tab', { name: chinese ? '对话' : 'Chats', exact: true });
+			const filesTab = tabs.getByRole('tab', { name: chinese ? '文件' : 'Files', exact: true });
+			await filesTab.click();
+			const materials = page.locator('.ash-projects-materials');
+			await expect(materials.getByRole('button', { name: chinese ? '使用文件夹' : 'Use a folder' })).toHaveCount(0);
+			const addMaterials = materials.getByRole('button', { name: chinese ? '添加项目资料' : 'Add project materials', exact: true });
+			await addMaterials.press('Enter');
+			const upload = page.getByRole('menuitem', { name: chinese ? '上传或添加文件' : 'Upload or add files', exact: true });
+			await expect(upload).toBeFocused();
+			await upload.press('ArrowDown');
+			const addText = page.getByRole('menuitem', { name: chinese ? '添加文本内容' : 'Add text content', exact: true });
+			await expect(addText).toBeFocused();
+			await addText.press('ArrowDown');
+			const useFolder = page.getByRole('menuitem', { name: chinese ? '使用文件夹' : 'Use a folder', exact: true });
+			await expect(useFolder).toBeFocused();
+			await useFolder.press('Escape');
+			await expect(addMaterials).toBeFocused();
+			await overviewTab.click();
+
+			const editorHost = form.locator('.ash-chat-input-editor-host');
+			const attach = form.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+			const model = composer.locator('.ash-chat-input-footer .ash-chat-input-model-action');
+			const voice = form.locator('.ash-chat-input-voice');
+			await expect(model).toHaveAccessibleName(chinese ? '选择模型' : 'Select model');
+			const [editorBounds, attachBounds, voiceBounds, modelBounds, formBounds] = await Promise.all(
+				[editorHost, attach, voice, model, form].map(control => control.boundingBox()),
+			);
+			expect(attachBounds!.y + attachBounds!.height / 2).toBeCloseTo(editorBounds!.y + editorBounds!.height / 2);
+			expect(voiceBounds!.y).toBe(attachBounds!.y);
+			expect(attachBounds!.x + attachBounds!.width).toBeLessThanOrEqual(editorBounds!.x);
+			expect(voiceBounds!.x).toBeGreaterThanOrEqual(editorBounds!.x + editorBounds!.width);
+			expect(modelBounds!.y).toBeGreaterThanOrEqual(formBounds!.y + formBounds!.height);
+			expect(modelBounds!.x).toBeGreaterThan(formBounds!.x + formBounds!.width / 2);
+
+			await model.press('Enter');
+			const picker = page.getByRole('dialog', { name: chinese ? '选择聊天模型' : 'Choose a chat model' });
+			const fixtureModel = picker.getByRole('menuitemradio', { name: 'Layout fixture' });
+			await expect(fixtureModel).toBeVisible();
+			await fixtureModel.press('Enter');
+			const effort = picker.getByRole('slider', { name: chinese ? '推理强度' : 'Effort' });
+			await expect(effort).toHaveAttribute('aria-valuetext', chinese ? '低' : 'Low');
+			await effort.press('ArrowRight');
+			await expect(effort).toHaveAttribute('aria-valuetext', chinese ? '高' : 'High');
+			await effort.press('Escape');
+			await expect(picker).toBeHidden();
+			await expect(model).toBeFocused();
+			await expect(model).toHaveAccessibleName(chinese ? 'Layout fixture 高' : 'Layout fixture High');
+
+			await input.focus();
+			await input.evaluate(element => {
+				const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
+				const clipboard = new DataTransfer();
+				clipboard.items.add(new File([bytes], 'image.png', { type: 'image/png' }));
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+			});
+			const thumbnail = form.getByRole('button', { name: chinese ? '预览 image.png' : 'Preview image.png', exact: true });
+			await expect(thumbnail.locator('img')).toBeVisible();
+			await editor.waitForEditorContents(text => text === '');
+			await expect(form.getByRole('button', { name: chinese ? '发送' : 'Send', exact: true })).toBeEnabled();
+			const thumbnailBounds = (await thumbnail.boundingBox())!;
+			expect(thumbnailBounds.y + thumbnailBounds.height).toBeLessThanOrEqual((await editorHost.boundingBox())!.y);
+			await page.screenshot({ path: info.outputPath(`project-image-composer-${locale}.png`) });
+			await thumbnail.click();
+			const preview = page.getByRole('dialog', { name: chinese ? '预览 image.png' : 'Preview image.png', exact: true });
+			await expect(preview.getByRole('img', { name: 'image.png' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(thumbnail).toBeFocused();
+			await input.focus();
 			await editor.waitForTypeInEditor('Draft for this project');
+			await input.press('Shift+Enter');
+			const expandedEditor = (await editorHost.boundingBox())!;
+			expect((await attach.boundingBox())!.y).toBeGreaterThanOrEqual(expandedEditor.y + expandedEditor.height);
+			await input.press('Backspace');
 			await input.press('ArrowLeft');
 			const originalEditor = await input.elementHandle();
 			await page.evaluate(() => window.ashSessionsIntegration.refreshProject());
@@ -117,16 +309,34 @@ suite('Projects toolbar', () => {
 			await expect(card).toBeVisible();
 			await expect(composer).toBeHidden();
 			await page.locator('[data-action-id="sessions.search"] button').click();
-			const search = page.locator('.ash-sessions-search-dialog').getByRole('combobox');
+			const searchDialog = page.locator('.ash-sessions-search-dialog');
+			const search = searchDialog.getByRole('combobox');
+			const tabStyle = (tab: Locator) => tab.evaluate(element => {
+				const item = getComputedStyle(element.parentElement!);
+				const label = getComputedStyle(element);
+				return {
+					height: item.height,
+					borderRadius: item.borderTopLeftRadius,
+					background: item.backgroundColor,
+					gap: getComputedStyle(element.parentElement!.parentElement!).columnGap,
+					padding: label.paddingInlineStart,
+					fontSize: label.fontSize,
+					fontWeight: label.fontWeight,
+				};
+			});
+			const searchStyle = await tabStyle(searchDialog.getByRole('tab', { selected: true }));
+			expect(searchStyle.height).toBe('28px');
 			await search.fill('Search project fixture');
-			await page.locator('.ash-sessions-search-dialog').getByRole('option', { name: /Search project fixture/ }).click();
+			await searchDialog.getByRole('option', { name: /Search project fixture/ }).click();
 			await expect(page.locator('.ash-project-titlebar-name')).toHaveText('Search project fixture');
+			expect(await tabStyle(overviewTab)).toEqual(searchStyle);
 			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
 			expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
 			await card.click();
 			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
 			expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
+			await expect(thumbnail).toBeVisible();
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 				for (const width of [1280, 600]) {
@@ -139,12 +349,53 @@ suite('Projects toolbar', () => {
 					expect(bounds.width).toBeGreaterThan(200);
 					expect(bounds.height).toBeGreaterThan(30);
 					expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
-					await expect(page.locator('.ash-projects-materials .ash-projects-goals')).toContainText(chinese ? '项目目标' : 'Project goals');
-					await expect(composer.locator('.embedded-composer')).toHaveCSS('padding', '0px');
-					await expect(composer.locator('.ash-sessions-cowork-welcome-heading')).toBeHidden();
+					const detail = (await page.locator('.ash-projects-detail').boundingBox())!;
+					const content = (await page.locator('.ash-projects-detail-content').boundingBox())!;
+					expect(bounds.y).toBeGreaterThanOrEqual(content.y + content.height);
+					expect(bounds.y + bounds.height).toBeCloseTo(detail.y + detail.height);
+					expect(bounds.x + bounds.width / 2).toBeCloseTo(detail.x + detail.width / 2);
+					expect(bounds.width).toBeCloseTo(Math.min(detail.width, 902));
+					await expect(composer).toBeInViewport({ ratio: 1 });
+					await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+					const chats = page.locator('.ash-projects-overview .ash-projects-chat-content');
+					const card = page.locator('.ash-projects-overview .ash-projects-detail-card');
+					await expect(card.getByRole('region', { name: chinese ? '指令' : 'Instructions', exact: true })).toBeVisible();
+					await expect(card.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true })).toBeVisible();
+					const [chatBounds, cardBounds] = await Promise.all([chats.boundingBox(), card.boundingBox()]);
+					if (width === 600) expect(cardBounds!.y).toBeGreaterThanOrEqual(chatBounds!.y + chatBounds!.height);
+					else {
+						expect(cardBounds!.y).toBeCloseTo(chatBounds!.y);
+						expect(cardBounds!.x).toBeGreaterThan(chatBounds!.x + chatBounds!.width);
+					}
+					await expect(composer.locator('.ash-chat-input-part')).toHaveCSS('padding', '0px');
 					await page.screenshot({ path: info.outputPath(`project-composer-${locale}-${theme}-${width}.png`) });
 				}
 			}
+			await overviewTab.press('ArrowRight');
+			await expect(chatsTab).toBeFocused();
+			await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+			await chatsTab.press('Enter');
+			await expect(chatsTab).toHaveAttribute('aria-selected', 'true');
+			const chatsPanel = page.getByRole('tabpanel', { name: chinese ? '对话' : 'Chats', exact: true });
+			await expect(chatsPanel.getByRole('heading', { name: chinese ? '项目对话' : 'Project conversations', exact: true })).toBeVisible();
+			await expect(chatsPanel.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true })).toHaveCount(0);
+			await chatsTab.press('ArrowRight');
+			await expect(filesTab).toBeFocused();
+			await filesTab.press('Enter');
+			const files = page.getByRole('tabpanel', { name: chinese ? '文件' : 'Files', exact: true });
+			await expect(files.getByRole('region', { name: chinese ? '项目文件' : 'Project files', exact: true })).toBeVisible();
+			await expect(composer).toBeHidden();
+			await overviewTab.click();
+			await expect(composer).toBeVisible();
+			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
+			await thumbnail.focus();
+			await page.keyboard.press('Tab');
+			const remove = form.getByRole('button', { name: chinese ? '移除 image.png' : 'Remove image.png', exact: true });
+			await expect(remove).toBeFocused();
+			await remove.press('Enter');
+			await expect(thumbnail).toHaveCount(0);
+			await expect(input).toBeFocused();
+			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
 		});
 
 		test(`keeps project dialog sizing and content insets independent of stylesheet order (${locale})`, async () => {
@@ -815,12 +1066,8 @@ suite('Projects loading states', () => {
 					await page.setViewportSize({ width, height: 720 });
 					await page.emulateMedia({ reducedMotion: 'reduce' });
 					const overview = (await skeleton.locator('.ash-projects-overview').boundingBox())!;
-					const materials = (await skeleton.locator('.ash-projects-materials').boundingBox())!;
-					if (width === 720) {
-						expect(materials.y).toBeGreaterThanOrEqual(overview.y + overview.height);
-					} else {
-						expect(materials.y).toBe(overview.y);
-					}
+					const detail = (await skeleton.boundingBox())!;
+					expect(overview.width).toBeCloseTo(detail.width);
 					expect(await skeleton.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 					expect(await skeleton.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 					await page.screenshot({ path: info.outputPath(`projects-detail-loading-${locale}-${width}.png`) });

@@ -89,11 +89,28 @@ export class SessionActionsService implements IAgentSessionActionsService {
 	deleteSession(id: string): Promise<void> { return this.sessionsOwner.deleteSession(id); }
 
 	resolveCatalogArchiveTarget(catalogId: string): { readonly title: string; archive(): Promise<boolean>; } {
-		const entry = this.catalog?.sources.flatMap(source => source.snapshot.get().entries).find(row => row.id === catalogId);
-		if (!entry?.archive || entry.disabled || entry.actionsDisabled) {
+		const entry = this.getCatalogEntry(catalogId);
+		if (!entry.archive) {
 			throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		}
 		return { title: entry.title, archive: entry.archive };
+	}
+
+	resolveCatalogDeleteTarget(catalogId: string, preferenceKey: string | undefined): { readonly title: string; remove(): Promise<void>; } {
+		const entry = this.getCatalogEntry(catalogId);
+		// A menu opened under a previous account must not resolve to the new account's row.
+		if (!entry.remove || entry.preferenceKey !== preferenceKey) {
+			throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		}
+		return { title: entry.title, remove: entry.remove };
+	}
+
+	private getCatalogEntry(catalogId: string) {
+		const entry = this.catalog?.sources.flatMap(source => source.snapshot.get().entries).find(row => row.id === catalogId);
+		if (!entry || entry.disabled || entry.actionsDisabled) {
+			throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		}
+		return entry;
 	}
 
 	resolveTarget(argument: unknown, useActive = false): IAgentSessionActionTarget {

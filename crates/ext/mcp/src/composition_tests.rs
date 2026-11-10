@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ExecutionDecision;
@@ -531,7 +534,7 @@ fn runtime_intents_override_durable_enablement_without_mutating_config() {
 }
 
 #[test]
-fn connector_tool_is_materialized_only_while_exact_connection_is_authorized() {
+fn connector_disconnect_drains_a_bound_resource_read_and_suppresses_its_late_result() {
     let connector = ConnectorDefinition::new(
         ConnectorId::new("acme/github:connector:account").unwrap(),
         "GitHub",
@@ -558,11 +561,16 @@ fn connector_tool_is_materialized_only_while_exact_connection_is_authorized() {
     let materialized =
         materialize_connector_servers(authority.clone(), secrets.as_ref(), &TokenStdioProvider)
             .unwrap();
+    let (entered, waiting) = mpsc::channel();
+    let release = Arc::new(tokio::sync::Notify::new());
     let composition = start_mcp_tools(
         materialized.definitions,
         materialized.authorities,
         1,
-        Some(Arc::new(FakeFactory)),
+        Some(Arc::new(LateResourceFactory {
+            entered,
+            release: release.clone(),
+        })),
     )
     .unwrap();
     let tool = composition.tools.definitions().remove(0);
@@ -573,16 +581,56 @@ fn connector_tool_is_materialized_only_while_exact_connection_is_authorized() {
     };
     composition.tools.prepare(&call).unwrap();
 
+    let timeout = Duration::from_secs(3);
     let connected_generation = authority.snapshot().generation();
-    service
-        .disconnect(
-            ConnectorCommandId::new("disconnect-github").unwrap(),
-            connected_generation,
-            connector_id,
-        )
-        .unwrap();
+    let changes = authority.subscribe();
+    let (done, received) = mpsc::channel();
+    thread::scope(|threads| {
+        let read = threads.spawn(|| {
+            composition.tools.read_resource(
+                &call,
+                "docs://original",
+                &CancellationSource::new().token(),
+            )
+        });
+        let started = waiting.recv_timeout(timeout);
+        threads.spawn(move || {
+            done.send(service.disconnect(
+                ConnectorCommandId::new("disconnect-github").unwrap(),
+                connected_generation,
+                connector_id,
+            ))
+            .unwrap();
+        });
+        // The authority publishes the revocation before waiting for the read to drain.
+        let revoked = changes.recv_timeout(timeout);
+        let before_release = received.recv_timeout(Duration::from_millis(100));
+        release.notify_one();
+
+        started.expect("resource read reached the session");
+        revoked.expect("disconnect committed the revocation");
+        assert!(
+            matches!(before_release, Err(mpsc::RecvTimeoutError::Timeout)),
+            "disconnect replied while the resource read was still active"
+        );
+        assert!(
+            matches!(read.join().unwrap(), Err(core_api::CoreError::Policy(_))),
+            "retired resource bytes reached the caller"
+        );
+        received.recv_timeout(timeout).unwrap().unwrap();
+    });
 
     assert!(composition.tools.prepare(&call).is_err());
+    release.notify_one();
+    assert!(matches!(
+        composition.tools.read_resource(
+            &call,
+            "docs://original",
+            &CancellationSource::new().token()
+        ),
+        Err(core_api::CoreError::Policy(_))
+    ));
+    assert!(matches!(waiting.try_recv(), Err(mpsc::TryRecvError::Empty)));
 }
 
 #[test]

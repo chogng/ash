@@ -122,7 +122,7 @@ fn narrow_row_keeps_a_combined_glyph_and_elapsed_column() {
     let rendered = (0..10)
         .map(|column| buffer[(column, 0)].symbol())
         .collect::<String>();
-    crate::tui_assert_snapshot!(rendered, @"○ abｶﾞc 31s");
+    crate::tui_assert_snapshot!(rendered, @"○ abｶﾞ  31s");
     assert_eq!(buffer[(7, 0)].symbol(), "3");
 }
 

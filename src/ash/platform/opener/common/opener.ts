@@ -8,6 +8,15 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 /** Explicitly selects the host's external opener and bypasses contributed handlers. */
 export const defaultExternalUriOpenerId = 'default';
 
+export type ImageOpenExtension = 'png' | 'jpg' | 'gif' | 'webp';
+
+export interface IImageOpeningApplication {
+	readonly id: string;
+	readonly name: string;
+	readonly isDefault: boolean;
+	readonly icon?: string;
+}
+
 export function withSelection(uri: URI, selection: ITextEditorSelection): URI {
 	const end = selection.endLineNumber === undefined ? '' : `-${selection.endLineNumber},${selection.endColumn ?? 1}`;
 	return uri.with({ fragment: `${selection.startLineNumber},${selection.startColumn}${end}` });

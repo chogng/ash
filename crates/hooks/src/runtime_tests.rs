@@ -9,6 +9,8 @@ use ash_config::HookAction;
 use ash_config::HookConfig;
 use ash_config::HookEnablement;
 use ash_config::HookEvent as ConfigHookEvent;
+use ash_file_access::GrantSource;
+use ash_file_access::Permissions;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
@@ -346,6 +348,100 @@ fn lifecycle_events_run_in_their_scope_and_record_the_declared_event() {
         ConfigHookEvent::ConfigChange
     );
     assert_eq!(runtime.recent_runs()[1].event, ConfigHookEvent::StopFailure);
+}
+
+#[test]
+fn failed_session_hook_refresh_releases_revoked_bindings_and_preserves_live_ones() {
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let session = SessionId::new("hook-refresh").unwrap();
+    let grant = |root: &std::path::Path| {
+        Grant::for_session_tree(
+            session.clone(),
+            Dir::open_local(root).unwrap(),
+            GrantSource::ExplicitUser,
+            Permissions::new([Permission::DiscoverHooks, Permission::ExecuteCommands]),
+        )
+    };
+    let revoked = grant(first.path());
+    let live = grant(second.path());
+    let hook = hook(
+        "user:hook:refresh",
+        ConfigHookEvent::BeforeTool,
+        &[],
+        HookEnablement::Enabled,
+    );
+    let config = HooksConfig {
+        hooks: [(hook.id.clone(), hook)].into(),
+    };
+    let runtime = DeclarativeHookRuntime::new(HooksConfig::default(), Arc::new(TestPolicy));
+    runtime
+        .refresh_session_dirs(&session, || {
+            Ok(vec![
+                (config.clone(), revoked.clone()),
+                (config.clone(), live.clone()),
+            ])
+        })
+        .unwrap();
+    let stale_binding =
+        Arc::downgrade(&runtime.session_bindings.read().unwrap()[&session].bindings[0]);
+
+    revoked.revoke();
+    assert!(
+        runtime
+            .refresh_session_dirs(&session, || {
+                assert!(stale_binding.upgrade().is_none());
+                Err("invalid TOML".into())
+            })
+            .is_err()
+    );
+    assert!(stale_binding.upgrade().is_none());
+    assert!(runtime.has_enabled_event(ConfigHookEvent::BeforeTool));
+    let live_binding =
+        Arc::downgrade(&runtime.session_bindings.read().unwrap()[&session].bindings[0]);
+
+    live.revoke();
+    assert!(
+        runtime
+            .refresh_session_dirs(&session, || Ok(vec![(config, live)]))
+            .is_err()
+    );
+    assert!(live_binding.upgrade().is_none());
+    assert!(runtime.session_bindings.read().unwrap().is_empty());
+}
+
+#[test]
+fn superseded_session_hook_refresh_cannot_overwrite_new_bindings_or_restore_cleared_ones() {
+    let root = tempfile::tempdir().unwrap();
+    let session = SessionId::new("overlapping-hook-refresh").unwrap();
+    let grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverHooks, Permission::ExecuteCommands]),
+    );
+    let runtime = DeclarativeHookRuntime::new(HooksConfig::default(), Arc::new(TestPolicy));
+    let load = || Ok(vec![(HooksConfig::default(), grant.clone())]);
+    runtime
+        .refresh_session_dirs(&session, || {
+            runtime.refresh_session_dirs(&session, load).unwrap();
+            Ok(Vec::new())
+        })
+        .unwrap();
+    assert_eq!(
+        runtime.session_bindings.read().unwrap()[&session]
+            .bindings
+            .len(),
+        1
+    );
+
+    runtime
+        .refresh_session_dirs(&session, || {
+            runtime.clear_session_dirs();
+            load()
+        })
+        .unwrap();
+    assert!(runtime.session_bindings.read().unwrap().is_empty());
 }
 
 #[test]

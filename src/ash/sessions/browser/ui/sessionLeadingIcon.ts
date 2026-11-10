@@ -12,51 +12,75 @@ import { SessionStatusIcon, type ISessionStatusIcon } from '../sessionStatusIcon
 /** Shared leading control. Hosts place it in their own row and supply the current icon and status. */
 export class SessionLeadingIcon extends Disposable {
 	readonly element: HTMLElement;
+	private readonly graphic: HTMLElement;
 	private readonly statusIcon: SessionStatusIcon;
 	private readonly picker = this._register(new MutableDisposable<IconPicker>());
-	private readonly button: HTMLButtonElement | undefined;
-	private readonly bar: ActionBar | undefined;
+	private readonly bar = this._register(new MutableDisposable<ActionBar>());
+	private button: HTMLButtonElement | undefined;
+	private title: string;
+	private navigation: { readonly label: string; readonly run?: () => void; } | undefined;
 
-	constructor(document: Document, title: string, onPick: ((icon: Icon | undefined) => void) | undefined,
+	constructor(document: Document, title: string, private readonly onPick: ((icon: Icon | undefined) => void) | undefined,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
-		const graphic = h(document, 'span', { className: 'ash-session-leading-graphic', attributes: { 'aria-hidden': 'true' } });
-		this.statusIcon = this._register(this.instantiation.createInstance(SessionStatusIcon, graphic));
+		this.title = title;
+		this.graphic = h(document, 'span', { className: 'ash-session-leading-graphic', attributes: { 'aria-hidden': 'true' } });
+		this.statusIcon = this._register(this.instantiation.createInstance(SessionStatusIcon, this.graphic));
 		this.element = h(document, 'div', { className: 'ash-session-leading-icon' });
-		if (onPick) {
-			const label = localize('sessionRow.changeIcon', 'Change icon for {0}', title);
-			const bar = this.bar = this._register(new ActionBar(this.element, {
+		this.element.append(this.graphic);
+		this.updateButton();
+	}
+
+	private updateButton(): void {
+		if (!this.navigation && !this.onPick) {
+			if (this.button) {
+				this.element.append(this.graphic);
+				this.bar.clear();
+				this.button = undefined;
+			}
+			return;
+		}
+		const label = this.navigation?.label ?? localize('sessionRow.changeIcon', 'Change icon for {0}', this.title);
+		if (!this.button) {
+			const graphic = this.graphic;
+			const bar = this.bar.value = new ActionBar(this.element, {
 				ariaLabel: label,
 				actions: [{
 					id: 'sessions.changeRowIcon',
 					label,
 					tooltip: label,
 					enabled: true,
-					run: () => this.pickIcon(onPick),
+					run: () => this.navigation ? this.navigation.run?.() : this.onPick && this.pickIcon(this.onPick),
 				}],
 				actionViewItemProvider: action => new class extends LabelActionViewItem {
 					override render(container: HTMLElement): void {
 						super.render(container);
 						const button = container.querySelector('button')!;
-						button.setAttribute('aria-haspopup', 'dialog');
 						button.prepend(graphic);
 					}
 				}(action, { label: '', ariaLabel: label }),
-			}));
+			});
 			this.button = bar.domNode.querySelector('button')!;
-		} else {
-			this.element.append(graphic);
 		}
+		this.bar.value?.setAriaLabel(label);
+		this.button.setAttribute('aria-label', label);
+		this.button.title = label;
+		if (this.navigation) this.button.removeAttribute('aria-haspopup');
+		else this.button.setAttribute('aria-haspopup', 'dialog');
+		this.button.setAttribute('aria-disabled', String(!!this.navigation && !this.navigation.run));
 	}
 
 	setTitle(title: string): void {
-		if (!this.button) { return; }
-		const label = localize('sessionRow.changeIcon', 'Change icon for {0}', title);
-		if (this.button.getAttribute('aria-label') === label) { return; }
-		this.bar?.setAriaLabel(label);
-		this.button.setAttribute('aria-label', label);
-		this.button.title = label;
+		if (this.title === title) return;
+		this.title = title;
+		this.updateButton();
+	}
+
+	setNavigationAction(label: string | undefined, run?: () => void): void {
+		if (!label && !this.navigation) return;
+		this.navigation = label ? { label, run } : undefined;
+		this.updateButton();
 	}
 
 	setRestingIcon(icon: Icon | undefined): void { this.statusIcon.setRestingIcon(icon); }

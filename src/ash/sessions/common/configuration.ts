@@ -98,6 +98,21 @@ export const SessionsConfiguration = Object.freeze({
 			}
 		},
 	}),
+	showSessionActivityBar: configurationRegistry.registerConfiguration<boolean>({
+		key: 'sessions.showSessionActivityBar',
+		defaultValue: false,
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value !== 'boolean') throw new TypeError(localize('sessions.sessionActivityBar.invalid', 'Choose whether to show the Session Activity Bar.'));
+			return value;
+		},
+		setting: {
+			included: false,
+			valueType: 'boolean',
+			get title() { return localize('sessions.sessionActivityBar.title', 'Session Activity Bar'); },
+			get description() { return localize('sessions.sessionActivityBar.description', 'Show Code tool shortcuts beside the conversation.'); },
+		},
+	}),
 	layoutStyle: configurationRegistry.registerConfiguration<SessionsLayoutStyle>({
 		key: 'sessions.layoutStyle',
 		defaultValue: 'modern',

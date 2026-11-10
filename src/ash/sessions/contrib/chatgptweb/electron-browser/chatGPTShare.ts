@@ -9,10 +9,15 @@ export async function shareChatGPTConversation(chat: IChatGPTService, dialogs: I
 	await shareConversationLink(dialogs, clipboard, {
 		message: messageId ? localize('sessions.chatgpt.shareResponseConfirm', 'Share through this response in “{0}”?', title)
 			: localize('sessions.chatgpt.shareConfirm', 'Share “{0}”?', title),
-		detail: localize('sessions.chatgpt.shareDetail', 'Anyone with the link may be able to read this chat. A share link will be created and copied.'),
+		detail: localize('sessions.chatgpt.shareDetail', 'A ChatGPT share link will be created and copied. Anyone with the link may be able to read this chat.'),
 	}, async () => {
 		if (scope !== chat.state.get().catalogScope) return undefined;
 		const url = await chat.share(id, messageId);
-		return scope === chat.state.get().catalogScope ? url : undefined;
+		const state = chat.state.get();
+		if (scope !== state.catalogScope) return undefined;
+		if (!url) {
+			throw new Error(state.error || localize('sessions.chatgpt.shareFailed', 'Could not create a ChatGPT share link. Try again.'));
+		}
+		return url;
 	});
 }

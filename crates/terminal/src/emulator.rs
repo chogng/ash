@@ -1,47 +1,30 @@
 use vte::{Params, Parser, Perform};
 
-use crate::input::{PasteEncoding, encode_key, encode_paste};
-use crate::mouse::encode_mouse;
-use crate::screen::{ModeChange, TerminalScreen};
-use crate::{
-    BlockList, GridSize, KeyModifiers, ScreenBuffer, TerminalGrid, TerminalKey, TerminalModes,
-    TerminalMouseEvent,
-};
+use crate::GridSize;
+use crate::ScreenBuffer;
+use crate::TerminalGrid;
+use crate::TerminalModes;
+use crate::screen::ModeChange;
+use crate::screen::TerminalScreen;
 
 struct GridPerformer<'a> {
     screen: &'a mut TerminalScreen,
-    printable: &'a mut String,
     replies: &'a mut Vec<u8>,
     title: &'a mut Option<String>,
-    command_finished: &'a mut bool,
 }
 
 impl Perform for GridPerformer<'_> {
     fn print(&mut self, character: char) {
-        let capture = self.screen.active() == ScreenBuffer::Primary;
         self.screen.grid_mut().print(character);
-        if capture {
-            self.printable.push(character);
-        }
     }
 
     fn execute(&mut self, byte: u8) {
-        let capture = self.screen.active() == ScreenBuffer::Primary;
+        let grid = self.screen.grid_mut();
         match byte {
-            b'\x08' => self.screen.grid_mut().backspace(),
-            b'\t' => {
-                self.screen.grid_mut().tab();
-                if capture {
-                    self.printable.push('\t');
-                }
-            }
-            b'\n' | b'\x0b' | b'\x0c' => {
-                self.screen.grid_mut().index();
-                if capture {
-                    self.printable.push('\n');
-                }
-            }
-            b'\r' => self.screen.grid_mut().carriage_return(),
+            b'\x08' => grid.backspace(),
+            b'\t' => grid.tab(),
+            b'\n' | b'\x0b' | b'\x0c' => grid.index(),
+            b'\r' => grid.carriage_return(),
             _ => {}
         }
     }
@@ -123,10 +106,6 @@ impl Perform for GridPerformer<'_> {
         let Some(command) = params.first() else {
             return;
         };
-        if *command == b"133" && params.get(1).is_some_and(|event| *event == b"D") {
-            *self.command_finished = true;
-            return;
-        }
         if !matches!(*command, b"0" | b"2") {
             return;
         }
@@ -193,12 +172,10 @@ fn raw_param(params: &Params, index: usize) -> u16 {
         .unwrap_or(0)
 }
 
-/// Combined terminal parser, screen grid, and command/output block state.
+/// Parses PTY output into screen state and terminal query replies.
 pub struct TerminalCore {
     parser: Parser,
     screen: TerminalScreen,
-    blocks: BlockList,
-    exit_code: Option<i32>,
     reply_bytes: Vec<u8>,
     title: Option<String>,
 }
@@ -208,8 +185,6 @@ impl TerminalCore {
         Self {
             parser: Parser::new(),
             screen: TerminalScreen::new(size),
-            blocks: BlockList::new(),
-            exit_code: None,
             reply_bytes: Vec::new(),
             title: None,
         }
@@ -227,14 +202,6 @@ impl TerminalCore {
         self.screen.modes()
     }
 
-    pub const fn block_list(&self) -> &BlockList {
-        &self.blocks
-    }
-
-    pub const fn exit_code(&self) -> Option<i32> {
-        self.exit_code
-    }
-
     pub fn title(&self) -> Option<&str> {
         self.title.as_deref()
     }
@@ -243,53 +210,17 @@ impl TerminalCore {
         self.screen.resize(size);
     }
 
-    pub fn start_command(&mut self, command: impl Into<String>) {
-        self.blocks.start_command(command);
-    }
-
     pub fn process_output(&mut self, bytes: &[u8]) {
-        let mut printable = String::new();
-        let mut command_finished = false;
         let mut performer = GridPerformer {
             screen: &mut self.screen,
-            printable: &mut printable,
             replies: &mut self.reply_bytes,
             title: &mut self.title,
-            command_finished: &mut command_finished,
         };
         self.parser.advance(&mut performer, bytes);
-        self.blocks.append_printable_output(&printable);
-        if command_finished {
-            self.blocks.complete_command();
-        }
-    }
-
-    pub fn encode_key(&self, key: TerminalKey<'_>, modifiers: KeyModifiers) -> Vec<u8> {
-        encode_key(key, modifiers, self.screen.modes().cursor_keys())
-    }
-
-    pub fn encode_paste(&self, text: &str) -> Vec<u8> {
-        let encoding = if self.screen.modes().bracketed_paste() {
-            PasteEncoding::Bracketed
-        } else {
-            PasteEncoding::Literal
-        };
-        encode_paste(text, encoding)
-    }
-
-    pub fn encode_mouse(&self, event: TerminalMouseEvent) -> Vec<u8> {
-        encode_mouse(event, self.screen.modes())
     }
 
     pub fn take_reply_bytes(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.reply_bytes)
-    }
-
-    pub fn mark_process_exited(&mut self, exit_code: i32) {
-        self.exit_code = Some(exit_code);
-        self.screen.process_exited();
-        self.blocks.mark_process_exited(exit_code);
-        self.reply_bytes.clear();
     }
 }
 

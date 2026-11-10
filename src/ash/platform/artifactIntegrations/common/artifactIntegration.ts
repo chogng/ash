@@ -23,4 +23,6 @@ export interface IArtifactIntegrationBinding {
 	readonly id: string;
 	readonly artifact: ArtifactRecord;
 	readonly actions: readonly ArtifactAction[];
+	/** Explains why an otherwise relevant action is unavailable. */
+	readonly unavailableReason?: string;
 }

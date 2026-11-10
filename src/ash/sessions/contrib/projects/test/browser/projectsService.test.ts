@@ -113,6 +113,19 @@ suite('Projects browsing', () => {
 		assert.equal(appearance('other-account').color, undefined);
 	});
 
+	test('restores existing offline material names under their catalog account and replaces removed names', () => {
+		using fixture = new ProjectsFixture();
+		const key = 'account:project';
+		const material = { id: 'file-existing', name: 'notes.txt' };
+		fixture.storage.store('sessions.chatgpt.projectFiles.v1:' + key, JSON.stringify([material]), StorageScope.PROFILE, StorageTarget.MACHINE);
+		assert.deepEqual(fixture.projectsView.readCatalogMaterialNames(key), [material]);
+		assert.equal(fixture.projectsView.readCatalogMaterialNames('other-account:project'), undefined);
+
+		fixture.projectsView.rememberCatalogMaterialNames(key, []);
+		using restored = fixture.services.createInstance(ProjectsService);
+		assert.deepEqual(restored.readCatalogMaterialNames(key), []);
+	});
+
 	test('pinning is profile state shared by retained views and sorts pinned projects first', async () => {
 		using fixture = new ProjectsFixture();
 		await fixture.projectsView.create('a', 'Alpha', '', []);
@@ -144,7 +157,9 @@ suite('Projects browsing', () => {
 
 	test('creates a project containing multiple material types and restores it through its owner', async () => {
 		using fixture = new ProjectsFixture();
-		const materials: ProjectMaterial[] = ['paper.pdf', 'photo.png', 'budget.xlsx'].map(name => ({ name, resource: URI.file(`/materials/${name}`), kind: 'file' }));
+		const materials: ProjectMaterial[] = ['paper.pdf', 'photo.png', 'budget.xlsx'].map((name, sizeBytes) => ({
+			name, resource: URI.file(`/materials/${name}`), kind: 'file', sizeBytes,
+		}));
 		assert.equal(await fixture.projectsView.create('research', 'Research', 'Compare the evidence', materials), true);
 		assert.deepEqual(fixture.projectsView.state.get().selected?.materials, materials);
 		using restored = fixture.services.createInstance(ProjectsService);

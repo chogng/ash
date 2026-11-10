@@ -10,6 +10,56 @@ use crate::test_support::TestRepository;
 use std::path::PathBuf;
 
 #[tokio::test]
+async fn staged_preview_rejects_changed_index_but_ignores_worktree_edits() {
+    let repository = TestRepository::init();
+    repository.write("partial.txt", "initial\n");
+    repository.write("old.txt", "rename this file\n");
+    repository.commit_all("initial");
+    repository.write("partial.txt", "reviewed\n");
+    repository.git(&["add", "partial.txt"]);
+    repository.git(&["mv", "old.txt", "renamed.txt"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let snapshot = client.snapshot(&opened).await.unwrap();
+    let version = client
+        .staged_commit_version(&opened, &snapshot)
+        .await
+        .unwrap();
+    let request = GitCommitRequest::new("reviewed commit".into())
+        .unwrap()
+        .with_expected_staged_version(version.clone())
+        .unwrap();
+    repository.write("partial.txt", "later\n");
+    let snapshot = client.snapshot(&opened).await.unwrap();
+    assert_eq!(
+        client
+            .staged_commit_version(&opened, &snapshot)
+            .await
+            .unwrap(),
+        version
+    );
+    repository.git(&["add", "partial.txt"]);
+    let head = repository.git(&["rev-parse", "HEAD"]);
+    assert!(matches!(
+        client.commit(&opened, &request).await,
+        Err(GitError::IndexChanged)
+    ));
+    assert_eq!(repository.git(&["rev-parse", "HEAD"]), head);
+    assert_eq!(repository.git(&["show", ":partial.txt"]), "later");
+
+    repository.write("partial.txt", "reviewed\n");
+    repository.git(&["add", "partial.txt"]);
+    repository.write("partial.txt", "worktree only\n");
+    client.commit(&opened, &request).await.unwrap();
+    assert_eq!(repository.git(&["show", "HEAD:partial.txt"]), "reviewed");
+    assert_eq!(
+        repository.git(&["show", "HEAD:renamed.txt"]),
+        "rename this file"
+    );
+    assert_eq!(repository.read("partial.txt"), "worktree only\n");
+}
+
+#[tokio::test]
 async fn commit_scopes_preserve_partial_staging_and_require_untracked_opt_in() {
     for scope in ["staged", "tracked", "includeUntracked"] {
         let repository = TestRepository::init();
@@ -834,7 +884,13 @@ async fn conflicted_pull_retains_git_integration_and_can_be_aborted() {
         );
         assert_eq!(origin.git(&["rev-parse", "main"]), remote_head);
         client
-            .execute_command(&opened, &crate::GitCommand::Abort { operation })
+            .execute_command(
+                &opened,
+                &crate::GitCommand::Abort {
+                    operation,
+                    expected_version: None,
+                },
+            )
             .await
             .unwrap();
         assert_eq!(client.integration_state(&opened), None);

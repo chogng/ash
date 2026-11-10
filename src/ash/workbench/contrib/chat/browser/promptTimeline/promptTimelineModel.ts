@@ -21,11 +21,11 @@ export interface PromptTick {
 	readonly position: number;
 }
 
-/** Derives navigation from the same rendered rows the transcript uses for reveal. */
+/** Derives navigation from transcript positions, including rows outside the render window. */
 export class PromptTimelineModel<T extends PromptTimelinePrompt = PromptTimelinePrompt> {
 	constructor(
 		readonly prompts: readonly T[],
-		private readonly getRow: (id: string) => HTMLElement,
+		private readonly getTop: (id: string) => number,
 	) { }
 
 	firstPromptAfter(top: number): number {
@@ -33,21 +33,21 @@ export class PromptTimelineModel<T extends PromptTimelinePrompt = PromptTimeline
 		let high = this.prompts.length;
 		while (low < high) {
 			const middle = (low + high) >>> 1;
-			if (this.bounds(this.prompts[middle]).top <= top) low = middle + 1;
+			if (this.top(this.prompts[middle]) <= top) low = middle + 1;
 			else high = middle;
 		}
 		return low;
 	}
 
-	bounds(prompt: PromptTimelinePrompt): DOMRect {
-		return this.getRow(prompt.id).getBoundingClientRect();
+	top(prompt: PromptTimelinePrompt): number {
+		return this.getTop(prompt.id);
 	}
 
 	ticks(viewport: HTMLElement): PromptTick[] {
 		const origin = viewport.getBoundingClientRect().top - viewport.scrollTop;
 		return this.prompts.map(prompt => ({
 			prompt,
-			position: Math.min(1, Math.max(0, (this.bounds(prompt).top - origin) / Math.max(1, viewport.scrollHeight))),
+			position: Math.min(1, Math.max(0, (this.top(prompt) - origin) / Math.max(1, viewport.scrollHeight))),
 		}));
 	}
 }

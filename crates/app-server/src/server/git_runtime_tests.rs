@@ -536,7 +536,7 @@ fn commit_amend_and_undo_use_one_repository_owner_and_return_complete_messages()
             .unwrap(),
         "Amended subject\n\nComplete body.\n\nSigned-off-by: Ash Test <ash@example.invalid>"
     );
-    let (undone, outcome, _) = runtime
+    let (undone, outcome) = runtime
         .command_for(
             Some(&repository_id),
             &ash_git::GitCommand::UndoCommit {
@@ -3071,7 +3071,7 @@ fn repository_intents_publish_conflicts_and_refs_to_every_connection_and_reject_
     first.drain();
     second.drain();
     let token = CancellationSource::new();
-    let (status, outcome, operation) = runtime
+    let (status, outcome) = runtime
         .command_for(
             None,
             &GitCommand::Merge {
@@ -3081,7 +3081,11 @@ fn repository_intents_publish_conflicts_and_refs_to_every_connection_and_reject_
         )
         .unwrap();
     assert_eq!(outcome, GitCommandOutcome::Conflicted);
-    assert_eq!(operation, Some(ash_git::GitIntegration::Merge));
+    let integration = status.integration.as_ref().unwrap();
+    assert_eq!(
+        integration.operation,
+        super::integration_dto(ash_git::GitIntegration::Merge)
+    );
     assert!(status.changes.iter().any(|change| change.conflicted));
     assert_eq!(first.drain(), second.drain());
     runtime
@@ -3089,6 +3093,7 @@ fn repository_intents_publish_conflicts_and_refs_to_every_connection_and_reject_
             None,
             &GitCommand::Abort {
                 operation: ash_git::GitIntegration::Merge,
+                expected_version: Some(integration.version.clone()),
             },
             &token.token(),
         )
@@ -3096,7 +3101,7 @@ fn repository_intents_publish_conflicts_and_refs_to_every_connection_and_reject_
     first.drain();
     second.drain();
     let before = runtime.status().unwrap();
-    let (after, _, _) = runtime
+    let (after, _) = runtime
         .command_for(
             None,
             &GitCommand::CreateTag {
@@ -3130,6 +3135,107 @@ fn repository_intents_publish_conflicts_and_refs_to_every_connection_and_reject_
         ))
     ));
     assert_eq!(repository.git_output(&["tag", "--list"]), "review");
+}
+
+#[test]
+fn external_rebase_restores_its_conflict_progress_and_rejects_a_stale_step() {
+    use ash_app_server_protocol::protocol::git::GitIntegrationDto;
+    use ash_async_utils::CancellationSource;
+    use ash_git::GitCommand;
+    use ash_git::GitCommandOutcome;
+    use ash_git::GitIntegration;
+
+    let repository = TestRepository::init();
+    for path in ["one.txt", "two.txt"] {
+        repository.write(path, "base\n");
+    }
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "Base"]);
+    repository.git(&["switch", "-c", "topic"]);
+    for path in ["one.txt", "two.txt"] {
+        repository.write(path, "topic\n");
+    }
+    repository.git(&["commit", "-am", "Topic"]);
+    repository.git(&["switch", "main"]);
+    for path in ["one.txt", "two.txt"] {
+        repository.write(path, "main\n");
+    }
+    repository.git(&["commit", "-am", "Main"]);
+    repository.git(&["switch", "topic"]);
+
+    let start_rebase = || {
+        let output = std::process::Command::new("git")
+            .current_dir(repository.root())
+            .args(["rebase", "main"])
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+    };
+    start_rebase();
+    let reopen = || {
+        GitRuntime::new(
+            mutation_authorization(repository.root()),
+            Arc::new(UpdateBroker::default()),
+        )
+        .unwrap()
+    };
+    let initial = reopen().status().unwrap();
+    let conflict_count = |status: &ash_app_server_protocol::protocol::git::GitStatusResult| {
+        status
+            .changes
+            .iter()
+            .filter(|change| change.conflicted)
+            .count()
+    };
+    assert_eq!(conflict_count(&initial), 2);
+    let stale_version = initial.integration.unwrap().version;
+    repository.git(&["rebase", "--abort"]);
+    start_rebase();
+
+    let runtime = reopen();
+    let token = CancellationSource::new();
+    assert!(
+        runtime
+            .command_for(
+                None,
+                &GitCommand::Abort {
+                    operation: GitIntegration::Rebase,
+                    expected_version: Some(stale_version),
+                },
+                &token.token(),
+            )
+            .is_err()
+    );
+    let initial = runtime.status().unwrap();
+    let integration = initial.integration.unwrap();
+    assert_eq!(integration.operation, GitIntegrationDto::Rebase);
+
+    repository.write("one.txt", "resolved one\n");
+    repository.git(&["add", "one.txt"]);
+    let runtime = reopen();
+    let partial = runtime.status().unwrap();
+    assert_eq!(conflict_count(&partial), 1);
+    assert_eq!(partial.integration.as_ref(), Some(&integration));
+    repository.write("two.txt", "resolved two\n");
+    repository.git(&["add", "two.txt"]);
+    assert_eq!(conflict_count(&runtime.status().unwrap()), 0);
+    let (finished, outcome) = runtime
+        .command_for(
+            None,
+            &GitCommand::Continue {
+                operation: GitIntegration::Rebase,
+                expected_version: Some(integration.version),
+            },
+            &token.token(),
+        )
+        .unwrap();
+    assert_eq!(outcome, GitCommandOutcome::Completed);
+    assert!(finished.integration.is_none());
+    assert!(finished.changes.is_empty());
+    assert_eq!(
+        repository.git_output(&["branch", "--show-current"]),
+        "topic"
+    );
 }
 
 #[test]
@@ -3550,7 +3656,10 @@ fn conflicted_pull_publishes_scm_state_and_retains_continue_abort_operation() {
         runtime
             .command_for(
                 None,
-                &GitCommand::Abort { operation },
+                &GitCommand::Abort {
+                    operation,
+                    expected_version: None,
+                },
                 &cancellation.token(),
             )
             .unwrap();

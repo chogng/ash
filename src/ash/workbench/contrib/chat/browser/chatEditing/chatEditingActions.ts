@@ -23,7 +23,7 @@ import { throwIfCancelled } from '../../../../../base/common/cancellation.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import { ChatRequestActionContext, IChatWidgetService } from '../chat.js';
+import { ChatRequestActionContext, IChatWidgetService, type ChatRequestVersion } from '../chat.js';
 
 export const RestoreCheckpointActionId = 'workbench.action.chat.restoreCheckpoint';
 export const RedoChatHistoryActionId = 'workbench.action.chat.redoEdit';
@@ -42,13 +42,53 @@ export function registerChatEditRequestAction(): void {
 		}
 
 		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
-			if (context instanceof ChatRequestActionContext && context.visible && context.item.requestSource) {
+			if (context instanceof ChatRequestActionContext && context.visible && (context.item.requestSource || context.item.requestEdit)) {
 				await context.startEditing(context.item.id);
 			} else if (context === undefined) {
 				const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
 				const item = widget?.getFocus();
-				if (item?.requestSource) await widget?.startEditing(item.id);
+				if (item && (item.requestSource || item.requestEdit)) await widget?.startEditing(item.id);
 			}
+		}
+	});
+	registerAction2(class SelectRequestVersionAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.chat.selectRequestVersion',
+				title: localize2('chat.edit.versions', 'Message versions'),
+				icon: Lxicon.history,
+				menu: {
+					id: MenuId.ChatMessageTitle, group: 'navigation', order: 3,
+					when: ContextKeyExpr.and(ChatContextKeys.transcriptProgressActive.isEqualTo(false), ChatContextKeys.requestHasVersions.isEqualTo(true)),
+				},
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (!(context instanceof ChatRequestActionContext) || !context.visible || !context.getVersions) return;
+			const quickInput = accessor.get(IQuickInputService);
+			const versions = await context.getVersions(context.item);
+			if (!context.visible || versions.length < 2) return;
+			using store = new DisposableStore();
+			const picker = store.add(quickInput.createQuickPick<IQuickPickItem & { version: ChatRequestVersion; }>());
+			picker.ariaLabel = picker.placeholder = localize('chat.edit.chooseVersion', 'Choose a message version');
+			picker.sortByLabel = false;
+			const items = versions.map(version => ({
+				label: version.text.trim().replace(/\s+/gu, ' ').slice(0, 160),
+				description: version.selected ? localize('chat.edit.currentVersion', 'Current version') : undefined,
+				version,
+			}));
+			picker.items = items;
+			picker.activeItems = items.filter(item => item.version.selected);
+			const selected = await new Promise<ChatRequestVersion | undefined>(resolve => {
+				store.add(picker.onDidAccept(() => {
+					resolve(picker.selectedItems[0]?.version);
+					picker.hide();
+				}));
+				store.add(picker.onDidHide(() => resolve(undefined)));
+				picker.show();
+			});
+			if (context.visible && selected && !selected.selected) await selected.select();
 		}
 	});
 }

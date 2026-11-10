@@ -1,6 +1,6 @@
 # 正式产物加载基线
 
-> 2026-10-20 边界更新：PDF 查看器现为可选安装的 `ash.pdf-viewer` 扩展，产品入口和 Chat 不静态依赖 PDF 实现。下文是迁移前的历史测量，PDF 主模块／独立 Worker 大小及请求方式不能作为当前包的测量结果。当前 PDF.js 与 Worker 均位于校验摘要的扩展客户端内；默认产品不含这些资源。尚未据此声称启动时间收益。构建和验证见 [PDF 扩展](../extensions/pdf-viewer/README.md)。
+> 2026-10-20 边界更新：PDF 查看器现为可选安装的 `ash.pdf-viewer` 扩展，产品入口和 Chat 不静态依赖 PDF 实现。下文是迁移前的历史测量，PDF 主模块／独立 Worker 大小及请求方式不能作为当前包的测量结果。完整查看器的 PDF.js 与 Worker 位于校验摘要的扩展客户端内。Agent Window 的只读文件预览随产品按需加载。尚未据此声称启动时间收益。构建和验证见 [PDF 扩展](../extensions/pdf-viewer/README.md)。
 
 本基线用于决定功能加载边界，不把单个 chunk 小于 500 kB 当作启动性能目标。
 

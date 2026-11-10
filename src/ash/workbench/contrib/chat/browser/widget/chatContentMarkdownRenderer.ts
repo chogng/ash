@@ -7,7 +7,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { IMarkdownRendererService, type IMarkdownRenderer } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { MarkedKatexSupport } from '../../../markdown/browser/markedKatexSupport.js';
 
-/** Shared chat policy; provider adapters supply only their own syntax and resource transformations. */
+/** Shared rendering policy for agent-authored Markdown. */
 export function getChatMarkdownRenderOptions(options: MarkdownRenderOptions = {}): MarkdownRenderOptions {
 	const sanitizer = {
 		replaceWithPlaintext: true,
@@ -40,7 +40,8 @@ export class ChatContentMarkdownRenderer extends Disposable implements IMarkdown
 	public render(markdown: IMarkdownString, options: MarkdownRenderOptions = {}, outElement?: HTMLElement): IRenderedMarkdown {
 		this.assertNotDisposed();
 		let hasResourceImages = false;
-		const mathSyntax = /[$\\]|`{3}|~{3}/u.test(markdown.value);
+		// Structured parts can carry nested Markdown even when their references contain no math syntax.
+		const mathSyntax = !!options.markedExtensions?.length || /[$\\]|`{3}|~{3}/u.test(markdown.value);
 		const renderOptions = getChatMarkdownRenderOptions({
 			...options,
 			markedExtensions: mathSyntax ? [MarkedKatexSupport.getExtension(), ...(options.markedExtensions ?? [])] : options.markedExtensions,

@@ -40,13 +40,13 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSys
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 	private readonly watches = this._register(new DisposableStore());
 
-	constructor(private readonly channel: IChannel) {
+	constructor(private readonly channel: IChannel, private readonly scheme = 'file') {
 		super();
 		this._register(channel.listen<unknown>('fileChange')(value => {
 			if (value === undefined) { this.changes.fire({ resources: undefined }); return; }
 			if (!Array.isArray(value) || value.some(resource => typeof resource !== 'string')) throw new TypeError('Invalid file-change resources');
 			const resources = value.map(resource => URI.parse(resource));
-			if (resources.some(resource => resource.scheme !== 'file' || resource.query || resource.fragment)) throw new TypeError('Invalid file-change resource');
+			if (resources.some(resource => resource.scheme !== this.scheme || resource.query || resource.fragment)) throw new TypeError('Invalid file-change resource');
 			this.changes.fire({ resources });
 		}));
 	}
@@ -102,7 +102,7 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSys
 	}
 	public watch(resource: URI, options: IWatchOptions): IDisposable {
 		this.assertNotDisposed();
-		if (resource.scheme !== 'file' || resource.query || resource.fragment) throw new TypeError('Expected a local file resource');
+		if (resource.scheme !== this.scheme || resource.query || resource.fragment) throw new TypeError('Unexpected file resource scheme');
 		// The subscription owns the Main-side watch; notifications use the shared fileChange event.
 		const watch = this.watches.add(this.channel.listen<void>('watch', { resource: resource.toString(), options })(() => { }));
 		return toDisposable(() => { this.watches.delete(watch); watch.dispose(); });

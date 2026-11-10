@@ -467,7 +467,9 @@ fn project_materials_round_trip_without_granting_file_access() {
         &ash_utils_absolute_path::AbsolutePathBuf::from_absolute(source.path().join("paper.pdf"))
             .unwrap(),
     );
-    let material = serde_json::json!({"path": path, "name": "paper.pdf", "kind": "file"});
+    let material =
+        serde_json::json!({"path": path, "name": "paper.pdf", "kind": "file", "sizeBytes": 12345});
+    let text = serde_json::json!({"id": "research-note", "name": "Reading notes", "kind": "text", "content": "Line 1\n第二行\n"});
     let created = call(
         &fixture.server,
         &mut host,
@@ -487,12 +489,12 @@ fn project_materials_round_trip_without_granting_file_access() {
         3,
         "project/details/update",
         serde_json::json!({
-            "commandId": "rename-material-project", "projectId": "material-project", "expectedRevision": 1, "name": "Research notes", "description": "Updated goal"
+            "commandId": "add-text-material", "projectId": "material-project", "expectedRevision": 1, "name": "Research notes", "description": "Updated goal", "materials": [material, text]
         }),
     );
     assert_eq!(
         updated["result"]["project"]["materials"],
-        serde_json::json!([material])
+        serde_json::json!([material, text])
     );
     let read = call(
         &fixture.server,
@@ -503,7 +505,7 @@ fn project_materials_round_trip_without_granting_file_access() {
     );
     assert_eq!(
         read["result"]["project"]["materials"],
-        serde_json::json!([material])
+        serde_json::json!([material, text])
     );
     let removed = call(
         &fixture.server,

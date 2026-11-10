@@ -16,37 +16,46 @@ const PAGE_SIZE: usize = 100;
 const PAGE_LIMIT: usize = 30;
 
 const QUERY: &str = r"
-query AshPullRequestChecks($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+query AshPullRequestChecks($owner: String!, $repo: String!, $number: Int!, $headCursor: String, $mergeCursor: String) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       baseRefName
       headRefOid
+      potentialMergeCommit {
+        oid
+        statusCheckRollup {
+          contexts(first: 100, after: $mergeCursor) { ...CheckPage }
+        }
+      }
       commits(last: 1) {
         nodes {
           commit {
             oid
             statusCheckRollup {
-              contexts(first: 100, after: $cursor) {
-                nodes {
-                  __typename
-                  ... on CheckRun { name status conclusion completedAt startedAt isRequired(pullRequestNumber: $number) }
-                  ... on StatusContext { context state isRequired(pullRequestNumber: $number) }
-                }
-                pageInfo { hasNextPage endCursor }
-              }
+              contexts(first: 100, after: $headCursor) { ...CheckPage }
             }
           }
         }
       }
     }
   }
+}
+
+fragment CheckPage on StatusCheckRollupContextConnection {
+  nodes {
+    __typename
+    ... on CheckRun { name status conclusion completedAt startedAt isRequired(pullRequestNumber: $number) }
+    ... on StatusContext { context state isRequired(pullRequestNumber: $number) }
+  }
+  pageInfo { hasNextPage endCursor }
 }";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PullRequestHead {
+struct PullRequestCommits {
     base_ref_name: String,
     head_ref_oid: String,
+    potential_merge_commit: Option<Commit>,
     commits: Nodes<PullRequestCommit>,
 }
 
@@ -211,42 +220,71 @@ impl GitHub {
             ));
         }
 
-        let stale_head = PullRequestChecks {
+        let stale_checks = PullRequestChecks {
             status: PullRequestChecksStatus::Pending,
             latest_check_at_unix_ms: None,
+            unreported_required_checks: Vec::new(),
         };
         let mut checks = Vec::new();
         let mut cursor: Option<String> = None;
         let mut cursors = HashSet::new();
         let mut base = String::new();
+        let mut merge_oid: Option<String> = None;
         for _ in 0..PAGE_LIMIT {
-            let response = self.graphql(repository, QUERY, json!({
-                "owner": repository.owner, "repo": repository.name, "number": number, "cursor": cursor,
-            }), Operation::Read).await?;
+            // Each cursor belongs to one commit's connection.
+            let (head_cursor, merge_cursor) = if merge_oid.is_some() {
+                (None, cursor.as_ref())
+            } else {
+                (cursor.as_ref(), None)
+            };
+            let response = self
+                .graphql(
+                    repository,
+                    QUERY,
+                    json!({
+                        "owner": repository.owner, "repo": repository.name, "number": number,
+                        "headCursor": head_cursor, "mergeCursor": merge_cursor,
+                    }),
+                    Operation::Read,
+                )
+                .await?;
             let pr = response
                 .pointer("/data/repository/pullRequest")
                 .filter(|value| !value.is_null())
                 .ok_or(Error::NotFound)?;
-            let pr: PullRequestHead = serde_json::from_value(pr.clone())
+            let pr: PullRequestCommits = serde_json::from_value(pr.clone())
                 .map_err(|_| Error::InvalidResponse("Invalid GitHub pull request checks".into()))?;
             if !pr.head_ref_oid.eq_ignore_ascii_case(head_commit)
                 || (cursor.is_some() && pr.base_ref_name != base)
             {
-                return Ok(stale_head);
+                return Ok(stale_checks);
             }
             base = pr.base_ref_name;
-            let Some(commit) = pr
+            let Some(head) = pr
                 .commits
                 .nodes
                 .into_iter()
                 .next()
                 .map(|entry| entry.commit)
             else {
-                return Ok(stale_head);
+                return Ok(stale_checks);
             };
-            if !commit.oid.eq_ignore_ascii_case(head_commit) {
-                return Ok(stale_head);
+            if !head.oid.eq_ignore_ascii_case(head_commit) {
+                return Ok(stale_checks);
             }
+            let merge = pr.potential_merge_commit.filter(|commit| {
+                commit.status_check_rollup.as_ref().is_some_and(|rollup| {
+                    merge_cursor.is_some()
+                        || !rollup.contexts.nodes.is_empty()
+                        || rollup.contexts.page_info.has_next_page
+                })
+            });
+            let current_merge_oid = merge.as_ref().map(|commit| &commit.oid);
+            if cursor.is_some() && merge_oid.as_ref() != current_merge_oid {
+                return Ok(stale_checks);
+            }
+            merge_oid = current_merge_oid.cloned();
+            let commit = merge.unwrap_or(head);
             if let Some(rollup) = commit.status_check_rollup {
                 checks.extend(rollup.contexts.nodes);
                 if rollup.contexts.page_info.has_next_page {
@@ -263,7 +301,7 @@ impl GitHub {
                     continue;
                 }
             } else if cursor.is_some() {
-                return Ok(stale_head);
+                return Ok(stale_checks);
             }
             let required = self.required_check_names(repository, &base).await?;
             return Ok(summarize_checks(&checks, required));
@@ -361,9 +399,12 @@ fn summarize_checks(checks: &[Check], mut unreported: HashSet<String>) -> PullRe
     if status != Failure && !unreported.is_empty() {
         status = Pending;
     }
+    let mut unreported_required_checks: Vec<_> = unreported.into_iter().collect();
+    unreported_required_checks.sort_unstable();
     PullRequestChecks {
         status,
         latest_check_at_unix_ms,
+        unreported_required_checks,
     }
 }
 

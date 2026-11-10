@@ -257,8 +257,8 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_dir_escape_argumen
     .unwrap();
 
     let shell = tool_call(json!({
-        "program": "/bin/sh",
-        "arguments": ["-lc", "printf hello"],
+        "program": "/usr/bin/printf",
+        "arguments": ["hello"],
         "working_directory": "."
     }));
     let review = service.prepare(&shell).unwrap();
@@ -397,9 +397,8 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
         ExecPolicySelector::all([
             ExecPolicySelector::source(Some("built_in_tool".into()), Some("shell-command".into())),
             ExecPolicySelector::command_prefix([
-                ash_execpolicy::ExecPolicyToken::literal("/bin/sh"),
-                ash_execpolicy::ExecPolicyToken::literal("-lc"),
-                ash_execpolicy::ExecPolicyToken::literal("printf safe"),
+                ash_execpolicy::ExecPolicyToken::literal("/usr/bin/printf"),
+                ash_execpolicy::ExecPolicyToken::literal("safe"),
             ]),
         ]),
         ExecPolicyEffect::AllowUnsandboxed,
@@ -428,8 +427,8 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
     )
     .unwrap();
     let call = tool_call(json!({
-        "program": "/bin/sh",
-        "arguments": ["-lc", "printf safe"],
+        "program": "/usr/bin/printf",
+        "arguments": ["safe"],
         "working_directory": "."
     }));
     let review = service.prepare(&call).unwrap();

@@ -298,8 +298,9 @@
 }
 
 .ash-projects-muted {
+	margin: 0;
 	color: var(--ash-description-foreground);
-	line-height: 1.6;
+	line-height: 1.5;
 }
 
 .ash-projects-breadcrumb {
@@ -321,34 +322,153 @@
 }
 
 .ash-projects-detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size240);
+	min-inline-size: 0;
+}
+
+.ash-projects.project-detail-open .ash-projects-main {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding-block-end: var(--ash-spacing-size120);
+}
+
+.ash-projects.project-detail-open .ash-projects-body,
+.ash-projects.project-detail-open .ash-projects-detail {
+	display: flex;
+	flex: 1 1 auto;
+	min-block-size: 0;
+}
+
+.ash-projects-detail-tabs {
+	flex: 0 0 auto;
+}
+
+.ash-projects-detail-content {
+	flex: 1 1 auto;
+	min-block-size: 0;
+}
+
+.ash-projects-detail-content > [role="tabpanel"] {
+	box-sizing: border-box;
+	block-size: 100%;
+	overflow: auto;
+	padding: var(--ash-spacing-size20);
+}
+
+.ash-projects-detail-content > .ash-projects-overview:not([hidden]) {
 	display: grid;
-	grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+	align-content: start;
 	gap: var(--ash-spacing-size400);
-	align-items: start;
+	grid-template-columns: minmax(0, 1fr);
 }
 
-.ash-projects-overview {
+.ash-projects:not(.stack-project-details)
+	.ash-projects-detail-content
+	> .ash-projects-overview:not([hidden]) {
+	grid-template-rows: minmax(0, 1fr);
+}
+
+.ash-projects:not(.stack-project-details)
+	.ash-projects-overview:has(> .ash-projects-detail-card:not([hidden])) {
+	grid-template-columns: minmax(0, 1.6fr) minmax(304px, 1fr);
+}
+
+.ash-projects:not(.stack-project-details)
+	.ash-projects-overview
+	> .ash-projects-chat-content,
+.ash-projects-chats > .ash-projects-chat-content {
+	block-size: 100%;
+	min-block-size: 0;
+	overflow: auto;
+}
+
+.ash-projects-detail-card {
+	box-sizing: border-box;
+	align-self: start;
+	min-inline-size: 0;
+	border: var(--ash-strokeThickness) solid
+		var(
+			--ash-contrastBorder,
+			color-mix(in srgb, var(--ash-widget-border) 55%, transparent)
+		);
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-projects:not(.stack-project-details) .ash-projects-detail-card {
+	max-block-size: 100%;
+	overflow: auto;
+}
+
+.ash-projects-detail-card
+	> :is(
+		.ash-projects-instructions-content,
+		.ash-projects-memory-content,
+		.ash-projects-file-content
+	) {
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
+}
+
+.ash-projects-detail-card
+	> :is(.ash-projects-memory-content, .ash-projects-file-content) {
+	border-block-start: var(--ash-strokeThickness) solid
+		var(
+			--ash-contrastBorder,
+			color-mix(in srgb, var(--ash-widget-border) 55%, transparent)
+		);
+}
+
+.ash-projects-detail-card .ash-projects-section-heading {
+	min-block-size: var(--ash-spacing-size280);
+}
+
+.ash-projects.stack-project-details
+	.ash-projects-detail-content
+	> .ash-projects-overview:not([hidden]) {
+	gap: var(--ash-spacing-size200);
+}
+
+.ash-projects-detail > .ash-projects-composer {
 	min-width: 0;
+	margin-inline: var(--ash-chat-content-inset);
+	--ash-chat-content-padding: var(--ash-spacing-size240);
+	--ash-chat-content-min-padding: 0px;
 }
 
-.ash-projects-composer > .ash-cowork {
+.ash-projects-detail > .ash-projects-composer[hidden] {
+	display: none;
+}
+
+.ash-projects-composer > .ash-chat {
 	height: auto;
 	overflow: visible;
+	background: transparent;
 }
 
-.ash-projects-overview .ash-projects-conversations {
-	margin-top: var(--ash-spacing-size240);
+.ash-projects-composer > .ash-chat > .ash-chat-input-part {
+	padding: 0;
 }
 
-.ash-projects-conversations h2 {
-	margin: 0 0 var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-heading3);
+.ash-projects-detail:has(.ash-projects-drop-overlay:not([hidden]))
+	.ash-projects-composer
+	.ash-chat-input-container {
+	outline: var(--ash-strokeThickness) dashed var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-projects-conversations {
+	display: grid;
+	justify-items: start;
+	gap: var(--ash-spacing-size80);
 }
 
 .ash-projects-conversation-list {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
-	gap: var(--ash-spacing-size40);
+	gap: var(--ash-spacing-size20);
+	justify-self: stretch;
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -356,21 +476,49 @@
 
 .ash-projects .ash-projects-conversation {
 	width: 100%;
+	min-height: var(--ash-spacing-size320);
 	justify-content: flex-start;
+	color: inherit;
 	text-align: start;
 }
 
-.ash-projects-goals {
-	margin-top: var(--ash-spacing-size240);
+.ash-projects .ash-projects-conversation:not(:disabled):hover {
+	background: var(--ash-sessions-sidebar-hover-background);
 }
 
-.ash-projects-materials {
-	min-width: 0;
-	padding: var(--ash-spacing-size240);
-	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-sideBar-background);
-	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
+.ash-projects-conversation-empty {
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-conversation-empty p {
+	margin: 0;
+}
+
+.ash-projects-conversation-empty {
+	display: grid;
+	justify-self: stretch;
+	justify-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size400) var(--ash-spacing-size160);
+	text-align: center;
+	line-height: 1.6;
+}
+
+.ash-projects-conversation-placeholder {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size60);
+	min-height: var(--ash-spacing-size320);
+	padding-inline: var(--ash-spacing-size80);
+}
+
+.ash-projects-conversation-placeholder > :first-child {
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+}
+
+.ash-projects-conversation-placeholder > :last-child {
+	width: 40%;
 }
 
 .ash-projects-section-heading {
@@ -383,16 +531,15 @@
 	font-size: var(--ash-fontSize-heading3);
 }
 
-.ash-projects-description {
-	min-height: 80px;
-	margin: var(--ash-spacing-size200) 0 0;
-	white-space: pre-wrap;
+:is(.ash-projects-guidance, .ash-projects-memory-content) > p {
+	margin-block: var(--ash-spacing-size40) 0;
 	overflow-wrap: anywhere;
-	line-height: 1.8;
 }
 
-.ash-projects-materials {
-	min-height: 320px;
+.ash-projects-description {
+	white-space: pre-wrap;
+	line-height: 1.5;
+	user-select: text;
 }
 
 .ash-projects-placeholder,
@@ -449,7 +596,7 @@
 	gap: var(--ash-spacing-size120);
 }
 
-.ash-projects-materials > .ash-projects-skeleton-lines {
+.ash-projects-overview > .ash-projects-skeleton-lines {
 	margin-top: var(--ash-spacing-size200);
 }
 
@@ -476,7 +623,6 @@
 	white-space: nowrap;
 }
 .ash-projects.narrow .ash-projects-detail {
-	grid-template-columns: minmax(0, 1fr);
 	gap: var(--ash-spacing-size200);
 }
 .ash-projects.narrow .ash-projects-grid {

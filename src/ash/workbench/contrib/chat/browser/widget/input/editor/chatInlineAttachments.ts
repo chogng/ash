@@ -22,6 +22,7 @@ import {
 	DefaultChatAttachmentWidget, FileAttachmentWidget, ImageAttachmentWidget, TerminalCommandAttachmentWidget,
 	ElementChatAttachmentWidget, SCMHistoryItemAttachmentWidget, SCMHistoryItemChangeAttachmentWidget,
 	PromptFileAttachmentWidget, ToolSetOrToolItemAttachmentWidget,
+	type IChatImageAnnotationTarget,
 } from '../../../attachments/chatAttachmentWidgets.js';
 import { registerChatInputReferenceDecorationType } from './chatInputReferenceDecorations.js';
 import './media/chatInlineAttachments.css';
@@ -37,6 +38,7 @@ export class ChatInlineAttachments extends Disposable {
 
 	constructor(
 		private readonly editor: ICodeEditor,
+		private readonly imageAnnotationTarget: (() => IChatImageAnnotationTarget | undefined) | undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ICodeEditorService codeEditors: ICodeEditorService,
 		@IEditorService private readonly editors: IEditorService,
@@ -123,7 +125,7 @@ export class ChatInlineAttachments extends Disposable {
 			}
 			if (!widget) {
 				const open = () => { void this.openSavedContent(reference); };
-				widget = this.instantiationService.createInstance(InlineChatAttachmentWidget, this.editor, reference, () => remove(reference.id), open);
+				widget = this.instantiationService.createInstance(InlineChatAttachmentWidget, this.editor, reference, () => remove(reference.id), open, this.imageAnnotationTarget);
 				this.referenceWidgets.set(reference.id, widget);
 			} else widget.attachment = reference;
 			for (const contentWidget of widget.widgets) this.editor.layoutContentWidget(contentWidget);
@@ -257,6 +259,7 @@ class InlineChatAttachmentWidget extends Disposable {
 		public attachment: ChatContextAttachment,
 		remove: () => void,
 		openSaved: (() => void) | undefined,
+		imageAnnotationTarget: (() => IChatImageAnnotationTarget | undefined) | undefined,
 		@IChatAttachmentWidgetRegistry registry: IChatAttachmentWidgetRegistry,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -269,7 +272,7 @@ class InlineChatAttachmentWidget extends Disposable {
 			if (attachment.kind === 'file' || attachment.kind === 'codeSelection' || attachment.kind === 'directory') {
 				content = this.fileWidget = instantiation.createInstance(FileAttachmentWidget, attachment, options, host);
 			} else if (attachment.kind === 'image') {
-				content = instantiation.createInstance(ImageAttachmentWidget, attachment, options, host);
+				content = instantiation.createInstance(ImageAttachmentWidget, attachment, { ...options, imageAnnotationTarget }, host);
 			} else if (attachment.kind === 'terminal' || attachment.kind === 'terminalCommand' || attachment.terminalSnapshot) {
 				content = instantiation.createInstance(TerminalCommandAttachmentWidget, attachment, options, host);
 			} else if (attachment.kind === 'browserElement') {

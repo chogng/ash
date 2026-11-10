@@ -126,10 +126,15 @@ Output 可读取命令、参数、目录、stdin、stdout、stderr、退出码�
 
 ## 安全与失败语义
 
-- 每个动作摘要绑定 Hook ID、完整 argv 和 canonical directory；Authorization 必须再次匹配动作摘要、能力
-  集合与策略版本。
-- 默认沙箱允许目录读写、拒绝网络，并把 process spawn capability 绑定到声明的 program。
-- Windows 按 MXC、账户沙箱顺序选择后端，原样保留动作策略返回的隔离和 ACL 要求；默认严格隔离不能由账户沙箱满足。启动错误不会换后端重跑。
+- 每个动作摘要绑定 Hook ID、完整 argv 和 canonical directory。会话目录 Hook 还绑定目录沙箱范围。
+  动作授权必须匹配摘要、能力集合与策略版本。
+- 会话目录 Hook 绑定同一份含 `DiscoverHooks` 和 `ExecuteCommands` 的可撤销授权。沙箱按该授权的
+  `ReadFiles`、`WriteFiles` 和路径约束限制访问。沙箱需要同时获得读写权限才允许写入目录，且动作审批
+  不能扩大目录权限。会话目录 Hook 在获得不受限动作审批时仍使用拒绝网络的沙箱。授权撤销后，旧绑定
+  无法启动进程。刷新失败时保留上次加载且授权仍有效的绑定，并释放失效绑定。宿主配置的 Hook 默认
+  允许目录读写并拒绝网络。
+- Windows 按 MXC、账户沙箱顺序选择后端。会话目录 Hook 始终要求严格隔离，账户沙箱无法满足该要求。
+  启动错误不会换后端重跑。
 - stdin、stdout 与 stderr 均有 byte 上限；单个进程最长运行 30 秒，captured output 总上限为
   64 KiB。
 - 文件变化、客户端通知和助手文本展示从各自的分发线程送入有界队列；每类分发最多暂存 256 个事件，

@@ -104,11 +104,12 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
-	public async setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void> {
+	public async setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<Project> {
 		try {
-			await appServerRequest(this.connection, 'project/appearance/update', {
+			const result = await appServerRequest(this.connection, 'project/appearance/update', {
 				commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, field, value: value ?? null,
 			});
+			return fromDto(result.project);
 		} catch (error) { throw projectError(error); }
 	}
 
@@ -134,12 +135,28 @@ function fromDto(project: ProjectDto): Project {
 		description: project.description, sessionIds: project.sessionIds, externalConversationIds: project.externalConversationIds,
 		sessionCount: project.sessionIds.length + (project.externalConversationIds?.length ?? 0),
 		roots: project.roots.map(root => URI.parse(root.path)),
-		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),
+		materials: project.materials.map(material => {
+			if (material.kind === 'text') {
+				return { kind: material.kind, id: material.id, name: material.name, content: material.content };
+			}
+			const resource = URI.parse(material.path);
+			return material.kind === 'file'
+				? { kind: material.kind, name: material.name, resource, sizeBytes: material.sizeBytes }
+				: { kind: material.kind, name: material.name, resource };
+		}),
 	};
 }
 
 function toMaterials(materials: readonly ProjectMaterial[]) {
-	return materials.map(material => ({ name: material.name, kind: material.kind, path: material.resource.toString() }));
+	return materials.map(material => {
+		if (material.kind === 'text') {
+			return { kind: material.kind, id: material.id, name: material.name, content: material.content };
+		}
+		const path = material.resource.toString();
+		return material.kind === 'file'
+			? { kind: material.kind, name: material.name, path, sizeBytes: material.sizeBytes }
+			: { kind: material.kind, name: material.name, path };
+	});
 }
 
 function projectError(error: unknown): Error {

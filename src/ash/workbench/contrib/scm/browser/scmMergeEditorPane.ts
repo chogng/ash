@@ -4,6 +4,8 @@ import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.j
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { alert as ariaAlert } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { disposableTimeout, raceCancellationError } from '../../../../base/common/async.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
@@ -12,12 +14,14 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ISCMService, type ISCMConflictFile, type ISCMConflictProvider, type ISCMConflictResolution } from '../common/scm.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { TextFileBinaryError, TextFileTooLargeError } from '../../../services/textfile/common/textFileService.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { MergeEditor, MergeEditorModel } from '../../mergeEditor/browser/mergeEditor.js';
 import { hasMergeConflictMarkers, parseMergeConflictBlocks } from '../common/mergeConflict.js';
@@ -35,6 +39,8 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 	private readonly mergeView: MergeEditor;
 	private domNode!: HTMLDivElement;
 	private fileChoicesDomNode!: HTMLDivElement;
+	private titleDomNode!: HTMLHeadingElement;
+	private actionsDomNode!: HTMLDivElement;
 	private statusDomNode!: HTMLDivElement;
 	private finishButton!: Button;
 	private input: ScmMergeEditorInput | undefined;
@@ -64,13 +70,13 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	public get workingCopy(): IWorkingCopy | undefined { return this.resultEditor.workingCopy; }
+	public get isShowingResultOnly(): boolean { return this.resolved && this.stageIds === undefined; }
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-scm-merge-editor';
 		this.domNode.setAttribute('role', 'region');
-		this.updateAriaLabel();
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.ScmMerge)) this.updateAriaLabel();
 		}));
@@ -82,21 +88,22 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 
 		const header = h(document, 'header');
 		header.className = 'ash-scm-merge-header';
-		const title = h(document, 'h2');
-		title.textContent = localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict');
+		this.titleDomNode = h(document, 'h2');
+		this.updateAriaLabel();
 		this.statusDomNode = h(document, 'div');
 		this.statusDomNode.className = 'ash-scm-merge-status';
 		this.statusDomNode.setAttribute('role', 'status');
 		this.statusDomNode.setAttribute('aria-live', 'polite');
-		const actions = h(document, 'div');
-		actions.className = 'ash-scm-merge-actions';
-		this.finishButton = this._register(new Button(actions, {
+		this.statusDomNode.tabIndex = -1;
+		this.actionsDomNode = h(document, 'div');
+		this.actionsDomNode.className = 'ash-scm-merge-actions';
+		this.finishButton = this._register(new Button(this.actionsDomNode, {
 			...defaultButtonStyles,
 			label: localize({ bundle: 'ash', key: 'mergeEditor.completeMerge' }, 'Complete Merge'),
 			presentation: 'primary',
 			onClick: () => void this.completeMerge(),
 		}));
-		header.append(title, this.statusDomNode, actions);
+		header.append(this.titleDomNode, this.statusDomNode, this.actionsDomNode);
 		this.fileChoicesDomNode = h(document, 'div');
 		this.domNode.append(header, this.fileChoicesDomNode);
 		this.mergeView.create(this.domNode);
@@ -104,15 +111,18 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isScmMergeEditorInput(input)) throw new TypeError('SCM merge editor requires a conflict input');
-		const conflictProvider = this.scmService.getRepository(input.repositoryId)?.provider.mergeProvider;
+		const conflictProvider = await this.waitForConflictProvider(input.repositoryId, signal);
 		if (!conflictProvider) throw new Error(`SCM repository '${input.repositoryId}' cannot resolve merge conflicts`);
-		const file = await conflictProvider.resolve(input.path);
-		if (signal.aborted) throw new Error('SCM merge editor loading was cancelled');
+		const file = await conflictProvider.resolve(input.path, signal);
+		throwIfCancelled(signal);
 		this.clearInput();
 		this.input = input;
-		this.conflictProvider = conflictProvider;
 		this.mergeStateKey = `ash.scm.merge.${digest(`${input.repositoryId}\0${input.path}`)}`;
-		this.resolved = false;
+		if (!file) {
+			await this.openResolvedResult(input, signal);
+			return;
+		}
+		this.conflictProvider = conflictProvider;
 		this.stageIds = file.stageIds;
 		this.resultObjectId = file.resultObjectId;
 		if (file.current.kind !== 'text' || file.incoming.kind !== 'text' || file.result.kind !== 'text') this.renderFileChoices(file);
@@ -157,6 +167,41 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		}
 	}
 
+	private async waitForConflictProvider(repositoryId: string, signal: AbortSignal): Promise<ISCMConflictProvider | undefined> {
+		const repository = this.scmService.getRepository(repositoryId);
+		if (repository) return repository.provider.mergeProvider;
+		// Workbench restoration can start before the SCM extension publishes its repositories.
+		using waiting = new DisposableStore();
+		return await raceCancellationError(new Promise<ISCMConflictProvider | undefined>(resolve => {
+			waiting.add(this.scmService.onDidAddRepository(repository => {
+				if (repository.id === repositoryId) resolve(repository.provider.mergeProvider);
+			}));
+			disposableTimeout(() => resolve(undefined), 15_000, waiting);
+		}), signal);
+	}
+
+	private async openResolvedResult(input: ScmMergeEditorInput, signal: AbortSignal): Promise<void> {
+		let placeholder: string | undefined;
+		try {
+			await this.resultEditor.setInput({ resource: input.resultResource, label: input.label }, signal);
+			this.resultLoaded = true;
+		} catch (error) {
+			if (error instanceof TextFileBinaryError || error instanceof TextFileTooLargeError) {
+				placeholder = localize({ bundle: 'ash', key: 'mergeEditor.resultPreviewUnavailable' }, 'Text preview unavailable for this file.');
+			} else if (error instanceof Error && toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileNotFound) {
+				placeholder = this.sourceText({ kind: 'missing' });
+			} else {
+				throw error;
+			}
+		}
+		throwIfCancelled(signal);
+		this.resolved = true;
+		this.actionsDomNode.hidden = true;
+		this.updateAriaLabel();
+		this.setStatus(this.getResolvedResultHelp());
+		this.mergeView.showResultOnly(placeholder);
+	}
+
 	public override clearInput(): void {
 		this.inputListeners.clear();
 		this.fileChoiceStore.clear();
@@ -174,6 +219,8 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 		this.resolved = false;
 		this.lastBlockCount = undefined;
 		this.finishButton.enabled = false;
+		this.actionsDomNode.hidden = false;
+		this.updateAriaLabel();
 	}
 
 	public override layout(dimension: IDimension): void {
@@ -187,15 +234,19 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 
 	public override focus(): void {
 		if (this.resultLoaded) this.mergeView.focus();
-		else this.fileChoiceButtons[0]?.focus();
+		else (this.fileChoiceButtons[0]?.domNode ?? this.statusDomNode).focus();
 	}
 
 	public async save(): Promise<void> { await this.resultEditor.save(); }
 
+	public getResolvedResultHelp(): string {
+		return localize({ bundle: 'ash', key: 'mergeEditor.noLongerConflicted' }, 'This file no longer has a merge conflict.');
+	}
+
 	public getAccessibleContent(): string {
 		const input = this.input;
 		if (!input) return '';
-		return `${input.path}\n\n${this.mergeView.getAccessibleContent()}`;
+		return [input.path, this.isShowingResultOnly && this.getResolvedResultHelp(), this.mergeView.getAccessibleContent()].filter(Boolean).join('\n\n');
 	}
 
 	private sourceText(content: ISCMConflictFile['base']): string {
@@ -307,7 +358,7 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 			this.modelSlot.clear();
 			this.resultLoaded = false;
 			this.finishButton.enabled = false;
-			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.completed' }, 'Merge completed.'));
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.completed' }, 'File conflict resolved and staged.'));
 		} catch (error) {
 			const message = provider.errorMessage(error);
 			this.setStatus(message);
@@ -337,13 +388,13 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 			if (this.resultEditor.hasExternalChange) throw new Error(localize({ bundle: 'ash', key: 'mergeEditor.fileChanged' }, 'The result file changed outside this editor. Review it before completing the merge.'));
 			if (this.resultEditor.isDirty) await this.resultEditor.save();
 			const saved = await provider.resolve(input.path);
-			if (JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) || saved.result.kind !== 'text' || saved.result.text !== control.getValue()) {
+			if (!saved || JSON.stringify(saved.stageIds) !== JSON.stringify(stageIds) || saved.result.kind !== 'text' || saved.result.text !== control.getValue()) {
 				throw new Error(localize({ bundle: 'ash', key: 'scm.mergeConflictChanged' }, 'The conflict changed. Reopen this merge editor to review the new versions.'));
 			}
 			await provider.complete(input.path, stageIds, saved.resultObjectId, { kind: 'edited', text: control.getValue() });
 			if (this.mergeStateKey) this.storageService.remove(this.mergeStateKey, StorageScope.WORKSPACE);
 			this.resolved = true;
-			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.completed' }, 'Merge completed.'));
+			this.setStatus(localize({ bundle: 'ash', key: 'mergeEditor.completed' }, 'File conflict resolved and staged.'));
 		} catch (error) {
 			const message = provider.errorMessage(error);
 			this.setStatus(message);
@@ -358,7 +409,10 @@ export class ScmMergeEditorPane extends EditorPane implements IEditorPane {
 	private setStatus(message: string): void { this.statusDomNode.textContent = message; }
 
 	private updateAriaLabel(): void {
-		const title = localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict');
+		const title = this.isShowingResultOnly
+			? localize({ bundle: 'ash', key: 'mergeEditor.result' }, 'Result')
+			: localize({ bundle: 'ash', key: 'mergeEditor.title' }, 'Resolve merge conflict');
+		this.titleDomNode.textContent = title;
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ScmMerge);
 		this.domNode.setAttribute('aria-label', hint ? `${title}. ${hint}` : title);
 	}

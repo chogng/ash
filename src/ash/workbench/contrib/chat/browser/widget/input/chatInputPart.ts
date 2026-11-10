@@ -40,6 +40,7 @@ import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
 import { ChatInputAction, ChatInputButtonViewItem, ChatInputSurface } from './chatInputSurface.js';
+import { ImageAttachmentWidget, type IChatImageAnnotationTarget } from '../../attachments/chatAttachmentWidgets.js';
 import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { ChatChangesPill } from './chatChangesPill.js';
 import { ChatWorkingLogo } from '../chatWorkingLogo.js';
@@ -63,7 +64,7 @@ import { ActionViewItem, ButtonActionViewItem } from '../../../../../../base/bro
 import { Action, type IAction } from '../../../../../../base/common/actions.js';
 import { Separator } from '../../../../../../base/common/actions.js';
 import type { Icon } from '../../../../../../base/common/icon.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { Emitter, PauseableEmitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
@@ -75,7 +76,7 @@ import { AccessibleViewRegistry } from '../../../../../../platform/accessibility
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { derived, observableFromEvent, observableValue, type IReader } from '../../../../../../base/common/observable.js';
+import { derived, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../../../base/common/observable.js';
 import { ICanvasContextService } from '../../../../canvases/common/canvas.js';
 import { CanvasesPillControl } from '../../../../canvases/browser/canvasesPillControl.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
@@ -93,7 +94,7 @@ import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
 import { ChatDynamicVariableModel } from '../../attachments/chatDynamicVariables.js';
-import { projectChatDraftReferences } from '../../attachments/chatVariables.js';
+import { projectChatDraftReferences } from '../../../common/attachments/chatInlineAttachments.js';
 import { ChatWidgetPasteTarget } from '../../attachments/chatWidgetPasteTarget.js';
 import { createChatFileAttachments, IChatAttachmentResolveService } from '../../attachments/chatAttachmentResolveService.js';
 import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
@@ -103,7 +104,7 @@ import type { ModelRef } from '../../../../../services/chat/common/chatService.j
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog, type SlashCommandInput } from '../../../common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import { isChatQuestionAnswerValid } from '../../../common/model/chatQuestionValidation.js';
-import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
+import type { ChatInputDelegate, ChatInputState, IChatInputDraft } from './chatInput.js';
 import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
 import { ChatInputPickerResponsiveLayout, type IChatInputPickerResponsiveLayoutItem } from './chatInputPickerResponsiveLayout.js';
 import {
@@ -188,6 +189,8 @@ export interface ChatInputPartOptions {
 	readonly renderLeadingFooter?: (footer: HTMLElement) => IDisposable;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
+	/** Places captured images in the attachment row, outside the editable message text. */
+	readonly stageImages?: boolean;
 	readonly inputLabel?: string;
 	readonly renderSecondaryToolbar?: boolean;
 	/** Places the shared context meter in the host's composer footer. */
@@ -220,6 +223,7 @@ export interface IChatInputPart extends IDisposable {
 	readonly inputEditor?: IChatInputEditor['codeEditor'];
 	readonly isSubmitting?: boolean;
 	readonly changesActionsHost?: HTMLElement;
+	readonly changesSummaryVisible?: IObservable<boolean>;
 	readonly composerForm?: HTMLElement;
 	readonly attachmentModel: ChatAttachmentModel;
 	readonly element: HTMLElement;
@@ -289,8 +293,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private renderedToolIdentity: string | undefined;
 	private confirmationCarousel: ChatToolConfirmationCarouselPart | undefined;
 	private readonly elicitationFocused: IContextKey<boolean>;
-	private readonly stagedFiles = this._register(new DisposableStore());
-	private readonly stagedFileList?: HTMLElement;
+	private readonly stagedFiles: StagedFileList;
 	private filePicker?: HTMLInputElement;
 	private applyingModelDraft = false;
 	private readonly attachContext = this._register(new MutableDisposable<AttachContextAction>());
@@ -462,6 +465,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					slashCommands: this.slashCommands,
 					skills: this.skills,
 					hostCompletions: true,
+					imageAnnotationTarget: () => this.getImageAnnotationTarget(),
 				});
 			},
 			submit: () => {
@@ -476,6 +480,23 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputContainer.classList.add(chatInputStackSlotClass);
 		setChatInputStackSlot(this.inputContainer, ChatInputStackSlot.Standalone);
 		this.input = surface.editor;
+		const draft = delegate.draft;
+		this.stagedFiles = this._register(new StagedFileList(this.inputContainer, draft ? {
+			imageAnnotationTarget: () => this.getImageAnnotationTarget(),
+			readImage: draft.readImage,
+			removeFile: id => { this.focus(); draft.removeFile(id); },
+			retryFile: id => { this.focus(); void draft.retryFile(id).catch(error => this.notifications.error(error)); },
+		} : options.stageImages ? {
+			imageAnnotationTarget: () => this.getImageAnnotationTarget(),
+			readImage: async id => (await this.inlineContext.stagedImages.find(image => image.id === id)?.resolve())?.content,
+			removeFile: id => {
+				const image = this.inlineContext.stagedImages.find(image => image.id === id);
+				if (!image) return;
+				this.focus();
+				this.attachmentModel.delete(id);
+				announceStatus(localize('chat.context.removed', 'Removed {0}', image.name));
+			},
+		} : undefined, instantiationService));
 		if (delegate.draft) {
 			const filePicker = this.filePicker = h(ownerDocument, 'input');
 			filePicker.type = 'file';
@@ -487,12 +508,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				filePicker.value = '';
 				void this.attachFiles(files);
 			}));
-			this.stagedFileList = h(ownerDocument, 'div');
-			this.stagedFileList.className = 'ash-chat-staged-files';
-			this.stagedFileList.setAttribute('role', 'list');
-			this.stagedFileList.setAttribute('aria-label', localize('chat.input.stagedFiles', 'Attachments'));
-			this.stagedFileList.setAttribute('aria-live', 'polite');
-			this.inputContainer.before(this.stagedFileList);
 		}
 		this.inputToolbar = surface.toolbar;
 		this.attachmentToolbar = surface.attachmentToolbar;
@@ -512,7 +527,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this._register(addDisposableListener(this.input.element, event, updateCursorAtTop));
 		}
 		updateCursorAtTop();
-		this.inlineContext = this._register(new ChatDynamicVariableModel(this.input, this.attachmentModel));
+		this.inlineContext = this._register(new ChatDynamicVariableModel(this.input, this.attachmentModel, options.stageImages));
 		this.pasteTarget = this._register(instantiationService.createInstance(ChatWidgetPasteTarget, this.input, this.inlineContext, this.attachmentModel));
 		this._register(addDisposableListener(this.inputContainer, 'keydown', (event: KeyboardEvent) => {
 			if ((isMacintosh ? event.metaKey : event.ctrlKey) && !event.shiftKey && !event.altKey && (event.key === 'u' || event.key === 'U')) {
@@ -592,18 +607,19 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					const changesFocused = focused && this.changesPill.domNode.contains(focused);
 					const referencePreview = focused?.closest<HTMLElement>('.ash-chat-context-reference-preview');
 					const previewAttachment = referencePreview && this.inlineContext.variables.find(reference => reference.id === referencePreview.dataset.attachmentId);
-					const previewOwned = !!previewAttachment;
+					const previewName = previewAttachment?.name ?? this.state.draft?.files.find(file => file.id === referencePreview?.dataset.attachmentId)?.name;
+					const previewOwned = !!referencePreview && previewName !== undefined;
 					const composerHelpFocused = type === AccessibleViewType.Help && focused && this.element.contains(focused);
 					if (!focused || (!composerHelpFocused && !previewOwned && !footerFocused && !changesFocused && !this.input.element.contains(focused) && !this.inputToolbar.element.querySelector('[data-action-id="ash.chat.input.attach"]')?.contains(focused))) { return undefined; }
 					if ((footerFocused || changesFocused) && type === AccessibleViewType.View) { return undefined; }
-					if (type === AccessibleViewType.View && this.contexts.length === 0) { return undefined; }
+					if (type === AccessibleViewType.View && this.contexts.length === 0 && !previewOwned) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
 						if (previewOwned) {
 							if (previewAttachment?.terminalSnapshot) return localize('terminal.chat.previewAccessibility', 'Saved terminal output: {0}\nThis preview is read only and retains the output captured when attached. Press Escape or Close terminal preview to return to the message.\n\n{1}', previewAttachment.name, previewAttachment.terminalSnapshot.text);
-							const image = referencePreview!.querySelector('img');
-							if (referencePreview!.getAttribute('aria-busy') === 'true') return localize('chat.context.imageLoading', 'Loading preview: {0}', previewAttachment!.name);
-							if (!image?.naturalWidth) return localize('chat.context.previewFailed', 'Preview unavailable: {0}', previewAttachment!.name);
-							return localize('chat.context.imagePreviewAccessibility', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', image.alt, image.naturalWidth, image.naturalHeight);
+							if (referencePreview.getAttribute('aria-busy') === 'true') return localize('chat.context.imageLoading', 'Loading preview: {0}', previewName);
+							const image = referencePreview.querySelector<HTMLImageElement>(':scope > img');
+							if (!image?.naturalWidth) return localize('chat.context.previewFailed', 'Preview unavailable: {0}', previewName);
+							return localize('chat.context.imagePreviewAccessibility', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', previewName, image.naturalWidth, image.naturalHeight);
 						}
 						const names = this.contexts.map(attachment => attachment.name).join('\n');
 						return type === AccessibleViewType.View ? names : this.getAccessibilityHelpContent();
@@ -688,6 +704,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (context.lifetime === 'source' && !this.synchronizingSourceContext) this.attachmentModel.delete(context.id);
 		}));
 		this._register(this.attachmentModel.onDidChange(() => {
+			if (options.stageImages && !draft) {
+				const files = this.inlineContext.stagedImages.map(({ id, name }) => ({ id, name, status: 'ready' as const }));
+				this.stagedFiles.render({ files, readOnly: false });
+			}
 			this.draftRevision++;
 			this.renderToolbar();
 			this.inputChanges.fire();
@@ -704,7 +724,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			stopEvent(event);
 			void this.attachFiles(files);
 		}, true));
-		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages(), () => this.state.conversation))
+		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages(), () => this.state.conversation,
+			(files: readonly File[], signal: AbortSignal) => this.prepareFiles(files, signal)))
 			.addOverlay(this.inputContainer, this.inputContainer, delegate.draft ? () => this.state.draft?.canAttachFiles === true : undefined);
 		this._register(this.executeMenu.onDidChange(() => this.renderToolbarActions()));
 		this._register(presentations.onDidChange(menu => { if (menu === MenuId.ChatExecute) this.renderToolbarActions(); }));
@@ -920,6 +941,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	get isSubmitting(): boolean { return this.submitting; }
 
 	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
+	get changesSummaryVisible(): IObservable<boolean> { return this.changesPill.summaryVisible; }
 	get composerForm(): HTMLElement { return this.inputContainer; }
 	get usesInlineVoiceControls(): boolean { return this.inlineActionsToolbar !== undefined; }
 	get composerFooter(): HTMLElement | undefined { return this.inputFooter; }
@@ -938,7 +960,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.pasteTarget.addAttachments([attachment]);
 			this.focus();
 		}
-		announceStatus(localize('chat.context.insertedReference', 'Inserted {0} at the message cursor', attachment.name));
+		announceStatus(this.inlineContext.shouldStageImage(attachment)
+			? localize('chat.context.added', 'Added {0}', attachment.name)
+			: localize('chat.context.insertedReference', 'Inserted {0} at the message cursor', attachment.name));
 	}
 
 
@@ -1050,15 +1074,60 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	async attachFiles(files: readonly File[], signal?: AbortSignal): Promise<void> {
 		if (this.isDisposed || !this.visible || files.length === 0) return;
 		try {
-			if (this.delegate.draft) {
-				if (this.state.draft?.canAttachFiles && !signal?.aborted) await this.delegate.draft.attachFiles(files);
-				return;
-			}
-			await this.acquireContext(draftSignal => createChatFileAttachments(files, draftSignal, () => this.supportsImages(), this.attachmentResolver), signal);
-			if (!this.isDisposed && this.visible && !signal?.aborted) announceStatus(localize('chat.context.filesAdded', 'Added {0} attachments', files.length));
+			await this.addFiles(files, signal);
 		} catch (error) {
 			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.attach.failed', 'Could not attach files: {0}', String(error)));
 		}
+	}
+
+	private async addFiles(files: readonly File[], signal?: AbortSignal): Promise<void> {
+		if (this.delegate.draft) {
+			if (this.state.draft?.canAttachFiles && !signal?.aborted) await this.delegate.draft.attachFiles(files);
+			return;
+		}
+		await this.acquireContext(draftSignal => this.prepareFiles(files, draftSignal), signal);
+		if (!this.isDisposed && this.visible && !signal?.aborted) announceStatus(localize('chat.context.filesAdded', 'Added {0} attachments', files.length));
+	}
+
+	private getImageAnnotationTarget(): IChatImageAnnotationTarget | undefined {
+		const signal = this.inputLifecycle.signal;
+		const identity = this.state.draftIdentity;
+		const conversation = this.state.conversation;
+		const current = () => !signal.aborted && !this.isDisposed && this.visible
+			&& this.state.draftIdentity?.id === identity?.id && this.state.draftIdentity?.generation === identity?.generation
+			&& this.state.conversation?.sessionId === conversation?.sessionId && this.state.conversation?.threadId === conversation?.threadId;
+		const canAttach = () => !this.state.aiDisabled && (this.delegate.draft ? this.state.draft?.canAttachFiles === true : this.supportsImages());
+		if (!current() || !canAttach()) return undefined;
+		return {
+			signal,
+			accessibleHelp: localize('chat.image.annotationHelp', 'Choose Annotate image to draw in the preview. Use Undo stroke or Cancel annotation to make changes, or Done annotating to add the image to this draft.'),
+			attach: async (file, previewSignal) => {
+				if (!current() || previewSignal.aborted) throw new CancellationError();
+				if (!canAttach()) throw new Error(localize('chat.image.annotationAttachUnavailable', 'Could not add the annotated image to this draft.'));
+				const lifetime = AbortSignal.any([signal, previewSignal]);
+				const existing = new Set(this.state.draft?.files.map(item => item.id));
+				const staged = () => this.state.draft?.files.some(item => item.name === file.name && !existing.has(item.id));
+				const completion = this.addFiles([file], lifetime);
+				if (this.delegate.draft && staged()) {
+					// The provider owns upload after it has staged the new file in this draft.
+					void completion.catch(error => { if (current()) this.notifications.error(error); });
+					return;
+				}
+				await completion;
+				if (!current() || previewSignal.aborted) throw new CancellationError();
+				if (this.delegate.draft && !staged()) throw new Error(localize('chat.image.annotationAttachUnavailable', 'Could not add the annotated image to this draft.'));
+			},
+			focus: () => { if (current()) this.focus(); },
+		};
+	}
+
+	private async prepareFiles(files: readonly File[], signal: AbortSignal): Promise<readonly ChatContextAttachment[]> {
+		using previews = new DisposableStore();
+		using cancelPreviews = addDisposableListener(signal, 'abort', () => previews.dispose());
+		return await createChatFileAttachments(files, signal, () => this.supportsImages(), this.attachmentResolver, (file, mimeType) => {
+			const image = file.type === mimeType ? file : file.slice(0, file.size, mimeType);
+			previews.add(this.stagedFiles.showPreparingImage(file.name, image));
+		});
 	}
 
 	/** Persistence and handoff retain user references; live producer references stay with their owner. */
@@ -1121,15 +1190,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
 		if (this.input.value || this.contexts.length > 0) throw new Error(localize('chat.draftHandoffConflict', 'The Agents Window already has an unsent draft in this chat.'));
 		this.delegate.selectMode(draft.mode);
-		this.setInputValue(draft.text);
-		const inline: ChatContextAttachment[] = [];
+		const attachments = draft.contexts.map(restoreChatVariableEntry);
+		const { text, contexts } = this.options.stageImages ? projectChatDraftReferences(draft.text, attachments, true)
+			: { text: draft.text, contexts: attachments };
+		this.setInputValue(text !== draft.text && !text.trim() && !contexts.some(context => context.reference) ? '' : text);
+		const references: ChatContextAttachment[] = [];
 		const legacyReferences: ChatContextAttachment[] = [];
-		for (const context of draft.contexts) {
-			const attachment = restoreChatVariableEntry(context);
-			if (attachment.reference) inline.push(attachment);
+		for (const attachment of contexts) {
+			if (attachment.reference || this.inlineContext.shouldStageImage(attachment)) references.push(attachment);
 			else legacyReferences.push(attachment);
 		}
-		this.setReferenceState(inline);
+		this.setReferenceState(references);
 		// Older drafts have snapshots without text positions; retain each as a reference at the message end.
 		for (const attachment of legacyReferences) this.inlineContext.addReference(attachment, false);
 		this.draftRevision++;
@@ -1339,8 +1410,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected getAccessibilityHelpContent(): string {
 		return [
 			getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0),
+			this.delegate.draft?.readImage ? localize('chat.input.stagedImageHelp', 'Pasted images appear above the message text inside the input. Use Tab to reach Preview or Remove, and Enter or Space to activate. Escape closes the preview and returns focus to the image.') : '',
 			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it, or run Chat: Open Workspace Picker from the Command Palette. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
+			this.options.stageImages ? localize('chat.input.stagedImagesHelp', 'Attached images appear above the message. From the message field, use Shift+Tab to reach the image controls. Press Enter or Space to preview or remove an image, and press Escape to close the preview.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
 			this.options.accessibilityHelp?.(),
 		].filter(Boolean).join('\n');
@@ -1459,8 +1532,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				try { this.setInputValue(state.draft.text); }
 				finally { this.applyingModelDraft = false; }
 			}
-			if (previousDraft?.files !== state.draft.files || previousDraft.readOnly !== state.draft.readOnly) this.renderStagedFiles();
 		}
+		if (previousDraft?.files !== state.draft?.files || previousDraft?.readOnly !== state.draft?.readOnly) this.stagedFiles.render(state.draft);
 		this.inputDecorations?.update();
 		this.updateNoticeHosts();
 		this.conversation.set(state.conversation, undefined);
@@ -1616,35 +1689,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (context.kind === 'toolSelection' && context.reference) text = text.slice(0, context.reference.start) + text.slice(context.reference.end);
 		}
 		return text.trim();
-	}
-
-	private renderStagedFiles(): void {
-		const list = this.stagedFileList;
-		const state = this.state.draft;
-		const draft = this.delegate.draft;
-		if (!list || !state || !draft) return;
-		const focused = list.ownerDocument.activeElement;
-		const focusedFile = focused instanceof HTMLElement && list.contains(focused) ? focused.closest<HTMLElement>('[data-file-id]')?.dataset.fileId : undefined;
-		this.stagedFiles.clear();
-		list.replaceChildren();
-		list.hidden = !state.files.length;
-		for (const file of state.files) {
-			const row = h(list.ownerDocument, 'div', { className: 'ash-chat-staged-file', attributes: { role: 'listitem' }, dataset: { fileId: file.id } });
-			const status = file.status === 'uploading' ? localize('chat.input.fileUploading', 'Uploading…')
-				: file.status === 'failed' ? localize('chat.input.fileUploadFailed', 'Upload failed') : localize('chat.input.fileReady', 'Ready');
-			row.append(h(list.ownerDocument, 'span', { className: 'ash-chat-staged-file-name' }, file.name), h(list.ownerDocument, 'span', {}, status));
-			if (file.error) row.append(h(list.ownerDocument, 'div', {}, file.error));
-			if (file.status === 'failed') {
-				const retry = this.stagedFiles.add(new Button(row, { ...defaultButtonStyles, label: localize('chat.input.retryFile', 'Retry {0}', file.name), size: 'small', presentation: 'quiet' }));
-				retry.enabled = !state.readOnly;
-				this.stagedFiles.add(retry.onDidClick(() => { this.focus(); void draft.retryFile(file.id).catch(error => this.notifications.error(error)); }));
-			}
-			const remove = this.stagedFiles.add(new Button(row, { ...defaultButtonStyles, label: localize('chat.input.removeFile', 'Remove {0}', file.name), size: 'small', presentation: 'quiet' }));
-			remove.enabled = !state.readOnly;
-			this.stagedFiles.add(remove.onDidClick(() => { this.focus(); draft.removeFile(file.id); }));
-			list.append(row);
-			if (focusedFile === file.id && !state.readOnly) remove.focus();
-		}
 	}
 
 	private isSubmissionBlocked(localCommand: boolean): boolean {
@@ -2480,6 +2524,125 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				if (state.queuedMessages > 0) return localize('chat.input.queuedMessages', '{0} messages queued', state.queuedMessages);
 				if (state.activeMode && state.activeMode !== state.mode) return localize('chat.input.modeChangeQueued', 'Working in {0}. The next message will be queued in {1} mode.', state.activeMode, state.mode);
 				return state.canInterrupt && !this.delegate.responseProgressInTranscript ? localize('chat.input.working', 'Working…') : '';
+		}
+	}
+}
+
+type StagedFile = IChatInputDraft['files'][number] | { readonly id: string; readonly name: string; readonly status: 'preparing'; readonly error?: undefined; };
+
+interface StagedFileActions {
+	readImage?(id: string): Promise<Blob | string | undefined>;
+	imageAnnotationTarget?(): IChatImageAnnotationTarget | undefined;
+	retryFile?(id: string): void;
+	removeFile?(id: string): void;
+}
+
+/** Keeps local preview controls stable as the provider updates upload state. */
+class StagedFileList extends Disposable {
+	private readonly list: HTMLElement;
+	private readonly rows = this._register(new DisposableMap<string, StagedFileRow>());
+
+	constructor(
+		private readonly form: HTMLFormElement,
+		private readonly actions: StagedFileActions | undefined,
+		private readonly instantiation: IInstantiationService,
+	) {
+		super();
+		this.list = h(form.ownerDocument, 'div', {
+			className: 'ash-chat-staged-files',
+			attributes: { role: 'list', 'aria-label': localize('chat.input.stagedFiles', 'Attachments'), 'aria-live': 'polite' },
+			properties: { hidden: true },
+		});
+		form.prepend(this.list);
+		this._register(toDisposable(() => {
+			this.list.remove();
+			form.classList.remove('has-staged-files');
+		}));
+	}
+
+	render(draft: Pick<IChatInputDraft, 'files' | 'readOnly'> | undefined): void {
+		const files = draft?.files ?? [];
+		const ids = new Set(files.map(file => file.id));
+		for (const id of this.rows.keys()) {
+			if (!ids.has(id)) this.rows.deleteAndDispose(id);
+		}
+		let next = this.list.firstElementChild;
+		for (const file of files) {
+			const row = this.rows.get(file.id) ?? this.rows.set(file.id, new StagedFileRow(this.list.ownerDocument, file, this.instantiation, this.actions));
+			if (row.domNode !== next) this.list.insertBefore(row.domNode, next);
+			next = row.domNode.nextElementSibling;
+			row.update(file, draft?.readOnly === true);
+		}
+		this.updateVisibility();
+	}
+
+	/** The preparing operation owns this row until it accepts or discards the file. */
+	showPreparingImage(name: string, image: Blob): IDisposable {
+		const file: StagedFile = { id: createUuid(), name, status: 'preparing' };
+		const row = new StagedFileRow(this.list.ownerDocument, file, this.instantiation, { readImage: async () => image });
+		row.update(file, true);
+		this.list.append(row.domNode);
+		this.updateVisibility();
+		return toDisposable(() => {
+			row.dispose();
+			this.updateVisibility();
+		});
+	}
+
+	private updateVisibility(): void {
+		const hasFiles = this.list.firstElementChild !== null;
+		this.list.hidden = !hasFiles;
+		this.form.classList.toggle('has-staged-files', hasFiles);
+	}
+}
+
+class StagedFileRow extends Disposable {
+	readonly domNode: HTMLElement;
+	private readonly stateLabel: HTMLElement;
+	private readonly error: HTMLElement;
+	private readonly retry?: Button;
+	private readonly image: ImageAttachmentWidget;
+
+	constructor(document: Document, file: StagedFile, instantiation: IInstantiationService, actions?: StagedFileActions) {
+		super();
+		const row = this.domNode = h(document, 'div', { className: 'ash-chat-staged-file preview-loading', attributes: { role: 'listitem' } });
+		this._register(toDisposable(() => row.remove()));
+		this.image = this._register(instantiation.createInstance(ImageAttachmentWidget, {
+			id: file.id, name: file.name,
+			resolve: async () => ({ content: await actions?.readImage?.(file.id) }),
+		}, { imagePresentation: 'thumbnail', supportsDeletion: !!actions?.removeFile, shouldFocusClearButton: false, imageAnnotationTarget: actions?.imageAnnotationTarget }, row));
+		this._register(this.image.onDidResolvePreview(hasPreview => {
+			row.classList.toggle('image', hasPreview);
+			row.classList.remove('preview-loading');
+		}));
+		this._register(this.image.onDidDelete(() => actions?.removeFile?.(file.id)));
+		this.stateLabel = h(document, 'span', { className: 'ash-chat-staged-file-status' });
+		this.error = h(document, 'div', { className: 'ash-chat-staged-file-error' });
+		row.append(this.stateLabel, this.error);
+		if (actions?.retryFile) {
+			this.retry = this._register(new Button(row, {
+				...defaultButtonStyles, label: localize('chat.input.retryFile', 'Retry {0}', file.name), size: 'small', presentation: 'quiet',
+				onClick: () => actions.retryFile?.(file.id),
+			}));
+			this.retry.domNode.classList.add('ash-chat-staged-file-retry');
+		}
+	}
+
+	update(file: StagedFile, readOnly: boolean): void {
+		const failed = file.status === 'failed';
+		const status = file.status === 'preparing' ? localize('chat.input.filePreparing', 'Preparing…')
+			: file.status === 'uploading' ? localize('chat.input.fileUploading', 'Uploading…')
+				: failed ? localize('chat.input.fileUploadFailed', 'Upload failed') : localize('chat.input.fileReady', 'Ready');
+		if (this.stateLabel.textContent !== status) this.stateLabel.textContent = status;
+		if (this.error.textContent !== (file.error ?? '')) this.error.textContent = file.error ?? '';
+		this.domNode.classList.toggle('ready', file.status === 'ready');
+		const pending = file.status === 'preparing' || file.status === 'uploading';
+		this.domNode.classList.toggle('pending', pending);
+		this.image.setThumbnailState(pending, readOnly);
+		this.error.hidden = !file.error;
+		if (this.retry) {
+			this.retry.domNode.hidden = !failed;
+			this.retry.enabled = !readOnly;
 		}
 	}
 }

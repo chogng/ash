@@ -46,6 +46,7 @@ import { BrowserWorkingCopyService } from '../../services/workingCopy/browser/br
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
 import { DecorationsService } from '../../services/decorations/browser/decorationsService.js';
 import { Event } from '../../../base/common/event.js';
+import { ITreeSitterLibraryService } from '../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -142,6 +143,14 @@ export function registerTestComponentServices(services: InstantiationService, do
 	if (!services.has(IUriIdentityService)) services.registerSingleton(IUriIdentityService, () => services.createInstance(UriIdentityService));
 	if (!services.has(IThemeService)) {
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
+	}
+	if (!services.has(ITreeSitterLibraryService)) {
+		services.registerInstance(ITreeSitterLibraryService, {
+			_serviceBrand: undefined,
+			onDidChange: Event.None,
+			supportsLanguage: () => false,
+			createSession: () => { throw new Error('This fixture does not have a syntax backend'); },
+		});
 	}
 	if (!services.has(IStorageService)) {
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: document.defaultView!, workspaceId: 'test-components', backend: new TestStorageBackend(), flushInterval: 0 }));

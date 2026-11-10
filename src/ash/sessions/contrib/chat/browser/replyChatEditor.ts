@@ -1,12 +1,9 @@
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { IChatListCatalog } from './chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import type { IAction } from '../../../../base/common/actions.js';
 import { autorun, derived, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
-import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, type AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -24,21 +21,13 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ChatWidget, type IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
-import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatInputEditorOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ProjectTitleBarContent } from '../../projects/browser/projectTitleBarWidget.js';
-import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import { ChatPromptStarters, getChatPromptStartersHelp } from './chatPromptStarters.js';
-import './media/chatInput.css';
-import './media/chatInputCard.css';
-import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
-import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
-import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
+import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
 import './media/chatView.css';
 
 export interface IReplyChatEditorModel extends IChatWidgetModel {
@@ -67,9 +56,7 @@ export interface ReplyChatEditorOptions {
 	readonly explicitModelSelection?: true;
 	readonly literalServerCommands?: true;
 	readonly advanceWelcomePhrase?: false;
-	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>, model: IReplyChatEditorModel) => IDisposable & {
-		getAttachMenuProjectActions?(): readonly IAction[] | undefined;
-	};
+	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>, model: IReplyChatEditorModel) => ReplyChatDraftPicker;
 	readonly accessibility: {
 		readonly focusContext: string;
 		readonly verbositySetting: AccessibilityVerbositySettingId;
@@ -121,8 +108,7 @@ export class ReplyChatEditor extends EditorPane {
 		@IOpenerService private readonly opener: IOpenerService,
 		@IEditorService private readonly editors: IEditorService,
 		@IThemeService theme: IThemeService,
-		@IStorageService private readonly profileStorage: IStorageService,
-		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IStorageService profileStorage: IStorageService,
 		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
 	) {
 		super(options.id, theme, profileStorage);
@@ -146,47 +132,27 @@ export class ReplyChatEditor extends EditorPane {
 		const instantiation = this._register(this.instantiation.createChild(services));
 		const model = instantiation.createInstance(this.options.model);
 		const createDraftPicker = this.options.createDraftPicker;
+		const inputFactory = instantiation.createInstance(ReplyChatInputFactory);
 		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, this.options.advanceWelcomePhrase !== false));
+		const scrollOptimization = this.options.scrollOptimizationSetting
+			? observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration)
+			: undefined;
 		try {
 			this.widget = this._register(instantiation.createInstance(ChatWidget<IReplyChatEditorModel>,
 				root, this.options.id, model, () => model.newChat(),
 				this.menus, this.contextViews, this.commands, this.accessibleViews, this.notifications,
 				this.opener, this.editors, undefined,
 				(container: HTMLElement, delegate: ChatInputDelegate) => {
-					let draftPicker: ReturnType<NonNullable<ReplyChatEditorOptions['createDraftPicker']>> | undefined;
-					const inputDelegate = {
-						...delegate,
-						selectAutomaticModel: this.options.explicitModelSelection ? undefined : delegate.selectAutomaticModel,
-						executeServerCommand: this.options.literalServerCommands ? undefined : delegate.executeServerCommand,
-					};
-					const input = instantiation.createInstance(ChatInputPart, container, inputDelegate,
-						this.menus, this.contextViews, this.accessibleViews, this.notifications, {
-						create: (options: ChatInputEditorOptions) => instantiation.createInstance(ChatInputEditor, {
-							...options,
-							placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
-							height: SESSIONS_COMPACT_INPUT_HEIGHT,
-							tabFocusMode: true,
-						}),
-					}, [], {
-						layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
-						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement === true,
-						chatModelSlider: true, configureModelInMenu: true,
-						renderSecondaryToolbar: false, draftStorage: 'host',
-						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => draftPicker = createDraftPicker(instantiation, footer, this.shown, model)),
-						attachMenuHost: { getProjectActions: () => draftPicker?.getAttachMenuProjectActions?.() },
+					const input = inputFactory.create(container, delegate, model, {
 						inputLabel: this.options.inputLabel(),
+						explicitModelSelection: this.options.explicitModelSelection,
+						literalServerCommands: this.options.literalServerCommands,
+						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
+						persistentDraftScope: this.options.persistentDraftScope,
+						createDraftPicker: createDraftPicker && (footer => createDraftPicker(instantiation, footer, this.shown, model)),
 						accessibilityHelp: getChatPromptStartersHelp,
 					});
-					const draftScope = this.options.persistentDraftScope;
-					if (draftScope) {
-						input.bindDraftStorage(model, {
-							read: identity => readNewChatDraftState(this.profileStorage, `${draftScope}:${identity}`, chatInputStatePersistence),
-							write: (identity, draft) => writeNewChatDraftState(this.profileStorage, draft, `${draftScope}:${identity}`, chatInputStatePersistence),
-							flush: () => this.profileStorage.flush(),
-						}, this.lifecycle.onWillShutdown);
-					}
-					input.element.classList.add('ash-sessions-chat-input', 'chat-composer');
-					input.composerForm.classList.add('ash-sessions-chat-input-card', 'floating-card');
+					input.element.classList.add('chat-composer');
 					const starters = this._register(new ChatPromptStarters(input.element, input));
 					const canShowStarters = observableFromEvent(this, model.onDidChange, () => {
 						const { aiDisabled, interaction, phase } = model.inputState;
@@ -197,13 +163,17 @@ export class ReplyChatEditor extends EditorPane {
 						starters.setDraft(this.shown.read(reader) && canShowStarters.read(reader) ? draft?.id : undefined);
 					}));
 					return input;
-				}, { showPromptTimeline: true, welcomeTitle: welcome.title }));
+				}, {
+				showPromptTimeline: true,
+				welcomeTitle: welcome.title,
+				codeBlockPresentation: 'card',
+				virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined),
+			}));
 		} catch (error) {
 			model.dispose();
 			throw error;
 		}
-		if (this.options.scrollOptimizationSetting) {
-			const scrollOptimization = observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration);
+		if (scrollOptimization) {
 			this._register(autorun(reader => {
 				root.classList.toggle('ash-chat-defer-completed', scrollOptimization.read(reader));
 			}));

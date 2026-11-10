@@ -1,9 +1,12 @@
 use pretty_assertions::assert_eq;
 
-use crate::{
-    CursorKeyMode, GridSize, KeyModifiers, MouseEncoding, MouseTrackingMode, ScreenBuffer,
-    TerminalColor, TerminalCore, TerminalKey,
-};
+use crate::CursorKeyMode;
+use crate::GridSize;
+use crate::MouseEncoding;
+use crate::MouseTrackingMode;
+use crate::ScreenBuffer;
+use crate::TerminalColor;
+use crate::TerminalCore;
 
 #[test]
 fn printable_text_wraps_and_scrolls_the_grid() {
@@ -45,31 +48,6 @@ fn parser_state_survives_output_chunk_boundaries() {
         TerminalColor::Indexed(2)
     );
     assert_eq!(terminal.grid().lines()[0].text(), "green");
-}
-
-#[test]
-fn printable_output_is_projected_into_the_active_block() {
-    let mut terminal = TerminalCore::new(GridSize::default());
-    terminal.process_output(b"$ ");
-    terminal.start_command("printf hi");
-    terminal.process_output(b"\x1b[32mhi\x1b[0m\r\n");
-
-    assert_eq!(terminal.block_list().preamble(), "$ ");
-    assert_eq!(terminal.block_list().blocks()[0].command(), "printf hi");
-    assert_eq!(terminal.block_list().blocks()[0].output(), "hi\n");
-}
-
-#[test]
-fn shell_integration_marker_completes_the_active_block() {
-    let mut terminal = TerminalCore::new(GridSize::default());
-    terminal.start_command("printf hi");
-    terminal.process_output(b"hi\x1b]133;D;0\x07");
-
-    assert_eq!(
-        terminal.block_list().blocks()[0].status(),
-        crate::BlockStatus::Completed
-    );
-    assert_eq!(terminal.block_list().blocks()[0].output(), "hi");
 }
 
 #[test]
@@ -129,15 +107,6 @@ fn alternate_screen_restores_primary_content_and_cursor() {
 }
 
 #[test]
-fn alternate_screen_output_is_not_retained_in_command_blocks() {
-    let mut terminal = TerminalCore::new(GridSize::new(3, 16));
-    terminal.start_command("vim");
-    terminal.process_output(b"before\x1b[?1049hfullscreen\x1b[?1049lafter\n");
-
-    assert_eq!(terminal.block_list().blocks()[0].output(), "beforeafter\n");
-}
-
-#[test]
 fn dec_private_modes_project_input_and_pointer_state() {
     let mut terminal = TerminalCore::new(GridSize::default());
     terminal.process_output(b"\x1b[?1;1002;1006;2004h\x1b[?25l");
@@ -160,36 +129,6 @@ fn dec_private_modes_project_input_and_pointer_state() {
         MouseTrackingMode::Disabled
     );
     assert_eq!(terminal.modes().mouse_encoding(), MouseEncoding::Legacy);
-}
-
-#[test]
-fn process_exit_returns_to_primary_screen_and_resets_modes() {
-    let mut terminal = TerminalCore::new(GridSize::default());
-    terminal.process_output(b"main\x1b[?1049hfullscreen\x1b[?1;2004h");
-
-    terminal.mark_process_exited(1);
-
-    assert_eq!(terminal.active_screen(), ScreenBuffer::Primary);
-    assert_eq!(terminal.grid().lines()[0].text(), "main");
-    assert_eq!(terminal.modes(), Default::default());
-}
-
-#[test]
-fn public_input_encoding_follows_modes_parsed_from_output() {
-    let mut terminal = TerminalCore::new(GridSize::default());
-
-    assert_eq!(
-        terminal.encode_key(TerminalKey::ArrowUp, KeyModifiers::NONE),
-        b"\x1b[A"
-    );
-    assert_eq!(terminal.encode_paste("hello"), b"hello");
-
-    terminal.process_output(b"\x1b[?1;2004h");
-    assert_eq!(
-        terminal.encode_key(TerminalKey::ArrowUp, KeyModifiers::NONE),
-        b"\x1bOA"
-    );
-    assert_eq!(terminal.encode_paste("hello"), b"\x1b[200~hello\x1b[201~");
 }
 
 #[test]
@@ -454,15 +393,4 @@ fn osc_zero_and_two_update_a_bounded_terminal_title() {
     let long_title = format!("\x1b]2;{}\x07", "x".repeat(300));
     terminal.process_output(long_title.as_bytes());
     assert_eq!(terminal.title().unwrap().chars().count(), 256);
-}
-
-#[test]
-fn terminal_core_filters_the_submitted_command_echo_from_block_output() {
-    let mut terminal = TerminalCore::new(GridSize::default());
-    terminal.start_command("echo hello");
-
-    terminal.process_output(b"echo ");
-    terminal.process_output(b"hello\r\nhello\r\n");
-
-    assert_eq!(terminal.block_list().blocks()[0].output(), "hello\n");
 }

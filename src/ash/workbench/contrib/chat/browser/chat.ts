@@ -41,12 +41,22 @@ export class ChatMessageActionContext extends Disposable {
 }
 
 export class ChatRequestActionContext extends ChatMessageActionContext {
-	constructor(item: IChatListItem, actions: HTMLElement, isVisible: () => boolean, readonly startEditing: (requestId: string) => void | Promise<void>) {
+	constructor(
+		item: IChatListItem, actions: HTMLElement, isVisible: () => boolean,
+		readonly startEditing: (requestId: string) => void | Promise<void>,
+		readonly getVersions?: (item: IChatListItem) => Promise<readonly ChatRequestVersion[]>,
+	) {
 		super(item, actions, isVisible);
 	}
 }
 
-/** Limits reply playback to the row's lifetime. */
+export interface ChatRequestVersion {
+	readonly text: string;
+	readonly selected: boolean;
+	select(): Promise<void>;
+}
+
+/** Binds reply actions and playback to the row's lifetime. */
 export class ChatResponseActionContext extends ChatMessageActionContext {
 	private playback: AbortController | undefined;
 	private status: HTMLElement | undefined;
@@ -57,9 +67,11 @@ export class ChatResponseActionContext extends ChatMessageActionContext {
 		readonly window: Window & typeof globalThis,
 		isVisible: () => boolean,
 		private readonly setReading: (reading: boolean) => void,
+		private readonly getFork?: () => (() => Promise<void>) | undefined,
 	) { super(item, actions, isVisible); }
 
 	get isReading(): boolean { return !!this.playback; }
+	get fork(): (() => Promise<void>) | undefined { return this.visible ? this.getFork?.() : undefined; }
 
 	override update(item: IChatListItem): void {
 		const previous = this.item;
@@ -152,9 +164,12 @@ export interface IChatWidgetViewOptions {
 	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | null | undefined>;
 	readonly configureModelInMenu?: boolean;
 	readonly showPromptTimeline?: boolean;
+	/** Minimum number of loaded rows for virtualization. Undefined keeps the full transcript mounted. */
+	readonly virtualizeHistoryFrom?: import('../../../../base/common/observable.js').IObservable<number | undefined>;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly messagePresentation?: ChatMessagePresentation;
+	readonly codeBlockPresentation?: 'card';
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }

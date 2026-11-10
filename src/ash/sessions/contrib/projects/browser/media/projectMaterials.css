@@ -1,13 +1,98 @@
+.ash-projects-file-content {
+	position: relative;
+}
+
+.ash-projects-files > .ash-projects-file-content {
+	min-block-size: 100%;
+}
+
+.ash-projects-material-context-title,
+.ash-projects-detail-card .ash-projects-material-files-title {
+	display: none;
+}
+
+.ash-projects-detail-card .ash-projects-material-context-title {
+	display: inline;
+}
+
+section.ash-projects-materials {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-projects-materials > .ash-button {
+	align-self: flex-start;
+}
+
+.ash-projects-material-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-projects-material-actions > .ash-button[hidden] {
+	display: none;
+}
+
 .ash-projects-materials-empty {
-	padding: var(--ash-spacing-size400) 0;
+	display: grid;
+	justify-items: center;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size240) var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-sideBar-background);
 	color: var(--ash-description-foreground);
 	text-align: center;
-	line-height: 1.6;
+	line-height: 1.5;
+}
+
+.ash-projects-materials-empty p {
+	max-width: 30ch;
+	margin: 0;
+}
+
+.ash-projects-materials-illustration {
+	position: relative;
+	width: 92px;
+	height: 48px;
+}
+
+.ash-projects-materials-sheet {
+	position: absolute;
+	inset-block-end: 0;
+	inset-inline-start: 0;
+	display: grid;
+	place-items: center;
+	box-sizing: border-box;
+	width: var(--ash-spacing-size320);
+	height: var(--ash-spacing-size320);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-background);
+	transform: rotate(-8deg);
+}
+
+.ash-projects-materials-sheet:nth-child(2) {
+	inset-inline-start: auto;
+	inset-inline-end: 0;
+	transform: rotate(8deg);
+}
+
+.ash-projects-materials-sheet:nth-child(3) {
+	inset-block-end: var(--ash-spacing-size120);
+	inset-inline-start: var(--ash-spacing-size280);
+	width: var(--ash-spacing-size360);
+	height: var(--ash-spacing-size360);
+	transform: rotate(4deg);
 }
 
 .ash-projects-material-list {
 	padding: 0;
-	margin: var(--ash-spacing-size200) 0;
+	margin: 0;
 	list-style: none;
 }
 
@@ -25,8 +110,185 @@
 	justify-content: flex-start;
 }
 
-.ash-projects-source-note {
+.ash-projects-material-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-projects-material-list:has(> .ash-projects-material-card) {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 144px), 1fr));
+	gap: var(--ash-spacing-size120);
+	margin-block-start: var(--ash-spacing-size80);
+}
+
+.ash-projects-detail-card
+	.ash-projects-material-list:has(> .ash-projects-material-card) {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ash-projects.stack-project-details
+	.ash-projects-detail-card
+	.ash-projects-material-list:has(> .ash-projects-material-card) {
+	grid-template-columns: repeat(2, minmax(0, 152px));
+}
+
+.ash-projects-material:not(.ash-projects-material-card) {
+	grid-column: 1 / -1;
+}
+
+.ash-projects-material-card {
+	position: relative;
+	aspect-ratio: 1.23;
+	min-block-size: 104px;
+	padding: 0;
+	align-items: stretch;
+}
+
+.ash-projects-material-card > .ash-projects-material-card-open {
+	display: grid;
+	flex: 1;
+	min-inline-size: 0;
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: auto auto minmax(0, 1fr) minmax(
+			var(--ash-spacing-size240),
+			auto
+		);
+	justify-items: start;
+	align-items: start;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size100);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: var(--ash-sessions-soft-shadow);
+	text-align: start;
+}
+
+.ash-projects-material-card
+	> .ash-button.ash-projects-material-card-open:focus-visible {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-projects-material-card-open > .ash-file-card-name {
+	grid-row: 1;
+	inline-size: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-projects-material-card-open > .ash-file-card-size {
+	grid-row: 2;
 	color: var(--ash-description-foreground);
-	line-height: 1.6;
 	font-size: var(--ash-fontSize-body2);
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-projects-material-card-open > .ash-file-card-format {
+	grid-row: 4;
+	align-self: center;
+	max-inline-size: 100%;
+}
+
+.ash-file-card-format > .ash-badge.outlined {
+	display: block;
+	max-inline-size: 100%;
+	overflow: hidden;
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-editor-background);
+	box-shadow: var(--ash-sessions-soft-shadow);
+	text-overflow: ellipsis;
+}
+
+.ash-projects-material-card:has(> .ash-projects-material-card-select)
+	.ash-file-card-format {
+	max-inline-size: calc(100% - var(--ash-spacing-size240));
+}
+
+.ash-projects-material-card-open > .ash-file-card-preview {
+	position: relative;
+	display: grid;
+	grid-row: 3;
+	justify-self: stretch;
+	align-self: stretch;
+	overflow: clip;
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-material-card-open > .ash-file-card-preview > img {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: contain;
+}
+
+.ash-projects-material-card-excerpt {
+	display: -webkit-box;
+	align-self: start;
+	justify-self: stretch;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.4;
+}
+
+:is(.hc-black, .hc-light)
+	.ash-projects-material-card
+	> .ash-projects-material-card-open,
+:is(.hc-black, .hc-light) .ash-file-card-format > .ash-badge.outlined {
+	box-shadow: none;
+}
+
+.ash-projects-material-card-select {
+	position: absolute;
+	inset-block-end: var(--ash-spacing-size80);
+	inset-inline-end: var(--ash-spacing-size80);
+	place-items: center;
+	inline-size: var(--ash-spacing-size240);
+	block-size: var(--ash-spacing-size240);
+}
+
+.ash-projects-material-card:has(> .ash-projects-material-card-select.checked)
+	> .ash-projects-material-card-open {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-projects-drop-overlay {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-content: center;
+	justify-items: center;
+	gap: var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size160);
+	border-radius: inherit;
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	text-align: center;
+	pointer-events: none;
+}
+
+.ash-projects-drop-icons {
+	display: flex;
+	gap: var(--ash-spacing-size160);
+	color: var(--ash-focusBorder);
+	--ash-lxiconFontSize: var(--ash-lxiconFontSize-large);
+}
+
+.ash-projects-drop-icons > :first-child {
+	transform: rotate(-12deg);
+}
+
+.ash-projects-drop-icons > :last-child {
+	transform: rotate(12deg);
 }

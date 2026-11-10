@@ -240,6 +240,18 @@ export class GitHubService extends Disposable implements IGitHubService {
 			}
 			return { repository, account, pr, info };
 		};
+		const readMergeBlock = async (target: Awaited<ReturnType<typeof readTarget>>): Promise<string | undefined> => {
+			const checks = await scope.github.readPullRequestChecks(target.repository, reference.number, target.pr.headCommit).catch(error => {
+				if (isCancellationError(error)) throw error;
+				this.log.error('sessions.github', 'Unable to read the checks required by this pull request', error);
+				return undefined;
+			});
+			assertCurrent();
+			const missing = checks?.unreportedRequiredChecks;
+			return missing?.length
+				? localize('sessions.github.artifactUnreportedChecks', 'Merge is waiting for required checks to report: {0}', missing.join(', '))
+				: undefined;
+		};
 		await this.artifactExecution.invoke(id, async () => {
 			const target = await readTarget();
 			const methods = [
@@ -247,6 +259,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 				{ method: GitHubMergeMethod.Squash, permission: 'allowSquashMerge' as const, label: localize('sessions.github.artifactSquash', 'Squash and merge') },
 				{ method: GitHubMergeMethod.Rebase, permission: 'allowRebaseMerge' as const, label: localize('sessions.github.artifactRebase', 'Rebase and merge') },
 			].filter(option => target.info[option.permission]);
+			const unavailableReason = methods.length ? await readMergeBlock(target) : undefined;
 			const actions: ArtifactAction[] = [];
 			for (const option of methods) {
 				const invoke = async (auto: boolean) => {
@@ -256,6 +269,10 @@ export class GitHubService extends Disposable implements IGitHubService {
 						|| !current.info[option.permission]
 						|| (auto ? !current.info.allowAutoMerge || current.pr.autoMerge : current.pr.mergeable !== true)) {
 						throw new Error(localize('sessions.github.artifactTargetChanged', 'The pull request or GitHub account changed. Open its actions again.'));
+					}
+					if (!auto) {
+						const blocked = await readMergeBlock(current);
+						if (blocked) throw new Error(blocked);
 					}
 					const merge = { commit: target.pr.headCommit, method: option.method };
 					try {
@@ -274,7 +291,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 						}
 					}
 				};
-				if (target.pr.mergeable === true) {
+				if (target.pr.mergeable === true && !unavailableReason) {
 					actions.push({
 						id: `merge:${option.method}`, label: option.label,
 						description: localize('sessions.github.artifactMergeEffect', 'Merge commit {0} into {1} now', target.pr.headCommit, target.pr.baseBranch),
@@ -290,7 +307,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 					});
 				}
 			}
-			return { id, artifact, actions };
+			return { id, artifact, actions, unavailableReason };
 		}, select);
 	}
 

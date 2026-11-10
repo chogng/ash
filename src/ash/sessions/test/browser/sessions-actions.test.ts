@@ -449,7 +449,10 @@ test('The project appearance command uses the project revision and the shared lo
 		const updates: unknown[][] = [];
 		services.registerInstance(IProjectService, {
 			read: async (id: string) => { assert.equal(id, project.id); return project; },
-			setAppearance: async (...args: unknown[]) => { updates.push(args); },
+			setAppearance: async (base, field, value) => {
+				updates.push([base, field, value]);
+				return { ...project, [field]: value, revision: base.revision + 1 };
+			},
 		} as IProjectService);
 		await commands.executeCommand('sessions.list.changeProjectAppearance', 'review', 'icon');
 		assert.equal(input.picker?.ariaLabel, '更改项目图标');

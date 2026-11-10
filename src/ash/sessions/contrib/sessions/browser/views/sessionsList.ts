@@ -4,18 +4,17 @@ import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrou
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
-import { COPY_PATH_COMMAND_ID } from '../../../../../workbench/contrib/files/browser/fileConstants.js';
 import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
-import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
+import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
-import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
-import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
+import { renderInlineRenameInput, showInlineRenameInput } from '../../../../browser/parts/titlebar/inlineRenameInput.js';
 import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -51,12 +50,12 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { IProjectService, type Project, type ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../../platform/contextview/browser/contextView.js';
-import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
+import { readCatalogProjectEdit, type ChatProjectEdit } from '../../../projects/browser/projectDialogService.js';
 import { IProjectsService, type CatalogProjectAppearance } from '../../../projects/browser/projectsService.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
-import { defaultButtonStyles, defaultInputBoxStyles, defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -64,7 +63,7 @@ import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.
 import { Menus } from '../../../../browser/menus.js';
 import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
-import { DeferredPromise, raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
+import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
@@ -78,6 +77,7 @@ import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js
 import { createSessionPreviewHover, loadSessionHoverBranch } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
+import { IAgentSessionActionsService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
 import { DragAndDropDataKind } from '../../../../../base/browser/ui/dnd/dnd.js';
 import { ObjectTreeElementCollapseState, type TreeDragAndDrop, type TreeDragData } from '../../../../../base/browser/ui/tree/tree.js';
@@ -113,11 +113,12 @@ const codeManagementIcons: typeof managementIcons = {
 };
 
 export type SessionsListPresentation = 'chat' | 'code'
-	| { readonly createProject: () => Promise<void>; }
+	| { readonly createProject: () => Promise<void>; readonly editProject: (id: string, restoreFocus: () => void) => Promise<void>; }
 	| { readonly openCommand: string; readonly activeContext: string; }
 	| {
 		readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility;
-		readonly editProject?: (title: string, appearance: CatalogProjectAppearance, restoreFocus: () => void) => void;
+		readonly createProjectForConversation?: (creator: NonNullable<SessionListProjectOrganization['creator']>, restoreFocus: () => void) => void;
+		readonly editProject?: (read: (signal: AbortSignal) => Promise<ChatProjectEdit>, restoreFocus: () => void) => Promise<void>;
 	};
 
 interface SessionsListDragOptions {
@@ -208,7 +209,6 @@ class SessionsListDragAndDrop extends Disposable implements TreeDragAndDrop<HTML
 		if (section === 'recent') {
 			if (leavingPinned && item.setPinned) return () => item.setPinned!(false);
 			if (project?.current && source.dataset.parentProjectId) return () => project.move(undefined);
-			if (from?.startsWith('workspace:')) return;
 			if (item.moveToGroup) return () => item.moveToGroup!(null);
 		}
 		if (section?.startsWith('group:') && target.dataset.groupDropTarget === 'true' && item.moveToGroup) {
@@ -225,6 +225,7 @@ export class SessionsList extends DomWidget {
 	private readonly mode: 'chat' | 'code';
 	private readonly entry: Extract<SessionsListPresentation, { openCommand: string; }> | undefined;
 	private readonly editCatalogProject: Extract<SessionsListPresentation, { catalog: SessionsCatalogListInput; }>['editProject'];
+	private readonly editCodeProject: Extract<SessionsListPresentation, { createProject: unknown; }>['editProject'] | undefined;
 	private readonly search: SessionsListSearch;
 	private readonly tree: SessionsListTree;
 	private readonly feedback = this._register(new SessionActionFeedback());
@@ -232,7 +233,7 @@ export class SessionsList extends DomWidget {
 	readonly domNode: HTMLElement;
 	readonly loading: IObservable<boolean>;
 	private readonly list: HTMLDivElement;
-	private readonly createListToolbar: (container: HTMLElement, disposables: DisposableStore) => MenuWorkbenchToolBar;
+	private readonly listToolbar: MenuWorkbenchToolBar;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
 	private readonly sections = this._register(new DisposableMap<string, SessionListSection>());
 	private projects: readonly Project[] = [];
@@ -245,12 +246,14 @@ export class SessionsList extends DomWidget {
 	private readonly projectLoadNotice = this._register(new MutableDisposable());
 	private readonly empty: HTMLParagraphElement;
 	private readonly catalog: SessionsCatalogListInput | undefined;
+	private readonly createProjectForConversation: ((creator: NonNullable<SessionListProjectOrganization['creator']>, restoreFocus: () => void) => void) | undefined;
 	private readonly menuContext: IScopedContextKeyService | undefined;
 	private readonly attention: IObservable<ReadonlyMap<string, IBlockedSession>>;
 	private readonly catalogViewport: HTMLElement | null | undefined;
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
+	private expandedForkRow: string | undefined;
 	private readonly catalogMenu = this._register(new MutableDisposable());
-	private readonly projectRename = this._register(new MutableDisposable());
+	private readonly inlineRename = this._register(new MutableDisposable<DisposableStore>());
 	private readonly catalogProjects = new Map<string, { readonly load?: () => void; readonly anchor?: HTMLElement; }>();
 	private readonly catalogPaging = this._register(new RunOnceScheduler(() => {
 		if (!this.domNode.isConnected || !this.domNode.clientHeight) return;
@@ -283,7 +286,6 @@ export class SessionsList extends DomWidget {
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
 		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
-		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@ILogService private readonly logService: ILogService,
 		@IProjectsService private readonly projectPreferences: IProjectsService,
@@ -292,12 +294,15 @@ export class SessionsList extends DomWidget {
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
 		@IInstantiationService private readonly instantiation?: IInstantiationService,
 		@IConfigurationService configuration?: IConfigurationService,
+		@IAgentSessionActionsService private readonly sessionActions?: IAgentSessionActionsService,
 	) {
 		super();
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
+		this.createProjectForConversation = contributed?.createProjectForConversation;
 		this.editCatalogProject = contributed?.editProject;
 		const code = typeof presentation !== 'string' && 'createProject' in presentation ? presentation : undefined;
+		this.editCodeProject = code?.editProject;
 		const mode = this.mode = typeof presentation === 'string' ? presentation : code ? 'code' : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
 		const showAttention = observableFromEvent(this, listModel.onDidChange, () => !this.entry && listModel.showAttentionGroup);
@@ -392,7 +397,7 @@ export class SessionsList extends DomWidget {
 				|| event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:')) this.render();
 		}));
 		this._register(listModel.onDidChange(() => {
-			if (listModel.grouping !== 'repository') {
+			if (listModel.getGrouping(this.mode) !== 'repository') {
 				this.resetRepositoryGroups();
 			}
 			this.render();
@@ -418,8 +423,8 @@ export class SessionsList extends DomWidget {
 			enabled: true,
 			run: code.createProject,
 		} : undefined;
-		this.createListToolbar = (container, disposables) => createSessionsListToolbar(
-			container, disposables, menus, contextMenus, menuContext,
+		this.listToolbar = createSessionsListToolbar(
+			h(ownerDocument, 'div'), this._store, menus, contextMenus, menuContext,
 			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions), createProject,
 		);
 		if (contributed) {
@@ -466,16 +471,16 @@ export class SessionsList extends DomWidget {
 		const model = this.listModel;
 		const choice = (id: string, label: string, checked: boolean, run: () => void): IAction => ({ id, label, tooltip: '', enabled: true, checked, run });
 		const group = (value: SessionGrouping, label: string): IAction =>
-			choice(`sessions.list.groupBy.${value}`, label, model.grouping === value, () => model.setGrouping(value));
+			choice(`sessions.list.groupBy.${value}`, label, model.getGrouping(this.mode) === value, () => model.setGrouping(this.mode, value));
 		const automation = model.automationSessionsMode;
 		return Separator.join([
 			new SubmenuAction('sessions.list.groupBy', localize('sessions.list.groupBy', 'Group By'), [
 				group('projects', localize('projects.title', 'Projects')),
+				group('none', localize('sessions.list.groupFlat', 'Flat List')),
+				new Separator(),
 				group('repository', localize('sessions.list.groupRepository', 'Repository')),
 				group('status', localize('sessions.list.groupStatus', 'Status')),
 				group('environment', localize('sessions.list.groupEnvironment', 'Environment')),
-				new Separator(),
-				group('none', localize('sessions.list.groupNone', 'None')),
 			]),
 			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sessionSortActions(model, this.mode)),
 			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
@@ -649,9 +654,17 @@ export class SessionsList extends DomWidget {
 		const controller = new AbortController();
 		this.catalogMenu.value = toDisposable(() => controller.abort());
 		try {
-			const focus = () => this.tree.focusRow(item.domNode);
-			const actions = [...await row.getActions(controller.signal, focus)];
+			let actions = [...await row.getActions(controller.signal)];
 			if (controller.signal.aborted || !item.domNode.isConnected) return;
+			const rename = row.rename;
+			if (!row.sessionId && rename) {
+				actions = Separator.join([{
+					id: 'sessions.list.renameConversation',
+					label: localize('sessions.list.rename', 'Rename'),
+					tooltip: '', enabled: true, icon: Lxicon.edit,
+					run: () => this.renameConversation(item, row.title, rename, row.validateRename),
+				}], actions);
+			}
 			const project = row.organization()?.project;
 			if (project) {
 				const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
@@ -664,25 +677,20 @@ export class SessionsList extends DomWidget {
 	}
 
 	private projectActions(item: SessionListItem, project: SessionListProjectOrganization): readonly IAction[] {
+		const restoreFocus = () => {
+			if (!this.isDisposed) this.tree.focusRow(item.domNode);
+		};
+		const creator = project.creator;
+		const createProject = this.createProjectForConversation;
 		return sessionListProjectActions(this.mode, project, async run => {
 			try {
 				await run();
 			} catch (error) {
 				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
 			} finally {
-				if (!this.isDisposed) this.tree.focusRow(item.domNode);
+				restoreFocus();
 			}
-		}, async () => {
-			const name = (await this.quickInput.input({
-				title: localize('sessions.list.newProject', 'New project'),
-				validateInput: async value => {
-					if (!value.trim()) return localize('sessions.list.projectNameRequired', 'Enter a project name.');
-					if (value.trim().length > 200) return localize('sessions.list.projectNameTooLong', 'Use at most {0} characters for the project name.', 200);
-					return undefined;
-				},
-			}))?.trim();
-			return this.isDisposed ? undefined : name;
-		});
+		}, creator && createProject ? () => createProject(creator, restoreFocus) : undefined);
 	}
 
 	private showRowMenu(item: SessionListItem, anchor: ContextMenuAnchor,
@@ -771,31 +779,22 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showLocalProjectMenu(title: string, project: ProjectSummary, row: ProjectMenuRow, anchor: ContextMenuAnchor): void {
-		this.showProjectMenu(project.id, title, field => this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), {
-			rename: async (name, signal) => {
-				const current = await this.projectService.read(project.id, this.mode);
-				signal.throwIfAborted();
-				await this.projectService.update(current, name, current.description, current.materials);
-			},
+		const editCode = this.editCodeProject;
+		const editChat = this.editCatalogProject;
+		const edit = editCode ? (restoreFocus: () => void) => editCode(project.id, restoreFocus)
+			: editChat && ((restoreFocus: () => void) => editChat(async () => ({
+				project: await this.projectService.read(project.id, 'chat'),
+			}), restoreFocus));
+		this.showProjectMenu(project.id, title, {
 			archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, this.mode),
 			remove: { removesContents: false, run: () => this.projectService.remove(project) },
-		}, row, anchor);
+		}, row, anchor, edit);
 	}
 
-	private showWorkspaceMenu(resource: URI, anchor: ContextMenuAnchor): void {
-		const label = localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path');
-		const actions: IAction[] = [{
-			id: COPY_PATH_COMMAND_ID, label, tooltip: label, icon: Lxicon.copy, enabled: true,
-			run: () => this.commands.executeCommand(COPY_PATH_COMMAND_ID, resource),
-		}];
-		this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
-	}
-
-	private showProjectMenu(projectId: string, title: string, change: ((field: 'icon' | 'color') => Promise<void>) | undefined,
-		operations: SessionsCatalogProjectOperations, row: ProjectMenuRow, anchor: ContextMenuAnchor,
-		edit?: (restoreFocus: () => void) => void): void {
+	private showProjectMenu(projectId: string, title: string, operations: SessionsCatalogProjectOperations,
+		row: ProjectMenuRow, anchor: ContextMenuAnchor, edit?: (restoreFocus: () => void) => Promise<void>): void {
 		if (!this.menuContext) return;
-		const { rename, archive, remove } = operations;
+		const { archive, remove } = operations;
 		const trigger = row.getMenuTrigger(anchor);
 		const pinned = this.projectPreferences.isPinned(projectId);
 		const runRemoval = async (operation: () => Promise<boolean | void>): Promise<void> => {
@@ -808,14 +807,11 @@ export class SessionsList extends DomWidget {
 			actions: {
 				pin: pinned ? undefined : () => this.setProjectPinned(projectId, true),
 				unpin: pinned ? () => this.setProjectPinned(projectId, false) : undefined,
-				rename: rename && (() => this.renameProject(title, row.domNode, trigger ?? row.button, rename)),
 				edit: edit && (() => edit(() => {
 					const target = trigger ?? row.button;
 					if (target.isConnected) target.focus({ preventScroll: true });
 					else this.focus();
 				})),
-				icon: change && (() => change('icon')),
-				color: change && (() => change('color')),
 				archive: archive && (() => runRemoval(archive)),
 				remove: remove && (async () => {
 					if (!await confirmProjectDelete(this.dialogs, title, remove.removesContents)) return;
@@ -842,94 +838,64 @@ export class SessionsList extends DomWidget {
 		if (row) this.tree.focusRow(row);
 	}
 
-	private async renameProject(title: string, anchor: HTMLElement, trigger: HTMLElement, rename: NonNullable<SessionsCatalogProjectOperations['rename']>): Promise<void> {
-		if (this.isDisposed || !anchor.isConnected) return;
-		const controller = new AbortController();
-		const lifetime = new DisposableStore();
-		lifetime.add(toDisposable(() => controller.abort()));
-		this.projectRename.value = lifetime;
-		try {
-			const name = await this.promptProjectName(title, anchor, trigger, lifetime);
-			if (controller.signal.aborted || !name || name === title) return;
-			await rename(name, controller.signal);
-			if (!controller.signal.aborted) status(localize('sessions.list.projectRenamed', 'Project renamed to {0}.', name));
-		} catch (error) {
-			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
-		} finally {
-			if (this.projectRename.value === lifetime) this.projectRename.clear();
-		}
-	}
-
-	private promptProjectName(title: string, anchor: HTMLElement, trigger: HTMLElement, lifetime: DisposableStore): Promise<string | undefined> {
-		const document = anchor.ownerDocument;
-		const heading = localize('sessions.list.renameProject', 'Rename project');
-		const form = h(document, 'form', {
-			className: 'ash-sessions-project-rename',
-			attributes: { role: 'dialog', 'aria-label': heading },
-		});
-		const view = lifetime.add(new ContextView(this.domNode));
-		const header = h(document, 'header', { className: 'ash-sessions-project-rename-header' });
-		header.append(h(document, 'h2', { attributes: { title: heading } }, heading));
-		const close = localize('sessions.list.closeProjectRename', 'Close rename dialog');
-		lifetime.add(new Button(header, {
-			...defaultButtonStyles,
-			label: close,
-			title: close,
-			icon: Lxicon.dialogClose,
-			iconOnly: true,
-			onClick: () => view.hide(),
-		}));
-		form.append(header);
-		const input = lifetime.add(new InputBox(form, {
-			ariaLabel: localize('sessions.list.projectName', 'Project name'),
-			inputBoxStyles: defaultInputBoxStyles,
-			presentation: 'field',
-		}));
-		input.value = title;
-		const actions = h(document, 'div', { className: 'ash-sessions-project-rename-actions' });
-		form.append(actions);
-		const result = new DeferredPromise<string | undefined>();
-		lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			size: 'small',
-			label: localize('sessions.list.cancelProjectRename', 'Cancel'),
-			onClick: () => view.hide(),
-		}));
-		lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			presentation: 'primary',
-			size: 'small',
-			label: localize('sessions.list.rename', 'Rename'),
-			type: 'submit',
-		}));
-		lifetime.add(input.onDidChange(() => input.showValidation('')));
-		lifetime.add(addDisposableListener(form, 'submit', event => {
-			event.preventDefault();
-			const name = input.value.trim();
-			if (!name) {
-				input.showValidation(localize('sessions.list.projectNameRequired', 'Enter a project name.'));
-				input.focus();
+	private renameConversation(
+		item: SessionListItem, name: string, rename: (title: string) => Promise<void>,
+		validate = (title: string): string | undefined => title && Array.from(title).length <= 256
+			? undefined : localize('sessions.titlebar.invalidName', 'Enter a name with 1 to 256 characters.'),
+	): void {
+		const row = item.domNode;
+		if (this.isDisposed || !row.isConnected) return;
+		const label = item.button.querySelector('.ash-sessions-list-label')!;
+		const labelBounds = label.getBoundingClientRect();
+		const rowBounds = row.getBoundingClientRect();
+		// Keep the existing title's inset when a row has leading status or pull request icons.
+		const titleInset = getWindow(row).getComputedStyle(row).direction === 'rtl'
+			? rowBounds.right - labelBounds.right : labelBounds.left - rowBounds.left;
+		const store = new DisposableStore();
+		this.inlineRename.value = store;
+		row.classList.add('renaming');
+		store.add(toDisposable(() => row.classList.remove('renaming')));
+		item.hidePreviewHover();
+		let saving = false;
+		const finish = (restoreFocus: boolean): void => {
+			if (this.inlineRename.value !== store) return;
+			this.inlineRename.clear();
+			if (restoreFocus) this.tree.focusRow(row, true);
+		};
+		const save = async (): Promise<void> => {
+			if (saving) return;
+			const title = input.value.trim();
+			const error = validate(title);
+			if (error) {
+				input.setCustomValidity(error);
+				input.setAttribute('aria-invalid', 'true');
+				input.reportValidity();
 				return;
 			}
-			void result.complete(name);
-			view.hide();
-		}));
-		trigger.focus({ preventScroll: true });
-		if (view.show({
-			anchor,
-			content: form,
-			presentation: 'dialog',
-			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-			gap: 8,
-			focusRestore: ContextViewFocusRestore.Previous,
-			onHide: () => { if (!result.isSettled) void result.complete(undefined); },
-		})) {
-			input.focus();
-			input.select();
-		} else if (!result.isSettled) {
-			void result.complete(undefined);
-		}
-		return result.p;
+			if (title === name) {
+				finish(true);
+				return;
+			}
+			saving = input.readOnly = true;
+			try {
+				await rename(title);
+				finish(getActiveElement(input.ownerDocument) === input);
+			} catch (error) {
+				if (!store.isDisposed) {
+					saving = input.readOnly = false;
+					this.notifications.error(toErrorMessage(error));
+					if (getActiveElement(input.ownerDocument) !== input) finish(false);
+				}
+			}
+		};
+		const input = renderInlineRenameInput(row, {
+			label: localize('sessions.titlebar.sessionName', 'Session name'),
+			onAccept: () => { void save(); },
+			onCancel: () => { if (!saving) finish(true); },
+			onBlur: () => { if (!saving) finish(false); },
+		}, store);
+		input.style.setProperty('--sessions-rename-start', `${titleInset}px`);
+		showInlineRenameInput(input, name);
 	}
 
 	private appearanceActions(id: string, change: (field: 'icon' | 'color') => Promise<void>, iconLabel: string, colorLabel: string): IAction[] {
@@ -973,7 +939,7 @@ export class SessionsList extends DomWidget {
 		if (selection.kind === 'untitled') {
 			this.showConversationMenu(item, anchor, [...actions, ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
 				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }))]);
+				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }))], { untitledSessionId: selection.session.untitledSessionId });
 			return;
 		}
 		const { session, threadId } = selection.active;
@@ -984,7 +950,7 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showConversationMenu(item: SessionListItem, anchor: ContextMenuAnchor, actions: IAction[],
-		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; }, pinned = false): void {
+		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; } | { readonly untitledSessionId: string; }, pinned = false): void {
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
 		const workspace = this.mode === 'code' && target && 'sessionId' in target && target.threadId
@@ -1002,7 +968,19 @@ export class SessionsList extends DomWidget {
 		}
 		const menu = this.mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
 		this.showRowMenu(item, anchor, {
-			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context)).map(action => {
+			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context))).map(action => {
+				const sessionActions = this.sessionActions;
+				if (action.id === 'agentSession.rename' && sessionActions && target && !('catalogId' in target)) {
+					return {
+						...action,
+						run: () => {
+							const captured = sessionActions.resolveTarget(target);
+							this.renameConversation(item, captured.title, async title => {
+								await sessionActions.renameSession((await captured.resolve()).sessionId, title);
+							});
+						},
+					};
+				}
 				if (action.id === 'agentSession.changeDirectory' && workspace) {
 					return { ...action, label: workspace.label, tooltip: workspace.label, badge: workspace.busyBadge, run: () => action.run() };
 				}
@@ -1019,7 +997,7 @@ export class SessionsList extends DomWidget {
 					}
 				};
 				return action;
-			})),
+			}),
 			onHide: () => {
 				if (this.rowMenuContext.value === context) this.rowMenuContext.clear();
 			},
@@ -1127,12 +1105,8 @@ export class SessionsList extends DomWidget {
 		this.render();
 	}
 
-	private sessionBucket(session: SessionGroupingContext | undefined, grouping: Exclude<SessionGrouping, 'none'>, projects: ReadonlyMap<string, Project>): SessionBucket {
+	private sessionBucket(session: SessionGroupingContext | undefined, grouping: Exclude<SessionGrouping, 'none' | 'projects'>): SessionBucket {
 		switch (grouping) {
-			case 'projects': {
-				const project = session && projects.get(session.sessionId);
-				return project ? { id: project.id, label: project.name } : { id: '', label: localize('sessions.list.noProjectGroup', 'No Project') };
-			}
 			case 'repository':
 				return (session && this.repositoryGroups.get(this.repositoryKey(session))) ?? { id: '', label: localize('sessions.list.noRepositoryGroup', 'No Repository Information') };
 			case 'status':
@@ -1175,7 +1149,9 @@ export class SessionsList extends DomWidget {
 		const remaining = new Map<string, HTMLElement>();
 		const childrenByRow = new Map<HTMLElement, readonly HTMLElement[]>();
 		const sort = this.listModel.getSort(this.mode);
-		const grouping = this.listModel.grouping;
+		const grouping = this.listModel.getGrouping(this.mode);
+		const flat = grouping === 'none';
+		const groupRecents = grouping !== 'projects' && grouping !== 'none';
 		const sortKeys = new Map<HTMLElement, string | number>();
 		const sortRows = (rows: readonly HTMLElement[]): readonly HTMLElement[] => {
 			const sign = sort.direction === 'ascending' ? 1 : -1;
@@ -1194,7 +1170,7 @@ export class SessionsList extends DomWidget {
 			? undefined : this.viewService.activeSelection;
 		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
 		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
-		const itemFor = (key: string, kind: 'conversation' | 'draft' | 'project', icon = restingIcon): SessionListItem => {
+		const itemFor = (key: string, kind: 'conversation' | 'draft' | 'project', icon = restingIcon, forkReference = false): SessionListItem => {
 			present.add(key);
 			let item = this.items.get(key);
 			if (!item) {
@@ -1202,26 +1178,26 @@ export class SessionsList extends DomWidget {
 				const setIcon = entry ? entry.setIcon && ((icon: Icon | undefined) => this.catalogRows.get(key)?.setIcon?.(icon))
 					: (icon: Icon | undefined) => this.listModel.setRowIcon(key, icon?.id);
 				const leading = kind === 'conversation' && this.instantiation
-					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '', setIcon)
+					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '', forkReference ? undefined : setIcon)
 					: undefined;
 				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, kind, icon, leading));
 			}
 			item.domNode.dataset.item = key;
-			if (item.leadingIcon && !this.catalogRows.has(key)) {
+			if (item.leadingIcon && !forkReference && !this.catalogRows.has(key)) {
 				const customId = this.listModel.getRowIcon(key);
 				item.leadingIcon.setRestingIcon((customId ? getRegisteredIcon(customId, ownerDocument) : undefined) ?? icon);
 			}
 			return item;
 		};
 		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section',
-			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: CatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly workspace?: URI; readonly catalogProjectId?: string; }): HTMLElement => {
+			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: CatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly catalogProjectId?: string; }): HTMLElement => {
 			activeSections.add(key);
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind, this.mode, this.contextMenus,
-				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
+				collapsed => this.tree.setSectionCollapsed(key, collapsed)));
 			const sorted = sortRows(children);
 			childrenByRow.set(section.domNode, key === attentionSection ? sorted
 				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
-			const { open, group, project, projectAppearance, projectOperations, workspace, catalogProjectId } = options ?? {};
+			const { open, group, project, projectAppearance, projectOperations, catalogProjectId } = options ?? {};
 			const appearance = project ?? projectAppearance ?? group;
 			section.update(title, {
 				open,
@@ -1234,18 +1210,17 @@ export class SessionsList extends DomWidget {
 				section.domNode.dataset.groupDropTarget = String(group.kind !== 'comparison');
 				section.setContextMenu(anchor => this.showSectionMenu(section, group, anchor));
 			}
-			if (workspace) {
-				section.setContextMenu(anchor => this.showWorkspaceMenu(workspace, anchor));
-			}
 			if (kind === 'project') {
 				if (project) {
 					section.setContextMenu(anchor => this.showLocalProjectMenu(title, project, section, anchor));
 				} else if (catalogProjectId) {
 					const operations = projectOperations ?? {};
 					const edit = this.editCatalogProject;
-					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, undefined, operations, section, anchor,
-						edit && projectAppearance
-							? restoreFocus => edit(title, projectAppearance, restoreFocus) : undefined));
+					const readDetails = operations.editDetails;
+					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, operations, section, anchor,
+						edit && (readDetails || projectAppearance) ? restoreFocus => edit(
+							signal => readCatalogProjectEdit(title, projectAppearance, readDetails, signal), restoreFocus,
+						) : undefined));
 				} else {
 					section.setContextMenu(undefined);
 				}
@@ -1256,11 +1231,51 @@ export class SessionsList extends DomWidget {
 		const contributedGroups = new Map<string, readonly HTMLElement[]>();
 		const contributedRecent: [HTMLElement, SessionGroupingContext | undefined][] = [];
 		const external = this.catalog?.snapshot.get();
+		const forkChildren = new Map<string, SessionsCatalogRow[]>();
+		const conversations = new Map<string, SessionsCatalogRow>();
+		for (const row of external?.forkEntries ?? []) conversations.set(row.id, row);
+		for (const section of external?.sections ?? []) {
+			for (const row of section.rows) conversations.set(row.id, row);
+			for (const project of section.projects) {
+				for (const row of project.rows) conversations.set(row.id, row);
+			}
+		}
+		for (const row of conversations.values()) {
+			const parent = row.forkSource?.id;
+			if (!parent || parent === row.id) continue;
+			const children = forkChildren.get(parent);
+			if (children) children.push(row);
+			else forkChildren.set(parent, [row]);
+		}
 		const externalRow = (row: SessionsCatalogRow, project?: string, alert?: IBlockedSession): HTMLElement => {
 			const key = project ? JSON.stringify([row.id, project]) : row.id;
 			this.catalogRows.set(key, row);
 			const item = itemFor(key, 'conversation');
-			item.updateCatalogRow(row, alert?.threadId);
+			const hasForks = forkChildren.has(row.id);
+			const expanded = hasForks && this.expandedForkRow === key;
+			item.updateCatalogRow(row, alert?.threadId, hasForks ? {
+				expanded,
+				toggle: () => {
+					this.expandedForkRow = this.expandedForkRow === key ? undefined : key;
+					this.render();
+				},
+			} : undefined);
+			if (expanded) {
+				// Keep canonical rows in their groups. The expanded tree contains shortcuts only.
+				const seen = new Set([row.id]);
+				const renderForks = (parent: string, depth: number): readonly HTMLElement[] => sortRows((forkChildren.get(parent) ?? []).flatMap(child => {
+					if (seen.has(child.id)) return [];
+					seen.add(child.id);
+					const childItem = itemFor(JSON.stringify(['fork', key, child.id]), 'conversation', undefined, true);
+					childItem.updateCatalogRow(child, undefined, undefined, true);
+					childItem.domNode.style.setProperty('--sessions-fork-depth', String(Math.min(depth, 4)));
+					childrenByRow.set(childItem.domNode, renderForks(child.id, depth + 1));
+					const value = sort.field === 'name' ? child.title : sort.field === 'created' ? child.createdAt : child.updatedAt ?? child.createdAt;
+					if (value !== undefined) sortKeys.set(childItem.domNode, value);
+					return [childItem.domNode];
+				}));
+				childrenByRow.set(item.domNode, renderForks(row.id, 1));
+			}
 			item.target = alert && { sessionId: alert.session.sessionId, threadId: alert.threadId };
 			item.setContextMenu(anchor => void this.showCatalogMenu(row, item, anchor));
 			if (project) item.domNode.dataset.parentProject = `project:${project}`;
@@ -1269,14 +1284,19 @@ export class SessionsList extends DomWidget {
 			return item.domNode;
 		};
 		const placedAlerts = new Set<string>();
+		const flatRecentIds = new Set<string>();
 		const catalogRowsFor = (rows: readonly SessionsCatalogRow[], sectionKey: string, project?: { readonly key: string; readonly title: string; }): HTMLElement[] => {
 			const children: HTMLElement[] = [];
 			for (const row of rows) {
 				const alert = sectionKey !== 'pinned' && !row.pinned && !row.disabled && row.sessionId ? alerts.get(row.sessionId) : undefined;
 				if (!this.search.matches(row.title, project?.title, alert && attentionLabel)) continue;
+				if (flat && sectionKey === 'recent') {
+					if (row.pinned || flatRecentIds.has(row.id)) continue;
+					flatRecentIds.add(row.id);
+				}
 				if (!alert) {
-					const node = externalRow(row, project?.key);
-					if (!project && sectionKey === 'recent' && grouping !== 'none') contributedRecent.push([node, row.groupingContext]);
+					const node = externalRow(row, flat ? undefined : project?.key);
+					if (!project && sectionKey === 'recent' && groupRecents) contributedRecent.push([node, row.groupingContext]);
 					children.push(node);
 				} else if (!placedAlerts.has(alert.session.sessionId)) {
 					placedAlerts.add(alert.session.sessionId);
@@ -1289,10 +1309,16 @@ export class SessionsList extends DomWidget {
 			const rows = catalogRowsFor(section.rows, section.key);
 			if (section.key === 'pinned') pinned.push(...rows);
 			else if (section.key === 'recent') {
-				if (grouping === 'none') recent.push(...rows);
+				if (!groupRecents) recent.push(...rows);
 			}
 			else contributedGroups.set(section.key, rows);
 			for (const project of section.projects) {
+				if (flat) {
+					// A catalog conversation can belong to multiple projects. Use its
+					// primary row once in the flat list, even inside a pinned project.
+					recent.push(...catalogRowsFor(project.rows, 'recent', project));
+					continue;
+				}
 				const children = catalogRowsFor(project.rows, section.key, project);
 				if (!children.length && !this.search.matches(project.title)) continue;
 				const key = `catalog-project:${project.key}`;
@@ -1343,7 +1369,7 @@ export class SessionsList extends DomWidget {
 				const rows = nestedDrafts.get(id) ?? [];
 				rows.push(item.domNode);
 				nestedDrafts.set(id, rows);
-			} else if (this.mode === 'code' && session.projectId && this.projects.some(project => project.id === session.projectId)) {
+			} else if (!flat && this.mode === 'code' && session.projectId && this.projects.some(project => project.id === session.projectId)) {
 				const rows = projectDrafts.get(session.projectId) ?? [];
 				rows.push(item.domNode);
 				projectDrafts.set(session.projectId, rows);
@@ -1401,7 +1427,7 @@ export class SessionsList extends DomWidget {
 		const projects = projectRows;
 		let hasProjectConversations = projectRows.length > 0;
 		const chatGroups: HTMLElement[] = [];
-		for (const project of this.projects) {
+		for (const project of flat ? [] : this.projects) {
 			const members = this.mode === 'code' ? project.sessionIds.flatMap(id => {
 				const item = remaining.get(id);
 				if (!item) return [];
@@ -1447,41 +1473,9 @@ export class SessionsList extends DomWidget {
 			}));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
-		const groupCodeWorkspaces = this.mode === 'code' && (grouping === 'none' || grouping === 'projects');
-		if (groupCodeWorkspaces) {
-			// Saved sessions can have a creation workspace without a Code project membership.
-			// Use the Session workspace so managed checkouts of the same folder stay together.
-			const workspaces = new Map<string, { readonly label: string; readonly resource: URI; readonly rows: HTMLElement[]; }>();
-			for (const session of catalog) {
-				const row = remaining.get(session.sessionId);
-				if (!row || !session.workspace) continue;
-				const resource = sessionWorkspaceUri(session.workspace);
-				const key = workspaceFolderKey(resource);
-				let workspace = workspaces.get(key);
-				if (!workspace) {
-					workspace = { label: basename(resource) || session.workspace.root, resource, rows: [] };
-					workspaces.set(key, workspace);
-				}
-				workspace.rows.push(row);
-				remaining.delete(session.sessionId);
-			}
-			for (const [key, workspace] of [...workspaces].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
-				orderedRecent.push(sectionFor(`workspace:${key}`, workspace.label, workspace.rows, 'subgroup', { workspace: workspace.resource }));
-			}
-		}
-		if (grouping === 'none' || groupCodeWorkspaces) {
+		if (!groupRecents) {
 			orderedRecent.push(...remaining.values());
 		} else {
-			const projectsBySession = new Map<string, Project>();
-			if (grouping === 'projects') {
-				for (const project of this.projects) {
-					for (const id of project.sessionIds) {
-						if (!projectsBySession.has(id)) {
-							projectsBySession.set(id, project);
-						}
-					}
-				}
-			}
 			const ungrouped = contributedRecent;
 			for (const session of catalog) {
 				const row = remaining.get(session.sessionId);
@@ -1492,7 +1486,7 @@ export class SessionsList extends DomWidget {
 			const buckets = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
 			for (const [row, session] of ungrouped) {
 				const context = repositoryCatalog && session ? this.repositoryGroupingContext(session, repositoryCatalog) : session;
-				const { id, label } = this.sessionBucket(context, grouping, projectsBySession);
+				const { id, label } = this.sessionBucket(context, grouping);
 				let bucket = buckets.get(id);
 				if (!bucket) {
 					bucket = { label, rows: [] };
@@ -1513,11 +1507,23 @@ export class SessionsList extends DomWidget {
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
 		if (attentionRows.length) ordered.push(sectionFor(attentionSection, attentionLabel, attentionRows));
-		ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
+		const projectsHeader = flat ? undefined : sectionFor('projects', localize('projects.title', 'Projects'), projects);
+		if (projectsHeader) ordered.push(projectsHeader);
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
-		if (orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
-			const label = this.mode === 'chat' && !this.catalog ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents');
-			ordered.push(sectionFor('recent', label, orderedRecent));
+		let recentHeader: HTMLElement | undefined;
+		if (flat || orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
+			const label = !flat && this.mode === 'chat' && !this.catalog ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents');
+			recentHeader = sectionFor('recent', label, orderedRecent);
+			ordered.push(recentHeader);
+		}
+		// Keep the same menu trigger when switching layouts so keyboard focus can
+		// return to it even though the Projects header is absent in the flat list.
+		const toolbar = this.listToolbar.element;
+		const toolbarHeader = projectsHeader ?? recentHeader!;
+		if (toolbar.parentElement !== toolbarHeader) {
+			toolbar.parentElement?.classList.remove('ash-sessions-list-section-with-actions');
+			toolbarHeader.classList.add('ash-sessions-list-section-with-actions');
+			toolbarHeader.append(toolbar);
 		}
 		if (showEmpty && emptyStatus) ordered.push(this.empty);
 		// Keep filtered rows available so closing search can restore the original focus target.
@@ -1529,10 +1535,13 @@ export class SessionsList extends DomWidget {
 			const key = element.dataset.section;
 			const children: ObjectTreeElement<HTMLElement>[] = [];
 			const rowChildren = childrenByRow.get(element) ?? [];
-			const projectSection = key === 'projects' || element.dataset.projectId !== undefined;
-			const collapsible = key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key));
+			const projectSection = key === 'projects' || (flat && key === 'recent') || element.dataset.projectId !== undefined;
+			const forkToggle = element.querySelector<HTMLButtonElement>('[data-action-id="sessions.list.forkTree"] button');
+			const collapsible = !!forkToggle || key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key));
 			let collapsed: ObjectTreeElementCollapseState | undefined;
-			if (key !== undefined && collapsible) {
+			if (forkToggle) {
+				collapsed = forkToggle.getAttribute('aria-expanded') === 'true' ? ObjectTreeElementCollapseState.Expanded : ObjectTreeElementCollapseState.Collapsed;
+			} else if (key !== undefined && collapsible) {
 				const saved = this.storage.getBoolean(this.collapseKey(key), StorageScope.PROFILE, element.dataset.catalogProject === 'true');
 				collapsed = saved && !this.search.hasQuery ? ObjectTreeElementCollapseState.Collapsed : ObjectTreeElementCollapseState.Expanded;
 			}
@@ -1658,6 +1667,7 @@ class SessionListItem extends AbstractDisposable {
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 	private catalogRow: SessionsCatalogRow | undefined;
+	private forkTree: { readonly expanded: boolean; readonly toggle: () => void; } | undefined;
 	private projectIcon: HTMLSpanElement | undefined;
 
 	describe(children: readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
@@ -1718,6 +1728,8 @@ class SessionListItem extends AbstractDisposable {
 		];
 	}
 
+	hidePreviewHover(): void { this.previewHover.value?.hide(); }
+
 	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
 		this.contextMenu = menu;
 		if (!this.moreButton) this.actions.setActions([this.moreAction]);
@@ -1756,32 +1768,51 @@ class SessionListItem extends AbstractDisposable {
 		}
 	}
 
-	updateCatalogRow(entry: SessionsCatalogRow, threadId?: string): void {
+	updateCatalogRow(entry: SessionsCatalogRow, threadId?: string, forkTree?: SessionListItem['forkTree'], reference = false): void {
 		const previous = this.catalogRow;
+		const hadForkTree = !!this.forkTree;
 		this.catalogRow = entry;
+		this.forkTree = forkTree;
 		this.update(entry.title, entry.selected, () => entry.open(threadId));
 		this.domNode.classList.add('ash-chat-navigation-row');
 		this.button.classList.add('ash-chat-navigation-item');
 		const icon = entry.iconId && getRegisteredIcon(entry.iconId, this.domNode.ownerDocument);
-		this.leadingIcon?.setRestingIcon(icon || entry.defaultIcon);
+		this.leadingIcon?.setRestingIcon(entry.forkSource ? Lxicon.fork : icon || entry.defaultIcon);
+		this.leadingIcon?.setNavigationAction(entry.forkSource && localize('sessions.list.forkSource', 'Forked from: {0}', entry.forkSource.title), entry.forkSource?.open);
 		this.leadingIcon?.setStatus(entry.status);
 		if (entry.status) {
 			this.managementDescription = entry.status.label;
 			this.updateDescription();
 		}
-		if (entry.setPinned && (!previous?.setPinned || previous.pinned !== entry.pinned)) {
-			const label = entry.pinned ? localize('sessions.chatList.unpin', 'Unpin chat') : localize('sessions.chatList.pin', 'Pin chat');
-			this.actions.setActions([{
-				id: 'sessions.chatList.pin', label, tooltip: label, enabled: true, checked: !!entry.pinned,
-				icon: entry.pinned ? Lxicon.pinFilled : Lxicon.pin,
-				run: async () => {
-					const row = this.catalogRow;
-					await row?.setPinned?.(!row.pinned);
-					if (this.button.isConnected) this.button.focus({ preventScroll: true });
-				},
-			}, this.moreAction]);
-		} else if (previous?.setPinned && !entry.setPinned) {
-			this.actions.setActions([this.moreAction]);
+		if (reference) {
+			this.setDisabled(!!entry.disabled, !!entry.actionsDisabled);
+			return;
+		}
+		if (!previous || hadForkTree !== !!forkTree || !!previous.setPinned !== !!entry.setPinned || previous.pinned !== entry.pinned) {
+			const actions: IAction[] = [];
+			if (forkTree) {
+				const label = localize('sessions.list.forkTree', 'Conversation branches');
+				actions.push({
+					id: 'sessions.list.forkTree', label, tooltip: label, enabled: true,
+					icon: Lxicon.gitBranch, run: () => this.forkTree?.toggle(),
+				});
+			}
+			if (entry.setPinned) {
+				const label = entry.pinned ? localize('sessions.chatList.unpin', 'Unpin chat') : localize('sessions.chatList.pin', 'Pin chat');
+				actions.push({
+					id: 'sessions.chatList.pin', label, tooltip: label, enabled: true, checked: !!entry.pinned,
+					icon: entry.pinned ? Lxicon.pinFilled : Lxicon.pin,
+					run: async () => {
+						const row = this.catalogRow;
+						await row?.setPinned?.(!row.pinned);
+						if (this.button.isConnected) this.button.focus({ preventScroll: true });
+					},
+				});
+			}
+			this.actions.setActions([...actions, this.moreAction]);
+		}
+		if (forkTree) {
+			this.actions.element.querySelector('[data-action-id="sessions.list.forkTree"] button')?.setAttribute('aria-expanded', String(forkTree.expanded));
 		}
 	}
 
@@ -1871,7 +1902,6 @@ type SessionListSectionKind = 'section' | 'subgroup' | 'project';
 class SessionListSection extends Disposable {
 	readonly domNode: HTMLElement;
 	readonly button: HTMLButtonElement;
-	readonly toolbar: MenuWorkbenchToolBar | undefined;
 	private readonly heading: HTMLElement;
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
@@ -1888,8 +1918,7 @@ class SessionListSection extends Disposable {
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
 	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code', contextMenus: IContextMenuService,
-		toggle: (collapsed?: boolean) => void,
-		createToolbar?: (container: HTMLElement, disposables: DisposableStore) => MenuWorkbenchToolBar) {
+		toggle: (collapsed?: boolean) => void) {
 		super();
 		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
@@ -1904,10 +1933,6 @@ class SessionListSection extends Disposable {
 		this.button.append(...(this.subgroup ? [this.icon, this.label] : [this.label, this.icon]));
 		this.heading.append(this.button);
 		this.domNode.append(this.heading);
-		if (createToolbar) {
-			this.domNode.classList.add('ash-sessions-list-section-with-actions');
-			this.toolbar = createToolbar(this.domNode, this._store);
-		}
 		if (kind === 'project') {
 			this.domNode.classList.add('ash-sessions-list-project-row');
 			this.actions = this._register(new WorkbenchToolBar(this.domNode, contextMenus, {
@@ -2169,11 +2194,22 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 			const button = event.target;
 			if (!isHTMLElement(button) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 			let target: HTMLElement | undefined;
+			const row = button.closest<HTMLElement>('[data-item]');
+			const forkToggle = row?.querySelector<HTMLButtonElement>('[data-action-id="sessions.list.forkTree"] button');
+			if (row && forkToggle && button.matches('.ash-sessions-list-item') && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+				const expanded = forkToggle.getAttribute('aria-expanded') === 'true';
+				if (!forkToggle.disabled && expanded === (event.key === 'ArrowLeft')) {
+					event.preventDefault();
+					event.stopPropagation();
+					forkToggle.click();
+					return;
+				}
+				if (expanded && event.key === 'ArrowRight') target = this.model.getNode(SessionsListTree.id(row))?.children[0]?.element;
+			}
 			if (event.key === 'ArrowRight' && button.matches('.ash-sessions-list-section-toggle[aria-expanded="true"]')) {
 				const section = button.closest<HTMLElement>('[data-section]')!;
 				target = this.model.getNode(SessionsListTree.id(section))?.children[0]?.element;
-			} else if (event.key === 'ArrowLeft' && button.matches('.ash-sessions-list-item')) {
-				const row = button.closest<HTMLElement>('[data-item]')!;
+			} else if (event.key === 'ArrowLeft' && row && button.matches('.ash-sessions-list-item')) {
 				target = this.model.getParent(SessionsListTree.id(row))?.element;
 			}
 			if (!target) return;

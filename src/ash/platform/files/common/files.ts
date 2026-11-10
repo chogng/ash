@@ -4,7 +4,25 @@ import type { URI } from '../../../base/common/uri.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBufferReadableStream } from '../../../base/common/buffer.js';
 import type { ReadableStreamEvents } from '../../../base/common/stream.js';
+import { localize } from '../../../nls.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+
+/** Formats a raw byte count for file surfaces. */
+export class ByteSize {
+	static readonly KB = 1024;
+	static readonly MB = ByteSize.KB ** 2;
+	static readonly GB = ByteSize.KB ** 3;
+	static readonly TB = ByteSize.KB ** 4;
+
+	static formatSize(bytes: number): string {
+		const size = Number.isFinite(bytes) ? bytes : 0;
+		if (size < ByteSize.KB) return localize('sizeB', '{0}B', size.toFixed(0));
+		if (size < ByteSize.MB) return localize('sizeKB', '{0}KB', (size / ByteSize.KB).toFixed(2));
+		if (size < ByteSize.GB) return localize('sizeMB', '{0}MB', (size / ByteSize.MB).toFixed(2));
+		if (size < ByteSize.TB) return localize('sizeGB', '{0}GB', (size / ByteSize.GB).toFixed(2));
+		return localize('sizeTB', '{0}TB', (size / ByteSize.TB).toFixed(2));
+	}
+}
 
 /** Stable file kind used by Workbench consumers independently of wire DTOs. */
 export enum FileKind {

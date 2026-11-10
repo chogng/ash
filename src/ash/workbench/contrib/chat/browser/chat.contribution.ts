@@ -15,6 +15,9 @@ import { registerChatEditingActions } from './chatEditing/chatEditingActions.js'
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import '../common/widget/chatColors.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ChatCopyActionRendering } from './actions/chatCopyActions.js';
+
+registerWorkbenchContribution(ChatCopyActionRendering.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatCopyActionRendering));
 registerChatActions();
 registerChatEditingActions();
 registerMoveActions();

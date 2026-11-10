@@ -1,4 +1,4 @@
-//! Real child commands for history/RPC tests, independent of provisioned OS sandboxes.
+//! Real child commands for history/RPC tests through the local process backend.
 //! Windows account isolation has its own explicitly provisioned acceptance test.
 
 use std::path::PathBuf;
@@ -29,7 +29,6 @@ use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
-use ash_sandboxing::SandboxBackends;
 use ash_sandboxing::SandboxPolicy;
 use core_api::ActionPolicyService;
 use core_api::CoreError;
@@ -139,14 +138,14 @@ impl ToolService for Shell {
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         let executor = ProcessExecutor::new(
             authorization.dir().clone(),
-            SandboxBackends::new(Vec::new()),
+            exec_server::LocalSandbox::new(ash_install_context::InstallContext::current()).build(),
             ExecutionLimits {
                 timeout: Duration::from_secs(30),
                 max_output_bytes: 64 * 1024,
             },
         );
-        // Keep the real command, process lifecycle and current Thread grant. This fixture
-        // exercises history capture; it does not claim to enforce a kernel sandbox.
+        // Keep the real command, process lifecycle and current Thread grant.
+        // Git metadata still requires isolation even for an unrestricted fixture command.
         let outcome = authorization
             .execute(
                 authorization.subject(),

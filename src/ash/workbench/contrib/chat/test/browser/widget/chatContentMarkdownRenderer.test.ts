@@ -29,6 +29,9 @@ import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../.
 import { ChatMarkdownContentPart } from '../../../browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { IncrementalDOMMorpher } from '../../../browser/widget/chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
 import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContentMarkdownRenderer.js';
+import { CHAT_RESPONSE_DOWNLOAD_SCHEME, chatMarkdownRichContentExtension, expandChatRichContentForCopy, renderChatRichContentText } from '../../../browser/widget/chatMarkdownRichContent.js';
+import { ChatMarkdownRichContentBuilder } from '../../../common/model/chatMarkdownRichContent.js';
+import { getChatFindTextParts } from '../../../browser/widget/chatFind/chatFindContent.js';
 
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>>;
 const snapshot = (): ExtensionHostFleetSnapshot => ({
@@ -74,6 +77,41 @@ suite('Shared chat Markdown rendering', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	suiteSetup(async function () { this.timeout(600000); math = await startMarkdownMathExtension(); });
 	suiteTeardown(async () => { await math?.dispose(); });
+
+	test('renders response parts from the shared model and keeps internal references out of text consumers', () => {
+		const builder = new ChatMarkdownRichContentBuilder('');
+		const files = [
+			['report.xlsx', 'xls-green'], ['report.XLS', 'xls-green'], ['report.csv', 'csv-green'],
+			['report.doc', 'docx-blue'], ['report.docx', 'docx-blue'], ['report.pdf', 'pdf-red'], ['report.zip', 'file'],
+		] as const;
+		const links = files.map(([label]) => builder.add({ kind: 'resource', label, uri: 'fixture:/' + label, block: false, markdown: '' }));
+		const details = builder.add({ kind: 'details', label: 'Framework', markdown: '', block: false, data: 'First line\nSecond | line' });
+		const value = `**文件：**${links.join(' · ')}\n\n| Framework | Note |\n| --- | --- |\n| ${details} | Same row |`;
+		const richContent = builder.content!;
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		using result = renderer.render({ value, supportThemeIcons: true }, {
+			markedExtensions: [chatMarkdownRichContentExtension(richContent)],
+			sanitizerConfig: { allowedLinkSchemes: { augment: [CHAT_RESPONSE_DOWNLOAD_SCHEME] } },
+		});
+		assert.equal(result.element.querySelector('strong')?.textContent, '文件：');
+		const anchors = [...result.element.querySelectorAll('a')];
+		assert.deepEqual(anchors.map(anchor => [
+			anchor.textContent, anchor.querySelector<HTMLElement>('.ash-chat-file-link-icon .ash-icon[aria-hidden="true"]')?.dataset.ashIconId,
+		]), files);
+		assert.deepEqual(anchors.map(anchor => anchor.getAttribute('href')), files.map((_, index) => CHAT_RESPONSE_DOWNLOAD_SCHEME + ':' + index));
+		assert.equal(result.element.querySelectorAll('tbody tr').length, 1);
+		assert.equal(result.element.querySelector('td details pre')?.textContent, 'First line\nSecond | line');
+		assert.equal(result.element.querySelector('td:last-child')?.textContent, 'Same row');
+		const text = renderChatRichContentText(value, richContent);
+		assert.match(text, /report\.xlsx[\s\S]*Second \| line/u);
+		assert.doesNotMatch(text, /ash-rich|chat-response-download|fixture:\/|\$\(/u);
+		const copied = expandChatRichContentForCopy(value, richContent);
+		assert.match(copied, /\*\*文件：\*\*<span>report\.xlsx<\/span>/u);
+		assert.doesNotMatch(copied, /ash-rich:|chat-response-download|fixture:\/|\$\(/u);
+		const found = getChatFindTextParts({ id: 'reply', type: 'agentMessage', text: value, transient: false, markdown: { supportHtml: true, richContent } });
+		assert.ok(found.some(part => part.text.includes('Second | line')));
+	});
 
 	const corpus = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/markdownMath.json'), 'utf8')) as { name: string; markdown: string; formulas: { source: string; display: string; }[]; }[];
 	for (const entry of corpus) {

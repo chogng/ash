@@ -7,6 +7,7 @@ use super::directory_grants_protocol::validate_path;
 use super::result;
 use crate::git_service::GitServiceError;
 use crate::server::git_runtime::GitRuntimeError;
+use crate::server::git_runtime::integration_dto;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::git::GitBranchCreateParams;
 use ash_app_server_protocol::protocol::git::GitBranchDeleteParams;
@@ -548,14 +549,14 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     ) -> Result<Value, RpcError> {
         let params: GitCommandParams = decode(value)?;
         let command = command(params.command);
-        let (status, outcome, operation) = self
+        let (status, outcome) = self
             .context
             .git_runtime_service()?
             .command_for(params.repository_id.as_deref(), &command, cancellation)
             .map_err(git_error)?;
         result(&GitCommandResult {
+            operation: status.integration.as_ref().map(|state| state.operation),
             status,
-            operation: operation.map(integration_dto),
             outcome: match outcome {
                 ash_git::GitCommandOutcome::Completed => GitCommandOutcomeDto::Completed,
                 ash_git::GitCommandOutcome::Conflicted => GitCommandOutcomeDto::Conflicted,
@@ -854,6 +855,17 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                 .context
                 .git_runtime_service()?
                 .changes_summary_for(params.repository_id.as_deref())
+                .map_err(git_error)?,
+        )
+    }
+
+    pub(super) fn git_staged_commit_preview(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        result(
+            &self
+                .context
+                .git_runtime_service()?
+                .staged_commit_preview_for(params.repository_id.as_deref())
                 .map_err(git_error)?,
         )
     }
@@ -1529,6 +1541,12 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             }
             None => request,
         };
+        let request = match params.expected_staged_version {
+            Some(version) => request
+                .with_expected_staged_version(version)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+            None => request,
+        };
         let committed = self
             .context
             .git_runtime_service()?
@@ -1695,13 +1713,6 @@ pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
     }
 }
 
-fn integration_dto(operation: ash_git::GitIntegration) -> GitIntegrationDto {
-    match operation {
-        ash_git::GitIntegration::Merge => GitIntegrationDto::Merge,
-        ash_git::GitIntegration::Rebase => GitIntegrationDto::Rebase,
-        ash_git::GitIntegration::CherryPick => GitIntegrationDto::CherryPick,
-    }
-}
 fn integration(operation: GitIntegrationDto) -> ash_git::GitIntegration {
     match operation {
         GitIntegrationDto::Merge => ash_git::GitIntegration::Merge,
@@ -1784,11 +1795,19 @@ fn command(command: GitCommandDto) -> ash_git::GitCommand {
             reference,
             mainline,
         },
-        GitCommandDto::Continue { operation } => ash_git::GitCommand::Continue {
+        GitCommandDto::Continue {
+            operation,
+            expected_version,
+        } => ash_git::GitCommand::Continue {
             operation: integration(operation),
+            expected_version,
         },
-        GitCommandDto::Abort { operation } => ash_git::GitCommand::Abort {
+        GitCommandDto::Abort {
+            operation,
+            expected_version,
+        } => ash_git::GitCommand::Abort {
             operation: integration(operation),
+            expected_version,
         },
         GitCommandDto::Stash { message, mode } => ash_git::GitCommand::Stash {
             message,

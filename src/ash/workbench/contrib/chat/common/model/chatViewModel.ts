@@ -1,3 +1,4 @@
+import type { ChatMarkdownRichContent } from './chatMarkdownRichContent.js';
 import type { FileSearchDirectory } from '../../../../../platform/search/common/fileSearch.js';
 import type { IChatToolInvocation } from '../chatService/chatService.js';
 import type { IChatHookPart, ChatContentPart, LoadedTurnSkill, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
@@ -54,6 +55,9 @@ export interface IChatListItem {
 	readonly historyRedoTarget?: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; };
 	/** Initial accepted request identity; presentation entry IDs are not backend item IDs. */
 	readonly requestSource?: { readonly sessionId: string; readonly threadId: string; readonly turnId: string; readonly itemId: string; };
+	/** Editable text supplied by a conversation model that owns its own submission route. */
+	readonly requestEdit?: { readonly text: string; readonly description: string; };
+	readonly requestHasVersions?: boolean;
 	readonly canForkBeforeRequest?: boolean;
 	readonly canRunAnotherVersion?: boolean;
 	readonly canCompareResults?: boolean;
@@ -64,11 +68,11 @@ export interface IChatListItem {
 	readonly resources?: readonly {
 		readonly uri: string;
 		readonly name: string;
-		readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html';
+		readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html' | 'chart';
 		readonly mimeType?: string;
 		readonly frameOrigin?: string;
 	}[];
-	readonly markdown?: { readonly supportHtml: boolean; };
+	readonly markdown?: { readonly supportHtml: boolean; readonly richContent?: ChatMarkdownRichContent; readonly linkPolicy?: 'external'; };
 	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; readonly kind: 'item' | 'toolResult'; };
 	readonly hookPart?: IChatHookPart;
 	readonly toolInvocation?: IChatToolInvocation;

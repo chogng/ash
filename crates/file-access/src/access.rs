@@ -132,11 +132,15 @@ impl Access {
     }
 
     pub fn permissions(&self, dir: &Dir, source: DirSource) -> Option<&Permissions> {
+        self.grant(dir, source).map(Grant::permissions)
+    }
+
+    /// Returns the active grant, including its lease and path policy, from one exact source.
+    pub fn grant(&self, dir: &Dir, source: DirSource) -> Option<&Grant> {
         self.grants
             .get(&dir.id())
             .and_then(|grants| grants.get(&source))
             .filter(|grant| grant.is_active())
-            .map(Grant::permissions)
     }
 
     /// Decides only the requested directory, independently of unrelated revoked grants.
@@ -184,7 +188,8 @@ impl Access {
             grant.dir().clone(),
             grant.source(),
             permissions,
-        );
+        )
+        .with_path_policy(grant.path_policy().clone());
         grant.revoke();
         *grant = replacement;
         self.revision.advance();

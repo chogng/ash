@@ -3,6 +3,22 @@ import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 export const chatGPTTransportChannel = 'sessions.chatgpt.transport';
+export const chatGPTEntityDetailPath = '/backend-api/sidebar/conversation';
+export const chatGPTPrepareTokenHeader = 'OpenAI-Sentinel-Chat-Requirements-Prepare-Token';
+
+/** ChatGPT web image search returns opaque assets on OpenAI's image CDN. */
+export function readChatGPTGalleryImageUrl(value: unknown): URL | undefined {
+	if (typeof value !== 'string' || value.length > 2048 || /[\s\\]/u.test(value)) return undefined;
+	let url: URL;
+	try { url = new URL(value); } catch { return undefined; }
+	return url.origin === 'https://images.openai.com' && !url.username && !url.password && !url.hash
+		&& /^\/static-rsc-\d+\/[A-Za-z0-9_-]+$/u.test(url.pathname)
+		&& (!url.search || /^\?purpose=[A-Za-z0-9_-]{1,40}$/u.test(url.search)) ? url : undefined;
+}
+
+export function isChatGPTProjectMemoryScope(value: unknown): value is 'global' | 'project_v2' {
+	return value === 'global' || value === 'project_v2';
+}
 
 /** A local sign-in failure, carried by name across IPC without exposing credential contents. */
 export class ChatGPTAuthenticationError extends Error {

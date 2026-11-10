@@ -19,7 +19,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { GitHubCommitResolver, type IGitHubCommitTarget } from './githubCommitResolver.js';
 import { computePullRequestIcon } from '../../../common/chatPullRequest.js';
-import { createCommitResourceHover, createIssueResourceHover, createPullRequestResourceHover, createRepositoryResourceHover, getIssueResourceStatus, getPullRequestChecksStatus, getPullRequestChecksStatusLabel, getPullRequestResourceStatus, GitHubResourcePresentation } from './githubResourceHover.js';
+import { createCommitResourceHover, createIssueResourceHover, createPullRequestResourceHover, createRepositoryResourceHover, getIssueResourceStatus, getPullRequestChecksStatusLabel, getPullRequestResourceStatus, GitHubResourcePresentation } from './githubResourceHover.js';
 import { LazyGitHubResourceResolver, parseGitHubReferenceTarget, type IGitHubReferenceTarget } from './lazyGitHubResourceHover.js';
 
 type LinkTarget =
@@ -135,7 +135,7 @@ export class GitHubLinkPresentationContribution extends Disposable {
 							}
 							const { pullRequest, checks } = state.value;
 							const headHref = pullRequest.headRepository ? `https://github.com/${pullRequest.headRepository}/tree/${encodeURIComponent(pullRequest.headBranch)}` : undefined;
-							const checksStatus = getPullRequestChecksStatus(checks);
+							const checksStatus = checks?.status === 'neutral' ? undefined : checks?.status;
 							const secondaryStatus = checksStatus ? {
 								kind: checksStatus === 'failure' ? 'error' as const : checksStatus,
 								label: getPullRequestChecksStatusLabel(checksStatus),
@@ -148,7 +148,7 @@ export class GitHubLinkPresentationContribution extends Disposable {
 								// Resolve checks on intent and keep the core card usable if checks fail.
 								void resolver.resolvePullRequest(target).catch(error => { if (!watcher.isDisposed) { reportError(error); } });
 								return createPullRequestResourceHover({
-									...common, number: target.number, pullRequest, checksStatus,
+									...common, number: target.number, pullRequest, checks,
 									onDidClickBaseBranch: () => open(`${repositoryHref}/tree/${encodeURIComponent(pullRequest.baseBranch)}`),
 									headBranchLink: headHref ? { href: headHref, onClick: () => open(headHref) } : undefined,
 								});

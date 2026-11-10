@@ -48,17 +48,20 @@ export class BrowserDialogHandler implements IDialogHandler {
 			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
 			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
 			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
-			const destructiveForm = this.presentation?.useFormForDestructiveConfirmations && request.kind === 'confirmation' && request.destructive;
+			const destructiveForm = request.kind === 'confirmation' && request.destructive && this.presentation?.useFormForDestructiveConfirmations;
+			const formConfirmation = request.kind === 'confirmation' && (request.layout === 'form' || destructiveForm);
 			const title = this.presentation?.messageAsTitle ? request.message : request.title ?? defaultTitle(request);
 			const options = createWorkbenchDialogOptions({
 				...this.presentation,
-				...(destructiveForm && {
+				...(formConfirmation && {
 					layout: 'form',
-					extraClasses: [...(this.presentation?.extraClasses ?? []), 'ash-dialog-destructive-confirmation'],
-					buttonOptions: [{ presentation: 'danger' }, { presentation: 'secondary' }],
+					extraClasses: [...(this.presentation?.extraClasses ?? []),
+					destructiveForm ? 'ash-dialog-destructive-confirmation' : 'ash-dialog-form-confirmation'],
 				}),
+				...(destructiveForm && { buttonOptions: [{ presentation: 'danger' }, { presentation: 'secondary' }] }),
+				...(request.kind === 'confirmation' && request.layout === 'form' && { focusCancelButton: true }),
 				cancelId,
-				type: destructiveForm || this.presentation?.messageAsTitle ? 'none' : request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
+				type: formConfirmation || this.presentation?.messageAsTitle ? 'none' : request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
 				detail: request.detail,
 				inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
 				checkboxLabel: request.checkbox?.label,

@@ -569,6 +569,16 @@ impl DirGrants {
     }
 
     pub(crate) fn list(&self, session_id: &SessionId) -> Vec<DirGrantEntry> {
+        self.session_grants(session_id)
+            .into_iter()
+            .map(|grant| DirGrantEntry {
+                dir: grant.dir().clone(),
+                permissions: grant.permissions().clone(),
+            })
+            .collect()
+    }
+
+    pub(crate) fn session_grants(&self, session_id: &SessionId) -> Vec<Grant> {
         let session_trees = self
             .session_trees
             .read()
@@ -581,12 +591,8 @@ impl DirGrants {
             .iter()
             .filter_map(|entry| {
                 access
-                    .permissions(entry.dir(), DirSource::SessionRequest)
+                    .grant(entry.dir(), DirSource::SessionRequest)
                     .cloned()
-                    .map(|permissions| DirGrantEntry {
-                        dir: entry.dir().clone(),
-                        permissions,
-                    })
             })
             .collect()
     }

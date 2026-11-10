@@ -54,7 +54,7 @@ EditorInputSerializers.registerStatic({
 });
 
 export type MultiDiffEditorSource =
-	| { readonly kind: 'snapshot'; readonly label: string; readonly repositoryId?: string; }
+	| { readonly kind: 'snapshot'; readonly label: string; readonly repositoryId?: string; readonly actions?: readonly MultiDiffCommandAction[]; }
 	| { readonly kind: 'external'; readonly providerId: string; readonly label: string; readonly repositoryId?: string; readonly branchName?: string; };
 
 export interface MultiDiffCommandAction {
@@ -87,7 +87,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 	if (!resource || typeof resource.toString !== 'function') throw new TypeError('Multi-diff editor input requires a resource identity');
 	if (!Array.isArray(items)) throw new TypeError('Multi-diff editor input requires comparisons');
 	if (typeof label !== 'string' || label.trim().length === 0) throw new TypeError('Multi-diff editor label must be a non-empty string');
-	if (source !== undefined) requireMultiDiffSource(source);
+	if (source !== undefined) source = requireMultiDiffSource(source);
 	const keys = new Set<string>();
 	const normalizedItems = items.map((item) => {
 		if (!item || typeof item !== 'object' || typeof item.label !== 'string' || item.label.trim().length === 0) {
@@ -120,7 +120,7 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 		label: label.trim(),
 		readOnly: normalizedItems.every(item => item.binary || item.modified.readOnly === true),
 		showBreadcrumbs: false,
-		...(source ? { source: freezeMultiDiffSource(source) } : {}),
+		...(source ? { source } : {}),
 	});
 }
 
@@ -178,7 +178,11 @@ function requireMultiDiffSource(value: unknown): MultiDiffEditorSource {
 	// Persisted inputs from the former built-in provider reopen as captured comparisons.
 	if ((value as { kind: string; }).kind === 'git' && 'scope' in value && typeof value.scope === 'string') return { kind: 'snapshot', label: value.scope };
 	if (source.kind === 'snapshot' && typeof source.label === 'string' && source.label.length > 0 && (source.repositoryId === undefined || typeof source.repositoryId === 'string')) {
-		return freezeMultiDiffSource(source as MultiDiffEditorSource);
+		return Object.freeze({
+			kind: 'snapshot', label: source.label,
+			...(source.repositoryId === undefined ? {} : { repositoryId: source.repositoryId }),
+			...(source.actions === undefined ? {} : { actions: requireActions(source.actions) })
+		});
 	}
 	if (source.kind === 'external' && typeof source.providerId === 'string' && source.providerId.length > 0 && typeof source.label === 'string' && source.label.length > 0 && (source.repositoryId === undefined || typeof source.repositoryId === 'string') && (source.branchName === undefined || typeof source.branchName === 'string')) {
 		return freezeMultiDiffSource(source as MultiDiffEditorSource);

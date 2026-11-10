@@ -26,6 +26,8 @@
 }
 
 .ash-context-view-dialog {
+	/* An anchored dialog can overlap the native window's draggable title bar. */
+	-webkit-app-region: no-drag;
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
 	border: var(--ash-strokeThickness) solid var(--ash-border);

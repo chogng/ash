@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { CountBadge } from '../../browser/ui/countBadge/countBadge.js';
+import { Badge, CountBadge } from '../../browser/ui/countBadge/countBadge.js';
 import { setHoverDelegate, type IManagedHover } from '../../browser/ui/hover/hoverDelegate.js';
 
 suite('CountBadge', () => {
@@ -51,6 +51,21 @@ suite('CountBadge', () => {
 			using formatted = new CountBadge(browser.window.document.body, { count: 12, countFormat: '({0})' });
 			const roots = browser.window.document.body.querySelectorAll<HTMLElement>('.ash-count-badge');
 			assert.deepEqual({ plain: roots[0]!.textContent, formatted: roots[1]!.textContent, tabIndex: roots[0]!.tabIndex }, { plain: '0', formatted: '(12)', tabIndex: -1 });
+		} finally {
+			browser.window.close();
+		}
+	});
+
+	test('renders a literal outlined label on the same badge base without adding a focus target', () => {
+		const browser = new JSDOM('<!doctype html><body></body>');
+		try {
+			const host = browser.window.document.body;
+			using badge = new Badge(host, 'PDF{0}', { presentation: 'outlined' });
+			const root = host.querySelector<HTMLElement>('.ash-badge.outlined')!;
+			assert.equal(root.textContent, 'PDF{0}');
+			assert.equal(root.tabIndex, -1);
+			badge.dispose();
+			assert.equal(host.childElementCount, 0);
 		} finally {
 			browser.window.close();
 		}

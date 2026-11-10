@@ -69,6 +69,25 @@ test('managed hovers respect the open menu boundary and share its lifetime', () 
 	assert.equal(container.querySelector('[role="tooltip"]')?.textContent, 'Outside hint');
 });
 
+test('a managed hover inside an anchored dialog leaves the dialog open', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const anchor = requiredElement<HTMLButtonElement>('#second');
+	const dialog = h(document, 'div');
+	const button = h(document, 'button');
+	dialog.append(button);
+	using configuration = new InMemoryConfigurationService();
+	using views = new BrowserContextViewService(container);
+	using menus = new TestContextMenuService();
+	using service = new HoverService(configuration, views, menus);
+	assert.ok(views.show({ anchor, content: dialog, presentation: 'dialog' }));
+
+	using hover = service.showHover({ target: button, content: 'Dialog action' });
+	assert.equal(dialog.parentElement?.querySelector('[role="tooltip"]')?.textContent, 'Dialog action');
+	views.hide();
+	assert.equal(container.querySelector('[role="tooltip"]'), null);
+	assert.equal(button.hasAttribute('aria-describedby'), false);
+});
+
 for (const reducedDelay of [false, true]) {
 	test(`HoverService waits for the ${reducedDelay ? 'reduced' : 'platform'} default delay and cancels brief visits`, () => {
 		mock.timers.enable({ apis: ['setTimeout'] });

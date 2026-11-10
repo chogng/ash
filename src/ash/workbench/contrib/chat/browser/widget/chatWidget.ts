@@ -1,4 +1,5 @@
 import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
+import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import type { ChatResponseActions } from './chatListRenderer.js';
 import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -88,9 +89,10 @@ export interface IChatWidgetModel extends IDisposable {
 		stop(): Promise<void>;
 	};
 	readResponseResource?(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob>;
-	/** The model can supply link handling for rows that belong to a different conversation backend. */
-	getResponseLinkOpener?(item: IChatListItem): ((target: string) => Promise<void>) | undefined;
+	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	getResponseActions?(item: IChatListItem): ChatResponseActions | undefined;
+	submitRequestEdit?(item: IChatListItem, text: string, commandId: string): Promise<void>;
+	getRequestVersions?(item: IChatListItem): Promise<readonly import('../chat.js').ChatRequestVersion[]>;
 	readonly historyStatus?: IChatSessionHistoryStatus;
 	readonly olderHistory?: { readonly loading: boolean; readonly error?: string; };
 	loadOlderHistory?(): Promise<void>;
@@ -262,11 +264,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
 			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
 			canEditRequest: () => !this.isTranscriptProgressActive,
+			submitRequestEdit: model.submitRequestEdit?.bind(model),
+			getRequestVersions: model.getRequestVersions?.bind(model),
 			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
 			messagePresentation: this.viewOptions?.messagePresentation,
+			codeBlockPresentation: this.viewOptions?.codeBlockPresentation,
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
+			virtualizeHistoryFrom: this.viewOptions?.virtualizeHistoryFrom,
 			readResponseResource: model.readResponseResource?.bind(model),
-			getResponseLinkOpener: model.getResponseLinkOpener?.bind(model),
+			inspectResponseEntity: model.inspectResponseEntity,
 			getResponseActions: model.getResponseActions?.bind(model),
 			openTurnChanges,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
@@ -374,7 +380,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
-		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm);
+		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible);
 		this._register(widgets.register(this));
 		if (model.prepareConversation || model.sessionId) this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
@@ -402,7 +408,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			const state = previous.getViewState();
 			previous.element.replaceWith(widget.element);
 			this.listWidget = widget;
-			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm);
+			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible);
 			widget.restoreViewState(state, this.model.items, this.responseWorking);
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
@@ -755,6 +761,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const showWelcome = this.viewOptions?.showWelcome !== false && !hasConversation && !input.aiDisabled
 			&& (welcomeTitle === undefined ? this.model.untitledSessionId !== undefined && !input.inputBlocked : !!welcomeTitle)
 			&& (!this.voiceWidget || !this.voiceSessionController?.isActive);
+		// Let the host style the welcome state without watching transcript DOM mutations.
+		this.element.classList.toggle('ash-chat-show-welcome', showWelcome);
 		this.welcome.render(showWelcome ? {
 			title: welcomeTitle ?? (input.mode === 'ask'
 				? localize('chat.welcome.ask', 'Ask about your code')

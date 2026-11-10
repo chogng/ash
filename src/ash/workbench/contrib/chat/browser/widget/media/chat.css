@@ -103,16 +103,15 @@
 	padding: var(--ash-spacing-size40) var(--ash-chat-content-inset);
 }
 
-.ash-chat:has(> .ash-chat-transcript-overlaps-composer) > .ash-chat-input-part {
+.ash-chat > .ash-chat-transcript-overlaps-composer ~ .ash-chat-input-part {
 	position: relative;
 	z-index: 1;
 }
 
 /* Keep the floating labels legible where the transcript extends behind them. */
-.ash-chat:has(
-		> .ash-chat-transcript-overlaps-composer.ash-chat-transcript-has-more-below
-	)
-	> .ash-chat-input-part
+.ash-chat
+	> .ash-chat-transcript-overlaps-composer.ash-chat-transcript-has-more-below
+	~ .ash-chat-input-part
 	> :is(.ash-chat-status, .ash-chat-input-changes) {
 	box-sizing: border-box;
 	inline-size: fit-content;
@@ -336,6 +335,52 @@
 	min-width: 0;
 	min-height: 0;
 	flex: 1 1 auto;
+}
+
+.ash-chat-staged-files:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-chat-staged-file {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	max-width: 100%;
+}
+
+.ash-chat-staged-file-error {
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-staged-file > .ash-chat-staged-file-retry[hidden] {
+	display: none;
+}
+
+.ash-chat-staged-file.preview-loading > .ash-chat-image-attachment-thumbnail {
+	display: none;
+}
+
+.ash-chat-staged-file.image {
+	flex-direction: column;
+	align-items: flex-start;
+}
+
+.ash-chat-staged-file.image.ready > .ash-chat-staged-file-status {
+	display: none;
+}
+
+.ash-chat-staged-file:is(.preview-loading, .image.pending)
+	> .ash-chat-staged-file-status {
+	position: absolute;
+	inline-size: 1px;
+	block-size: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .ash-chat-input-footer {

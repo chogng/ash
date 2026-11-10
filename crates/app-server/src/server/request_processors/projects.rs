@@ -16,7 +16,6 @@ use ash_app_server_protocol::protocol::projects::ProjectLifecycleParams;
 use ash_app_server_protocol::protocol::projects::ProjectListParams;
 use ash_app_server_protocol::protocol::projects::ProjectListResult;
 use ash_app_server_protocol::protocol::projects::ProjectMaterialDto;
-use ash_app_server_protocol::protocol::projects::ProjectMaterialKindDto;
 use ash_app_server_protocol::protocol::projects::ProjectMutationResult;
 use ash_app_server_protocol::protocol::projects::ProjectReadParams;
 use ash_app_server_protocol::protocol::projects::ProjectReadResult;
@@ -32,10 +31,10 @@ use ash_projects::ProjectCommandResult;
 use ash_projects::ProjectCoordinator;
 use ash_projects::ProjectError;
 use ash_projects::ProjectMaterial;
-use ash_projects::ProjectMaterialKind;
 use ash_projects::ProjectRoot;
 use ash_projects::ProjectScope;
 use serde_json::Value;
+use std::path::PathBuf;
 
 /// Borrows only the projects domain services for one request.
 /// Composition retains their lifetimes; this adapter cannot access other server state.
@@ -447,17 +446,29 @@ fn project_error(error: ProjectError) -> RpcError {
 }
 
 fn material_from_dto(material: ProjectMaterialDto) -> Result<ProjectMaterial, RpcError> {
-    Ok(ProjectMaterial {
-        path: material
-            .path
+    let host_path = |path: ash_utils_path_uri::PathUri| -> Result<PathBuf, RpcError> {
+        Ok(path
             .to_host_path()
             .map_err(|_| invalid_project_reference())?
             .as_path()
-            .to_path_buf(),
-        name: material.name,
-        kind: match material.kind {
-            ProjectMaterialKindDto::File => ProjectMaterialKind::File,
-            ProjectMaterialKindDto::Folder => ProjectMaterialKind::Folder,
+            .to_path_buf())
+    };
+    Ok(match material {
+        ProjectMaterialDto::File {
+            path,
+            name,
+            size_bytes,
+        } => ProjectMaterial::File {
+            path: host_path(path)?,
+            name,
+            size_bytes,
         },
+        ProjectMaterialDto::Folder { path, name } => ProjectMaterial::Folder {
+            path: host_path(path)?,
+            name,
+        },
+        ProjectMaterialDto::Text { id, name, content } => {
+            ProjectMaterial::Text { id, name, content }
+        }
     })
 }

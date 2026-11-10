@@ -246,7 +246,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 				}
 				const openMore = () => toolbar.getByRole('button', { name: 'More Actions', exact: true }).click();
 				expect((await window.menus.inspect(application, openMore)).map(item => item.label)).toEqual([
-					'Fork from this reply', 'Good response', 'Bad response', 'Give model feedback',
+					'Fork', 'Good response', 'Bad response', 'Give model feedback',
 				]);
 				await window.menus.select(application, openMore, ['Good response']);
 				expect((await window.menus.inspect(application, openMore)).find(item => item.label === 'Good response')).toMatchObject({ checked: true });
@@ -254,7 +254,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 				const voted = await window.menus.inspect(application, openMore);
 				expect(voted.find(item => item.label === 'Good response')).toMatchObject({ checked: false });
 				expect(voted.find(item => item.label === 'Bad response')).toMatchObject({ checked: true });
-				await window.menus.select(application, openMore, ['Fork from this reply']);
+				await window.menus.select(application, openMore, ['Fork']);
 				await expect(chat).not.toHaveAttribute('data-thread-id', root);
 				await expect(chat).toHaveAttribute('data-thread-id', /.+/u);
 				await expect(chat).toHaveAttribute('data-session-id', sessionId);

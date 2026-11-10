@@ -3,8 +3,10 @@ import { DetachedTerminalSnapshotMirror } from '../../../terminal/browser/chatTe
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import './chatAttachmentWidgets.css';
-import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
+import { h, addDisposableListener, getWindow } from '../../../../../base/browser/dom.js';
+import { createObjectUrl } from '../../../../../base/browser/fileAccess.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
@@ -31,8 +33,8 @@ import { isDarkColorScheme } from '../../../../../platform/theme/common/theme.js
 import { renderMarkdown } from '../../../../../base/browser/markdownRenderer.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { cancelOnDispose, type CancellationToken } from '../../../../../base/common/cancellation.js';
-import { SCMHistoryItemUri } from '../../../scm/common/history.js';
 import type { Icon } from '../../../../../base/common/icon.js';
+import { SCMHistoryItemUri } from '../../../scm/common/history.js';
 import type { IChatAttachmentWidgetInstance } from './chatAttachmentWidgetRegistry.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
@@ -46,6 +48,8 @@ import { isRemoteResource } from '../../../../../platform/remote/common/remote.j
 import { basename, dirname } from '../../../../../base/common/resources.js';
 import { extname } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { ImagePreviewPopup, type IImagePreviewAnnotationTarget } from '../../../mediaPreview/browser/imagePreviewPopup.js';
+import { decodeBase64 } from '../../../../../base/common/buffer.js';
 
 /** Generic sources keep their original navigation; source-less contexts expose their saved-content intent. */
 export class DefaultChatAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
@@ -520,97 +524,203 @@ function isAttachmentResource(resource: URI | undefined): resource is URI {
 	return !!resource && (resource.scheme === Schemas.file || isRemoteResource(resource) || resource.scheme === Schemas.untitled || resource.scheme === Schemas.vscodeUserData);
 }
 
-/** Displays the image already prepared by the attachment owner; no source resource is reread. */
+interface ImageAttachment {
+	readonly id: string;
+	readonly name: string;
+	readonly resource?: URI;
+	resolve(): Promise<{ readonly content: Blob | string | undefined; }>;
+}
+
+export type IChatImageAnnotationTarget = IImagePreviewAnnotationTarget;
+
+/** Displays the image supplied by the attachment owner in either input presentation. */
 export class ImageAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
 	readonly element: HTMLElement;
+	private readonly previewResolved = this._register(new Emitter<boolean>());
+	readonly onDidResolvePreview = this.previewResolved.event;
 	private readonly deleted = this._register(new Emitter<globalThis.Event>());
 	readonly onDidDelete = this.deleted.event;
 	private readonly opened = this._register(new Emitter<void>());
 	readonly onDidOpen = this.opened.event;
 	private readonly preview = this._register(new MutableDisposable<DisposableStore>());
+	private readonly thumbnailRemove?: Button;
 
 	constructor(
-		attachment: ChatContextAttachment,
-		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; },
+		attachment: ImageAttachment,
+		options: {
+			shouldFocusClearButton: boolean;
+			supportsDeletion: boolean;
+			imagePresentation?: 'inline' | 'thumbnail';
+			allowProviderImageUrls?: boolean;
+			retryOnFailure?: boolean;
+			imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined;
+		},
 		container: HTMLElement,
-		@IContextViewService contextViews: IContextViewService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		const document = container.ownerDocument;
+		const tile = options.imagePresentation === 'thumbnail';
 		const element = this.element = h(document, 'div');
-		element.className = 'ash-chat-attachment-chip ash-chat-image-reference-control';
-		element.setAttribute('role', 'group');
-		element.setAttribute('aria-label', attachment.name);
+		element.className = tile ? 'ash-chat-image-attachment-thumbnail' : 'ash-chat-attachment-chip ash-chat-image-reference-control';
+		const previewLabel = localize('chat.context.previewImage', 'Preview {0}', attachment.name);
+		const loadingLabel = localize('chat.context.imageLoading', 'Loading preview: {0}', attachment.name);
+		const fallback = tile ? h(document, 'span', { className: 'ash-chat-image-attachment-name' }, attachment.name) : undefined;
+		if (fallback) element.append(fallback);
+		else {
+			element.setAttribute('role', 'group');
+			element.setAttribute('aria-label', attachment.name);
+			element.setAttribute('aria-busy', 'true');
+		}
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
 		const source = this._register(new Button(element, {
 			...defaultButtonStyles,
-			label: attachment.name,
-			ariaLabel: localize('chat.context.previewImage', 'Preview {0}', attachment.name),
-			title: localize('chat.context.imageLoading', 'Loading preview: {0}', attachment.name),
-			icon: Lxicon.image,
+			label: tile ? '' : attachment.name,
+			ariaLabel: previewLabel,
+			title: loadingLabel,
+			icon: tile ? undefined : Lxicon.image,
 			enabled: false, size: 'small', presentation: 'quiet',
 		}));
-		source.domNode.classList.add('ash-chat-attachment-source');
+		source.domNode.classList.add(tile ? 'ash-chat-image-attachment-source' : 'ash-chat-attachment-source');
+		source.domNode.hidden = tile;
 		if (isAttachmentResource(attachment.resource)) {
 			this._register(instantiation.createInstance(AttachmentResourceActions,
 				element, source.domNode, attachment.resource, false, MenuId.ChatInputResourceAttachmentContext));
 		}
 		const thumbnail = h(document, 'img');
 		thumbnail.draggable = false;
-		thumbnail.alt = attachment.name;
+		thumbnail.alt = tile ? '' : attachment.name;
 		thumbnail.hidden = true;
 		source.domNode.prepend(thumbnail);
-		element.setAttribute('aria-busy', 'true');
 		const loading = this._register(new DisposableStore());
+		const objectUrl = this._register(new MutableDisposable());
 		this._register(toDisposable(() => thumbnail.removeAttribute('src')));
-		const open = () => {
-			if (this.isDisposed || !source.enabled) return;
+		let imageContent: Blob | string | undefined;
+		let isLoading = false;
+		const activate = () => {
+			if (this.isDisposed || !source.enabled || isLoading) return;
+			if (!imageContent) {
+				void load();
+				return;
+			}
+			const image = typeof imageContent === 'string'
+				? imageContent.startsWith('data:') ? imageDataUrlToBlob(imageContent) : undefined
+				: imageContent;
 			const resources = new DisposableStore();
 			this.preview.value = resources;
-			const frame = createAttachmentPreview(attachment, source.domNode, contextViews, resources, {
-				className: 'ash-chat-image-reference-preview',
-				label: localize('chat.context.previewImage', 'Preview {0}', attachment.name),
-				closeLabel: localize('chat.context.closeImagePreview', 'Close image preview'),
-			}, () => { if (this.preview.value === resources) this.preview.clear(); });
-			const image = h(document, 'img');
-			image.alt = attachment.name;
-			image.src = thumbnail.src;
-			frame.content.append(image);
-			if (frame.show()) this.opened.fire();
+			source.domNode.focus({ preventScroll: true });
+			const preview = instantiation.createInstance(ImagePreviewPopup,
+				{ name: attachment.name, blob: image, url: thumbnail.src }, source.domNode, resources, options.imageAnnotationTarget?.(),
+				() => { if (this.preview.value === resources) this.preview.clear(); });
+			if (preview.show()) this.opened.fire();
 			else this.preview.clear();
 		};
-		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, open, event => this.deleted.fire(event)));
+		if (tile && options.supportsDeletion) {
+			const label = localize('chat.input.removeFile', 'Remove {0}', attachment.name);
+			this.thumbnailRemove = new Button(element, {
+				...defaultButtonStyles, label, title: label,
+				icon: Lxicon.close, iconOnly: true, size: 'small', presentation: 'secondary',
+			});
+		}
+		const finishLoading = () => {
+			loading.clear();
+			isLoading = false;
+			source.domNode.removeAttribute('aria-disabled');
+		};
 		const unavailable = () => {
 			if (this.isDisposed) return;
-			loading.clear();
+			const announce = source.enabled && source.hasFocus();
+			finishLoading();
+			imageContent = undefined;
 			thumbnail.removeAttribute('src');
+			objectUrl.clear();
 			const message = localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name);
-			element.setAttribute('aria-busy', 'false');
-			element.setAttribute('aria-label', message);
-			source.domNode.setAttribute('aria-label', message);
-			source.setTitle(message);
-			source.icon = Lxicon.warning;
+			if (fallback && options.retryOnFailure) {
+				fallback.textContent = message;
+				const retryLabel = localize('chat.context.retryImagePreviewLabel', 'Retry preview for {0}', attachment.name);
+				source.label = localize('chat.context.retryImagePreview', 'Retry');
+				source.domNode.setAttribute('aria-label', retryLabel);
+				source.setTitle(message);
+				source.domNode.hidden = false;
+				source.enabled = true;
+				if (announce) status(message);
+			} else if (!tile) {
+				element.setAttribute('aria-busy', 'false');
+				element.setAttribute('aria-label', message);
+				source.domNode.setAttribute('aria-label', message);
+				source.setTitle(message);
+				source.icon = Lxicon.warning;
+			}
+			this.previewResolved.fire(false);
 		};
-		loading.add(addDisposableListener(thumbnail, 'error', unavailable));
-		loading.add(addDisposableListener(thumbnail, 'load', () => {
-			if (!thumbnail.naturalWidth) { unavailable(); return; }
-			loading.clear();
-			element.setAttribute('aria-busy', 'false');
+		const loaded = () => {
+			if (!thumbnail.naturalWidth) {
+				unavailable();
+				return;
+			}
+			const announce = source.enabled && source.hasFocus();
+			finishLoading();
+			if (fallback) {
+				fallback.hidden = true;
+				element.classList.add('loaded');
+				source.label = '';
+				source.domNode.setAttribute('aria-label', previewLabel);
+			} else {
+				element.setAttribute('aria-busy', 'false');
+			}
 			source.setTitle(attachment.name);
 			source.icon = undefined;
 			thumbnail.hidden = false;
+			source.domNode.hidden = false;
 			source.enabled = true;
-		}));
-		void attachment.resolve().then(context => {
-			if (this.isDisposed) return;
-			if (!/^data:image\/(png|jpeg|gif|webp);base64,/u.test(context.content)) { unavailable(); return; }
-			// Captured bytes can outlive their original source. A data URL alone does not
-			// establish that the browser can display them; native loading gates preview.
-			thumbnail.src = context.content;
-		}, unavailable);
+			if (announce) status(localize('chat.context.imagePreviewLoaded', 'Preview loaded: {0}', attachment.name));
+			this.previewResolved.fire(true);
+		};
+		const load = async () => {
+			isLoading = true;
+			if (source.enabled) {
+				// Keep the focused retry button in the tab order until it becomes the preview button.
+				source.domNode.setAttribute('aria-disabled', 'true');
+				const retrying = localize('chat.context.retryingImagePreview', 'Retrying…');
+				source.label = retrying;
+				source.domNode.setAttribute('aria-label', retrying);
+				source.setTitle(loadingLabel);
+			}
+			try {
+				const { content } = await attachment.resolve();
+				if (this.isDisposed) return;
+				if (!content || typeof content === 'string'
+					&& !/^data:image\/(png|jpeg|gif|webp);base64,/u.test(content)
+					&& !(options.allowProviderImageUrls && /^(?:https?:\/\/|data:image\/svg\+xml;base64,)/iu.test(content))) {
+					unavailable();
+					return;
+				}
+				imageContent = content;
+				// Resolving bytes or a URL does not establish that the browser can display the image.
+				loading.add(addDisposableListener(thumbnail, 'error', unavailable));
+				loading.add(addDisposableListener(thumbnail, 'load', loaded));
+				if (typeof content === 'string') {
+					thumbnail.src = content;
+				} else {
+					const { url, registration } = createObjectUrl(getWindow(element), content);
+					objectUrl.value = registration;
+					thumbnail.src = url.href;
+				}
+			} catch {
+				unavailable();
+			}
+		};
+		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, activate, event => this.deleted.fire(event), this.thumbnailRemove));
+		void load();
 	}
+
+	setThumbnailState(pending: boolean, readOnly: boolean): void {
+		this.element.classList.toggle('pending', pending);
+		if (this.thumbnailRemove) this.thumbnailRemove.enabled = !readOnly;
+	}
+
+	closePreview(): void { this.preview.clear(); }
 }
 
 /** Owns frozen terminal rendering and the optional action back to its original terminal. */
@@ -757,20 +867,21 @@ function wireAttachmentActions(
 	options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; },
 	open: () => void,
 	remove: (event: globalThis.Event) => void,
+	removeButton?: Button,
 ): DisposableStore {
 	const resources = new DisposableStore();
 	resources.add(addDisposableListener(source, 'click', open));
 	resources.add(addDisposableListener(element, 'click', event => { if (event.target === element) open(); }));
 	resources.add(addDisposableListener(element, 'keydown', event => {
 		if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
-		if (options.supportsDeletion && (event.key === 'Delete' || event.key === 'Backspace')) {
+		if (options.supportsDeletion && removeButton?.enabled !== false && (event.key === 'Delete' || event.key === 'Backspace')) {
 			event.preventDefault();
 			event.stopPropagation();
 			remove(event);
 		}
 	}));
 	if (options.supportsDeletion) {
-		const button = resources.add(new Button(element, {
+		const button = resources.add(removeButton ?? new Button(element, {
 			...defaultButtonStyles,
 			label: localize('chat.attach.remove', 'Remove {0}', name),
 			icon: Lxicon.close, iconOnly: true, size: 'small', presentation: 'quiet',
@@ -778,7 +889,7 @@ function wireAttachmentActions(
 		button.domNode.classList.add('ash-chat-attachment-remove');
 		resources.add(button.onDidClick(remove));
 		resources.add(addDisposableListener(element, 'auxclick', event => {
-			if (event.button !== 1) return;
+			if (event.button !== 1 || !button.enabled) return;
 			event.preventDefault();
 			event.stopPropagation();
 			remove(event);
@@ -788,9 +899,14 @@ function wireAttachmentActions(
 	return resources;
 }
 
+function imageDataUrlToBlob(source: string): Blob {
+	const dataStart = source.indexOf(',') + 1;
+	return new Blob([new Uint8Array(decodeBase64(source.slice(dataStart)).buffer)], { type: source.slice(5, source.indexOf(';')) });
+}
+
 /** Dialog chrome is shared; each widget owns its content, pending work and visible lifetime. */
 function createAttachmentPreview(
-	attachment: ChatContextAttachment,
+	attachment: Pick<ChatContextAttachment, 'id' | 'name'>,
 	anchor: HTMLElement,
 	contextViews: IContextViewService,
 	resources: DisposableStore,

@@ -1,4 +1,5 @@
 import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
+import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import type { ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel, type PromptTurnChanges } from '../promptTimeline/promptTimelineModel.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
@@ -10,13 +11,13 @@ import { cloneVisibleSelection, sanitizeChatClipboardFragment } from './chatClip
 import { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { ChatWorkingLogo } from './chatWorkingLogo.js';
 import { ILoggerService } from '../../../../../platform/log/common/log.js';
-import { autorun } from '../../../../../base/common/observable.js';
+import { autorun, type IObservable } from '../../../../../base/common/observable.js';
 import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
 import { findLast, findLastIdx } from '../../../../../base/common/arraysFind.js';
 import { PromptTimelineStickyHeader } from '../promptTimeline/promptTimelineStickyHeader.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
-import { observeIntersection, observeResize } from '../../../../../base/browser/observer.js';
+import { observeIntersection, observeMutations, observeResize } from '../../../../../base/browser/observer.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -44,15 +45,22 @@ import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatResponseAccessibleView } from '../accessibility/chatResponseAccessibleView.js';
 import { ChatFindWidget, computeRevealScrollTop, type IChatFindHost } from './chatFind/chatFindWidget.js';
+import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { ChatVirtualRows } from './chatVirtualRows.js';
+import type { ChatToolDisclosureState } from './chatContentParts/toolInvocationParts/chatToolProgressPart.js';
 
 interface ChatListWidgetOptions {
 	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
+	readonly codeBlockPresentation?: 'card';
 	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
 	readonly canEditRequest?: () => boolean;
+	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;
+	readonly getRequestVersions?: (item: IChatListItem) => Promise<readonly import('../chat.js').ChatRequestVersion[]>;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly showPromptTimeline?: boolean;
+	readonly virtualizeHistoryFrom?: IObservable<number | undefined>;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
-	readonly getResponseLinkOpener?: (item: IChatListItem) => ((target: string) => Promise<void>) | undefined;
+	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly onDidChangeFindVisibility?: (visible: boolean) => void;
@@ -71,6 +79,7 @@ interface ChatListWidgetOptions {
 const textInputSelector = 'textarea, [role="textbox"], [contenteditable="true"]';
 const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
 const viewportMargin = 600;
+const virtualOverscan = 1000;
 
 interface ReadingAnchor {
 	readonly id: string;
@@ -91,7 +100,7 @@ interface ChatListViewState {
 	readonly anchor: ReadingAnchor | undefined;
 	readonly advisorExpansion: readonly [string, boolean][];
 	readonly contextExpansion?: readonly [string, boolean][];
-	readonly toolExpansion?: readonly [string, boolean][];
+	readonly toolExpansion?: readonly [string, ChatToolDisclosureState][];
 	readonly thinkingExpansion?: readonly [string, boolean][];
 	readonly focus: { readonly itemId: string; readonly index: number; readonly textInput?: boolean; } | undefined;
 }
@@ -112,7 +121,7 @@ export class ChatListWidget extends DomWidget {
 	private workingStatus: { readonly element: HTMLElement; readonly label: HTMLElement; readonly logo: ChatWorkingLogo; readonly sticky: HTMLElement; } | undefined;
 	private workingOutsideViewport = false;
 	private readonly stickyPrompt: PromptTimelineStickyHeader;
-	private promptModel = new PromptTimelineModel<IChatListItem>([], id => this.renderedItems.get(id)!.element);
+	private promptModel = new PromptTimelineModel<IChatListItem>([], id => this.promptTop(id));
 	private readonly promptTimeline: PromptTimelineWidgetContrib | undefined;
 	private pinnedPrompt: { readonly item: IChatListItem; readonly index: number; readonly total: number; } | undefined;
 	private readonly layoutTrace: ChatLayoutTrace;
@@ -124,10 +133,11 @@ export class ChatListWidget extends DomWidget {
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private readonly contextExpansion = new Map<string, boolean>();
 	private readonly thinkingExpansion = new Map<string, boolean>();
+	private readonly toolExpansion = new Map<string, ChatToolDisclosureState>();
 	private visible = true;
 	private shouldFollow = true;
 	private pausedReplyScrollTop: number | undefined;
-	private activeRequestEdit: ((restoreFocus: boolean) => boolean) | undefined;
+	private activeRequestEdit: { readonly id: string; readonly close: (restoreFocus: boolean) => boolean; } | undefined;
 	private readonly refreshAfterRequestEdit = this._register(new RunOnceScheduler(() => this.render(this.items, this.working), 0));
 	private readingPosition: ReadingAnchor | undefined;
 	private layingOut = false;
@@ -137,11 +147,19 @@ export class ChatListWidget extends DomWidget {
 	private readonly viewportObserver: IntersectionObserver | undefined;
 	private readonly pendingViewportMeasurements = new Set<string>();
 	private readonly refreshViewport = this._register(new RunOnceScheduler(() => this.refreshRowViewports(), 0));
+	private virtualRows: ChatVirtualRows | undefined;
+	private virtualPadding = 0;
+	private virtualWindow: { readonly start: number; readonly end: number; } | undefined;
+	private virtualPins: readonly number[] = [];
+	private readonly virtualGaps = new Map<number, { readonly end: number; readonly element: HTMLDivElement; }>();
+	private readonly rowResizeObserver: ResizeObserver | undefined;
+	private selectionStart: string | undefined;
+	private readonly refreshSelection = this._register(new RunOnceScheduler(() => this.refreshVirtualWindow(), 0));
 
 	public get element(): HTMLElement { return this.domNode; }
 
 	/** Places the list-owned control in the composer action row when the host supplies one. */
-	public setScrollToLatestHost(host: HTMLElement | undefined, composerForm: HTMLElement | undefined): void {
+	public setScrollToLatestHost(host: HTMLElement | undefined, composerForm: HTMLElement | undefined, changesSummaryVisible?: IObservable<boolean>): void {
 		this.scrollToLatestHostObserver.clear();
 		const overlapProperty = '--ash-chat-transcript-composer-overlap';
 		const updateOverlap = () => {
@@ -157,8 +175,14 @@ export class ChatListWidget extends DomWidget {
 			const overlap = Math.max(0, Math.round(composer.top - this.element.getBoundingClientRect().bottom - appliedMargin));
 			const value = `${overlap}px`;
 			if (this.element.style.getPropertyValue(overlapProperty) !== value) {
+				const { top, maximumTop } = this.scrollable.state;
 				this.element.style.setProperty(overlapProperty, value);
 				this.element.classList.toggle('ash-chat-transcript-overlaps-composer', overlap > 0);
+				// Hiding the jump button can change the maximum offset before the next
+				// resize notification. Preserve the bottom even after a manual jump.
+				if (this.visible && !this.layingOut && this.items.length && (this.shouldFollow || maximumTop - top <= 1)) {
+					this.layout(undefined, false, true);
+				}
 			}
 		};
 		const target = host ?? this.element;
@@ -175,11 +199,19 @@ export class ChatListWidget extends DomWidget {
 			const targets = [this.element, host, composerForm];
 			if (host.parentElement) targets.push(host.parentElement);
 			const resize = observeResize(targets, () => layout.schedule());
+			// The jump button can hide its entire composer row on the last scroll event.
+			// Correct the overlap before paint so the rail never extends into the input.
+			const visibility = observeMutations(button, updateOverlap, { attributeFilter: ['hidden'] });
+			const reserveSummarySpace = changesSummaryVisible && autorun(reader => {
+				this.element.classList.toggle('ash-chat-transcript-has-changes-summary', changesSummaryVisible.read(reader));
+			});
 			this.scrollToLatestHostObserver.value = toDisposable(() => {
 				resize.dispose();
+				visibility.dispose();
+				reserveSummarySpace?.dispose();
 				layout.dispose();
 				this.element.style.removeProperty(overlapProperty);
-				this.element.classList.remove('ash-chat-transcript-overlaps-composer');
+				this.element.classList.remove('ash-chat-transcript-overlaps-composer', 'ash-chat-transcript-has-changes-summary');
 			});
 		}
 	}
@@ -205,9 +237,9 @@ export class ChatListWidget extends DomWidget {
 		const focused = this.getFocus();
 		const item = focused && focused.type !== 'userMessage' ? focused : [...this.items].reverse().find(item => item.type === 'agentMessage');
 		if (!item) { return; }
-		this.renderedItems.get(item.id)?.thinkingPart?.expandContent();
 		this.reveal(item);
 		const row = this.renderedItems.get(item.id);
+		row?.thinkingPart?.expandContent();
 		const part: IChatContentPart | undefined = row?.toolPart ?? row?.markdownPart;
 		const blocks = part?.codeblocks ?? [];
 		if (!blocks.length) { return; }
@@ -218,7 +250,7 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	public getFocus(): IChatListItem | undefined {
-		return this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId)?.item : undefined;
+		return this.lastFocusedItemId ? this.itemById(this.lastFocusedItemId) : undefined;
 	}
 
 	public getFileTreeInfosForResponse(item: IChatListItem) { return this.renderedItems.get(item.id)?.getFileTreeInfos() ?? []; }
@@ -231,19 +263,19 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	public focus(item: IChatListItem): void {
-		if (this.visible) { this.renderedItems.get(item.id)?.element.focus({ preventScroll: true }); }
+		if (this.visible) { this.ensureRow(item.id)?.element.focus({ preventScroll: true }); }
 	}
 
 	public reveal(item: IChatListItem): void { this.revealItem(item.id); }
 
 	public startEditing(requestId: string): void {
-		this.renderedItems.get(requestId)?.startEditing();
+		if (this.visible) this.ensureRow(requestId)?.startEditing();
 	}
 
 	get isEditingRequest(): boolean { return this.activeRequestEdit !== undefined; }
 
 	public cancelEditing(): boolean {
-		return this.activeRequestEdit?.(true) ?? false;
+		return this.activeRequestEdit?.close(true) ?? false;
 	}
 
 	public focusResponseItem(lastFocused = false): void {
@@ -272,6 +304,7 @@ export class ChatListWidget extends DomWidget {
 		@IChatLayoutService chatLayoutService: IChatLayoutService,
 		@ILoggerService loggerService: ILoggerService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
 	) {
 		super();
 		this.layoutTrace = this.layoutTraceStore.add(new ChatLayoutTrace(() => performance.now(), loggerService.createLogger('chat.layout')));
@@ -285,6 +318,7 @@ export class ChatListWidget extends DomWidget {
 		this._register(this.scrollable.onDidScroll(event => {
 			if (this.layingOut || !this.visible) return;
 			this.updateReplyFollowing(event.current.top, event.current.maximumTop);
+			if (this.refreshVirtualWindow()) return;
 			this.updateStickyPrompt();
 			this.updateScrollToLatestVisibility();
 		}));
@@ -299,6 +333,30 @@ export class ChatListWidget extends DomWidget {
 		this.transcript.setAttribute('aria-label', this.accessibilityProvider.getWidgetAriaLabel());
 		this.transcript.setAttribute('aria-live', 'polite');
 		this.transcript.setAttribute('aria-busy', 'false');
+		const virtualizeHistoryFrom = options.virtualizeHistoryFrom;
+		if (virtualizeHistoryFrom) {
+			const Resize = this.transcript.ownerDocument.defaultView?.ResizeObserver;
+			if (Resize) {
+				this.rowResizeObserver = new Resize(() => { if (this.visible) this.relayout.schedule(); });
+				this._register(toDisposable(() => this.rowResizeObserver?.disconnect()));
+			}
+			this._register(accessibilityService.onDidChangeScreenReaderOptimized(() => {
+				if (this.virtualRows || this.items.length >= (virtualizeHistoryFrom.get() ?? Infinity)) this.render(this.items, this.working);
+			}));
+			this._register(addDisposableListener<PointerEvent>(this.transcript, 'pointerdown', event => {
+				if (!this.virtualRows || event.button !== 0 || event.pointerType !== 'mouse') return;
+				const target = event.target as HTMLElement;
+				if (!target.closest(focusableSelector)) this.selectionStart = this.rowId(target);
+			}));
+			const endSelection = () => {
+				if (!this.selectionStart) return;
+				this.selectionStart = undefined;
+				this.refreshSelection.schedule();
+			};
+			this._register(addDisposableListener(this.transcript.ownerDocument, 'pointerup', endSelection));
+			this._register(addDisposableListener(this.transcript.ownerDocument, 'pointercancel', endSelection));
+			this._register(addDisposableListener<KeyboardEvent>(this.transcript, 'keydown', event => this.navigateVirtualRows(event)));
+		}
 		const scrollToLatestLabel = localize('chat.scrollToLatest', 'Scroll to Latest');
 		this.scrollToLatestButton = this._register(new Button(this.element, {
 			...defaultButtonStyles,
@@ -323,14 +381,14 @@ export class ChatListWidget extends DomWidget {
 			this.promptTimeline = this._register(instantiationService.createInstance(PromptTimelineWidgetContrib,
 				this.element, this.scrollable.scrollableElement, {
 				reveal: (id: string) => {
-					const prompt = this.renderedItems.get(id)?.item;
+					const prompt = this.itemById(id);
 					if (prompt) {
 						this.focus(prompt);
 						this.revealItem(id, undefined, true);
 					}
 				},
 				changes: (id: string) => {
-					const prompt = this.renderedItems.get(id)?.item;
+					const prompt = this.itemById(id);
 					return prompt && promptTimelineChanges?.(prompt);
 				},
 			}, () => this.renderPromptTimeline()));
@@ -374,17 +432,27 @@ export class ChatListWidget extends DomWidget {
 			// Keep text, actions and disclosure DOM available to native selection, find
 			// and accessibility. Only the derived code-editor documents leave memory.
 			this.viewportObserver = new Observer(entries => {
+				const rows: ChatListItemRenderer[] = [];
 				for (const entry of entries) {
 					const row = this.renderedItems.get((entry.target as HTMLElement).dataset.itemId!);
 					if (!row || row.element !== entry.target) continue;
+					// Let completed replies establish their intrinsic height before CSS skips their contents.
+					if (row.item.type === 'agentMessage' && entry.boundingClientRect.height > 0
+						&& !row.element.classList.contains('ash-chat-item-measured')) {
+						row.element.classList.add('ash-chat-item-measured');
+					}
 					row.inViewport = entry.isIntersecting;
-					this.updateRowViewport(row);
+					if (row.markdownPart) rows.push(row);
 				}
+				this.updateRowViewports(rows);
 				if (this.findWidget.value?.visible) { this._onDidChangeContent.fire(); }
 			}, { root: this.scrollable.scrollableElement, rootMargin: `${viewportMargin}px 0px` });
 			this._register(toDisposable(() => this.viewportObserver?.disconnect()));
 			this._register(addDisposableListener(this.transcript, 'focusout', () => this.refreshViewport.schedule()));
-			this._register(addDisposableListener(this.element.ownerDocument, 'selectionchange', () => this.refreshViewport.schedule()));
+			this._register(addDisposableListener(this.element.ownerDocument, 'selectionchange', () => {
+				this.refreshViewport.schedule();
+				if (this.virtualRows) this.refreshSelection.schedule();
+			}));
 		}
 		const accessibilityId = createUuid();
 		this._register(AccessibleViewRegistry.register({
@@ -403,7 +471,7 @@ export class ChatListWidget extends DomWidget {
 						localize('chat.requestVersions.help', 'In Code, open the original request’s checkpoint actions and choose Run another version to run it again in a separate worktree. When both versions have finished and their Git snapshots are available, open More Actions on either reply and choose Compare results.'),
 						...(this.options.openTurnChanges ? [localize('chat.turnChanges.help', 'When a completed reply has captured file changes, use Tab to reach its file count button. Press Enter or Space to open the before-and-after comparison for that turn.')] : []),
 					].join('\n');
-					return (this.promptTimeline ? localize('chat.promptTimeline.help', 'In the Agents window, hover over the left timeline to show prompts. Click a mark to jump to the prompt it previews. To open the list with the keyboard, focus Show prompts and press Enter. Use Up and Down Arrow, Home or End to move between prompts, and Left and Right Arrow to switch between a prompt and its change counts. Activate the prompt to jump to it or the counts to open that turn’s changes. In the ruler, activate a marker to see the same actions and expand Changed files to review an individual file. Escape closes the prompt list.') + '\n' : '') + localize('chat.stickyScroll.help', 'When a user prompt scrolls out of view, it stays at the top of the conversation. Tab to the pinned prompt and press Enter or Space to return to the original message.') + '\n' + localize('chat.memory.projectHelp', 'In a Code project conversation, open Message actions on a sent prompt and choose Save as project memory. Review the title, text and project in Memories, then choose Save memory. When a reply cites a memory, use Open memory reference to read the excerpt and open its source conversation.') + '\n' + localize('chat.requests.help', 'Click an editable request to edit its text in place. With the keyboard, Tab to its edit control and press Enter or Space. Enter inserts a line. Tab reaches Cancel and Send below the editor. Send or Ctrl or Command+Enter creates a new chat with the original context and attachments. Choose Cancel, click outside the editor, or press Escape to keep the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + forkHelp + '\n' + localize('chat.remainingActions.help', 'Chat: Configure Tools edits the focused draft’s tool selection; Escape discards changes. Chat: Approve Tool Once and Chat: Decline Tool act only on the currently displayed approval. They never save an approval rule. Chat: Submit Requested Answers submits the current question form with its entered values; required answers must be filled. Use Ctrl or Command+Enter while the question form has focus. Chat: Retry Failed Request repeats an available failed request through its original retry policy. Chat: Copy Final Response copies the latest completed assistant reply without speaker labels or streaming text. Chat: Next Code Block and Chat: Previous Code Block move focus through the current or latest response’s code blocks and wrap at the ends. Use Ctrl or Command+Alt+Page Down or Page Up in Chat. Chat: Export Conversation Transcript saves a frozen backend text snapshot, including voice transcripts, tool call summaries with inputs and errors, and partial markers. Tool output, result attachments and internal reasoning are excluded. Chat: Open Saved Transcript (Read-Only) opens a supported saved document in a read-only editor; it does not restore or execute a conversation. These commands keep the unsent draft.') + '\n' + localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker, Chat: Open Mode or Agent Picker, or Chat: Open Permission Picker in the Command Palette to configure the most recently focused composer. Model and mode pickers also open with {0} and {1}. Fixed-mode inputs keep the mode picker hidden. Cowork uses its existing permission flow. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>', '<keybinding:workbench.action.chat.openModePicker>') + '\n' + localize('chat.execution.help', 'Chat: Send Message uses the current draft, attachments and submission policy. Chat: Add Message to Queue waits for the current request to finish; Chat: Steer with Message explicitly targets it. When idle, both send normally. Explicit steering rejects a different mode, Skill or task type. Queue and steering actions do not run slash commands. Failed submissions restore the draft if it has not been edited again. Use {0} to stop the focused task while keeping unsent text. Stopping remains available for running work when AI features are disabled.', '<keybinding:workbench.action.chat.cancel>') + '\n' + localize('chat.queue.manageHelp', 'Use Chat: Edit Queued Message, Chat: Remove Queued Message or Chat: Send Queued Message Immediately in the Command Palette, then select a message in queue order. Editing pauses that message and preserves attached inputs and your unsent draft. Enter keeps the edited message’s queue or steering action; Alt+Enter uses the other action. Ctrl or Command+Enter saves; Escape restores a previously pending message at its original position. Previously paused or failed messages remain paused when editing is cancelled. A changed revision requires choosing the message again. Send Immediately moves the original message to the front and stops the current task before running it. Remove All Queued Messages removes the captured revisions and keeps messages added while the action runs.') + '\n' + localize('chat.navigation.help', 'Use {0} to focus the latest response and {1} to return to the last focused message. Use {2} and {3} to move between user prompts without wrapping. Navigation includes loaded messages; load earlier messages to reach older prompts. On macOS, the input-to-list shortcut applies only on the first visual input line. Quick Chat reverses the input-to-list shortcut direction. Use {4} to focus a pending confirmation or return to the input. Focusing never accepts or declines a request, sends a message or changes the draft.', '<keybinding:chat.action.focus>', '<keybinding:workbench.chat.action.focusLastFocused>', '<keybinding:workbench.action.chat.previousUserPrompt>', '<keybinding:workbench.action.chat.nextUserPrompt>', '<keybinding:workbench.action.chat.focusConfirmation>') + '\n' + localize('chat.find.commandsHelp', 'Use {0} to find text in this conversation. Find includes complete code blocks and continues through earlier history without sending or changing the draft. Use the result controls to navigate; Escape closes Find and restores focus.', '<keybinding:workbench.action.chat.find>') + '\n' + localize('chat.commands.help', 'Use Focus Chat Input in the Command Palette to return to the most recently focused Chat input. From a conversation, use {0} to return to its input. Chat: Copy Conversation in the Command Palette copies all text messages and voice transcripts, including earlier history. Markdown is preserved. Export Transcript in the conversation title menu saves a JSON snapshot of the conversation. Draft text is kept in the input.', '<keybinding:workbench.action.chat.focusInput>') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message preserves Markdown and copies internal resource links as code labels. Copying a selection also replaces internal links with their visible labels. Tool summaries describe the activity and its current result state. Press Enter or Space on a tool summary to inspect its source and execution target. Input, standard output, standard error and result each have a separate summary; press Enter or Space to expand or collapse them. Tab to an expanded text region and use the arrow keys to scroll long output. Tool text is displayed literally. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. When Automatically follow new replies is enabled in Chat settings, returning to the bottom resumes following. Scrolling up or editing a message pauses following. While reading earlier messages, use Scroll to Latest to jump to the bottom. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.media.copyHelp', 'For a loaded local image, use Tab to reach Copy image and press Enter or Space to copy it to the clipboard.') + '\n' + localize('chat.markdown.tableScrollHelp', 'Use Tab to focus a response table and Left or Right Arrow to scroll wide tables. Find in Chat scrolls the table to the matching cell.') + '\n' + localize('chat.thinking.help', 'Reasoning starts collapsed. Press Enter or Space on its summary to expand or collapse it. Streaming updates and completion keep your expansion and keyboard focus. Code block navigation expands the matching reasoning when needed. The accessible transcript includes reasoning even while collapsed.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.') + '\n' + localize('chat.response.feedbackHelp', 'Completed IDE Chat responses offer Helpful. Press Enter or Space to save a personal helpful mark for that response; reopening Chat retains it. Feedback stays in the current Ash profile and is not sent to the model provider or used to change the response. Choose Helpful response animation in Settings to change or disable the effect. Reduced motion also disables the animation.') + '\n' + localize('chat.typography.help', 'In Settings, open Chat, then Appearance to change the message font and text size, including Markdown and links. Message input and code blocks have separate font settings. Changes keep your draft and reading position.');
+					return (this.promptTimeline ? localize('chat.promptTimeline.help', 'In the Agents window, hover over the left timeline to show prompts. Click a mark to jump to the prompt it previews. To open the list with the keyboard, focus Show prompts and press Enter. Use Up and Down Arrow, Home or End to move between prompts, and Left and Right Arrow to switch between a prompt and its change counts. Activate the prompt to jump to it or the counts to open that turn’s changes. In the ruler, activate a marker to see the same actions and expand Changed files to review an individual file. Escape closes the prompt list.') + '\n' : '') + localize('chat.stickyScroll.help', 'When a user prompt scrolls out of view, it stays at the top of the conversation. Tab to the pinned prompt and press Enter or Space to return to the original message.') + '\n' + localize('chat.memory.referenceHelp', 'When a reply cites a memory, use Open memory reference to read the excerpt and open its source conversation.') + '\n' + localize('chat.showAgentReplyTimestamps.help', 'In Settings, search for Show Agent reply timestamps to change whether reply times are shown.') + '\n' + localize('chat.requests.help', 'Click an editable request to edit its text in place. With the keyboard, Tab to its edit control and press Enter or Space. Enter inserts a line. Tab reaches Cancel and Send below the editor. Send or Ctrl or Command+Enter creates a new chat with the original context and attachments. Choose Cancel, click outside the editor, or press Escape to keep the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + forkHelp + '\n' + localize('chat.remainingActions.help', 'Chat: Configure Tools edits the focused draft’s tool selection; Escape discards changes. Chat: Approve Tool Once and Chat: Decline Tool act only on the currently displayed approval. They never save an approval rule. Chat: Submit Requested Answers submits the current question form with its entered values; required answers must be filled. Use Ctrl or Command+Enter while the question form has focus. Chat: Retry Failed Request repeats an available failed request through its original retry policy. Chat: Copy Final Response copies the latest completed assistant reply without speaker labels or streaming text. Chat: Next Code Block and Chat: Previous Code Block move focus through the current or latest response’s code blocks and wrap at the ends. Use Ctrl or Command+Alt+Page Down or Page Up in Chat. Chat: Export Conversation Transcript saves a frozen backend text snapshot, including voice transcripts, tool call summaries with inputs and errors, and partial markers. Tool output, result attachments and internal reasoning are excluded. Chat: Open Saved Transcript (Read-Only) opens a supported saved document in a read-only editor; it does not restore or execute a conversation. These commands keep the unsent draft.') + '\n' + localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker, Chat: Open Mode or Agent Picker, or Chat: Open Permission Picker in the Command Palette to configure the most recently focused composer. Model and mode pickers also open with {0} and {1}. Fixed-mode inputs keep the mode picker hidden. Cowork uses its existing permission flow. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>', '<keybinding:workbench.action.chat.openModePicker>') + '\n' + localize('chat.execution.help', 'Chat: Send Message uses the current draft, attachments and submission policy. Chat: Add Message to Queue waits for the current request to finish; Chat: Steer with Message explicitly targets it. When idle, both send normally. Explicit steering rejects a different mode, Skill or task type. Queue and steering actions do not run slash commands. Failed submissions restore the draft if it has not been edited again. Use {0} to stop the focused task while keeping unsent text. Stopping remains available for running work when AI features are disabled.', '<keybinding:workbench.action.chat.cancel>') + '\n' + localize('chat.queue.manageHelp', 'Use Chat: Edit Queued Message, Chat: Remove Queued Message or Chat: Send Queued Message Immediately in the Command Palette, then select a message in queue order. Editing pauses that message and preserves attached inputs and your unsent draft. Enter keeps the edited message’s queue or steering action; Alt+Enter uses the other action. Ctrl or Command+Enter saves; Escape restores a previously pending message at its original position. Previously paused or failed messages remain paused when editing is cancelled. A changed revision requires choosing the message again. Send Immediately moves the original message to the front and stops the current task before running it. Remove All Queued Messages removes the captured revisions and keeps messages added while the action runs.') + '\n' + localize('chat.navigation.help', 'Use {0} to focus the latest response and {1} to return to the last focused message. Use {2} and {3} to move between user prompts without wrapping. Navigation includes loaded messages; load earlier messages to reach older prompts. On macOS, the input-to-list shortcut applies only on the first visual input line. Quick Chat reverses the input-to-list shortcut direction. Use {4} to focus a pending confirmation or return to the input. Focusing never accepts or declines a request, sends a message or changes the draft.', '<keybinding:chat.action.focus>', '<keybinding:workbench.chat.action.focusLastFocused>', '<keybinding:workbench.action.chat.previousUserPrompt>', '<keybinding:workbench.action.chat.nextUserPrompt>', '<keybinding:workbench.action.chat.focusConfirmation>') + '\n' + localize('chat.find.commandsHelp', 'Use {0} to find text in this conversation. Find includes complete code blocks and continues through earlier history without sending or changing the draft. Use the result controls to navigate; Escape closes Find and restores focus.', '<keybinding:workbench.action.chat.find>') + '\n' + localize('chat.commands.help', 'Use Focus Chat Input in the Command Palette to return to the most recently focused Chat input. From a conversation, use {0} to return to its input. Chat: Copy Conversation in the Command Palette copies all text messages and voice transcripts, including earlier history. Markdown is preserved. Export Transcript in the conversation title menu saves a JSON snapshot of the conversation. Draft text is kept in the input.', '<keybinding:workbench.action.chat.focusInput>') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message preserves Markdown and copies internal resource links as code labels. Copying a selection also replaces internal links with their visible labels. Tool summaries describe the activity and its current result state. Press Enter or Space on a tool summary to inspect its source and execution target. Input, standard output, standard error and result each have a separate summary; press Enter or Space to expand or collapse them. Tab to an expanded text region and use the arrow keys to scroll long output. Tool text is displayed literally. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. When Automatically follow new replies is enabled in Chat settings, returning to the bottom resumes following. Scrolling up or editing a message pauses following. While reading earlier messages, use Scroll to Latest to jump to the bottom. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.media.copyHelp', 'For a loaded local image, use Tab to reach Copy image and press Enter or Space to copy it to the clipboard.') + '\n' + localize('chat.markdown.tableScrollHelp', 'Use Tab to focus a response table and Left or Right Arrow to scroll wide tables. Find in Chat scrolls the table to the matching cell.') + '\n' + localize('chat.thinking.help', 'Reasoning starts collapsed. Press Enter or Space on its summary to expand or collapse it. Streaming updates and completion keep your expansion and keyboard focus. Code block navigation expands the matching reasoning when needed. The accessible transcript includes reasoning even while collapsed.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.') + '\n' + localize('chat.response.feedbackHelp', 'Completed IDE Chat responses offer Helpful. Press Enter or Space to save a personal helpful mark for that response; reopening Chat retains it. Feedback stays in the current Ash profile and is not sent to the model provider or used to change the response. Choose Helpful response animation in Settings to change or disable the effect. Reduced motion also disables the animation.') + '\n' + localize('chat.typography.help', 'In Settings, open Chat, then Appearance to change the message font and text size, including Markdown and links. Message input and code blocks have separate font settings. Changes keep your draft and reading position.');
 				}, () => { if (active.isConnected) active.focus(); }, AccessibilityVerbositySettingId.Chat);
 				provider.onDidChangeContent = this._onDidChangeContent.event;
 				return provider;
@@ -417,7 +485,7 @@ export class ChatListWidget extends DomWidget {
 				const active = this.element.ownerDocument.activeElement;
 				return this.visible && !this.isDisposed && active instanceof this.element.ownerDocument.defaultView!.HTMLElement && this.transcript.contains(active) ? active : undefined;
 			},
-		})));
+		}, () => this.configurationService.getValue<boolean>(ChatConfiguration.ShowAgentReplyTimestamps) !== false)));
 		// Keep the position measured before an image, editor wrap or disclosure changes height.
 		const resize = new ResizeObserver(() => this.relayout.schedule());
 		resize.observe(this.transcript);
@@ -428,6 +496,12 @@ export class ChatListWidget extends DomWidget {
 			if (event.affectsConfiguration(ChatConfiguration.AutoFollowReplies)) {
 				const { top, maximumTop } = this.scrollable.state;
 				this.updateReplyFollowing(top, maximumTop);
+			}
+			if (event.affectsConfiguration(ChatConfiguration.ShowAgentReplyTimestamps)) {
+				for (const [, row] of this.renderedItems) {
+					if (row.item.type === 'agentMessage') { row.updateMessageTime(); }
+				}
+				this._onDidChangeContent.fire();
 			}
 			if (event.affectsConfiguration(PROMPT_TIMELINE_STICKY_SCROLL_SETTING)) this.updateStickyPrompt();
 			const keys = [...Object.values(ChatEditorConfiguration), CodeEditorConfiguration.fontFamily, CodeEditorConfiguration.fontSize, CodeEditorConfiguration.lineHeight];
@@ -452,6 +526,12 @@ export class ChatListWidget extends DomWidget {
 			// Font changes reflow retained rows; restore the position captured before the change.
 			if (this.visible) this.layout(anchor, false);
 		}));
+		if (virtualizeHistoryFrom) {
+			this._register(autorun(reader => {
+				const threshold = virtualizeHistoryFrom.read(reader) ?? Infinity;
+				if (this.virtualRows || this.items.length >= threshold) this.render(this.items, this.working);
+			}));
+		}
 	}
 
 	private updateCodeBlockOptions(): void {
@@ -494,38 +574,86 @@ export class ChatListWidget extends DomWidget {
 		if (this.transcript.getAttribute('aria-busy') !== value) this.transcript.setAttribute('aria-busy', value);
 	}
 
-	private reconcile(items: readonly IChatListItem[]): void {
+	private reconcile(items: readonly IChatListItem[], viewportOnly = false, top = this.scrollable.state.top): void {
 		let needsLayout = false;
 		let anchor: ReadingAnchor | undefined;
 		const beforeLayout = () => {
 			if (needsLayout) return;
 			needsLayout = true;
-			if (this.visible) {
+			if (this.visible && !viewportOnly) {
 				this.captureFollowState();
 				anchor = this.shouldFollow ? undefined : this.readingPosition;
+			} else if (this.visible && !this.shouldFollow) {
+				anchor = this.readingPosition;
 			}
 		};
+		if (!viewportOnly) {
+			// Galleries share a renderer across rows. MCP Apps own a live view that
+			// cannot be recreated when its row leaves and re-enters the viewport.
+			const useVirtualRows = items.length >= (this.options.virtualizeHistoryFrom?.get() ?? Infinity) && !this.accessibilityService.isScreenReaderOptimized()
+				&& !items.some(item => item.toolInvocation && (isImageGenerationToolInvocation(item.toolInvocation)
+					|| item.toolInvocation.result?.content?.some(part => part.type === 'artifact' && part.artifact.source.type === 'mcpApp')));
+			const changedVirtualMode = useVirtualRows !== (this.virtualRows !== undefined);
+			if (useVirtualRows || this.virtualRows) beforeLayout();
+			if (useVirtualRows) {
+				this.virtualRows ??= new ChatVirtualRows();
+				this.virtualRows.setItems(items);
+				this.virtualPadding = this.readVirtualPadding();
+			} else {
+				this.virtualRows = undefined;
+				this.selectionStart = undefined;
+				this.rowResizeObserver?.disconnect();
+			}
+			this.virtualWindow = undefined;
+			if (changedVirtualMode) {
+				this.element.classList.toggle('ash-chat-transcript-virtualized', useVirtualRows);
+				// Mounting old history must not announce it as a new reply.
+				this.transcript.setAttribute('aria-live', useVirtualRows ? 'off' : 'polite');
+			}
+			this.promptModel = new PromptTimelineModel(items.filter(item => item.type === 'userMessage'), id => this.promptTop(id));
+			if (this.virtualRows) {
+				const saved = this.pendingReadingPosition?.anchor ?? anchor;
+				const index = saved && this.virtualRows.indexOf(saved.id);
+				const height = this.scrollable.scrollableElement.clientHeight || 800;
+				top = this.shouldFollow ? Math.max(0, this.virtualRows.size - height)
+					: saved && typeof index === 'number' ? this.virtualRows.positionAt(index) + this.virtualPadding - saved.viewportTop : top;
+			}
+		}
+		const entries = this.renderEntries(items, top);
 		const active = this.element.ownerDocument.activeElement;
 		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
 		const focusedReferenceId = isHTMLElement(active) ? active.dataset.chatReferenceId : undefined;
 		const focusedActionRowId = focusedRow?.element.contains(active)
-			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
+			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.requestEdit || focusedRow.item.requestHasVersions
+				|| focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
 			? focusedRow.item.id : undefined;
 		const focusedActionId = focusedActionRowId ? active?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 		const imageFocus = isHTMLElement(active) && [...this.imageBatches].some(([, entry]) => entry.part.domNode.contains(active)) ? active : undefined;
-		let changed = false;
-		const ids = new Set(items.map(item => item.id));
+		let changed = needsLayout;
+		const ids = new Set(entries.flatMap(entry => 'text' in entry ? [entry.id] : []));
 		for (const [id, row] of this.renderedItems) {
 			if (ids.has(id)) continue;
 			beforeLayout();
+			if (this.virtualRows?.indexOf(id) !== undefined) this.rememberDisclosures(id, row);
 			this.viewportObserver?.unobserve(row.element);
+			this.rowResizeObserver?.unobserve(row.element);
 			this.renderedItems.deleteAndDispose(id);
 			this.pendingViewportMeasurements.delete(id);
 			changed = true;
 		}
 		let next: ChildNode | null = this.transcript.firstChild;
-		for (const item of items) {
+		for (const item of entries) {
+			if (!('text' in item)) {
+				if (item !== next) {
+					beforeLayout();
+					this.transcript.insertBefore(item, next);
+					changed = true;
+				}
+				next = item.nextSibling;
+				continue;
+			}
 			let row = this.renderedItems.get(item.id);
+			if (row && this.virtualRows && !viewportOnly) this.rowResizeObserver?.observe(row.element);
 			const update = row?.update(item, beforeLayout);
 			if (row && update === 'unchanged') {
 				if (row.element !== next) {
@@ -540,7 +668,11 @@ export class ChatListWidget extends DomWidget {
 			if (!row || update === 'replace') {
 				beforeLayout();
 				if (row?.element === next) next = row.element.nextSibling;
-				if (row) this.viewportObserver?.unobserve(row.element);
+				if (row) {
+					if (this.virtualRows) this.rememberDisclosures(item.id, row);
+					this.viewportObserver?.unobserve(row.element);
+					this.rowResizeObserver?.unobserve(row.element);
+				}
 				// Retire the previous row before its replacement starts attachment work.
 				this.renderedItems.deleteAndDispose(item.id);
 				row = this.renderedItems.set(item.id, this.instantiationService.createInstance(ChatListItemRenderer, item, this.element.ownerDocument, {
@@ -551,18 +683,19 @@ export class ChatListWidget extends DomWidget {
 					refreshRequestAfterEdit: () => this.refreshAfterRequestEdit.schedule(),
 					classPrefix: this.classPrefix,
 					deferCodeBlockModels: !!this.viewportObserver,
+					synchronousInitialRender: this.virtualRows !== undefined && !item.transient,
 					isVisible: () => this.visible,
 					advisorExpansion: this.advisorExpansion,
 					contextExpansion: this.contextExpansion,
 					thinkingExpansion: this.thinkingExpansion,
 					onDidChangeHeight: () => this.relayout.schedule(),
 					beginRequestEdit: (close: (restoreFocus: boolean) => boolean) => {
-						if (this.activeRequestEdit && !this.activeRequestEdit(false)) return undefined;
-						this.activeRequestEdit = close;
+						if (this.activeRequestEdit && !this.activeRequestEdit.close(false)) return undefined;
+						const edit = this.activeRequestEdit = { id: item.id, close };
 						this.shouldFollow = false;
 						this.readingPosition = this.readingAnchor();
 						return toDisposable(() => {
-							if (this.activeRequestEdit === close) this.activeRequestEdit = undefined;
+							if (this.activeRequestEdit === edit) this.activeRequestEdit = undefined;
 						});
 					},
 					onWillCloseRequestEditor: ({ heightChanges, sent }: { readonly heightChanges: boolean; readonly sent: boolean; }) => {
@@ -584,7 +717,10 @@ export class ChatListWidget extends DomWidget {
 					},
 					onDidChangeContent: () => this._onDidChangeContent.fire(),
 				}, this.layoutTrace));
+				const toolExpansion = this.toolExpansion.get(item.id);
+				if (toolExpansion) row.toolPart?.restoreDisclosure(toolExpansion);
 				this.viewportObserver?.observe(row.element);
+				if (this.virtualRows) this.rowResizeObserver?.observe(row.element);
 				if (this.viewportObserver) this.pendingViewportMeasurements.add(item.id);
 			}
 			if (this.viewportObserver && row.markdownPart && (update !== 'queued' || row.element !== next)) this.pendingViewportMeasurements.add(item.id);
@@ -594,13 +730,12 @@ export class ChatListWidget extends DomWidget {
 			}
 			next = row.element.nextSibling;
 		}
-		changed = this.renderImageBatches(items, beforeLayout) || changed;
+		if (!viewportOnly) changed = this.renderImageBatches(items, beforeLayout) || changed;
 		if (this.working !== (this.workingStatus?.element.hidden === false)) {
 			beforeLayout();
 			this.renderWorkingStatus();
 			changed = true;
 		}
-		this.promptModel = new PromptTimelineModel(items.filter(item => item.type === 'userMessage'), id => this.renderedItems.get(id)!.element);
 		// Reparenting a retained gallery can blur its button. Restore only that button,
 		// and never replace focus deliberately moved elsewhere by a render listener.
 		if (imageFocus?.isConnected && this.element.ownerDocument.activeElement === this.element.ownerDocument.body) {
@@ -617,10 +752,14 @@ export class ChatListWidget extends DomWidget {
 			else if (row) this.focus(row.item);
 			else this.focusReadingPosition();
 		}
-		if (this.lastFocusedItemId && !ids.has(this.lastFocusedItemId)) { this.lastFocusedItemId = undefined; }
-		for (const id of this.contextExpansion.keys()) if (!ids.has(id)) this.contextExpansion.delete(id);
-		for (const id of this.advisorExpansion.keys()) if (!ids.has(id)) this.advisorExpansion.delete(id);
-		for (const id of this.thinkingExpansion.keys()) if (!ids.has(id)) this.thinkingExpansion.delete(id);
+		if (!viewportOnly) {
+			const hasItem = (id: string) => this.virtualRows ? this.virtualRows.indexOf(id) !== undefined : ids.has(id);
+			if (this.lastFocusedItemId && !hasItem(this.lastFocusedItemId)) this.lastFocusedItemId = undefined;
+			for (const id of this.contextExpansion.keys()) if (!hasItem(id)) this.contextExpansion.delete(id);
+			for (const id of this.advisorExpansion.keys()) if (!hasItem(id)) this.advisorExpansion.delete(id);
+			for (const id of this.thinkingExpansion.keys()) if (!hasItem(id)) this.thinkingExpansion.delete(id);
+			for (const id of this.toolExpansion.keys()) if (!hasItem(id)) this.toolExpansion.delete(id);
+		}
 		// Reconciliation can temporarily shorten the DOM scroll range. Keep the position
 		// captured before moving retained widgets instead of interpreting that clamp as user input.
 		if (changed) {
@@ -629,10 +768,184 @@ export class ChatListWidget extends DomWidget {
 				if (this.visible) this.layout(anchor, false);
 				if (this.pendingViewportMeasurements.size) this.refreshRowViewports();
 			}
-			this._onDidChangeContent.fire();
+			if (!viewportOnly || this.findWidget.value?.visible) this._onDidChangeContent.fire();
 		} else if (this.visible) {
 			this.renderPromptTimeline();
 		}
+	}
+
+	private rememberDisclosures(id: string, row: ChatListItemRenderer): void {
+		if (row.context) this.contextExpansion.set(id, row.context.disclosure.open);
+		if (row.thinkingPart) this.thinkingExpansion.set(id, row.thinkingPart.domNode.open);
+		const tool = row.toolPart?.disclosureState;
+		if (tool?.userInteracted) this.toolExpansion.set(id, tool);
+	}
+
+	private itemById(id: string): IChatListItem | undefined {
+		const index = this.virtualRows?.indexOf(id);
+		return index === undefined ? this.renderedItems.get(id)?.item : this.items[index];
+	}
+
+	private rowId(node: Node | null): string | undefined {
+		const element = isHTMLElement(node) ? node : node?.parentElement;
+		const row = element?.closest<HTMLElement>('.ash-chat-item[data-item-id]');
+		return row?.parentElement === this.transcript ? row.dataset.itemId : undefined;
+	}
+
+	private readVirtualPadding(): number {
+		return parseFloat(this.transcript.ownerDocument.defaultView!.getComputedStyle(this.transcript).paddingTop) || 0;
+	}
+
+	private windowAt(rows: ChatVirtualRows, top: number): { readonly start: number; readonly end: number; } {
+		const start = top - this.virtualPadding;
+		const end = start + (this.scrollable.state.height || this.scrollable.scrollableElement.clientHeight || 800);
+		const window = this.virtualWindow;
+		// Keep the existing buffer until the viewport approaches its edges.
+		if (window && (window.start === 0 || rows.positionAt(window.start) <= start - virtualOverscan / 3)
+			&& (window.end === rows.count || rows.positionAt(window.end) >= end + virtualOverscan / 3)) return window;
+		return {
+			start: Math.min(rows.count - 1, rows.indexAt(start - virtualOverscan)),
+			end: Math.min(rows.count, rows.indexAt(end + virtualOverscan) + 1),
+		};
+	}
+
+	private pinnedRows(rows: ChatVirtualRows, window: { readonly start: number; readonly end: number; }): number[] {
+		const document = this.transcript.ownerDocument;
+		const indexOf = (node: Node | null) => {
+			const id = this.rowId(node);
+			return id ? rows.indexOf(id) : undefined;
+		};
+		const pins = new Set<number>();
+		const focused = indexOf(document.activeElement);
+		if (focused !== undefined) pins.add(focused);
+		const editing = this.activeRequestEdit && rows.indexOf(this.activeRequestEdit.id);
+		if (editing !== undefined) pins.add(editing);
+		for (const [id, row] of this.renderedItems) {
+			if (row.hasActivePlayback || row.toolPart?.keepMounted) {
+				const index = rows.indexOf(id);
+				if (index !== undefined) pins.add(index);
+			}
+		}
+		const selection = document.getSelection();
+		const dragStart = this.selectionStart === undefined ? undefined : rows.indexOf(this.selectionStart);
+		const anchor = dragStart ?? (!selection?.isCollapsed ? indexOf(selection?.anchorNode ?? null) : undefined);
+		const extent = indexOf(selection?.focusNode ?? null);
+		if (anchor !== undefined) {
+			// A native drag can reach the edge before Chromium updates the selection end.
+			const start = Math.min(anchor, extent ?? anchor, dragStart === undefined ? anchor : window.start);
+			const end = Math.max(anchor, extent ?? anchor, dragStart === undefined ? anchor : window.end - 1);
+			for (let i = start; i <= end; i++) pins.add(i);
+		}
+		return [...pins].filter(index => index < window.start || index >= window.end).sort((a, b) => a - b);
+	}
+
+	private refreshVirtualWindow(top = this.scrollable.state.top): boolean {
+		const rows = this.virtualRows;
+		if (!rows || !this.visible || this.layingOut) return false;
+		const window = this.windowAt(rows, top);
+		const pins = this.pinnedRows(rows, window);
+		if (window === this.virtualWindow && pins.length === this.virtualPins.length && pins.every((value, i) => value === this.virtualPins[i])) return false;
+		this.reconcile(this.items, true, top);
+		return true;
+	}
+
+	private renderEntries(items: readonly IChatListItem[], top: number): readonly (IChatListItem | HTMLDivElement)[] {
+		const rows = this.virtualRows;
+		const gaps = new Set<number>();
+		let entries: readonly (IChatListItem | HTMLDivElement)[] = items;
+		if (rows) {
+			const window = this.virtualWindow = this.windowAt(rows, top);
+			const pins = this.virtualPins = this.pinnedRows(rows, window);
+			const mounted = [
+				...pins.filter(index => index < window.start),
+				...Array.from({ length: window.end - window.start }, (_, index) => window.start + index),
+				...pins.filter(index => index >= window.end),
+			];
+			const result: (IChatListItem | HTMLDivElement)[] = [];
+			const addGap = (start: number, end: number) => {
+				if (start === end) return;
+				const element = this.virtualGaps.get(start)?.element ?? h(this.transcript.ownerDocument, 'div');
+				element.setAttribute('aria-hidden', 'true');
+				element.className = 'ash-chat-transcript-gap';
+				element.style.height = `${rows.positionAt(end) - rows.positionAt(start)}px`;
+				this.virtualGaps.set(start, { end, element });
+				gaps.add(start);
+				result.push(element);
+			};
+			let next = 0;
+			for (const index of mounted) {
+				addGap(next, index);
+				result.push(items[index]);
+				next = index + 1;
+			}
+			addGap(next, items.length);
+			entries = result;
+		}
+		for (const [start, gap] of this.virtualGaps) {
+			if (gaps.has(start)) continue;
+			gap.element.remove();
+			this.virtualGaps.delete(start);
+		}
+		return entries;
+	}
+
+	private measureVirtualRows(): void {
+		const rows = this.virtualRows;
+		if (!rows || !this.scrollable.scrollableElement.clientHeight) return;
+		this.virtualPadding = this.readVirtualPadding();
+		const measured = [...this.renderedItems].flatMap(([id, row]) => {
+			const height = row.element.getBoundingClientRect().height;
+			const margin = parseFloat(this.transcript.ownerDocument.defaultView!.getComputedStyle(row.element).marginBottom) || 0;
+			return height > 0 ? [{ id, height: height + margin }] : [];
+		});
+		if (!rows.measure(measured)) return;
+		for (const [start, { end, element }] of this.virtualGaps) {
+			element.style.height = `${rows.positionAt(end) - rows.positionAt(start)}px`;
+		}
+	}
+
+	private ensureRow(id: string): ChatListItemRenderer | undefined {
+		const existing = this.renderedItems.get(id);
+		const rows = this.virtualRows;
+		const index = rows?.indexOf(id);
+		if (existing || !rows || index === undefined || !this.visible) return existing;
+		this.moveVirtualViewport(rows.positionAt(index) + this.virtualPadding);
+		return this.renderedItems.get(id);
+	}
+
+	private moveVirtualViewport(top: number): void {
+		this.layingOut = true;
+		try {
+			this.scrollable.layout();
+			this.scrollable.scrollTo(0, top);
+		} finally { this.layingOut = false; }
+		this.updateReplyFollowing(this.scrollable.state.top, this.scrollable.state.maximumTop);
+		this.refreshVirtualWindow();
+	}
+
+	private navigateVirtualRows(event: KeyboardEvent): void {
+		if (event.key !== 'Tab' || event.defaultPrevented || !this.virtualRows) return;
+		const id = this.rowId(event.target as Node);
+		const row = id && this.renderedItems.get(id);
+		if (!row) return;
+		const reverse = event.shiftKey;
+		const next = reverse ? row.element.previousElementSibling : row.element.nextElementSibling;
+		if (!next?.classList.contains('ash-chat-transcript-gap')) return;
+		const controls = this.tabbableControls(row.element);
+		if (controls.length && (reverse ? controls[0] : controls.at(-1)) !== event.target) return;
+		const adjacent = this.getSibling(row.item, reverse ? 'previous' : 'next');
+		if (!adjacent) return;
+		event.preventDefault();
+		this.reveal(adjacent);
+		const element = this.renderedItems.get(adjacent.id)?.element;
+		if (!element) return;
+		const targets = this.tabbableControls(element);
+		((reverse ? targets.at(-1) : targets[0]) ?? element).focus({ preventScroll: true });
+	}
+
+	private tabbableControls(row: HTMLElement): HTMLElement[] {
+		return [...row.querySelectorAll<HTMLElement>(focusableSelector)].filter(control => control.tabIndex >= 0
+			&& !control.matches(':disabled') && control.getClientRects().length > 0);
 	}
 
 	private renderWorkingStatus(): void {
@@ -717,6 +1030,8 @@ export class ChatListWidget extends DomWidget {
 		if (!visible) {
 			this.relayout.cancel();
 			this.refreshViewport.cancel();
+			this.refreshSelection.cancel();
+			this.selectionStart = undefined;
 			this.captureFollowState();
 			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingPosition };
 		}
@@ -741,14 +1056,22 @@ export class ChatListWidget extends DomWidget {
 		}
 		if (visible) {
 			if (this.pendingReadingPosition) {
-				this.layingOut = true;
-				try {
-					this.scrollable.layout();
-					this.scrollable.scrollTo(0, this.pendingReadingPosition.top);
-				} finally { this.layingOut = false; }
+				const { top, anchor } = this.pendingReadingPosition;
+				const index = anchor && this.virtualRows?.indexOf(anchor.id);
+				if (this.virtualRows && !this.shouldFollow) {
+					const target = anchor && typeof index === 'number' ? this.virtualRows.positionAt(index) + this.virtualPadding - anchor.viewportTop : top;
+					this.moveVirtualViewport(target);
+				} else {
+					this.layingOut = true;
+					try {
+						this.scrollable.layout();
+						this.scrollable.scrollTo(0, top);
+					} finally { this.layingOut = false; }
+				}
 			}
-			this.layout(this.pendingReadingPosition?.anchor);
+			this.layout(this.pendingReadingPosition?.anchor, false);
 			this.pendingReadingPosition = undefined;
+			this.refreshVirtualWindow();
 			this.refreshRowViewports();
 		}
 	}
@@ -756,13 +1079,15 @@ export class ChatListWidget extends DomWidget {
 	private refreshRowViewports(): void {
 		if (!this.visible) return;
 		const viewport = this.pendingViewportMeasurements.size ? this.scrollable.scrollableElement.getBoundingClientRect() : undefined;
+		const rows: ChatListItemRenderer[] = [];
 		for (const [id, row] of this.renderedItems) {
 			if (viewport && this.pendingViewportMeasurements.delete(id)) {
 				const bounds = row.element.getBoundingClientRect();
 				row.inViewport = viewport.height > 0 && bounds.bottom > viewport.top - viewportMargin && bounds.top < viewport.bottom + viewportMargin;
 			}
-			this.updateRowViewport(row);
+			if (row.markdownPart) rows.push(row);
 		}
+		this.updateRowViewports(rows);
 	}
 
 	private setFindVisible(visible: boolean): void {
@@ -777,7 +1102,7 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	private revealItem(id: string, target?: { readonly top: number; readonly bottom: number; }, alignToTop = false): void {
-		const row = this.renderedItems.get(id);
+		const row = this.ensureRow(id);
 		if (!row || !this.visible) { return; }
 		row.markdownPart?.setViewportVisible(true);
 		this.shouldFollow = false;
@@ -796,17 +1121,24 @@ export class ChatListWidget extends DomWidget {
 			this.updateStickyPrompt();
 			this.updateScrollToLatestVisibility();
 		} finally { this.layingOut = false; }
+		this.refreshVirtualWindow();
 	}
 
-	private updateRowViewport(row: ChatListItemRenderer): void {
-		if (!row.markdownPart) return;
+	private updateRowViewports(rows: readonly ChatListItemRenderer[]): void {
+		if (!rows.length) return;
 		const document = this.element.ownerDocument;
+		const active = document.activeElement;
 		const selection = document.getSelection();
+		// Read the selection once after recording all measured rows. Selection
+		// reads can flush pending styles before any code editors are activated.
+		const ranges = selection && !selection.isCollapsed
+			? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index))
+			: [];
 		// Keyboard focus and a native selection pin their response even if a user
 		// scrolls it out of view; scrolling must not interrupt editing or copying.
-		const pinned = row.element.contains(document.activeElement)
-			|| !!selection && !selection.isCollapsed && Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index)).some(range => range.intersectsNode(row.element));
-		row.markdownPart.setViewportVisible(row.inViewport || pinned);
+		for (const row of rows) {
+			row.markdownPart?.setViewportVisible(row.inViewport || row.element.contains(active) || ranges.some(range => range.intersectsNode(row.element)));
+		}
 	}
 
 	/** Captures presentation state without taking ownership of conversation data. */
@@ -814,13 +1146,20 @@ export class ChatListWidget extends DomWidget {
 		if (this.visible) this.captureFollowState();
 		const active = this.element.ownerDocument.activeElement;
 		let focus: ChatListViewState['focus'];
+		const contextExpansion = new Map(this.contextExpansion);
+		const thinkingExpansion = new Map(this.thinkingExpansion);
+		const toolExpansion = new Map(this.toolExpansion);
 		for (const [itemId, row] of this.renderedItems) {
-			if (active === row.element) { focus = { itemId, index: -1 }; break; }
+			if (row.context) contextExpansion.set(itemId, row.context.disclosure.open);
+			if (row.thinkingPart) thinkingExpansion.set(itemId, row.thinkingPart.domNode.open);
+			if (row.toolPart) toolExpansion.set(itemId, row.toolPart.disclosureState);
+			if (!row.element.contains(active)) continue;
+			if (active === row.element) { focus = { itemId, index: -1 }; continue; }
 			// Editor scrollbars appear after measurement; their controls must not shift the
 			// remembered input ordinal while a replacement editor is still being laid out.
 			const textInput = active?.matches(textInputSelector) === true;
 			const index = [...row.element.querySelectorAll(textInput ? textInputSelector : focusableSelector)].indexOf(active!);
-			if (index >= 0) { focus = { itemId, index, ...(textInput ? { textInput: true } : {}) }; break; }
+			if (index >= 0) focus = { itemId, index, ...(textInput ? { textInput: true } : {}) };
 		}
 		return {
 			visible: this.visible,
@@ -829,9 +1168,9 @@ export class ChatListWidget extends DomWidget {
 			top: this.pendingReadingPosition?.top ?? this.scrollable.state.top,
 			anchor: this.pendingReadingPosition?.anchor ?? (this.visible && !this.shouldFollow ? this.readingPosition : undefined),
 			advisorExpansion: [...this.advisorExpansion],
-			contextExpansion: [...this.renderedItems].filter(([, row]) => row.context).map(([id, row]) => [id, row.context!.disclosure.open]),
-			toolExpansion: [...this.renderedItems].flatMap(([id, row]) => row.toolPart ? [[id, row.toolPart.domNode.querySelector<HTMLDetailsElement>('details')!.open] as [string, boolean]] : []),
-			thinkingExpansion: [...this.renderedItems].flatMap(([id, row]) => row.thinkingPart ? [[id, row.thinkingPart.domNode.open] as [string, boolean]] : []),
+			contextExpansion: [...contextExpansion],
+			toolExpansion: [...toolExpansion],
+			thinkingExpansion: [...thinkingExpansion],
 			focus,
 		};
 	}
@@ -841,15 +1180,15 @@ export class ChatListWidget extends DomWidget {
 		for (const [id, expanded] of state.contextExpansion ?? []) this.contextExpansion.set(id, expanded);
 		for (const [id, expanded] of state.advisorExpansion) this.advisorExpansion.set(id, expanded);
 		for (const [id, expanded] of state.thinkingExpansion ?? []) this.thinkingExpansion.set(id, expanded);
+		for (const [id, disclosure] of state.toolExpansion ?? []) this.toolExpansion.set(id, disclosure);
 		this.render(items, working);
-		this.lastFocusedItemId = state.lastFocusedItemId && this.renderedItems.has(state.lastFocusedItemId) ? state.lastFocusedItemId : undefined;
+		this.lastFocusedItemId = state.lastFocusedItemId && this.itemById(state.lastFocusedItemId) ? state.lastFocusedItemId : undefined;
 		for (const [id, expanded] of state.contextExpansion ?? []) {
 			const context = this.renderedItems.get(id)?.context;
 			if (context) context.disclosure.open = expanded;
 		}
-		for (const [id, expanded] of state.toolExpansion ?? []) {
-			const part = this.renderedItems.get(id)?.toolPart;
-			if (part) part.domNode.querySelector<HTMLDetailsElement>('details')!.open = expanded;
+		for (const [id, disclosure] of state.toolExpansion ?? []) {
+			this.renderedItems.get(id)?.toolPart?.restoreDisclosure(disclosure);
 		}
 		for (const [id, expanded] of state.thinkingExpansion ?? []) {
 			const part = this.renderedItems.get(id)?.thinkingPart;
@@ -881,6 +1220,7 @@ export class ChatListWidget extends DomWidget {
 	private scrollToLatest(): void {
 		if (!this.visible) return;
 		this.pausedReplyScrollTop = undefined;
+		if (this.virtualRows) this.moveVirtualViewport(this.scrollable.state.maximumTop);
 		this.layingOut = true;
 		try {
 			this.scrollable.layout();
@@ -934,18 +1274,22 @@ export class ChatListWidget extends DomWidget {
 		return true;
 	}
 
-	private layout(anchor?: ReadingAnchor, captureScroll = true): void {
+	private layout(anchor?: ReadingAnchor, captureScroll = true, stickToBottom = false): void {
 		if ((captureScroll && this.captureFollowState()) || !anchor) anchor = this.readingPosition;
 		this.layingOut = true;
 		try {
+			this.measureVirtualRows();
 			this.scrollable.layout();
-			if (this.shouldFollow) {
+			if (this.shouldFollow || stickToBottom) {
 				this.scrollable.scrollTo(0, this.scrollable.state.maximumTop);
 			} else if (anchor) {
 				const row = this.renderedItems.get(anchor.id);
 				if (row) {
 					const contentTop = row.element.getBoundingClientRect().top - this.transcript.getBoundingClientRect().top;
 					this.scrollable.scrollTo(0, contentTop - anchor.viewportTop);
+				} else if (this.virtualRows) {
+					const index = this.virtualRows.indexOf(anchor.id);
+					if (index !== undefined) this.scrollable.scrollTo(0, this.virtualRows.positionAt(index) + this.virtualPadding - anchor.viewportTop);
 				}
 			}
 			this.readingPosition = this.shouldFollow ? undefined : this.readingAnchor();
@@ -957,6 +1301,15 @@ export class ChatListWidget extends DomWidget {
 
 	private renderPromptTimeline(): void {
 		this.promptTimeline?.render(this.promptModel, this.visible && !this.transcript.style.paddingTop);
+	}
+
+	private promptTop(id: string): number {
+		if (this.virtualRows) {
+			const index = this.virtualRows.indexOf(id)!;
+			const viewport = this.scrollable.scrollableElement;
+			return viewport.getBoundingClientRect().top - viewport.scrollTop + this.virtualPadding + this.virtualRows.positionAt(index);
+		}
+		return this.renderedItems.get(id)!.element.getBoundingClientRect().top;
 	}
 
 	private updateStickyPrompt(): void {
@@ -980,7 +1333,7 @@ export class ChatListWidget extends DomWidget {
 			}
 			// Keep the original row at the top when revealing it. Pin only after
 			// it crosses the edge by enough to absorb fractional scroll positions.
-			if (viewport.height > 0 && active && this.promptModel.bounds(active).top < viewport.top - 2
+			if (viewport.height > 0 && active && this.promptModel.top(active) < viewport.top - 2
 				&& this.configurationService.getValue<boolean>(PROMPT_TIMELINE_STICKY_SCROLL_SETTING) !== false) {
 				item = active;
 			}
@@ -1003,6 +1356,12 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	private readingAnchor(): ReadingAnchor | undefined {
+		if (this.virtualRows) {
+			const top = this.scrollable.scrollableElement.scrollTop - this.virtualPadding;
+			const index = Math.min(this.virtualRows.count - 1, this.virtualRows.indexAt(top));
+			const item = this.virtualRows.itemAt(index);
+			return item && { id: item.id, viewportTop: this.virtualRows.positionAt(index) - top };
+		}
 		const viewport = this.scrollable.scrollableElement.getBoundingClientRect();
 		const children = this.transcript.children;
 		// Rows are in normal document flow. Find the first possible intersection

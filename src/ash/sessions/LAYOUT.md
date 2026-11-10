@@ -221,6 +221,8 @@ All non-phone Agents windows use the desktop detail layout. Phone viewports use 
 
 In split Code windows the conversation and tool divider continues into the window title bar. The conversation title and window tool controls occupy the conversation side. Visible groups mount their existing title rows in visual tool order on the other side, scrolling horizontally when needed. The groups retain their tabs, commands, focus and drag ownership. Breadcrumbs remain with the editor body. When the split is unavailable or too narrow for the title bar controls, groups mount their title rows in their own card again.
 
+When Session Activity Bar is enabled and the conversation Part is visible, `SessionsPart` hosts the Files, Changes and Browser commands beside its conversation grid. The grid lays out within the remaining width. The commands use the same layout and editor state in both placements. They appear in the title bar when the conversation Part is hidden or the setting is off.
+
 Changes starts with one group and hides the tab strip while keeping the group's title toolbar. Splitting a Changes group adds another group inside the same card, with its own title toolbar. Diff View commands use that group as their context and update the Agents window's shared diff preference. Maximize Tool acts on the whole card in the outer tool Grid.
 
 The desktop window title bar reserves pointer interaction for editor tabs and controls, and dragging the surrounding title area moves the window. In an inline card header, dragging the title moves groups within a tool and Alt-drag moves the whole tool card. Alt+Shift+Arrow first moves a group beside its local neighbor, then moves the tool at a group-grid boundary. Tool and group separators retain their own geometry.

@@ -22,11 +22,13 @@ This specification defines stable placement and state-ownership rules. Row styli
 | Desktop contributed projects and paging          | Conversation catalog sources and their projection            |
 | Row rendering, keyboard focus and scrolling      | Sidebar view and list controls                               |
 
-Desktop Chat and Code each retain a Sessions tree with its own sorting, row order, and collapse state. Pins and custom-group membership remain attached to their conversation identities. Native Session rows retain their thread hierarchy. Workspace grouping uses the Agent's bound execution directory, which can be a worktree or container for the same Project.
+Desktop Chat and Code each retain a Sessions tree with its own grouping, sorting, row order, and collapse state. Pins and custom-group membership remain attached to their conversation identities. Native Session rows retain their thread hierarchy. Workspace grouping uses the Agent's bound execution directory, which can be a worktree or container for the same Project.
 
 ### Conversation adapter boundary
 
 Shared Ash code sees conversations through the Ash Chat catalog contract. The adapter translates ChatGPT conversations into that contract before the views and actions consume them.
+
+Ash Chat owns the conversation experience across response backends. The shared catalog supplies Fork relationships and navigation to the sidebar. Native Chat uses the parent Thread recorded by App Server. For contributed conversations, Ash stores the relationship under the account-scoped catalog identity, using the backend's confirmed Fork result or verifiable history evidence. Response backends supply those facts and implement conversation operations through the catalog contract.
 
 | Layer                   | Works with                                                                           | Responsibility                                                                                                                              |
 | ----------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -71,14 +73,14 @@ Keep catalog project icons and colors in Ash profile preferences, keyed by accou
 
 The table describes the current entry points and effects.
 
-| User action                                                                                                                                                                     | Owner and effect                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Change or reset a project icon or color                                                                                                                                         | Ash Projects reads and writes the same profile preferences for the sidebar and Projects page. The ChatGPT adapter supplies the scoped identity.                                                                     |
-| Pin or unpin a project, expand or collapse its sidebar row, or change the Projects sort order                                                                                   | Ash stores the presentation preference. Expanding a row can separately load its conversation history through the provider.                                                                                          |
-| Open **Edit details** for a ChatGPT project, rename it, or save changes to its goals                                                                                            | The ChatGPT adapter reads the provider details and writes changed names or goals to ChatGPT.                                                                                                                        |
-| Browse ChatGPT project history, move a ChatGPT conversation into or out of a ChatGPT project, create a ChatGPT project through **Move to project**, or delete a ChatGPT project | The ChatGPT adapter reads history or changes the remote project and conversation membership.                                                                                                                        |
-| Use **New project** on the Ash Projects page                                                                                                                                    | Ash App Server creates a local Chat project, including its materials and appearance.                                                                                                                                |
-| Archive or restore a ChatGPT project in Ash                                                                                                                                     | Archive first archives its active conversations through ChatGPT, then records the project’s archived status in the account-scoped Ash profile. Restore clears that local marker. The conversations remain archived. |
+| User action                                                                                                                                                                                   | Owner and effect                                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Change or reset a project icon or color                                                                                                                                                       | Ash Projects reads and writes the same profile preferences for the sidebar and Projects page. The ChatGPT adapter supplies the scoped identity.                                                                                                                                                           |
+| Pin or unpin a project, expand or collapse its sidebar row, or change the Projects sort order                                                                                                 | Ash stores the presentation preference. Expanding a row can separately load its conversation history through the provider.                                                                                                                                                                                |
+| Open **Edit details** for a ChatGPT project, rename it, or save changes to its goals                                                                                                          | The ChatGPT adapter reads the provider details and writes changed names or goals to ChatGPT.                                                                                                                                                                                                              |
+| Browse ChatGPT project history, move a ChatGPT conversation into or out of a ChatGPT project, create a ChatGPT project through **Move to project → New project**, or delete a ChatGPT project | The ChatGPT adapter reads history or changes the remote project and conversation membership.                                                                                                                                                                                                              |
+| Use **New project** on the Ash Projects page                                                                                                                                                  | The shared project form creates the project through the selected owner. Ash App Server stores local projects and their materials. The ChatGPT adapter creates cloud projects in the current account. **Move to project → New project** uses the same form with the conversation’s project owner selected. |
+| Archive or restore a ChatGPT project in Ash                                                                                                                                                   | Archive first archives its active conversations through ChatGPT, then records the project’s archived status in the account-scoped Ash profile. Restore clears that local marker. The conversations remain archived.                                                                                       |
 
 The sidebar and Projects page invoke `projects.archive` to archive a project’s active conversations before marking the project archived. A partial failure leaves the project active so the command can retry the remaining conversations. The Archived view uses the project owner’s restore operation.
 
@@ -100,7 +102,7 @@ A session appears in exactly one primary section. Higher-precedence states win:
 Archived
     > Pinned
     > Needs Attention (when shown)
-    > Project (Code)
+    > Project (Code, when shown)
     > Custom group
     > External (when dedicated sectioning is enabled)
     > Quick chat
@@ -110,11 +112,11 @@ Archived
 - Archived sessions appear only in the final archived section.
 - Pinned sessions appear in the pinned section, retaining their project and custom-group membership. Unpinning derives placement from that membership again.
 - Needs Attention uses the same background Session, host, and occurrence rules as the title bar. Eligible unpinned rows temporarily move into the section within the existing tree and open the Thread associated with the alert. The profile preference and section collapse are presentation state. Resolving or ignoring an alert restores ordinary placement without modifying its memberships or manual order.
-- The Desktop Chat sidebar nests project members under their project. The Projects page provides access to project home pages. The standard Sessions list keeps Chat conversations flat within their custom group or the conversation section.
+- The Desktop Chat sidebar nests project members under their project when the sidebar shows projects. The Projects page provides access to project home pages. The standard Sessions list keeps Chat conversations flat within their custom group or the conversation section.
 - A valid custom-group membership places an unpinned, unarchived session in that group, including a quick chat.
 - When dedicated external sectioning is enabled, remaining external sessions appear together before the archived section. Pinning and custom-group membership retain their precedence; disabling sectioning returns external sessions to the ordinary grouping rules without changing that presentation state.
 - Remaining unpinned quick chats appear in the dedicated chats section.
-- Remaining sessions follow the selected workspace or date grouping.
+- Remaining sessions follow the grouping selected for their list.
 - A regular session created by another regular session is initially placed
   immediately after its creator. While it has neither custom-group membership
   nor an explicit ungrouped preference, it inherits the creator's custom group
@@ -129,13 +131,13 @@ A caller can acquire a disposable reveal of a session row or its archive action 
 
 ### Sidebar grouping
 
-The sidebar may group otherwise ungrouped conversations under Chats or Recents by project membership, repository, management status or execution environment. Pins and explicit group membership take precedence. Hiding comparison groups displays their attempts as ordinary conversations and preserves the saved comparison membership. Repository grouping reads metadata through the session's authorized host. Environment grouping uses the saved session execution authority and runtime workspace.
+Chat and Code each remember a sidebar grouping choice. In Projects, project members appear under their project and unassigned conversations go directly into Recents. In Flat List, Recents also includes unpinned project conversations available in the catalog. The sidebar omits project headings in that layout. Switching layouts preserves project membership, pins, and custom group membership.
 
-### Workspace grouping
+Repository, management status, and environment grouping apply to otherwise ungrouped conversations in Recents. Pins and explicit groups retain their placement. Hiding comparison groups displays their attempts as ordinary conversations and preserves the saved comparison membership. Repository grouping reads metadata through the session's authorized host. Environment grouping uses the saved session execution authority and runtime workspace.
+
+### Legacy Code projects
 
 The Projects section shows projects with a Project record. When the Code sidebar first loads the saved Session catalog for a profile, it creates or reuses Code projects for legacy local workspace groups and links their active, unassigned conversations. Existing project and custom-group memberships take precedence. The migration runs once so that deleting a project or removing a conversation from it stays effective.
-
-In the default Code sidebar and when grouped by Projects, remaining unpinned conversations without a project or custom group appear in workspace groups under Recents. Code groups these conversations by their saved creation workspace, including its authority, and sorts the workspace groups by folder name. Project membership remains with `IProjectService`.
 
 ### Date grouping
 

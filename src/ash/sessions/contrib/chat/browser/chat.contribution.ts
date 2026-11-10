@@ -26,6 +26,10 @@ import { ISessionsService } from '../../../services/sessions/browser/sessionsSer
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { IChatTipService } from '../../../../workbench/contrib/chat/browser/chatTipService.js';
 
+import { SessionsChatCopyActionRendering } from './chatCopyActionRendering.js';
+
+registerWorkbenchContribution(SessionsChatCopyActionRendering.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(SessionsChatCopyActionRendering));
+
 registerSingleton(ISessionsChatViewStateService, SessionsChatViewStateService, InstantiationType.Delayed);
 
 registerAction2(NewChatInSessionsWindowAction);

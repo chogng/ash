@@ -102,7 +102,7 @@ fn model_operations_keep_resource_progress_private_and_broadcast_shared_snapshot
     let missing: Value = serde_json::from_str(&server.handle_json(&mut owner, &read)).unwrap();
     assert_eq!(
         missing["result"],
-        serde_json::json!({"modelId":"custom","available":false,"sizeBytes":0,"stage":null})
+        serde_json::json!({"modelId":"custom","available":false,"sizeBytes":0,"downloadSizeBytes":null,"recommendedLanguages":[],"stage":null})
     );
     let started: Value = serde_json::from_str(&server.handle_json(&mut owner,
         &request("dictation/model/start", serde_json::json!({"resourceId":"import","modelId":"custom","operation":{"type":"import","sourceDirectory":root.path().join("absent")}})),

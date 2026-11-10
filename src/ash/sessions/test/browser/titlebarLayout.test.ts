@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 import type { } from '../../../../../test/fixtures/browser/sessions.page.js';
@@ -6,20 +6,33 @@ import type { } from '../../../../../test/fixtures/browser/sessions.page.js';
 suite('Sessions native titlebar layout', () => {
 	const browser = useBrowserTests();
 
+	async function expectCenteredTitlebarIcon(button: Locator): Promise<void> {
+		await expect(button).toBeVisible();
+		const bounds = (await button.boundingBox())!;
+		expect(bounds.width).toBe(28);
+		expect(bounds.height).toBe(28);
+		const glyph = (await button.locator('.ash-icon:visible').boundingBox())!;
+		expect(glyph.x + glyph.width / 2).toBeCloseTo(bounds.x + bounds.width / 2, 0);
+		expect(glyph.y + glyph.height / 2).toBeCloseTo(bounds.y + bounds.height / 2, 0);
+	}
+
 	test('Code tools move into More Actions when narrow and return when widened', async () => {
 		const { page } = browser;
-		await page.goto('/sessions.html');
+		await page.goto('/sessions.html?multiHost');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		await page.getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
 		const tools = page.getByRole('toolbar', { name: 'Code layout', exact: true });
 		const files = tools.getByRole('button', { name: 'Toggle files', exact: true });
 		const more = tools.getByRole('button', { name: 'More Actions', exact: true });
 		await expect(files).toBeInViewport({ ratio: 1 });
+		await expectCenteredTitlebarIcon(files);
 		await files.focus();
 		const viewport = page.viewportSize()!;
-		await page.setViewportSize({ width: 320, height: viewport.height });
+		await page.setViewportSize({ width: 240, height: viewport.height });
 		await expect(files).toHaveCount(0);
 		await expect(more).toBeInViewport({ ratio: 1 });
+		await expectCenteredTitlebarIcon(more);
 		await expect(more).toBeFocused();
 		await more.press('Enter');
 		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle files', exact: true })).toBeVisible();
@@ -28,6 +41,11 @@ suite('Sessions native titlebar layout', () => {
 		await expect(more).toBeFocused();
 		await page.setViewportSize(viewport);
 		await expect(files).toBeInViewport({ ratio: 1 });
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.activityBar.location', 'top'));
+		const account = page.locator('.ash-sessions-titlebar-right').getByRole('button', { name: 'Accounts', exact: true });
+		await expectCenteredTitlebarIcon(account);
+		await account.hover();
+		await expectCenteredTitlebarIcon(account);
 	});
 
 	test('mouse side buttons traverse the Sessions navigation history', async () => {

@@ -3,6 +3,7 @@ use ash_projects::ProjectCommand;
 use ash_projects::ProjectCommandDisposition;
 use ash_projects::ProjectCommandRequest;
 use ash_projects::ProjectCoordinator;
+use ash_projects::ProjectMaterial;
 use ash_projects::ProjectScope;
 use ash_projects::ProjectStore;
 use ash_protocol::CommandId;
@@ -16,7 +17,22 @@ fn sqlite_projects_persist_records_and_original_command_results() {
     let path = directory.path().join("state.sqlite3");
     let store: Arc<dyn ProjectStore> = Arc::new(SqliteProjectStore::open(&path).unwrap());
     let coordinator = ProjectCoordinator::new(store);
-    let create = create_request();
+    let mut create = create_request();
+    let ProjectCommand::Create { materials, .. } = &mut create.command else {
+        unreachable!()
+    };
+    materials.extend([
+        ProjectMaterial::File {
+            path: directory.path().join("sample.txt"),
+            name: "sample.txt".into(),
+            size_bytes: 12,
+        },
+        ProjectMaterial::Text {
+            id: "note".into(),
+            name: "Note".into(),
+            content: "季节".into(),
+        },
+    ]);
     let created = coordinator.apply(create.clone()).unwrap();
     assert_eq!(created.project.revision, 1);
     let updated = coordinator
@@ -85,6 +101,29 @@ fn sqlite_projects_reopen_and_replay_with_missing_legacy_timestamps() {
         let replay = reopened.apply(create).unwrap();
         assert_eq!(replay.disposition, ProjectCommandDisposition::Replayed);
         assert_eq!(replay.project, legacy);
+    }
+}
+
+#[test]
+fn sqlite_projects_reject_removed_schema_versions() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    drop(SqliteProjectStore::open(&path).unwrap());
+    let connection = Connection::open(&path).unwrap();
+    for version in [2, 3] {
+        connection
+            .execute(
+                "UPDATE ash_schema_migrations SET version = ?1 WHERE component = 'projects'",
+                [version],
+            )
+            .unwrap();
+        let Err(error) = SqliteProjectStore::open(&path) else {
+            panic!("removed projects schema version {version} was accepted");
+        };
+        assert_eq!(
+            error.to_string(),
+            format!("Project storage failed: unsupported projects SQLite schema version {version}")
+        );
     }
 }
 

@@ -619,7 +619,8 @@ class MultiDiffEditorSession extends Disposable {
 
 	private createToolbar(): void {
 		const editor = this.editor;
-		if (!editor || !this.paneInput.source || this.paneInput.source.kind === 'snapshot') return;
+		const source = this.paneInput.source;
+		if (!editor || !source || source.kind === 'snapshot' && !source.actions?.length) return;
 		this.toolbar.value = this.instantiationService.createInstance(MultiDiffEditorToolbar, {
 			container: this.domNode,
 			input: this.paneInput,

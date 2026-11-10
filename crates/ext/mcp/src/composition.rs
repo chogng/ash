@@ -76,6 +76,31 @@ pub(crate) struct McpInvocationAuthority {
     pub runtime_fence: Option<Arc<dyn RuntimeInvocationFence>>,
 }
 
+impl McpInvocationAuthority {
+    fn with_connector_authorization<T>(
+        &self,
+        operation: impl FnOnce() -> T,
+    ) -> Result<T, CoreError> {
+        match &self.connector_fence {
+            Some(fence) => fence
+                .authority
+                .with_authorized_invocation(
+                    &fence.connector_id,
+                    fence.connection_generation,
+                    &fence.definition_digest,
+                    operation,
+                )
+                .ok_or_else(|| {
+                    CoreError::Policy(format!(
+                        "Connector was disconnected before MCP dispatch: {}",
+                        fence.connector_id
+                    ))
+                }),
+            None => Ok(operation()),
+        }
+    }
+}
+
 struct OAuthInvocationFence(Arc<ash_rmcp_client::HttpCredentialScope>);
 
 impl RuntimeInvocationFence for OAuthInvocationFence {
@@ -770,26 +795,29 @@ impl ToolService for McpToolService {
         uri: &str,
         cancellation: &CancellationToken,
     ) -> Result<ash_protocol::ToolOutputArtifact, CoreError> {
-        // Reuses current connector/plugin fences before any peer request. No tool is re-executed.
         self.review_request(call)?;
         let prepared = self.prepared_call(call)?;
-        let _lease = self
-            .authorities
-            .get(prepared.binding().remote().server())
-            .and_then(|authority| authority.runtime_fence.as_ref())
+        let server = prepared.binding().remote().server();
+        let authority = self.authorities.get(server).ok_or_else(|| {
+            CoreError::Policy(format!("MCP server authority is unavailable: {server}"))
+        })?;
+        let _lease = authority
+            .runtime_fence
+            .as_ref()
             .map(|fence| {
                 fence
                     .acquire()
                     .ok_or_else(|| CoreError::Policy("MCP authority was retired".into()))
             })
             .transpose()?;
-        let resource = self
-            .owner
-            .read_resource(
-                prepared.binding().clone(),
-                uri.to_owned(),
-                cancellation.clone(),
-            )
+        let resource = authority
+            .with_connector_authorization(|| {
+                self.owner.read_resource(
+                    prepared.binding().clone(),
+                    uri.to_owned(),
+                    cancellation.clone(),
+                )
+            })?
             .map_err(|error| CoreError::Execution(error.to_string()))?;
         self.review_request(call)?;
         Ok(resource)
@@ -865,42 +893,23 @@ impl McpToolService {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         validate_mcp_authorization(authorization)?;
         let prepared = self.prepared_call(call)?;
-        let binding = prepared.binding().clone();
+        let server = prepared.binding().remote().server();
         let authority = self
             .authorities
-            .get(binding.remote().server())
-            .cloned()
+            .get(server)
             .ok_or_else(|| CoreError::Policy("MCP invocation authority is unavailable".into()))?;
         let _runtime_lease = match authority.runtime_fence.as_ref() {
             Some(fence) => Some(fence.acquire().ok_or_else(|| {
                 CoreError::Policy(format!(
-                    "MCP invocation authority was retired before dispatch: {}",
-                    binding.remote().server()
+                    "MCP invocation authority was retired before dispatch: {server}"
                 ))
             })?),
             None => None,
         };
-        let invoke = || {
+        let invocation = authority.with_connector_authorization(|| {
             self.owner
                 .call(prepared, cancellation.clone(), interactions, hook_scope)
-        };
-        let invocation = match authority.connector_fence {
-            Some(fence) => fence
-                .authority
-                .with_authorized_invocation(
-                    &fence.connector_id,
-                    fence.connection_generation,
-                    &fence.definition_digest,
-                    invoke,
-                )
-                .ok_or_else(|| {
-                    CoreError::Policy(format!(
-                        "Connector was disconnected before MCP dispatch: {}",
-                        fence.connector_id
-                    ))
-                })?,
-            None => invoke(),
-        };
+        })?;
         // Bound generations intentionally survive ordinary config updates, but OAuth retirement
         // must suppress results from that identity even when the peer completed concurrently.
         self.review_request(call)?;

@@ -344,6 +344,32 @@ test('Scrollbar owns two-axis state, elements, visibility, and ARIA', () => {
 	dom.window.close();
 });
 
+test('native scroll acknowledgements skip remeasurement while independent scrolls update the range', () => {
+	const { window } = new JSDOM('<!doctype html><body></body>');
+	try {
+		using scrollbar = new ScrollableElement(window.document.body, { direction: 'vertical' });
+		const viewport = scrollbar.scrollableElement;
+		let measurements = 0;
+		let scrollHeight = 400;
+		installMetrics(viewport, {
+			width: 200, height: 100, scrollWidth: 200,
+			get scrollHeight() { measurements++; return scrollHeight; },
+		});
+		scrollbar.layout();
+		scrollbar.scrollTo(0, 120);
+		viewport.dispatchEvent(new window.Event('scroll'));
+		assert.equal(measurements, 1);
+		assert.equal(scrollbar.state.top, 120);
+
+		scrollHeight = 600;
+		viewport.scrollTop = 180;
+		viewport.dispatchEvent(new window.Event('scroll'));
+		assert.equal(measurements, 2);
+		assert.equal(scrollbar.state.top, 180);
+		assert.equal(scrollbar.state.maximumTop, 500);
+	} finally { window.close(); }
+});
+
 test('Scrollbar normalizes wheel input and propagates at boundaries', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const positions: Array<{ readonly left: number; readonly top: number; }> = [];

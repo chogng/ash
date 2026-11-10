@@ -23,7 +23,7 @@ import { registerAction2 } from '../../../../platform/actions/common/actions.js'
 import { ChatContextContributions, ChatReferenceContextContribution } from './actions/chatContext.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
-import { ChatCopyActionRendering, registerChatCopyActions } from './actions/chatCopyActions.js';
+import { registerChatCopyActions } from './actions/chatCopyActions.js';
 import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
@@ -180,7 +180,6 @@ registerChatToolActions();
 registerChatTitleActions();
 registerChatExportActions();
 registerChatCopyActions();
-registerWorkbenchContribution(ChatCopyActionRendering.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatCopyActionRendering));
 registerChatApprovalEnvironmentActions();
 registerChatCodeBlockActions();
 registerChatElicitationActions();
@@ -289,6 +288,22 @@ configurationRegistry.registerConfiguration<boolean>({
 		valueType: 'boolean',
 		get title() { return localize('chat.autoFollowReplies.title', 'Automatically follow new replies'); },
 		get description() { return localize('chat.autoFollowReplies.description', 'Follow new replies when the conversation is at the bottom. Scrolling up or editing a message pauses following.'); },
+	},
+});
+
+configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.ShowAgentReplyTimestamps,
+	defaultValue: true,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.showAgentReplyTimestamps.invalid', 'The Agent reply timestamp setting must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.showAgentReplyTimestamps.title', 'Show Agent reply timestamps'); },
+		get description() { return localize('chat.showAgentReplyTimestamps.description', 'Show the time below each Agent reply.'); },
 	},
 });
 

@@ -1,4 +1,4 @@
-.ash-sessions-filter-tabs {
+.ash-sessions-window .ash-tab-list-navigation {
 	--ash-tab-height: var(--ash-spacing-size280);
 	--ash-tab-border-radius: var(--ash-cornerRadius-large);
 	--ash-tabList-itemContentInset: var(--ash-spacing-size120);

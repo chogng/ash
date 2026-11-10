@@ -12,6 +12,23 @@
 		"attachments . actions";
 }
 
+.ash-chat-input-container.ash-chat-input-adaptive.has-staged-files {
+	grid-template-areas:
+		"staged staged staged"
+		"attachments editor actions";
+}
+
+.ash-chat-input-container.ash-chat-input-adaptive.has-staged-files.expanded {
+	grid-template-areas:
+		"staged staged staged"
+		"editor editor editor"
+		"attachments . actions";
+}
+
+.ash-chat-input-adaptive > .ash-chat-staged-files {
+	grid-area: staged;
+}
+
 .ash-chat-input-adaptive > .ash-chat-input-editor-host {
 	grid-area: editor;
 }

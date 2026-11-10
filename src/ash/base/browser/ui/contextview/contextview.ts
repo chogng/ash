@@ -105,13 +105,32 @@ export class ContextView
 		return popupRevisions.get(document) ?? 0;
 	}
 
+	static getContainingDialog(target: Element): ContextView | undefined {
+		return findLast(visibleContextViews.get(target.ownerDocument) ?? [], view =>
+			view.options?.presentation === 'dialog' && view.element.contains(target));
+	}
+
 	static getHoverScope(target: HTMLElement): ContextView | undefined {
 		return findLast(visibleContextViews.get(target.ownerDocument) ?? [], view =>
-			view.options?.blockOutsidePointer && !isTargetInAnotherModal(target, view.element));
+			(view.options?.blockOutsidePointer || (view.options?.presentation === 'dialog' && view.contains(target))) &&
+			!isTargetInAnotherModal(target, view.element));
 	}
 
 	contains(target: Node): boolean {
 		return this.element.contains(target) || this.options?.isTargetWithin?.(target) === true;
+	}
+
+	private canHandleEscape(target: EventTarget | null): boolean {
+		if (isTopmostContextView(this)) return true;
+		if (this.options?.presentation !== 'dialog' || !isNode(target) || !this.element.contains(target)) return false;
+		const stack = visibleContextViews.get(this.element.ownerDocument);
+		const hover = stack?.at(-1);
+		if (stack?.at(-2) !== this || hover?.options?.presentation !== 'hover' ||
+			!anchorContains(hover.options.anchor, target) || hover.contains(target)) return false;
+		// A tooltip above the focused control should close with its dialog. A
+		// hover that has taken focus still handles its own Escape first.
+		hover.hide(ContextViewHideReason.Escape);
+		return isTopmostContextView(this);
 	}
 
 	show(options: ContextViewOptions): boolean {
@@ -208,8 +227,8 @@ export class ContextView
 				if (
 					event.isComposing ||
 					event.key !== 'Escape' ||
-					!isTopmostContextView(this) ||
-					isTargetInAnotherModal(event.target, this.element)
+					isTargetInAnotherModal(event.target, this.element) ||
+					!this.canHandleEscape(event.target)
 				) {
 					return;
 				}

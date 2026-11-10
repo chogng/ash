@@ -699,7 +699,7 @@ export const SettingsNavigation = [
 						id: 'chat-conversation-display',
 						label: localize('settings.chatConversationDisplay.label', 'Conversation'),
 						description: localize('settings.chatConversationDisplay.description', 'Choose how Chat displays and follows the conversation.'),
-						settings: ['chat.autoFollowReplies', 'chat.stickyScroll.enabled', 'sessions.chatTimeline.display', 'chat.tips.enabled'],
+						settings: ['chat.autoFollowReplies', 'chat.showAgentReplyTimestamps', 'chat.stickyScroll.enabled', 'sessions.chatTimeline.display', 'chat.tips.enabled'],
 					},
 				],
 			},
@@ -709,7 +709,14 @@ export const SettingsNavigation = [
 				description: '',
 				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion', 'commit', 'commit message'],
 				presentation: 'general',
-				groups: [],
+				groups: [
+					{
+						id: 'model-evaluation',
+						label: localize({ bundle: 'ash.settings', key: 'categories.agents.label' }, 'Agents'),
+						description: '',
+						settings: ['sessions.chat.compareAgents.tools.enabled'],
+					},
+				],
 			},
 			{
 				id: 'teams',

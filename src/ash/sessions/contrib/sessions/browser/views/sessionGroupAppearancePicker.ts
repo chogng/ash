@@ -48,7 +48,11 @@ registerAction2(class ChangeProjectAppearanceAction extends Action2 {
 		const input = accessor.get(IQuickInputService);
 		const project = await projects.read(projectId);
 		if (project.archived) return;
-		const apply = (value: string | undefined) => value === project[field] ? Promise.resolve() : projects.setAppearance(project, field, value);
+		const apply = async (value: string | undefined): Promise<void> => {
+			if (value !== project[field]) {
+				await projects.setAppearance(project, field, value);
+			}
+		};
 		await pickProjectAppearance(input, field, project[field], apply);
 	}
 });

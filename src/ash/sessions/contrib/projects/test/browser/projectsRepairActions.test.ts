@@ -142,7 +142,7 @@ test('folder repair links selected conversations and creates one project per mis
 	await completion;
 	assert.deepEqual(fixture.linked, [['workspace', 'missed'], ['missing', 'new-one'], ['missing', 'new-two']]);
 	assert.equal(fixture.created.length, 1);
-	assert.equal(fixture.created[0]?.materials[0]?.resource.fsPath, URI.file('/missing').fsPath);
+	assert.equal(fixture.created[0]?.materials.find(material => material.kind === 'folder')?.resource.fsPath, URI.file('/missing').fsPath);
 	assert.equal(storage.getBoolean(migrationKey, StorageScope.PROFILE), true);
 });
 

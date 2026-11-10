@@ -3,7 +3,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IGitHubService, type GitHubChecks, type GitHubIssueDetails, type GitHubPullRequest } from '../../../../platform/github/common/githubService.js';
+import { IGitHubService, type GitHubIssueDetails, type GitHubPullRequest, type GitHubPullRequestChecks } from '../../../../platform/github/common/githubService.js';
 
 export type GitHubReferenceKind = 'pullRequest' | 'issue';
 
@@ -15,7 +15,7 @@ export interface IGitHubReferenceTarget {
 
 export interface IPullRequestHoverDetails {
 	readonly pullRequest: GitHubPullRequest;
-	readonly checks: GitHubChecks | undefined;
+	readonly checks: GitHubPullRequestChecks | undefined;
 }
 
 export type LazyGitHubResourceState<T> =
@@ -74,17 +74,8 @@ export class LazyGitHubResourceResolver extends Disposable {
 				throw new Error('Pull request core metadata is not loaded');
 			}
 			const pullRequest = state.value.pullRequest;
-			const statuses: GitHubChecks['statuses'][number][] = [];
-			const checks: GitHubChecks['checks'][number][] = [];
-			let page: number | null = 1;
-			let result!: GitHubChecks;
-			while (page !== null) {
-				result = await this.github.readChecks(repository(target), pullRequest.headCommit, page, entry.cancellation.token);
-				statuses.push(...result.statuses);
-				checks.push(...result.checks);
-				page = result.nextPage;
-			}
-			return { pullRequest, checks: { ...result, statuses, checks } };
+			const checks = await this.github.readPullRequestChecks(repository(target), pullRequest.number, pullRequest.headCommit, token);
+			return { pullRequest, checks };
 		}, ResourceDetail.Checks);
 	}
 

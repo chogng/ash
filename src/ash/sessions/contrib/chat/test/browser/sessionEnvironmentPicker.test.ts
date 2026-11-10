@@ -105,7 +105,7 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(discoveries, 2);
 	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
-	assert.ok(document.querySelector('[aria-label="WSL: Ubuntu"]'));
+	assert.equal(document.querySelector('[aria-label="WSL: Ubuntu"]')?.getAttribute('aria-description'), 'Connect to the Ubuntu WSL distribution.');
 	assert.ok(document.querySelector('[aria-label="Cloud"]:disabled'));
 	assert.ok(document.querySelector('[aria-label="New Environment"]'));
 	assert.equal(document.querySelector('[aria-label="Add Remote…"]'), null);
@@ -113,6 +113,8 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 	assert.ok(remote);
 	const host = document.querySelector<HTMLElement>('[aria-label="devbox"]');
 	assert.ok(host);
+	assert.equal(host.getAttribute('aria-description'), 'Run on devbox. · Connected');
+	assert.equal(host.getAttribute('title'), 'Run on devbox.');
 	assert.equal(host.closest('[role="menu"]'), remote.closest('[role="menu"]'));
 	assert.ok(host.compareDocumentPosition(remote) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
 	assert.equal(remote.getAttribute('aria-haspopup'), 'menu');
@@ -123,6 +125,8 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 	assert.ok(document.querySelector('[aria-label="SSH"]'));
 	const tunnel = document.querySelector<HTMLButtonElement>('[aria-label="Ash Tunnel"]');
 	assert.ok(tunnel);
+	assert.equal(tunnel.getAttribute('aria-description'), 'Connect using an authenticated Ash Tunnel URL.');
+	assert.equal(tunnel.getAttribute('title'), 'Connect using an authenticated Ash Tunnel URL.');
 	assert.equal(document.activeElement, tunnel);
 
 	tunnel.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));

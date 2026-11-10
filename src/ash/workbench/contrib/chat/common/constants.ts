@@ -16,6 +16,7 @@ export enum ChatConfiguration {
 	AutoExpandToolFailures = 'chat.tools.autoExpandFailures',
 	TipsEnabled = 'chat.tips.enabled',
 	AutoFollowReplies = 'chat.autoFollowReplies',
+	ShowAgentReplyTimestamps = 'chat.showAgentReplyTimestamps',
 }
 
 export enum ChatNotificationMode {

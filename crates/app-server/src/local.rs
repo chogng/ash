@@ -11,6 +11,7 @@ use crate::server::EnvToolPorts;
 use crate::server::update_broker::UpdateBroker;
 use crate::tool_composition::ToolPort;
 use ash_async_utils::CancellationToken;
+use ash_async_utils::FutureCancellationExt;
 use ash_chatgpt::ChatGptOAuth;
 use ash_client::OperationClient;
 use ash_cloud_codebase::CloudCodebaseProviderRegistry;
@@ -3139,9 +3140,10 @@ impl ModelCatalog for ConfigBackedModelService {
             .map_err(ModelPreferencesError::Configuration)
     }
 
-    fn refresh(
+    fn refresh_with_cancellation(
         &self,
         id: &ash_protocol::ModelConnectionId,
+        cancellation: &CancellationToken,
     ) -> Result<
         Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>,
         crate::model_catalog::ModelCatalogRefreshError,
@@ -3191,7 +3193,12 @@ impl ModelCatalog for ConfigBackedModelService {
             })?
             .ok_or(ModelCatalogRefreshError::Unsupported)?;
         self.catalog_runtime
-            .block_on(manager.refresh(binding.scope().clone(), binding.source()))
+            .block_on(
+                manager
+                    .refresh(binding.scope().clone(), binding.source())
+                    .with_cancellation(cancellation.clone()),
+            )
+            .map_err(|_| ModelCatalogRefreshError::Cancelled)?
             .map_err(ModelCatalogRefreshError::from)?;
         manager
             .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())

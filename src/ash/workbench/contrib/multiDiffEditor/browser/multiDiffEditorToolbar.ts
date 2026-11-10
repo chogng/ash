@@ -1,6 +1,8 @@
 import { h } from '../../../../base/browser/dom.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import type { IAction } from '../../../../base/common/actions.js';
+import { Icon } from '../../../../base/common/icon.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
@@ -31,6 +33,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 		@IEditorService editorService: IEditorService,
 		@IViewsService viewsService: IViewsService,
 		@IContextMenuService contextMenuService: IContextMenuService,
+		@ICommandService commandService: ICommandService,
 	) {
 		super();
 		const document = options.container.ownerDocument;
@@ -57,8 +60,11 @@ export class MultiDiffEditorToolbar extends Disposable {
 			const label = h(document, 'span'); label.className = 'ash-multi-diff-editor-source-label'; label.textContent = options.input.label; left.append(label);
 			this._register(hoverService.setupDelayedHover(label, { content: options.input.label }));
 		}
-		const primary = this.sourceResolvers.primaryRepositoryAction(options.input);
-		const repositoryActions = this.sourceResolvers.repositoryActions?.(options.input).map(action => this.wrap(action)) ?? [];
+		const snapshotActions = options.input.source?.kind === 'snapshot' ? options.input.source.actions?.map(action =>
+			new ToolbarAction(action.id, action.label, action.tooltip, action.icon ? Icon.fromId(action.icon) : undefined,
+				action.enabled !== false, () => commandService.executeCommand(action.command, ...action.arguments))) : undefined;
+		const primary = snapshotActions ? snapshotActions[0] : this.sourceResolvers.primaryRepositoryAction(options.input);
+		const repositoryActions = (snapshotActions ? snapshotActions.slice(1) : this.sourceResolvers.repositoryActions?.(options.input) ?? []).map(action => this.wrap(action));
 		const wrapped = primary ? this.wrap(primary) : undefined;
 		const dropdown = new ToolbarAction('multiDiff.repository.menu', localize('multiDiff.repositoryActions', 'Multi-diff repository actions'), localize('multiDiff.repositoryActions', 'Multi-diff repository actions'), Lxicon.chevronDown, true, () => { });
 		const toolbar = this._register(new WorkbenchToolBar(right, contextMenuService, {

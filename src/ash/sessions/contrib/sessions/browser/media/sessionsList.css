@@ -441,6 +441,7 @@
 .ash-sessions-list-row {
 	position: relative;
 	min-width: 0;
+	--sessions-fork-depth: 0;
 	--sessions-row-background: var(--ash-sideBar-background);
 }
 
@@ -555,7 +556,10 @@
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
 	.ash-sessions-list-row
 	> .ash-session-leading-icon {
-	inset-inline-start: var(--ash-sessions-sidebar-item-inset);
+	inset-inline-start: calc(
+		var(--ash-sessions-sidebar-item-inset) + var(--sessions-fork-depth) *
+			var(--ash-spacing-size120)
+	);
 }
 
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
@@ -563,7 +567,8 @@
 	> .ash-sessions-list-item {
 	padding-inline-start: calc(
 		var(--ash-sessions-sidebar-item-inset) + var(--ash-toolbar-actionSize) +
-			var(--ash-spacing-size60)
+			var(--ash-spacing-size60) + var(--sessions-fork-depth) *
+			var(--ash-spacing-size120)
 	);
 }
 
@@ -616,53 +621,47 @@
 	}
 }
 
-.ash-sessions-project-rename {
-	display: grid;
-	gap: var(--ash-spacing-size80);
-	box-sizing: border-box;
-	inline-size: min(288px, calc(100vw - var(--ash-spacing-size80)));
-	padding: var(--ash-spacing-size120);
-	background: var(--ash-dialog-background);
+.ash-sessions-list
+	.ash-sessions-list-row.renaming
+	> :is(.ash-sessions-list-item, .ash-sessions-list-actions) {
+	visibility: hidden;
 }
 
-.ash-sessions-project-rename-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--ash-spacing-size80);
-	min-block-size: var(--ash-spacing-size280);
+.ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
+	.ash-tree-row:not(:hover, .selected)
+	.ash-sessions-list-row.renaming {
+	background: var(--ash-sessions-sidebar-hover-background);
 }
 
-.ash-sessions-project-rename-header > h2 {
-	margin: 0;
-	min-inline-size: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+.ash-sessions-list-row.renaming > .ash-inline-rename-input {
+	position: absolute;
+	inset-block-start: 50%;
+	inset-inline-start: var(--sessions-rename-start);
+	inline-size: calc(
+		100% - var(--sessions-rename-start) -
+			var(--ash-sessions-sidebar-item-inset)
+	);
+	transform: translateY(-50%);
+	field-sizing: fixed;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: var(--ash-foreground);
 	font-size: var(--ash-fontSize-body1);
-	font-weight: var(--ash-fontWeight-semiBold);
 }
 
-.ash-sessions-project-rename .ash-input-box-field {
-	min-inline-size: 0;
-	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-sessions-project-rename .ash-input-box-message {
-	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size60);
-	color: var(--ash-error-foreground);
-	font-size: var(--ash-fontSize-label1);
-	overflow-wrap: anywhere;
-}
-
-.ash-sessions-project-rename-actions {
-	display: flex;
-	justify-content: flex-end;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size40);
+:is(.hc-black, .hc-light) .ash-sessions-list-row.renaming {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
 }
 
 @media (forced-colors: active) {
+	.ash-sessions-list-row.renaming {
+		outline: var(--ash-strokeThickness) solid Highlight;
+		outline-offset: -1px;
+	}
+
 	.ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
 		.ash-sessions-list-row.selected
 		> .ash-sessions-list-item:not(:focus-visible) {

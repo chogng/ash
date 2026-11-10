@@ -2,19 +2,97 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { realpath } from 'node:fs/promises';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { Editor } from '../../../automation/editor.js';
 import { expect, test } from '../../../automation/test.js';
-import { QuickAccess } from '../../../automation/quickaccess.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 test.use({ gitRepository: true, electronUserSettings: { 'workbench.locale': 'zh-CN' } });
 
+test('views and saves only the selected Ash project memory', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }, testInfo) => {
+	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+	try {
+		const { client } = connection;
+		const add = async (name: string, title: string) => {
+			const projectId = randomUUID();
+			await client.request(APP_SERVER_METHODS['project/create'], {
+				commandId: randomUUID(), projectId, name, description: '', materials: [], scope: 'chat',
+			});
+			const scope = { type: 'chatProject', projectId } as const;
+			const memoryId = randomUUID();
+			await client.request(APP_SERVER_METHODS['memory/add'], {
+				commandId: randomUUID(), memoryId, scope, title, body: '初始内容',
+			});
+			return { scope, memoryId };
+		};
+		const first = await add('项目记忆样本', '本项目记忆');
+		const other = await add('另一个项目', '其他项目记忆');
+		await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(), name: '空记忆项目', description: '', materials: [], scope: 'chat',
+		});
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
+		const projects = page.locator('.ash-projects');
+		const view = projects.getByRole('button', { name: '查看记忆', exact: true });
+		const dialog = page.getByRole('dialog', { name: '项目记忆', exact: true });
+		const content = new Editor(dialog);
+		const save = dialog.getByRole('button', { name: '保存', exact: true });
+		const memories = dialog.getByRole('combobox', { name: '已保存的记忆' });
+		await projects.getByRole('button', { name: '空记忆项目', exact: true }).click();
+		await view.press('Enter');
+		await expect(content.input).toBeEditable();
+		await expect(save).toBeDisabled();
+		await content.waitForEditorFocus();
+		await page.keyboard.insertText('新建的项目记忆');
+		await save.click();
+		await expect(view).toBeFocused();
+		await view.press('Enter');
+		await content.waitForEditorContents(text => text === '新建的项目记忆');
+		await page.keyboard.press('Escape');
+		await expect(view).toBeFocused();
+		await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
+		await projects.getByRole('button', { name: '项目记忆样本', exact: true }).click();
+		await view.press('Enter');
+		await expect(memories).toHaveText('本项目记忆');
+		await expect(dialog).not.toHaveAttribute('aria-modal', 'true');
+		await content.waitForEditorContents(text => text === '初始内容');
+		await expect(content.input).toHaveAccessibleName('内容');
+		await expect(dialog.getByText('记忆已开启', { exact: true })).toBeVisible();
+		await expect(save).toBeDisabled();
+		await memories.press('Enter');
+		await expect(dialog.getByRole('option')).toHaveText(['本项目记忆']);
+		await page.keyboard.press('Escape');
+		await page.screenshot({ path: testInfo.outputPath('project-memory-dialog.png') });
+		await dialog.getByRole('textbox', { name: '标题', exact: true }).press('Tab');
+		await expect(content.input).toBeFocused();
+		await content.input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('取消后丢弃的内容');
+		await expect(save).toBeEnabled();
+		await content.input.press('Escape');
+		await page.getByRole('button', { name: '放弃更改', exact: true }).click();
+		await expect(view).toBeFocused();
+		await view.press('Enter');
+		await content.waitForEditorContents(text => text === '初始内容');
+		await content.input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('更新的项目记忆\n保留换行');
+		await save.click();
+		await expect(view).toBeFocused();
+		const read = (memory: typeof first) => client.request(APP_SERVER_METHODS['memory/read'], memory);
+		expect((await read(first)).body).toBe('更新的项目记忆\n保留换行');
+		expect((await read(other)).body).toBe('初始内容');
+	} finally {
+		await connection.close();
+	}
+});
+
 test('Code and Chat recall separate memories from the same project', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	test.setTimeout(120_000);
 	const note = '演示统一使用紫色样本。';
+	const prompt = `长期约定：${note} 请简短确认。`;
 	const chatNote = '聊天项目只使用金色样本。';
 	const followUp = '按之前说的处理。';
 	const provider = 'custom-memory-fixture';
 	const model = { provider, model: 'memory-fixture' };
+	let projectId: string;
 	const server = createServer(async (request, response) => {
 		if (request.method === 'GET') {
 			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
@@ -28,8 +106,27 @@ test('Code and Chat recall separate memories from the same project', { tag: ['@e
 		const reference = input.match(/memory:[A-Za-z0-9_-]+/u)?.[0];
 		const content = hasCode && hasChat ? '记忆范围混合。' : reference && (hasCode || hasChat)
 			? `${hasCode ? '会使用紫色样本。' : '会使用金色样本。'} ${reference}` : '已收到。';
-		const chunk = (delta: object, finish_reason: 'stop' | null) => `data: ${JSON.stringify({ id: 'memory-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+		const chunk = (delta: object, finish_reason: 'stop' | 'tool_calls' | null) => `data: ${JSON.stringify({ id: 'memory-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
 		response.writeHead(200, { 'content-type': 'text/event-stream' });
+		const requestBody = JSON.parse(input) as {
+			messages: { role: string; content?: unknown; tool_call_id?: string; }[];
+			tools?: { function?: { name?: string; }; }[];
+		};
+		if (requestBody.messages.some(message => message.role === 'user' && JSON.stringify(message.content)?.includes(prompt))) {
+			const toolNames = requestBody.tools?.map(tool => tool.function?.name);
+			const callTool = (id: string, name: string, args: object) => {
+				response.end(chunk({ tool_calls: [{ index: 0, id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] }, null)
+					+ chunk({}, 'tool_calls') + 'data: [DONE]\n\n');
+			};
+			if (toolNames?.includes('memories-scopes') && !requestBody.messages.some(message => message.tool_call_id === 'fixture-scopes')) {
+				callTool('fixture-scopes', 'memories-scopes', {});
+				return;
+			}
+			if (toolNames?.includes('memories-save') && !requestBody.messages.some(message => message.tool_call_id === 'fixture-save')) {
+				callTool('fixture-save', 'memories-save', { scope: `project:${projectId}`, title: '演示样本', body: note, expected_revision: 0 });
+				return;
+			}
+		}
 		response.end(chunk({ content }, null) + chunk({}, 'stop') + 'data: [DONE]\n\n');
 	});
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -51,7 +148,7 @@ test('Code and Chat recall separate memories from the same project', { tag: ['@e
 		});
 		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-fixture-key' });
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
-		await client.request(APP_SERVER_METHODS['config/update'], { commandId: randomUUID(), expectedRevision: config.revision, model });
+		await client.request(APP_SERVER_METHODS['config/update'], { commandId: randomUUID(), expectedRevision: config.revision, model, features: { memories: true, chatMemories: true } });
 		const createProject = async (name: string) => {
 			const projectId = randomUUID();
 			await client.request(APP_SERVER_METHODS['project/create'], {
@@ -59,7 +156,11 @@ test('Code and Chat recall separate memories from the same project', { tag: ['@e
 			});
 			return projectId;
 		};
-		const projectId = await createProject('Memory fixture');
+		projectId = await createProject('Memory fixture');
+		const scope = { type: 'project', projectId } as const;
+		await client.request(APP_SERVER_METHODS['memory/policy/update'], {
+			commandId: randomUUID(), scope, expectedRevision: 0, automaticRead: 'firstInvocation', modelWrite: 'enabled',
+		});
 		const create = async (title: string, branchName: string, project = projectId) => {
 			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
 				commandId: randomUUID(), kind: 'code', title, agent: { type: 'default' },
@@ -84,28 +185,27 @@ test('Code and Chat recall separate memories from the same project', { tag: ['@e
 			});
 			await expect.poll(async () => (await read(identity)).thread.turns.at(-1)?.status).toBe('completed');
 		};
-		await turn(first, note);
+		await turn(first, prompt);
+		const saved = (await client.request(APP_SERVER_METHODS['memory/list'], { scope })).memories[0]!;
+		expect(saved.title).toBe('演示样本');
+		const record = await client.request(APP_SERVER_METHODS['memory/read'], { scope, memoryId: saved.memoryId });
+		expect(record.source).toMatchObject({ model: { threadId: first.threadId } });
+		expect(record.body).toBe(note);
 
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 		const select = (identity: typeof first) => page.locator(`[data-item="session:${identity.sessionId}"] .ash-sessions-list-item`).click();
 		const active = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat:visible');
 		await select(first);
-		const row = active.locator('.ash-chat-user-message').filter({ hasText: note });
-		await row.hover();
-		await row.locator('[data-action-id="ash.toolbar.moreActions"] button').press('Enter');
-		await page.getByRole('menuitem', { name: '保存为项目记忆', exact: true }).click();
-
+		const row = active.locator('.ash-chat-user-message').filter({ hasText: prompt });
+		await expect(row).toBeVisible();
+		const more = row.locator('[data-action-id="ash.toolbar.moreActions"] button');
+		if (await more.count()) {
+			await more.press('Enter');
+			await expect(page.getByRole('menuitem', { name: '保存为项目记忆', exact: true })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+		}
 		const memories = page.locator('.ash-memories:visible');
-		const title = memories.getByRole('textbox', { name: '记忆标题', exact: true });
-		await expect(title).toBeFocused();
-		await expect(memories.getByRole('textbox', { name: '记忆内容', exact: true })).toHaveValue(note);
-		await title.fill('演示样本');
-		await memories.getByRole('button', { name: '保存记忆', exact: true }).press('Enter');
-		await expect(memories.getByRole('status')).toHaveText('记忆已保存。');
-		await memories.getByRole('checkbox', { name: '启用 Code 模型记忆', exact: true }).check();
-		await memories.getByRole('checkbox', { name: '允许读取记忆', exact: true }).check();
-		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['memory/policy/read'], { scope: { type: 'project', projectId } })).automaticRead).toBe('firstInvocation');
 
 		const firstDirectory = (await read(first)).directory;
 		const secondDirectory = (await read(second)).directory;
@@ -145,24 +245,18 @@ test('Code and Chat recall separate memories from the same project', { tag: ['@e
 		const chatScopes = await client.request(APP_SERVER_METHODS['memory/scopes'], { threadId: chat.threadId });
 		expect(chatScopes.scopes.map(entry => entry.policy.scope)).toEqual([chatScope]);
 
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true }).click();
-		await new QuickAccess(page).runCommand('ash.memories.open');
-		await expect(memories.getByRole('checkbox', { name: '启用 Code 模型记忆', exact: true })).toHaveCount(0);
-		const context = memories.getByRole('combobox', { name: 'Conversation context' });
-		await context.selectOption(chat.threadId);
-		await memories.getByRole('textbox', { name: '记忆标题', exact: true }).fill('聊天项目样本');
-		await memories.getByRole('textbox', { name: '记忆内容', exact: true }).fill(chatNote);
-		await memories.getByRole('button', { name: '保存记忆', exact: true }).press('Enter');
-		await expect(memories.getByRole('status')).toHaveText('记忆已保存。');
-		await memories.getByRole('checkbox', { name: '允许读取记忆', exact: true }).check();
-		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['memory/policy/read'], { scope: chatScope })).automaticRead).toBe('firstInvocation');
+		const chatMemoryId = randomUUID();
+		await client.request(APP_SERVER_METHODS['memory/add'], {
+			commandId: chatMemoryId, memoryId: chatMemoryId, scope: chatScope, title: '聊天项目样本', body: chatNote,
+		});
+		await client.request(APP_SERVER_METHODS['memory/policy/update'], {
+			commandId: randomUUID(), scope: chatScope, expectedRevision: 0, automaticRead: 'firstInvocation', modelWrite: 'disabled',
+		});
 		const nextChat = await createChat('Another Chat in the project');
 		await turn(nextChat, followUp);
 		const items = (await read(nextChat)).thread.turns.at(-1)?.items ?? [];
 		expect(items.filter(item => item.type === 'agentMessage').map(item => item.text).join('')).toMatch(/^会使用金色样本。 memory:/u);
 
-		const scope = { type: 'project', projectId } as const;
-		const saved = (await client.request(APP_SERVER_METHODS['memory/list'], { scope })).memories[0]!;
 		await client.request(APP_SERVER_METHODS['memory/delete'], {
 			commandId: randomUUID(), scope, memoryId: saved.memoryId, expectedRevision: saved.revision,
 		});

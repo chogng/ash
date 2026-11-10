@@ -1,5 +1,6 @@
 import type { IAction } from '../../../../base/common/actions.js';
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
+import { observeIntersection } from '../../../../base/browser/observer.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -245,35 +246,72 @@ export class ProjectsList extends Disposable {
 		const document = container.ownerDocument;
 		const section = h(document, 'section', { className: 'ash-projects-conversations' });
 		const label = localize('projects.conversations', 'Project conversations');
-		section.append(h(document, 'h2', {}, label));
+		const heading = h(document, 'h2', { properties: { id: generateUuid() } }, label);
+		section.append(h(document, 'div', { className: 'ash-projects-section-heading' }, heading));
 		container.append(section);
-		const list = h(document, 'ul', { className: 'ash-projects-conversation-list', attributes: { 'aria-label': label } });
+		const list = h(document, 'ul', { className: 'ash-projects-conversation-list', attributes: { 'aria-labelledby': heading.id } });
 		const history = project?.history;
+		const loading = history?.state === 'loading' || history?.state === 'idle';
 		for (const entry of entries) {
-			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const row = h(document, 'li');
 			const button = content.add(new Button(row, {
-				...defaultButtonStyles, label: entry.title, icon: entry.defaultIcon, presentation: 'quiet',
+				...defaultButtonStyles,
+				label: entry.title,
+				icon: entry.defaultIcon,
+				title: entry.title,
+				enabled: !entry.disabled,
 				onClick: () => this.openProjectConversation(entry),
 			}));
 			button.domNode.classList.add('ash-projects-conversation');
-			button.enabled = !entry.disabled;
 			button.domNode.dataset.projectControl = entry.id;
 			list.append(row);
 		}
-		if (entries.length) section.append(list);
-		if (history?.state === 'more') {
-			const button = content.add(new Button(section, {
+		if (entries.length) {
+			list.setAttribute('aria-busy', String(loading));
+			section.append(list);
+		}
+		if (history?.state === 'more' && history.manual) {
+			const more = content.add(new Button(section, {
 				...defaultButtonStyles,
-				label: localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats'),
+				label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moreProjectConversations' }, 'Load more conversations'),
+				presentation: 'secondary',
 				onClick: history.load,
 			}));
-			button.domNode.dataset.projectControl = 'project-history';
-		} else if (history?.state === 'loading' || history?.state === 'idle') {
-			section.append(h(document, 'p', { attributes: { role: 'status' } },
+			more.domNode.dataset.projectControl = 'project-history:more';
+		} else if (history?.state === 'more') {
+			const anchor = list.lastElementChild ?? heading;
+			let requested = false;
+			const load = () => {
+				if (requested || !anchor.isConnected || !this.options.isVisible()) return;
+				requested = true;
+				history.load();
+			};
+			content.add(observeIntersection(anchor, entry => { if (entry.isIntersecting) load(); }));
+			content.add(addDisposableListener(anchor, 'focusin', () => queueMicrotask(load)));
+		} else if (loading) {
+			if (!entries.length) {
+				const skeleton = h(document, 'div', {
+					className: 'ash-projects-conversation-list',
+					attributes: { 'aria-hidden': 'true' },
+				});
+				for (let index = 0; index < 3; index++) {
+					skeleton.append(h(document, 'div', { className: 'ash-projects-conversation-placeholder' },
+						h(document, 'span', { className: 'ash-projects-placeholder' }),
+						h(document, 'span', { className: 'ash-projects-placeholder' }),
+					));
+				}
+				section.append(skeleton);
+			}
+			section.append(h(document, 'p', {
+				className: 'ash-aria-live',
+				attributes: { role: 'status' },
+			},
 				localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')));
 		} else if (!entries.length && (!history || history.state === 'complete')) {
-			section.append(h(document, 'p', { attributes: { role: 'status' } },
-				localize('sessions.chatList.emptyProject', 'No chats in this project')));
+			const empty = h(document, 'div', { className: 'ash-projects-conversation-empty', attributes: { role: 'status' } });
+			appendIcon(Lxicon.chatSession, empty);
+			empty.append(h(document, 'p', {}, localize('sessions.chatList.emptyProject', 'No chats in this project')));
+			section.append(empty);
 		}
 	}
 

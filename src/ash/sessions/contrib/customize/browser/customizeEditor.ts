@@ -65,7 +65,6 @@ import {
 } from '../../../../workbench/contrib/extensions/common/extensionsInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CustomizeSkillActions } from './customizeSkillActions.js';
-import '../../../browser/ui/filterTabs.css';
 import './customizeEditor.css';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 
@@ -213,7 +212,6 @@ export class CustomizeEditorPane extends EditorPane {
 				},
 			}),
 		);
-		this.tabs.element.classList.add('ash-sessions-filter-tabs');
 		this.collectionControl = this._register(
 			new SegmentedControl(toolbar, {
 				ariaLabel: localize('customize.collection', 'Resource collection'),

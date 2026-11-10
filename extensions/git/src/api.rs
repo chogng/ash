@@ -242,10 +242,17 @@ impl Api {
                 }
             };
             if let Some(error) = value.get("backendError") {
+                // This read reports ConflictChanged when the path no longer has unmerged stages.
+                if method == "conflictFile" && error["name"] == "GitConflictChanged" {
+                    return Ok(Value::Null);
+                }
                 let message = match error["name"].as_str().unwrap_or("Unavailable") {
                     "GitUnavailable" => self.text("git.unavailable", &[]),
                     "GitWorkspaceUnavailable" => self.text("git.workspaceUnavailable", &[]),
                     "GitRepositoryNotFound" => self.text("git.repositoryNotFound", &[]),
+                    "GitIndexChanged" if matches!(method, "stagedCommitPreview" | "commit") => {
+                        self.text("git.stagedPreviewChanged", &[])
+                    }
                     "PermissionRequired" => self.text("git.permissionRequired", &[]),
                     name => {
                         let message = error["message"]
@@ -375,6 +382,13 @@ impl Api {
             &repository.configuration,
             token,
         )?)
+    }
+    pub fn staged_commit_preview(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<model::StagedCommitPreview, ExtensionError> {
+        decode(self.repository_request(repository, "stagedCommitPreview", json!({}), token)?)
     }
     pub fn installation(
         &self,
@@ -732,7 +746,7 @@ impl Api {
         repository: &Repository,
         path: &RepoPath,
         token: &CancellationToken,
-    ) -> Result<model::ConflictFile, ExtensionError> {
+    ) -> Result<Option<model::ConflictFile>, ExtensionError> {
         decode(self.repository_request(repository, "conflictFile", json!({"path":path}), token)?)
     }
     pub fn complete_conflict(

@@ -11,7 +11,7 @@ import { ViewContainerLocation } from '../../../../../workbench/common/views.js'
 import { SessionsList, type SessionsListPresentation } from './sessionsList.js';
 import type { SessionsCatalogAccessibility, SessionsCatalogListInput } from './sessionsCatalogList.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../../chat/common/constants.js';
-import { IProjectDialogService } from '../../../projects/browser/projectDialogService.js';
+import { IProjectDialogService, type ChatProjectEdit } from '../../../projects/browser/projectDialogService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 
@@ -59,16 +59,38 @@ export class SessionsView extends ViewPane {
 			const input = this._register(instantiation.createInstance(presentation.input));
 			input.attach(getWindow(this.element), () => this.isBodyVisible());
 			this._register(toDisposable(() => this.projectDialogs.close(this.element)));
+			const pendingEdit = this._register(new MutableDisposable());
 			presentation = {
 				catalog: input,
 				accessibility: presentation.accessibility,
-				editProject: (title, appearance, restoreFocus) => {
-					if (this.isBodyVisible()) this.projectDialogs.showChatProjectDialog(this.element, restoreFocus, { title, appearance });
+				createProjectForConversation: (creator, restoreFocus) => {
+					if (!this.isBodyVisible()) return;
+					restoreFocus();
+					this.projectDialogs.showChatProjectDialog(this.element, restoreFocus, undefined, creator);
+				},
+				editProject: async (read: (signal: AbortSignal) => Promise<ChatProjectEdit>, restoreFocus: () => void) => {
+					if (!this.isBodyVisible()) return;
+					const controller = new AbortController();
+					const request = pendingEdit.value = toDisposable(() => controller.abort());
+					try {
+						const edit = await read(controller.signal);
+						if (!controller.signal.aborted && this.isBodyVisible()) {
+							restoreFocus();
+							this.projectDialogs.showChatProjectDialog(this.element, restoreFocus, edit);
+						}
+					} catch (error) {
+						if (!controller.signal.aborted) throw error;
+					} finally {
+						if (pendingEdit.value === request) pendingEdit.clear();
+					}
 				},
 			};
 		}
 		if (presentation === 'code') {
-			presentation = { createProject: () => this.projectDialogs.showCodeProjectDialog(this.element) };
+			presentation = {
+				createProject: () => this.projectDialogs.showCodeProjectDialog(this.element),
+				editProject: (id: string, restoreFocus: () => void) => this.projectDialogs.showCodeProjectDialog(this.element, { id, restoreFocus }),
+			};
 			this._register(toDisposable(() => this.projectDialogs.close(this.element)));
 		}
 		const title = localize({ bundle: 'ash.sessions', key: 'sessions.list.header' }, 'Sessions');

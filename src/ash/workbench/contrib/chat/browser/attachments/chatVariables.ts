@@ -45,21 +45,3 @@ export function projectCopiedChatReferences(
 	}
 	return { text, references };
 }
-
-/** Removes live producer labels from a portable draft and rebases the user references that follow them. */
-export function projectChatDraftReferences(
-	text: string,
-	variables: readonly ChatContextAttachment[],
-): { text: string; contexts: readonly ChatContextAttachment[]; } {
-	let contexts = variables.filter(attachment => attachment.lifetime !== 'source');
-	for (const attachment of [...variables].reverse()) {
-		if (attachment.lifetime !== 'source' || !attachment.reference) continue;
-		const { start, end } = attachment.reference;
-		text = text.slice(0, start) + text.slice(end);
-		contexts = contexts.map(context => context.reference && context.reference.start >= end ? {
-			...context,
-			reference: { start: context.reference.start - (end - start), end: context.reference.end - (end - start) },
-		} : context);
-	}
-	return { text, contexts };
-}

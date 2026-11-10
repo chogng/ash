@@ -227,6 +227,44 @@ suite('ChatGPT entry', () => {
 		assert.deepEqual(loadChatSelection(storage), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
 	});
 
+	for (const staleSelection of ['deleted', 'archived'] as const) {
+		test(`an Ash Chat link opens its target when the previous conversation was ${staleSelection}`, async () => {
+			const values = new Map([['sessions.chat.ashSelection', JSON.stringify({ kind: 'thread', sessionId: 'old', threadId: 'old-root' })]]);
+			const storage = {
+				get: (key: string) => values.get(key), getBoolean: () => false, onWillSaveState: Event.None,
+				store: (key: string, value: string) => { values.set(key, value); },
+			} as unknown as IStorageService;
+			const sessions = [{ sessionId: 'target', kind: 'chat', status: 'active', chats: [{ threadId: 'target-root', status: 'active' }] }];
+			if (staleSelection === 'archived') {
+				sessions.push({ sessionId: 'old', kind: 'chat', status: 'archived', chats: [{ threadId: 'old-root', status: 'archived' }] });
+			}
+			const { management, view } = chatSelectionFixture(storage, sessions as unknown as ISession[]);
+			using selection = view;
+			let linkOpener: IOpener | undefined;
+			let opened = 0;
+			const target = { kind: 'thread', sessionId: 'target', threadId: 'target-root' };
+			using services = new InstantiationService(new ServiceCollection(
+				[IStorageService, storage],
+				[ISessionsService, selection],
+				[ISessionsManagementService, management],
+				[IOpenerService, { registerOpener: (value: IOpener) => { linkOpener = value; return Disposable.None; } } as IOpenerService],
+				[ISessionsLayoutService, {
+					openEntry: async (entry: ISessionsEntry) => {
+						assert.equal(entry.id, 'ashChat');
+						assert.deepEqual(selection.chatSelection.get(), target);
+						assert.equal(selection.getChatSelection()?.kind, 'session');
+						opened++;
+					},
+				} as ISessionsLayoutService],
+			));
+			using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand);
+			assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('target', 'target-root', 'local')), true);
+			assert.equal(opened, 1);
+			assert.deepEqual(loadChatSelection(storage), target);
+			assert.deepEqual(management.untitledSessions, []);
+		});
+	}
+
 	test('an experimental Chat draft applies Ash model visibility while default model reads are pending', async () => {
 		const native = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'GPT-6.1 Sol', longContext: null };
 		const web = { provider: 'chatgpt', model: 'web' };

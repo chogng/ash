@@ -10,6 +10,7 @@ import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { wrapTablesWithScrollable } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { ImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/imageEditorService.js';
 const codeFeatures = registerTestCodeEditorFeatures();
@@ -107,6 +108,7 @@ import { IMenuService } from '../../../src/ash/platform/actions/common/actions.j
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { SessionsWorkspaceModeContext } from '../../../src/ash/sessions/common/contextkeys.js';
 import '../../../src/ash/sessions/contrib/chat/browser/chatRunAnotherVersionActions.js';
@@ -161,6 +163,7 @@ import { IAgentSessionService, IAgentTurnService } from '../../../src/ash/platfo
 import { type AgentSession } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IAgentModelsService } from '../../../src/ash/platform/models/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { SessionsChatCopyActionRendering } from '../../../src/ash/sessions/contrib/chat/browser/chatCopyActionRendering.js';
 import { AppServerSessionsProvider } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import { SessionsManagementService } from '../../../src/ash/sessions/services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
@@ -180,7 +183,6 @@ const services = resources.add(createTestEditorServices(resources.add(new Workbe
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
 	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService),
 })));
-resources.add(services.createInstance(ChatCopyActionRendering));
 services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
 services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
@@ -247,6 +249,12 @@ if (builtinBackend) {
 }
 services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected introduction settings'); } } as unknown as IPreferencesService);
 registerTestVoiceInputServices(services);
+const copyPresentationQuery = new URLSearchParams(location.search);
+if (copyPresentationQuery.has('sessionsCopyFeedback') || copyPresentationQuery.has('codeCard')) {
+	resources.add(services.createInstance(SessionsChatCopyActionRendering));
+} else {
+	resources.add(services.createInstance(ChatCopyActionRendering));
+}
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
@@ -355,8 +363,17 @@ services.registerInstance(IAccessibleViewService, accessibleView);
 let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
+if (new URLSearchParams(location.search).has('sentImageViewer')) {
+	ChatContextKeys.imagePreviewPresentation.bindTo(appServices.get(IContextKeyService)).set('popup');
+	appServices.registerInstance(IHostService, {
+		hasFocus: true, onDidChangeFocus: Event.None, getWindows: async () => [],
+		openWindow: async () => { }, restart: async () => { }, reload: async () => { }, getScreenshot: async () => undefined,
+		showToast: async () => ({ supported: false, clicked: false }),
+	});
+}
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
 const listOptions = {
+	codeBlockPresentation: new URLSearchParams(location.search).has('codeCard') ? 'card' as const : undefined,
 	openTurnChanges: new URLSearchParams(location.search).has('turnChanges') ? async (source: NonNullable<IChatListItem['feedbackSource']>) => {
 		root.dataset.openedTurn = JSON.stringify(source);
 	} : undefined,
@@ -738,7 +755,8 @@ declare global {
 			clearCopiedMessage(): void;
 			showAcceptedContext(text: string, cowork?: boolean): void;
 			updateAcceptedContext(text: string): void;
-			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean): void;
+			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean, virtualizeHistory?: boolean): void;
+			showLongCodeHistory(turns: number, virtualizeHistory: boolean): void;
 			voiceState(): readonly string[];
 			showVoiceIntroduction(): void;
 			toggleIntroductionFocus(): void;
@@ -849,13 +867,18 @@ window.ashChatTranscriptIntegration = {
 	dictationState: () => ({ starts: dictationStarts, cancels: dictationCancels, busy: services.get(IChatSpeechToTextService).isBusy, widgets: services.get(IChatWidgetService).getAllWidgets().length, focused: appChat?.inputEditor?.hasTextFocus() === true, file: file.getModel()!.getValue() }),
 	holdClipboard: (fail = false) => { clipboardFailure = fail; clipboardReady = new Promise(resolve => { releaseClipboard = resolve; }); },
 	releaseClipboard: () => releaseClipboard(),
-	state: () => ({
-		copied: clipboardText, copiedImage: clipboardImage, file: file.getModel()!.getValue(), resource: activeResource.toString(),
-		editorCount: services.get(ICodeEditorService).listCodeEditors().length,
-		codeModelCount: services.get(ICodeEditorService).listCodeEditors().filter(editor => editor !== file && editor.getModel()).length,
-		selection: services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)?.getSelection(),
-		notifications: (services.get(INotificationService) as NotificationService).model.getNotifications().map(item => item.message),
-	}),
+	state: () => {
+		const editors = services.get(ICodeEditorService).listCodeEditors();
+		const responseEditors = editors.filter(editor => editor !== file);
+		const selected = responseEditors.find(editor => editor.hasTextFocus()) ?? responseEditors[0];
+		return {
+			copied: clipboardText, copiedImage: clipboardImage, file: file.getModel()!.getValue(), resource: activeResource.toString(),
+			editorCount: editors.length,
+			codeModelCount: responseEditors.filter(editor => editor.getModel()).length,
+			selection: selected?.getSelection(),
+			notifications: (services.get(INotificationService) as NotificationService).model.getNotifications().map(item => item.message),
+		};
+	},
 	openSkill: async () => {
 		const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'reference-session');
 		await services.get(ICodeEditorService).openCodeEditor({ resource: skill.uri }, file);
@@ -1049,14 +1072,14 @@ window.ashChatTranscriptIntegration = {
 		return { actual: copy.innerHTML, expected: expected.element.innerHTML, layoutError, layout };
 	},
 	inspectRawCodeUpdates: async values => {
-		const part = services.createInstance(CodeBlockPart, document);
+		const part = services.createInstance(CodeBlockPart, document, undefined);
 		document.body.append(part.element);
 		const snapshots: { text: string; eol: string; copied: string; }[] = [];
 		let model: TextModel | null = null;
 		try {
 			for (const value of values) {
 				part.render({ text: value, languageId: 'typescript', codeBlockIndex: 0, element: undefined, chatSessionResource: undefined }, 600);
-				model = part.editor.getModel()!;
+				model = part.model!;
 				clipboardText = '';
 				part.element.querySelector('button')!.click();
 				await new Promise<void>(resolve => setTimeout(resolve, 0));
@@ -1246,14 +1269,16 @@ window.ashChatTranscriptIntegration = {
 	closeConnection: () => connectionChanges.fire(),
 	setAppResourceMode: mode => { linkMode = mode; },
 	appState: () => ({ messages: appMessages, views: [...webviews.webviews].length }),
-	showChatApp: (voice = false, cowork = false, withMedia = false) => {
+	showChatApp: (voice = false, cowork = false, withMedia = false, virtualizeHistory = false) => {
 		appChat?.dispose();
 		window.ashChatTranscriptIntegration.showApp('read', false, withMedia);
 		root.hidden = true;
 		const chatServices = resources.add(services.createChild());
 		if (new URLSearchParams(location.search).has('sessions')) {
-			IsSessionsWindowContext.bindTo(chatServices.get(IContextKeyService)).set(true);
-			SessionsWorkspaceModeContext.bindTo(chatServices.get(IContextKeyService)).set('code');
+			const chatContext = chatServices.get(IContextKeyService);
+			IsSessionsWindowContext.bindTo(chatContext).set(true);
+			ChatContextKeys.imagePreviewPresentation.bindTo(chatContext).set('popup');
+			SessionsWorkspaceModeContext.bindTo(chatContext).set('code');
 		}
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
@@ -1330,8 +1355,33 @@ window.ashChatTranscriptIntegration = {
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
-		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model, 'conversation'))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
 		appChat.setVisible(true);
+	},
+	showLongCodeHistory: (turns, virtualizeHistory) => {
+		window.ashChatTranscriptIntegration.showChatApp(false, false, false, virtualizeHistory);
+		const host = appChat!.domNode.parentElement!;
+		host.style.position = 'fixed';
+		host.style.inset = '20px auto auto 20px';
+		const entries: ThreadTranscriptEntry[] = [];
+		for (let index = 0; index < turns; index++) {
+			const turnId = `code-turn-${index}`;
+			const toolCallId = `code-tool-${index}`;
+			const program = index % 2 ? 'fixture-command' : 'fixture-read';
+			const output = Array.from({ length: 18 }, (_, line) => `Tool evidence ${index}, line ${line}`).join('\n');
+			const code = Array.from({ length: 14 }, (_, line) => `const value${line} = ${index + line};`).join('\n');
+			const items: Extract<ThreadTranscriptEntry, { type: 'item' }>['item'][] = [
+				{ type: 'userMessage', itemId: `code-prompt-${index}`, turnId, text: `Code prompt ${index}` },
+				{ type: 'toolCall', itemId: `code-call-${index}`, turnId, toolCallId, name: program, argumentsJson: JSON.stringify({ index }),
+					binding: { registryGeneration: 1, definitionDigest: 'fixture', sourceChain: [{ type: 'product', component: 'fixture' }], caller: { type: 'direct' },
+						activity: index % 2 ? { type: 'command', program, arguments: [String(index)], workingDirectory: '/fixture' } : { type: 'read', target: `file-${index}.ts` } } },
+				{ type: 'toolResult', itemId: `code-result-${index}`, turnId, toolCallId, text: output, isError: index === 1, content: [{ type: 'text', text: output }] },
+				{ type: 'agentMessage', itemId: `code-reply-${index}`, turnId, text: `## Code reply ${index}\n\n${'Synthetic repository work. '.repeat(40 + index % 6)}\n\n\`\`\`typescript\n${code}\n\`\`\`\n\nFinal result ${index}.` },
+			];
+			for (const item of items) entries.push({ type: 'item', entryId: item.itemId, turnId, transient: false, item });
+		}
+		appItems = chatTranscriptListItems(entries);
+		chatChanges.fire();
 	},
 	showHistoryPagination: (fail = false) => {
 		window.ashChatTranscriptIntegration.showChatApp();

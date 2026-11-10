@@ -43,7 +43,9 @@ impl GitRuntime {
             // current-side and working-file snapshots here so the total file count stays honest.
             let status = self.api.status(repository, Some(token))?;
             for change in status.changes.iter().filter(|change| change.conflicted) {
-                let file = self.api.conflict_file(repository, &change.path, token)?;
+                let Some(file) = self.api.conflict_file(repository, &change.path, token)? else {
+                    continue;
+                };
                 let resource = file_uri(&repository.root_uri, &change.path)?;
                 let mut snapshot = url::Url::parse("git-conflict:/").expect("constant URI");
                 snapshot.set_path(&change.path);
@@ -220,6 +222,16 @@ impl GitRuntime {
             return Err(invalid("Invalid Git change scope"));
         }
         let status = self.api.status(repository, Some(token))?;
+        self.multi_diff_for_status(repository, scope, &status, token)
+    }
+
+    fn multi_diff_for_status(
+        &self,
+        repository: &Repository,
+        scope: &str,
+        status: &Status,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
         let changes = status.changes.iter().filter(|change| {
             !change.conflicted
                 && (scope != "staged" || change.index_status != "unmodified")
@@ -270,7 +282,7 @@ impl GitRuntime {
                 for (&index, file) in indices.iter().zip(files) {
                     inputs[index] = Some(change_content_inputs(
                         repository,
-                        &status,
+                        status,
                         changes[index],
                         comparison,
                         &file,
@@ -332,6 +344,70 @@ impl GitRuntime {
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
         self.api.editor(json!({"method":"open","input":self.multi_diff_input(repository,scope,token)?,"options":{"pinned":true}}),Some(token))
+    }
+
+    pub(crate) fn show_staged_commit_preview(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        if repository.descriptor.parent_path.is_some() {
+            return Err(invalid(
+                &self.api.text("git.stagedPreviewRepositoryRoot", &[]),
+            ));
+        }
+        let preview = self.api.staged_commit_preview(repository, token)?;
+        if preview
+            .status
+            .changes
+            .iter()
+            .any(|change| change.conflicted)
+        {
+            return Err(invalid(&self.api.text("git.resolveConflicts", &[])));
+        }
+        if !preview
+            .status
+            .changes
+            .iter()
+            .any(|change| change.index_status != "unmodified")
+        {
+            self.api.information("git.stagedPreviewEmpty", token)?;
+            return Ok(Value::Null);
+        }
+        let mut input = self.multi_diff_for_status(repository, "staged", &preview.status, token)?;
+        if self.api.staged_commit_preview(repository, token)?.version != preview.version {
+            return Err(invalid(&self.api.text("git.stagedPreviewChanged", &[])));
+        }
+        let label = self.api.text("git.previewStagedCommit", &[]);
+        let action = self.api.text("git.menu.commitStaged", &[]);
+        let resource = format!(
+            "ash-scm://ash.git/{}?stagedPreview={}",
+            repository.descriptor.id, preview.version
+        );
+        input["label"] = json!(label);
+        input["resource"] = json!(resource);
+        input["source"] = json!({"kind":"snapshot","label":label,"repositoryId":repository.descriptor.id,
+            "actions":[{"id":"commitReviewedStaged","label":action,"tooltip":action,"command":"git.commitReviewedStaged","arguments":[repository.descriptor.id,preview.version]}]});
+        for item in input["items"].as_array_mut().expect("multi-diff items") {
+            item.as_object_mut()
+                .expect("multi-diff item")
+                .remove("actions");
+            // The status revision can stay the same when the bytes of a staged file change.
+            for side in ["original", "modified"] {
+                let mut uri =
+                    url::Url::parse(item[side]["resource"].as_str().expect("comparison URI"))
+                        .expect("change content input uses an absolute URI");
+                uri.set_scheme("git-staged-preview")
+                    .expect("snapshot uses a non-file scheme");
+                uri.query_pairs_mut()
+                    .append_pair("stagedPreview", &preview.version);
+                item[side]["resource"] = json!(uri.to_string());
+            }
+        }
+        self.api.editor(
+            json!({"method":"open","input":input,"options":{"pinned":true}}),
+            Some(token),
+        )
     }
     pub(crate) fn committed_diff(
         &self,

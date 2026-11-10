@@ -14,6 +14,7 @@ import {
 	clickCanvasMenu,
 	inspectCanvasMenu,
 	drawBezierPath,
+	drawImageAnnotation,
 	rightClickCanvasShape,
 } from '../../../automation/design.js';
 import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/document.js';
@@ -1099,6 +1100,241 @@ test('Sessions permissions show only the selected check at the trailing edge', a
 	await expect(manual).toBeVisible();
 });
 
+test('Code composer shows image preparation on the pasted thumbnail', { tag: ['@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	const form = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-container');
+	const editor = new Editor(form);
+	await editor.waitForEditorFocus();
+	await editor.input.evaluate(element => {
+		const imageSource = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src')!;
+		Object.defineProperty(HTMLImageElement.prototype, 'src', {
+			...imageSource,
+			set(this: HTMLImageElement, value: string) {
+				if (!this.closest('.ash-chat-image-attachment-thumbnail')) {
+					imageSource.set!.call(this, value);
+					return;
+				}
+				Object.defineProperty(HTMLImageElement.prototype, 'src', imageSource);
+				window.addEventListener('show-clipboard-thumbnail', () => imageSource.set!.call(this, value), { once: true });
+			},
+		});
+		const read = FileReader.prototype.readAsArrayBuffer;
+		FileReader.prototype.readAsArrayBuffer = function (image) {
+			FileReader.prototype.readAsArrayBuffer = read;
+			window.addEventListener('finish-clipboard-image-read', () => read.call(this, image), { once: true });
+		};
+		const bytes = Uint8Array.from(
+			atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='),
+			character => character.charCodeAt(0),
+		);
+		const clipboard = new DataTransfer();
+		clipboard.items.add(new File([bytes], 'clipboard.png', { type: 'image/png' }));
+		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+	});
+	const waitingForPreview = form.locator('.ash-chat-staged-file.pending');
+	const filename = waitingForPreview.getByText('clipboard.png', { exact: true });
+	await expect(filename).toHaveCount(1);
+	await expect(filename).toBeHidden();
+	await expect(waitingForPreview.getByText('Preparing…', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
+	await page.evaluate(() => window.dispatchEvent(new Event('show-clipboard-thumbnail')));
+	const pending = form.locator('.ash-chat-staged-file.image.pending');
+	const preview = pending.getByRole('button', { name: 'Preview clipboard.png', exact: true });
+	await expect(pending.locator('img')).toBeVisible();
+	await expect(pending.locator('img')).toHaveCSS('opacity', '0.5');
+	const tileBorder = await preview.evaluate(element => {
+		const probe = document.createElement('span');
+		probe.style.color = 'var(--ash-border)';
+		element.append(probe);
+		const color = getComputedStyle(probe).color;
+		probe.remove();
+		return color;
+	});
+	await expect(preview).toHaveCSS('border-top-color', tileBorder);
+	await expect(pending.getByText('Preparing…', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
+	expect(await preview.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('ash-chat-staged-image-sweep');
+	expect(await preview.evaluate(element => getComputedStyle(element, '::after').backgroundImage)).toMatch(/^linear-gradient\(90deg,/u);
+	await testInfo.attach('code-pending-image', { body: await form.screenshot(), contentType: 'image/png' });
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	expect(await preview.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
+	await expect(pending.locator('img')).toHaveCSS('opacity', '0.5');
+	await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'active' });
+	expect(await preview.evaluate(element => getComputedStyle(element, '::after').borderTopStyle)).toBe('dashed');
+	await expect(pending.locator('img')).toHaveCSS('opacity', '1');
+	await page.emulateMedia({ forcedColors: 'none' });
+	await page.evaluate(() => window.dispatchEvent(new Event('finish-clipboard-image-read')));
+	await expect(pending).toHaveCount(0);
+	const ready = form.locator('.ash-chat-staged-file.image.ready');
+	const readyPreview = ready.getByRole('button', { name: 'Preview clipboard.png', exact: true });
+	await expect(readyPreview.locator('img')).toBeVisible();
+	await expect(readyPreview.locator('img')).toHaveCSS('opacity', '1');
+	await expect(readyPreview).toHaveCSS('border-top-color', tileBorder);
+	await expect(readyPreview).toHaveCSS('padding', '0px');
+	expect(await readyPreview.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
+	await readyPreview.click();
+	const dialog = page.getByRole('dialog', { name: 'Preview clipboard.png', exact: true });
+	await expect(dialog.getByRole('img', { name: 'clipboard.png', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+	await expect(readyPreview).toBeFocused();
+	await page.keyboard.press('Tab');
+	const remove = ready.getByRole('button', { name: 'Remove clipboard.png', exact: true });
+	await expect(remove).toBeFocused();
+	await page.keyboard.press('Enter');
+	await expect(ready).toHaveCount(0);
+	await expect(editor.input).toBeFocused();
+});
+
+test('Code image preview zooms, saves, opens in the system viewer, and attaches an annotated copy', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
+	if (!('windows' in application)) throw new Error('Expected Electron application');
+	const directory = await realpath(testWorkspace.directory);
+	const savePath = join(directory, 'saved-image.png');
+	const originals = await application.evaluateHandle(({ dialog, shell }) => ({ save: dialog.showSaveDialog, open: shell.openPath }));
+	try {
+		await application.evaluate(({ dialog, shell }, path) => {
+			dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
+			shell.openPath = async value => {
+				(globalThis as { openedChatImage?: string; }).openedChatImage = value;
+				return '';
+			};
+		}, savePath);
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const form = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-container');
+		const editor = new Editor(form);
+		await editor.waitForEditorFocus();
+		const original = await editor.input.evaluate(element => {
+			const canvas = document.createElement('canvas');
+			canvas.width = 256;
+			canvas.height = 160;
+			canvas.getContext('2d')!.fillRect(0, 0, 120, 100);
+			const encoded = canvas.toDataURL('image/png').split(',')[1];
+			const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0));
+			const clipboard = new DataTransfer();
+			clipboard.items.add(new File([bytes], 'annotate.png', { type: 'image/png' }));
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+			return encoded;
+		});
+		await form.getByRole('button', { name: 'Preview annotate.png', exact: true }).click();
+		const preview = page.getByRole('dialog', { name: 'Preview annotate.png', exact: true });
+		const image = preview.getByRole('img', { name: 'annotate.png', exact: true });
+		await expect(image).toBeVisible();
+		await expect(page.locator('.ash-context-view-dialog').filter({ has: preview })).toHaveCSS('-webkit-app-region', 'no-drag');
+		const toolbar = preview.getByRole('toolbar', { name: 'Image preview actions', exact: true });
+		const zoom = toolbar.getByRole('button', { name: /^Zoom: \d+%$/u });
+		await expect(zoom).toBeEnabled();
+		const hasAppPicker = process.platform === 'darwin' || process.platform === 'win32';
+		const iconButtons = [
+			toolbar.getByRole('button', { name: 'Save image', exact: true }),
+			toolbar.getByRole('button', { name: hasAppPicker ? 'Choose image app' : 'Open', exact: true }),
+			toolbar.getByRole('button', { name: 'Annotate image', exact: true }),
+			preview.getByRole('button', { name: 'Close image preview', exact: true }),
+		];
+		for (const button of iconButtons) {
+			await expect(button).toHaveCSS('width', '28px');
+			await expect(button).toHaveCSS('height', '28px');
+		}
+		await testInfo.attach('image-preview-actions', { body: await preview.screenshot(), contentType: 'image/png' });
+		const width = () => image.evaluate(element => element.getBoundingClientRect().width);
+		const fitted = await width();
+		await zoom.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(toolbar.getByRole('button', { name: 'Save image', exact: true })).toBeFocused();
+		await zoom.press('ArrowDown');
+		const zoomMenu = page.getByRole('menu');
+		const fit = zoomMenu.getByRole('menuitemradio', { name: 'Zoom to fit', exact: true });
+		await expect(fit).toHaveAttribute('aria-checked', 'true');
+		await zoomMenu.getByRole('menuitemradio', { name: '100%', exact: true }).click();
+		await expect(zoom).toHaveText('100%');
+		await expect.poll(width).toBe(256);
+		await zoom.click();
+		await expect(zoomMenu.getByRole('menuitemradio', { name: '100%', exact: true })).toHaveAttribute('aria-checked', 'true');
+		await fit.click();
+		await expect.poll(width).toBe(fitted);
+		const fittedLabel = await zoom.textContent();
+		await preview.locator('.ash-image-viewer').dispatchEvent('wheel', { deltaY: -45, ctrlKey: true });
+		await expect.poll(width).toBeGreaterThan(fitted);
+		await expect(zoom).not.toHaveText(fittedLabel!);
+		await image.click({ button: 'right' });
+		await expect(preview).toBeVisible();
+
+		await preview.getByRole('button', { name: 'Save image', exact: true }).click();
+		await expect.poll(async () => readFile(savePath, 'base64').catch(() => '')).toBe(original);
+		const openImage = toolbar.getByRole('button', { name: /^Open(?: with .+)?$/u });
+		const opened = () => application.evaluate(() => (globalThis as { openedChatImage?: string; }).openedChatImage);
+		if (process.platform === 'darwin') {
+			const chooseApp = toolbar.getByRole('button', { name: 'Choose image app', exact: true });
+			await expect(openImage.locator('img')).toBeVisible();
+			await openImage.focus();
+			await page.keyboard.press('ArrowRight');
+			await expect(chooseApp).toBeFocused();
+			await chooseApp.press('Enter');
+			const openMenu = page.getByRole('menu');
+			const defaultApp = openMenu.locator('[role="menuitemradio"][aria-checked="true"]');
+			await expect(defaultApp).toHaveAttribute('aria-checked', 'true');
+			const defaultName = (await defaultApp.innerText()).trim();
+			const defaultEntry = openMenu.getByRole('menuitemradio', { name: defaultName, exact: true });
+			await expect(defaultEntry).toHaveCount(1);
+			await expect(openMenu.getByRole('menuitemradio').first()).toHaveText(defaultName);
+			await expect(openImage).toHaveAccessibleName(`Open with ${defaultName}`);
+			await expect(defaultApp.locator('.ash-menu-leading-slot img')).toBeVisible();
+			await expect(defaultApp.locator('.ash-menu-trailing-slot .ash-icon-check')).toBeVisible();
+			await expect(openMenu.getByRole('menuitemradio', { name: /^(Default application|Claude|LibreOffice(?:Dev)?)$/iu })).toHaveCount(0);
+			const alternative = openMenu.locator('[role="menuitemradio"][aria-checked="false"]').last();
+			await expect(alternative).toBeVisible();
+			const appName = await alternative.innerText();
+			await alternative.click();
+			await expect(openImage).toHaveAccessibleName(`Open with ${appName.trim()}`);
+			await expect(openImage).toHaveText('Open');
+			expect(await opened()).toBeUndefined();
+			await chooseApp.click();
+			await expect(openMenu.getByRole('menuitemradio', { name: appName.trim(), exact: true })).toHaveAttribute('aria-checked', 'true');
+			await defaultEntry.click();
+			await expect(openImage).toHaveAccessibleName(`Open with ${defaultName}`);
+		}
+		await openImage.click();
+		await expect.poll(opened).toMatch(/\.png$/u);
+		expect(await readFile((await opened())!, 'base64')).toBe(original);
+
+		await zoom.click();
+		await fit.click();
+		const annotate = preview.getByRole('button', { name: 'Annotate image', exact: true });
+		const done = preview.getByRole('button', { name: 'Done annotating', exact: true });
+		await annotate.click();
+		await expect(done).toBeDisabled();
+		await drawImageAnnotation(preview);
+		await preview.getByRole('button', { name: 'Undo stroke', exact: true }).click();
+		await expect(done).toBeDisabled();
+		await drawImageAnnotation(preview);
+		await preview.getByRole('button', { name: 'Cancel annotation', exact: true }).click();
+		await expect(annotate).toBeFocused();
+		await expect(form.locator('.ash-chat-staged-file.image')).toHaveCount(1);
+		await annotate.click();
+		await drawImageAnnotation(preview);
+		await testInfo.attach('image-annotation-in-preview', { body: await preview.screenshot(), contentType: 'image/png' });
+		await done.click();
+		await expect(preview).toBeHidden();
+		await expect(editor.input).toBeFocused();
+		await expect(form.getByRole('button', { name: 'Preview annotate.png', exact: true })).toBeVisible();
+		const result = form.getByRole('button', { name: 'Preview annotate-annotated.png', exact: true });
+		await expect(result).toBeVisible();
+		await expect.poll(() => result.locator('img').evaluate(element => {
+			const image = element as HTMLImageElement;
+			const canvas = document.createElement('canvas');
+			canvas.width = image.naturalWidth;
+			canvas.height = image.naturalHeight;
+			const context = canvas.getContext('2d')!;
+			context.drawImage(image, 0, 0);
+			const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+			return { width: canvas.width, height: canvas.height, hasInk: pixels.some((red, index) => index % 4 === 0 && red > 200 && pixels[index + 1] < 110 && pixels[index + 3] > 200) };
+		})).toEqual({ width: 256, height: 160, hasInk: true });
+	} finally {
+		await application.evaluate(({ dialog, shell }, saved) => { dialog.showSaveDialog = saved.save; shell.openPath = saved.open; }, originals);
+		await originals.dispose();
+	}
+});
+
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({
 	application,
 	target,
@@ -1112,7 +1348,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	if (target.kind === 'electron') {
 		await composer.locator('.ash-chat-input-tip')
 			.filter({ hasText: 'to open the Agents Window from any app' })
-			.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
+			.getByRole('button', { name: 'Dismiss tip', exact: true }).press('Enter');
 	}
 	await expect(composer.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName(
 		'Add context',
@@ -1130,14 +1366,15 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await editor.waitForEditorContents(contents => contents === fileDraft);
 	const send = composer.getByRole('button', { name: 'Send', exact: true });
 	await expect(send).toBeDisabled();
-	await expect(composer.getByText('Choose a project before sending.', { exact: true })).toBeVisible();
+	const project = composer.locator('.ash-sessions-workspace-picker');
+	await expect(project).toBeVisible();
+	await expect(project).toHaveText('Choose project');
 	// Project operations require the connected desktop host's authority.
 	if (target.kind === 'electron' && target.appServerMode === 'required') {
-		const project = page.locator('.ash-sessions-chat-slot.active:visible .ash-sessions-workspace-picker');
-		await expect(project).toHaveText('Choose project');
-		await project.click();
 		const projectName = basename(testWorkspace.directory);
-		await page.getByRole('menuitemradio', { name: projectName, exact: true }).click();
+		// The workspace fixture is a recent folder until a Code project is chosen for it.
+		const recent = page.locator('.ash-sessions-chat-slot.active').getByRole('group', { name: 'Recent projects', exact: true });
+		await recent.getByRole('button', { name: projectName, exact: true }).click({ timeout: 5_000 });
 		await expect(project).toHaveText(projectName);
 		await expect(send).toBeEnabled();
 	}
@@ -1219,7 +1456,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 			new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }),
 		);
 	});
-	await expect(composer.getByRole('button', { name: 'Remove clipboard.png', exact: true })).toBeVisible();
+	await expect(composer.locator('.ash-chat-staged-file.image.ready').getByRole('button', { name: 'Preview clipboard.png', exact: true }).locator('img')).toBeVisible();
 	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts']);
 	await editor.waitForEditorContents(contents => contents.includes('Keep the attached draft'));
 	const imageDraft = (await editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
@@ -1243,8 +1480,13 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts', 'dropped.md']);
 	await editor.input.press('Backspace');
 	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts']);
+	// Deleting the dropped reference leaves the separator before it.
+	await editor.waitForEditorContents(contents => contents === `${imageDraft} `);
+	await editor.input.press('Backspace');
 	await editor.waitForEditorContents(contents => contents === imageDraft);
-	await composer.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
+	if (target.kind === 'browser') {
+		await composer.getByRole('button', { name: 'Dismiss tip', exact: true }).press('Enter');
+	}
 	await expect(composer.locator(':is(.ash-chat-input-tip,.ash-cowork-input-tip)')).toHaveCount(0);
 	await editor.waitForEditorFocus();
 	page = await workbench.reopenAgentsWindow(application, page);
@@ -1252,8 +1494,19 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	editor = new Editor(composer);
 	await editor.waitForEditorContents(contents => contents === imageDraft);
 	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts']);
-	await expect(composer.getByRole('button', { name: 'Remove clipboard.png', exact: true })).toBeVisible();
-	await expect(composer.locator(':is(.ash-chat-input-tip,.ash-cowork-input-tip)')).toHaveCount(0);
+	const restoredImage = composer.locator('.ash-chat-staged-file.image.ready');
+	const restoredPreview = restoredImage.getByRole('button', { name: 'Preview clipboard.png', exact: true });
+	await expect(restoredPreview.locator('img')).toBeVisible();
+	await restoredPreview.click();
+	const preview = page.getByRole('dialog', { name: 'Preview clipboard.png', exact: true });
+	await expect(preview.getByRole('img', { name: 'clipboard.png', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(preview).toBeHidden();
+	await expect(restoredPreview).toBeFocused();
+	await restoredImage.getByRole('button', { name: 'Remove clipboard.png', exact: true }).press('Enter');
+	await expect(restoredImage).toHaveCount(0);
+	await editor.waitForEditorContents(contents => contents === imageDraft);
+	await expect(composer.locator('.ash-chat-input-tip').filter({ hasText: 'to open the Agents Window from any app' })).toHaveCount(0);
 });
 
 test('Sessions composer configuration leaves Workbench input defaults unchanged', async ({
@@ -2276,9 +2529,11 @@ focusTest(
 			.click();
 		await replaceChatInput(targetEditor, 'Keep this Code draft during handoff');
 
+		const sessionsWindow = await application.browserWindow(sessionsPage);
 		const closed = sessionsPage.waitForEvent('close');
-		await returnFromSessions(sessionsPage, application);
+		await sessionsWindow.evaluate(window => window.close());
 		await closed;
+		await sessionsWindow.dispose();
 		await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		await sourceDraft.focus();
 		await workbenchPage.keyboard.insertText('Keep this second draft in the IDE');

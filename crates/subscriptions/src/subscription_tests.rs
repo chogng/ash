@@ -77,7 +77,11 @@ impl SubscriptionCatalog<String, &'static str> for SwitchingCatalog {
     fn external_scope(&self, _: &ModelConnectionId) -> Result<Option<String>, &'static str> {
         Ok(None)
     }
-    fn refresh(&self, _: &ModelConnectionId) -> Result<Vec<String>, &'static str> {
+    fn refresh(
+        &self,
+        _: &ModelConnectionId,
+        _: &CancellationToken,
+    ) -> Result<Vec<String>, &'static str> {
         self.login.update_account(account("Pro")).unwrap();
         Ok(vec!["old-account-model".into()])
     }
@@ -87,7 +91,11 @@ impl SubscriptionCatalog<String, &'static str> for Catalog {
     fn external_scope(&self, _: &ModelConnectionId) -> Result<Option<String>, &'static str> {
         Ok(None)
     }
-    fn refresh(&self, connection: &ModelConnectionId) -> Result<Vec<String>, &'static str> {
+    fn refresh(
+        &self,
+        connection: &ModelConnectionId,
+        _: &CancellationToken,
+    ) -> Result<Vec<String>, &'static str> {
         assert_eq!(connection.as_str(), PROVIDER);
         self.calls.fetch_add(1, Ordering::Relaxed);
         if self.unavailable.load(Ordering::Relaxed) {
@@ -395,6 +403,52 @@ fn observer_starts_and_stops_with_its_owner() {
     drop(observer);
 }
 
+#[test]
+fn dropping_observer_cancels_in_flight_catalog_refresh() {
+    struct BlockingCatalog(mpsc::Sender<()>, mpsc::Sender<bool>);
+
+    impl SubscriptionCatalog<String, &'static str> for BlockingCatalog {
+        fn refresh(
+            &self,
+            _: &ModelConnectionId,
+            cancellation: &CancellationToken,
+        ) -> Result<Vec<String>, &'static str> {
+            self.0.send(()).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !cancellation.is_cancelled() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            self.1.send(cancellation.is_cancelled()).unwrap();
+            Err("catalog interrupted")
+        }
+
+        fn external_scope(&self, _: &ModelConnectionId) -> Result<Option<String>, &'static str> {
+            Ok(Some("test-scope".into()))
+        }
+    }
+
+    let login = Arc::new(LoginService::deferred(Arc::new(AccountDriver {
+        account: Mutex::new(None),
+    })));
+    let (started, running) = mpsc::channel();
+    let (finished, cancelled) = mpsc::channel();
+    let events = Arc::new(EventLog::default());
+    let observer = SubscriptionObserver::start(
+        login,
+        Vec::new(),
+        vec!["kimi-desktop"],
+        Arc::new(BlockingCatalog(started, finished)),
+        events.clone(),
+    );
+
+    running.recv_timeout(Duration::from_secs(5)).unwrap();
+    drop(observer);
+    assert!(cancelled.recv().unwrap());
+    let updates = events.external.lock().unwrap();
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].result, Ok(Vec::new()));
+}
+
 struct ExternalCatalog {
     scope: Mutex<Option<String>>,
     rotate_during_request: AtomicBool,
@@ -405,7 +459,11 @@ impl SubscriptionCatalog<String, &'static str> for ExternalCatalog {
     fn external_scope(&self, _: &ModelConnectionId) -> Result<Option<String>, &'static str> {
         Ok(self.scope.lock().unwrap().clone())
     }
-    fn refresh(&self, _: &ModelConnectionId) -> Result<Vec<String>, &'static str> {
+    fn refresh(
+        &self,
+        _: &ModelConnectionId,
+        _: &CancellationToken,
+    ) -> Result<Vec<String>, &'static str> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         let scope = self.scope.lock().unwrap().clone().unwrap();
         if self.rotate_during_request.swap(false, Ordering::Relaxed) {

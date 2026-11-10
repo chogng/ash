@@ -34,6 +34,9 @@ export class ArtifactDetailsPanel extends Disposable {
 			consent.textContent = localize('sessions.github.artifactNoActions', 'No merge actions are currently available for this pull request.');
 		}
 		element.append(title, consent);
+		if (binding.unavailableReason) {
+			element.append(h(document, 'p', { attributes: { role: 'status' } }, binding.unavailableReason));
+		}
 		if (renderFollowUp) this._register(renderFollowUp(element));
 		const actions = h(document, 'div', { className: 'ash-session-artifact-details-actions' });
 		element.append(actions);

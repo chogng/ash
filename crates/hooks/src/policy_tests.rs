@@ -3,6 +3,7 @@ use ash_config::HookEnablement;
 use ash_config::HookEvent;
 use ash_config::HookId;
 use ash_config::HookMatcher;
+use ash_sandboxing::SandboxDirGrant;
 
 fn hook(id: &str) -> HookConfig {
     HookConfig {
@@ -28,11 +29,32 @@ fn review_authority_is_bound_to_the_exact_hook_identity() {
     let first = hook("user:hook:first");
     let second = hook("user:hook:second");
 
-    let first_review = review_request(&first, &dir, "hook-test-policy".into()).unwrap();
-    let second_review = review_request(&second, &dir, "hook-test-policy".into()).unwrap();
+    let first_review = review_request(&first, &dir, None, "hook-test-policy".into()).unwrap();
+    let second_review = review_request(&second, &dir, None, "hook-test-policy".into()).unwrap();
     assert_eq!(first_review.provenance().source_id(), "user:hook:first");
     assert_ne!(
         first_review.action().digest(),
         second_review.action().digest()
+    );
+
+    let scope = SandboxScope::new(
+        dir.clone(),
+        vec![SandboxDirGrant::new(
+            dir.clone(),
+            SandboxDirAccess::ReadOnly,
+        )],
+        Vec::new(),
+    )
+    .unwrap();
+    let scoped = review_request(&first, &dir, Some(&scope), "hook-test-policy".into()).unwrap();
+    assert_ne!(first_review.action().digest(), scoped.action().digest());
+    assert_eq!(
+        scoped
+            .action()
+            .required_capabilities()
+            .iter()
+            .map(Capability::kind)
+            .collect::<Vec<_>>(),
+        vec![&CapabilityKind::FileRead, &CapabilityKind::ProcessSpawn],
     );
 }

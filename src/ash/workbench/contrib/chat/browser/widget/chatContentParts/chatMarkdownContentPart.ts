@@ -24,6 +24,9 @@ import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import type { IChatContentPart } from './chatContentParts.js';
 import type { IChatCodeBlockInfo } from '../../chat.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
+import { ImageAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
+import { URI } from '../../../../../../base/common/uri.js';
+import { localize } from '../../../../../../nls.js';
 
 interface RenderedBlock {
 	node: ChildNode;
@@ -68,12 +71,16 @@ interface MarkdownFragment {
 
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly getChatItem?: () => IChatListItem | undefined;
+	readonly readGalleryImage?: (uri: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly ownerDocument: Document;
+	readonly codeBlockPresentation?: 'card';
 	readonly fileReferenceDirectory?: FileSearchDirectory;
 	readonly markdown?: string | IMarkdownString;
 	readonly visible?: boolean;
 	/** The transcript admits new code documents after measuring their reserved row geometry. */
 	readonly deferCodeBlockModels?: boolean;
+	/** The virtual list measures a newly mounted row before returning from the scroll event. */
+	readonly synchronousInitialRender?: boolean;
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
@@ -91,13 +98,14 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private readonly plainLexer = new Marked();
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
+	private readonly galleryImages = new Set<ImageAttachmentWidget>();
 	private fragments: readonly MarkdownFragment[] = [];
 	private markdown: IMarkdownString | undefined;
 	// Code actions retain this response, rather than a full historical string per code block.
 	private readonly codeElement: IMarkdownString;
 	private readonly getCodeActionContext = (): Pick<ICodeBlockActionContext, 'element' | 'chatSessionResource'> => {
 		const item = this.options.getChatItem?.();
-		const source = item?.feedbackSource;
+		const source = this.options.codeBlockPresentation === 'card' && item?.transient ? undefined : item?.feedbackSource;
 		return { element: item ?? this.codeElement, chatSessionResource: source ? LocalChatSessionUri.forSession(source.sessionId, source.threadId) : undefined };
 	};
 	private viewportVisible = true;
@@ -136,7 +144,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));
 		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.domNode.remove(); }));
 		const markdown = typeof options.markdown === 'string' ? { value: options.markdown } : options.markdown ?? { value: '' };
-		this.incrementalRendering.update(markdown, options.fillInIncompleteTokens ?? false);
+		this.incrementalRendering.update(markdown, options.fillInIncompleteTokens ?? false, !options.synchronousInitialRender);
 	}
 
 	/** Reconciles appended text and provider corrections within this response's existing lifetime. */
@@ -161,8 +169,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			ownerMarkdownPartId: this.codeblocksPartId,
 			codeBlockIndex: index,
 			elementId: part.element.id,
-			uri: part.editor.getModel()?.uri,
-			languageId: part.editor.getModel()?.getLanguageId(),
+			uri: part.model?.uri,
+			languageId: part.model?.getLanguageId(),
 			focus: () => { if (!this.isDisposed && this.incrementalRendering.isVisible) { part.focus(); } },
 		}));
 	}
@@ -175,8 +183,9 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	}
 
 	public setVisible(visible: boolean): void {
-		this.incrementalRendering.setVisible(visible);
+		this.incrementalRendering.setVisible(visible, !this.options.synchronousInitialRender || this.markdown !== undefined);
 		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
+		if (!visible) for (const image of this.galleryImages) image.closePreview();
 	}
 
 	/** Retains readable Markdown while offscreen code blocks release their derived documents. */
@@ -384,6 +393,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			}
 			if (!patch) {
 				wrapTablesWithScrollable(element);
+				this.renderImageGalleries(element, lifetime);
 				for (const rich of element.querySelectorAll<HTMLElement>('.ash-chat-rich')) {
 					for (const variant of rich.classList) {
 						const color = /^(background|border)-rgba-(\d{1,3})-(\d{1,3})-(\d{1,3})-([01](?:p\d+)?)$/u.exec(variant);
@@ -407,7 +417,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				const index = codeStart + localIndex;
 				let part = this.codeBlocks.get(index);
 				if (!part) {
-					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document));
+					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document, this.options.codeBlockPresentation));
 					part.element.id = `${this.codeblocksPartId}-${index}`;
 					if (this.options.deferCodeBlockModels) {
 						this.deferredCodeBlocks.add(part);
@@ -415,7 +425,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					}
 				}
 				part.setVisible(this.incrementalRendering.isVisible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
-				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
+				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } });
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
 				else data.placeholder.replaceWith(part.element);
@@ -434,6 +444,43 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		} catch (error) {
 			lifetime.dispose();
 			throw error;
+		}
+	}
+
+	private renderImageGalleries(element: HTMLElement, lifetime: DisposableStore): void {
+		const readImage = this.options.readGalleryImage;
+		if (!readImage) return;
+		const parts = this.options.getChatItem?.()?.markdown?.richContent?.parts;
+		for (const gallery of element.querySelectorAll<HTMLElement>('.ash-chat-image-gallery[data-ash-chat-gallery-index]')) {
+			const part = parts?.[Number(gallery.dataset.ashChatGalleryIndex)];
+			if (part?.kind !== 'imageGallery') continue;
+			const document = gallery.ownerDocument;
+			const controller = new AbortController();
+			lifetime.add(toDisposable(() => controller.abort()));
+			for (const [index, image] of part.images.entries()) {
+				const tile = h(document, 'div', { className: 'ash-chat-image-gallery-tile' });
+				gallery.append(tile);
+				const widget = lifetime.add(this.instantiation.createInstance(ImageAttachmentWidget, {
+					id: String(index), name: image.label,
+					resolve: async () => {
+						const blob = await readImage(URI.parse(image.uri), controller.signal);
+						return { content: blob.type.startsWith('image/') ? blob : undefined };
+					},
+				}, { imagePresentation: 'thumbnail', retryOnFailure: true, supportsDeletion: false, shouldFocusClearButton: false }, tile));
+				this.galleryImages.add(widget);
+				lifetime.add(toDisposable(() => this.galleryImages.delete(widget)));
+				lifetime.add(widget.onDidResolvePreview(() => this.changedHeight.fire()));
+				if (image.source) {
+					const source = URI.parse(image.source);
+					if (source.scheme !== 'https' && source.scheme !== 'http') continue;
+					tile.append(h(document, 'a', {
+						attributes: {
+							href: image.source, rel: 'noopener noreferrer',
+							'aria-label': localize('chat.imageGallery.source', 'Source for {0}', image.label),
+						},
+					}, source.authority));
+				}
+			}
 		}
 	}
 
@@ -506,7 +553,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			text: fragment.source.slice(fragment.fence.headerLength).replace(/\n$/u, ''),
 			languageId: fragment.fence.languageId, codeBlockIndex: fragment.codeStart,
 			element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 },
-		}, this.domNode.clientWidth);
+		});
 		return true;
 	}
 }

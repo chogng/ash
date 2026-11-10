@@ -26,6 +26,10 @@ records and supplies ordered sections and row operations. The view owns
 rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
 host's contracts. The [catalog project ownership contract](SESSIONS_LIST.md#catalog-project-ownership)
 defines which actions reach a provider.
+The Workbench message editor shares editing and resubmission between Ash Chat
+and Code. App Server owns their Thread rewrites. The ChatGPT adapter supplies
+the same editor with remote message capabilities and uses the web backend to
+confirm edits and switch versions within the existing remote conversation.
 In an eligible new Chat draft, selecting an Ash model asks the
 adapter for the current unsent text after model validation. The host opens an
 independent Ash Chat draft without sending a message. Its first send creates a
@@ -38,11 +42,12 @@ The selected model source determines where a message is sent. ChatGPT Web
 sends through its reply backend. Older ChatGPT conversations may contain
 references to Cowork tasks. The adapter reads their existing status and can bind
 a legacy local conversation to a ChatGPT history without losing those references.
-The profile keeps the last loaded
-sidebar index and opened conversation snapshots under an opaque user and
+The profile keeps the last loaded sidebar index, last confirmed project
+instructions, and opened conversation snapshots under an opaque user and
 workspace scope verified by the native credential owner. Chat shows that cache
 while refreshing from the backend and requires a current history read before
-continuing a restored conversation. The visible sidebar refreshes on focus,
+continuing a restored conversation. Cached project instructions can be displayed
+immediately. Edit access requires a live project details read. The sidebar refreshes on focus,
 network recovery and a foreground interval. Refresh checks the loaded portion
 of the catalog and verifies omitted conversations individually before removing
 their snapshots. An account-scoped outbox persists offline first text messages
@@ -405,7 +410,7 @@ controls. Each product owns its composition, model policy and draft lifecycle.
 | Host                | Ash component and owner                                                                                   | VS Code relationship                                                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent Window Code   | `SharedChatInputComposer` in `contrib/chat/browser/sharedChatInputComposer.ts`                            | Composes Sessions input policy for new and existing Code conversations around Workbench `ChatInputPart`.                                       |
-| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy. Its embedded presentation is used by project pages.             |
+| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy.                                                                 |
 | Agent Window Chat   | Shared `ChatWidget` and `ChatInputPart`                                                                   | The desktop host's `ChatGPTWidgetModel` projects the ChatGPT service into Ash's transcript and composer and connects the host's model routing. |
 | IDE Chat            | `ChatInputPart` in `workbench/contrib/chat/browser/widget/input/chatInputPart.ts`, hosted by `ChatWidget` | Same upstream owner, path and public class name. Sessions layout and product policy stay in Sessions.                                          |
 
@@ -413,8 +418,10 @@ In VS Code, `sessions/contrib/chat/browser/newChatComposerInput.ts` defines the
 new-session host options and send contracts; it does not export an input widget.
 `SharedChatInputComposer` delegates submission to its host and participates in the
 normal Chat input command scope. Its public contract does not describe all three
-Ash Agent Window products. Project pages compose the Cowork input and use
-`IProjectService` for membership; they do not own a fifth editor implementation.
+Ash Agent Window products. Local Chat project pages share the Ash Chat model and
+reply input. They pass the current project ID on the draft, and Sessions
+management links the conversation before the first request
+or voice session can start.
 
 ## Execution path
 

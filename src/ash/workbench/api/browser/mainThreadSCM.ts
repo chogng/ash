@@ -489,6 +489,7 @@ interface ProviderSnapshot {
 	readonly activeRepositoryName: string | undefined;
 	readonly count: number | undefined;
 	readonly statusMessage: string;
+	readonly statusMessageVisible: boolean;
 	readonly isBusy: boolean;
 	readonly statusBarCommands: readonly Record<string, JsonValue>[];
 	readonly historyRef: ISCMHistoryItemRef | undefined;
@@ -559,7 +560,10 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			};
 		}
 		this.mergeProvider = snapshot.hasMerge ? {
-			resolve: async (path: string): Promise<ISCMConflictFile> => parseConflict(await this.call('merge', { methodName: 'resolve', arguments: [path] })),
+			resolve: async (path: string, signal?: AbortSignal): Promise<ISCMConflictFile | undefined> => {
+				const file = await this.call('merge', { methodName: 'resolve', arguments: [path] }, signal);
+				return file === null ? undefined : parseConflict(file);
+			},
 			complete: async (path: string, stageIds: readonly (string | null)[], objectId: string | null, resolution: ISCMConflictResolution): Promise<void> => { await this.call('merge', { methodName: 'complete', arguments: [path, stageIds, objectId, resolution] }); },
 			errorMessage: (error: unknown): string => String(error),
 		} : undefined;
@@ -609,6 +613,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	public get rootUri(): URI | undefined { return this.snapshot.rootUri ? URI.parse(this.snapshot.rootUri) : undefined; }
 	public get activeRepositoryName(): string | undefined { return this.snapshot.activeRepositoryName; }
 	public get statusMessage(): string { return this.snapshot.statusMessage; }
+	public get statusMessageVisible(): boolean { return this.snapshot.statusMessageVisible; }
 	public get isBusy(): boolean { return this.snapshot.isBusy; }
 	public get count(): number | undefined { return this.snapshot.count; }
 	public get actionButton(): ISCMActionButtonDescriptor | undefined { return this.snapshot.actionButton; }
@@ -738,6 +743,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			|| value.count !== this.snapshot.count
 			|| value.activeRepositoryName !== this.snapshot.activeRepositoryName
 			|| value.statusMessage !== this.snapshot.statusMessage
+			|| value.statusMessageVisible !== this.snapshot.statusMessageVisible
 			|| value.isBusy !== this.snapshot.isBusy
 			|| !structuralEquals(value.input, this.snapshot.input)
 			|| !structuralEquals(value.actionButton, this.snapshot.actionButton)
@@ -887,6 +893,7 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 		input,
 		activeRepositoryName: optionalString(entry.activeRepositoryName),
 		statusMessage: string(entry.statusMessage),
+		statusMessageVisible: entry.statusMessageVisible === true,
 		isBusy: entry.isBusy === true,
 		statusBarCommands,
 		historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef),

@@ -1,14 +1,14 @@
 use ash_app_server_protocol::protocol::projects::ProjectDto;
 use ash_app_server_protocol::protocol::projects::ProjectMaterialDto;
-use ash_app_server_protocol::protocol::projects::ProjectMaterialKindDto;
 use ash_app_server_protocol::protocol::projects::ProjectRootDto;
 use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
 use ash_app_server_protocol::protocol::projects::ProjectSummaryDto;
 use ash_projects::Project;
-use ash_projects::ProjectMaterialKind;
+use ash_projects::ProjectMaterial;
 use ash_projects::ProjectStatus;
 use ash_utils_absolute_path::AbsolutePathBuf;
 use ash_utils_path_uri::PathUri;
+use std::path::Path;
 
 pub(super) fn project(project: &Project) -> ProjectDto {
     ProjectDto {
@@ -41,19 +41,35 @@ pub(super) fn project(project: &Project) -> ProjectDto {
         materials: project
             .materials
             .iter()
-            .map(|material| ProjectMaterialDto {
-                path: PathUri::from_absolute_path(
-                    &AbsolutePathBuf::from_absolute(&material.path)
-                        .expect("validated Project material has an absolute path"),
-                ),
-                name: material.name.clone(),
-                kind: match material.kind {
-                    ProjectMaterialKind::File => ProjectMaterialKindDto::File,
-                    ProjectMaterialKind::Folder => ProjectMaterialKindDto::Folder,
+            .map(|material| match material {
+                ProjectMaterial::File {
+                    path,
+                    name,
+                    size_bytes,
+                } => ProjectMaterialDto::File {
+                    path: material_path(path),
+                    name: name.clone(),
+                    size_bytes: *size_bytes,
+                },
+                ProjectMaterial::Folder { path, name } => ProjectMaterialDto::Folder {
+                    path: material_path(path),
+                    name: name.clone(),
+                },
+                ProjectMaterial::Text { id, name, content } => ProjectMaterialDto::Text {
+                    id: id.clone(),
+                    name: name.clone(),
+                    content: content.clone(),
                 },
             })
             .collect(),
     }
+}
+
+fn material_path(path: &Path) -> PathUri {
+    PathUri::from_absolute_path(
+        &AbsolutePathBuf::from_absolute(path)
+            .expect("validated Project material has an absolute path"),
+    )
 }
 
 pub(super) fn summary(project: &Project) -> ProjectSummaryDto {

@@ -333,9 +333,20 @@ export function registerAgentSessionActions(): void {
 		override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
 			const sessions = accessor.get(IAgentSessionActionsService);
 			if (sessions.discardDraft(argument)) return;
+			const dialogs = accessor.get(IDialogService);
+			if (isRecord(argument) && 'catalogId' in argument) {
+				const { catalogId, preferenceKey } = argument;
+				if (typeof catalogId !== 'string' || !catalogId || (preferenceKey !== undefined && typeof preferenceKey !== 'string')
+					|| Object.keys(argument).some(key => key !== 'catalogId' && key !== 'preferenceKey')) {
+					throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
+				}
+				const target = sessions.resolveCatalogDeleteTarget(catalogId, preferenceKey);
+				await confirmSessionDeletion(dialogs, target.title,
+					localize('chatSession.delete.conversationDetail', 'This conversation and its history will be permanently deleted.'), target.remove);
+				return;
+			}
 			const requested = getAgentSessionId(argument);
 			const input = accessor.get(IQuickInputService);
-			const dialogs = accessor.get(IDialogService);
 			await sessions.initialize();
 			const archived = sessions.sessions.filter(session => session.status === 'archived');
 			let id = requested;
@@ -354,15 +365,22 @@ export function registerAgentSessionActions(): void {
 			if (!id) return;
 			const session = sessions.sessions.find(candidate => candidate.sessionId === id);
 			if (!session) throw new Error(localize('chatSession.archived.missing', 'Archived session is unavailable: {0}', id));
-			const confirmation = await dialogs.confirm({
-				message: localize('chatSession.delete.confirm', 'Permanently delete {0}?', session.title),
-				detail: localize('chatSession.delete.detail', 'This removes the session and its conversation history and cannot be undone. Any resumed work in this session will be stopped. Other sessions and unsent drafts are kept.'),
-				primaryButton: localize('chatSession.delete.button', 'Delete permanently'),
-			});
-			if (confirmation.confirmed) {
-				if (session.status === 'active') await sessions.archiveSession(session.sessionId);
-				await sessions.deleteSession(session.sessionId);
-			}
+			await confirmSessionDeletion(dialogs, session.title,
+				localize('chatSession.delete.detail', 'This removes the session and its conversation history and cannot be undone. Any resumed work in this session will be stopped. Other sessions and unsent drafts are kept.'),
+				async () => {
+					if (session.status === 'active') await sessions.archiveSession(session.sessionId);
+					await sessions.deleteSession(session.sessionId);
+				});
 		}
 	});
+}
+
+async function confirmSessionDeletion(dialogs: IDialogService, title: string, detail: string, remove: () => Promise<void>): Promise<void> {
+	const confirmation = await dialogs.confirm({
+		message: localize('chatSession.delete.confirm', 'Permanently delete {0}?', title),
+		detail,
+		primaryButton: localize('chatSession.delete.button', 'Delete permanently'),
+		destructive: true,
+	});
+	if (confirmation.confirmed) await remove();
 }

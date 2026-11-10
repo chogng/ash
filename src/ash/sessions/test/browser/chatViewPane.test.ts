@@ -975,9 +975,9 @@ test('Chat title and history switching retain conversations and drafts', async (
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, 'GPT-6.1 Sol');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.displayName);
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.textContent, 'High');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), 'GPT-6.1 Sol High');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), `${subscriptionModel.displayName} High`);
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.hidden, true);
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
@@ -992,7 +992,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(modelButton?.getAttribute('aria-expanded'), 'true');
 	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input[role="combobox"]')?.placeholder, 'Search models');
 	assert.equal(modelPicker?.querySelector('.ash-switch input')?.getAttribute('aria-label'), 'Auto');
-	assert.match(modelPicker?.textContent ?? '', /GPT-6\.1 Sol/);
+	assert.ok(modelPicker?.textContent?.includes(subscriptionModel.displayName));
 	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /128,000 context tokens/);
 	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /Thinking: Low, Medium, High/);
 	assert.equal(modelPicker?.classList.contains('ash-action-widget'), true);
@@ -1001,7 +1001,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	modelSearch.value = 'no-such-model';
 	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	assert.equal(modelPicker?.querySelectorAll('[role=menuitemradio]').length, 0);
-	modelSearch.value = 'GPT-6.1 Sol';
+	modelSearch.value = subscriptionModel.displayName;
 	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(dom.window.document.activeElement, modelPicker?.querySelector('[role=menuitemradio]'));
@@ -1306,7 +1306,7 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 	using composer = surface === 'chat'
 		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false), undefined)
 		: undefined;
-	using input = composer?.input ?? fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
+	using input = composer?.input ?? fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
 	input.render(fixture.model.inputState);
 	input.appendToDraft('Review ');
 	const values = ['file:///workspace/first.ts', 'file:///workspace/second.ts'];
@@ -1336,7 +1336,7 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	using fixture = await sessionsInputFixture(async (text, _mode, skills) => { submissions.push({ text, skills }); });
 	fixture.disposeInput();
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
-	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
+	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
 	const skill = { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:commit' } };
 	input.render({
 		...fixture.model.inputState,
@@ -1733,7 +1733,10 @@ for (const background of [false, true]) test(background
 		const welcomeTip = input?.querySelector('.ash-chat-input-tip');
 		assert.ok(welcomeTip);
 		const tipSlot = welcomeTip.parentElement;
-		assert.equal(tipSlot?.nextElementSibling, input?.querySelector('.ash-chat-input-container'));
+		const tipAnchor = input?.querySelector(':scope > .ash-sessions-chat-tip-anchor');
+		assert.ok(tipAnchor);
+		assert.equal(tipSlot?.parentElement, tipAnchor);
+		assert.equal(tipAnchor.nextElementSibling, input?.querySelector('.ash-chat-input-container'));
 		assert.equal(input?.lastElementChild, input?.querySelector('.ash-sessions-chat-input-footer'));
 		assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent], ['true', '']);
 		await widgetModel.initialize();
@@ -3620,7 +3623,9 @@ test('New Code defaults preserve inheritance when selecting a model or clearing 
 	await waitFor(() => select('profile-model').enabled);
 	initializeTestLocalization('zh-CN');
 	try {
-		select('profile-model').setValue(select('profile-model').options.find(option => option.label === 'GPT-6.1 Sol')!.value);
+		const solOption = select('profile-model').options.find(option => option.label === 'Sol');
+		assert.ok(solOption);
+		select('profile-model').setValue(solOption.value);
 		await waitFor(() => profile()?.model?.model === sol.model && select('profile-effort').enabled);
 		assert.equal(profile()?.effort, undefined);
 		assert.equal(select('profile-effort').options.find(option => option.value === '')?.label, '使用默认推理强度');
@@ -3628,7 +3633,9 @@ test('New Code defaults preserve inheritance when selecting a model or clearing 
 		await waitFor(() => profile()?.effort === 'high' && select('profile-effort').enabled);
 		select('profile-effort').setValue('');
 		await waitFor(() => profile()?.effort === undefined && select('profile-model').enabled);
-		select('profile-model').setValue(select('profile-model').options.find(option => option.label === 'GPT-6 Luna')!.value);
+		const lunaOption = select('profile-model').options.find(option => option.label === 'Luna');
+		assert.ok(lunaOption);
+		select('profile-model').setValue(lunaOption.value);
 		await waitFor(() => profile()?.model?.model === luna.model);
 		assert.equal(profile()?.effort, undefined);
 	} finally { resetNlsResolver(); }
@@ -3754,8 +3761,9 @@ test('Code falls back for inherited drafts and waits for a replacement in existi
 	fake.emit({ method: 'config/changed', params: { revision: 2, generation: 2 } });
 	await waitFor(() => existing.inputState.inputBlocked === true);
 	assert.deepEqual(existing.selectedModel, selected);
-	assert.match(existing.inputState.status ?? '', /GPT-6\.1 Sol has been retired/);
-	await assert.rejects(existing.send('Keep the draft'), /GPT-6\.1 Sol has been retired/);
+	const retiredMessage = 'Original has been retired. Choose another model to send.';
+	assert.equal(existing.inputState.status, retiredMessage);
+	await assert.rejects(existing.send('Keep the draft'), { message: retiredMessage });
 	assert.equal(fake.turnStartRequests.length, 0);
 
 	using draft = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
@@ -4184,7 +4192,7 @@ for (const locale of ['en', 'zh-CN']) test(`Cowork accessibility help composes s
 	try {
 		using fixture = await sessionsInputFixture();
 		fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
-		using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
+		using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
 		input.render(fixture.model.inputState);
 		input.focus();
 		const focused = document.activeElement;
@@ -5236,8 +5244,9 @@ test('stream updates preserve message order and survive an older refresh snapsho
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
+	const timestamp = Date.UTC(2026, 0, 15, 12);
 	const emit = (revision: number, itemId: string, text: string, transient = true): void => fake.emit({
-		method: 'session/thread/transcript/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision, changes: [{ type: 'upsert', entry: { type: 'item', entryId: `item:${itemId}`, turnId: 'turn-1', transient, item: { type: 'agentMessage', itemId, turnId: 'turn-1', text } } }] },
+		method: 'session/thread/transcript/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision, changes: [{ type: 'upsert', entry: { type: 'item', entryId: `item:${itemId}`, turnId: 'turn-1', transient, timestamp, item: { type: 'agentMessage', itemId, turnId: 'turn-1', text } } }] },
 	});
 	const changes: unknown[] = [];
 	using presentation = model.onDidChangePresentation(update => changes.push(update));
@@ -5250,7 +5259,7 @@ test('stream updates preserve message order and survive an older refresh snapsho
 	await waitFor(() => reads === 1);
 	emit(6, 'first', 'Completed', false);
 	emit(5, 'first', 'Stale duplicate');
-	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true } }, undefined, undefined]);
+	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true, timestamp, fileReferenceDirectory: undefined } }, undefined, undefined]);
 	assert.deepEqual(model.items.map(item => [item.id, item.text, item.transient]), [['item:first', 'Completed', false], ['item:second', 'Later message', true]]);
 	await read.complete(await fake.api.thread.read({ sessionId: 'session-1', threadId: 'thread-1' }));
 	await nextTask();

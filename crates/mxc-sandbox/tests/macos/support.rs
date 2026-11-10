@@ -85,6 +85,7 @@ fn run_authorized(
             arguments,
             working_directory: ".".into(),
             input,
+            environment: Default::default(),
         },
         authority,
         &CancellationSource::new().token(),

@@ -279,6 +279,7 @@ export async function createChatFileAttachments(
 	signal: AbortSignal,
 	supportsImages: () => boolean,
 	attachments: Pick<IChatAttachmentResolveService, 'resolveImageAttachContext'>,
+	onPreparingImage?: (file: File, mimeType: string) => void,
 ): Promise<readonly ChatContextAttachment[]> {
 	const batch = new AbortController();
 	signal = AbortSignal.any([signal, batch.signal]);
@@ -289,14 +290,15 @@ export async function createChatFileAttachments(
 			const source = path ? { resource: URI.file(path) } : {};
 			// Native file transfers can omit MIME or supply only a generic binary type.
 			const mimeType = !file.type || file.type === Mimes.binary ? getMediaMime(file.name) : file.type;
-			const image = /^image\/(png|jpeg|gif|webp)$/u.test(mimeType ?? '');
-			if (image && !supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+			const imageMimeType = mimeType && /^image\/(png|jpeg|gif|webp)$/u.test(mimeType) ? mimeType : undefined;
+			if (imageMimeType && !supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 			// Bound image allocation before reading; image processing also bounds the encoded result.
-			if (image && file.size > 20 * 1024 * 1024) throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', file.name));
+			if (imageMimeType && file.size > 20 * 1024 * 1024) throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', file.name));
+			if (imageMimeType && file.size > 0) onPreparingImage?.(file, imageMimeType);
 			const bytes = await readFile(file, signal);
 			if (!bytes.length) throw new Error(localize('chat.attach.empty', '{0} is empty', file.name));
-			if (image) {
-				const [attachment] = await attachments.resolveImageAttachContext([{ name: file.name, data: bytes, mimeType, ...source }], signal);
+			if (imageMimeType) {
+				const [attachment] = await attachments.resolveImageAttachContext([{ name: file.name, data: bytes, mimeType: imageMimeType, ...source }], signal);
 				if (signal.aborted) throw new CancellationError();
 				if (!supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return attachment!;

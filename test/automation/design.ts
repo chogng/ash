@@ -2,6 +2,19 @@ import { expect, type Page, type Locator } from '@playwright/test';
 import type { PlaywrightApplication } from './playwrightDriver.js';
 import { captureElectronMenu } from './menus.js';
 
+export async function drawImageAnnotation(preview: Locator): Promise<void> {
+	const overlay = preview.locator('.ash-image-annotation.drawing');
+	await expect(overlay).toBeVisible();
+	const bounds = (await overlay.boundingBox())!;
+	const mouse = preview.page().mouse;
+	await mouse.move(bounds.x + bounds.width * 0.15, bounds.y + bounds.height * 0.2);
+	await mouse.down();
+	await mouse.move(bounds.x + bounds.width * 0.42, bounds.y + bounds.height * 0.32, { steps: 6 });
+	await mouse.move(bounds.x + bounds.width * 0.55, bounds.y + bounds.height * 0.62, { steps: 6 });
+	await mouse.up();
+	await expect(overlay.locator('polyline')).toHaveCount(1);
+}
+
 export async function paintColor(page: Page, value: string): Promise<void> {
 	await page.locator('[data-part="auxiliarybar"]').getByRole('button', { name: 'Fill', exact: true }).click();
 	const input = page.getByRole('textbox', { name: 'Color value', exact: true });

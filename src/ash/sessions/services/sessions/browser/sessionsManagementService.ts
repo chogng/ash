@@ -453,7 +453,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			if (!session) return Promise.reject(new Error(`Untitled Chat Session is not available: ${untitledSessionId}`));
 			const cancellation = new CancellationTokenSource();
 			const creating = Promise.resolve().then(async () => {
-				const project = session.projectId && await this.projects?.read(session.projectId);
+				const projectScope = session.kind === 'chat' ? 'chat' : undefined;
+				const project = session.projectId && await this.projects?.read(session.projectId, projectScope);
 				if (session.projectId && (!project || project.archived)) {
 					throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.project.unavailable' }, 'This project is unavailable. Choose another project.'));
 				}
@@ -485,12 +486,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 					catalogOnly: session.kind === 'chat' ? true : undefined,
 				}, session.forkSource);
 				if (project && !project.sessionIds.includes(active.session.sessionId)) {
+					if (cancellation.token.isCancellationRequested) throw canceled();
 					// The same draft creation ID recovers this Session if linking needs a retry.
 					try {
 						await this.projects!.addSession(project, active.session.sessionId);
 					} catch (error) {
-						const latest = await this.projects!.read(project.id);
+						const latest = await this.projects!.read(project.id, projectScope);
 						if (!latest.sessionIds.includes(active.session.sessionId)) {
+							if (cancellation.token.isCancellationRequested) throw canceled();
 							if (latest.archived || latest.revision === project.revision) throw error;
 							await this.projects!.addSession(latest, active.session.sessionId);
 						}

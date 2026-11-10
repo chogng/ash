@@ -1,0 +1,96 @@
+.ash-image-preview-popup {
+	box-sizing: border-box;
+	width: min(680px, calc(100vw - 32px));
+	padding: var(--ash-spacing-size120);
+}
+
+.ash-image-preview-popup > .ash-image-preview-popup-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size120);
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-image-preview-popup-header > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-image-preview-popup-actions,
+.ash-image-preview-annotation-actions:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size20);
+}
+
+.ash-image-preview-popup-actions {
+	margin-inline-start: auto;
+}
+
+.ash-image-preview-popup-actions > .ash-toolbar {
+	--ash-actionBar-gap: var(--ash-spacing-size20);
+	flex-wrap: wrap;
+}
+
+.ash-image-preview-popup-actions
+	[data-action-id="imagePreview.zoom"]
+	> .ash-button {
+	inline-size: calc(
+		7ch + var(--ash-lxiconFontSize) + var(--ash-spacing-size120)
+	);
+	padding-inline: var(--ash-spacing-size20);
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-image-preview-app-icon-slot,
+.ash-image-preview-app-icon {
+	inline-size: var(--ash-lxiconFontSize-large);
+	block-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-image-preview-app-icon-slot {
+	display: grid;
+	place-items: center;
+	flex: none;
+}
+
+.ash-image-preview-app-icon {
+	object-fit: contain;
+}
+
+.ash-menu-leading-slot > .ash-image-preview-app-icon {
+	inline-size: 100%;
+	block-size: 100%;
+}
+
+.ash-image-preview-popup-actions
+	[data-action-id="imagePreview.openExternal"]
+	.ash-split-action-dropdown
+	> .ash-button {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+}
+
+.ash-image-preview-popup
+	> .ash-image-preview-popup-header
+	> .ash-button.icon-only {
+	box-sizing: border-box;
+	flex: none;
+	inline-size: var(--ash-toolbar-actionSize);
+	block-size: var(--ash-toolbar-actionSize);
+	min-block-size: var(--ash-toolbar-actionSize);
+	padding: 0;
+}
+
+@media (pointer: coarse) {
+	.ash-image-preview-popup {
+		--ash-toolbar-actionSize: 44px;
+	}
+}
+
+.ash-image-preview-popup-viewport {
+	height: min(500px, 58vh);
+}

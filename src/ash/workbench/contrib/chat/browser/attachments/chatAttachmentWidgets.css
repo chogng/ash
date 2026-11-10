@@ -152,6 +152,146 @@
 	background-color: var(--ash-editor-selectionBackground);
 }
 
+.ash-chat-image-attachment-thumbnail {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	max-width: 100%;
+}
+
+.ash-chat-image-attachment-name {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-chat-image-attachment-thumbnail
+	> .ash-chat-image-attachment-source[hidden] {
+	display: none;
+}
+
+.ash-chat-image-attachment-thumbnail.loaded
+	> .ash-chat-image-attachment-source {
+	position: relative;
+	inline-size: 80px;
+	block-size: 80px;
+	padding: 0;
+	border-radius: var(--ash-cornerRadius-medium);
+	background-color: var(--ash-button-secondaryBackground);
+	border-color: var(--ash-contrastBorder, var(--ash-border));
+}
+
+.ash-chat-image-attachment-source > img {
+	inline-size: 100%;
+	block-size: 100%;
+	border-radius: inherit;
+	object-fit: contain;
+}
+
+.ash-chat-image-attachment-thumbnail.loaded.pending
+	> .ash-chat-image-attachment-source
+	> img {
+	opacity: 0.5;
+}
+
+.ash-chat-image-attachment-thumbnail.loaded.pending
+	> .ash-chat-image-attachment-source::after {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background-color: color-mix(in srgb, var(--ash-foreground) 8%, transparent);
+	pointer-events: none;
+	content: "";
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+	.ash-chat-image-attachment-thumbnail.loaded:not(.ash-reduce-motion *)
+		> .ash-chat-image-attachment-source
+		> img {
+		transition: opacity var(--ash-animation-durationNormal) ease-out;
+	}
+
+	.ash-chat-image-attachment-thumbnail.loaded.pending:not(
+			.ash-reduce-motion *
+		)
+		> .ash-chat-image-attachment-source::after {
+		background-image: linear-gradient(
+			90deg,
+			transparent,
+			color-mix(in srgb, var(--ash-foreground) 8%, transparent),
+			transparent
+		);
+		background-repeat: no-repeat;
+		background-size: 60% 100%;
+		animation: ash-chat-staged-image-sweep 2s linear infinite;
+	}
+}
+
+@keyframes ash-chat-staged-image-sweep {
+	from {
+		background-position: -150% 0;
+	}
+	to {
+		background-position: 250% 0;
+	}
+}
+
+@media (forced-colors: active) {
+	.ash-chat-image-attachment-thumbnail.loaded.pending
+		> .ash-chat-image-attachment-source
+		> img {
+		opacity: 1;
+	}
+
+	.ash-chat-image-attachment-thumbnail.loaded.pending
+		> .ash-chat-image-attachment-source::after {
+		border: var(--ash-strokeThickness) dashed CanvasText;
+		background: none;
+		animation: none;
+	}
+}
+
+.ash-chat-image-attachment-thumbnail.loaded > .ash-chat-attachment-remove {
+	position: absolute;
+	inset-block-start: var(--ash-spacing-size20);
+	inset-inline-end: var(--ash-spacing-size20);
+	box-sizing: border-box;
+	inline-size: var(--ash-spacing-size280);
+	block-size: var(--ash-spacing-size280);
+	padding: 0;
+	background-color: var(--ash-input-background);
+}
+
+.ash-chat-image-attachment-thumbnail.loaded
+	> .ash-chat-attachment-remove:not(:disabled):hover {
+	background:
+		linear-gradient(
+			var(--ash-button-hoverBackground),
+			var(--ash-button-hoverBackground)
+		),
+		var(--ash-input-background);
+}
+
+.ash-chat-image-attachment-thumbnail.loaded
+	> .ash-chat-attachment-remove
+	.ash-icon-label-icon
+	> .ash-icon {
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
+@media (hover: hover) {
+	.ash-chat-image-attachment-thumbnail.loaded:not(:hover, :focus-within)
+		> .ash-chat-attachment-remove {
+		/* Keep the remove button in the Tab order. */
+		opacity: 0;
+		pointer-events: none;
+	}
+}
+
 .ash-chat-context-reference-preview {
 	box-sizing: border-box;
 	max-width: calc(100vw - 32px);
@@ -169,6 +309,10 @@
 .ash-chat-context-reference-preview-header > span {
 	min-width: 0;
 	overflow-wrap: anywhere;
+}
+
+.ash-chat-image-reference-preview > .ash-chat-context-reference-preview-header {
+	flex-wrap: wrap;
 }
 
 .ash-chat-image-reference-preview > img {

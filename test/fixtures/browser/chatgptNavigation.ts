@@ -1,7 +1,11 @@
 import './chatFixtureLocalization.js';
+import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
+import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
+import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import '../../../src/ash/sessions/browser/actions/sessionsChatActions.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../../src/ash/sessions/contrib/projects/browser/projects.contribution.js';
-import { IProjectDialogService } from '../../../src/ash/sessions/contrib/projects/browser/projectDialogService.js';
+import { IProjectDialogService, ProjectDialogService } from '../../../src/ash/sessions/contrib/projects/browser/projectDialogService.js';
 import { IProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
@@ -24,6 +28,7 @@ import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
@@ -36,17 +41,18 @@ import { BrowserStorageService } from '../../../src/ash/workbench/services/stora
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
-import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
+import { ChatGPTService, IChatGPTService, chatGPTProjectConversationId } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
 import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
 import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
 import { IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
+import { ChatListForks } from '../../../src/ash/sessions/contrib/chat/browser/chatListForks.js';
 import { SessionActionsService } from '../../../src/ash/sessions/browser/sessionActionsService.js';
 import { IAgentSessionActionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
-import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
+import { chatGPTReplyEditor, chatGPTScrollOptimization } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
 import { registerChatGPTResponseActions } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTResponseActions.js';
 import { ChatCopyActionRendering } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -116,10 +122,19 @@ import { AccessibilityService } from '../../../src/ash/platform/accessibility/br
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
+	interface Window {
+		ashChatGPTIntegration: {
+			newChat(): void; draft(): string; readSavedMaterial(name: string): string | undefined; openedMaterial(): string | undefined; setOffline(offline: boolean): void; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; showFind(): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>;
+			switchAccount(): void;
+			pauseMaterialRead(name: string): void;
+			isMaterialReadPaused(): boolean;
+			resumeMaterialRead(): Promise<void>;
+		};
+	}
 }
 
 const parameters = new URLSearchParams(location.search);
+let chatGPTCacheScope = 'a'.repeat(64);
 registerChatGPTResponseActions();
 // The renderer widgets consume the containing Sessions host's visual defaults.
 document.body.classList.add('ash-workbench');
@@ -129,6 +144,7 @@ sessionsRoot.style.flexDirection = 'row';
 sessionsRoot.append(document.getElementById('navigation')!, document.getElementById('editor')!);
 document.body.append(sessionsRoot);
 const resources = new DisposableStore();
+const authenticationChanged = resources.add(new Emitter<void>());
 if (parameters.has('dictation')) resources.add(installTestDictationAudio(window));
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const theme = resources.add(new TestThemeService(themes[(parameters.get('theme') ?? 'dark') as keyof typeof themes]));
@@ -155,16 +171,21 @@ const dictation: TestDictationCapture | undefined = parameters.has('dictation') 
 	},
 } : undefined;
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+configurationRegistry.registerConfiguration({ key: chatGPTScrollOptimization, defaultValue: false, parse: value => Boolean(value) });
 configurationRegistry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
 configurationRegistry.registerConfiguration({ key: 'markdown.math.macros', defaultValue: {}, parse: value => value });
 const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new TestNotificationService());
 if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
+const savedMaterials = new Map<string, string>();
+let pausedMaterialRead: { name: string; started: boolean; release: DeferredPromise<void> } | undefined;
+resources.add(toDisposable(() => void pausedMaterialRead?.release.complete()));
+let openedMaterial: string | undefined;
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	...getSingletonServiceDescriptors().filter(([id]) =>
 		id === IChatWidgetService || id === IActionViewItemService || id === IChatSlashCommandService
 		|| id === IChatPasteTargetService || id === IChatResponseResourceFileSystemProvider
-		|| id === IProjectsService || id === IProjectDialogService),
+		|| id === IProjectsService),
 	[IAgentVoiceService, undefined],
 	[IMessageHistoryService, undefined],
 	[IVoiceModeOnboardingService, { showIfNeeded() { }, registerHost: () => toDisposable(() => { }) } as unknown as IVoiceModeOnboardingService],
@@ -173,7 +194,8 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IImageEditorService, {} as IImageEditorService],
 	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
 	[IChatGPTTransport, {
-		async getCacheScope() { return 'a'.repeat(64); },
+		async getCacheScope() { return chatGPTCacheScope; },
+		onDidChangeAuthentication: authenticationChanged.event,
 		async request(id, request) {
 			const controller = new AbortController();
 			const pending = { controller, reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
@@ -205,7 +227,12 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 		if (options?.openExternal) document.body.dataset.openedExternal = url;
 		return true;
 	} } as unknown as IOpenerService],
-	[IEditorService, { focusActiveEditor: () => widget.focus() } as unknown as IEditorService],
+	[IEditorService, {
+		focusActiveEditor: () => widget.focus(),
+		openEditor: async ({ resource }: { resource: URI }) => {
+			openedMaterial = (await services.get(IFileService).readFile(resource)).content;
+		},
+	} as unknown as IEditorService],
 	[IAgentThreadService, {} as IAgentThreadService],
 	[IChatService, {} as IChatService],
 	[IChatSessionNavigationService, {} as IChatSessionNavigationService],
@@ -225,8 +252,31 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
+services.registerSingleton(IProjectDialogService, () => services.createInstance(ProjectDialogService, { readEnabled: async () => true }));
 registerTestVoiceInputServices(services);
 registerTestComponentServices(services);
+if (parameters.has('projectMaterials')) {
+	Object.assign(services.get(IWorkbenchEnvironmentService), { userRoamingDataHome: URI.file('/fixture-profile') });
+	const provider = new class extends MemoryFileService {
+		override async readFile(resource: URI) {
+			const result = await super.readFile(resource);
+			const pause = pausedMaterialRead;
+			if (pause && !pause.started && resource.path.endsWith(`/${pause.name}`)) {
+				pause.started = true;
+				await pause.release.p;
+			}
+			return result;
+		}
+
+		override async writeFile(...args: Parameters<MemoryFileService['writeFile']>) {
+			const written = await super.writeFile(...args);
+			savedMaterials.set(args[0].path.split('/').at(-1)!, this.text(args[0]));
+			return written;
+		}
+	}([]);
+	resources.add(services.get(IFileService).registerProvider(projectMaterialFilesScheme, provider));
+}
+
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
 	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: configuration,
 })));
@@ -282,10 +332,24 @@ resources.add(CommandsRegistry.register('sessions.open.code', () => {
 }));
 window.ashChatGPTIntegration = {
 	setConfiguration: (key, value) => configuration.updateValue(key, value),
+	showFind: () => services.get(IChatWidgetService).getAllWidgets().find(widget => widget.visible)?.getFindController()?.show(),
 	setMathEnabled: enabled => services.get(IConfigurationService).updateValue('markdown.math.enabled', enabled),
 	setMathMacros: macros => services.get(IConfigurationService).updateValue('markdown.math.macros', macros),
 	newChat: () => chat.newChat(),
 	draft: () => chat.state.get().draft,
+	readSavedMaterial: name => savedMaterials.get(name),
+	switchAccount: () => {
+		chatGPTCacheScope = (chatGPTCacheScope[0] === 'a' ? 'b' : 'a').repeat(64);
+		authenticationChanged.fire();
+	},
+	pauseMaterialRead: name => { pausedMaterialRead = { name, started: false, release: new DeferredPromise<void>() }; },
+	isMaterialReadPaused: () => pausedMaterialRead?.started === true,
+	resumeMaterialRead: async () => {
+		await pausedMaterialRead?.release.complete();
+		pausedMaterialRead = undefined;
+	},
+	openedMaterial: () => openedMaterial,
+	setOffline: offline => chat.setNetworkAvailable(!offline),
 	storageKeys: () => storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE),
 	dictate: (text, final) => transcript?.(text, final),
 	dictationStops: () => dictationStops,
@@ -305,12 +369,23 @@ let ashProject: Project = {
 	archived: false, sessionCount: 0, description: '', materials: [], sessionIds: [],
 	icon: 'chat', color: 'terminal.ansiBlue',
 };
+const mixedProjectArchive = parameters.has('mixedProjectArchive');
+const withArchiveMembers = (project: Project): Project => {
+	if (!mixedProjectArchive) return project;
+	const externalConversationIds = ['first', 'older'].map(id => chatGPTProjectConversationId(chatGPTCacheScope, id)!);
+	return { ...project, sessionIds: ['fixture-chat'], externalConversationIds, sessionCount: 3 };
+};
 const projectChanged = resources.add(new Emitter<void>());
 services.registerInstance(IProjectService, {
-	list: async () => parameters.has('ashProjectPicker') ? [ashProject] : [],
+	list: async () => parameters.has('ashProjectPicker') || mixedProjectArchive ? [withArchiveMembers(ashProject)] : [],
 	read: async (id: string) => {
-		if (parameters.has('ashProjectPicker') && id === ashProject.id) return ashProject;
+		if ((parameters.has('ashProjectPicker') || mixedProjectArchive) && id === ashProject.id) return withArchiveMembers(ashProject);
 		throw new Error('Unknown fixture project');
+	},
+	archive: async (project: Project) => {
+		ashProject = { ...project, archived: true, revision: project.revision + 1 };
+		projectChanged.fire();
+		return ashProject;
 	},
 	moveExternalConversation: async (id: string, _from: string | undefined, to: string | undefined) => {
 		if (to !== ashProject.id) throw new Error('Unknown destination project');
@@ -325,17 +400,24 @@ services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None, getOrder: (_mode, ids) => ids } as ISessionSectionOrderService);
 
 services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService);
+const localChat = {
+	sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
+	management: { status: 'idle' },
+	chats: [{ threadId: 'fixture-thread', status: 'active', origin: { type: 'root' }, createdAt: new Date(1) }],
+};
 services.registerInstance(ISessionsManagementService, {
-	state: 'ready', onDidChange: Event.None, untitledSessions: [],
+	state: 'ready', primaryCatalogReady: true, onDidChange: Event.None, untitledSessions: [],
 	async initialize() { },
+	async refresh() { },
+	async archiveSession(id: string) {
+		if (id !== localChat.sessionId || localChat.status !== 'active') throw new Error('Unexpected Ash conversation archive');
+		localChat.status = 'archived';
+		document.body.dataset.archivedAsh = id;
+	},
 	sessions: parameters.has('mixedCatalog') ? [{
 		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', kind: 'code',
 		chats: [{ threadId: 'fixture-code', status: 'active', origin: { type: 'root' } }],
-	}, {
-		sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
-		management: { status: 'idle' },
-		chats: [{ threadId: 'fixture-thread', status: 'active', origin: { type: 'root' }, createdAt: new Date(1) }],
-	}] : [],
+	}, localChat] : mixedProjectArchive ? [localChat] : [],
 } as unknown as ISessionsManagementService);
 const chatSelection = observableValue<import('../../../src/ash/sessions/services/sessions/browser/sessionGridState.js').StoredChatSelection | undefined>('fixture chat', undefined);
 services.registerInstance(ISessionsService, {
@@ -361,7 +443,7 @@ if (parameters.has('mixedCatalog')) {
 	}));
 	sources.push(resources.add(ashServices.createInstance(NativeChatCatalogSource)));
 }
-services.registerInstance(IChatListCatalog, { sources });
+services.registerInstance(IChatListCatalog, { sources, forks: resources.add(new ChatListForks(sources, services.get(IStorageService))) });
 services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));
 const titlebarContent = document.createElement('div');
 titlebarContent.className = 'ash-sessions-titlebar-page-content';
@@ -398,6 +480,6 @@ resources.add(services.createInstance(ProjectTitleBarContribution));
 const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
 resize.observe(host);
 resources.add(toDisposable(() => resize.disconnect()));
-chat.initialize();
+if (!mixedProjectArchive) chat.initialize();
 if (parameters.has('focus')) { widget.focus(); }
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });

@@ -59,6 +59,14 @@ suite('Chat image reference editor hover', () => {
 				const element = image as HTMLImageElement;
 				return [element.naturalWidth, element.naturalHeight];
 			}), [320, 180]);
+			await content.locator('.ash-chat-context-reference-preview-header').evaluate(async header => {
+				const icon = header.ownerDocument.createElement('img');
+				icon.alt = '';
+				icon.hidden = true;
+				icon.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+				header.prepend(icon);
+				await icon.decode();
+			});
 			const accessible = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
 			assert.ok(accessible.content?.includes(locale === 'zh-CN' ? `图片预览：${imageName}` : `Image preview: ${imageName}`));
 			assert.ok(accessible.content?.includes('320 × 180'));

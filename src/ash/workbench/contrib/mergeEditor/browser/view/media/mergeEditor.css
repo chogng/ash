@@ -150,6 +150,21 @@
 	padding: var(--ash-spacing-size120);
 }
 
+.ash-merge-editor.result-only {
+	display: flex;
+}
+
+.ash-merge-editor.result-only > .ash-merge-navigation,
+.ash-merge-editor.result-only > .ash-merge-inputs,
+.ash-merge-editor.result-only > .ash-merge-hunks,
+.ash-merge-editor.result-only .ash-merge-result > h3 {
+	display: none;
+}
+
+.ash-merge-editor.result-only .ash-merge-result {
+	border-left: 0;
+}
+
 .ash-merge-line-unresolved {
 	background: var(--ash-diffEditor-removedLineBackground);
 }

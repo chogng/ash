@@ -694,6 +694,10 @@
 	width: calc(100% - 16px);
 }
 
+.ash-scm-status:not(.ash-aria-live) {
+	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size40);
+}
+
 .ash-scm-changes {
 	display: flex;
 	flex-direction: column;

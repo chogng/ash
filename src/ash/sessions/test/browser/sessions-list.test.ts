@@ -13,7 +13,6 @@ import type { ISessionProviderScopeService } from '../../browser/agentHost/sessi
 import type { IProjectService, Project } from '../../../platform/projects/common/projectService.js';
 import { CommandsRegistry, type ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import type { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { IFileDialogService, type IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { NullLoggerService, type LogEntry } from '../../../platform/log/common/log.js';
 import { LogService } from '../../../platform/log/common/logServiceImpl.js';
@@ -67,7 +66,6 @@ const menuContexts = new ContextKeyService();
 const listMenus = new MenuService(listCommands, menuContexts);
 suiteTeardown(() => menuContexts.dispose());
 const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
-const listQuickInput = { createQuickPick: () => { throw new Error('Unexpected appearance picker'); } } as unknown as IQuickInputService;
 const listDialogs = { confirm: () => { throw new Error('Unexpected confirmation'); } } as unknown as IDialogService;
 const noAttention = { blockedSessions: constObservable([]), ignore: () => undefined };
 
@@ -118,7 +116,7 @@ test('Code folder migration waits for the primary catalog and retries when it re
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view, github, emptyGroups, storage, projects,
 		listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage),
-		new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+		new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences);
 	const migrated = () => storage.getBoolean('sessions.code.folderProjectsMigrated', StorageScope.PROFILE, false);
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(project.sessionIds, []);
@@ -168,7 +166,7 @@ test('Sidebar project load failures offer retry only in notifications', async ()
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view, github, emptyGroups, storage, projects,
 		listCommands, listContextMenus, listCustomViews, listMenus, notifications, new SessionsListModelService(storage),
-		new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, log, projectPreferences);
+		new SessionSectionOrderService(storage), noAttention, listDialogs, log, projectPreferences);
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.ok(list.domNode.querySelector('[data-project-id="release"]'));
 
@@ -255,7 +253,7 @@ test('Needs Attention reuses title bar alerts in the single sidebar tree', async
 			}), loadMore() { }
 		},
 		accessibility: { focusContext: 'testSessionsList', verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' },
-	}, management, view, github, groups, storage, emptyProjects, listCommands, contextMenu, listCustomViews, listMenus, listNotifications, model, new SessionSectionOrderService(storage), indicator, listQuickInput, listDialogs, listLog, projectPreferences);
+	}, management, view, github, groups, storage, emptyProjects, listCommands, contextMenu, listCustomViews, listMenus, listNotifications, model, new SessionSectionOrderService(storage), indicator, listDialogs, listLog, projectPreferences);
 	const tree = () => model.readTree('chat')!;
 	const attention = () => tree().find(section => section.id === 'attention');
 	const alertSessions = () => attention()?.children?.map(row => row.sessionId).sort();
@@ -349,7 +347,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	const executed: unknown[][] = [];
 	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const commands = { executeCommand: async (...args: unknown[]) => { executed.push(args); } } as ICommandService;
-	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences);
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')];
 	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
@@ -426,20 +424,15 @@ for (const mode of ['chat', 'code'] as const) {
 					openUntitledSession(id: string) { opened.push(id); },
 				} as unknown as ISessionsService;
 				const listModel = new SessionsListModelService(storage);
-				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences);
 				const assertRows = (...draftIds: string[]): void => {
 					const rows = [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item);
 					const draftRows = draftIds.map(id => `untitled:${id}`);
 					assert.deepEqual(rows, [...draftRows, ...sessions.map(session => `session:${session.sessionId}`)]);
 				};
 				assertRows();
-				if (mode === 'code') {
-					for (const grouping of ['none', 'projects'] as const) {
-						listModel.setGrouping(grouping);
-						assert.match(list.domNode.querySelector('[data-item="session:saved"]')?.getAttribute('data-parent-section') ?? '', /^workspace:/u);
-						assert.equal(list.domNode.querySelector('[data-item="session:standalone"]')?.getAttribute('data-parent-section'), 'recent');
-						assert.ok(list.domNode.querySelector('[data-section^="workspace:"][data-parent-section="recent"]'));
-					}
+				for (const session of sessions) {
+					assert.equal(list.domNode.querySelector(`[data-item="session:${session.sessionId}"]`)?.getAttribute('data-parent-section'), 'recent');
 				}
 				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
 				assertRows();
@@ -515,7 +508,7 @@ test('SessionsList updates passive status without changing row identity or selec
 			});
 		},
 	} as IHoverService;
-	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences, menuContexts, hoverService);
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences, menuContexts, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const viewport = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items > .ash-scrollbar-viewport')!;
@@ -618,7 +611,7 @@ test('The keyboard menu sets a workspace only for an unbound Session and targets
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view,
 		{ onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
 		emptyGroups, storage, emptyProjects, commands,
-		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences, menuContexts);
+		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences, menuContexts);
 	const row = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'Move me')!;
 	row.focus();
 	row.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
@@ -725,7 +718,7 @@ for (const outcome of ['confirmed', 'cancelled', 'failed', 'disposed'] as const)
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', sessions, views,
 		{ onDidChange: Event.None, getSessionPullRequests: () => [], watchSessionPullRequests: () => toDisposable(() => { }), getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
 		emptyGroups, storage, emptyProjects, { executeCommand: () => pending.p } as unknown as ICommandService,
-		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences);
 	const row = list.domNode.querySelector<HTMLElement>('.ash-sessions-list-row')!;
 	Object.defineProperty(row, 'getBoundingClientRect', { value: () => new dom.window.DOMRect(10, 48, 240, 28) });
 	row.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
@@ -801,7 +794,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const commands = { executeCommand: async (...args: unknown[]) => { appearanceCommands.push(args); } } as ICommandService;
 	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
 		github, groups, storage, emptyProjects, commands, context, listCustomViews, listMenus, listNotifications,
-		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences);
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences);
 	const sectionNames = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section^="group:"] > h3'), heading => heading.textContent);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-parent-section="group:quality"][data-row-order-id]'), row => row.getAttribute('data-row-order-id'));
 	const moveUp = async (button: HTMLButtonElement) => {
@@ -934,7 +927,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	} as unknown as ISessionProviderScopeService;
 	const makeList = (mode: ConstructorParameters<typeof SessionsList>[2]) => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
 		github, emptyGroups, storage, projects, listCommands, context, listCustomViews, listMenus, listNotifications,
-		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, listLog, projectPreferences, undefined, undefined, scopes);
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listDialogs, listLog, projectPreferences, undefined, undefined, scopes);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll<HTMLElement>('[data-row-order-id]'), row => row.dataset.rowOrderId);
 	const submenuAction = (list: SessionsList, submenu: string, id: string): IAction => {
 		list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more button')!.click();
@@ -998,13 +991,15 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.deepEqual(rows(chat), [...catalog].sort((left, right) => right.title.localeCompare(left.title)).map(session => session.sessionId));
 
 	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
+	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').checked, true);
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
 	const working = chat.domNode.querySelector('[data-section="grouping:status:working"]')!;
 	assert.equal(working.querySelector('h3 button')?.textContent, '进行中');
 	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:status:working"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
 	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
 	assert.equal(repositoryReads.length, 0);
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
-	assert.equal(chat.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'grouping:projects:release');
+	assert.equal(chat.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'recent');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
 	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
@@ -1029,7 +1024,8 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	});
 	const parent = () => contributed.domNode.querySelector('[data-item="catalog-manual"]')?.getAttribute('data-parent-section');
 	assert.equal(parent(), 'recent');
-	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
+	assert.equal(submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
+	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
 	assert.equal(parent(), 'grouping:status:working');
 	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
 	assert.equal(parent(), 'grouping:environment:local');
@@ -1037,27 +1033,34 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(parent(), 'grouping:repository:["git.example","team","repo"]');
 	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
-	assert.equal(parent(), 'grouping:projects:');
+	assert.equal(parent(), 'recent');
 	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
 	assert.equal(parent(), 'recent');
 });
 
-test('The previous shared sidebar sort seeds both modes once', async () => {
+test('The previous shared sidebar preferences seed both modes once', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	storage.store('sessions.list.sortMode', 'created', StorageScope.PROFILE, StorageTarget.USER);
 	storage.store('sessions.list.sortDirection', 'ascending', StorageScope.PROFILE, StorageTarget.USER);
+	storage.store('sessions.list.grouping', 'repository', StorageScope.PROFILE, StorageTarget.USER);
 	const model = new SessionsListModelService(storage);
 	assert.deepEqual(model.getSort('chat'), { field: 'created', direction: 'ascending' });
 	assert.deepEqual(model.getSort('code'), { field: 'created', direction: 'ascending' });
+	assert.equal(model.getGrouping('chat'), 'repository');
+	assert.equal(model.getGrouping('code'), 'repository');
 	await storage.flush();
+	assert.equal(storage.get('sessions.list.grouping', StorageScope.PROFILE), undefined);
 	assert.equal(storage.get('sessions.list.sortMode', StorageScope.PROFILE), undefined);
 	assert.equal(storage.get('sessions.list.sortDirection', StorageScope.PROFILE), undefined);
 
 	model.setSortMode('chat', 'name');
 	model.setSortDirection('code', 'descending');
+	model.setGrouping('chat', 'none');
 	const reopened = new SessionsListModelService(storage);
+	assert.equal(reopened.getGrouping('chat'), 'none');
+	assert.equal(reopened.getGrouping('code'), 'repository');
 	assert.deepEqual(reopened.getSort('chat'), { field: 'name', direction: 'ascending' });
 	assert.deepEqual(reopened.getSort('code'), { field: 'created', direction: 'descending' });
 });

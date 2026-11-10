@@ -60,11 +60,13 @@ import { AppServerConnectionRelay } from '../../platform/agentHost/electron-main
 import { DevelopmentAppServerReloader } from '../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from '../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { AppServerProcessDiagnostics } from '../../platform/app-server-daemon/electron-main/appServerProcessDiagnostics.js';
-import { remoteExecutablePath } from '../../platform/remote/node/remotePackage.js';
+import { remoteExecutablePath, remoteHostExecutablePath } from '../../platform/remote/node/remotePackage.js';
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platform/ipc/electron-main/trustedIpcRouter.js';
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../platform/browserView/electron-main/browserViewMainService.js';
+import { projectMaterialFilesChannel } from '../../platform/projects/common/projectMaterialFiles.js';
+import { ProjectMaterialFilesChannel } from '../../platform/projects/electron-main/projectMaterialFilesChannel.js';
 import { ChatGPTMain } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTMain.js';
 import { readFile } from 'node:fs/promises';
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
@@ -86,6 +88,7 @@ import { MeteredConnectionChannel } from '../../platform/meteredConnection/elect
 import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, validateNativeContextMenuClose, validateNativeContextMenuRequest, type INativeContextMenuRequest } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
+import { ElectronOpenerService } from '../../platform/opener/electron-main/electronOpenerService.js';
 import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from '../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
 import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from '../../platform/menubar/electron-main/menubarMainService.js';
@@ -155,7 +158,7 @@ import { DesktopStorageChannel } from '../../platform/storage/electron-main/desk
 import { desktopStorageChannelName } from '../../platform/storage/common/profileStorageService.js';
 import { LoggerService } from '../../platform/log/electron-main/loggerService.js';
 import { spawn } from 'node:child_process';
-import { hostLogExecutable, hostIntegrityExecutable } from '../../../../.build/desktop/hostLogs.js';
+import { hostLogExecutable, hostIntegrityExecutable, imageOpenerExecutable } from '../../../../.build/desktop/hostLogs.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
 import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
@@ -253,6 +256,7 @@ export class AshApplication extends Disposable {
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
+	private readonly opener = new ElectronOpenerService(imageOpenerExecutable ? join(mainOutput, imageOpenerExecutable) : undefined);
 	private remoteConnections: RemoteConnections | undefined;
 	private readonly wslHosts = new WSLRemoteAgentHostService();
 	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
@@ -589,16 +593,16 @@ export class AshApplication extends Disposable {
 		}));
 		// Runtime binaries are needed only when inbound hosting actually starts.
 		// UI-only windows must not require a prepared backend package at startup.
-		const remoteExecutable = () => remoteExecutablePath({
+		const remotePackage = {
 			appPath: app.getAppPath(),
 			isPackaged: app.isPackaged,
 			platform: process.platform,
 			resourcesPath: process.resourcesPath
-		});
+		};
 		const tunnelServices = this._register(this.windowServices.createChild(new ServiceCollection([ILogService, this.logService])));
 		const coordinator = this._register(tunnelServices.createInstance(TunnelProcessCoordinator, {
-			get executable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'); },
-			get backendExecutable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'); },
+			get executable() { return remoteHostExecutablePath(remotePackage); },
+			get backendExecutable() { return join(dirname(remoteHostExecutablePath(remotePackage)), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'); },
 			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
 			assets: this.rendererRoot,
 			environment: { ...process.env, ASH_HOME: this.profileRoot },
@@ -619,6 +623,10 @@ export class AshApplication extends Disposable {
 		this._register(profileFiles.onDidWatchError(error => this.logService.error('files', 'Failed to watch user profile files', error)));
 		this._register(profileFiles.watch(URI.file(this.profileRoot), { recursive: true, excludes: ['**/*.tmp'] }));
 		this.mainProcessIpcServer.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, this._register(new DiskFileSystemProviderChannel(profileFiles, URI.file(this.profileRoot), URI.file(app.getPath('home')))));
+		this.mainProcessIpcServer.registerChannel(projectMaterialFilesChannel, this._register(this.windowServices.createInstance(
+			ProjectMaterialFilesChannel, URI.file(this.profileRoot),
+			(context: string) => context === `window:${this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY)?.id}`,
+		)));
 		this.mainProcessIpcServer.registerChannel('keyboardLayout', keyboardLayoutChannel(this.nativeKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('userKeyboardLayout', userKeyboardLayoutChannel(this.services.userKeyboardLayout));
 		this.mainProcessIpcServer.registerChannel('update', new UpdateChannel(this.updateMainService));
@@ -1528,6 +1536,20 @@ export class AshApplication extends Disposable {
 		return bootstrap.processLauncher;
 	}
 
+	private createSshPortForwardingService(getWorkspace: () => IAnyWorkspaceIdentifier): SshPortForwardingService {
+		return new SshPortForwardingService({
+			getWorkspace,
+			forwardExecutable: () => remoteHostExecutablePath({
+				appPath: app.getAppPath(),
+				isPackaged: app.isPackaged,
+				platform: process.platform,
+				resourcesPath: process.resourcesPath,
+			}),
+			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
+			localEnvironment: process.env,
+		});
+	}
+
 	private async startAppServerWithRecovery(
 		supervisor: AppServerConnectionRelay,
 	): Promise<boolean> {
@@ -1641,11 +1663,7 @@ export class AshApplication extends Disposable {
 		this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
-		const remotePortForwardingService = new SshPortForwardingService({
-			getWorkspace: () => workspaceContext.getWorkspace(),
-			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
-			localEnvironment: process.env,
-		});
+		const remotePortForwardingService = this.createSshPortForwardingService(() => workspaceContext.getWorkspace());
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables, supervisor, systemContextMenu);
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace, resolvedWorkspace }) => {
@@ -1786,7 +1804,7 @@ export class AshApplication extends Disposable {
 			}),
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
-			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
+			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService, this.opener),
 			...this.windowImageRoutes(window, windowDisposables),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
@@ -2202,11 +2220,7 @@ export class AshApplication extends Disposable {
 						: undefined;
 					if (localSessionsRelay) this.trackAppServerConnection(window, localSessionsRelay, windowDisposables);
 
-					const remotePortForwardingService = new SshPortForwardingService({
-						getWorkspace: () => session.workspaceContext.getWorkspace(),
-						sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
-						localEnvironment: process.env,
-					});
+					const remotePortForwardingService = this.createSshPortForwardingService(() => session.workspaceContext.getWorkspace());
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay, systemContextMenu);
 					this.chatGPTMain.attachWindow(window.id, windowDisposables);
@@ -2226,7 +2240,7 @@ export class AshApplication extends Disposable {
 						...this.remoteAgentHostRoutes(window, sessionsEntry.url, windowDisposables),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
-						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
+						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService, this.opener),
 						...this.windowImageRoutes(window, windowDisposables),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,
@@ -2355,6 +2369,7 @@ export class AshApplication extends Disposable {
 		const host = this.windowsMainService.getWindowById(window.id)!;
 		if (this.appServerStartupMode !== 'disabled') await host.ready();
 		const current = session.workspaceContext.getWorkspace();
+		if (getWorkspaceRemoteAuthority(current) !== getWorkspaceRemoteAuthority(resolvedWorkspace)) return false;
 		if (current.id === workspace.id) return true;
 		if (this.appServerStartupMode !== 'disabled' && resolvedWorkspace.folders.length > 0) {
 			const channel = this.mainProcessIpcServer.getChannel(AGENTS_WINDOW_WORKSPACE_CHANNEL, client => client.ctx === `window:${window.id}`);

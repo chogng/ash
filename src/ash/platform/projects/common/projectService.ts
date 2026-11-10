@@ -2,12 +2,11 @@ import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-/** References retain their source location and never authorize reading or modifying it. */
-export interface ProjectMaterial {
-	readonly resource: URI;
-	readonly name: string;
-	readonly kind: 'file' | 'folder';
-}
+/** Project text and source references that never grant file access. */
+export type ProjectMaterial =
+	| { readonly kind: 'file'; readonly name: string; readonly resource: URI; readonly sizeBytes: number; }
+	| { readonly kind: 'folder'; readonly name: string; readonly resource: URI; }
+	| { readonly kind: 'text'; readonly id: string; readonly name: string; readonly content: string; };
 
 export interface ProjectAppearance {
 	readonly icon?: string;
@@ -48,7 +47,8 @@ export interface IProjectService {
 	/** Organizes an account-scoped provider conversation without creating an Ash Thread. */
 	moveExternalConversation(conversationId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
-	setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void>;
+	/** Returns the saved project and its revision for subsequent edits. */
+	setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<Project>;
 	archive(project: ProjectSummary): Promise<Project>;
 	restore(project: ProjectSummary): Promise<Project>;
 	/** Removes the project and its references, preserving conversations and source files. */

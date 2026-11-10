@@ -88,6 +88,8 @@ pub struct Status {
     pub path: String,
     pub head: Head,
     pub changes: Vec<Change>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integration: Option<IntegrationState>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -478,9 +480,11 @@ pub enum RepositoryCommand {
     },
     Continue {
         operation: Integration,
+        expected_version: String,
     },
     Abort {
         operation: Integration,
+        expected_version: String,
     },
     Stash {
         message: String,
@@ -523,6 +527,13 @@ pub enum Integration {
     Merge,
     Rebase,
     CherryPick,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationState {
+    pub operation: Integration,
+    pub version: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -662,6 +673,15 @@ pub struct CommitIntent {
     pub identity: CommitIdentity,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_head: Option<Head>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_staged_version: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StagedCommitPreview {
+    pub status: Status,
+    pub version: String,
 }
 
 #[derive(Deserialize, Serialize)]

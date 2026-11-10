@@ -8,6 +8,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
@@ -29,6 +30,9 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { getChatRequestAccessibilityHelp } from '../../browser/actions/chatAccessibilityHelp.js';
 import '../../browser/chat.shared.contribution.js';
 
 const document = browserEnvironment.window.document;
@@ -208,6 +212,86 @@ test('a changed media source cancels the original read while retaining the respo
 	assert.equal(widget.element.querySelector('img')!.hasAttribute('src'), false);
 });
 
+test('a sent image retries a failed attachment read in place and restores its preview', async () => {
+	using resources = new DisposableStore();
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	resources.add(toDisposable(resetNlsResolver));
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	resources.add(setARIAContainer(document.body));
+	ChatContextKeys.imagePreviewPresentation.bindTo(services.get(IContextKeyService)).set('popup');
+	const { window } = browserEnvironment;
+	const urls = window.URL;
+	const revoked: string[] = [];
+	for (const [key, value] of [['createObjectURL', () => 'blob:sent-image'], ['revokeObjectURL', (url: string) => revoked.push(url)]] as const) {
+		const descriptor = Object.getOwnPropertyDescriptor(urls, key);
+		Object.defineProperty(urls, key, { configurable: true, value });
+		resources.add(toDisposable(() => {
+			if (descriptor) Object.defineProperty(urls, key, descriptor);
+			else Reflect.deleteProperty(urls, key);
+		}));
+	}
+	const retry = new DeferredPromise<{ bytes: Uint8Array; mimeType: string; }>();
+	const reads: unknown[] = [];
+	let signal: AbortSignal | undefined;
+	services.registerInstance(IAgentThreadService, {
+		...createDisconnectedRendererApi().thread,
+		readAttachment: async (request, cancellation) => {
+			reads.push(request);
+			signal = cancellation;
+			if (reads.length === 1) throw new Error('Connection unavailable');
+			return retry.p;
+		},
+	});
+	const widget = mount(resources, services);
+	widget.render([{ id: source.itemId, type: 'userImageAttachment', text: '', transient: false, content: [image], attachmentSource: source }]);
+	const tile = widget.element.querySelector('.ash-chat-sent-image-thumbnails > div')!;
+	const message = tile.querySelector<HTMLElement>('.ash-chat-image-attachment-name')!;
+	const button = tile.querySelector('button')!;
+	const thumbnail = tile.querySelector('img')!;
+	const nextAttributeChange = (element: Element, attribute: string): Promise<void> => new Promise(resolve => {
+		const observer = new window.MutationObserver(() => {
+			observer.disconnect();
+			resolve();
+		});
+		observer.observe(element, { attributeFilter: [attribute] });
+		resources.add(toDisposable(() => observer.disconnect()));
+	});
+	await nextAttributeChange(button, 'hidden');
+	assert.equal(message.textContent, '无法预览：图片.png');
+	assert.equal(button.textContent, '重试');
+	assert.equal(button.getAttribute('aria-label'), '重试预览 图片.png');
+	assert.equal(button.hidden, false);
+	assert.match(getChatRequestAccessibilityHelp(true), /按 Tab 到达“重试”/u);
+
+	button.focus();
+	button.click();
+	button.click();
+	const { sessionId, threadId, itemId } = source;
+	assert.deepEqual(reads, Array.from({ length: 2 }, () => ({ sessionId, threadId, itemId, contentIndex: undefined })));
+	assert.equal(button.getAttribute('aria-disabled'), 'true');
+	assert.equal(button.textContent, '正在重试…');
+	assert.equal(message.hidden, false);
+	const resolved = nextAttributeChange(thumbnail, 'src');
+	await retry.complete({ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png' });
+	await resolved;
+	assert.equal(thumbnail.getAttribute('src'), 'blob:sent-image');
+	assert.equal(thumbnail.hidden, true);
+	button.click();
+	assert.equal(reads.length, 2);
+	Object.defineProperty(thumbnail, 'naturalWidth', { value: 2 });
+	thumbnail.dispatchEvent(new window.Event('load'));
+	assert.equal(thumbnail.hidden, false);
+	assert.equal(message.hidden, true);
+	assert.equal(button.getAttribute('aria-disabled'), null);
+	assert.equal(button.getAttribute('aria-label'), '预览 图片.png');
+	assert.equal(document.activeElement, button);
+	assert.equal(widget.element.querySelector('.ash-chat-sent-image-thumbnails > div'), tile);
+
+	widget.render([]);
+	assert.equal(signal?.aborted, true);
+	assert.deepEqual(revoked, ['blob:sent-image']);
+});
+
 test('response view state restores focus inside its code editor', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
@@ -260,17 +344,19 @@ test('unchanged response media keeps its DOM and corrected metadata updates its 
 	} finally { observer.disconnect(); }
 });
 
-test('changing a completed code fence language retains the response document', () => {
+test('a code card resolves a late language alias without replacing the response document', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
-	resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript' }));
-	using part = services.createInstance(CodeBlockPart, document);
+	using part = services.createInstance(CodeBlockPart, document, 'card');
 	const data = { text: 'const value = 1;', languageId: 'plaintext', codeBlockIndex: 0, element: response, chatSessionResource: undefined };
 	part.render(data, 300);
-	const model = part.editor.getModel()!;
-	part.render({ ...data, languageId: 'typescript' }, 300);
-	assert.equal(part.editor.getModel(), model);
+	const model = part.model!;
+	part.render({ ...data, languageId: 'ts' }, 300);
+	assert.equal(model.getLanguageId(), 'plaintext');
+	resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript', aliases: ['TypeScript', 'ts'] }));
+	assert.equal(part.model, model);
 	assert.equal(model.getLanguageId(), 'typescript');
+	assert.equal(part.element.querySelector('.ash-chat-code-block-language')?.textContent, 'TypeScript');
 	assert.equal(model.isDisposed(), false);
 });
 

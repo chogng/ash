@@ -8,10 +8,20 @@ import { getToolSpecificDataDescription } from '../../../accessibility/chatRespo
 import { isImageGenerationToolInvocation } from './chatToolPartUtilities.js';
 import '../media/chatCollapsibleContentPart.css';
 
+export interface ChatToolDisclosureState {
+	readonly open: boolean;
+	readonly userInteracted: boolean;
+}
+
 /** Owns the stable disclosure and summary; execution state is projected from transcript evidence. */
 export class ChatToolProgressSubPart extends BaseChatToolInvocationSubPart<HTMLDetailsElement> {
 	private userInteracted = false;
 	public get hasUserInteracted(): boolean { return this.userInteracted; }
+	public get disclosureState(): ChatToolDisclosureState { return { open: this.domNode.open, userInteracted: this.userInteracted }; }
+	public restoreDisclosure(state: ChatToolDisclosureState): void {
+		this.userInteracted = state.userInteracted;
+		this.domNode.open = state.open;
+	}
 	private readonly summary: HTMLElement;
 	private readonly statusIcon: HTMLElement;
 	private readonly label: HTMLElement;

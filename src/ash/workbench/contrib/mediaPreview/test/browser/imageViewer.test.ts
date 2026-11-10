@@ -165,6 +165,73 @@ suite('Built-in image viewer', () => {
 		await expect(page.locator('#menu')).toContainText('Copy image');
 	});
 
+	test('previews a pinch without relayout and lets a newer keyboard zoom take precedence', async () => {
+		const { page } = browser;
+		await page.goto('/imagePreview.html');
+		await page.evaluate(() => window.imagePreviewFixture.open('png'));
+		const viewport = page.getByLabel('Image viewport', { exact: true });
+		const image = viewport.locator('img');
+		await viewport.press('1');
+		await expect(image).toHaveCSS('width', '800px');
+
+		const pinch = await viewport.evaluate(async element => {
+			const image = element.querySelector('img')!;
+			const viewportCenter = element.getBoundingClientRect().left + element.clientWidth / 2;
+			const imageCenter = () => (viewportCenter - image.getBoundingClientRect().left) / image.getBoundingClientRect().width;
+			const centerBefore = imageCenter();
+			const scrollBefore = element.scrollWidth;
+			const canceled = [-10, -20, 5].map(deltaY => !element.dispatchEvent(
+				new WheelEvent('wheel', { ctrlKey: true, deltaY, bubbles: true, cancelable: true }),
+			));
+			await new Promise(resolve => requestAnimationFrame(resolve));
+			return {
+				canceled, centerBefore, centerDuring: imageCenter(), scrollBefore, scrollDuring: element.scrollWidth,
+				layoutWidth: image.offsetWidth, visualWidth: image.getBoundingClientRect().width,
+				pendingState: window.imagePreviewFixture.state(),
+			};
+		});
+		expect(pinch.canceled).toEqual([true, true, true]);
+		expect(pinch.layoutWidth).toBe(800);
+		expect(pinch.scrollDuring).toBe(pinch.scrollBefore);
+		expect(pinch.visualWidth).toBeCloseTo(800 * Math.exp(0.25), 1);
+		expect(pinch.centerDuring).toBeCloseTo(pinch.centerBefore, 3);
+		expect(pinch.pendingState!.scale).toBeCloseTo(Math.exp(0.25), 10);
+		await expect(page.locator('#status')).toContainText('128%');
+		await expect.poll(() => viewport.evaluate(element => element.querySelector('img')!.offsetWidth)).toBe(Math.round(pinch.visualWidth));
+		const centerAfter = await viewport.evaluate(element => {
+			const image = element.querySelector('img')!.getBoundingClientRect();
+			return (element.getBoundingClientRect().left + element.clientWidth / 2 - image.left) / image.width;
+		});
+		expect(centerAfter).toBeCloseTo(pinch.centerBefore, 3);
+
+		await viewport.evaluate(async element => {
+			element.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -10, bubbles: true, cancelable: true }));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true, cancelable: true }));
+			await new Promise(resolve => requestAnimationFrame(resolve));
+		});
+		await expect(page.locator('#status')).toContainText('Fit to window');
+	});
+
+	test('restores the zoom and projected scroll position when closed mid-pinch', async () => {
+		const { page } = browser;
+		await page.goto('/imagePreview.html');
+		await page.evaluate(() => window.imagePreviewFixture.open('png'));
+		const viewport = page.getByLabel('Image viewport', { exact: true });
+		await viewport.press('1');
+		const expected = await viewport.evaluate(element => {
+			const scrollLeft = (element.scrollLeft + element.clientWidth / 2) * 1.5 - element.clientWidth / 2;
+			const scrollTop = (element.scrollTop + element.clientHeight / 2) * 1.5 - element.clientHeight / 2;
+			element.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -Math.log(1.5) * 100, bubbles: true, cancelable: true }));
+			window.imagePreviewFixture.close();
+			return { scrollLeft, scrollTop };
+		});
+		await page.evaluate(() => window.imagePreviewFixture.open('png'));
+		await expect(viewport.locator('img')).toHaveCSS('width', '1200px');
+		const restored = (await page.evaluate(() => window.imagePreviewFixture.state()))!;
+		expect(Math.abs(restored.scrollLeft - expected.scrollLeft)).toBeLessThanOrEqual(1);
+		expect(Math.abs(restored.scrollTop - expected.scrollTop)).toBeLessThanOrEqual(1);
+	});
+
 	test('copies raster and SVG images to the real browser clipboard as PNG', async () => {
 		const { page } = browser;
 		await page.goto('/imagePreview.html');

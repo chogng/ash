@@ -29,13 +29,16 @@ export interface SessionsCatalogRow {
 	readonly disabled?: boolean;
 	readonly actionsDisabled?: boolean;
 	readonly defaultIcon: Icon;
+	readonly forkSource?: { readonly id: string; readonly title: string; readonly open?: () => void; };
 	readonly iconId?: string;
 	readonly setIcon?: (icon: Icon | undefined) => void;
 	readonly pinned?: boolean;
 	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
+	readonly rename?: (title: string) => Promise<void>;
+	readonly validateRename?: (title: string) => string | undefined;
 	organization(): SessionListOrganization | undefined;
 	open(threadId?: string): void;
-	getActions(signal: AbortSignal, restoreFocus: () => void): readonly IAction[] | Promise<readonly IAction[]>;
+	getActions(signal: AbortSignal): readonly IAction[] | Promise<readonly IAction[]>;
 }
 
 export interface SessionsCatalogProject {
@@ -51,13 +54,22 @@ export interface SessionsCatalogProject {
 	readonly loadMore?: () => void;
 }
 
+export type CatalogProjectMemoryMode = 'default' | 'projectOnly';
+
 export interface ConversationProjectEditor {
-	readonly details: { readonly name: string; readonly description: string; };
+	readonly details: { readonly name: string; readonly description: string; readonly memoryMode?: CatalogProjectMemoryMode; };
 	save(details: ConversationProjectEditor['details']): Promise<void>;
 }
 
+export interface CatalogProjectCreator {
+	readonly label: string;
+	readonly description: string;
+	readonly supportsMemoryMode?: boolean;
+	create(details: ConversationProjectEditor['details']): Promise<{ readonly id: string; readonly preferenceKey?: string; readonly warning?: string; }>;
+}
+
 export interface SessionsCatalogProjectOperations {
-	readonly rename?: (name: string, signal: AbortSignal) => Promise<void>;
+	readonly editDetails?: (signal: AbortSignal) => Promise<ConversationProjectEditor>;
 	readonly archive?: () => Promise<boolean>;
 	readonly remove?: { readonly removesContents: boolean; run(): Promise<void>; };
 }
@@ -70,6 +82,7 @@ interface SessionsCatalogSection {
 
 export interface SessionsCatalogSnapshot {
 	readonly sections: readonly SessionsCatalogSection[];
+	readonly forkEntries?: readonly SessionsCatalogRow[];
 	readonly loading: boolean;
 }
 

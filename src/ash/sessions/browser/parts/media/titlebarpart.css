@@ -123,10 +123,15 @@
 	padding-inline-start: var(--ash-spacing-size40);
 }
 
-.ash-sessions-titlebar-page-content {
+.ash-sessions-titlebar-page-content,
+.ash-sessions-titlebar.has-page-content.show-session-alongside-page
+	.ash-sessions-titlebar-session-content {
 	box-sizing: border-box;
-	padding-inline-end: var(--ash-spacing-size120);
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-sessions-titlebar-page-content {
+	padding-inline-end: var(--ash-spacing-size120);
 }
 
 .ash-sessions-titlebar-page-content[hidden] {
@@ -150,8 +155,32 @@
 	-webkit-app-region: no-drag;
 }
 
-.ash-sessions-titlebar.has-page-content .ash-sessions-titlebar-session-content {
+.ash-sessions-titlebar.has-page-content:not(.show-session-alongside-page)
+	.ash-sessions-titlebar-session-content {
 	display: none;
+}
+
+.ash-sessions-titlebar.show-session-alongside-page
+	.ash-sessions-titlebar-page-content {
+	flex: 0 1 auto;
+	padding-inline-end: var(--ash-spacing-size40);
+}
+
+.ash-sessions-titlebar-separator {
+	display: none;
+	flex-shrink: 0;
+	color: var(--ash-description-foreground);
+	user-select: none;
+}
+
+.ash-sessions-titlebar.has-page-content.show-session-alongside-page
+	.ash-sessions-titlebar-separator {
+	display: block;
+}
+
+.ash-sessions-titlebar.has-page-content.show-session-alongside-page
+	.ash-sessions-titlebar-session-content {
+	flex-basis: auto;
 }
 
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {

@@ -1,6 +1,7 @@
 use crate::api::Api;
 use crate::model::Change;
 use crate::model::Head;
+use crate::model::Integration;
 use crate::model::Repository;
 use serde_json::Value;
 use serde_json::json;
@@ -84,6 +85,11 @@ pub fn snapshot(
         .as_ref()
         .map(|status| status.changes.as_slice())
         .unwrap_or_default();
+    let integration = repository
+        .status
+        .as_ref()
+        .and_then(|status| status.integration.as_ref());
+    let unresolved = changes.iter().filter(|change| change.conflicted).count();
     let optimistic: Vec<_> = changes
         .iter()
         .cloned()
@@ -163,6 +169,7 @@ pub fn snapshot(
         if resources.is_empty()
             && !(group == "staged"
                 && configuration.boolean("alwaysShowStagedChangesResourceGroup", false))
+            && !(group == "merge" && integration.is_some())
         {
             continue;
         }
@@ -179,7 +186,7 @@ pub fn snapshot(
                 "stageAll",
                 "git.menu.stageAll",
                 "add",
-                !repository.is_busy(),
+                !repository.is_busy() && !resources.is_empty(),
             )],
             _ => vec![
                 action(
@@ -198,6 +205,30 @@ pub fn snapshot(
                 ),
             ],
         };
+        if group == "merge"
+            && let Some(integration) = integration
+        {
+            actions.insert(
+                0,
+                action(
+                    api,
+                    &format!("abortIntegration:{}", integration.version),
+                    "git.integrationAbort",
+                    "close",
+                    !repository.is_busy(),
+                ),
+            );
+            actions.insert(
+                0,
+                action(
+                    api,
+                    &format!("continueIntegration:{}", integration.version),
+                    "git.integrationContinue",
+                    "check",
+                    unresolved == 0 && !repository.is_busy(),
+                ),
+            );
+        }
         if let Some(id) = match group {
             "staged" => Some("viewStagedChanges"),
             "changes" => Some("viewChanges"),
@@ -217,7 +248,11 @@ pub fn snapshot(
     let head = repository.status.as_ref().map(|status| &status.head);
     let branch = head.and_then(Head::name);
     let primary = primary_action(repository);
-    let input_validation = validate_input(api, repository);
+    let input_validation = if integration.is_none() {
+        validate_input(api, repository)
+    } else {
+        None
+    };
     let staged = changes
         .iter()
         .any(|change| change.index_status != "unmodified");
@@ -375,13 +410,16 @@ pub fn snapshot(
             (label.clone(), label)
         }
     };
-    let can_accept = primary != "commit"
-        || !changes.iter().any(|change| change.conflicted)
-            && (staged || smart && !changes.is_empty());
+    let can_accept = integration.is_none()
+        && (primary != "commit" || unresolved == 0 && (staged || smart && !changes.is_empty()));
     let command = |id: &str, title: String| json!({"id":id,"title":title,"arguments":[repository.descriptor.id]});
     let secondary_commands = if primary == "commit" {
         vec![
             vec![
+                command(
+                    "git.previewStagedCommit",
+                    api.text("git.previewStagedCommit", &[]),
+                ),
                 command("git.commitStaged", api.text("git.menu.commitStaged", &[])),
                 command("git.commitAll", api.text("git.menu.commitAll", &[])),
             ],
@@ -422,7 +460,28 @@ pub fn snapshot(
             .count(),
         _ => changes.len(),
     };
-    let status_message = if limit_reached && !configuration.boolean("ignoreLimitWarning", false) {
+    let status_message = if integration.is_some() && !repository.error.is_empty() {
+        repository.error.clone()
+    } else if integration.is_some() && !repository.notice.is_empty() {
+        repository.notice.clone()
+    } else if let Some(integration) = integration {
+        let operation = api.text(
+            match integration.operation {
+                Integration::Merge => "git.integrationMerge",
+                Integration::Rebase => "git.integrationRebase",
+                Integration::CherryPick => "git.integrationCherryPick",
+            },
+            &[],
+        );
+        api.text(
+            if unresolved == 1 {
+                "git.integrationProgressOne"
+            } else {
+                "git.integrationProgress"
+            },
+            &[&operation, &unresolved.to_string()],
+        )
+    } else if limit_reached && !configuration.boolean("ignoreLimitWarning", false) {
         api.text("git.limitReached", &[])
     } else if in_progress && configuration.boolean("showProgress", true) {
         api.text("git.operationProgress", &[])
@@ -445,10 +504,10 @@ pub fn snapshot(
     Ok(
         json!({"id":repository.descriptor.id,"providerId":"git","label":repository.descriptor.label,"rootUri":repository.root_uri,
         "count":count,"selected":selected,"selectionRevision":selection_revision,"groups":groups,
-        "input":{"visible":configuration.boolean("showCommitInput",true),"buttonVisible":configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
+        "input":{"visible":integration.is_none() && configuration.boolean("showCommitInput",true),"buttonVisible":integration.is_none() && configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
             "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":can_accept,"buttonLabel":label,"buttonTooltip":tooltip},
         "actionButton":{"command":primary_command,"secondaryCommands":secondary_commands,"enabled":can_accept && !repository.is_busy()},
-        "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":in_progress,"historyOperationRevision":repository.history_operation_revision,"statusBarCommands":statusbar,
+        "activeRepositoryName":branch,"statusMessage":status_message,"statusMessageVisible":integration.is_some(),"isBusy":in_progress,"historyOperationRevision":repository.history_operation_revision,"statusBarCommands":statusbar,
         "timeline":{"label":api.text("git.timelineHistory",&[]),"resetKey":format!("{}:{}:{}",configuration.text("timeline.date","committed"),configuration.boolean("timeline.showAuthor",true),configuration.boolean("timeline.showUncommitted",false))},
         "hasHistory":true,"hasHistoryItemRefs":true,"hasHistoryMergeBase":true,"historyRef":history_ref,"historyRemoteRef":remote_ref,
         "historyRevision":repository.status.as_ref().map(|status|status.history_revision).unwrap_or(0),"historyChangeSilent":repository.status.as_ref().is_some_and(|status|status.history_change_silent),"historyRefsRevision":0,"historyRefsItems":[],"hasMerge":true,"inputRevision":repository.input_revision,

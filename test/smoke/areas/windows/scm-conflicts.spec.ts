@@ -68,7 +68,13 @@ test('SCM opens a three-way merge editor and stages the saved manual resolution'
 
 test('SCM accepts an incoming conflict block and completes the merge', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	await workbench.git.open();
+	const resume = page.getByRole('button', { name: 'Continue Git operation' });
+	const conflicts = page.locator('.ash-scm-section-label').getByText('Merge Changes', { exact: true });
+	await expect(page.getByRole('status').filter({ hasText: 'Merge in progress · 1 unresolved file' })).toBeVisible();
+	await conflicts.hover();
+	await expect(resume).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Abort Git operation' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Open main.ts for Merge Changes' }).click();
 	await expect(page.locator('.ash-merge-hunk')).toHaveCount(1);
 	await expect(page.getByRole('button', { name: 'Next Conflict' })).toBeEnabled();
@@ -82,10 +88,23 @@ test('SCM accepts an incoming conflict block and completes the merge', { tag: ['
 	await expect(page.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
 	await expect(page.getByRole('button', { name: 'Accept Incoming' })).toBeFocused();
 	await page.getByRole('button', { name: 'Complete Merge' }).click();
-	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
+	await expect(page.locator('.ash-scm-merge-status')).toHaveText('File conflict resolved and staged.');
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
 	expect((await readFile(testWorkspace.file, 'utf8'))).toBe('const value = 2;\n');
 	expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 2;\n');
+	await page.reload();
+	await workbench.waitForReady();
+	const editor = workbench.editors.groupAt(0).content;
+	await expect(editor.getByRole('status').filter({ hasText: 'This file no longer has a merge conflict.' })).toBeVisible();
+	await expect(editor.locator('.ash-merge-result-editor')).toContainText('const value = 2;');
+	await expect(editor.getByRole('button', { name: 'Complete Merge' })).toBeHidden();
+	await workbench.git.open();
+	await expect(page.getByRole('status').filter({ hasText: 'Merge in progress · 0 unresolved files' })).toBeVisible();
+	await conflicts.hover();
+	await expect(resume).toBeEnabled();
+	await resume.click();
+	await expect(resume).toHaveCount(0);
+	expect((await run('git', ['rev-list', '--parents', '-n', '1', 'HEAD'], { cwd: testWorkspace.directory })).stdout.trim().split(' ')).toHaveLength(3);
 });
 
 test('SCM can choose the incoming-first combination and then use the common ancestor', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
@@ -114,15 +133,12 @@ test('SCM keeps an explicitly handled base result when the merge editor reopens'
 	await expect(group.content.locator('.ash-scm-merge-status')).toHaveText('Review or resolve every conflict before completing the merge.');
 	await page.getByRole('button', { name: 'Use Base' }).click();
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
-	await page.keyboard.press('F1');
-	const picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Close');
-	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close$/u }).click();
-	await page.getByRole('button', { name: 'Open main.ts for Merge Changes' }).click();
+	await page.reload();
+	await workbench.waitForReady();
 	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Base');
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 1 conflicts resolved');
 	await page.getByRole('button', { name: 'Complete Merge' }).click();
-	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
+	await expect(page.locator('.ash-scm-merge-status')).toHaveText('File conflict resolved and staged.');
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
 });
 
@@ -145,7 +161,7 @@ test('SCM requires review of an existing manual result and preserves the decisio
 	await page.getByRole('button', { name: 'Open main.ts for Merge Changes' }).click();
 	await expect(group.content.locator('.ash-merge-hunk-state')).toHaveText('Manual resolution');
 	await page.getByRole('button', { name: 'Complete Merge' }).click();
-	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
+	await expect(page.locator('.ash-scm-merge-status')).toHaveText('File conflict resolved and staged.');
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
 });
 
@@ -304,25 +320,33 @@ test('SCM resolves a non-text result by choosing the whole current file', { tag:
 	await page.getByRole('button', { name: 'Open main.ts for Merge Changes' }).click();
 	await expect(page.getByRole('button', { name: 'Use Current File' })).toBeVisible();
 	await page.getByRole('button', { name: 'Use Current File' }).click();
-	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
+	await expect(page.locator('.ash-scm-merge-status')).toHaveText('File conflict resolved and staged.');
 	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
 	expect((await readFile(testWorkspace.file, 'utf8'))).toBe('const value = 3;\n');
 	expect((await run('git', ['show', ':main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('const value = 3;\n');
 });
 
-test('SCM can keep a deleted side of a modify/delete conflict', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	await run('git', ['merge', '--abort'], { cwd: testWorkspace.directory });
-	await run('git', ['switch', 'topic'], { cwd: testWorkspace.directory });
-	await run('git', ['rm', 'main.ts'], { cwd: testWorkspace.directory });
-	await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Delete file'], { cwd: testWorkspace.directory });
-	await run('git', ['switch', 'main'], { cwd: testWorkspace.directory });
-	await run('git', ['merge', 'topic'], { cwd: testWorkspace.directory }).then(() => { throw new Error('Expected modify/delete conflict'); }, () => undefined);
-	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-	await page.getByRole('button', { name: 'Open main.ts for Merge Changes' }).click();
-	await expect(page.getByRole('button', { name: 'Keep Incoming Deletion' })).toBeVisible();
-	await page.getByRole('button', { name: 'Keep Incoming Deletion' }).click();
-	await expect(page.locator('.ash-scm-merge-status')).toHaveText('Merge completed and result staged.');
-	await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
-	expect((await run('git', ['ls-files', '--stage', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
+test.describe('SCM conflict restoration in Simplified Chinese', () => {
+	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+
+	test('SCM can keep a deleted side of a modify/delete conflict', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+		await run('git', ['merge', '--abort'], { cwd: testWorkspace.directory });
+		await run('git', ['switch', 'topic'], { cwd: testWorkspace.directory });
+		await run('git', ['rm', 'main.ts'], { cwd: testWorkspace.directory });
+		await run('git', ['-c', 'user.name=Ash Test', '-c', 'user.email=ash-test@example.invalid', 'commit', '-m', 'Delete file'], { cwd: testWorkspace.directory });
+		await run('git', ['switch', 'main'], { cwd: testWorkspace.directory });
+		await run('git', ['merge', 'topic'], { cwd: testWorkspace.directory }).then(() => { throw new Error('Expected modify/delete conflict'); }, () => undefined);
+		const page = workbench.page;
+		await workbench.git.open();
+		await page.getByRole('button', { name: '打开 合并更改 的main.ts' }).click();
+		await page.getByRole('button', { name: '保留传入删除结果' }).click();
+		await expect(page.locator('.ash-scm-merge-status')).toHaveText('文件冲突已解决并暂存。');
+		await expect.poll(async () => (await run('git', ['ls-files', '--unmerged', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
+		expect((await run('git', ['ls-files', '--stage', 'main.ts'], { cwd: testWorkspace.directory })).stdout).toBe('');
+		await page.reload();
+		await workbench.waitForReady();
+		const editor = workbench.editors.groupAt(0).content;
+		await expect(editor.getByRole('status').filter({ hasText: '此文件已没有合并冲突。' })).toBeVisible();
+		await expect(editor.getByText('文件已删除', { exact: true })).toBeVisible();
+	});
 });

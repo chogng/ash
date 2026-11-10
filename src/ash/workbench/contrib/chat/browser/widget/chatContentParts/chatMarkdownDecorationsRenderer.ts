@@ -14,10 +14,11 @@ import { localize } from '../../../../../../nls.js';
 import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
 import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../github/browser/githubResourceHover.js';
 import { ISessionSummaryHoverService } from '../../agentSessions/sessionSummaryHoverService.js';
+import { chatSourcePreviewClass } from '../chatMarkdownRichContent.js';
 
 /** Owns provider decorations for the live, sanitized anchors of one response. */
 export class ChatMarkdownDecorationsRenderer extends Disposable {
-	private readonly bindings = this._register(new DisposableMap<HTMLAnchorElement, DisposableStore>());
+	private readonly bindings = this._register(new DisposableMap<HTMLAnchorElement>());
 	private readonly verbosity: IObservable<boolean>;
 
 	constructor(
@@ -40,32 +41,36 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 		for (const anchor of this.bindings.keys()) {
 			if (!this.root.contains(anchor)) this.bindings.deleteAndDispose(anchor);
 		}
-		if (this.links.linkPresentationRules.length) this.bind(this.root.querySelectorAll<HTMLAnchorElement>('a[href]'));
+		const selector = this.links.linkPresentationRules.length ? 'a[href]' : `a[href].${chatSourcePreviewClass}[title]`;
+		this.bind(this.root.querySelectorAll<HTMLAnchorElement>(selector));
 	}
 
 	applyPatch(removed: readonly ChildNode[], added: readonly ChildNode[]): void {
 		if (this.bindings.size) {
 			for (const anchor of anchorsIn(removed)) this.bindings.deleteAndDispose(anchor);
 		}
-		if (this.links.linkPresentationRules.length) this.bind(anchorsIn(added));
+		this.bind(anchorsIn(added));
 	}
 
 	private bind(anchors: Iterable<HTMLAnchorElement>): void {
+		const hasRules = this.links.linkPresentationRules.length > 0;
 		for (const anchor of anchors) {
 			const href = anchor.getAttribute('href');
 			if (!href || this.bindings.has(anchor)) continue;
-			const resource = URI.parse(href);
-			const rule = this.links.getLinkPresentationRule(resource);
-			if (!rule) {
-				continue;
-			}
-			const watcher = this.links.createLinkPresentationWatcher(rule.id, resource);
-			if (!watcher) {
-				continue;
-			}
-			const binding = this.bindings.set(anchor, new DisposableStore());
-			const contents = [...anchor.childNodes];
 			const title = anchor.getAttribute('title');
+			const preview = anchor.classList.contains(chatSourcePreviewClass) ? title?.trim() : undefined;
+			const resource = hasRules ? URI.parse(href) : undefined;
+			const rule = resource && this.links.getLinkPresentationRule(resource);
+			const watcher = resource && rule && this.links.createLinkPresentationWatcher(rule.id, resource);
+			if (!watcher || !resource) {
+				if (preview) {
+					this.bindings.set(anchor, this.hoverService.setupHover({ target: anchor, content: preview }));
+				}
+				continue;
+			}
+			const binding = new DisposableStore();
+			this.bindings.set(anchor, binding);
+			const contents = [...anchor.childNodes];
 			const ariaLabel = anchor.getAttribute('aria-label');
 			const ariaDescription = anchor.getAttribute('aria-description');
 			binding.add(watcher);
@@ -73,7 +78,9 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 			const restore = (): void => {
 				spinner.clear();
 				anchor.replaceChildren(...contents);
-				if (title === null) { anchor.removeAttribute('title'); } else { anchor.setAttribute('title', title); }
+				if (!preview) {
+					if (title === null) { anchor.removeAttribute('title'); } else { anchor.setAttribute('title', title); }
+				}
 				if (ariaLabel === null) { anchor.removeAttribute('aria-label'); } else { anchor.setAttribute('aria-label', ariaLabel); }
 				if (ariaDescription === null) { anchor.removeAttribute('aria-description'); } else { anchor.setAttribute('aria-description', ariaDescription); }
 				anchor.removeAttribute('aria-busy');
@@ -84,7 +91,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 			const card = binding.add(new MutableDisposable<IGitHubResourceHover>());
 			const hover = binding.add(this.hoverService.setupHover({
 				target: anchor,
-				content: undefined,
+				content: preview,
 				trapFocus: true,
 				onDidHide: () => card.clear(),
 			}));
@@ -98,7 +105,7 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 			binding.add(autorun(reader => {
 				const presentation = watcher.presentation.read(reader);
 				if (!presentation) {
-					hover.update(undefined);
+					hover.update(preview);
 					card.clear();
 					restore();
 					return;

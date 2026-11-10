@@ -1,14 +1,13 @@
-import { Marked, type MarkedExtension, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
+import { Marked, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
-import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
-import { renderAsPlaintext, renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
-import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
+import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
+import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
 import type { ChatReplyReference, ChatReplyResource } from '../../../common/chatReplyBackend.js';
-import { isRecord } from '../../../../base/common/types.js';
+import { ChatMarkdownRichContentBuilder, type ChatMarkdownRichContent, type ChatMarkdownRichPart, type ChatMarkdownRichStyle } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
+import type { ChatGPTImageGroup } from './chatGPTClient.js';
 
 interface RichTag {
 	readonly name: string;
@@ -19,18 +18,12 @@ interface RichTag {
 }
 
 const inlineTags = new Set(['text', 'icon']);
+const chatGPTFileLinkSchemes = ['sandbox', 'file-service', 'sediment'] as const;
+const isChatGPTFileLink = (href: string): boolean => chatGPTFileLinkSchemes.some(scheme => href.startsWith(`${scheme}:`));
 const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas']);
 // This is routing to the shared HTML renderer, not a second HTML implementation.
 const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'svg', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
 const hiddenTags = new Set(['cite']);
-const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
-const iconAliases = new Map([
-	['arrow-down-up', Lxicon.sort.id],
-	['minus', Lxicon.remove.id],
-	['plus', Lxicon.add.id],
-	['x', Lxicon.close.id],
-]);
-const escapeHTML = htmlAttributeEncodeValue;
 const fallbackText = (): string => localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT');
 
 interface RichContent {
@@ -172,32 +165,14 @@ function componentData(tag: RichTag): string {
 	catch { return data; } // Retain unfamiliar expressions as text, never execute them.
 }
 
-function colorClass(property: 'background' | 'border', value: string | undefined): string | undefined {
-	const match = value && /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
-	if (!match || match.slice(1, 4).some(channel => Number(channel) > 255)) { return undefined; }
-	return `${property}-rgba-${match[1]}-${match[2]}-${match[3]}-${(match[4] ?? '1').replace('.', 'p')}`;
-}
-
-function classes(tag: RichTag): string {
-	const values = attributes(tag);
-	const result = ['ash-chat-rich', `ash-chat-rich-${tag.name}`];
-	// Only named presentation variants reach HTML. Unknown attributes, event
-	// handlers and arbitrary expressions have no effect on the host document.
-	const variants: ReadonlyArray<readonly [string, readonly string[]]> = [
-		['radius', ['sm', 'md', 'lg']], ['padding', ['0', '1', '2', '3', '4']], ['gap', ['0', '1', '2', '3', '4']],
-		['align', ['start', 'center', 'end', 'stretch']], ['justify', ['start', 'center', 'end']],
-		['background', ['surface', 'surface-secondary']], ['color', tag.name === 'icon' ? ['secondary', 'success', 'danger'] : ['secondary']], ['size', ['xs', 'sm', 'lg']],
-	];
-	for (const [name, allowed] of variants) {
-		const value = values.get(name);
-		if (value && allowed.includes(value)) { result.push(`${name}-${value}`); }
-	}
-	if (values.has('border')) { result.push('border'); }
-	const background = colorClass('background', values.get('background'));
-	const border = colorClass('border', /\bcolor\s*:\s*["']([^"']+)["']/u.exec(values.get('border') ?? '')?.[1]);
-	if (background) { result.push(background); }
-	if (border) { result.push(border); }
-	return result.join(' ');
+function style(values: ReadonlyMap<string, string>): ChatMarkdownRichStyle {
+	const border = values.get('border');
+	return {
+		radius: values.get('radius'), padding: values.get('padding'), gap: values.get('gap'),
+		align: values.get('align'), justify: values.get('justify'), background: values.get('background'),
+		color: values.get('color'), size: values.get('size'), border,
+		borderColor: /\bcolor\s*:\s*["']([^"']+)["']/u.exec(border ?? '')?.[1],
+	};
 }
 
 const lexerDepth = new WeakMap<TokenizerThis['lexer'], number>();
@@ -232,347 +207,253 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 		try { tokens = inline ? this.lexer.inlineTokens(body) : this.lexer.blockTokens(body); }
 		finally { lexerDepth.set(this.lexer, depth); }
 	}
-	return { type: 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, tokens, inline, literal: literal ? renderAsPlaintext(body) : undefined, hasBody: !!body };
+	return { type: 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, tokens, inline, literal: literal ? renderAsPlaintext(body) : undefined, body };
 }
 
-function referenceMarkup(ids: readonly string[], references: readonly ChatReplyReference[]): string {
-	const selected = [...new Set(ids)].flatMap(id => {
+function referencesFor(ids: readonly string[], references: readonly ChatReplyReference[]) {
+	return [...new Set(ids)].flatMap(id => {
 		const exact = references.find(reference => reference.id === id);
 		const candidates = references.filter(reference => reference.id.replace(/^turn\d+/u, '') === id.replace(/^turn\d+/u, ''));
 		const reference = exact ?? (candidates.length === 1 ? candidates[0] : undefined);
-		return reference ? [reference] : [];
+		return reference ? [{ ...reference, number: references.indexOf(reference) + 1 }] : [];
 	});
-	if (!selected.length) return '';
-	return `<details class="ash-chat-citation"><summary>${selected.map(reference => `[${references.indexOf(reference) + 1}]`).join(' ')}</summary>${selected.map(reference => `<div><a href="${escapeHTML(reference.url)}">${escapeHTML(reference.title)}</a><p>${escapeHTML(reference.snippet)}</p></div>`).join('')}</details>`;
 }
 
-function createRichContentExtension(references: readonly ChatReplyReference[] = [], presentation?: { collectResource(resource: ChatReplyResource): void; conversationId?: string; }): MarkedExtension {
-	const conversationId = presentation?.conversationId;
-	const fallback = (): string => `<a href="https://chatgpt.com/${conversationId ? `c/${encodeURIComponent(conversationId)}` : ''}">${escapeHTML(fallbackText())}</a>`;
-	const resourceMarkup = (resource: ChatReplyResource): string => {
-		presentation?.collectResource(resource);
-		return escapeHTML(resource.name).replace(/\$/gu, '&#36;').replace(/\\/gu, '&#92;');
-	};
-	return {
-		renderer: {
-			html(token) {
-				return /^\s*<\/?(?:script|style)\b/iu.test(token.raw) ? '' : false;
-			},
-			image(token) {
-				if (token.href.startsWith('data:image/')) return `<img src="${escapeHTML(token.href)}" alt="${escapeHTML(token.text)}">`;
-				return resourceMarkup({ uri: token.href, name: token.text || localize('sessions.chatgpt.image', 'Image'), kind: 'image' });
-			},
-			link(token) {
-				if (/^(?:sandbox:|file-service:|sediment:)/u.test(token.href)) {
-					const mimeType = getMediaOrTextMime(token.href);
-					let kind: ChatReplyResource['kind'] = 'document';
-					if (mimeType?.startsWith('image/')) kind = 'image';
-					else if (mimeType?.startsWith('audio/')) kind = 'audio';
-					else if (mimeType?.startsWith('video/')) kind = 'video';
-					else if (mimeType === 'text/html') kind = 'html';
-					return resourceMarkup({ uri: token.href, name: token.text || token.href.split('/').at(-1) || localize('sessions.chatgpt.file', 'File'), kind, mimeType });
-				}
-				return false;
-			},
-		},
-		extensions: [...(['block', 'inline'] as const).map((level): NonNullable<MarkedExtension['extensions']>[number] => ({
-			name: 'chatgptRichContent', level, tokenizer(source, tokens) { return tokenize.call(this, source, level, tokens); }, childTokens: ['tokens'],
-			start: source => {
-				if (level === 'inline') { return source.search(/<\/?[a-z][\w-]*(?::[a-z][\w-]*)?(?=[\s/>]|$)/iu); }
-				// Marked searches after the first character. Requiring a newline avoids
-				// splitting a code span whose opening backtick was that first character.
+function richContentLexer(): Marked {
+	return new Marked({
+		extensions: [...(['block', 'inline'] as const).map(level => ({
+			name: 'chatgptRichContent', level,
+			tokenizer(this: TokenizerThis, source: string, tokens: Token[]) { return tokenize.call(this, source, level, tokens); },
+			childTokens: ['tokens'],
+			start(source: string) {
+				if (level === 'inline') return source.search(/<\/?[a-z][\w-]*(?::[a-z][\w-]*)?(?=[\s/>]|$)/iu);
+				// Marked searches after the first character. Start only on a new line so code spans stay intact.
 				const match = /\n {0,3}<\/?[a-z][\w-]*(?::[a-z][\w-]*)?(?=[\s/>]|$)/iu.exec(source);
 				return match ? match.index + 1 : -1;
-			},
-			renderer(token) {
-				const tag = token.tag as RichTag;
-				if (tag.closing) { return ''; }
-				if (hiddenTags.has(tag.name)) {
-					const ids = attributes(tag).get('refs')?.match(/turn\d+[a-z]+\d+/giu) ?? [];
-					return referenceMarkup(ids, references);
-				}
-				if (mediaTags.has(tag.name)) {
-					const values = attributes(tag);
-					if (tag.name === 'canvas') return resourceMarkup({ uri: `data:text/html;charset=utf-8,${encodeURIComponent(token.raw)}`, name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'), kind: 'html' });
-					if (tag.name === 'iframe' && values.has('srcdoc')) {
-						// Decode the HTML attribute as inert text before handing its document
-						// to the isolated host. The Workbench never inserts that HTML.
-						const encoded = values.get('srcdoc')!.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-						const html = sanitizeHtmlToFragment(encoded, { ownerDocument: getDocument() }).textContent ?? '';
-						return resourceMarkup({ uri: `data:text/html;charset=utf-8,${encodeURIComponent(html)}`, name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'), kind: 'html' });
-					}
-					const uri = values.get('src');
-					if (uri && tag.name === 'iframe') {
-						try {
-							const url = new URL(uri);
-							if (url.protocol === 'https:' && !url.username && !url.password) return resourceMarkup({
-								uri: `data:text/html;charset=utf-8,${encodeURIComponent(`<iframe src="${escapeHTML(url.href)}" title="${escapeHTML(description(tag))}" style="border:0;width:100%;height:100vh" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>`)}`,
-								name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'), kind: 'html', frameOrigin: url.origin,
-							});
-						} catch { /* Malformed destinations remain readable as unavailable media. */ }
-					}
-					if (uri) return resourceMarkup({ uri, name: description(tag) || localize('sessions.chatgpt.media', 'Media'), kind: tag.name === 'img' ? 'image' : tag.name === 'iframe' ? 'html' : tag.name as 'audio' | 'video' });
-					return `<span class="ash-chat-markdown-media">${localize('chat.markdown.mediaUnavailable', 'Media content is unavailable here.')} ${fallback()}</span>`;
-				}
-				const element = token.inline ? 'span' : 'div';
-				const body = typeof token.literal === 'string' ? escapeHTML(token.literal).replace(/&amp;(?=(?:#\d+|#x[\da-f]+|[a-z]+);)/giu, '&') : token.inline ? this.parser.parseInline(token.tokens as Token[]) : this.parser.parse(token.tokens as Token[]);
-				if (tag.name === 'icon') {
-					const name = attributes(tag).get('name') ?? '';
-					const text = escapeHTML(iconText.get(name) ?? (description(tag) || name)) || fallback();
-					const iconId = iconAliases.get(name) ?? name;
-					const content = presentation && getLxiconDefinition(iconId)
-						? `$(${iconId})<span class="ash-chat-rich-icon-text">${text}</span>`
-						: text;
-					return `<span class="${classes(tag)}">${content}</span>`;
-				}
-				if (['box', 'row', 'text'].includes(tag.name)) { return `<${element} class="${classes(tag)}">${body || fallback()}</${element}>`; }
-				const label = escapeHTML(description(tag));
-				const data = componentData(tag);
-				const chart = tag.name === 'chart' && data && presentation ? chartDocument(description(tag), data) : undefined;
-				if (chart) return resourceMarkup({ uri: `data:text/html;charset=utf-8,${encodeURIComponent(chart)}`, name: description(tag) || localize('sessions.chatgpt.chart', 'Chart'), kind: 'html' });
-				// Unknown web cards still have usable disclosure and readable data; no
-				// arbitrary JSX or component expressions are evaluated in the Workbench.
-				if (!label && !body && !data) return '';
-				return `<details class="ash-chat-rich" open><summary>${label || localize('sessions.chatgpt.content', 'Content')}</summary>${body}${data ? `<pre><code>${escapeHTML(data)}</code></pre>` : ''}</details>`;
 			},
 		})), {
 			name: 'chatgptWebReference', level: 'inline',
 			start: source => source.indexOf('\uE200'),
 			tokenizer(source) {
 				if (this.lexer.state.inRawBlock) return undefined;
+				const imageGroup = /^\uE200image_group\uE202[^\uE200\uE201\r\n]*(?:\uE201|$)/u.exec(source);
+				if (imageGroup) return { type: 'chatgptWebReference', raw: imageGroup[0], kind: 'image_group' };
 				const match = /^\uE200(cite|url|entity)\uE202([^\uE200\uE201\r\n]*)\uE201/u.exec(source);
 				if (!match) return undefined;
-				return { type: 'chatgptWebReference', raw: match[0], kind: match[1], payload: match[2], inLink: this.lexer.state.inLink };
-			},
-			renderer(token) {
-				const payload = token.payload as string;
-				if (token.kind === 'entity') {
-					try {
-						const entity: unknown = JSON.parse(payload);
-						return Array.isArray(entity) && typeof entity[1] === 'string' ? escapeHTML(entity[1]) : '';
-					} catch { return ''; }
-				}
-				const parts = payload.split('\uE202');
-				if (token.kind === 'cite') return referenceMarkup(parts, references);
-				const [label = '', ...targets] = parts;
-				let href = references.find(reference => targets.includes(reference.id))?.url;
-				const direct = targets.find(target => /^https?:\/\//iu.test(target));
-				if (!href && direct) {
-					try {
-						const url = new URL(direct);
-						if (!url.username && !url.password) href = url.href;
-					} catch { /* Keep the readable label when the destination is invalid. */ }
-				}
-				return href && !token.inLink ? `<a href="${escapeHTML(href)}">${escapeHTML(label)}</a>` : escapeHTML(label);
+				return { type: 'chatgptWebReference', raw: match[0], kind: match[1], payload: match[2] };
 			},
 		}, {
 			name: 'chatgptWriting', level: 'block',
-			// Marked omits the paragraph's first character here; an offset-zero match
-			// would split a codespan whose opening backtick was that character.
 			start: source => /\n {0,3}:::writing\{/u.exec(source)?.index ?? -1,
 			tokenizer(source) {
 				const depth = lexerDepth.get(this.lexer) ?? 0;
-				if (depth >= 32) { return undefined; }
+				if (depth >= 32) return undefined;
 				const writing = readWriting(source);
-				if (!writing) { return undefined; }
+				if (!writing) return undefined;
 				lexerDepth.set(this.lexer, depth + 1);
-				try { return { type: 'chatgptWriting', raw: writing.raw, tokens: this.lexer.blockTokens(writing.body) }; }
+				try { return { type: 'chatgptWriting', raw: writing.raw, body: writing.body, tokens: this.lexer.blockTokens(writing.body) }; }
 				finally { lexerDepth.set(this.lexer, depth); }
 			},
-			renderer(token) { return this.parser.parse(token.tokens ?? []); },
 		}],
-	};
+	});
 }
 
-/** Decode the wire syntax before the shared Chat renderer consumes the response. */
-export function decodeChatGPTReply(text: string, references?: readonly ChatReplyReference[], conversationId?: string): { readonly text: string; readonly resources: readonly ChatReplyResource[]; } {
+function dataUri(mimeType: string, source: string): string {
+	return 'data:' + mimeType + ';charset=utf-8,' + encodeURIComponent(source);
+}
+
+function entityPart(label: string, category: unknown, disambiguation: unknown, block: boolean): ChatMarkdownRichPart {
+	if (typeof category !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/u.test(category) || label.length > 256) {
+		return { kind: 'textLiteral', label, block };
+	}
+	return { kind: 'entity', entity: { label, category, disambiguation: typeof disambiguation === 'string' ? disambiguation.slice(0, 1024) : '' }, block };
+}
+
+/** Projects Web-specific syntax and resources into Ash's response model. */
+export function decodeChatGPTReply(text: string, references: readonly ChatReplyReference[] = [], conversationId?: string, imageGroups: readonly ChatGPTImageGroup[] = []): {
+	readonly text: string;
+	readonly richContent?: ChatMarkdownRichContent;
+	readonly resources: readonly ChatReplyResource[];
+} {
+	const normalized = text.replace(/\r\n?/gu, '\n');
+	if (!/[<\[\uE200]|:::writing\{/u.test(normalized)) return { text: normalized, resources: [] };
 	const resources: ChatReplyResource[] = [];
-	const decoder = new Marked(createRichContentExtension(references, { collectResource: resource => resources.push(resource), conversationId }));
-	const parser = new decoder.Parser(decoder.defaults);
-	const decode = (source: string, tokens: readonly Token[], inline: boolean): string => {
+	const richContent = new ChatMarkdownRichContentBuilder(normalized);
+	const fallback = {
+		href: 'https://chatgpt.com/' + (conversationId ? 'c/' + encodeURIComponent(conversationId) : ''),
+		label: fallbackText(),
+	};
+
+	function resourcePart(resource: ChatReplyResource, block: boolean, data?: string): ChatMarkdownRichPart {
+		resources.push(resource);
+		return { kind: 'resource', label: resource.name, markdown: '', block, data };
+	}
+
+	function citationPart(ids: readonly string[], block: boolean): ChatMarkdownRichPart | '' {
+		const entries = referencesFor(ids, references);
+		return entries.length ? { kind: 'citations', entries, block } : '';
+	}
+
+	function projectComponent(token: Tokens.Generic): ChatMarkdownRichPart | '' {
+		const tag = token.tag as RichTag;
+		if (tag.closing) return '';
+		const block = !token.inline;
+		const values = attributes(tag);
+		if (tag.name === 'asyncimage') {
+			const query = values.get('query');
+			const group = imageGroups.find(group => 'query' in group && group.query === query);
+			return group ? { kind: 'imageGallery', images: group.images, compact: true, block } : { kind: 'unavailableMedia', fallback, block };
+		}
+		if (tag.name === 'entity') {
+			// Saved replies can carry the label as an attribute or inside a data object.
+			const value = values.get('value');
+			if (value?.trim()) return entityPart(value, values.get('category'), values.get('disambig'), block);
+			const data = values.get('data');
+			if (data) {
+				try {
+					const entity: unknown = JSON.parse(data);
+					if (typeof entity === 'object' && entity !== null && 'value' in entity && typeof entity.value === 'string' && entity.value.trim()) {
+						return entityPart(entity.value, 'category' in entity ? entity.category : undefined, 'disambig' in entity ? entity.disambig : undefined, block);
+					}
+				} catch { /* Keep the generic fallback for malformed entity data. */ }
+			}
+		}
+		const label = description(tag);
+		if (hiddenTags.has(tag.name)) return citationPart(values.get('refs')?.match(/turn\d+[a-z]+\d+/giu) ?? [], block);
+		if (mediaTags.has(tag.name)) {
+			const name = label || localize('sessions.chatgpt.interactive', 'Interactive content');
+			if (tag.name === 'canvas') return resourcePart({ uri: dataUri('text/html', token.raw), name, kind: 'html' }, block);
+			if (tag.name === 'iframe' && values.has('srcdoc')) {
+				// Decode the attribute as inert text. The shared preview owns its isolated document.
+				const encoded = values.get('srcdoc')!.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+				const html = sanitizeHtmlToFragment(encoded, { ownerDocument: getDocument() }).textContent ?? '';
+				return resourcePart({ uri: dataUri('text/html', html), name, kind: 'html' }, block);
+			}
+			const uri = values.get('src');
+			if (uri && tag.name === 'iframe') {
+				try {
+					const url = new URL(uri);
+					if (url.protocol === 'https:' && !url.username && !url.password) {
+						return resourcePart({ uri: url.href, name, kind: 'html', frameOrigin: url.origin }, block);
+					}
+				} catch { /* Preserve the label for a malformed frame target. */ }
+			}
+			if (uri) {
+				const kind = tag.name === 'img' ? 'image' : tag.name === 'iframe' ? 'html' : tag.name as 'audio' | 'video';
+				return resourcePart({ uri, name: label || localize('sessions.chatgpt.media', 'Media'), kind }, block);
+			}
+			return { kind: 'unavailableMedia', fallback, block };
+		}
+		if (tag.name === 'icon') return { kind: 'icon', name: values.get('name') ?? '', label, style: style(values), fallback, block };
+		if (typeof token.literal === 'string') return { kind: 'textLiteral', label: token.literal, block };
+		const markdown = decode(token.body, token.tokens ?? [], !block);
+		if (tag.name === 'box' || tag.name === 'row' || tag.name === 'text') {
+			return { kind: tag.name, markdown, style: style(values), fallback, block };
+		}
+		const data = componentData(tag);
+		if (tag.name === 'chart' && data) {
+			try {
+				JSON.parse(data);
+				return resourcePart({ uri: dataUri('application/json', data), name: label || localize('chat.chart.label', 'Chart'), kind: 'chart' }, block, data);
+			} catch { /* Display invalid chart data as inert text. */ }
+		}
+		return label || markdown || data ? { kind: 'details', label, data, markdown, block } : '';
+	}
+
+	function projectReference(token: Tokens.Generic): ChatMarkdownRichPart | '' {
+		if (token.kind === 'image_group') {
+			const group = imageGroups.find(group => 'marker' in group && group.marker === token.raw);
+			// The marker contains search terms. Only its matching metadata can supply gallery images.
+			return group ? { kind: 'imageGallery', images: group.images, block: true } : '';
+		}
+		const payload = token.payload as string;
+		if (token.kind === 'entity') {
+			try {
+				const entity: unknown = JSON.parse(payload);
+				return Array.isArray(entity) && typeof entity[1] === 'string' && entity[1].trim() ? entityPart(entity[1], entity[0], entity[2], false) : '';
+			} catch { return ''; }
+		}
+		const parts = payload.split('\uE202');
+		if (token.kind === 'cite') return citationPart(parts, false);
+		const [label = '', ...targets] = parts;
+		const reference = references.find(reference => targets.includes(reference.id));
+		let href = reference?.url;
+		const direct = targets.find(target => /^https?:\/\//iu.test(target));
+		if (!href && direct) {
+			try {
+				const url = new URL(direct);
+				if (!url.username && !url.password) href = url.href;
+			} catch { /* Keep the readable label when the destination is invalid. */ }
+		}
+		const snippet = reference?.snippet.trim();
+		const title = snippet && reference?.title && reference.title !== label ? `${reference.title}\n${snippet}` : snippet;
+		return href ? { kind: 'link', link: { href, label }, title, block: false } : { kind: 'textLiteral', label, block: false };
+	}
+
+	function project(token: Token, inline: boolean): ChatMarkdownRichPart | '' | undefined {
+		if (token.type === 'chatgptRichContent') return projectComponent(token);
+		if (token.type === 'chatgptWebReference') return projectReference(token);
+		if (token.type === 'chatgptWriting') {
+			return { kind: 'markdown', markdown: decode(token.body, token.tokens ?? [], false), block: true };
+		}
+		if (token.type === 'html' && /^\s*<\/?(?:script|style)\b/iu.test(token.raw)) return '';
+		if (token.type === 'image' && !token.href.startsWith('data:image/')) {
+			return resourcePart({ uri: token.href, name: token.text || localize('sessions.chatgpt.image', 'Image'), kind: 'image' }, !inline);
+		}
+		if (token.type === 'link' && isChatGPTFileLink(token.href)) {
+			const uri = token.href.replace(/^sediment:\/\//u, 'file-service://');
+			const name = token.text || token.href.split('/').at(-1) || localize('sessions.chatgpt.file', 'File');
+			const mimeType = getMediaOrTextMime(token.href);
+			let kind: ChatReplyResource['kind'] = 'document';
+			if (mimeType?.startsWith('image/')) kind = 'image';
+			else if (mimeType?.startsWith('audio/')) kind = 'audio';
+			else if (mimeType?.startsWith('video/')) kind = 'video';
+			else if (mimeType === 'text/html') kind = 'html';
+			const available = conversationId || !uri.startsWith('sandbox:');
+			if (available) resources.push({ uri, name, kind, mimeType });
+			return { kind: 'resource', label: name, markdown: decode(token.text, token.tokens ?? [], true), uri: available ? uri : undefined, title: token.title ?? undefined, block: false };
+		}
+		return undefined;
+	}
+
+	function decode(source: string, tokens: readonly Token[], inline: boolean, tableCell = false): string {
 		let cursor = 0;
 		let result = '';
 		for (const token of tokens) {
-			let start = source.indexOf(token.raw, cursor);
 			let raw = token.raw;
-			if (start < 0 && raw.includes('\n') && raw.includes('\uE200')) {
-				// The lexer strips indentation and quote prefixes from child tokens.
-				// Locate their original span so the second Markdown pass keeps the container.
-				const pattern = new RegExp(escapeRegExpCharacters(raw).replaceAll('\n', '\n[ \t>]*?'), 'gu');
+			const escapedPipe = tableCell && raw.includes('|');
+			let start = escapedPipe ? -1 : source.indexOf(raw, cursor);
+			const prefixedLines = raw.includes('\n') && raw.includes('\uE200');
+			if (start < 0 && (escapedPipe || prefixedLines)) {
+				// Marked removes table escapes and strips prefixes from children of Markdown containers.
+				let patternSource = escapeRegExpCharacters(raw);
+				if (prefixedLines) patternSource = patternSource.replaceAll('\n', '\n[ \t>]*?');
+				if (escapedPipe) patternSource = patternSource.replaceAll(String.raw`\|`, String.raw`\\\|`);
+				const pattern = new RegExp(patternSource, 'gu');
 				pattern.lastIndex = cursor;
 				const match = pattern.exec(source);
 				if (match) { start = match.index; raw = match[0]; }
 			}
 			if (start < 0) continue;
 			result += source.slice(cursor, start);
-			if (token.type === 'chatgptRichContent' || token.type === 'chatgptWebReference' || token.type === 'chatgptWriting'
-				|| token.type === 'html' && /^\s*<\/?(?:script|style)\b/iu.test(token.raw)
-				|| token.type === 'image' || token.type === 'link' && /^(?:sandbox:|file-service:|sediment:)/u.test(token.href)) {
-				const html = inline ? parser.parseInline([token]) : parser.parse([token]);
-				result += inline ? html : html + '\n';
+			const part = project(token, inline);
+			if (part !== undefined) {
+				if (part) result += richContent.add(part);
+				if (!inline) result += '\n';
 			} else if (token.type === 'list') {
 				result += decode(raw, token.items, false);
 			} else if (token.type === 'table') {
-				result += decode(raw, [token.header, ...token.rows].flatMap(row => row.flatMap((cell: Tokens.TableCell) => cell.tokens)), true);
+				result += decode(raw, [token.header, ...token.rows].flatMap(row => row.flatMap((cell: Tokens.TableCell) => cell.tokens)), true, true);
 			} else if ('tokens' in token && Array.isArray(token.tokens) && token.tokens.length) {
-				result += decode(raw, token.tokens, true);
+				result += decode(raw, token.tokens, true, tableCell);
 			} else {
 				result += raw;
 			}
 			cursor = start + raw.length;
 		}
 		return result + source.slice(cursor);
-	};
-	const normalized = text.replace(/\r\n?/gu, '\n');
-	const decoded = decode(normalized, decoder.lexer(normalized), false);
-	return { text: decoded, resources };
-}
-
-/** The accessible view retains component text and arrows without exposing markup. */
-export function getChatGPTRichContentText(source: string, references?: readonly ChatReplyReference[]): string {
-	const html = renderWorkbenchMarkdown({ value: source, supportHtml: true }, false, { markedExtensions: [createRichContentExtension(references)] });
-	return renderAsPlaintext(html, { useLinkFormatter: true });
-}
-
-/** A Chart web component carries data, not executable JSX. Its interaction runs inside the existing Webview host. */
-function chartDocument(title: string, json: string): string | undefined {
-	let data: unknown;
-	try { data = JSON.parse(json); }
-	catch { return undefined; }
-	let rows: unknown[] = Array.isArray(data) ? data : isRecord(data) && Array.isArray(data.data) ? data.data : [];
-	if (isRecord(data) && Array.isArray(data.labels) && Array.isArray(data.datasets)) {
-		const datasets = data.datasets.filter(isRecord);
-		rows = data.labels.map((label, index) => Object.fromEntries([
-			['label', label],
-			...datasets.map((dataset, series) => [typeof dataset.label === 'string' ? dataset.label : String(series + 1), Array.isArray(dataset.data) ? dataset.data[index] : null]),
-		]));
 	}
-	const table = rows.map((row, index) => isRecord(row) ? row : { index: index + 1, value: row });
-	const keys = [...new Set(table.flatMap(row => Object.keys(row)))];
-	const content = JSON.stringify({ rows: table, keys }).replaceAll('<', '\\u003c');
-	return `<!doctype html>
-<html>
-<meta charset="utf-8">
-<style>body{font:14px system-ui;color:CanvasText;background:Canvas;margin:16px}canvas{width:100%;height:280px}fieldset{border:0;padding:0;display:flex;gap:12px;flex-wrap:wrap}table{border-collapse:collapse}td,th{padding:8px;border:1px solid GrayText}button,select,input{font:inherit}output{display:block;min-height:2em}</style>
-<h3>${escapeHTML(title)}</h3>
-<fieldset>
-<label>${escapeHTML(localize('sessions.chatgpt.chartType', 'Chart type'))} <select id="type">
-<option value="bar">${escapeHTML(localize('sessions.chatgpt.barChart', 'Bar'))}</option>
-<option value="line">${escapeHTML(localize('sessions.chatgpt.lineChart', 'Line'))}</option>
-</select>
-</label>
-<label>${escapeHTML(localize('sessions.chatgpt.chartZoom', 'Zoom'))} <input aria-label="${escapeHTML(localize('sessions.chatgpt.chartZoom', 'Zoom'))}" id="zoom" type="range" min="1" max="4" step="0.25" value="1">
-</label>
-<span id="series">
-</span>
-<button id="previous">${escapeHTML(localize('sessions.chatgpt.previous', 'Previous'))}</button>
-<output id="page"></output>
-<button id="next">${escapeHTML(localize('sessions.chatgpt.next', 'Next'))}</button>
-</fieldset>
-<canvas id="chart" role="img" aria-label="${escapeHTML(title)}" tabindex="0">
-</canvas>
-<output id="point" aria-live="polite">
-</output>
-<details open>
-<summary>${escapeHTML(localize('sessions.chatgpt.chartData', 'Chart data'))}</summary>
-<table>
-<thead>
-<tr>${keys.map(key => `<th>${escapeHTML(key)}</th>`).join('')}</tr>
-</thead>
-<tbody id="rows"></tbody>
-</table>
-</details>
-<details><summary>${escapeHTML(localize('sessions.chatgpt.originalData', 'Original data'))}</summary><pre>${escapeHTML(json)}</pre></details><script>
-(() => {
-  const data = ${content};
-  const canvas = document.getElementById('chart');
-  const context = canvas.getContext('2d');
-  const numeric = data.keys.filter(key => data.rows.some(row => typeof row[key] === 'number'));
-  const label = data.keys.find(key => !numeric.includes(key)) ?? (data.keys.length > 1 ? data.keys[0] : undefined);
-  const series = numeric.filter(key => key !== label);
-  const enabled = new Set(series);
-  const type = document.getElementById('type');
-  const zoom = document.getElementById('zoom');
-  const point = document.getElementById('point');
-  let selected = 0;
-  let page = 0;
-  const pageSize = 100;
-  for (const key of series) {
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = true;
-    box.onchange = () => {
-      box.checked ? enabled.add(key) : enabled.delete(key);
-      draw();
-    };
-    const item = document.createElement('label');
-    item.append(box, key);
-    document.getElementById('series').append(item);
-  }
-  function describe(index) {
-    const row = data.rows[index];
-    point.textContent = row ? data.keys.map(key => key + ': ' + String(row[key] ?? '')).join(' · ') : '';
-  }
-  function draw() {
-    const rows = data.rows.slice(page * pageSize, (page + 1) * pageSize);
-    document.getElementById('previous').disabled = page === 0;
-    document.getElementById('next').disabled = (page + 1) * pageSize >= data.rows.length;
-    document.getElementById('page').textContent = (page + 1) + '/' + Math.max(1, Math.ceil(data.rows.length / pageSize));
-    document.getElementById('rows').replaceChildren(...rows.map(row => {
-      const tr = document.createElement('tr');
-      for (const key of data.keys) {
-        const td = document.createElement('td');
-        td.textContent = row[key] && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key] ?? '');
-        tr.append(td);
-      }
-      return tr;
-    }));
-    canvas.width = Math.max(300, canvas.clientWidth) * devicePixelRatio;
-    canvas.height = 280 * devicePixelRatio;
-    context.scale(devicePixelRatio, devicePixelRatio);
-    const width = canvas.width / devicePixelRatio;
-    const active = series.filter(key => enabled.has(key));
-    const maximum = rows.reduce((max, row) => active.reduce((max, key) => Math.max(max, Math.abs(Number(row[key]) || 0)), max), 1);
-    context.clearRect(0, 0, width, 280);
-    context.fillStyle = getComputedStyle(document.body).color;
-    context.font = '12px system-ui';
-    const slot = (width - 60) / Math.max(1, rows.length);
-    active.forEach((key, seriesIndex) => {
-      context.strokeStyle = context.fillStyle = 'hsl(' + ((seriesIndex * 137 + 210) % 360) + ' 65% 48%)';
-      context.beginPath();
-      rows.forEach((row, index) => {
-        const value = Number(row[key]) || 0;
-        const x = 40 + index * slot;
-        const y = 240 - value / maximum * 190 * Number(zoom.value);
-        if (type.value === 'bar') {
-          context.fillRect(x + seriesIndex * slot / Math.max(1, active.length), Math.min(y, 240), Math.max(1, slot / Math.max(1, active.length) - 4), Math.abs(240 - y));
-        } else {
-          index ? context.lineTo(x + slot / 2, y) : context.moveTo(x + slot / 2, y);
-        }
-      });
-      if (type.value === 'line') context.stroke();
-    });
-    context.fillStyle = getComputedStyle(document.body).color;
-    rows.forEach((row, index) => context.fillText(String(row[label] ?? index + page * pageSize + 1).slice(0, 16), 40 + index * slot, 260));
-    describe(selected);
-  }
-  type.onchange = zoom.oninput = draw;
-  document.getElementById('previous').onclick = () => { page--; selected = page * pageSize; draw(); };
-  document.getElementById('next').onclick = () => { page++; selected = page * pageSize; draw(); };
-  canvas.onpointermove = event => {
-    const count = Math.min(pageSize, data.rows.length - page * pageSize);
-    selected = page * pageSize + Math.max(0, Math.min(count - 1, Math.floor((event.offsetX - 40) / ((canvas.clientWidth - 60) / Math.max(1, count)))));
-    describe(selected);
-  };
-  canvas.onkeydown = event => {
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      event.preventDefault();
-      selected = Math.max(0, Math.min(data.rows.length - 1, selected + (event.key === 'ArrowLeft' ? -1 : 1)));
-      describe(selected);
-    }
-  };
-  new ResizeObserver(draw).observe(canvas);
-  draw();
-})();
-</script></html>`;
+
+	const decoded = decode(normalized, richContentLexer().lexer(normalized), false);
+	return { text: decoded, richContent: richContent.content, resources };
 }

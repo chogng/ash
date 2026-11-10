@@ -9,6 +9,7 @@ import type { ChatContentPart } from '../../../../services/chat/common/chatServi
 import { formatChatMessageTime, formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
 import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
+import { renderChatRichContentText } from '../widget/chatMarkdownRichContent.js';
 
 interface ChatResponseSource {
 	readonly getItems: () => readonly IChatListItem[];
@@ -23,7 +24,10 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 	public readonly type = AccessibleViewType.View;
 	private readonly labels = new ChatAccessibilityProvider();
 
-	constructor(private readonly source: ChatResponseSource) { }
+	constructor(
+		private readonly source: ChatResponseSource,
+		private readonly showAgentReplyTimestamps = () => true,
+	) { }
 
 	public getProvider(): AccessibleContentProvider | undefined {
 		const focused = this.source.getFocusedElement();
@@ -41,7 +45,9 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 
 	private messageText(item: IChatListItem): string {
 		const sections = [this.labels.getAriaLabel(item)];
-		if (item.timestamp !== undefined) sections.push(formatChatMessageTime(item.timestamp));
+		if (item.timestamp !== undefined && item.type === 'agentMessage' && this.showAgentReplyTimestamps()) {
+			sections.push(formatChatMessageTime(item.timestamp));
+		}
 		const invocation = item.toolInvocation;
 		if (invocation) {
 			const { call, output, result, stopped, waitingFor, executionStarted } = invocation;
@@ -94,7 +100,8 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 			}
 		} else {
 			const markdown = item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor';
-			sections.push(markdown ? renderAsPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
+			const rich = item.markdown?.richContent;
+			sections.push(markdown ? rich ? renderChatRichContentText(item.text, rich) : renderAsPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
 			sections.push(...this.attachments(item.content ?? []));
 			if (item.loadedSkills?.length) {
 				sections.push(localize('chat.skills.loadedTitle', 'Skills loaded in this turn'));

@@ -9,7 +9,12 @@ export async function shareConversationLink(
 	prompt: { readonly message: string; readonly detail: string; },
 	publish: () => Promise<string | undefined>,
 ): Promise<void> {
-	const confirmation = await dialogs.confirm({ ...prompt, primaryButton: localize('sessions.titlebar.share', 'Share') });
+	const confirmation = await dialogs.confirm({
+		...prompt,
+		title: localize('sessions.chat.shareTitle', 'Share conversation'),
+		primaryButton: localize('sessions.titlebar.share', 'Share'),
+		layout: 'form',
+	});
 	if (!confirmation.confirmed) return;
 	const url = await publish();
 	if (!url) return;

@@ -1507,7 +1507,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         rewrite: RewriteSessionMutation,
     ) -> Result<SessionRewriteResult, RpcError> {
         let source = self.read_session_thread(&mutation.session_id, &rewrite.parent_thread_id)?;
-        let mode = source
+        let source_turn = source
             .turns
             .iter()
             .find(|turn| turn.turn_id == rewrite.before_turn_id)
@@ -1515,15 +1515,24 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 core_error(core_api::CoreError::NotFound(
                     rewrite.before_turn_id.to_string(),
                 ))
-            })?
-            .mode;
+            })?;
+        let mode = source_turn.mode;
         let mut normalized_input =
             self.normalize_input(Some(connection_id), &mutation.session_id, rewrite.input)?;
-        let selection = self.turn_instruction_selection(
-            &mut normalized_input,
-            mode,
-            ash_protocol::CommandInterpretation::Product,
-        )?;
+        let session = self
+            .context
+            .agent_runtime()
+            .read_session_catalog(&mutation.session_id)
+            .map_err(core_error)?;
+        let is_chat =
+            session.is_some_and(|session| session.kind == ash_protocol::SessionKind::Chat);
+        let interpretation = if is_chat {
+            ash_protocol::CommandInterpretation::Literal
+        } else {
+            ash_protocol::CommandInterpretation::Product
+        };
+        let selection =
+            self.turn_instruction_selection(&mut normalized_input, mode, interpretation)?;
         let rewound = self
             .context
             .agent_runtime()
@@ -1556,27 +1565,48 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             Some(replayed) => turn_start_result(replayed),
             // Normalization releases host snapshot handles. Admit the captured input
             // directly so rewriting never tries to read those handles a second time.
-            None => self.start_agent_turn_request(
-                ThreadMutation {
-                    ide_window_id: None,
-                    connection_id: Some(connection_id),
-                    command_id: start_command_id,
-                    session_id: mutation.session_id.clone(),
-                    expected_sequence: thread_before.sequence,
-                },
-                thread_id.clone(),
-                ash_protocol::ApprovalMode::default(),
-                mode,
-                rewrite.tool_mode.map_or(
-                    TurnToolModeSelection::ConfiguredDefault,
-                    TurnToolModeSelection::Explicit,
-                ),
-                normalized_input,
-                ash_protocol::TurnKind::Coding,
-                selection,
-                TurnModelSelection::Current,
-                None,
-            )?,
+            None => {
+                let (approval_mode, model_selection, reasoning_effort) = if is_chat {
+                    (
+                        self.context.resolve_turn_approval_mode(
+                            &mutation.session_id,
+                            Some(source_turn.approval_mode),
+                        )?,
+                        source_turn
+                            .model
+                            .clone()
+                            .map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
+                        source_turn.reasoning_effort,
+                    )
+                } else {
+                    (
+                        ash_protocol::ApprovalMode::default(),
+                        TurnModelSelection::Current,
+                        None,
+                    )
+                };
+                self.start_agent_turn_request(
+                    ThreadMutation {
+                        ide_window_id: None,
+                        connection_id: Some(connection_id),
+                        command_id: start_command_id,
+                        session_id: mutation.session_id.clone(),
+                        expected_sequence: thread_before.sequence,
+                    },
+                    thread_id.clone(),
+                    approval_mode,
+                    mode,
+                    rewrite.tool_mode.map_or(
+                        TurnToolModeSelection::ConfiguredDefault,
+                        TurnToolModeSelection::Explicit,
+                    ),
+                    normalized_input,
+                    ash_protocol::TurnKind::Coding,
+                    selection,
+                    model_selection,
+                    reasoning_effort,
+                )?
+            }
         };
         self.updates.subscribe_session_thread(
             connection_id,

@@ -42,14 +42,14 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	private pendingFocus: HTMLElement | undefined;
 	private readonly generalRows: boolean;
 
-	constructor(host: HTMLElement | { readonly container: HTMLElement; readonly rowPresentation: 'general'; }, private readonly model: SettingsSectionModel, providerId: AccessibleViewProviderId, verbosity: AccessibilityVerbositySettingId,
+	constructor(host: HTMLElement | { readonly container: HTMLElement; readonly rowPresentation?: 'general'; readonly hideInnerTitle?: boolean; }, private readonly model: SettingsSectionModel, providerId: AccessibleViewProviderId, verbosity: AccessibilityVerbositySettingId,
 		@IContextViewService private readonly contextView: IContextViewService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
 	) {
 		super();
-		const { container, rowPresentation } = isHTMLElement(host) ? { container: host, rowPresentation: undefined } : host;
+		const { container, rowPresentation, hideInnerTitle } = isHTMLElement(host) ? { container: host } : host;
 		this.generalRows = rowPresentation === 'general';
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div'); this.domNode.className = 'ash-settings-section';
@@ -65,7 +65,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			this.fieldsDomNode.className = 'ash-settings-card';
 			this.domNode.append(this.titleDomNode, this.fieldsDomNode);
 		} else {
-			if (!model.hideInnerTitle) {
+			if (!hideInnerTitle && !model.hideInnerTitle) {
 				this.titleDomNode = h(document, 'h5');
 				this.domNode.append(this.titleDomNode);
 			}

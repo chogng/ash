@@ -18,7 +18,7 @@ import type { IResourceEditorInput } from '../../../../common/editor.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { createChatReferenceVariableEntry } from '../../common/attachments/chatVariableEntries.js';
-import { IChatAttachmentResolveService, createChatFileAttachments } from '../attachments/chatAttachmentResolveService.js';
+import { IChatAttachmentResolveService } from '../attachments/chatAttachmentResolveService.js';
 import type { IChatInputPart } from './input/chatInputPart.js';
 import type { ChatInputState } from './input/chatInput.js';
 import { resolveChatReferenceDrop } from './chatReferenceDrop.js';
@@ -36,6 +36,7 @@ export class ChatDragAndDrop extends Disposable {
 		private readonly target: IChatInputPart,
 		private readonly supportsImages: () => boolean,
 		private readonly getConversation: () => ChatInputState['conversation'],
+		private readonly prepareFiles: (files: readonly File[], signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>,
 		@IFileService private readonly files: IFileService,
 		@IChatAttachmentResolveService private readonly resolver: IChatAttachmentResolveService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -163,7 +164,7 @@ export class ChatDragAndDrop extends Disposable {
 				if (signal.aborted) throw new CancellationError();
 				return this.resolver.resolveResourceAttachContext(resource, directory, signal);
 			})),
-			createChatFileAttachments(drop.files, signal, this.supportsImages, this.resolver),
+			this.prepareFiles(drop.files, signal),
 		]);
 		return [...resources, ...native];
 	}

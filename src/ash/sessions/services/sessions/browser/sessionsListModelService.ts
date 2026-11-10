@@ -11,7 +11,8 @@ type SessionListIdentity = Pick<ISession, 'sessionId' | 'source'>;
 
 export type SessionSortMode = 'name' | 'created' | 'updated';
 export type SessionSortDirection = 'ascending' | 'descending';
-export type SessionGrouping = 'none' | 'projects' | 'repository' | 'status' | 'environment';
+const sessionGroupings = ['none', 'projects', 'repository', 'status', 'environment'] as const;
+export type SessionGrouping = typeof sessionGroupings[number];
 export type AutomationSessionsListMode = 'always' | 'afterReply' | 'never';
 const listModes = ['chat', 'code'] as const;
 export type SessionsListMode = typeof listModes[number];
@@ -30,8 +31,8 @@ export interface ISessionsListModelService {
 	getSort(mode: SessionsListMode): { readonly field: SessionSortMode; readonly direction: SessionSortDirection; };
 	setSortMode(mode: SessionsListMode, field: SessionSortMode): void;
 	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void;
-	readonly grouping: SessionGrouping;
-	setGrouping(grouping: SessionGrouping): void;
+	getGrouping(mode: SessionsListMode): SessionGrouping;
+	setGrouping(mode: SessionsListMode, grouping: SessionGrouping): void;
 	readonly showAttentionGroup: boolean;
 	setShowAttentionGroup(show: boolean): void;
 	readonly showComparisonGroups: boolean;
@@ -86,10 +87,10 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	constructor(@IStorageService private readonly storage: IStorageService) {
-		this.migrateSortPreferences();
+		this.migrateViewPreferences();
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key.startsWith(`${sortModeKey}.`)
-				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key === groupingKey || event.key === comparisonGroupsKey
+				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key.startsWith(`${groupingKey}.`) || event.key === comparisonGroupsKey
 				|| event.key === attentionGroupKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
 				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix) || event.key.startsWith(catalogRowIconPrefix))) {
@@ -116,10 +117,11 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.storage.store(`${sortDirectionKey}.${mode}`, direction, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
-	private migrateSortPreferences(): void {
+	private migrateViewPreferences(): void {
 		const preferences = [
 			[sortModeKey, ['name', 'created', 'updated']],
 			[sortDirectionKey, ['ascending', 'descending']],
+			[groupingKey, sessionGroupings],
 		] as const;
 		const migrated = new Map<string, string>();
 		for (const [key, valid] of preferences) {
@@ -147,16 +149,13 @@ export class SessionsListModelService implements ISessionsListModelService {
 		}).catch(onUnexpectedError);
 	}
 
-	get grouping(): SessionGrouping {
-		const value = this.storage.get(groupingKey, StorageScope.PROFILE);
-		switch (value) {
-			case 'projects': case 'repository': case 'status': case 'environment': return value;
-			default: return 'none';
-		}
+	getGrouping(mode: SessionsListMode): SessionGrouping {
+		const value = this.storage.get(`${groupingKey}.${mode}`, StorageScope.PROFILE);
+		return sessionGroupings.find(grouping => grouping === value) ?? 'projects';
 	}
 
-	setGrouping(grouping: SessionGrouping): void {
-		this.storage.store(groupingKey, grouping, StorageScope.PROFILE, StorageTarget.USER);
+	setGrouping(mode: SessionsListMode, grouping: SessionGrouping): void {
+		this.storage.store(`${groupingKey}.${mode}`, grouping, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	get showAttentionGroup(): boolean {

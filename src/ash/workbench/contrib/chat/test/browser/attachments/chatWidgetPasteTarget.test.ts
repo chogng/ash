@@ -11,12 +11,13 @@ import type { ChatContextAttachment } from '../../../../../services/chat/common/
 import { IChatPasteTargetService, type IChatPasteTarget } from '../../../browser/chat.js';
 import { ChatDynamicVariableModel } from '../../../browser/attachments/chatDynamicVariables.js';
 import { ChatPasteTargetService } from '../../../browser/attachments/chatPasteTargetService.js';
+import { projectChatDraftReferences } from '../../../common/attachments/chatInlineAttachments.js';
 import { ChatWidgetPasteTarget } from '../../../browser/attachments/chatWidgetPasteTarget.js';
 import { ChatInputEditorRegistry } from '../../../browser/widget/input/chatInputEditorRegistry.js';
 import { SlashCommandCatalog } from '../../../common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 
-function setup(resources: DisposableStore) {
+function setup(resources: DisposableStore, stageImages = false) {
 	const owner = resources.add(new InstantiationService());
 	let inputUri: URI | undefined;
 	const routes = resources.add(new class extends ChatPasteTargetService {
@@ -37,7 +38,7 @@ function setup(resources: DisposableStore) {
 		skills: new SkillSelectorCatalog(),
 	}));
 	const attachmentModel = resources.add(new ChatAttachmentModel());
-	const references = resources.add(new ChatDynamicVariableModel(input, attachmentModel));
+	const references = resources.add(new ChatDynamicVariableModel(input, attachmentModel, stageImages));
 	const target = resources.add(owner.createInstance(ChatWidgetPasteTarget, input, references, attachmentModel));
 	return { input, references, target, attachmentModel, routes, inputUri: inputUri! };
 }
@@ -82,6 +83,22 @@ test('Aborted, replaced and disposed paste targets cannot edit their borrowed co
 
 suite('Attachment batch admission', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('restores a legacy inline image as a staged attachment and keeps following file offsets', () => {
+		using resources = new DisposableStore();
+		const { input, references, target } = setup(resources, true);
+		const image = { ...attachment, id: 'image', kind: 'image', name: 'image.png', reference: { start: 7, end: 16 } };
+		const file = { ...attachment, reference: { start: 22, end: 29 } };
+		const draft = projectChatDraftReferences('Review image.png with file.ts', [image, file], true);
+		input.value = draft.text;
+		references.setInputState(draft.contexts);
+		assert.equal(input.value, 'Review  with file.ts');
+		assert.deepEqual(references.stagedImages.map(({ id, reference }) => ({ id, reference })), [{ id: 'image', reference: undefined }]);
+		assert.deepEqual(references.variables.find(entry => entry.id === 'file')?.reference, { start: 13, end: 20 });
+		target.removeAttachments(['image']);
+		assert.deepEqual(references.stagedImages, []);
+		assert.equal(input.value, 'Review  with file.ts');
+	});
 
 	test('one manual batch edits text once and binds exact snapshot ranges at the replaced selection', async () => {
 		using resources = new DisposableStore();

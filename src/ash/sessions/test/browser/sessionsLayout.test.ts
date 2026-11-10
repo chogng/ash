@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { EditorGroup } from '../../../../../test/automation/editors.js';
 import { QuickAccess } from '../../../../../test/automation/quickaccess.js';
 import { Color } from '../../../base/common/color.js';
+import { URI } from '../../../base/common/uri.js';
 import { StorageTarget } from '../../../platform/storage/common/storage.js';
 import { lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { menuHoverBackground } from '../../../platform/theme/common/colors/menuColors.js';
@@ -1208,6 +1209,61 @@ suite('sessions browser component', () => {
 		}
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`the session activity bar moves Code tools beside the conversation in ${locale}`, async () => {
+		const { page } = browserTests;
+		const chinese = locale === 'zh-CN';
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto(`/sessions.html?multiHost&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const conversation = page.locator('[data-part="sessions"]');
+		const grid = conversation.locator('.ash-sessions-chat-grid');
+		const bar = conversation.getByRole('toolbar', { name: chinese ? '会话活动栏' : 'Session Activity Bar', exact: true });
+		const filesSelector = '[data-action-id="ash.sessions.toggleFiles"] button';
+		const changesSelector = '[data-action-id="ash.sessions.toggleChanges"] button';
+		const width = (locator: Locator) => locator.evaluate(element => element.getBoundingClientRect().width);
+		await expect(titlebar.locator(filesSelector)).toBeVisible();
+		await expect(bar).toHaveCount(0);
+		const originalWidth = await width(grid);
+
+		await new QuickAccess(page).runCommand('ash.sessions.toggleSessionActivityBar');
+		await expect(bar).toBeVisible();
+		await expect(bar).toHaveAttribute('aria-orientation', 'vertical');
+		await expect(titlebar.locator(filesSelector)).toHaveCount(0);
+		await expect(titlebar.locator(changesSelector)).toHaveCount(0);
+		await expect.poll(async () => await width(grid) + await width(bar)).toBeCloseTo(originalWidth, 0);
+		const files = bar.locator(filesSelector);
+		const changes = bar.locator(changesSelector);
+		await expect(files).toHaveCSS('width', '24px');
+		await changes.focus();
+		await changes.press('End');
+		await expect(files).toBeFocused();
+		await files.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /按 Tab 进入会话活动栏/u : /Use Tab to reach the Session Activity Bar/u);
+		await page.keyboard.press('Escape');
+		await expect(files).toBeFocused();
+		await files.press('Enter');
+		await expect(page.locator('[data-part="editor"]')).toBeVisible();
+		await expect(files).toHaveAttribute('aria-pressed', 'true');
+		if (chinese) {
+			await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+			await expect(files).toHaveCSS('border-top-color', 'rgb(255, 255, 255)');
+		}
+		await files.press('Shift+F10');
+		const toggle = page.getByRole('menuitem', { name: chinese ? '切换会话活动栏' : 'Toggle Session Activity Bar', exact: true });
+		await expect(toggle).toBeVisible();
+		await toggle.press('Escape');
+		await expect(files).toBeFocused();
+		await files.press('Shift+F10');
+		await toggle.click();
+		await expect(bar).toHaveCount(0);
+		await expect(titlebar.locator(filesSelector)).toHaveAttribute('aria-pressed', 'true');
+		await expect(conversation.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
+	});
+
 	test('Code window actions and card headers follow opposite sides of the tool divider', async function () {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1440, height: 900 });
@@ -1722,7 +1778,8 @@ suite('sessions browser component', () => {
 			await expect(group).toBeFocused();
 			await group.press('ArrowRight');
 			await expect(page.getByRole('menuitemradio', { name: chinese ? '状态' : 'Status', exact: true })).toBeVisible();
-			const selected = page.getByRole('menuitemradio', { checked: true });
+			await expect(page.getByRole('menuitemradio', { name: chinese ? '平铺' : 'Flat List', exact: true })).toBeVisible();
+			const selected = page.getByRole('menuitemradio', { name: chinese ? '项目' : 'Projects', exact: true, checked: true });
 			await expect(selected).toBeVisible();
 			const label = (await selected.locator('.ash-button-label').boundingBox())!;
 			const check = (await selected.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]').boundingBox())!;
@@ -1791,9 +1848,10 @@ suite('sessions browser component', () => {
 		await expect(add).toBeFocused();
 		const folders = source.getByRole('listitem');
 		const names = folders.locator('.ash-code-project-folder-name');
+		const firstPath = URI.file('/workspace/first').fsPath;
 		await expect(names).toHaveText(['first']);
 		await expect(folders.first()).toHaveCSS('border-bottom-width', '0px');
-		await expect(names.first()).toHaveAttribute('title', '/workspace/first');
+		await expect(names.first()).toHaveAttribute('title', firstPath);
 		await expect(name).toHaveAttribute('placeholder', 'first');
 		await expect(submit).toBeEnabled();
 		await add.press('Enter');
@@ -1812,7 +1870,7 @@ suite('sessions browser component', () => {
 		expect(folderNameBounds.x).toBeCloseTo(nameTextX);
 		expect(addIconBounds.x).toBeCloseTo(nameIconBounds.x);
 		expect((await addLabel.boundingBox())!.x).toBeCloseTo(nameTextX);
-		const removeFirst = source.getByRole('button', { name: chinese ? '移除 /workspace/first' : 'Remove /workspace/first' });
+		const removeFirst = source.getByRole('button', { name: chinese ? `移除 ${firstPath}` : `Remove ${firstPath}` });
 		const populatedPanel = (await folderPanel.boundingBox())!;
 		const populatedAdd = (await add.boundingBox())!;
 		const firstFolderBounds = (await folders.first().boundingBox())!;
@@ -1834,7 +1892,7 @@ suite('sessions browser component', () => {
 		await expect(add).toBeInViewport();
 		expect(await folderList.evaluate(list => list.scrollHeight > list.clientHeight)).toBe(true);
 		for (const folder of ['folder-6', 'folder-5', 'folder-4', 'folder-3']) {
-			const path = `/workspace/${folder}`;
+			const path = URI.file(`/workspace/${folder}`).fsPath;
 			await source.getByRole('button', { name: chinese ? `移除 ${path}` : `Remove ${path}` }).click();
 		}
 		await expect(names).toHaveText(['first', 'second']);
@@ -1870,6 +1928,36 @@ suite('sessions browser component', () => {
 		await expect(create).toBeFocused();
 		const created = list.getByRole('button', { name: expectedName, exact: true });
 		await expect(created.locator('[data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
+	});
+
+	test('Code retries the remaining project appearance change after a partial save', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?projectCreation&codeProjectEdit&locale=en');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const list = page.locator('.ash-sessions-list[data-mode="code"]:visible');
+		const project = list.getByRole('button', { name: 'Code project', exact: true });
+		await project.click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Edit', exact: true });
+		const appearance = dialog.getByRole('button', { name: 'Change project appearance' });
+		await appearance.click();
+		const picker = page.getByRole('dialog', { name: 'Change project appearance', exact: true });
+		await picker.getByRole('combobox', { name: 'Search icons' }).fill('clockface');
+		await picker.getByRole('option', { name: 'clockface', exact: true }).click();
+		await picker.getByRole('button', { name: 'Blue', exact: true }).click();
+		await picker.getByRole('button', { name: 'Done', exact: true }).click();
+		const previewColor = await appearance.evaluate(element => getComputedStyle(element).color);
+		const savedIcon = project.locator('[data-ash-icon-id="clockface"]');
+		const submit = dialog.getByRole('button', { name: 'Save changes', exact: true });
+		await submit.click();
+		await expect(dialog.getByRole('alert')).toHaveText('Synthetic color save failure');
+		await expect(savedIcon).toBeVisible();
+		await expect(savedIcon).not.toHaveCSS('color', previewColor);
+		await expect(appearance).toHaveCSS('color', previewColor);
+		await submit.click();
+		await expect(dialog).toHaveCount(0);
+		await expect(savedIcon).toHaveCSS('color', previewColor);
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Projects navigation opens the project creation dialog (${locale})`, async function () {
@@ -2143,6 +2231,12 @@ suite('sessions browser component', () => {
 		await follow.press('Space');
 		await expect(follow).toHaveAttribute('aria-checked', 'true');
 		await expect(follow).toBeEnabled();
+		const timestamps = settings.getByRole('switch', { name: chinese ? '显示 Agent 回复时间' : 'Show Agent reply timestamps', exact: true });
+		await expect(timestamps).toHaveAttribute('aria-checked', 'true');
+		await timestamps.press('Space');
+		await expect(timestamps).toHaveAttribute('aria-checked', 'false');
+		await timestamps.press('Space');
+		await expect(timestamps).toHaveAttribute('aria-checked', 'true');
 		await settings.getByRole('searchbox').fill('@id:chat.input.fontSize');
 		const fontSize = settings.locator('[data-settings-item-id="chat.input.fontSize"]').getByRole('spinbutton');
 		await expect(fontSize).toHaveValue('14');
