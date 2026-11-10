@@ -1,13 +1,71 @@
+section.ash-projects-materials {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-projects-materials > .ash-button {
+	align-self: flex-start;
+}
+
 .ash-projects-materials-empty {
-	padding: var(--ash-spacing-size400) 0;
+	display: grid;
+	justify-items: center;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size240) var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-sideBar-background);
 	color: var(--ash-description-foreground);
 	text-align: center;
-	line-height: 1.6;
+	line-height: 1.5;
+}
+
+.ash-projects-materials-empty p {
+	max-width: 30ch;
+	margin: 0;
+}
+
+.ash-projects-materials-illustration {
+	position: relative;
+	width: 92px;
+	height: 48px;
+}
+
+.ash-projects-materials-sheet {
+	position: absolute;
+	inset-block-end: 0;
+	inset-inline-start: 0;
+	display: grid;
+	place-items: center;
+	box-sizing: border-box;
+	width: var(--ash-spacing-size320);
+	height: var(--ash-spacing-size320);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-background);
+	transform: rotate(-8deg);
+}
+
+.ash-projects-materials-sheet:nth-child(2) {
+	inset-inline-start: auto;
+	inset-inline-end: 0;
+	transform: rotate(8deg);
+}
+
+.ash-projects-materials-sheet:nth-child(3) {
+	inset-block-end: var(--ash-spacing-size120);
+	inset-inline-start: var(--ash-spacing-size280);
+	width: var(--ash-spacing-size360);
+	height: var(--ash-spacing-size360);
+	transform: rotate(4deg);
 }
 
 .ash-projects-material-list {
 	padding: 0;
-	margin: var(--ash-spacing-size200) 0;
+	margin: 0;
 	list-style: none;
 }
 
@@ -33,7 +91,15 @@
 }
 
 .ash-projects-source-note {
+	margin: 0;
 	color: var(--ash-description-foreground);
-	line-height: 1.6;
+	line-height: 1.5;
 	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-projects-materials-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }

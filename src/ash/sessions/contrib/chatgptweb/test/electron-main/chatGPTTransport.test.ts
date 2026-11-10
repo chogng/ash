@@ -242,7 +242,24 @@ suite('ChatGPT transport', () => {
 		assert.equal((await authorizeSubrequest!(sentinel)).get('X-OpenAI-Fedramp'), 'true');
 		auth.headers.delete('X-OpenAI-Fedramp');
 		assert.equal((await authorizeSubrequest!(sentinel)).get('X-OpenAI-Fedramp'), '');
-		for (const url of ['https://chatgpt.com/backend-api/me', 'https://files.oaiusercontent.com/file-test']) {
+		for (const path of [
+			'/gizmos/g-p-project?include_file_limits=true',
+			'/gizmos/g-p-project/conversations?limit=20&owned_only=false',
+			'/projects/g-p-project',
+			'/projects/g-p-project/files',
+			'/projects/g-p-project/files/file-example',
+			'/files/download/file-example?gizmo_id=g-p-project&inline=false',
+		]) {
+			const headers = await authorizeSubrequest!(new URL('https://chatgpt.com/backend-api' + path));
+			assert.equal(headers.get('Authorization'), 'Bearer fixture-one', path);
+			assert.equal(headers.get('ChatGPT-Account-Id'), 'account-one', path);
+		}
+		for (const url of [
+			'https://chatgpt.com/backend-api/me',
+			'https://chatgpt.com/backend-api/gizmos/g-custom',
+			'https://chatgpt.com/backend-api/gizmos/g-p-project%2Fother',
+			'https://files.oaiusercontent.com/backend-api/projects/g-p-project',
+		]) {
 			const headers = await authorizeSubrequest!(new URL(url));
 			assert.equal(headers.get('Authorization'), '');
 			assert.equal(headers.get('ChatGPT-Account-Id'), '');

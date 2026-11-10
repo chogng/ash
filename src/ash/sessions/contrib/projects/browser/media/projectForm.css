@@ -24,6 +24,22 @@
 	height: 360px;
 }
 
+.ash-projects-dialog.ash-project-instructions-dialog.ash-dialog {
+	width: 720px;
+	height: fit-content;
+}
+
+.ash-project-instructions-intro {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+}
+
+.ash-project-instructions-dialog .ash-projects-form textarea {
+	block-size: clamp(120px, 40dvh, 320px);
+	line-height: 1.5;
+}
+
 .ash-projects-form {
 	display: flex;
 	flex-direction: column;

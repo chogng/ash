@@ -69,6 +69,11 @@ suite('Projects toolbar', () => {
 			await expect(dialog).toHaveCount(0);
 			await expect(projects).toHaveAttribute('aria-label', 'Local research');
 			await expect(projects.locator('.ash-projects-composer')).toBeVisible();
+			const context = projects.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true });
+			await expect(context.getByText(chinese
+				? '添加 PDF、文档或其他文件，供此项目参考。'
+				: 'Add PDFs, documents, or other files to reference in this project.', { exact: true })).toBeVisible();
+			await expect(context.getByRole('button', { name: chinese ? '添加文件' : 'Add files', exact: true })).toBeVisible();
 			const renameLabel = chinese ? '重命名项目' : 'Rename project';
 			await breadcrumb.getByRole('button', { name: `${renameLabel} Local research`, exact: true }).press('Enter');
 			const input = breadcrumb.getByRole('textbox');
@@ -208,7 +213,14 @@ suite('Projects toolbar', () => {
 					expect(bounds.x + bounds.width / 2).toBeCloseTo(detail.x + detail.width / 2);
 					expect(bounds.width).toBeCloseTo(Math.min(detail.width, 902));
 					await expect(composer).toBeInViewport({ ratio: 1 });
-					await expect(page.locator('.ash-projects-materials .ash-projects-goals')).toContainText(chinese ? '项目目标' : 'Project goals');
+					const detailCard = page.locator('.ash-projects-detail-card');
+					const guidance = detailCard.getByRole('region', { name: chinese ? '指令' : 'Instructions', exact: true });
+					const context = detailCard.getByRole('region', { name: chinese ? '上下文' : 'Context', exact: true });
+					const guidanceBounds = (await guidance.boundingBox())!;
+					const contextBounds = (await context.boundingBox())!;
+					expect(contextBounds.y).toBeCloseTo(guidanceBounds.y + guidanceBounds.height);
+					expect(contextBounds.width).toBe(guidanceBounds.width);
+					await expect(context).toHaveCSS('border-block-start-width', '1px');
 					await expect(composer.locator('.ash-chat-input-part')).toHaveCSS('padding', '0px');
 					await page.screenshot({ path: info.outputPath(`project-composer-${locale}-${theme}-${width}.png`) });
 					if (width === 600) {
@@ -900,11 +912,11 @@ suite('Projects loading states', () => {
 					await page.setViewportSize({ width, height: 720 });
 					await page.emulateMedia({ reducedMotion: 'reduce' });
 					const overview = (await skeleton.locator('.ash-projects-overview').boundingBox())!;
-					const materials = (await skeleton.locator('.ash-projects-materials').boundingBox())!;
+					const card = (await skeleton.locator('.ash-projects-detail-card').boundingBox())!;
 					if (width === 720) {
-						expect(materials.y).toBeGreaterThanOrEqual(overview.y + overview.height);
+						expect(card.y).toBeGreaterThanOrEqual(overview.y + overview.height);
 					} else {
-						expect(materials.y).toBe(overview.y);
+						expect(card.y).toBe(overview.y);
 					}
 					expect(await skeleton.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 					expect(await skeleton.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);

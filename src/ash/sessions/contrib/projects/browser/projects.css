@@ -298,8 +298,9 @@
 }
 
 .ash-projects-muted {
+	margin: 0;
 	color: var(--ash-description-foreground);
-	line-height: 1.6;
+	line-height: 1.5;
 }
 
 .ash-projects-breadcrumb {
@@ -327,7 +328,7 @@
 	align-items: start;
 }
 
-.ash-projects:not(.narrow) .ash-projects-detail:has(.ash-projects-materials) {
+.ash-projects:not(.narrow) .ash-projects-detail.with-detail-card {
 	grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
 }
 
@@ -366,7 +367,7 @@
 
 .ash-projects:not(.narrow)
 	.ash-projects-detail-content
-	> .ash-projects-materials {
+	> .ash-projects-detail-card {
 	grid-column: 2;
 	grid-row: 1;
 	align-self: start;
@@ -461,17 +462,23 @@
 	width: 40%;
 }
 
-.ash-projects-goals {
-	margin-top: var(--ash-spacing-size240);
+.ash-projects-detail-card {
+	min-width: 0;
+	border-radius: var(--ash-cornerRadius-xLarge);
+	border: var(--ash-strokeThickness) solid
+		var(
+			--ash-contrastBorder,
+			color-mix(in srgb, var(--ash-widget-border) 55%, transparent)
+		);
 }
 
-.ash-projects-materials {
-	min-width: 0;
-	padding: var(--ash-spacing-size240);
-	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-sideBar-background);
-	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
+.ash-projects-detail-card
+	> :is(.ash-projects-guidance, .ash-projects-materials) {
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
+}
+
+.ash-projects-detail-card > .ash-projects-materials {
+	border-block-start: inherit;
 }
 
 .ash-projects-section-heading {
@@ -484,16 +491,24 @@
 	font-size: var(--ash-fontSize-heading3);
 }
 
-.ash-projects-description {
-	min-height: 80px;
-	margin: var(--ash-spacing-size200) 0 0;
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-	line-height: 1.8;
+.ash-projects-detail-card .ash-projects-section-heading {
+	min-height: var(--ash-spacing-size280);
+	flex-wrap: nowrap;
 }
 
-.ash-projects-materials {
-	min-height: 320px;
+.ash-projects-detail-card .ash-projects-section-heading > .ash-button {
+	flex-shrink: 0;
+}
+
+.ash-projects-guidance > p {
+	margin-block: var(--ash-spacing-size40) 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-projects-description {
+	white-space: pre-wrap;
+	line-height: 1.5;
+	user-select: text;
 }
 
 .ash-projects-placeholder,
@@ -550,7 +565,7 @@
 	gap: var(--ash-spacing-size120);
 }
 
-.ash-projects-materials > .ash-projects-skeleton-lines {
+.ash-projects-overview > .ash-projects-skeleton-lines {
 	margin-top: var(--ash-spacing-size200);
 }
 

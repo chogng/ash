@@ -35,6 +35,10 @@ const historyFreshnessMs = 60_000;
 const recentFreshnessMs = 5 * 60_000;
 const sidebarFreshnessMs = 15 * 60_000;
 
+function projectInstructionsKey(scope: string, id: string): string {
+	return `sessions.chatgpt.projectInstructions.v1:${scope}:${id}`;
+}
+
 function isCachedTimestamp(value: unknown): value is number {
 	return typeof value === 'number' && Number.isFinite(new Date(value).getTime());
 }
@@ -50,6 +54,11 @@ interface ProjectHistory {
 	readonly cursor?: ChatGPTProjectCursor;
 	readonly interrupted?: boolean;
 }
+
+type ProjectDetailsSnapshot = Pick<ChatGPTProjectDetails, 'description' | 'files'> & {
+	/** Only a live details read can establish write access. */
+	readonly canWrite?: boolean;
+};
 
 type HistoryRead = 'catalog' | 'recentPage' | 'conversation' | `project:${string}`;
 type HistoryFailure = { readonly error: unknown; readonly retry: () => Promise<void>; };
@@ -202,7 +211,7 @@ export function pendingCreationStatus(state: ChatGPTState): string {
 export interface IChatGPTService {
 	readonly native?: true;
 	readonly state: IObservable<ChatGPTState>;
-	readonly projectDetails: IObservable<ReadonlyMap<string, ChatGPTProjectDetails>>;
+	readonly projectDetails: IObservable<ReadonlyMap<string, ProjectDetailsSnapshot>>;
 	readonly newDraftRevision: number;
 	/** Reports permanent removal or replacement of an identity within the current catalog. */
 	readonly onDidRetireConversationIdentity: Event<{ readonly id: string; readonly replacementId?: string; }>;
@@ -313,7 +322,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private readonly recentIds = new Set<string>();
 
 	public readonly state: IObservable<ChatGPTState> = this.model;
-	public readonly projectDetails = observableValue<ReadonlyMap<string, ChatGPTProjectDetails>>(this, new Map());
+	public readonly projectDetails = observableValue<ReadonlyMap<string, ProjectDetailsSnapshot>>(this, new Map());
 	private readonly projectRequests = this._register(new ResourceQueue());
 	private readonly retiredConversationIdentity = this._register(new Emitter<{ readonly id: string; readonly replacementId?: string; }>());
 	public readonly onDidRetireConversationIdentity = this.retiredConversationIdentity.event;
@@ -456,14 +465,28 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 	public async editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit> {
 		const account = this.management.signal;
-		const details = await this.client.projectDetails(id, AbortSignal.any([account, signal, AbortSignal.timeout(30_000)]));
+		const scope = this.cacheScope;
+		const read = AbortSignal.any([account, signal, AbortSignal.timeout(30_000)]);
+		const details = await this.queueProjectRequest(id, async () => {
+			read.throwIfAborted();
+			if (scope !== this.cacheScope) throw canceled();
+			const details = await this.client.projectDetails(id, read);
+			read.throwIfAborted();
+			if (scope !== this.cacheScope) throw canceled();
+			this.publishProjectDetails(id, scope, details);
+			return details;
+		});
 		if (!details.canWrite) throw new Error(localize('sessions.chatgpt.projectReadOnly', 'You only have view access to this ChatGPT project.'));
 		return {
 			details: { name: details.name, description: details.description },
 			save: edited => this.queueProjectRequest(id, async () => {
 				if (edited.name === details.name && edited.description === details.description) return;
 				const request = AbortSignal.any([account, AbortSignal.timeout(30_000)]);
+				request.throwIfAborted();
+				if (scope !== this.cacheScope) throw canceled();
 				const latest = await this.client.projectDetails(id, request);
+				request.throwIfAborted();
+				if (scope !== this.cacheScope) throw canceled();
 				if (!latest.canWrite) throw new Error(localize('sessions.chatgpt.projectReadOnly', 'You only have view access to this ChatGPT project.'));
 				const updated = {
 					...latest,
@@ -472,7 +495,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				};
 				await this.client.updateProjectDetails(id, updated, request);
 				request.throwIfAborted();
-				this.publishProjectDetails(id, updated);
+				this.publishProjectDetails(id, scope, updated);
 			}),
 		};
 	}
@@ -490,13 +513,19 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		return AbortSignal.any([this.management.signal, AbortSignal.timeout(timeout)]);
 	}
 
-	private publishProjectDetails(id: string, details: ChatGPTProjectDetails): void {
+	private publishProjectDetails(id: string, scope: string | undefined, details: ChatGPTProjectDetails): void {
+		const { projects } = this.model.get();
+		const project = projects.find(project => project.id === id);
+		if (scope !== this.cacheScope || !project) return;
 		const values = new Map(this.projectDetails.get());
-		values.set(id, { ...details, files: details.files ?? values.get(id)?.files });
+		values.set(id, { description: details.description, canWrite: details.canWrite, files: details.files ?? values.get(id)?.files });
+		if (scope) {
+			this.storage.store(projectInstructionsKey(scope, id), details.description, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}
 		this.projectDetails.set(values);
-		if (this.model.get().projects.some(project => project.id === id && project.title !== details.name)) {
+		if (project.title !== details.name) {
 			this.refreshOperation?.abort();
-			this.updateCatalog({ projects: this.model.get().projects.map(project => project.id === id ? { ...project, title: details.name } : project) });
+			this.updateCatalog({ projects: projects.map(project => project.id === id ? { ...project, title: details.name } : project) });
 		}
 	}
 
@@ -505,7 +534,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const request = AbortSignal.any([signal, this.projectRequest(id, scope, 30_000)]);
 			const details = await this.client.projectDetails(id, request, true);
 			request.throwIfAborted();
-			this.publishProjectDetails(id, details);
+			this.publishProjectDetails(id, scope, details);
 		});
 	}
 
@@ -517,7 +546,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				const fileId = await this.client.addProjectFile(id, file, request);
 				const details = await this.client.projectDetails(id, request, true);
 				request.throwIfAborted();
-				this.publishProjectDetails(id, details);
+				this.publishProjectDetails(id, scope, details);
 				if (!details.files?.some(file => file.id === fileId)) throw new Error(localize('sessions.chatgpt.projectFileNotAdded', 'ChatGPT did not confirm that the file was added to the project.'));
 			}
 		});
@@ -529,7 +558,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			await this.client.removeProjectFile(id, fileId, request);
 			const details = await this.client.projectDetails(id, request, true);
 			request.throwIfAborted();
-			this.publishProjectDetails(id, details);
+			this.publishProjectDetails(id, scope, details);
 			if (!details.files || details.files.some(file => file.id === fileId)) throw new Error(localize('sessions.chatgpt.projectFileNotRemoved', 'ChatGPT did not confirm that the file was removed from the project.'));
 		});
 	}
@@ -1454,7 +1483,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.recentIds.clear();
 		this.remoteTimeline = new ChatTimelineStorage(this.storage, `chatgpt-web:${scope}`);
 		this.outbox = new ChatGPTOutbox(this.storage, scope);
-		this.update({ conversations: this.withLocalConversations([]), historyListFailed: false, attachments: this.readDraft(this.draftKey())?.attachments ?? [] });
+		this.projectDetails.set(new Map());
+		this.update({
+			conversations: this.withLocalConversations([]), projects: [], projectHistory: new Map(), historyListFailed: false,
+			attachments: this.readDraft(this.draftKey())?.attachments ?? [],
+		});
 		const raw = this.storage.get(`${catalogKey}:${scope}`, StorageScope.PROFILE);
 		if (!raw) { return; }
 		let value: unknown;
@@ -1468,8 +1501,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				...(item.projectOnly === true ? { projectOnly: true } : {}),
 			}];
 		}) : [];
+		const details = new Map<string, ProjectDetailsSnapshot>();
 		const projects = Array.isArray(value.projects) ? value.projects.flatMap(item => {
 			if (!isRecord(item) || typeof item.id !== 'string' || typeof item.title !== 'string') { return []; }
+			const description = this.storage.get(projectInstructionsKey(scope, item.id), StorageScope.PROFILE);
+			if (description !== undefined) details.set(item.id, { description });
 			return [{
 				id: item.id, title: item.title,
 				...(isCachedTimestamp(item.createdAt) ? { createdAt: item.createdAt } : {}),
@@ -1502,12 +1538,24 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		// Older catalogs recorded projectsFetchedAt before project timestamps were decoded.
 		this.projectsFetchedAt = freshAt(value.projectMetadataFetchedAt);
 		this.pinsFetchedAt = freshAt(value.pinsFetchedAt);
+		this.projectDetails.set(details);
 		this.update({ conversations: this.withLocalConversations(conversations), projects, ...(restoredRecent ? { hasMore: restoredRecent.hasMore } : {}) });
 	}
 
 	private updateCatalog(change: Partial<ChatGPTState>): void {
-		const projectHistory = change.projectHistory ?? this.model.get().projectHistory;
+		const state = this.model.get();
+		const projectHistory = change.projectHistory ?? state.projectHistory;
 		const projectIds = change.projects && new Set(change.projects.map(project => project.id));
+		if (projectIds) {
+			const details = this.projectDetails.get();
+			const retained = new Map([...details].filter(([id]) => projectIds.has(id)));
+			if (retained.size !== details.size) this.projectDetails.set(retained);
+			if (this.cacheScope) {
+				for (const project of state.projects) {
+					if (!projectIds.has(project.id)) this.storage.remove(projectInstructionsKey(this.cacheScope, project.id), StorageScope.PROFILE);
+				}
+			}
+		}
 		this.update({
 			...change,
 			...(change.conversations ? { conversations: this.withLocalConversations(change.conversations) } : {}),

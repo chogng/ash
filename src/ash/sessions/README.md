@@ -42,11 +42,12 @@ The selected model source determines where a message is sent. ChatGPT Web
 sends through its reply backend. Older ChatGPT conversations may contain
 references to Cowork tasks. The adapter reads their existing status and can bind
 a legacy local conversation to a ChatGPT history without losing those references.
-The profile keeps the last loaded
-sidebar index and opened conversation snapshots under an opaque user and
+The profile keeps the last loaded sidebar index, last confirmed project
+instructions, and opened conversation snapshots under an opaque user and
 workspace scope verified by the native credential owner. Chat shows that cache
 while refreshing from the backend and requires a current history read before
-continuing a restored conversation. The visible sidebar refreshes on focus,
+continuing a restored conversation. Cached project instructions can be displayed
+immediately. Edit access requires a live project details read. The sidebar refreshes on focus,
 network recovery and a foreground interval. Refresh checks the loaded portion
 of the catalog and verifies omitted conversations individually before removing
 their snapshots. An account-scoped outbox persists offline first text messages

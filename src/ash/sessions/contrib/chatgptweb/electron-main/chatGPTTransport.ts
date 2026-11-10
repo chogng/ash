@@ -278,7 +278,13 @@ export class ChatGPTTransport extends Disposable {
 			// Empty values remove stale account routing and credentials from Chromium
 			// subrequests before the current owner's headers are applied.
 			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '', 'X-OpenAI-Fedramp': '' });
-			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || uploadedPath(url.pathname) || conversationPath(url.pathname) || this.options.native && nativeHistoryPath(url.pathname) || renamePath(url.pathname) || deletePath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
+			const path = url.pathname;
+			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(path)) return headers;
+			if (!(readPaths.has(path) || writePaths.has(path) || uploadedPath(path) || conversationPath(path)
+				|| this.options.native && nativeHistoryPath(path) || renamePath(path) || deletePath(path)
+				|| projectDetailsPath(path) || projectConversationsPath(path) || projectUpdatePath(path)
+				|| projectFilesPath(path) || projectFilePath(path) || projectFileDownloadPath(path)
+				|| filePath(path) || path.startsWith('/backend-api/sentinel/'))) return headers;
 			using authorization = await this.options.authentication.authorize(randomUUID(), context, new AbortController().signal);
 			for (const [name, value] of authorization.headers) { headers.set(name, value); }
 			return headers;

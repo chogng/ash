@@ -603,7 +603,7 @@ test(
 			.getByRole('textbox', { name: 'What are you working on?', exact: true })
 			.fill('Inline rename fixture');
 		await dialog
-			.getByRole('textbox', { name: 'What are you trying to achieve?', exact: true })
+			.getByRole('textbox', { name: 'Instructions', exact: true })
 			.fill('Keep the project goals when renaming.');
 		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
@@ -727,7 +727,7 @@ test('Sessions Projects protects an unsaved form from keyboard page switching', 
 	await expect(projects).toBeHidden();
 });
 
-test('Sessions Projects persists creation and goals through a real backend and reopened window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+test('Sessions Projects persists instructions through a real backend and reopened window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
 	let projects = page.locator('.ash-projects');
@@ -737,7 +737,7 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
 	const dialog = page.getByRole('dialog', { name: 'Create a project' });
 	await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Research workspace');
-	await dialog.getByRole('textbox', { name: 'What are you trying to achieve?' }).fill('Collect images, papers and working documents.');
+	await dialog.getByRole('textbox', { name: 'Instructions' }).fill('Collect images, papers and working documents.');
 	await page.screenshot({ path: testInfo.outputPath('projects-create.png') });
 	await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
@@ -745,7 +745,7 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name');
 	await expect(projectTitle).toHaveText('Research workspace');
 	await expect(projectTitle).toHaveAttribute('aria-current', 'page');
-	await expect(projects.getByRole('region', { name: 'Materials' })).toBeVisible();
+	await expect(projects.getByRole('region', { name: 'Context', exact: true })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('projects-detail.png') });
 	await expect(projects.getByText('Collect images, papers and working documents.', { exact: true })).toBeVisible();
 	await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Projects', exact: true }).click();
@@ -759,10 +759,16 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	await expect(projects.getByText('No matching projects', { exact: true })).toBeVisible();
 	await projects.getByRole('button', { name: 'Clear search' }).click();
 	await projects.getByRole('button', { name: 'Research workspace', exact: true }).click();
-	await projects.getByRole('button', { name: 'Edit details' }).click();
-	const edit = page.getByRole('dialog', { name: 'Edit details' });
-	await edit.getByRole('textbox', { name: 'What are you trying to achieve?' }).fill('Organize the final evidence.');
-	await edit.getByRole('button', { name: 'Save changes' }).click();
+	const editInstructions = projects.getByRole('button', { name: 'Edit instructions', exact: true });
+	await editInstructions.press('Enter');
+	const edit = page.getByRole('dialog', { name: 'Set project instructions', exact: true });
+	const instructions = edit.getByRole('textbox', { name: 'Instructions', exact: true });
+	await expect(instructions).toHaveValue('Collect images, papers and working documents.');
+	await expect(instructions).toBeFocused();
+	await page.screenshot({ path: testInfo.outputPath('projects-instructions.png') });
+	await instructions.fill('Organize the final evidence.');
+	await edit.getByRole('button', { name: 'Save instructions', exact: true }).click();
+	await expect(editInstructions).toBeFocused();
 	await expect(edit).toHaveCount(0);
 	page = await workbench.reopenAgentsWindow(application, page);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
@@ -844,7 +850,7 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
 		await expect(edit.getByRole('button', { name: 'Reload and merge', exact: true })).toBeFocused();
 		await edit.getByRole('button', { name: 'Reload and merge', exact: true }).click();
-		await expect(edit.getByRole('textbox', { name: 'What are you trying to achieve?' })).toHaveValue('Goals from another window');
+		await expect(edit.getByRole('textbox', { name: 'Instructions' })).toHaveValue('Goals from another window');
 		await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
 		await expect(edit).toHaveCount(0);
 		await expect(page.locator('.ash-projects h1')).toHaveText('Projects');
@@ -903,6 +909,8 @@ test('Sessions Projects keeps PDFs and arbitrary file references inside a projec
 		await projects.getByRole('button', { name: 'Mixed materials', exact: true }).click();
 		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Mixed materials');
 		await projects.getByRole('button', { name: 'Remove paper.pdf from project', exact: true }).click();
+		const confirm = page.getByRole('dialog').filter({ hasText: 'Remove paper.pdf from this project?' });
+		await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
 		await expect(projects.locator('.ash-projects-material')).toHaveCount(3);
 		expect(await readFile(paths[0], 'utf8')).toBe('Project source material');
 	} finally {
@@ -922,7 +930,7 @@ test('Sessions Projects creation is localized in Chinese', { tag: ['@electron-ap
 	await page.locator('.ash-projects').getByRole('button', { name: '新建项目', exact: true }).first().click();
 	const dialog = page.getByRole('dialog', { name: '创建项目' });
 	await expect(dialog.getByRole('textbox', { name: '你正在做什么？' })).toBeFocused();
-	await expect(dialog.getByRole('textbox', { name: '你希望达成什么目标？' })).toBeVisible();
+	await expect(dialog.getByRole('textbox', { name: '指令' })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('projects-chinese.png') });
 	await page.keyboard.press('Escape');
 });
@@ -939,8 +947,8 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
 		const copy = locale === 'zh-CN'
-			? { projects: '项目', edit: '编辑详情', name: '你正在做什么？', goals: '你希望达成什么目标？', save: '保存更改', reload: '重载并合并', folder: '使用文件夹', saved: '使用已保存的值', draft: '保留草稿' }
-			: { projects: 'Projects', edit: 'Edit details', name: 'What are you working on?', goals: 'What are you trying to achieve?', save: 'Save changes', reload: 'Reload and merge', folder: 'Use a folder', saved: 'Use saved value', draft: 'Keep draft' };
+			? { projects: '项目', edit: '编辑详情', name: '你正在做什么？', goals: '指令', save: '保存更改', reload: '重载并合并', folder: '使用文件夹', saved: '使用已保存的值', draft: '保留草稿' }
+			: { projects: 'Projects', edit: 'Edit details', name: 'What are you working on?', goals: 'Instructions', save: 'Save changes', reload: 'Reload and merge', folder: 'Use a folder', saved: 'Use saved value', draft: 'Keep draft' };
 		const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 		const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 		try {
@@ -955,8 +963,10 @@ for (const locale of ['en', 'zh-CN']) {
 			const page = await workbench.openAgentsWindow(target.kind);
 			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.projects, exact: true }).click();
 			const projects = page.locator('.ash-projects');
-			await projects.getByRole('button', { name: 'Original project', exact: true }).click();
-			await projects.getByRole('button', { name: copy.edit, exact: true }).click();
+			const row = projects.locator('.ash-projects-row').filter({ has: page.getByRole('button', { name: 'Original project', exact: true }) });
+			await row.hover();
+			await row.locator('.ash-toolbar-more-actions button').click();
+			await page.getByRole('menuitem', { name: copy.edit, exact: true }).click();
 			const dialog = page.getByRole('dialog', { name: copy.edit });
 			const name = dialog.getByRole('textbox', { name: copy.name });
 			const goals = dialog.getByRole('textbox', { name: copy.goals });

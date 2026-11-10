@@ -204,6 +204,58 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().projects[0]?.updatedAt, updatedAt.getTime());
 	});
 
+	test('restores confirmed project instructions offline within their account scope', async () => {
+		const values = new Map<string, string>();
+		const id = 'g-p-project';
+		const scope = 'a'.repeat(64);
+		let instructions = 'Written in ChatGPT';
+		let saveAllowed = false;
+		const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest) => {
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				return Response.json({ items: [{ gizmo: { id, display: { name: 'Project' } } }], cursor: null });
+			}
+			if (path.split('?')[0].endsWith(`/gizmos/${id}`)) {
+				return Response.json({
+					gizmo: { id, instructions, display: { name: 'Project' } },
+					files: [{ file_id: 'file-example', name: 'example.txt' }],
+				});
+			}
+			if (path.endsWith(`/projects/${id}`) && request.method === 'PATCH') {
+				if (!saveAllowed) return new Response(null, { status: 503 });
+				assert.ok(typeof request.body === 'string');
+				instructions = JSON.parse(request.body).instructions;
+				return new Response(null, { status: 204 });
+			}
+			return response(path);
+		};
+		using chat = fixture(respond, { values });
+		using otherWindow = fixture(respond, { values });
+		await chat.reload();
+		await otherWindow.reload();
+		await chat.loadProjectDetails(id, scope, new AbortController().signal);
+		await otherWindow.reload();
+		const assertRestored = async (description: string) => {
+			using offline = fixture(async () => assert.fail('Offline restoration should not make requests'), { values });
+			offline.setNetworkAvailable(false);
+			await offline.reload();
+			assert.equal(offline.state.get().projects[0]?.id, id);
+			assert.deepEqual(offline.projectDetails.get().get(id), { description });
+		};
+		await assertRestored(instructions);
+		const edit = await chat.editProjectDetails(id, new AbortController().signal);
+		await assert.rejects(edit.save({ ...edit.details, description: 'Rejected edit' }));
+		await assertRestored('Written in ChatGPT');
+		saveAllowed = true;
+		await edit.save({ ...edit.details, description: '' });
+		assert.equal(instructions, '');
+		await assertRestored('');
+
+		using otherAccount = fixture(respond, { values, cacheScope: () => 'b'.repeat(64) });
+		await otherAccount.reload();
+		assert.equal(otherAccount.state.get().projects[0]?.id, id);
+		assert.equal(otherAccount.projectDetails.get().get(id), undefined);
+	});
+
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
 		const values = new Map<string, string>();
 		const respond = async (path: string) => response(path);

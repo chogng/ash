@@ -8,17 +8,16 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { autorun, derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import { isValidBasename } from '../../../../base/common/extpath.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { basename } from '../../../../base/common/resources.js';
-import { URI } from '../../../../base/common/uri.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -75,7 +74,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IStorageService private readonly storage: IStorageService,
 		@IFileService private readonly files: IFileService,
-		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
@@ -222,24 +220,18 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 	private projectDetails(id: string, scope: string, online: boolean): CatalogProjectDetails {
 		return {
 			key: JSON.stringify([this.chat.native === true, scope, id]),
-			load: signal => this.chat.loadProjectDetails(id, scope, signal),
+			load: online ? signal => this.chat.loadProjectDetails(id, scope, signal) : undefined,
 			data: this.chat.projectDetails.map(values => {
 				const details = values.get(id);
 				if (!details) return undefined;
+				const canEdit = online && details.canWrite === true;
 				return {
 					description: details.description,
-					canEdit: online && details.canWrite,
+					canEdit,
 					materials: details.files?.map(file => ({
-						...file, kind: 'file' as const, download: true,
-						open: online ? () => this.downloadProjectFile(id, scope, file) : undefined,
-						remove: online && details.canWrite ? async () => {
-							const confirmation = await this.dialogs.confirm({
-								message: localize('sessions.chatgpt.removeProjectFile', 'Remove {0} from this project?', file.name),
-								detail: localize('sessions.chatgpt.removeProjectFileDetail', 'Anyone who shares this project will lose access to this file through the project.'),
-								primaryButton: localize('sessions.chatgpt.removeProjectFileAction', 'Remove'),
-							});
-							if (confirmation.confirmed) await this.chat.removeProjectFile(id, scope, file.id);
-						} : undefined,
+						...file, kind: 'file' as const,
+						download: online ? (target: URI) => this.downloadProjectFile(id, scope, file.id, target) : undefined,
+						remove: canEdit ? () => this.chat.removeProjectFile(id, scope, file.id) : undefined,
 					})),
 				};
 			}),
@@ -263,10 +255,8 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		await this.chat.addProjectFiles(id, scope, files);
 	}
 
-	private async downloadProjectFile(id: string, scope: string, file: { id: string; name: string; }): Promise<void> {
-		const target = await this.fileDialogs.showSaveDialog({ defaultUri: isValidBasename(file.name) ? URI.file('/' + file.name) : undefined });
-		if (!target) return;
-		const blob = await this.chat.readProjectFile(id, scope, file.id);
+	private async downloadProjectFile(id: string, scope: string, fileId: string, target: URI): Promise<void> {
+		const blob = await this.chat.readProjectFile(id, scope, fileId);
 		const bytes = new Uint8Array(await blob.arrayBuffer());
 		if (this.chat.state.get().catalogScope !== scope) return;
 		await this.files.writeFileBytes(target, bytes, { create: true, overwrite: true });

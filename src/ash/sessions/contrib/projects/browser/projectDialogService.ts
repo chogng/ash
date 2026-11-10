@@ -23,13 +23,14 @@ function createProjectFormDialog(
 	title: string,
 	form: HTMLFormElement,
 	actions: HTMLElement,
-	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; },
+	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; instructionsOnly?: boolean; },
 ): Dialog {
 	return new Dialog(container, title, [], createWorkbenchDialogOptions({
 		extraClasses: [
 			'ash-projects-dialog',
 			...(options.code ? ['ash-code-project-dialog'] : []),
 			...(options.appearanceOnly ? ['ash-project-appearance-dialog'] : []),
+			...(options.instructionsOnly ? ['ash-project-instructions-dialog'] : []),
 		],
 		layout: 'form',
 		modal: false,
@@ -43,8 +44,7 @@ function createProjectFormDialog(
 }
 
 export type ChatProjectEdit =
-	| { readonly project: Project; }
-	| { readonly conversation: ConversationProjectEditor; }
+	| (({ readonly project: Project; } | { readonly conversation: ConversationProjectEditor; }) & { readonly instructionsOnly?: boolean; })
 	| { readonly title: string; readonly appearance: CatalogProjectAppearance; };
 
 export interface IProjectDialogService {
@@ -93,6 +93,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		const project = edit && 'project' in edit ? edit.project : undefined;
 		const conversation = edit && 'conversation' in edit ? edit.conversation : undefined;
 		const appearanceEdit = edit && 'appearance' in edit ? edit : undefined;
+		const instructionsOnly = edit && 'instructionsOnly' in edit && edit.instructionsOnly;
 		const savedAppearance = appearanceEdit?.appearance;
 		const form = h(document, 'form', { className: 'ash-projects-form' });
 		form.id = generateUuid();
@@ -124,24 +125,19 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		nameField.append(name);
 		const nameGroup = h(document, 'div', { className: 'ash-project-name-group' },
 			nameLabel, nameField);
-		const descriptionLabel = h(
-			document,
-			'label',
-			{},
-			localize('projects.descriptionLabel', 'What are you trying to achieve?'),
-		);
+		const instructionsLabel = localize('projects.instructions', 'Instructions');
 		const description = h(document, 'textarea', {
 			properties: {
 				value: project?.description ?? conversation?.details.description ?? '',
 				maxLength: 20000,
-				placeholder: localize('projects.descriptionPlaceholder', 'Describe your project, goals, subject, etc…'),
+				placeholder: localize('projects.instructionsPlaceholder', 'For example, use concise explanations and include examples where helpful.'),
 			},
 		});
-		descriptionLabel.append(description);
 		const initialName = name.value;
 		const initialDescription = description.value;
 		let materials = [...(project?.materials ?? [])];
 		let base = project;
+		const instructionsChanged = () => description.value !== (base?.description ?? initialDescription).replace(/\r\n?/g, '\n');
 		let needsMerge = false;
 		const unresolved = new Set<HTMLInputElement | HTMLTextAreaElement>();
 		const mergeControls = store.add(new DisposableStore());
@@ -192,24 +188,35 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		);
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
-		form.append(nameGroup);
-		if (!appearanceEdit) form.append(descriptionLabel);
-		if (!conversation && !appearanceEdit) form.append(folderRow);
+		if (instructionsOnly) {
+			const intro = h(document, 'p', { className: 'ash-project-instructions-intro' },
+				localize('projects.instructionsIntro', 'Write the instructions and background for this project.'));
+			intro.id = generateUuid();
+			description.setAttribute('aria-label', instructionsLabel);
+			description.setAttribute('aria-describedby', intro.id);
+			form.append(intro, description);
+		} else {
+			form.append(nameGroup);
+			if (!appearanceEdit) form.append(h(document, 'label', {}, instructionsLabel, description));
+			if (!conversation && !appearanceEdit) form.append(folderRow);
+		}
 		form.append(feedback, conflicts);
 		let didSave = false;
 		const dialog = store.add(
 			createProjectFormDialog(
 				container,
-				appearanceEdit ? localize('projects.editAppearance', 'Edit project appearance')
-					: edit ? localize('projects.edit', 'Edit details')
-						: localize('projects.createTitle', 'Create a project'),
+				instructionsOnly ? localize('projects.setInstructions', 'Set project instructions')
+					: appearanceEdit ? localize('projects.editAppearance', 'Edit project appearance')
+						: edit ? localize('projects.edit', 'Edit details')
+							: localize('projects.createTitle', 'Create a project'),
 				form,
 				actions,
 				{
 					appearanceOnly: !!appearanceEdit,
+					instructionsOnly,
 					canClose: () => !name.disabled && !pickingFolder,
 					shouldConfirmDiscard: () => name.value !== (base?.name ?? initialName) ||
-						description.value !== (base?.description ?? initialDescription) ||
+						instructionsChanged() ||
 						!!chosenFolder || appearanceChanged() || unresolved.size > 0,
 				},
 			),
@@ -236,19 +243,20 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		const submit = store.add(
 			new Button(actions, {
 				...defaultButtonStyles,
-				label: edit
-					? localize('projects.save', 'Save changes')
-					: localize('projects.create', 'Create'),
+				label: instructionsOnly ? localize('projects.saveInstructions', 'Save instructions')
+					: edit ? localize('projects.save', 'Save changes')
+						: localize('projects.create', 'Create'),
 				presentation: 'primary',
 				type: 'submit',
-				enabled: !!appearanceEdit || !!name.value.trim(),
+				enabled: !instructionsOnly && (!!appearanceEdit || !!name.value.trim()),
 			}),
 		);
 		submit.domNode.setAttribute('form', form.id);
 		const updateSubmit = () => {
-			submit.enabled = !!name.value.trim() && !needsMerge && unresolved.size === 0;
+			submit.enabled = !needsMerge && unresolved.size === 0 && (instructionsOnly ? instructionsChanged() : !!name.value.trim());
 		};
 		store.add(addDisposableListener(name, 'input', updateSubmit));
+		if (instructionsOnly) store.add(addDisposableListener(description, 'input', updateSubmit));
 		const offerMerge = (): boolean => {
 			const latest = this.chatProjects.state.get().projects.find(item => item.id === base?.id);
 			if (!base || !latest || latest.revision === base.revision) {
@@ -271,7 +279,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			label: string,
 		): void => {
 			let draft = input.value;
-			if (draft.trim() === previous || draft.trim() === saved) {
+			const value = instructionsOnly ? draft : draft.trim();
+			const textAreaValue = (text: string) => input === description ? text.replace(/\r\n?/g, '\n') : text;
+			if (value === textAreaValue(previous) || value === textAreaValue(saved)) {
 				input.value = saved;
 				return;
 			}
@@ -362,7 +372,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					description,
 					base.description,
 					latest.description,
-					localize('projects.descriptionConflict', 'The project goals changed in both versions.'),
+					localize('projects.descriptionConflict', 'The project instructions changed in both versions.'),
 				);
 				// The dialog only adds a folder. Start with the latest materials so a
 				// concurrent addition or removal cannot be undone by the old draft.
@@ -394,7 +404,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			description.disabled = false;
 			folder.enabled = true;
 			updateSubmit();
-			(conflicts.querySelector('select') ?? name).focus();
+			(conflicts.querySelector('select') ?? (instructionsOnly ? description : name)).focus();
 		};
 		const id = generateUuid();
 		store.add(
@@ -411,7 +421,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					return;
 				}
 				if (
-					name.disabled || pickingFolder || !name.value.trim() ||
+					name.disabled || pickingFolder || (instructionsOnly ? !instructionsChanged() : !name.value.trim()) ||
 					this.chatProjects.state.get().busy ||
 					needsMerge ||
 					unresolved.size ||
@@ -424,7 +434,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				description.disabled = true;
 				folder.enabled = false;
 				if (appearance) appearance.enabled = false;
-				const details = { name: name.value.trim(), description: description.value.trim() };
+				const details = instructionsOnly
+					? { name: name.value, description: description.value }
+					: { name: name.value.trim(), description: description.value.trim() };
 				const result = conversation
 					? conversation.save(details).then(() => true, error => {
 						if (!store.isDisposed) feedback.textContent = toErrorMessage(error);
@@ -446,7 +458,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 						folder.enabled = true;
 						if (appearance) appearance.enabled = true;
 						updateSubmit();
-						if (!offerMerge() && getActiveElement(document) === document.body) name.focus();
+						if (!offerMerge() && getActiveElement(document) === document.body) (instructionsOnly ? description : name).focus();
 					}
 				});
 			}),
@@ -461,7 +473,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			}
 		});
 		if (appearanceEdit) appearance?.focus();
-		else name.focus();
+		else (instructionsOnly ? description : name).focus();
 	}
 
 	async showCodeProjectDialog(container: HTMLElement): Promise<void> {

@@ -1132,28 +1132,99 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			expect(emptyReads).toBe(1);
 		});
 
-		test(`shows and edits ChatGPT materials and goals in the shared Projects pane (${locale})`, async () => {
+		test(`renames a writable ChatGPT project from the breadcrumb (${locale})`, async () => {
 			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			await mockChatGPTRequests(page);
+			const id = 'g-p-rename';
+			const readOnlyId = 'g-p-read-only';
+			let name = 'Research';
+			let instructions = 'Saved instructions';
+			const writes: unknown[] = [];
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: {
+					items: [
+						{ gizmo: { id, display: { name } } },
+						{ gizmo: { id: readOnlyId, display: { name: 'Shared research' } } },
+					],
+					cursor: null,
+				},
+			}));
+			for (const projectId of [id, readOnlyId]) {
+				await page.route(`**/service/backend-api/gizmos/${projectId}*`, route => {
+					if (!new URL(route.request().url()).pathname.endsWith(projectId)) return route.fallback();
+					return route.fulfill({
+						json: {
+							gizmo: {
+								id: projectId, instructions, current_user_permission: { can_write: projectId === id },
+								display: { name: projectId === id ? name : 'Shared research', emoji: '🔬', theme: 'blue' },
+							},
+							files: [],
+						},
+					});
+				});
+			}
+			await page.route(`**/service/backend-api/projects/${id}`, route => {
+				expect(route.request().method()).toBe('PATCH');
+				const body = route.request().postDataJSON();
+				writes.push(body);
+				if (writes.length === 1) return route.fulfill({ status: 503 });
+				name = body.name;
+				return route.fulfill({ status: 204 });
+			});
+			await page.goto(`/chatgptNavigation.html?projects&locale=${locale}`);
+			const projects = page.locator('.ash-projects');
+			await projects.getByRole('button', { name: 'Research', exact: true }).click();
+			const breadcrumb = page.locator('.ash-projects-breadcrumb');
+			const rename = (name: string) => breadcrumb.getByRole('button', {
+				name: zh ? `重命名项目 ${name}` : `Rename project ${name}`, exact: true,
+			});
+			const input = breadcrumb.getByRole('textbox', { name: zh ? '项目名称' : 'Project name', exact: true });
+			await rename('Research').press('Enter');
+			await expect(input).toHaveValue('Research');
+			await input.fill('New research name');
+			await input.press('Enter');
+			await expect(projects.locator('.ash-projects-feedback')).toBeVisible();
+			await expect(input).toHaveValue('New research name');
+			await expect(input).toBeEditable();
+			instructions = 'Updated in ChatGPT';
+			await input.press('Enter');
+			await expect(rename('New research name')).toBeFocused();
+			await expect(page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'New research name', exact: true })).toBeVisible();
+			expect(writes).toEqual([
+				{ name, instructions: 'Saved instructions', emoji: '🔬', theme: 'blue' },
+				{ name, instructions: 'Updated in ChatGPT', emoji: '🔬', theme: 'blue' },
+			]);
+			await breadcrumb.getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
+			await projects.getByRole('button', { name: 'Shared research', exact: true }).click();
+			await expect(projects.locator('.ash-projects-description')).toHaveText('Updated in ChatGPT');
+			await expect(breadcrumb.getByRole('button', { name: 'Shared research', exact: true })).toBeDisabled();
+		});
+
+		test(`edits ChatGPT project instructions in the shared Ash editor (${locale})`, async () => {
+			const { page, info } = browserTests;
 			const zh = locale === 'zh-CN';
 			await mockChatGPTRequests(page);
 			const id = 'g-p-research';
 			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
 				json: { items: [{ gizmo: { id, display: { name: 'Research' } } }], cursor: null },
 			}));
-			let goals = 'Saved notes';
+			let instructions = 'Saved instructions\nUse concise examples.';
 			let projectFiles = [{ file_id: 'file-existing', name: 'Existing.txt' }];
 			let canWrite = true;
 			let reads = 0;
-			await page.route(`**/service/backend-api/gizmos/${id}*`, route => {
+			let holdDetails: Promise<void> | undefined;
+			await page.route(`**/service/backend-api/gizmos/${id}*`, async route => {
 				const url = new URL(route.request().url());
 				if (!url.pathname.endsWith(id)) return route.fallback();
 				if (++reads === 1) return route.fulfill({ status: 503 });
-				return route.fulfill({ json: { gizmo: { id, instructions: goals, current_user_permission: { can_write: canWrite }, display: { name: 'Research', emoji: '🔬', theme: 'blue' } }, files: projectFiles } });
+				if (holdDetails) await holdDetails;
+				return route.fulfill({ json: { gizmo: { id, instructions, current_user_permission: { can_write: canWrite }, display: { name: 'Research', emoji: '🔬', theme: 'blue' } }, files: projectFiles } });
 			});
 			await page.route(`**/service/backend-api/projects/${id}`, route => {
 				const body = route.request().postDataJSON();
-				expect(body).toEqual({ name: 'Research', instructions: 'New goals', emoji: '🔬', theme: 'blue' });
-				goals = body.instructions;
+				expect(body).toEqual({ name: 'Research', instructions: 'New instructions\nKeep examples short.', emoji: '🔬', theme: 'blue' });
+				instructions = body.instructions;
 				return route.fulfill({ status: 204 });
 			});
 			await page.route('**/service/backend-api/files', route => {
@@ -1189,14 +1260,24 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.goto(`/chatgptNavigation.html?projects&projectMaterials&locale=${locale}`);
 			const projects = page.locator('.ash-projects');
 			await projects.getByRole('button', { name: 'Research', exact: true }).click();
-			const materials = projects.getByRole('region', { name: zh ? '资料' : 'Materials' });
+			const materials = projects.getByRole('region', { name: zh ? '上下文' : 'Context', exact: true });
+			const guidance = projects.getByRole('region', { name: zh ? '指令' : 'Instructions', exact: true });
+			const editInstructions = guidance.getByRole('button', { name: zh ? '编辑指令' : 'Edit instructions', exact: true });
 			await materials.getByRole('button', { name: zh ? '重试' : 'Try again', exact: true }).press('Enter');
-			await expect(materials.getByText('Saved notes', { exact: true })).toBeVisible();
-			await materials.getByRole('button', { name: zh ? '编辑详情' : 'Edit details', exact: true }).press('Enter');
-			const dialog = page.getByRole('dialog');
-			await dialog.getByRole('textbox').nth(1).fill('New goals');
-			await dialog.getByRole('button', { name: zh ? '保存更改' : 'Save changes', exact: true }).click();
-			await expect(materials.getByText('New goals', { exact: true })).toBeVisible();
+			await expect(guidance.locator('.ash-projects-description')).toHaveText('Saved instructions\nUse concise examples.');
+			await editInstructions.press('Enter');
+			const dialog = page.getByRole('dialog', { name: zh ? '设置项目指令' : 'Set project instructions', exact: true });
+			const editor = dialog.getByRole('textbox', { name: zh ? '指令' : 'Instructions', exact: true });
+			const save = dialog.getByRole('button', { name: zh ? '保存指令' : 'Save instructions', exact: true });
+			await expect(dialog.getByRole('textbox')).toHaveCount(1);
+			await expect(editor).toBeFocused();
+			await expect(editor).toHaveValue('Saved instructions\nUse concise examples.');
+			await expect(save).toBeDisabled();
+			await page.screenshot({ path: info.outputPath(`project-instructions-${locale}.png`) });
+			await editor.fill('New instructions\nKeep examples short.');
+			await save.click();
+			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
+			await expect(editInstructions).toBeFocused();
 			const download = materials.getByRole('button', { name: zh ? '下载 Existing.txt' : 'Download Existing.txt', exact: true });
 			await download.click();
 			await expect.poll(() => downloaded).toBe(true);
@@ -1204,15 +1285,31 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true }).click();
 			await expect(materials.getByText('notes.txt', { exact: true })).toBeVisible();
 			await materials.getByRole('button', { name: zh ? '从项目中移除 Existing.txt' : 'Remove Existing.txt from project', exact: true }).click();
-			await dialog.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click();
+			const confirm = page.getByRole('dialog').filter({ hasText: zh ? '从此项目移除 Existing.txt？' : 'Remove Existing.txt from this project?' });
+			await confirm.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click();
 			await expect(download).toHaveCount(0);
-			await expect(materials.getByText('New goals', { exact: true })).toBeVisible();
+			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 			canWrite = false;
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await projects.getByRole('button', { name: 'Research', exact: true }).click();
 			await expect(materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true })).toHaveCount(0);
-			await expect(materials.getByRole('button', { name: zh ? '编辑详情' : 'Edit details', exact: true })).toHaveCount(0);
+			await expect(editInstructions).toHaveCount(0);
 			await expect(materials.getByRole('button', { name: zh ? '下载 notes.txt' : 'Download notes.txt', exact: true })).toBeVisible();
+
+			let releaseDetails!: () => void;
+			holdDetails = new Promise<void>(resolve => { releaseDetails = resolve; });
+			instructions = 'Updated on ChatGPT Web';
+			canWrite = true;
+			try {
+				await page.reload();
+				await projects.getByRole('button', { name: 'Research', exact: true }).click();
+				await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
+				await expect(editInstructions).toHaveCount(0);
+			} finally {
+				releaseDetails();
+			}
+			await expect(guidance.locator('.ash-projects-description')).toHaveText('Updated on ChatGPT Web');
+			await expect(editInstructions).toBeVisible();
 		});
 
 		test(`starts a new ChatGPT conversation from the current project (${locale})`, async () => {

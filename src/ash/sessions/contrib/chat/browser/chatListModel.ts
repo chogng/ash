@@ -18,7 +18,7 @@ import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWor
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogProjectOperations, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
@@ -75,7 +75,7 @@ export interface ProjectMaterialRow {
 	readonly name: string;
 	readonly kind: 'file' | 'folder';
 	readonly tooltip?: string;
-	readonly download?: boolean;
+	readonly download?: (target: URI) => Promise<void>;
 	readonly open?: () => Promise<void>;
 	readonly remove?: () => Promise<void>;
 }
@@ -87,7 +87,7 @@ export interface CatalogProjectDetails {
 		readonly materials: readonly ProjectMaterialRow[] | undefined;
 		readonly canEdit: boolean;
 	} | undefined>;
-	load(signal: AbortSignal): Promise<void>;
+	readonly load?: (signal: AbortSignal) => Promise<void>;
 	readonly addFiles?: (resources: readonly URI[]) => Promise<void>;
 }
 
@@ -272,6 +272,15 @@ export interface ChatListGroup {
 	readonly project?: ChatListProject;
 }
 
+export function getCatalogProjectRename(editDetails: ChatListProject['editDetails']): SessionsCatalogProjectOperations['rename'] {
+	if (!editDetails) return undefined;
+	return async (name, signal) => {
+		const editor = await editDetails(signal);
+		signal.throwIfAborted();
+		await editor.save({ ...editor.details, name });
+	};
+}
+
 export function getProjectSessionRows(entries: readonly ChatListEntry[], sessionIds: readonly string[], externalConversationIds?: readonly string[]): ChatListEntry[] {
 	const members = new Set(sessionIds);
 	const external = new Set(externalConversationIds);
@@ -443,7 +452,6 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		const rows = project.rows.map(entry => this.toRow(entry, destinations, project.key));
 		const current = this.membership.get(project.key);
 		const history = project.project?.history;
-		const editDetails = project.project?.editDetails;
 		const loading = history?.state === 'loading' || (current !== undefined && current.failed === undefined);
 		const retry = current?.failed ? () => {
 			this.membership.delete(project.key);
@@ -457,11 +465,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			localProject,
 			appearance: project.project?.preferenceKey ? this.projects.getCatalogProjectAppearance(project.project.preferenceKey) : undefined,
 			operations: {
-				rename: editDetails && (async (name, signal) => {
-					const editor = await editDetails(signal);
-					signal.throwIfAborted();
-					await editor.save({ ...editor.details, name });
-				}),
+				rename: getCatalogProjectRename(project.project?.editDetails),
 				archive: project.project?.archive,
 				remove: project.project?.remove,
 			},

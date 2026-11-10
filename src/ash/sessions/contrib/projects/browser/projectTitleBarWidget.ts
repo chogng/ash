@@ -24,7 +24,7 @@ import './media/projectTitleBarWidget.css';
 
 interface ProjectTitleRenameTarget {
 	readonly id: string;
-	readonly save: (name: string) => Promise<boolean>;
+	readonly save: (name: string, signal: AbortSignal) => Promise<boolean>;
 }
 
 interface ProjectBreadcrumbContent {
@@ -141,7 +141,8 @@ class ProjectTitleBarWidget extends ActionViewItem {
 		}));
 		nameButton.domNode.classList.add('ash-project-titlebar-name', 'ash-projects-breadcrumb-name');
 		nameButton.domNode.setAttribute('aria-current', 'page');
-		let edit: { target: ProjectTitleRenameTarget; originalName: string; saving: boolean; } | undefined;
+		let edit: { target: ProjectTitleRenameTarget; originalName: string; saving: boolean; controller: AbortController; } | undefined;
+		store.add(toDisposable(() => edit?.controller.abort()));
 		const input = renderInlineRenameInput(title, {
 			label: localize('projects.projectName', 'Project name'),
 			description: localize('projects.renameHint', 'Enter to save, Escape to cancel.'),
@@ -153,13 +154,15 @@ class ProjectTitleBarWidget extends ActionViewItem {
 		const beginRename = (): void => {
 			const content = readBreadcrumb();
 			if (!content?.rename || content.busy || edit) return;
-			edit = { target: content.rename, originalName: nameButton.label, saving: false };
+			edit = { target: content.rename, originalName: nameButton.label, saving: false, controller: new AbortController() };
 			showInlineRenameInput(input, edit.originalName);
 			nameButton.hidden = true;
 		};
 		const finishRename = (restoreFocus: boolean): void => {
 			if (!edit) return;
+			const { controller } = edit;
 			edit = undefined;
+			controller.abort();
 			input.hidden = true;
 			nameButton.hidden = !nameButton.label;
 			if (restoreFocus) nameButton.focus();
@@ -176,7 +179,7 @@ class ProjectTitleBarWidget extends ActionViewItem {
 			draft.saving = true;
 			input.readOnly = true;
 			try {
-				const saved = await draft.target.save(name);
+				const saved = await draft.target.save(name, draft.controller.signal);
 				if (edit !== draft || !input.isConnected) return;
 				if (saved) {
 					finishRename(getActiveElement(document) === input);

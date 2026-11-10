@@ -5,6 +5,8 @@ import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/co
 import { addDisposableListener, getActiveElement, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableValue } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -13,7 +15,7 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import type { Project } from '../../../../platform/projects/common/projectService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { getProjectSessionRows, groupChatList, IChatListCatalog, type CatalogProjectDetails, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
+import { getCatalogProjectRename, getProjectSessionRows, groupChatList, IChatListCatalog, type CatalogProjectDetails, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -54,6 +56,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const selected = this.projectGroups.read(reader).find(group => group.key === state.conversationProjectId);
 		const project = state.selected;
 		const loading = !!state.selectedId && !project && state.loading;
+		const details = selected?.project?.details;
+		const renameCatalogProject = !details || details.data.read(reader)?.canEdit
+			? getCatalogProjectRename(selected?.project?.editDetails)
+			: undefined;
 		return {
 			kind: 'breadcrumb',
 			name: selected?.title ?? project?.name ?? '',
@@ -62,7 +68,20 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			busy: state.busy,
 			showSeparator: !!(selected || project || loading),
 			catalogCurrent: !state.selectedId && !selected,
-			rename: project && { id: project.id, save: name => this.projects.update(project, name, project.description, project.materials) },
+			rename: project
+				? { id: project.id, save: name => this.projects.update(project, name, project.description, project.materials) }
+				: selected && renameCatalogProject ? {
+					id: details?.key ?? selected.key,
+					save: async (name, signal) => {
+						try {
+							await renameCatalogProject(name, signal);
+							return true;
+						} catch (error) {
+							if (!signal.aborted && !isCancellationError(error)) this.showError(toErrorMessage(error));
+							return false;
+						}
+					},
+				} : undefined,
 			open: () => {
 				const projectId = this.projects.state.get().conversationProjectId;
 				this.projects.showProjects();
@@ -147,10 +166,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const projectChats = state.selected
 				? getProjectSessionRows(snapshots.flatMap(snapshot => snapshot.entries), state.selected.sessionIds, state.selected.externalConversationIds) : [];
 			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined, projectChats, data, load?.key === details?.key ? load?.phase : undefined);
-			if (this.shown.read(reader) && details && load?.key !== details.key) {
+			if (this.shown.read(reader) && details?.load && load?.key !== details.key) {
 				this.projectActions.cancelPendingEdit();
 				this.loadCatalogDetails(details);
-			} else if (!details && load) {
+			} else if (!details?.load && load) {
 				this.catalogDetailsRequest.clear();
 				this.catalogDetailsLoad.set(undefined);
 				this.projectActions.cancelPendingEdit();
@@ -167,8 +186,22 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private showProjectDialog(edit?: ChatProjectEdit): void {
+		const instructionsProject = edit && 'instructionsOnly' in edit && edit.instructionsOnly
+			? this.body.querySelector<HTMLElement>('[data-project-detail]')?.dataset.projectDetail
+			: undefined;
 		this.projectDialogs.showChatProjectDialog(this.domNode, () => {
-			if (!this.isDisposed && this.isVisible()) this.focus();
+			if (this.isDisposed || !this.isVisible()) return;
+			if (instructionsProject) {
+				const current = this.body.querySelector<HTMLElement>('[data-project-detail]');
+				const trigger = current?.dataset.projectDetail === instructionsProject
+					? current.querySelector<HTMLButtonElement>('[data-project-control="instructions"]')
+					: undefined;
+				if (trigger) {
+					trigger.focus();
+					return;
+				}
+			}
+			this.focus();
 		}, edit);
 	}
 
@@ -225,6 +258,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private loadCatalogDetails(details: CatalogProjectDetails): void {
+		if (!details.load) return;
 		const controller = new AbortController();
 		this.catalogDetailsRequest.value = toDisposable(() => controller.abort());
 		this.catalogDetailsLoad.set({ key: details.key, phase: 'loading' });
@@ -297,7 +331,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		data: ReturnType<CatalogProjectDetails['data']['get']>, detailsPhase: 'loading' | 'loaded' | 'error' | undefined): void {
 		const document = this.domNode.ownerDocument;
 		const layout = this.body.querySelector<HTMLElement>('.ash-projects-detail') ?? h(document, 'div', { className: 'ash-projects-detail' });
+		const details = conversationProject?.details;
 		layout.dataset.projectDetail = id;
+		layout.classList.toggle('with-detail-card', !!(localProject || details));
 		const detailContent = layout.querySelector<HTMLElement>('.ash-projects-detail-content') ?? h(document, 'div', { className: 'ash-projects-detail-content' });
 		const overview = layout.querySelector<HTMLElement>('.ash-projects-overview') ?? h(document, 'section', { className: 'ash-projects-overview' });
 		overview.querySelector('.ash-projects-conversations')?.remove();
@@ -305,24 +341,25 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (overview.parentElement !== detailContent) detailContent.append(overview);
 		if (detailContent.parentElement !== layout) layout.append(detailContent);
 		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject);
-		layout.querySelector('.ash-projects-materials')?.remove();
-		const details = conversationProject?.details;
+		layout.querySelector('.ash-projects-detail-card')?.remove();
 		if (localProject) {
 			const materials = this.projectMaterials.renderLocal(document, localProject, this.projects.state.get().busy, this.content);
-			this.renderProjectTools(detailContent, materials, localProject.description, () => this.showProjectDialog({ project: localProject }));
+			detailContent.append(this.renderProjectDetailCard(materials, localProject.description,
+				() => this.showProjectDialog({ project: localProject, instructionsOnly: true })));
 		} else if (details) {
 			const failed = detailsPhase === 'error' || detailsPhase === 'loaded' && !data?.materials;
 			const materials = this.projectMaterials.render(document, {
 				rows: data?.materials,
 				addFiles: data?.canEdit && data.materials ? details.addFiles : undefined,
-				status: failed ? {
+				status: !details.load ? undefined : failed ? {
 					text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
-				} : data ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
+				} : data?.materials ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
 			}, this.content);
-			materials.dataset.catalogProjectMaterials = '';
 			const editDetails = conversationProject?.editDetails;
-			this.renderProjectTools(detailContent, materials, data?.description,
-				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails); } : undefined);
+			const card = this.renderProjectDetailCard(materials, data?.description,
+				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails, true); } : undefined);
+			card.dataset.catalogProjectMaterials = '';
+			detailContent.append(card);
 		}
 		if (layout.parentElement !== this.body) this.body.append(layout);
 	}
@@ -358,35 +395,41 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		input.setVisible(this.isVisible());
 	}
 
-	private renderProjectTools(detailContent: HTMLElement, materials: HTMLElement, description: string | undefined, edit: (() => void) | undefined): void {
-		const document = detailContent.ownerDocument;
+	private renderProjectDetailCard(
+		materials: HTMLElement,
+		description: string | undefined,
+		edit: (() => void) | undefined,
+	): HTMLElement {
+		const document = materials.ownerDocument;
+		const label = localize('projects.instructions', 'Instructions');
 		const heading = h(
 			document,
 			'div',
 			{ className: 'ash-projects-section-heading' },
-			h(document, 'h2', {}, localize('projects.goals', 'Project goals')),
+			h(document, 'h2', {}, label),
 		);
-		if (edit) this.button(
-			heading,
-			{
-				label: localize('projects.edit', 'Edit details'),
-				icon: Lxicon.edit,
+		if (edit) {
+			const editLabel = description
+				? localize('projects.editInstructions', 'Edit instructions')
+				: localize('projects.addInstructions', 'Add instructions');
+			this.button(heading, {
+				label: editLabel,
+				title: editLabel,
+				icon: description ? Lxicon.edit : Lxicon.add,
+				iconOnly: true,
 				onClick: edit,
-			},
-			'edit',
-		);
-		const goals = h(document, 'section', { className: 'ash-projects-goals' });
-		goals.append(heading);
-		if (description !== undefined) {
-			goals.append(h(
-				document,
-				'p',
-				{ className: 'ash-projects-description' },
-				description || localize('projects.noGoals', 'Add a description of what you want to achieve.'),
-			));
+			}, 'instructions');
 		}
-		materials.append(goals);
-		detailContent.append(materials);
+		const guidance = h(document, 'section', {
+			className: 'ash-projects-guidance', attributes: { 'aria-label': label },
+		}, heading);
+		if (description) {
+			guidance.append(h(document, 'p', { className: 'ash-projects-description' }, description));
+		} else if (description === '' && edit) {
+			guidance.append(h(document, 'p', { className: 'ash-projects-muted' },
+				localize('projects.noInstructions', 'Add instructions for this project.')));
+		}
+		return h(document, 'div', { className: 'ash-projects-detail-card' }, guidance, materials);
 	}
 
 	private renderDetailLoading(): void {
@@ -394,7 +437,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const placeholder = (className = '') =>
 			h(document, 'span', { className: `ash-projects-placeholder ${className}` });
 		const skeleton = h(document, 'div', {
-			className: 'ash-projects-skeleton ash-projects-detail',
+			className: 'ash-projects-skeleton ash-projects-detail with-detail-card',
 			attributes: { 'aria-hidden': 'true' },
 		});
 		const overview = h(
@@ -405,26 +448,22 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			h(
 				document,
 				'div',
-				{ className: 'ash-projects-description ash-projects-skeleton-lines' },
-				placeholder(),
-				placeholder(),
-				placeholder('ash-projects-skeleton-short'),
-			),
-		);
-		const materials = h(
-			document,
-			'div',
-			{ className: 'ash-projects-materials' },
-			placeholder('ash-projects-skeleton-section-title'),
-			h(
-				document,
-				'div',
 				{ className: 'ash-projects-skeleton-lines' },
 				placeholder(),
+				placeholder(),
 				placeholder('ash-projects-skeleton-short'),
 			),
 		);
-		skeleton.append(overview, materials);
+		const card = h(
+			document,
+			'div',
+			{ className: 'ash-projects-detail-card' },
+			h(document, 'div', { className: 'ash-projects-guidance ash-projects-skeleton-lines' },
+				placeholder('ash-projects-skeleton-section-title'), placeholder()),
+			h(document, 'div', { className: 'ash-projects-materials ash-projects-skeleton-lines' },
+				placeholder('ash-projects-skeleton-section-title'), placeholder(), placeholder('ash-projects-skeleton-short')),
+		);
+		skeleton.append(overview, card);
 		this.body.append(skeleton);
 	}
 
