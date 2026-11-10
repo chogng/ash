@@ -810,6 +810,59 @@ suite('chatTranscript browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Response code card keeps its editor actions reachable in ${locale}`, async () => {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			const source = 'printf "%s\\n" hello';
+			await page.goto(`/chatTranscript.html?codeCard&locale=${locale}`);
+			await page.evaluate(source => {
+				document.querySelector('main')!.style.width = '220px';
+				window.ashChatTranscriptIntegration.renderItems([{ id: 'reply', type: 'agentMessage', text: '```bash\n' + source + '\n```', transient: false }]);
+			}, source);
+			const card = page.locator('.ash-chat-code-block-card');
+			const toolbar = card.getByRole('toolbar', { name: zh ? '代码块 1 操作' : 'Code block 1 actions' });
+			const more = toolbar.getByRole('button', { name: zh ? '更多操作' : 'More Actions' });
+			const copy = toolbar.getByRole('button', { name: zh ? '复制' : 'Copy', exact: true });
+			await expect(card.locator('.ash-chat-code-block-language')).toHaveText('Bash');
+			await expect(toolbar.getByRole('button')).toHaveCount(2);
+			expect((await more.boundingBox())!.x).toBeLessThan((await copy.boundingBox())!.x);
+			expect((await more.boundingBox())!.y).toBe((await copy.boundingBox())!.y);
+			const icon = card.locator('.ash-chat-code-block-toolbar > .ash-icon');
+			const line = card.locator('.stanza-editor-line-text').first();
+			expect((await icon.boundingBox())!.x).toBe((await line.boundingBox())!.x);
+
+			await more.focus();
+			await more.press('ArrowRight');
+			await expect(copy).toBeFocused();
+			await copy.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(source);
+			await expect(copy.locator('[data-ash-icon-id="check"]')).toBeVisible();
+			await expect(copy).toBeFocused();
+			await copy.press('ArrowLeft');
+			await expect(more).toBeFocused();
+			await more.press('ArrowDown');
+			const menu = page.getByRole('menu');
+			await expect(menu.getByRole('menuitem', { name: zh ? '应用到编辑器' : 'Apply to editor' })).toBeDisabled();
+			await expect(menu.getByRole('menuitem', { name: zh ? '插入到光标处' : 'Insert at cursor' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(menu).toHaveCount(0);
+			await expect(more).toBeFocused();
+			await expect(copy.locator('[data-ash-icon-id="copy"]')).toBeVisible();
+			await more.press('Enter');
+			await menu.getByRole('menuitem', { name: zh ? '在新文件中打开' : 'Open in new file' }).click();
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state())).toMatchObject({ file: source, resource: expect.stringContaining('untitled:') });
+
+			const editor = card.locator('.stanza-editor');
+			for (const palette of ['light', 'dark', 'hc'] as const) {
+				await page.evaluate(value => window.ashChatTranscriptIntegration.setTheme(value), palette);
+				const surface = await card.evaluate(element => getComputedStyle(element).backgroundColor);
+				await expect(editor).toHaveCSS('background-color', surface);
+				await expect(card).toHaveCSS('border-top-width', '1px');
+			}
+		});
+	}
+
 	test('Response code blocks preserve nodes and selections through wrapping and theme updates and stay read-only', async function () {
 		const { page } = browserTests;
 
@@ -843,12 +896,12 @@ suite('chatTranscript browser component', () => {
 	test('Response code blocks cap their viewport while copying the complete long source', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/chatTranscript.html');
+		await page.goto('/chatTranscript.html?codeCard');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setCodeLineHeight(24));
 		const code = await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCode());
 		const editor = page.locator('.ash-chat-code-block-editor');
 		await expect.poll(() => editor.evaluate(element => element.getBoundingClientRect().height)).toBe(496);
-		await page.locator('.ash-chat-code-block').getByRole('button', { name: 'Copy', exact: true }).click();
+		await page.locator('.ash-chat-code-block-card').getByRole('button', { name: 'Copy', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(code);
 	});
 

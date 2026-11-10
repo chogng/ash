@@ -22,7 +22,8 @@ import { toPortableMarkdown } from '../widget/chatClipboard.js';
 
 // Single-host owners retain the established local address namespace.
 const connectionAuthority = 'local';
-const CopyItemActionId = 'workbench.action.chat.copyItem';
+export const CopyItemActionId = 'workbench.action.chat.copyItem';
+
 const copyFeedbackDuration = 1200;
 
 class ChatCopyFeedback extends Disposable {

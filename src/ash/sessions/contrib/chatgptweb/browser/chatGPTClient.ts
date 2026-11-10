@@ -839,6 +839,23 @@ function readEditableMessage(message: Record<string, unknown>): { text: string; 
 	return text.trim() ? { text, files: [...files.values()] } : undefined;
 }
 
+/** History can describe one upload in both the content and attachment metadata. */
+export function mergeChatGPTResources(resources: readonly ChatGPTResource[]): ChatGPTResource[] {
+	const merged = new Map<string, ChatGPTResource>();
+	for (const resource of resources) {
+		const key = resource.uri.replace(/^sediment:\/\//u, 'file-service://');
+		const previous = merged.get(key);
+		if (!previous) {
+			merged.set(key, resource);
+		} else if (previous.kind === 'image' || resource.kind === 'image') {
+			// Keep the content pointer's identity and prefer the attachment's file metadata.
+			const generic = resource.name === localize('sessions.chatgpt.media', 'Media') || resource.name === localize('sessions.chatgpt.file', 'File');
+			merged.set(key, { ...previous, kind: 'image', name: generic ? previous.name : resource.name, mimeType: resource.mimeType ?? previous.mimeType });
+		}
+	}
+	return [...merged.values()];
+}
+
 function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {
 	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant', 'tool'].includes(value.author.role as string)
 		|| !isRecord(value.content)) { return undefined; }
@@ -871,26 +888,31 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		const name = ['name', 'file_name', 'title', 'alt'].map(key => part[key]).find(value => typeof value === 'string');
 		const mimeType = typeof part.mime_type === 'string' ? part.mime_type : typeof part.mimeType === 'string' ? part.mimeType : typeof name === 'string' ? getMediaOrTextMime(name) : undefined;
 		const type = typeof part.content_type === 'string' ? part.content_type : mimeType ?? '';
-		const kind = /image/u.test(type) ? 'image' : /audio/u.test(type) ? 'audio' : /video/u.test(type) ? 'video' : mimeType === 'text/html' ? 'html' : 'document';
+		const kind = /image/u.test(type) || mimeType?.startsWith('image/') ? 'image' : /audio/u.test(type) ? 'audio' : /video/u.test(type) ? 'video' : mimeType === 'text/html' ? 'html' : 'document';
 		return { uri, kind, name: typeof name === 'string' ? name : kind === 'document' ? localize('sessions.chatgpt.file', 'File') : localize('sessions.chatgpt.media', 'Media'), mimeType };
 	};
 	const literal = (text: string): string => escapeMarkdownSyntaxTokens(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-	const partText = (part: unknown): string => {
+	const user = value.author.role === 'user';
+	const addResource = (resource: ChatGPTResource): string | undefined => {
+		resources.push(resource);
+		return user && resource.kind === 'image' ? undefined : literal(resource.name);
+	};
+	const partText = (part: unknown): string | undefined => {
 		if (typeof part === 'string') { return part; }
 		if (!isRecord(part)) { return part == null ? '' : fallback; }
 		// Keep mixed text/media parts in source order. Selecting only string parts
 		// used to silently discard an image whenever that same message had a caption.
 		if (['text', 'audio_transcription', 'text_audio'].includes(part.content_type as string) && typeof part.text === 'string') { return part.text; }
 		const resource = resourcePart(part);
-		if (resource) { resources.push(resource); return literal(resource.name); }
+		if (resource) return addResource(resource);
 		for (const key of ['audio', 'video', 'image']) {
-			if (isRecord(part[key])) { const nested = resourcePart({ content_type: key, ...part[key] }); if (nested) { resources.push(nested); return literal(nested.name); } }
+			if (isRecord(part[key])) { const nested = resourcePart({ content_type: key, ...part[key] }); if (nested) return addResource(nested); }
 		}
 		const description = ['text', 'title', 'alt', 'name'].flatMap(key => typeof part[key] === 'string' ? [literal(part[key])] : []).join('\n');
 		return [description, fallback].filter(Boolean).join('\n\n');
 	};
 	let text: string;
-	if (Array.isArray(value.content.parts)) { text = value.content.parts.map(partText).join('\n'); }
+	if (Array.isArray(value.content.parts)) { text = value.content.parts.map(partText).filter(part => part !== undefined).join('\n'); }
 	else if (typeof value.content.text === 'string') {
 		const body = value.content.text;
 		// Code content uses a different web payload shape. Quote it instead of
@@ -940,7 +962,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		...(edit && { editableText: edit.text }),
 		...(isRecord(value.metadata) && value.metadata.has_versions === true && { hasVersions: true }),
 		...(timestamp !== undefined && Number.isFinite(new Date(timestamp).getTime()) ? { timestamp } : {}),
-		...(resources.length ? { resources } : {}), ...(references.length ? { references } : {})
+		...(resources.length ? { resources: mergeChatGPTResources(resources) } : {}), ...(references.length ? { references } : {})
 	};
 }
 

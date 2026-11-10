@@ -44,6 +44,18 @@
 	--ash-font-family: var(--ash-system-font-family);
 }
 
+.ash-sessions-window .ash-chat-sent-image-thumbnails:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--ash-spacing-size40);
+	margin-block-end: var(--ash-spacing-size40);
+}
+
+.ash-sessions-window .ash-copy-action-succeeded .ash-icon-check {
+	color: var(--ash-success-foreground);
+}
+
 .ash-sessions-window .ash-workbench-sidebar {
 	--ash-toolbar-actionSize: var(--ash-spacing-size240);
 	--ash-sessions-sidebar-item-inset: var(--ash-spacing-size40);

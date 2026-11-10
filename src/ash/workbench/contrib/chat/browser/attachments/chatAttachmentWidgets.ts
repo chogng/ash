@@ -5,13 +5,10 @@ import { OpenSettingsCommandId } from '../../../preferences/common/preferences.j
 import './chatAttachmentWidgets.css';
 import { h, addDisposableListener, getWindow } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { Separator, type IAction } from '../../../../../base/common/actions.js';
-import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
-import { MenuActionViewItem, type MenuActionViewItemOptions } from '../../../../../base/browser/ui/menu/menu.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { getNLSLanguage, localize } from '../../../../../nls.js';
-import { IOpenerService, type IImageOpeningApplication, type ImageOpenExtension } from '../../../../../platform/opener/common/opener.js';
+import { localize } from '../../../../../nls.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
@@ -21,7 +18,7 @@ import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../../files/browser/fileConsta
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { FOCUS_SEARCH_COMMAND_ID } from '../../../search/common/constants.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
-import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../../../../base/browser/ui/contextview/contextview.js';
+import { ContextViewFocusRestore } from '../../../../../base/browser/ui/contextview/contextview.js';
 import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IResourceIconRenderer } from '../../../../browser/labels.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -34,13 +31,11 @@ import { isDarkColorScheme } from '../../../../../platform/theme/common/theme.js
 import { renderMarkdown } from '../../../../../base/browser/markdownRenderer.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { cancelOnDispose, type CancellationToken } from '../../../../../base/common/cancellation.js';
-import { SCMHistoryItemUri } from '../../../scm/common/history.js';
 import type { Icon } from '../../../../../base/common/icon.js';
+import { SCMHistoryItemUri } from '../../../scm/common/history.js';
 import type { IChatAttachmentWidgetInstance } from './chatAttachmentWidgetRegistry.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
-import { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
-import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import {
 	ResourceContext, ResourceSchemeContext, ResourceSetContext, ResourcePathContext,
 	ResourceFilenameContext, ResourceDirnameContext, ResourceExtensionContext, MultipleEditorsSelectedInGroupContext,
@@ -51,14 +46,8 @@ import { isRemoteResource } from '../../../../../platform/remote/common/remote.j
 import { basename, dirname } from '../../../../../base/common/resources.js';
 import { extname } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { ImagePreviewPopup, type IImagePreviewAnnotationTarget } from '../../../mediaPreview/browser/imagePreviewPopup.js';
 import { decodeBase64 } from '../../../../../base/common/buffer.js';
-import { ImageViewer, type ImageViewerScale } from '../../../mediaPreview/browser/imageViewer.js';
-import { mediaImageFileName, saveMediaImageAs } from '../../../mediaPreview/browser/mediaPreviewSaveAs.js';
-import { IHostService } from '../../../../services/host/browser/host.js';
-import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
-import { encodeImageBlobAsPng } from '../../../mediaPreview/browser/imageEncoder.js';
-import { ImageAnnotation } from '../../../mediaPreview/browser/imageAnnotation.js';
-import { isCancellationError } from '../../../../../base/common/errors.js';
 
 /** Generic sources keep their original navigation; source-less contexts expose their saved-content intent. */
 export class DefaultChatAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
@@ -540,11 +529,7 @@ interface ImageAttachment {
 	resolve(): Promise<{ readonly content: Blob | string | undefined; }>;
 }
 
-export interface IChatImageAnnotationTarget {
-	readonly signal: AbortSignal;
-	attach(file: File, signal: AbortSignal): Promise<void>;
-	focus(): void;
-}
+export type IChatImageAnnotationTarget = IImagePreviewAnnotationTarget;
 
 /** Displays the image supplied by the attachment owner in either input presentation. */
 export class ImageAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
@@ -560,7 +545,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 
 	constructor(
 		attachment: ImageAttachment,
-		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; imagePresentation?: 'inline' | 'thumbnail'; imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined; },
+		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; imagePresentation?: 'inline' | 'thumbnail'; allowProviderImageUrls?: boolean; imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined; },
 		container: HTMLElement,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -603,10 +588,14 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		let imageContent: Blob | string | undefined;
 		const open = () => {
 			if (this.isDisposed || !source.enabled || !imageContent) return;
-			const image = typeof imageContent === 'string' ? imageDataUrlToBlob(imageContent) : imageContent;
+			const image = typeof imageContent === 'string'
+				? imageContent.startsWith('data:') ? imageDataUrlToBlob(imageContent) : undefined
+				: imageContent;
 			const resources = new DisposableStore();
 			this.preview.value = resources;
-			const preview = instantiation.createInstance(ImageAttachmentPreview, attachment, image, thumbnail.src, source.domNode, resources, options.imageAnnotationTarget?.(),
+			source.domNode.focus({ preventScroll: true });
+			const preview = instantiation.createInstance(ImagePreviewPopup,
+				{ name: attachment.name, blob: image, url: thumbnail.src }, source.domNode, resources, options.imageAnnotationTarget?.(),
 				() => { if (this.preview.value === resources) this.preview.clear(); });
 			if (preview.show()) this.opened.fire();
 			else this.preview.clear();
@@ -653,7 +642,9 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		}));
 		void attachment.resolve().then(({ content }) => {
 			if (this.isDisposed) return;
-			if (!content || typeof content === 'string' && !/^data:image\/(png|jpeg|gif|webp);base64,/u.test(content)) { unavailable(); return; }
+			if (!content || typeof content === 'string'
+				&& !/^data:image\/(png|jpeg|gif|webp);base64,/u.test(content)
+				&& !(options.allowProviderImageUrls && /^(?:https?:\/\/|data:image\/svg\+xml;base64,)/iu.test(content))) { unavailable(); return; }
 			imageContent = content;
 			// Captured bytes can outlive their original source. A data URL alone does not
 			// establish that the browser can display them; native loading gates preview.
@@ -676,6 +667,8 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		this.element.classList.toggle('pending', pending);
 		if (this.thumbnailRemove) this.thumbnailRemove.enabled = !readOnly;
 	}
+
+	closePreview(): void { this.preview.clear(); }
 }
 
 /** Owns frozen terminal rendering and the optional action back to its original terminal. */
@@ -857,300 +850,6 @@ function wireAttachmentActions(
 function imageDataUrlToBlob(source: string): Blob {
 	const dataStart = source.indexOf(',') + 1;
 	return new Blob([new Uint8Array(decodeBase64(source.slice(dataStart)).buffer)], { type: source.slice(5, source.indexOf(';')) });
-}
-
-const nativeImageFormats = new Map<string, ImageOpenExtension>([
-	['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/gif', 'gif'], ['image/webp', 'webp'],
-]);
-
-class ImageApplicationMenuItem extends MenuActionViewItem {
-	constructor(action: IAction, options: MenuActionViewItemOptions, private readonly appIcon: string) {
-		super(action, options);
-	}
-
-	override render(container: HTMLElement): void {
-		super.render(container);
-		this.iconSlot?.append(h(container.ownerDocument, 'img', {
-			className: 'ash-chat-image-open-app-icon',
-			properties: { src: this.appIcon, alt: '', draggable: false },
-		}));
-	}
-}
-
-class ImageOpenActionViewItem extends DropdownWithPrimaryActionViewItem {
-	private iconSlot: HTMLElement | undefined;
-
-	constructor(
-		private readonly getApplication: () => IImageOpeningApplication | null | undefined,
-		...args: ConstructorParameters<typeof DropdownWithPrimaryActionViewItem>
-	) {
-		super(...args);
-	}
-
-	override render(container: HTMLElement): void {
-		super.render(container);
-		const button = this.primaryButton!;
-		this.iconSlot = h(button.ownerDocument, 'span', {
-			className: 'ash-chat-image-open-app-icon-slot',
-			attributes: { 'aria-hidden': 'true' },
-		});
-		button.prepend(this.iconSlot);
-		this.refreshApplication();
-	}
-
-	refreshApplication(): void {
-		const slot = this.iconSlot;
-		if (this.isDisposed || !slot || !this.primaryButton) return;
-		const application = this.getApplication();
-		this.primaryButton.setAttribute('aria-label', application
-			? localize('chat.context.openWithImageApp', 'Open with {0}', application.name)
-			: this.action.label);
-		slot.replaceChildren();
-		// Leave the slot empty while discovering the default application.
-		if (application === undefined) return;
-		if (!application?.icon) {
-			appendIcon(Lxicon.openInProduct, slot);
-			return;
-		}
-		const icon = h(slot.ownerDocument, 'img', {
-			className: 'ash-chat-image-open-app-icon',
-			properties: { src: application.icon, alt: '', draggable: false, hidden: true },
-		});
-		slot.append(icon);
-		void icon.decode().then(() => {
-			if (!this.isDisposed && icon.parentElement === slot) icon.hidden = false;
-		}, () => {
-			if (this.isDisposed || icon.parentElement !== slot) return;
-			icon.remove();
-			appendIcon(Lxicon.openInProduct, slot);
-		});
-	}
-}
-
-class ImageAttachmentPreview {
-	private readonly frame: ReturnType<typeof createAttachmentPreview>;
-
-	constructor(
-		attachment: ImageAttachment,
-		image: Blob,
-		src: string,
-		anchor: HTMLElement,
-		resources: DisposableStore,
-		target: IChatImageAnnotationTarget | undefined,
-		onHide: () => void,
-		@IContextViewService contextViews: IContextViewService,
-		@IContextMenuService menus: IContextMenuService,
-		@IInstantiationService instantiation: IInstantiationService,
-		@INotificationService notifications: INotificationService,
-		@IHostService host: IHostService,
-		@IWebWorkerService workers: IWebWorkerService,
-	) {
-		const frame = this.frame = createAttachmentPreview(attachment, anchor, contextViews, resources, {
-			className: 'ash-chat-image-reference-preview',
-			label: localize('chat.context.previewImage', 'Preview {0}', attachment.name),
-			closeLabel: localize('chat.context.closeImagePreview', 'Close image preview'),
-		}, onHide);
-		const document = anchor.ownerDocument;
-		const viewport = h(document, 'div', { className: 'ash-chat-image-reference-viewport' });
-		frame.content.append(viewport);
-		const annotation = target && resources.add(new ImageAnnotation(document, src));
-		// The dialog and the viewer's context menu use the same popup host.
-		const viewer = resources.add(instantiation.createInstance(ImageViewer, viewport, { contextMenu: false, overlay: annotation?.overlay }));
-		const lifetime = new AbortController();
-		resources.add(toDisposable(() => lifetime.abort()));
-		if (target) resources.add(addDisposableListener(target.signal, 'abort', () => contextViews.hide()));
-		const read = async () => new Uint8Array(await image.arrayBuffer());
-		const name = mediaImageFileName(attachment.name, image.type);
-		const actions = h(document, 'div', { className: 'ash-chat-image-reference-actions' });
-		frame.header.insertBefore(actions, frame.header.lastElementChild);
-		const reportError = (error: unknown) => {
-			if (!lifetime.signal.aborted && !isCancellationError(error)) notifications.error(error instanceof Error ? error : String(error));
-		};
-		const zoomId = 'imagePreview.zoom';
-		const openId = 'imagePreview.openExternal';
-		const selectZoom = localize('media.image.selectZoom', 'Select image zoom level');
-		const percent = new Intl.NumberFormat(getNLSLanguage(), { style: 'percent' });
-		const zoomToFit = localize('chat.context.zoomToFit', 'Zoom to fit');
-		let zoomLabel = selectZoom;
-		let zoomItem: DropdownMenuActionViewItem | undefined;
-		const updateZoomLabel = () => zoomItem?.setLabel(zoomLabel, localize('chat.context.imageZoomValue', 'Zoom: {0}', zoomLabel));
-		const openFormat = nativeImageFormats.get(image.type);
-		const openImage = host.openImage?.bind(host);
-		const listApps = host.listImageOpeningApplications?.bind(host);
-		let openItem: ImageOpenActionViewItem | undefined;
-		let selectedApp: IImageOpeningApplication | undefined;
-		let defaultApp: IImageOpeningApplication | null | undefined;
-		const applications = listApps?.(openFormat ?? 'png').catch(() => []).then(apps => {
-			const systemDefault = apps.find(app => app.isDefault);
-			defaultApp = systemDefault ?? null;
-			if (!lifetime.signal.aborted) openItem?.refreshApplication();
-			return systemDefault ? [systemDefault, ...apps.filter(app => app.id !== systemDefault.id)] : apps;
-		});
-		const open = async (applicationId?: string) => {
-			try { await openImage?.(await (openFormat ? read() : encodeImageBlobAsPng(image, document, workers)), applicationId); }
-			catch (error) { throw new Error(localize('chat.context.openFailed', 'Could not open {0}: {1}', name, String(error)), { cause: error }); }
-		};
-		const selectApp = (application: IImageOpeningApplication | undefined) => {
-			selectedApp = application;
-			openItem?.refreshApplication();
-		};
-		const chooseApp = localize('chat.context.chooseImageApp', 'Choose image app');
-		const openDropdown: IAction = { id: 'imagePreview.chooseApp', label: chooseApp, tooltip: chooseApp, enabled: true, run: () => { } };
-		const toolbar = resources.add(new WorkbenchToolBar(actions, menus, {
-			ariaLabel: localize('chat.context.imagePreviewActions', 'Image preview actions'),
-			tabNavigation: 'each-action',
-			actionViewItemProvider: (action, options) => {
-				if (action.id === zoomId) {
-					return zoomItem = new DropdownMenuActionViewItem(action, () => {
-						const selected = viewer.getViewState().scale;
-						const zoomAction = (scale: ImageViewerScale, label: string): IAction => ({
-							id: `imagePreview.zoom.${scale}`, label, tooltip: '', enabled: true,
-							checked: selected === scale, run: () => viewer.setScale(scale),
-						});
-						return [...[0.25, 0.5, 1, 1.5, 2].map(scale => zoomAction(scale, percent.format(scale))),
-						new Separator(), zoomAction('fit', zoomToFit)];
-					}, {
-						showContextMenu: delegate => menus.showContextMenu({
-							...delegate, anchorPosition: AnchorPosition.Below, gap: 4,
-							getMenuClassName: () => 'ash-chat-image-preview-menu',
-							iconPlacement: 'trailing', getCheckedActionsRepresentation: () => 'radio',
-						}),
-					}, options, () => ({ anchorAlignment: AnchorAlignment.Right }));
-				}
-				if (action.id === openId && applications) {
-					// The provider supplies the actual menu actions once app discovery finishes.
-					return openItem = new ImageOpenActionViewItem(() => selectedApp ?? defaultApp, action, openDropdown, [openDropdown], {
-						showContextMenu: delegate => {
-							const pending = delegate.cancellationToken?.onCancellationRequested(() => delegate.onHide?.(true));
-							void applications.then(apps => {
-								pending?.dispose();
-								if (delegate.cancellationToken?.isCancellationRequested) return;
-								const icons = new Map<string, string>();
-								const selectedId = (selectedApp ?? defaultApp)?.id;
-								const appActions = apps.map((application): IAction => {
-									const id = `imagePreview.open.${application.id}`;
-									if (application.icon) icons.set(id, application.icon);
-									return {
-										id, label: application.name, tooltip: '', enabled: true,
-										icon: application.icon ? undefined : Lxicon.openInProduct,
-										checked: selectedId === application.id,
-										run: () => selectApp(application.isDefault ? undefined : application),
-									};
-								});
-								if (!appActions.length) {
-									appActions.push({
-										id: 'imagePreview.noApps', label: localize('chat.context.noImageApps', 'No compatible applications'),
-										tooltip: '', enabled: false, run: () => { },
-									});
-								}
-								menus.showContextMenu({
-									...delegate, anchorPosition: AnchorPosition.Below, gap: 4,
-									anchorAlignment: AnchorAlignment.Right,
-									getMenuClassName: () => 'ash-chat-image-preview-menu',
-									iconPlacement: 'leading-with-trailing-check', getCheckedActionsRepresentation: () => 'radio',
-									getActions: () => appActions,
-									getActionViewItem: (action, options) => {
-										const icon = icons.get(action.id);
-										return icon ? new ImageApplicationMenuItem(action, options, icon) : undefined;
-									},
-								});
-							}).catch(error => {
-								pending?.dispose();
-								delegate.onHide?.(true);
-								reportError(error);
-							});
-						},
-					}, options);
-				}
-				return undefined;
-			},
-		}));
-		resources.add(toolbar.actionRunner.onDidRun(({ error }) => { if (error !== undefined) reportError(error); }));
-		resources.add(viewer.onDidChangeDisplayScale(scale => {
-			const label = percent.format(scale);
-			if (label !== zoomLabel) {
-				zoomLabel = label;
-				updateZoomLabel();
-			}
-		}));
-		const action = (id: string, label: string, icon: Icon | undefined, run: () => void | Promise<void>): IAction =>
-			({ id, label, tooltip: label, icon, enabled: true, run });
-		const zoom: IAction[] = [{ id: zoomId, get label() { return zoomLabel; }, tooltip: '', enabled: true, run: () => { } }];
-		resources.add(viewer.onDidFailCopy(reportError));
-		const save = action('imagePreview.save', localize('chat.context.saveImage', 'Save image'), Lxicon.download,
-			() => instantiation.invokeFunction(saveMediaImageAs, image, name, document));
-		const fileActions = [save];
-		if (openImage) fileActions.push(action(openId, localize('chat.context.openImage', 'Open'), applications ? undefined : Lxicon.openInProduct, () => open(selectedApp?.id)));
-		const previewActions = [...zoom, ...fileActions];
-		const loadingActions = [...zoom.map(item => ({ ...item, enabled: false })), ...fileActions];
-		if (annotation && target) {
-			let editing = false;
-			let busy = false;
-			const annotationActions = h(document, 'div', { className: 'ash-chat-image-annotation-actions' });
-			annotationActions.hidden = true;
-			actions.append(annotationActions);
-			const button = (label: string, run: () => void | Promise<void>, presentation: 'quiet' | 'primary' = 'quiet'): Button =>
-				resources.add(new Button(annotationActions, {
-					...defaultButtonStyles, label, title: label, size: 'small', presentation,
-					onClick: () => { void Promise.resolve().then(run).catch(reportError); },
-				}));
-			const toggle = (active: boolean) => {
-				editing = active;
-				toolbar.setActions(active ? zoom : previewActions);
-				annotationActions.hidden = !active;
-				update();
-			};
-			const update = () => {
-				undo.enabled = editing && annotation.hasStrokes && !busy;
-				done.enabled = undo.enabled;
-				cancel.enabled = !busy;
-			};
-			const draw = action('imagePreview.annotate', localize('chat.image.annotate', 'Annotate image'), Lxicon.edit, () => {
-				if (!viewer.naturalSize) return;
-				annotation.start(viewer.naturalSize);
-				toggle(true);
-				viewer.domNode.focus();
-			});
-			const undo = button(localize('chat.image.undoStroke', 'Undo stroke'), () => annotation.undo());
-			const cancel = button(localize('chat.image.cancelAnnotation', 'Cancel annotation'), () => {
-				annotation.clear();
-				toggle(false);
-				toolbar.focus(previewActions.indexOf(draw));
-			});
-			const done = button(localize('chat.image.doneAnnotating', 'Done annotating'), async () => {
-				if (busy || !annotation.hasStrokes) return;
-				busy = true;
-				annotation.overlay.style.pointerEvents = 'none';
-				update();
-				try {
-					const blob = await annotation.renderPng(lifetime.signal);
-					const fileName = `${name.slice(0, name.length - extname(name).length)}-annotated.png`;
-					await target.attach(new (getWindow(anchor).File)([blob], fileName, { type: 'image/png' }), lifetime.signal);
-					if (!lifetime.signal.aborted) contextViews.hide();
-					target.focus();
-				} finally {
-					if (!lifetime.signal.aborted) {
-						busy = false;
-						annotation.overlay.style.pointerEvents = '';
-						update();
-					}
-				}
-			}, 'primary');
-			previewActions.push(draw);
-			loadingActions.push({ ...draw, enabled: false });
-			update();
-			resources.add(annotation.onDidChange(update));
-		}
-		toolbar.setActions(loadingActions);
-		void viewer.setSource(src, { alt: attachment.name, data: { mimeType: image.type, read } }).then(loaded => {
-			if (loaded && !lifetime.signal.aborted) {
-				toolbar.setActions(previewActions);
-				updateZoomLabel();
-			}
-		}).catch(reportError);
-	}
-
-	show(): boolean { return this.frame.show(); }
 }
 
 /** Dialog chrome is shared; each widget owns its content, pending work and visible lifetime. */

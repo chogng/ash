@@ -14,7 +14,7 @@ import { modelRefIdentity } from '../../../../workbench/services/chat/common/mod
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
-import { getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
+import { getChatCodeBlockCardAccessibilityHelp, getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
 import { getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
@@ -257,7 +257,8 @@ function registerAshChatAccessibility(): void {
 					() => type === AccessibleViewType.Help
 						? localize('sessions.chat.ashAccessibilityHelp', 'Ash Chat has its own conversation history and drafts. Use Tab to reach the model picker and Enter to open it. In an unsent draft, selecting a ChatGPT model opens the ChatGPT draft. Enter sends a message, Shift+Enter inserts a line break, and Stop interrupts a reply. Open Accessible View to read the transcript. The Chat sidebar opens saved conversations. New starts a new draft.') + '\n\n' + localize({ bundle: 'ash.sessions', key: 'sessions.workspace.chatMenuHelp' }, 'For a saved conversation without a workspace, focus it in the sidebar and press Shift+F10, then choose Set Workspace. The input footer shows the bound folder. Once a folder is set, choose Continue in Code from the same menu to open the conversation and its history in Code.')
 						+ '\n\n' + getSessionsListGroupingHelp()
-						+ '\n\n' + getChatRequestAccessibilityHelp()
+						+ '\n\n' + getChatRequestAccessibilityHelp(true)
+						+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()
 						+ '\n\n' + localize('sessions.chat.versionsHelp', 'For a conversation with edits, open More actions on its sidebar row and choose Conversation versions. Use Right Arrow to open the submenu and Enter to open a version.')
 						+ '\n\n' + localize('sessions.titlebar.ashChatHelp', 'For a saved chat, focus its title and press Enter to rename it. Use More Sessions Actions beside the title to pin, archive, or delete it. Share at the right of the title bar asks for confirmation before creating and copying a link to the conversation text.')
 						: model.items.filter(item => !item.transient).map(item => item.text).filter(Boolean).join('\n\n'),

@@ -19,8 +19,8 @@ declare global {
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
-async function installService(application: ElectronApplication, holdInitialization = false): Promise<void> {
-	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization }) => {
+async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix = '', historyImage = false): Promise<void> {
+	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage }) => {
 		const fs = process.getBuiltinModule('fs/promises');
 		const path = process.getBuiltinModule('path');
 		const home = path.join(process.env.HOME!, '.codex');
@@ -93,6 +93,9 @@ async function installService(application: ElectronApplication, holdInitializati
 					return new Response(null, { status: 204 });
 				}
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
+				if (historyImage && url.pathname === '/backend-api/files/file_diagram/download') {
+					return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#396da8"/></svg>', { headers: { 'Content-Type': 'image/svg+xml' } });
+				}
 				if (url.pathname === '/backend-api/conversations') { recentHistoryRequests++; }
 				if (offline) { return new Response(null, { status: 503 }); }
 				if (url.pathname.endsWith('/files') && init?.method === 'POST') {
@@ -168,10 +171,19 @@ async function installService(application: ElectronApplication, holdInitializati
 				}
 				if (url.pathname.includes('/conversation/history-')) {
 					const first = url.pathname.endsWith('history-one');
+					const question = historyImage && first ? {
+						...message('question', 'user', 'History question'),
+						content: {
+							content_type: 'multimodal_text', parts: [
+								{ content_type: 'image_asset_pointer', asset_pointer: 'sediment://file_diagram', width: 80, height: 40 }, 'History question',
+							]
+						},
+						metadata: { attachments: [{ id: 'file_diagram', name: 'diagram.svg', mime_type: 'image/svg+xml', size: 126 }] },
+					} : message('question', 'user', 'History question');
 					return Response.json({
 						title: first ? 'First native history' : 'Second native history', current_node: 'answer', mapping: {
-							question: { parent: null, message: message('question', 'user', 'History question') },
-							answer: { parent: 'question', message: message('answer', 'assistant', first ? 'History one answer' : 'History two answer') },
+							question: { parent: null, message: question },
+							answer: { parent: 'question', message: message('answer', 'assistant', first ? 'History one answer' + historyReplySuffix : 'History two answer') },
 						}
 					});
 				}
@@ -190,7 +202,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		};
 		install(session.defaultSession); for (const contents of webContents.getAllWebContents()) { install(contents.session); }
 		app.on('session-created', install);
-	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization });
+	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization, historyReplySuffix, historyImage });
 }
 
 const ashFixtureModel = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
@@ -228,7 +240,7 @@ async function createConversationShareServer() {
 	return { origin, records, [Symbol.asyncDispose]: () => server[Symbol.asyncDispose]() };
 }
 
-function createAshModelServer(ashRequests: string[]) {
+function createAshModelServer(ashRequests: string[], replySuffix = '') {
 	return createServer(async (request, response) => {
 		if (request.method === 'GET') {
 			response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: ashFixtureModel.model }] }));
@@ -237,7 +249,8 @@ function createAshModelServer(ashRequests: string[]) {
 		const chunks: Buffer[] = [];
 		for await (const chunk of request) chunks.push(Buffer.from(chunk));
 		ashRequests.push((JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; }).model);
-		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end('data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Answer from Ash"},"finish_reason":null}]}\n\ndata: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+		const content = JSON.stringify('Answer from Ash' + replySuffix);
+		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(`data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":${content}},"finish_reason":null}]}\n\ndata: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
 	});
 }
 
@@ -325,6 +338,98 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('opens one sent SVG thumbnail inside Chat without opening Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+		await installService(application as ElectronApplication, false, '', true);
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('[data-item="chatgpt:history-one"] .ash-sessions-list-item').click();
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const message = chat.locator('.ash-chat-item-userMessage');
+		const thumbnail = message.getByRole('button', { name: '预览 diagram.svg', exact: true });
+		await expect(thumbnail).toBeEnabled();
+		await expect(message.locator('img')).toHaveCount(1);
+		await expect(message.locator('pre')).toHaveText('History question');
+		await expect(chat.locator('.ash-chat-media')).toHaveCount(0);
+		await thumbnail.press('Enter');
+		const preview = page.getByRole('dialog', { name: '预览 diagram.svg' });
+		await expect(preview).toHaveClass('ash-image-preview-popup');
+		const image = preview.locator('.ash-image-viewer-image');
+		await expect(image).toBeVisible();
+		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(80);
+		await expect(page.locator('.ash-image-preview')).toHaveCount(0);
+		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await testInfo.attach('sent-svg-preview', { body: await preview.screenshot(), contentType: 'image/png' });
+		await page.keyboard.press('Escape');
+		await expect(preview).toHaveCount(0);
+		await expect(thumbnail).toBeFocused();
+	});
+
+	test('renders the shared code card for Ash and ChatGPT replies', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }, testInfo) => {
+		const application = browser as ElectronApplication;
+		const fence = '\n\n```bash\nprintf "%s\\n" hello\necho "Ash code card"\n```';
+		await installService(application, false, fence);
+		await application.evaluate(({ clipboard }) => { clipboard.writeText = async () => { }; });
+		await using catalog = createAshModelServer([], fence);
+		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		try {
+			const { client } = connection;
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'shared-code-card', title: 'Ash code card', kind: 'chat',
+				executionTarget: null, agent: { type: 'default' },
+			});
+			const { sessionId } = session;
+			const { threadId } = session.threads[0]!;
+			const readThread = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
+			await client.request(APP_SERVER_METHODS['session/request'], {
+				commandId: 'shared-code-card-turn', sessionId, request: {
+					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence,
+					model: ashFixtureModel, mode: 'agent', approvalMode: 'manual',
+					input: [{ type: 'text', text: 'Show a shell example' }],
+				},
+			});
+			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
+			const page = await workbench.openAgentsWindow(target.kind);
+			for (const [source, selector, canApply] of [
+				['ChatGPT', 'chatgpt:history-one', false],
+				['Ash', `ash:${sessionId}`, true],
+			] as const) {
+				await page.locator(`[data-item="${selector}"] .ash-sessions-list-item`).click();
+				const card = page.locator('.ash-chat-code-block-card:visible');
+				await expect(card.locator('.ash-chat-code-block-language')).toHaveText('Bash');
+				await expect(card.locator('.stanza-editor-line-text')).toHaveText(['printf "%s\\n" hello', 'echo "Ash code card"']);
+				await testInfo.attach(`${source}-code-card`, { body: await card.screenshot(), contentType: 'image/png' });
+				const copyCode = card.getByRole('button', { name: '复制', exact: true });
+				const copyMessage = page.locator('.ash-chat-item-agentMessage:visible').filter({ has: card })
+					.getByRole('button', { name: '复制消息', exact: true });
+				await expect(async () => {
+					await card.hover();
+					await copyMessage.hover();
+					await expect(page.getByRole('tooltip')).toHaveText('复制', { timeout: 1500 });
+				}).toPass({ timeout: 8000 });
+				for (const copy of [copyMessage, copyCode]) {
+					await copy.press('Enter');
+					const check = copy.locator('[data-ash-icon-id="check"]');
+					await expect(check).toBeVisible();
+					expect(await check.evaluate(icon => {
+						const styles = getComputedStyle(icon);
+						const expected = icon.ownerDocument.createElement('span');
+						expected.style.color = styles.getPropertyValue('--ash-success-foreground');
+						return styles.color === expected.style.color;
+					})).toBe(true);
+					await expect(copy).toBeFocused();
+				}
+				await testInfo.attach(`${source}-copied-code`, { body: await card.screenshot(), contentType: 'image/png' });
+				const more = card.getByRole('button', { name: '更多操作', exact: true });
+				await more.press('Enter');
+				const apply = page.getByRole('menuitem', { name: '应用到编辑器', exact: true });
+				if (canApply) await expect(apply).toBeEnabled();
+				else await expect(apply).toBeDisabled();
+				await page.keyboard.press('Escape');
+				await expect(more).toBeFocused();
+			}
+		} finally { await connection.close(); }
+	});
 
 	test('edits a native Ash Chat message in a new Thread and reopens the original draft', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;

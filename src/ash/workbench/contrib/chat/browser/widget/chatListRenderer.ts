@@ -14,6 +14,7 @@ import { createActionViewItem } from '../../../../../platform/actions/browser/me
 import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { getMediaMime } from '../../../../../base/common/mime.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
 import { DefaultChatAttachmentWidget } from '../attachments/chatAttachmentWidgets.js';
@@ -64,6 +65,7 @@ export interface ChatResponseActions {
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
 	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
+	readonly codeBlockPresentation?: 'card';
 	readonly onDidRequestEdit: (requestId: string) => void | Promise<void>;
 	readonly canEditRequest: () => boolean;
 	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;
@@ -71,8 +73,8 @@ interface ChatListItemRendererOptions {
 	readonly cancelRequestEdit: () => boolean;
 	readonly refreshRequestAfterEdit: () => void;
 	readonly deferCodeBlockModels: boolean;
-	readonly isVisible: () => boolean;
 	readonly synchronousInitialRender?: boolean;
+	readonly isVisible: () => boolean;
 	/** Borrowed view state remains owned by the list across row replacements. */
 	readonly advisorExpansion: Map<string, boolean>;
 	readonly contextExpansion: Map<string, boolean>;
@@ -266,15 +268,18 @@ export class ChatListItemRenderer extends Disposable {
 		if (!this.attachments) return;
 		const content = this.item.content ?? [];
 		const changed = () => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); };
-		const resources: IChatAttachmentResource[] = (this.item.resources ?? []).map(resource => ({
-			type: 'resource', resource: URI.parse(resource.uri), name: resource.name,
-			presentation: resource.kind, mimeType: resource.mimeType, frameOrigin: resource.frameOrigin,
-		}));
+		const useImagePopup = this.contextKeys.getValue(ChatContextKeys.imagePreviewPresentation.key) === 'popup';
+		const resources: IChatAttachmentResource[] = (this.item.resources ?? []).map(resource => {
+			const mimeType = useImagePopup && (!resource.mimeType || resource.mimeType === 'application/octet-stream') ? getMediaMime(resource.name) : resource.mimeType;
+			const presentation = useImagePopup && resource.kind === 'document' && mimeType?.startsWith('image/') ? 'image' : resource.kind;
+			return { type: 'resource', resource: URI.parse(resource.uri), name: resource.name, presentation, mimeType, frameOrigin: resource.frameOrigin };
+		});
 		const mediaContent = [...content, ...resources];
 		if (resources.length || content.some(part => part.type !== 'text' && part.type !== 'artifact')) {
 			if (!this.media.value) {
 				const media = this.instantiationService.createInstance(ChatAttachmentsContentPart, {
 					ownerDocument: this.element.ownerDocument, variables: mediaContent, source: this.item.attachmentSource,
+					thumbnailImages: this.item.type === 'userMessage' || this.item.type === 'userImage' || this.item.type === 'userImageAttachment',
 					readResource: resources.length && this.options.readResponseResource ? (resource: URI, signal: AbortSignal) => this.options.readResponseResource!(this.item, resource, signal) : undefined
 				});
 				this.media.value = media;
@@ -853,6 +858,8 @@ export class ChatListItemRenderer extends Disposable {
 			return;
 		}
 		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
+		const useImagePopup = this.contextKeys.getValue(ChatContextKeys.imagePreviewPresentation.key) === 'popup';
+		const sentImage = useImagePopup && (item.type === 'userImage' || item.type === 'userImageAttachment');
 		if (item.type === 'userMessage' || item.type === 'queuedMessage') article.classList.add('ash-chat-user-message');
 		if (item.type === 'userMessage' || item.type === 'agentMessage') {
 			const presentation = this.options.messagePresentation;
@@ -864,7 +871,7 @@ export class ChatListItemRenderer extends Disposable {
 				if (participant.icon) appendIcon(participant.icon, avatar);
 				article.append(h(document, 'header', { className: 'ash-chat-participant' }, avatar, h(document, 'span', participant.name)));
 			}
-		} else if (item.type !== 'reasoning') {
+		} else if (item.type !== 'reasoning' && !sentImage) {
 			const label = h(article.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
 			label.className = `${this.options.classPrefix}-item-label`;
 			label.textContent = this.accessibilityProvider.getAriaLabel(item);
@@ -883,11 +890,12 @@ export class ChatListItemRenderer extends Disposable {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				getChatItem: () => this.item,
+				codeBlockPresentation: item.type === 'agentMessage' ? this.options.codeBlockPresentation : undefined,
 				visible: this.options.isVisible() && (item.type !== 'reasoning' || this.options.thinkingExpansion.get(item.id) === true),
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
+				synchronousInitialRender: this.options.synchronousInitialRender,
 				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
-				synchronousInitialRender: this.options.synchronousInitialRender,
 				fillInIncompleteTokens: item.transient,
 				fileReferenceDirectory: !openResponseLink && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
 				actionHandler: openResponseLink
@@ -923,14 +931,19 @@ export class ChatListItemRenderer extends Disposable {
 			} else {
 				body.append(markdown.domNode);
 			}
-		} else {
+		} else if (!sentImage) {
 			const content = h(this.element.ownerDocument, 'pre');
 			content.textContent = item.text;
 			body.append(content);
 			if (item.type === 'userMessage') requestText = content;
 		}
 		const attachments = h(article.ownerDocument, 'div');
-		body.append(attachments);
+		if (requestText && useImagePopup) {
+			requestText.before(attachments);
+			requestText.hidden = !item.text;
+		} else {
+			body.append(attachments);
+		}
 		if (item.type === 'turnError') {
 			disposables.add(new ChatErrorContentPart(article, item, this.options.classPrefix, this.options.onDidRequestErrorAction));
 		} else if (item.detail) {

@@ -13,6 +13,28 @@ import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/
 // Native application menus follow OS focus on macOS.
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 
+focusTest('opens an SVG from Agent Window Files in the shared image preview', { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace }) => {
+	await writeFile(join(testWorkspace.directory, 'preview.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="green"/></svg>');
+	const page = await workbench.openAgentsWindow(target.kind);
+	const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+	await code.click();
+	await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
+	const files = page.locator('.ash-desktop-auxiliarybar:visible');
+	const tree = files.getByRole('tree');
+	const file = tree.getByRole('treeitem', { name: 'preview.svg', exact: true });
+	await file.dblclick();
+	const preview = page.getByRole('dialog', { name: 'Preview preview.svg', exact: true });
+	await expect(preview).toHaveClass('ash-image-preview-popup');
+	const image = preview.getByRole('img', { name: 'preview.svg', exact: true });
+	await expect(image).toBeVisible();
+	await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(80);
+	await expect(code).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByRole('tab', { name: 'preview.svg', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(preview).toHaveCount(0);
+	await expect(tree).toBeFocused();
+});
+
 test('Code Sessions consumes the shared JSON extension for settings completion, hover, formatting and diagnostics', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await installMainChannelTestClient(page);

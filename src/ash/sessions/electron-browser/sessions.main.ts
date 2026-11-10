@@ -295,7 +295,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					}
 					: undefined,
 				contributionIds: [
-					'chat.copyActionRendering',
+					'sessions.chat.copyActionRendering',
 					'chat.queuePickerRendering',
 					'workbench.contrib.btwSlashCommand',
 					'workbench.contrib.chatSideChat',

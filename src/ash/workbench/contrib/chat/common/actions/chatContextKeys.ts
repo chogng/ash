@@ -17,6 +17,8 @@ export namespace ChatContextKeys {
 	export const inChatSession = new RawContextKey<boolean>('inChat', false);
 	export const responseHasText = new RawContextKey<boolean>('chatResponseHasText', false);
 	export const requestHasText = new RawContextKey<boolean>('chatRequestHasText', false);
+	/** The popup presentation uses thumbnails for sent images and opens images in place. */
+	export const imagePreviewPresentation = new RawContextKey<'editor' | 'popup'>('chatImagePreviewPresentation', 'editor');
 	export const requestCanEdit = new RawContextKey<boolean>('chatRequestCanEdit', false);
 	export const requestHasVersions = new RawContextKey<boolean>('chatRequestHasVersions', false);
 	export const responseHasFeedbackSurvey = new RawContextKey<boolean>('chatSessionResponseHasFeedbackSurvey', false);

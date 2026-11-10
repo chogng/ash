@@ -108,6 +108,7 @@ import { IMenuService } from '../../../src/ash/platform/actions/common/actions.j
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { SessionsWorkspaceModeContext } from '../../../src/ash/sessions/common/contextkeys.js';
 import '../../../src/ash/sessions/contrib/chat/browser/chatRunAnotherVersionActions.js';
@@ -162,6 +163,7 @@ import { IAgentSessionService, IAgentTurnService } from '../../../src/ash/platfo
 import { type AgentSession } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IAgentModelsService } from '../../../src/ash/platform/models/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
+import { SessionsChatCopyActionRendering } from '../../../src/ash/sessions/contrib/chat/browser/chatCopyActionRendering.js';
 import { AppServerSessionsProvider } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import { SessionsManagementService } from '../../../src/ash/sessions/services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
@@ -181,7 +183,6 @@ const services = resources.add(createTestEditorServices(resources.add(new Workbe
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
 	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService),
 })));
-resources.add(services.createInstance(ChatCopyActionRendering));
 services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
 services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
@@ -248,6 +249,12 @@ if (builtinBackend) {
 }
 services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected introduction settings'); } } as unknown as IPreferencesService);
 registerTestVoiceInputServices(services);
+const copyPresentationQuery = new URLSearchParams(location.search);
+if (copyPresentationQuery.has('sessionsCopyFeedback') || copyPresentationQuery.has('codeCard')) {
+	resources.add(services.createInstance(SessionsChatCopyActionRendering));
+} else {
+	resources.add(services.createInstance(ChatCopyActionRendering));
+}
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
@@ -356,8 +363,17 @@ services.registerInstance(IAccessibleViewService, accessibleView);
 let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
+if (new URLSearchParams(location.search).has('sentImageViewer')) {
+	ChatContextKeys.imagePreviewPresentation.bindTo(appServices.get(IContextKeyService)).set('popup');
+	appServices.registerInstance(IHostService, {
+		hasFocus: true, onDidChangeFocus: Event.None, getWindows: async () => [],
+		openWindow: async () => { }, restart: async () => { }, reload: async () => { }, getScreenshot: async () => undefined,
+		showToast: async () => ({ supported: false, clicked: false }),
+	});
+}
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
 const listOptions = {
+	codeBlockPresentation: new URLSearchParams(location.search).has('codeCard') ? 'card' as const : undefined,
 	openTurnChanges: new URLSearchParams(location.search).has('turnChanges') ? async (source: NonNullable<IChatListItem['feedbackSource']>) => {
 		root.dataset.openedTurn = JSON.stringify(source);
 	} : undefined,
@@ -1056,7 +1072,7 @@ window.ashChatTranscriptIntegration = {
 		return { actual: copy.innerHTML, expected: expected.element.innerHTML, layoutError, layout };
 	},
 	inspectRawCodeUpdates: async values => {
-		const part = services.createInstance(CodeBlockPart, document);
+		const part = services.createInstance(CodeBlockPart, document, undefined);
 		document.body.append(part.element);
 		const snapshots: { text: string; eol: string; copied: string; }[] = [];
 		let model: TextModel | null = null;
@@ -1259,8 +1275,10 @@ window.ashChatTranscriptIntegration = {
 		root.hidden = true;
 		const chatServices = resources.add(services.createChild());
 		if (new URLSearchParams(location.search).has('sessions')) {
-			IsSessionsWindowContext.bindTo(chatServices.get(IContextKeyService)).set(true);
-			SessionsWorkspaceModeContext.bindTo(chatServices.get(IContextKeyService)).set('code');
+			const chatContext = chatServices.get(IContextKeyService);
+			IsSessionsWindowContext.bindTo(chatContext).set(true);
+			ChatContextKeys.imagePreviewPresentation.bindTo(chatContext).set('popup');
+			SessionsWorkspaceModeContext.bindTo(chatContext).set('code');
 		}
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);

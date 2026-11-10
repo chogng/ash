@@ -26,7 +26,7 @@ export interface IImageViewerViewState {
 export interface IImageViewerSourceOptions {
 	readonly alt: string;
 	readonly viewState?: IImageViewerViewState;
-	readonly data: { readonly mimeType: string; read(): Promise<Uint8Array>; };
+	readonly data?: { readonly mimeType: string; read(): Promise<Uint8Array>; };
 }
 
 const zoomLevels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20];

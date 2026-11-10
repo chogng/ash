@@ -50,6 +50,7 @@ import type { ChatToolDisclosureState } from './chatContentParts/toolInvocationP
 
 interface ChatListWidgetOptions {
 	readonly messagePresentation?: import('../chat.js').ChatMessagePresentation;
+	readonly codeBlockPresentation?: 'card';
 	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
 	readonly canEditRequest?: () => boolean;
 	readonly submitRequestEdit?: (item: IChatListItem, text: string, commandId: string) => Promise<void>;

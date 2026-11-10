@@ -69,6 +69,7 @@ interface MarkdownFragment {
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly getChatItem?: () => IChatListItem | undefined;
 	readonly ownerDocument: Document;
+	readonly codeBlockPresentation?: 'card';
 	readonly fileReferenceDirectory?: FileSearchDirectory;
 	readonly markdown?: string | IMarkdownString;
 	readonly visible?: boolean;
@@ -99,7 +100,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private readonly codeElement: IMarkdownString;
 	private readonly getCodeActionContext = (): Pick<ICodeBlockActionContext, 'element' | 'chatSessionResource'> => {
 		const item = this.options.getChatItem?.();
-		const source = item?.feedbackSource;
+		const source = this.options.codeBlockPresentation === 'card' && item?.transient ? undefined : item?.feedbackSource;
 		return { element: item ?? this.codeElement, chatSessionResource: source ? LocalChatSessionUri.forSession(source.sessionId, source.threadId) : undefined };
 	};
 	private viewportVisible = true;
@@ -409,7 +410,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				const index = codeStart + localIndex;
 				let part = this.codeBlocks.get(index);
 				if (!part) {
-					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document));
+					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document, this.options.codeBlockPresentation));
 					part.element.id = `${this.codeblocksPartId}-${index}`;
 					if (this.options.deferCodeBlockModels) {
 						this.deferredCodeBlocks.add(part);
