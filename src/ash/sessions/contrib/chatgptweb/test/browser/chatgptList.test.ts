@@ -1294,9 +1294,15 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await confirm.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click();
 			await expect(existing).toHaveCount(0);
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
-			canWrite = false;
+			const freshReads = reads;
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await projects.getByRole('button', { name: 'Research', exact: true }).click();
+			await expect(editInstructions).toBeVisible();
+			expect(reads).toBe(freshReads);
+
+			canWrite = false;
+			await page.clock.setFixedTime(new Date(Date.now() + 65_000));
+			await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 			await expect(materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true })).toHaveCount(0);
 			await expect(editInstructions).toHaveCount(0);
 			await expect(materials.getByRole('button', { name: 'notes.txt', exact: true })).toBeVisible();
@@ -1311,11 +1317,53 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 				await expect(editInstructions).toHaveCount(0);
 				await expect(materials.getByRole('button', { name: 'notes.txt', exact: true })).toBeVisible();
+				await expect(materials.getByText(zh ? '正在加载项目详情…' : 'Loading project details…', { exact: true })).toHaveCount(0);
 			} finally {
 				releaseDetails();
 			}
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('Updated on ChatGPT Web');
 			await expect(editInstructions).toBeVisible();
+		});
+
+		test(`pauses the project history fallback between batches (${locale})`, async () => {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			await mockChatGPTRequests(page);
+			const id = 'g-p-fallback';
+			await page.route('**/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: { items: [{ gizmo: { id, display: { name: 'Research' } } }], cursor: null },
+			}));
+			let fallingBack = false;
+			await page.route(`**/gizmos/${id}/conversations?*`, route => {
+				fallingBack = true;
+				return route.fulfill({ status: 403 });
+			});
+			const offsets: number[] = [];
+			await page.route('**/service/backend-api/conversations?*', route => {
+				if (!fallingBack) return route.fallback();
+				const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+				offsets.push(offset);
+				const item = offset < 3 ? { id: `outside-${offset}`, title: 'Other chat' }
+					: { id: `project-chat-${offset}`, title: offset === 3 ? 'Older research chat' : 'Oldest research chat', gizmo_id: id };
+				return route.fulfill({ json: { items: [item], total: 5 } });
+			});
+
+			await page.goto(`/chatgptNavigation.html?projects&locale=${locale}`);
+			const projects = page.locator('.ash-projects');
+			await projects.getByRole('button', { name: 'Research', exact: true }).click();
+			const more = projects.getByRole('button', { name: zh ? '加载更多对话' : 'Load more conversations', exact: true });
+			await expect(more).toBeVisible();
+			await more.focus();
+			await expect(more).toBeFocused();
+			expect(offsets).toEqual([0, 1, 2]);
+			await more.press('Enter');
+			await expect(projects.getByRole('button', { name: 'Older research chat', exact: true })).toBeVisible();
+			await expect(more).toBeVisible();
+			expect(offsets).toEqual([0, 1, 2, 3]);
+			await more.press('Enter');
+			await expect(projects.getByRole('button', { name: 'Oldest research chat', exact: true })).toBeVisible();
+			await expect(more).toHaveCount(0);
+			expect(offsets).toEqual([0, 1, 2, 3, 4]);
 		});
 
 		test(`starts a new ChatGPT conversation from the current project (${locale})`, async () => {

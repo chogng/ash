@@ -183,6 +183,9 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 						createdAt: project.createdAt,
 						updatedAt: project.updatedAt,
 						history: this.projectHistory(project.id, state),
+						refreshHistory: online ? () => {
+							if (isCurrentAccount()) void this.chat.loadProjectConversations(project.id, 'refresh');
+						} : undefined,
 						details: scope ? this.projectDetails(project.id, scope, online) : undefined,
 						composer: scope ? {
 							key: JSON.stringify([chat.native === true, scope, project.id]),
@@ -240,12 +243,12 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 
 	private projectHistory(projectId: string, state: ChatGPTState): ChatListProject['history'] {
 		const page = state.projectHistory.get(projectId);
-		if (page?.status === 'ready' && !page.cursor) return { state: 'complete' };
+		if (page && !page.cursor && (page.status === 'ready' || page.checkedAt !== undefined)) return { state: 'complete' };
 		if (!state.connected || !state.networkAvailable) return { state: 'unavailable' };
 		if (!page) return { state: 'idle', load: () => this.chat.loadProjectConversations(projectId) };
-		if (page.status === 'loading') return { state: 'loading' };
+		if (page.status === 'loading') return { state: page.refreshing ? 'refreshing' : 'loading' };
 		if (page.status === 'error') return { state: 'error' };
-		return { state: 'more', load: () => this.chat.loadProjectConversations(projectId, true) };
+		return { state: 'more', manual: page.cursor?.kind === 'recent', load: () => this.chat.loadProjectConversations(projectId, 'next') };
 	}
 
 	archiveProjectMembers(references: ReadonlySet<string>): Promise<ReadonlySet<string>> {

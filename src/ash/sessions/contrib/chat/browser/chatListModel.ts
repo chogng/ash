@@ -67,8 +67,9 @@ export interface ChatListEntry extends SessionListOrganization {
 }
 
 type ProjectHistory =
-	| { readonly state: 'idle' | 'more'; readonly load: () => void; }
-	| { readonly state: 'loading' | 'complete' | 'unavailable' | 'error'; };
+	| { readonly state: 'idle'; readonly load: () => void; }
+	| { readonly state: 'more'; readonly load: () => void; readonly manual?: boolean; }
+	| { readonly state: 'loading' | 'refreshing' | 'complete' | 'unavailable' | 'error'; };
 
 export interface ProjectMaterialRow {
 	readonly id: string;
@@ -104,6 +105,8 @@ export interface ChatListProject {
 	readonly createdAt?: number;
 	readonly updatedAt?: number;
 	readonly history: ProjectHistory;
+	/** Revalidates the project's first page if its cached result is stale. */
+	readonly refreshHistory?: () => void;
 	readonly details?: CatalogProjectDetails;
 	readonly composer?: {
 		/** Opaque draft scope. The catalog owner includes the account and project identity. */
@@ -475,9 +478,12 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 				archive: project.project?.archive,
 				remove: project.project?.remove,
 			},
-			history: retry ? { label: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'), action: retry } : undefined,
+			history: retry ? { label: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'), action: retry }
+				: history?.state === 'more' && history.manual
+					? { label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moreProjectConversations' }, 'Load more conversations'), action: history.load }
+					: undefined,
 			onExpand: history?.state === 'idle' ? history.load : undefined,
-			loadMore: history?.state === 'more' ? history.load : undefined,
+			loadMore: history?.state === 'more' && !history.manual ? history.load : undefined,
 		};
 	}
 

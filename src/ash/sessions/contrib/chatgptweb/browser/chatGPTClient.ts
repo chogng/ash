@@ -101,8 +101,15 @@ export interface ChatGPTHistory {
 	readonly model?: string;
 	readonly thinkingEffort?: string;
 	readonly archived?: boolean;
+	/** Undefined when the response does not report membership, null when unassigned. */
+	readonly projectId?: string | null;
 	readonly olderCursor?: string;
 	readonly messages: readonly ChatGPTMessage[];
+}
+
+function historyProjectId(value: Record<string, unknown>): Pick<ChatGPTHistory, 'projectId'> {
+	const id = value.gizmo_id;
+	return id === null || typeof id === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(id) ? { projectId: id } : {};
 }
 interface ChatGPTStreamFrame extends ChatGPTStreamUpdate { readonly resumeToken?: string; readonly handoff?: boolean; readonly finished?: boolean; }
 
@@ -442,7 +449,7 @@ export class ChatGPTClient {
 	async history(id: string, signal: AbortSignal): Promise<ChatGPTHistory> {
 		if (this.native) { return this.nativeHistory(id, signal); }
 		const { value, mapping, head } = await this.conversationGraph(id, signal);
-		return { id, ...this.readGraphHistory(value, mapping, head, id) };
+		return { id, ...this.readGraphHistory(value, mapping, head, id), ...historyProjectId(value) };
 	}
 
 	async fork(id: string, messageId: string, signal: AbortSignal): Promise<Omit<ChatGPTHistory, 'id'> & { readonly projectId?: string; }> {
@@ -550,6 +557,7 @@ export class ChatGPTClient {
 		return {
 			id, title: typeof head.title === 'string' ? head.title : 'ChatGPT', parentId: head.current_node,
 			...(head.is_archived === true ? { archived: true } : {}),
+			...historyProjectId(head),
 			model: typeof head.default_model_slug === 'string' ? head.default_model_slug : undefined,
 			thinkingEffort, ...page,
 		};

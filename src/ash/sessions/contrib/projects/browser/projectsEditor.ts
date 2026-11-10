@@ -2,7 +2,7 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
-import { addDisposableListener, getActiveElement, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
@@ -43,6 +43,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private readonly projectInputs = this._register(new DisposableMap<string, ProjectChatInput>());
 	private readonly catalogDetailsRequest = this._register(new MutableDisposable());
 	private readonly catalogDetailsLoad = observableValue<{ readonly key: string; readonly phase: 'loading' | 'loaded' | 'error'; } | undefined>(this, undefined);
+	private catalogHistoryKey: string | undefined;
 	private catalogMaterialSnapshotKey: string | undefined;
 	private catalogMaterialSyncKey: string | undefined;
 	private activeProjectInput: ProjectChatInput | undefined;
@@ -155,6 +156,16 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				status(localize('projects.helpHint', 'Press Alt+F1 for Projects accessibility help.'));
 			}
 		}));
+		const refreshCatalogProject = () => {
+			if (!this.shown.get() || document.visibilityState !== 'visible') return;
+			const id = this.projects.state.get().conversationProjectId;
+			const project = this.projectGroups.get().find(group => group.key === id)?.project;
+			project?.refreshHistory?.();
+			const details = project?.details;
+			if (details?.load && !this.catalogDetailsRequest.value) this.loadCatalogDetails(details);
+		};
+		this._register(addDisposableListener(getWindow(this.domNode), 'focus', refreshCatalogProject));
+		this._register(addDisposableListener(document, 'visibilitychange', refreshCatalogProject));
 		this._register(autorun(reader => {
 			const state = this.projects.state.read(reader);
 			const id = state.conversationProjectId;
@@ -196,9 +207,15 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				this.catalogDetailsLoad.set(undefined);
 				this.projectActions.cancelPendingEdit();
 			}
-			const history = (selected ?? groups.find(group => group.key === state.selectedId))?.project?.history;
-			if (this.isVisible() && history?.state === 'idle') {
+			const project = (selected ?? groups.find(group => group.key === state.selectedId))?.project;
+			const history = project?.history;
+			const historyKey = shown && project?.refreshHistory ? project.preferenceKey ?? project.id : undefined;
+			const refreshHistory = historyKey !== undefined && historyKey !== this.catalogHistoryKey;
+			this.catalogHistoryKey = historyKey;
+			if (shown && history?.state === 'idle') {
 				history.load();
+			} else if (refreshHistory) {
+				project?.refreshHistory?.();
 			}
 		}));
 	}
@@ -247,8 +264,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (visible) {
 			const state = this.projects.state.get();
 			if (!state.loading) void this.projects.reload();
-			const history = this.projectGroups.get().find(group => group.key === (state.conversationProjectId ?? state.selectedId))?.project?.history;
-			if (history?.state === 'idle') history.load();
 		} else {
 			this.catalogDetailsRequest.clear();
 			this.catalogDetailsLoad.set(undefined);
@@ -283,10 +298,17 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (!details.load) return;
 		const controller = new AbortController();
 		this.catalogDetailsRequest.value = toDisposable(() => controller.abort());
-		this.catalogDetailsLoad.set({ key: details.key, phase: 'loading' });
-		const finish = (phase: 'loaded' | 'error') => {
-			if (!controller.signal.aborted) this.catalogDetailsLoad.set({ key: details.key, phase });
+		const setPhase = (phase: 'loading' | 'loaded' | 'error') => {
+			const current = this.catalogDetailsLoad.get();
+			if (current?.key !== details.key || current.phase !== phase) this.catalogDetailsLoad.set({ key: details.key, phase });
 		};
+		const finish = (phase: 'loaded' | 'error') => {
+			if (controller.signal.aborted) return;
+			this.catalogDetailsRequest.clear();
+			setPhase(phase);
+		};
+		const current = this.catalogDetailsLoad.get();
+		if (current?.key !== details.key || current.phase !== 'loaded') setPhase('loading');
 		void details.load(controller.signal).then(() => finish('loaded'), () => finish('error'));
 	}
 
@@ -301,6 +323,14 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const focusedInComposer = this.activeProjectInput?.element.contains(focused) ?? false;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		const detail = this.body.querySelector<HTMLElement>('.ash-projects-detail');
+		const sameProject = detail !== null && detail.dataset.projectDetail === projectId;
+		const overview = sameProject ? detail.querySelector<HTMLElement>('.ash-projects-overview') : undefined;
+		const scroller = overview?.scrollTop ? overview : this.domNode;
+		const scrollTop = overview ? scroller.scrollTop : 0;
+		const viewportTop = scrollTop ? scroller.getBoundingClientRect().top : 0;
+		const anchor = scrollTop && overview ? Array.from(overview.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
+			.find(row => row.getBoundingClientRect().bottom > viewportTop) : undefined;
+		const anchorTop = anchor?.getBoundingClientRect().top;
 		this.projectList.stopUpdatingTimes();
 		this.content.clear();
 		const catalogInputs = new Set(groups.flatMap(group => group.project?.composer ? [group.project.composer.key] : []));
@@ -336,8 +366,16 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const replacement = Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(
 				node => node.dataset.projectControl === focusKey,
 			);
-			if (replacement) replacement.focus({ preventScroll: replacement.classList.contains('ash-projects-conversation') });
+			if (replacement) replacement.focus({ preventScroll: sameProject });
+			else if (sameProject) this.domNode.focus({ preventScroll: true });
 			else this.focusPage();
+		}
+		// Restore the visible row after rebuilding the list, including when new rows appear above it.
+		if (scrollTop && overview) {
+			const replacement = anchor && Array.from(overview.querySelectorAll<HTMLElement>('.ash-projects-conversation'))
+				.find(row => row.dataset.projectControl === anchor.dataset.projectControl);
+			scroller.scrollTop = replacement && anchorTop !== undefined
+				? scroller.scrollTop + replacement.getBoundingClientRect().top - anchorTop : scrollTop;
 		}
 	}
 
@@ -372,14 +410,15 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const failed = detailsPhase === 'error' || detailsPhase === 'loaded' && !data?.materials;
 			const cachedNames = data?.materials === undefined
 				? this.projects.readCatalogMaterialNames(conversationProject.preferenceKey ?? details.key) : undefined;
+			const materialsSnapshot = data?.materials ?? cachedNames?.map(file => ({ ...file, kind: 'file' as const }));
 			const materials = this.projectMaterials.renderCatalog(document, details.key, this.projectMaterials.fileRoot.get(), {
-				rows: data?.materials ?? cachedNames?.map(file => ({ ...file, kind: 'file' })),
+				rows: materialsSnapshot,
 				upload: data?.canEdit && data.materials ? details.upload : undefined,
 				isCurrent: () => this.shown.get() && this.projects.state.get().conversationProjectId === id
 					&& this.projectGroups.get().find(group => group.key === id)?.project?.details?.key === details.key,
 				status: !details.load ? undefined : failed ? {
 					text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
-				} : data?.materials ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
+				} : materialsSnapshot ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
 			}, this.content);
 			const editDetails = conversationProject?.editDetails;
 			const card = this.renderProjectDetailCard(materials, data?.description,

@@ -24,9 +24,13 @@ description: Integrate ChatGPT Web capabilities into Ash Chat and Sessions throu
 
 ## 按动作的数据归属接线
 
+新增或调整 ChatGPT Web 动作时，同步更新此处的归属、远端身份边界和对应验收入口。
+
 | 动作 | 调用链和验收点 |
 | --- | --- |
 | 新建会话 | 共享 `sessions.open.new` 调用注入的草稿能力。来源入口解析自己的默认配置并打开草稿。仅打开或恢复草稿时不发消息。首次发送由实际选定的来源执行。已有会话按原来源打开与继续。 |
+| 分叉会话 | 共享 `ForkConversationAction` 通过 `ChatResponseActionContext.fork` 派发。适配器从当前可见回复解析源会话和回复 ID，并在 Ash 中打开远端返回的分支历史。保留项目归属，首次发送携带分支来源，收到远端新会话 ID 后才绑定目录记录。 |
+| 分享会话或回复 | 标题栏和侧栏复用 `ChatListEntry.share`，回复工具栏从当前可见回复取得截止节点。整段分享读取远端当前分支头，回复分享使用选中回复 ID。分叉取得新的远端会话 ID 后才提供分享。通过 `shareConversationLink` 确认后才创建链接，复制前复核账号作用域，并只接受 ChatGPT 的分享地址。 |
 | 归档会话 | 共享命令经 `SessionActionsService.resolveCatalogArchiveTarget` 找到选中的 Ash 目录记录并调用 `archive`。ChatGPT 适配器解析该记录的远端身份、归档对应会话，再通过目录发布结果。能力缺失或执行失败时保留真实状态。 |
 | 新建项目或更改归属 | Ash 按目标项目的归属派发。创建 Ash 项目走现有命令或项目服务，例如 `sessions.createProject`。将 ChatGPT 会话加入 Ash 项目时，适配器提供账号范围内的不透明会话引用，由 `IProjectService.moveExternalConversation` 写入归属。移动到新 ChatGPT 项目时，适配器调用远端创建并设置成员关系。 |
 | 编辑项目详情 | Projects 通过 `CatalogProjectDetails` 显示说明和资料。面包屑和侧栏从同一个 `editDetails` 能力派生重命名操作，改名时保留远端最新的说明。项目说明读写同一个远端字段，读取或写回成功后按账号作用域和项目 ID 更新远端快照缓存。恢复的快照可直接显示，编辑权限以本次远端读取为准。 |
@@ -37,11 +41,16 @@ description: Integrate ChatGPT Web capabilities into Ash Chat and Sessions throu
 
 目录 ID 和 `preferenceKey` 对共享层是不透明的。适配器为偏好提供账号与对象作用域，并在对象身份失效或替换时通知 Ash 清理或迁移。异步操作提交前确认账号和目标仍与操作开始时一致，避免旧菜单或晚到的响应更新到另一个账号。
 
+## Learnings
+
+- **项目快照与校验。** 项目详情按账号和项目恢复说明与文件清单，已确认的空清单也可以直接显示。进入项目、窗口回焦或网络恢复时，校验当前项目的过期数据，并保留可见对话和键盘焦点。对话刷新从第一页取得新游标，第一页遗漏的旧对话须经远端确认移走、归档或删除后才移除。项目接口回退到全局历史时限制每批扫描，下一批由用户主动加载。
+
 ## 验证改动
 
 - 从真实 Ash 入口验证能力回调、后端请求和结果渲染；涉及共享操作时分别验证两个后端。生产代码的适配器导入集中在装配处，测试可以直接使用适配器构造 fixture。
 - 涉及 Ash 本地状态时，验证远端不可用时仍可操作该本地状态，并检查不触发远端写入。项目资料验证打开项目后由 Ash 落盘、Settings 更改目录，以及重开窗口后离线打开已保存副本。
 - 入口与恢复查 `src/ash/sessions/contrib/chatgptweb/test/browser/chatGPTWeb.test.ts`。检查打开草稿不发送，以及恢复时选中同一个会话。
+- 分叉与分享回复查 `chatgptBrowser.test.ts`。验证打开分支时未发送消息，首次发送绑定新的会话 ID，原会话仍能打开。分享验证确认前没有请求，确认后使用正确的截止节点。外部来源链接的拒绝查 `chatGPTService.test.ts`，标题栏整段分享与打开分支预览查桌面 `chatgptNative.spec.ts`，侧栏整段分享查 `chatgptList.test.ts`。
 - 列表、归档和外观查同目录的 `chatgptList.test.ts`。用远端请求记录确认只归档目标会话、重试只处理剩余项，以及外观在远端详情不可用时仍可保存并在两个入口显示。
 - 新增或修改 ChatGPT Web 请求时，在 `ChatGPTTransport` 同时检查 IPC 对方法、路径和参数的校验，以及 Chromium 发出请求前的认证头处理。回归测试要经过 Chromium 的认证回调，确认批准的 ChatGPT 路由带有当前账号的认证头，其他来源不携带这些头。模拟响应通过后，从真实 Ash 窗口做一次只读验证。若返回 401，先区分认证头被清除和远端拒绝有效登录，再决定是否检查响应字段。
 - 草稿选项目查 `chatgptBrowser.test.ts`。从侧栏改图标和颜色后，验证两个选择入口及当前项目标签同步更新。选 Ash 项目后发送，确认归属写入 Ash 项目服务，消息仍经 ChatGPT 发送，并检查远端项目归属的写入次数为零。

@@ -256,6 +256,58 @@ suite('ChatGPT shared service', () => {
 		assert.equal(otherAccount.projectDetails.get().get(id), undefined);
 	});
 
+	test('refreshes a stale project from the head and verifies omitted conversations before removing them', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
+		const id = 'g-p-project';
+		const projectPath = `/gizmos/${id}/conversations`;
+		const omitted = ['still-here', 'moved', 'unassigned', 'archived', 'deleted', 'unknown', 'unavailable'];
+		const cursors: (string | null)[] = [];
+		const checks: string[] = [];
+		let changed = false;
+		using chat = fixture(async path => {
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				return Response.json({ items: [{ gizmo: { id, display: { name: 'Project' } } }], cursor: null });
+			}
+			if (path.includes(projectPath)) {
+				const cursor = new URLSearchParams(path.split('?')[1]).get('cursor');
+				cursors.push(cursor);
+				const ids = cursor === 'old-cursor' ? omitted : cursor === 'new-cursor' ? ['still-here'] : [changed ? 'new-head' : 'old-head'];
+				return Response.json({
+					items: ids.map(id => ({ id, title: id })),
+					cursor: cursor ? null : changed ? 'new-cursor' : 'old-cursor',
+				});
+			}
+			const conversation = path.split('/').at(-1)!;
+			if (path.includes('/conversation/')) {
+				checks.push(conversation);
+				if (conversation === 'deleted') return new Response(null, { status: 404 });
+				if (conversation === 'unavailable') return new Response(null, { status: 503 });
+				const gizmo_id = conversation === 'unassigned' ? null : conversation === 'moved' ? 'g-p-other' : conversation === 'unknown' ? undefined : id;
+				return Response.json({ title: conversation, gizmo_id, is_archived: conversation === 'archived', current_node: 'root', mapping: { root: { parent: null } } });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		await chat.loadProjectConversations(id);
+		await chat.loadProjectConversations(id, 'next');
+		await chat.loadProjectConversations(id);
+		assert.deepEqual(cursors, [null, 'old-cursor']);
+
+		changed = true;
+		mock.timers.tick(60_000);
+		await chat.loadProjectConversations(id);
+		const conversations = chat.state.get().conversations;
+		assert.deepEqual(conversations.filter(row => row.projectId === id).map(row => row.id), ['new-head', 'old-head', 'still-here', 'unknown', 'unavailable']);
+		assert.equal(conversations.find(row => row.id === 'moved')?.projectId, 'g-p-other');
+		assert.ok(conversations.some(row => row.id === 'unassigned' && row.projectId === undefined));
+		assert.ok(!conversations.some(row => row.id === 'archived' || row.id === 'deleted'));
+		assert.deepEqual(new Set(checks), new Set(['old-head', ...omitted]));
+		await chat.loadProjectConversations(id, 'next');
+		assert.deepEqual(cursors, [null, 'old-cursor', null, 'new-cursor']);
+		assert.equal(chat.state.get().conversations.filter(row => row.id === 'still-here').length, 1);
+	});
+
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
 		const values = new Map<string, string>();
 		const respond = async (path: string) => response(path);

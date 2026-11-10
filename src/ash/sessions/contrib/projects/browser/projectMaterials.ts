@@ -143,7 +143,7 @@ export class ProjectMaterials extends Disposable {
 			materials.append(h(document, 'p', { className: 'ash-projects-muted', attributes: { role: 'status' } }, model.status.text));
 			if (model.status.retry) this.action(content, materials, 'retry-details', { label: localize('projects.retry', 'Try again') }, model.status.retry);
 		}
-		if (model.rows?.length === 0 && !model.status) {
+		if (model.rows?.length === 0) {
 			const illustration = h(document, 'div', {
 				className: 'ash-projects-materials-illustration', attributes: { 'aria-hidden': 'true' },
 			});

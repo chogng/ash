@@ -270,7 +270,15 @@ export class ProjectsList extends Disposable {
 			list.setAttribute('aria-busy', String(loading));
 			section.append(list);
 		}
-		if (history?.state === 'more') {
+		if (history?.state === 'more' && history.manual) {
+			const more = content.add(new Button(section, {
+				...defaultButtonStyles,
+				label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moreProjectConversations' }, 'Load more conversations'),
+				presentation: 'secondary',
+				onClick: history.load,
+			}));
+			more.domNode.dataset.projectControl = 'project-history:more';
+		} else if (history?.state === 'more') {
 			const anchor = list.lastElementChild ?? heading;
 			let requested = false;
 			const load = () => {
