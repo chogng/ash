@@ -4902,7 +4902,12 @@ suite('chatInput browser component', () => {
 			expect(accessiblePreview.content).toContain(`图片预览：${name}`);
 			expect(accessiblePreview.content).toContain('尺寸：320 × 180');
 			await page.screenshot({ path: testInfo.outputPath('inline-image-preview.png') });
+			const openWithPhotos = dialog.getByRole('button', { name: '用 Photos 打开', exact: true });
+			await openWithPhotos.focus();
+			await expect(openWithPhotos).toBeFocused();
+			await expect(openWithPhotos).toHaveAttribute('aria-describedby', /ash-hover-/u);
 			await page.keyboard.press('Escape');
+			await expect(dialog).toHaveCount(0);
 			await expect(preview).toBeFocused();
 			await preview.press('Tab');
 			await expect(remove).toBeFocused();
