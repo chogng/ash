@@ -215,9 +215,14 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		const store = new DisposableStore();
 		const reconnect = store.add(new MutableDisposable());
 		const active = () => this.nativeSelected.get() === !!this.chat.native;
-		if (!this.chat.native) {
+		const retainedBackend = this.storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE);
+		const restoreCatalog = retainedBackend === (this.chat.native ? 'chatgpt-native' : 'chatgpt');
+		if (!this.chat.native || restoreCatalog) {
 			this.chat.setNetworkAvailable(window.navigator.onLine);
 		}
+		// Pages such as Projects restore the shared sidebar without opening a chat editor.
+		// The retained backend still owns its account-scoped catalog and selection.
+		if (restoreCatalog) this.chat.initialize();
 		const refresh = (): void => {
 			if (this.chat.state.get().pendingSync || active() && window.document.visibilityState === 'visible' && isVisible()) {
 				void this.chat.refresh();

@@ -46,7 +46,6 @@ export interface ICodeBlockData {
 /** Owns a read-only Stanza document; actions operate on its source text, never rendered markup. */
 export class CodeBlockPart extends Disposable {
 	public readonly element: HTMLElement;
-	public readonly editor: CodeEditorWidget;
 	private readonly documentModel = this._register(new MutableDisposable<TextModel>());
 	private readonly editorContainer: HTMLElement;
 	private readonly toolbar: HTMLElement;
@@ -55,13 +54,15 @@ export class CodeBlockPart extends Disposable {
 	private readonly pendingActions = new Set<Button>();
 	private data: ICodeBlockData | undefined;
 	private readonly relayout: RunOnceScheduler;
+	private editor: CodeEditorWidget | undefined;
+	private layoutWidth: number | undefined;
 	private visible = true;
 	private measuredHeight = false;
 	private viewState: ReturnType<CodeEditorWidget['saveViewState']> | undefined;
 
 	constructor(
 		document: Document,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -125,12 +126,23 @@ export class CodeBlockPart extends Disposable {
 		}));
 		this.editorContainer.className = 'ash-chat-code-block-editor';
 		this.element.append(this.toolbar, this.editorContainer);
-		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
+		this.relayout = this._register(new RunOnceScheduler(() => this.layout(), 0));
+		this._register(toDisposable(() => this.element.remove()));
+	}
+
+	public get model(): TextModel | undefined { return this.documentModel.value; }
+
+	private createEditor(): CodeEditorWidget {
+		// Offscreen history only needs the toolbar and reserved block height.
+		const editor = this._register(this.instantiationService.createInstance(CodeEditorWidget, {
 			container: this.editorContainer,
 			model: null,
 			readOnly: true,
 			ariaLabel: localize('chat.code.content', 'Response code block'),
 			presentation: 'embedded',
+			// The block supplies its measured width and capped height after attaching
+			// the model. Skip the interim synchronous paint at the old dimensions.
+			dimension: { width: 0, height: 0 },
 			glyphMargin: false,
 			lineDecorationsWidth: 0,
 			folding: false,
@@ -139,22 +151,25 @@ export class CodeBlockPart extends Disposable {
 			scrollBeyondLastLine: false,
 			contributions: [],
 		}));
-		this.relayout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(this.configuration.onDidChangeConfiguration(event => {
 			const keys = [...Object.values(ChatEditorConfiguration), ...Object.values(CodeEditorConfiguration)];
 			if (keys.some(key => event.affectsConfiguration(key))) {
-				this.updateOptions();
+				this.updateOptions(editor);
 				this.relayout.schedule();
 			}
 		}));
-		this._register(this.editor.onDidLayoutChange(() => this.relayout.schedule()));
-		const resize = new ResizeObserver(() => this.relayout.schedule());
+		this._register(editor.onDidContentSizeChange(event => {
+			if (event.contentHeightChanged) this.relayout.schedule();
+		}));
+		const resize = new ResizeObserver(([entry]) => {
+			if (this.model && Math.round(entry.contentRect.width) !== this.layoutWidth) this.relayout.schedule();
+		});
 		resize.observe(this.editorContainer);
 		this._register(toDisposable(() => resize.disconnect()));
-		this._register(toDisposable(() => this.element.remove()));
+		return editor;
 	}
 
-	public render(data: ICodeBlockData, width: number): void {
+	public render(data: ICodeBlockData, width?: number): void {
 		this.data = data;
 		this.language.textContent = data.languageId;
 		this.toolbar.setAttribute('aria-label', localize('chat.code.numberedActions', 'Code block {0} actions', data.codeBlockIndex + 1));
@@ -172,27 +187,28 @@ export class CodeBlockPart extends Disposable {
 		// Fence info can be empty, incomplete, or an alias rather than a valid registry ID.
 		const languageId = this.languages.getRegisteredLanguageIds().includes(data.languageId) ? data.languageId
 			: this.languages.getLanguageIdByLanguageName(data.languageId) ?? 'plaintext';
+		const editor = this.editor ??= this.createEditor();
 		const model = this.documentModel.value;
 		if (!model) {
 			const created = new TextModel(data.text, { languageId });
-			this.editor.setModel(created);
+			editor.setModel(created);
 			this.documentModel.value = created;
 		} else {
 			// A completed language fence changes highlighting, not the response document's lifetime.
 			if (model.getLanguageId() !== languageId) model.setLanguage(languageId);
 			const previous = model.getValue();
 			if (previous !== data.text) {
-				const selections = this.editor.getSelections();
+				const selections = editor.getSelections();
 				if (model.getEOL() === '\n' && !data.text.includes('\r') && data.text.startsWith(previous)) {
 					// Streamed appends keep the existing buffer and invalidate only the added text.
 					// Reset corrections and other EOL inputs so the model still detects/normalizes their EOL.
 					const end = model.getPositionAt(previous.length);
 					model.applyEdits([{ range: Range.fromPositions(end), text: data.text.slice(previous.length) }]);
 				} else { model.setValue(data.text); }
-				if (selections) this.editor.setSelections(selections);
+				if (selections) editor.setSelections(selections);
 			}
 		}
-		this.updateOptions();
+		this.updateOptions(editor);
 		this.layout(width);
 	}
 
@@ -202,38 +218,42 @@ export class CodeBlockPart extends Disposable {
 	public focus(): void {
 		if (this.isDisposed) { return; }
 		this.setVisible(true);
-		this.editor.focus();
+		this.editor?.focus();
 	}
 
 	public setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
 		if (!visible) {
-			this.viewState = this.editor.saveViewState() ?? undefined;
+			this.viewState = this.editor?.saveViewState() ?? undefined;
 			this.relayout.cancel();
-			this.editor.setModel(null);
+			this.editor?.setModel(null);
 			this.documentModel.clear();
 		} else if (this.data) {
 			this.render(this.data, this.editorContainer.clientWidth);
-			this.editor.restoreViewState(this.viewState ?? null);
+			this.editor?.restoreViewState(this.viewState ?? null);
 			this.viewState = undefined;
 		}
 	}
 
-	public layout(width = this.editorContainer.clientWidth): void {
-		if (this.isDisposed || !this.documentModel.value) return;
+	public layout(width?: number): void {
+		const model = this.model;
+		const editor = this.editor;
+		if (this.isDisposed || !model || !editor) return;
+		width ??= this.editorContainer.clientWidth;
+		this.layoutWidth = width;
 		const font = this.font();
 		const maximum = this.data?.renderOptions?.maxHeightInLines ?? 20;
-		const contentHeight = this.editor.getContentHeight() || this.documentModel.value.lineCount * font.lineHeight + 16;
+		const contentHeight = editor.getContentHeight() || model.lineCount * font.lineHeight + 16;
 		const height = Math.max(font.lineHeight + 16, Math.min(contentHeight, maximum * font.lineHeight + 16));
 		this.editorContainer.style.height = `${height}px`;
 		this.measuredHeight = true;
-		this.editor.layout({ width, height });
+		editor.layout({ width, height });
 	}
 
-	private updateOptions(): void {
+	private updateOptions(editor: CodeEditorWidget): void {
 		const font = this.font();
-		this.editor.updateOptions({
+		editor.updateOptions({
 			fontFamily: font.getMassagedFontFamily(), fontSize: font.fontSize, lineHeight: font.lineHeight,
 			wordWrap: this.configuration.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on' ? 'on' : 'off',
 		});

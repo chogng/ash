@@ -13,7 +13,7 @@ import { Emitter } from '../../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { ChatToolOutputSubPart } from './chatToolOutputPart.js';
-import { ChatToolProgressSubPart } from './chatToolProgressPart.js';
+import { ChatToolProgressSubPart, type ChatToolDisclosureState } from './chatToolProgressPart.js';
 import { isImageGenerationToolInvocation } from './chatToolPartUtilities.js';
 import type { IChatContentPart } from '../chatContentParts.js';
 
@@ -21,6 +21,13 @@ import type { IChatContentPart } from '../chatContentParts.js';
 export class ChatToolInvocationPart extends Disposable implements IChatContentPart {
 	public getFileTreeInfos() { return this.output.getFileTreeInfos() ?? []; }
 	public getLastFocusedFileTree() { return this.output.getLastFocusedFileTree(); }
+	public get disclosureState(): ChatToolDisclosureState { return this.progress.disclosureState; }
+	public restoreDisclosure(state: ChatToolDisclosureState): void { this.progress.restoreDisclosure(state); }
+	/** Live output and manually opened details retain their interaction state outside the viewport. */
+	public get keepMounted(): boolean {
+		const { result, stopped, waitingFor } = this.invocation;
+		return !!waitingFor || (!result && !stopped) || (this.details.open && this.progress.hasUserInteracted);
+	}
 	public readonly domNode: HTMLElement;
 	public readonly toolCallId: string;
 	private readonly details: HTMLDetailsElement;

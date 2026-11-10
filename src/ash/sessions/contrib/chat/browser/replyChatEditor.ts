@@ -147,6 +147,9 @@ export class ReplyChatEditor extends EditorPane {
 		const model = instantiation.createInstance(this.options.model);
 		const createDraftPicker = this.options.createDraftPicker;
 		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, this.options.advanceWelcomePhrase !== false));
+		const scrollOptimization = this.options.scrollOptimizationSetting
+			? observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration)
+			: undefined;
 		try {
 			this.widget = this._register(instantiation.createInstance(ChatWidget<IReplyChatEditorModel>,
 				root, this.options.id, model, () => model.newChat(),
@@ -197,13 +200,12 @@ export class ReplyChatEditor extends EditorPane {
 						starters.setDraft(this.shown.read(reader) && canShowStarters.read(reader) ? draft?.id : undefined);
 					}));
 					return input;
-				}, { showPromptTimeline: true, welcomeTitle: welcome.title }));
+				}, { showPromptTimeline: true, welcomeTitle: welcome.title, virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined) }));
 		} catch (error) {
 			model.dispose();
 			throw error;
 		}
-		if (this.options.scrollOptimizationSetting) {
-			const scrollOptimization = observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration);
+		if (scrollOptimization) {
 			this._register(autorun(reader => {
 				root.classList.toggle('ash-chat-defer-completed', scrollOptimization.read(reader));
 			}));

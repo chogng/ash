@@ -70,6 +70,15 @@
 	scroll-padding-block-start: var(--ash-chat-transcript-overlap, 0px);
 }
 
+.ash-chat-transcript-virtualized > .ash-scrollbar-viewport {
+	/* The transcript compensates height changes using the message at the reading position. */
+	overflow-anchor: none;
+}
+
+.ash-chat-transcript-gap {
+	user-select: none;
+}
+
 /* Messages and controls show focus instead of the transcript's scroll layers. */
 .ash-chat-transcript-viewport.ash-scrollbar:focus-visible,
 .ash-chat-transcript-viewport > .ash-scrollbar-viewport:focus-visible,
@@ -135,14 +144,7 @@
 
 	/* Only a persistent changes row needs extra space at the bottom. The jump-only
 	   row disappears there, so reserving its height would move the scroll target. */
-	:where(
-			.ash-chat:has(
-				> .ash-chat-input-part
-					> .ash-chat-input-changes
-					> .ash-chat-changes-pill:not([hidden])
-			)
-		)
-		> .ash-chat-transcript-overlaps-composer:not(
+	.ash-chat-transcript-has-changes-summary.ash-chat-transcript-overlaps-composer:not(
 			:where(
 				[data-color-scheme="hcDark"] *,
 				[data-color-scheme="hcLight"] *
@@ -310,8 +312,17 @@ article.ash-chat-user-message > pre {
 }
 
 .ash-chat-defer-completed .ash-chat-item-agentMessage:not([data-transient]) {
+	/* Keep the same formatting context before and after layout containment. */
+	display: flow-root;
+	contain-intrinsic-block-size: auto none;
+}
+
+.ash-chat-defer-completed
+	.ash-chat-item-measured:not(
+		[data-transient],
+		:where(.ash-chat-transcript-virtualized *)
+	) {
 	content-visibility: auto;
-	contain-intrinsic-size: auto 160px;
 }
 
 .ash-chat-context summary {

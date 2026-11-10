@@ -71,6 +71,7 @@ interface ChatListItemRendererOptions {
 	readonly refreshRequestAfterEdit: () => void;
 	readonly deferCodeBlockModels: boolean;
 	readonly isVisible: () => boolean;
+	readonly synchronousInitialRender?: boolean;
 	/** Borrowed view state remains owned by the list across row replacements. */
 	readonly advisorExpansion: Map<string, boolean>;
 	readonly contextExpansion: Map<string, boolean>;
@@ -252,6 +253,8 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	public override dispose(): void {
+	get hasActivePlayback(): boolean { return this.responseActionContext?.isReading === true || this.media.value?.isPlaying === true; }
+
 		if (this.isDisposed) return;
 		this.layoutTrace.trace('disposeElement', () => `type=${this.item.type}`);
 		this.element.remove();
@@ -882,6 +885,7 @@ export class ChatListItemRenderer extends Disposable {
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
 				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
+				synchronousInitialRender: this.options.synchronousInitialRender,
 				fillInIncompleteTokens: item.transient,
 				fileReferenceDirectory: !openResponseLink && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
 				actionHandler: openResponseLink

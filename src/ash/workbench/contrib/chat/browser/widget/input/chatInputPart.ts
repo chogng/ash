@@ -75,7 +75,7 @@ import { AccessibleViewRegistry } from '../../../../../../platform/accessibility
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { derived, observableFromEvent, observableValue, type IReader } from '../../../../../../base/common/observable.js';
+import { derived, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../../../base/common/observable.js';
 import { ICanvasContextService } from '../../../../canvases/common/canvas.js';
 import { CanvasesPillControl } from '../../../../canvases/browser/canvasesPillControl.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
@@ -220,6 +220,7 @@ export interface IChatInputPart extends IDisposable {
 	readonly inputEditor?: IChatInputEditor['codeEditor'];
 	readonly isSubmitting?: boolean;
 	readonly changesActionsHost?: HTMLElement;
+	readonly changesSummaryVisible?: IObservable<boolean>;
 	readonly composerForm?: HTMLElement;
 	readonly attachmentModel: ChatAttachmentModel;
 	readonly element: HTMLElement;
@@ -920,6 +921,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	get isSubmitting(): boolean { return this.submitting; }
 
 	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
+	get changesSummaryVisible(): IObservable<boolean> { return this.changesPill.summaryVisible; }
 	get composerForm(): HTMLElement { return this.inputContainer; }
 	get usesInlineVoiceControls(): boolean { return this.inlineActionsToolbar !== undefined; }
 	get composerFooter(): HTMLElement | undefined { return this.inputFooter; }

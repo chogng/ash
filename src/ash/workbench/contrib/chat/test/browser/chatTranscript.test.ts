@@ -4,6 +4,50 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('chatTranscript browser component', () => {
 	const browserTests = useBrowserTests();
+	test('long Code history restores tool disclosures and retains focused code while scrolling', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=en');
+		const chat = page.locator('#app-chat');
+		const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const articles = viewport.locator('article[data-item-id]');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(20, true));
+		await expect(viewport.getByText('Final result 19.', { exact: true })).toBeInViewport();
+		await expect(viewport.locator('[data-item-id="code-reply-0"]')).toHaveCount(0);
+		expect(await articles.count()).toBeLessThan(40);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(120, true));
+		const latest = viewport.getByText('Final result 119.', { exact: true });
+		const firstTool = viewport.locator('[data-tool-call-id="code-tool-1"] > details');
+		await expect(latest).toBeInViewport();
+		await expect(firstTool).toHaveCount(0);
+		expect(await articles.count()).toBeLessThan(40);
+
+		const jump = (latest: boolean) => viewport.evaluate((element, end) => { element.scrollTop = end ? element.scrollHeight : 0; }, latest);
+		await jump(false);
+		await expect(firstTool).toHaveAttribute('open', '');
+		await firstTool.locator(':scope > summary').press('Enter');
+		await expect(firstTool).not.toHaveAttribute('open');
+		await viewport.locator('.ash-chat-transcript-content').focus();
+		await jump(true);
+		await expect(firstTool).toHaveCount(0);
+		await jump(false);
+		await expect(firstTool).toBeAttached();
+		await expect(firstTool).not.toHaveAttribute('open');
+		await firstTool.locator(':scope > summary').press('Enter');
+		await expect(firstTool).toContainText('Tool evidence 1, line 0');
+		const codeInput = viewport.locator('[data-item-id="code-reply-0"] .ash-chat-code-block .stanza-editor-input');
+		await codeInput.focus();
+		await expect(codeInput).toBeFocused();
+		await codeInput.press('ControlOrMeta+A');
+		const selection = await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection);
+		expect(selection).toMatchObject({ startLineNumber: 1, endLineNumber: 14 });
+		await jump(true);
+		await expect(latest).toBeInViewport();
+		await expect(codeInput).toBeFocused();
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
+		await expect(firstTool).toHaveAttribute('open', '');
+		expect(await articles.count()).toBeLessThan(40);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`active request progress follows streamed messages inside the transcript in ${locale}`, async () => {
 			const { page } = browserTests;
@@ -578,6 +622,27 @@ suite('chatTranscript browser component', () => {
 			expect(Math.abs((await row.boundingBox())!.y - rowTop)).toBeLessThan(1);
 			expect(Math.abs((await composer.boundingBox())!.y - composerTop)).toBeLessThan(1);
 		}
+		const bottomFrames = await viewport.evaluate(async element => {
+			const chat = element.closest('.ash-chat')!;
+			const input = chat.querySelector('.ash-chat-input-container')!;
+			const rail = element.parentElement!.querySelector('.ash-scrollbar-track-vertical')!;
+			element.scrollTop = element.scrollHeight;
+			const frames: { railOverlap: number; remaining: number; }[] = [];
+			for (let frame = 0; frame < 6; frame++) {
+				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+				frames.push({
+					railOverlap: rail.getBoundingClientRect().bottom - input.getBoundingClientRect().top,
+					remaining: element.scrollHeight - element.clientHeight - element.scrollTop,
+				});
+			}
+			return frames;
+		});
+		for (const frame of bottomFrames) {
+			expect(frame.railOverlap).toBeLessThanOrEqual(1);
+			expect(frame.remaining).toBeLessThanOrEqual(1);
+		}
+		await viewport.evaluate(element => { element.scrollTop -= 140; });
+		await expect(jump).toBeVisible();
 		await jump.click();
 		await expect(row).toBeHidden();
 		expect(await edgeFade()).toBe('none');

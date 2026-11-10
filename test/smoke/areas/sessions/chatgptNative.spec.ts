@@ -1,8 +1,6 @@
 import { createServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
@@ -751,9 +749,9 @@ test.describe('Unified Chat sidebar', () => {
 		const ashReplyTime = ash.locator('.ash-chat-item-agentMessage time').first();
 		await expect(ashRequestTime).toBeVisible();
 		await expect(ashReplyTime).toBeVisible();
-		const requestDateTime = (await ashRequestTime.getAttribute('datetime'))!;
 		const replyDateTime = (await ashReplyTime.getAttribute('datetime'))!;
 		expect(Date.parse(requestDateTime)).toBeGreaterThanOrEqual(sentAfter);
+		const requestDateTime = (await ashRequestTime.getAttribute('datetime'))!;
 		expect(Date.parse(replyDateTime)).toBeGreaterThanOrEqual(Date.parse(requestDateTime));
 		expect(Date.parse(replyDateTime)).toBeLessThanOrEqual(Date.now());
 		const ashSessionId = await ash.getAttribute('data-session-id');
@@ -1084,14 +1082,6 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const ashRequests: string[] = [];
 			await using catalog = createAshModelServer(ashRequests);
 			await configureAshModel(catalog, application, workbench, testWorkspace.directory);
-			const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
-			const projectName = 'Chat routing fixture';
-			try {
-				await connection.client.request(APP_SERVER_METHODS['project/create'], {
-					commandId: randomUUID(), projectId: randomUUID(), name: projectName, description: '',
-					materials: [{ kind: 'folder', name: 'Workspace', path: pathToFileURL(testWorkspace.directory).href }],
-				});
-			} finally { await connection.close(); }
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
 			const newLabel = locale === 'en' ? 'New' : '新建';
 			const newChat = page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: newLabel, exact: true });
@@ -1133,34 +1123,32 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(ash.locator('.ash-chat-input-model-action')).toHaveText(model.model);
 			const ashDraftId = await ash.getAttribute('data-untitled-session-id');
 			expect(ashDraftId).toBeTruthy();
-			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
-			await expect(editor).toBeVisible();
-			await composer.waitForEditorContents(text => text === 'Hello from native UI');
 			const sidebar = page.locator('.ash-chat-navigation');
 			await expect(sidebar.getByRole('button', { name: 'Ash', exact: true })).toHaveCount(0);
 			await expect(sidebar.locator('.ash-sessions-list')).toHaveCount(0);
 			const codeMode = mode.getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true });
 			await codeMode.click();
+			await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
+			await expect(ash).toBeHidden();
 			const codeList = page.locator('.ash-sessions-list[data-mode="code"]');
-			await codeList.locator('.ash-sessions-list-item').getByText(locale === 'en' ? /\(draft\)/ : /（草稿）/).click();
+			await expect(codeList).toBeVisible();
+			await expect(codeList.locator(`[data-item="untitled:${ashDraftId}"]`)).toHaveCount(0);
+			await chatMode.click();
+			await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
 			await expect(ash).toHaveAttribute('data-untitled-session-id', ashDraftId!);
 			await ashComposer.waitForEditorContents(text => text === 'Hello from native UI');
-			await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
 			await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
 			await expect(modelMenu.getByRole('menuitemradio', { name: model.model, exact: true })).toBeVisible();
-			await expect(modelMenu.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toHaveCount(0);
+			await expect(modelMenu.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toBeVisible();
 			await expect(modelMenu.getByText(locale === 'en' ? 'New ChatGPT Chat with Model…' : '选择模型新建 ChatGPT 对话…', { exact: true })).toHaveCount(0);
 			await page.keyboard.press('Escape');
-			const projectPicker = ash.locator('.ash-sessions-workspace-picker');
-			await projectPicker.click();
-			await page.getByRole('menu').getByText(projectName, { exact: true }).click();
-			await expect(projectPicker).toHaveText(projectName);
 			await ashComposer.waitForEditorFocus();
 			await page.keyboard.press('Enter');
 			await expect(ash).toContainText('Answer from Ash');
 			expect(ashRequests).toEqual([model.model]);
-			await commands.runCommand('sessions.open.chatgpt');
+			await newChat.click();
 			await expect(editor).toBeVisible();
+			await composer.waitForEditorContents(text => text === 'Hello from native UI');
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(0);
 			await editor.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 			const answer = editor.locator('.ash-chat-item-agentMessage').last();
@@ -1249,7 +1237,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			for (const entry of pages) {
 				await viewport.evaluate(element => { element.scrollTop = 96; });
 				await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(96);
-				await page.locator(`[data-action-id="${entry.action}"] button`).click();
+				await page.locator(`[data-action-id="${entry.action}"] .ash-sessions-activity-item`).click();
 				await expect(page.locator(entry.content)).toBeVisible();
 				await expect(editor).toBeHidden();
 				await expect(history).toBeVisible();
@@ -1282,7 +1270,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(restoredNewChat).toBeVisible();
 			await expect(restoredNewChat).not.toHaveAttribute('aria-current', 'page');
 			for (const entry of pages) {
-				await restored.locator(`[data-action-id="${entry.action}"] button`).click();
+				await restored.locator(`[data-action-id="${entry.action}"] .ash-sessions-activity-item`).click();
 				restored = await workbench.reopenAgentsWindow(application, restored);
 				await expect(restored.locator(entry.content)).toBeVisible();
 				const restoredHistory = restored.locator('.ash-chat-navigation');

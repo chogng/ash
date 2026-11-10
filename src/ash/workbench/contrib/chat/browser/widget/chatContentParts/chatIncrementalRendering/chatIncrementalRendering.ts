@@ -37,21 +37,21 @@ export class IncrementalDOMMorpher extends Disposable {
 		return true;
 	}
 
-	update(markdown: IMarkdownString, incomplete: boolean): void {
+	update(markdown: IMarkdownString, incomplete: boolean, defer = true): void {
 		// Keep size admission synchronous, including while the response is hidden.
 		if (markdown.value.length <= this.sizeLimit) {
 			if (!this.visible) {
 				this.snapshot = { markdown, incomplete };
 				return;
 			}
-			if (markdown.value.length >= markdownFrameThreshold && this.tryMorph(markdown, incomplete)) return;
+			if (defer && markdown.value.length >= markdownFrameThreshold && this.tryMorph(markdown, incomplete)) return;
 		}
 		this.frame.clear();
 		this.snapshot = undefined;
 		this.commit(markdown, incomplete, false);
 	}
 
-	setVisible(visible: boolean): void {
+	setVisible(visible: boolean, defer = true): void {
 		this.visible = visible;
 		if (!visible) {
 			this.frame.clear();
@@ -59,7 +59,7 @@ export class IncrementalDOMMorpher extends Disposable {
 			const { markdown, incomplete } = this.snapshot;
 			this.snapshot = undefined;
 			// Showing a response uses the same synchronous or deferred admission.
-			this.update(markdown, incomplete);
+			this.update(markdown, incomplete, defer);
 		}
 	}
 

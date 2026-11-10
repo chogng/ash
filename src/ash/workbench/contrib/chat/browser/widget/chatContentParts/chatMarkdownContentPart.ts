@@ -74,6 +74,8 @@ interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly visible?: boolean;
 	/** The transcript admits new code documents after measuring their reserved row geometry. */
 	readonly deferCodeBlockModels?: boolean;
+	/** The virtual list measures a newly mounted row before returning from the scroll event. */
+	readonly synchronousInitialRender?: boolean;
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
@@ -136,7 +138,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));
 		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.domNode.remove(); }));
 		const markdown = typeof options.markdown === 'string' ? { value: options.markdown } : options.markdown ?? { value: '' };
-		this.incrementalRendering.update(markdown, options.fillInIncompleteTokens ?? false);
+		this.incrementalRendering.update(markdown, options.fillInIncompleteTokens ?? false, !options.synchronousInitialRender);
 	}
 
 	/** Reconciles appended text and provider corrections within this response's existing lifetime. */
@@ -161,8 +163,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			ownerMarkdownPartId: this.codeblocksPartId,
 			codeBlockIndex: index,
 			elementId: part.element.id,
-			uri: part.editor.getModel()?.uri,
-			languageId: part.editor.getModel()?.getLanguageId(),
+			uri: part.model?.uri,
+			languageId: part.model?.getLanguageId(),
 			focus: () => { if (!this.isDisposed && this.incrementalRendering.isVisible) { part.focus(); } },
 		}));
 	}
@@ -175,7 +177,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	}
 
 	public setVisible(visible: boolean): void {
-		this.incrementalRendering.setVisible(visible);
+		this.incrementalRendering.setVisible(visible, !this.options.synchronousInitialRender || this.markdown !== undefined);
 		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
 	}
 
@@ -415,7 +417,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					}
 				}
 				part.setVisible(this.incrementalRendering.isVisible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
-				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
+				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } });
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
 				else data.placeholder.replaceWith(part.element);
@@ -506,7 +508,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			text: fragment.source.slice(fragment.fence.headerLength).replace(/\n$/u, ''),
 			languageId: fragment.fence.languageId, codeBlockIndex: fragment.codeStart,
 			element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 },
-		}, this.domNode.clientWidth);
+		});
 		return true;
 	}
 }

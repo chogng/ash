@@ -539,6 +539,96 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 	test('ChatGPT response actions are icon-only and address the selected reply', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page, 'memory:fixture\n\n[Local file](file:///workspace/private.ts)\n\n[Web source](https://example.test/source)');
+		test('long ChatGPT history renders around the viewport and still reveals, selects and searches older messages', async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			const count = 240;
+			let reads = 0;
+			await page.route('**/service/backend-api/conversation/fixture-chat', route => {
+				reads++;
+				const messages = Array.from({ length: count }, (_, index) => {
+					const id = `long-${index}`;
+					const role = index % 2 ? 'assistant' : 'user';
+					const text = role === 'user' ? `Prompt ${index}` : `## Reply ${index}\n\n${'Long reply content. '.repeat(65 + index % 13)}\n\nDetail ${index}.`;
+					return [id, { parent: index ? `long-${index - 1}` : null, message: { id, author: { role }, content: { content_type: 'text', parts: [text] } } }];
+				});
+				return route.fulfill({ json: { title: 'Synthetic conversation', current_node: `long-${count - 1}`, mapping: Object.fromEntries(messages) } });
+			});
+			await page.goto('/chatgptNavigation.html?locale=en');
+			await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chatgpt.optimizeScrolling', true));
+			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+			const viewport = page.locator('.ash-chatgpt-widget .ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+			const articles = viewport.locator('article[data-item-id]');
+			const first = viewport.getByRole('heading', { name: 'Reply 1', exact: true });
+			const latest = viewport.getByRole('heading', { name: `Reply ${count - 1}`, exact: true });
+			await expect(latest).toBeInViewport();
+			await expect(first).toHaveCount(0);
+			expect(await articles.count()).toBeLessThan(45);
+			const scroll = await viewport.evaluate(async element => {
+				const transcript = element.querySelector('.ash-chat-transcript-content')!;
+				const initialRow = transcript.querySelector('article');
+				const viewportTop = element.getBoundingClientRect().top;
+				let maximumError = 0;
+				for (let step = 0; step < 24; step++) {
+					const anchor = [...transcript.querySelectorAll('article')].find(row => row.getBoundingClientRect().bottom > viewportTop)!;
+					const top = anchor.getBoundingClientRect().top;
+					element.dispatchEvent(new WheelEvent('wheel', { deltaY: -163, bubbles: true, cancelable: true }));
+					await new Promise(requestAnimationFrame);
+					maximumError = Math.max(maximumError, Math.abs(anchor.getBoundingClientRect().top - top - 163));
+				}
+				return { maximumError, mountedEarlierRows: initialRow !== transcript.querySelector('article') };
+			});
+			expect(scroll.mountedEarlierRows).toBe(true);
+			expect(scroll.maximumError).toBeLessThanOrEqual(2);
+
+			const handle = page.getByLabel('Show prompts', { exact: true });
+			await handle.press('Enter');
+			const prompt = page.locator('.ash-prompt-timeline-gutter').getByRole('button', { name: 'Prompt 0', exact: true });
+			await prompt.press('Enter');
+			await expect(first).toBeInViewport();
+
+			await viewport.evaluate(element => {
+				const start = [...element.querySelectorAll('pre')].find(node => node.textContent === 'Prompt 0')!;
+				const end = [...element.querySelectorAll('h2')].find(node => node.textContent === 'Reply 1')!;
+				element.ownerDocument.getSelection()!.setBaseAndExtent(start.firstChild!, 0, end.firstChild!, end.textContent!.length);
+				element.scrollTop = element.scrollHeight / 2;
+			});
+			await expect.poll(() => viewport.evaluate(element => [...element.querySelectorAll('article')].some(row => {
+				const rowTop = row.getBoundingClientRect().top;
+				const bounds = element.getBoundingClientRect();
+				return rowTop >= bounds.top && rowTop < bounds.bottom;
+			}))).toBe(true);
+			expect(await page.evaluate(() => getSelection()!.toString())).toMatch(/Prompt 0\s+Reply 1/u);
+			await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+			await page.keyboard.press('ControlOrMeta+c');
+			await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/Prompt 0\s+Reply 1/u);
+			await page.evaluate(() => getSelection()!.removeAllRanges());
+			await expect(first).toHaveCount(0);
+
+			await page.evaluate(() => window.ashChatGPTIntegration.showFind());
+			await page.getByRole('textbox', { name: 'Find in conversation' }).fill('Detail 1.');
+			await expect(first).toBeInViewport();
+			await page.getByRole('button', { name: 'Close Find' }).click();
+			await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('editor.accessibilitySupport', 'on'));
+			await expect(articles).toHaveCount(count);
+			await expect(first).toBeInViewport();
+			await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('editor.accessibilitySupport', 'off'));
+			await expect.poll(() => articles.count()).toBeLessThan(45);
+			await expect(first).toBeInViewport();
+			await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chatgpt.optimizeScrolling', false));
+			await expect(articles).toHaveCount(count);
+			await expect(first).toBeInViewport();
+			await page.evaluate(async () => {
+				await window.ashChatGPTIntegration.setConfiguration('sessions.chatgpt.optimizeScrolling', true);
+				await window.ashChatGPTIntegration.setConfiguration('chat.autoFollowReplies', false);
+			});
+			await expect.poll(() => articles.count()).toBeLessThan(45);
+			await page.getByRole('button', { name: 'Scroll to Latest' }).click();
+			await expect(latest).toBeInViewport();
+			await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
+			expect(reads).toBe(1);
+		});
+
 		await page.addInitScript(() => {
 			window.Audio = function () { return document.createElement('audio'); } as unknown as typeof Audio;
 			HTMLMediaElement.prototype.play = async function () { document.body.dataset.audioPlaying = 'true'; };
@@ -652,7 +742,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await row.hover();
 		await row.getByRole('button', { name: '更多操作', exact: true }).click();
 		await page.getByRole('menuitem', { name: '删除', exact: true }).click();
-		await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: '永久删除', exact: true }).click();
 		await expect(original).toHaveCount(0);
 		await fillMessage(page, 'Offline first question');
 		await page.getByRole('button', { name: '发送', exact: true }).click();

@@ -386,6 +386,10 @@ function createRichContentExtension(references: readonly ChatReplyReference[] = 
 
 /** Decode the wire syntax before the shared Chat renderer consumes the response. */
 export function decodeChatGPTReply(text: string, references?: readonly ChatReplyReference[], conversationId?: string): { readonly text: string; readonly resources: readonly ChatReplyResource[]; } {
+	const normalized = text.replace(/\r\n?/gu, '\n');
+	// Components, citations, writing envelopes and Markdown links or images
+	// can carry provider-specific content. Ordinary Markdown needs only the shared parser.
+	if (!/[<\[\uE200]|:::writing\{/u.test(normalized)) return { text: normalized, resources: [] };
 	const resources: ChatReplyResource[] = [];
 	const decoder = new Marked(createRichContentExtension(references, { collectResource: resource => resources.push(resource), conversationId }));
 	const parser = new decoder.Parser(decoder.defaults);
@@ -423,7 +427,6 @@ export function decodeChatGPTReply(text: string, references?: readonly ChatReply
 		}
 		return result + source.slice(cursor);
 	};
-	const normalized = text.replace(/\r\n?/gu, '\n');
 	const decoded = decode(normalized, decoder.lexer(normalized), false);
 	return { text: decoded, resources };
 }

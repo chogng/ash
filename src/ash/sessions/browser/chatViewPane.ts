@@ -7,6 +7,7 @@ import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { DisposableMap, DisposableStore } from '../../base/common/lifecycle.js';
 import { Emitter } from '../../base/common/event.js';
+import { constObservable } from '../../base/common/observable.js';
 import type { IQuickChatSession, IChatWidgetViewOptions } from '../../workbench/contrib/chat/browser/chat.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 import { IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -47,6 +48,8 @@ import { IEditorGroupsService } from '../../workbench/services/editor/common/edi
 import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
 
 let chatPaneInstanceId = 0;
+// A 20-turn history page can already contain 60 prompt, tool and reply rows.
+const codeHistoryVirtualizeFrom = constObservable(48);
 
 /**
  * Retains opened conversations behind a shared tab row or list switcher.
@@ -394,7 +397,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.openerService,
 				this.editorService,
 				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-				undefined, { ...options, configureModelInMenu: true, openTurnChanges },
+				undefined, { ...options, virtualizeHistoryFrom: options?.virtualizeHistoryFrom ?? codeHistoryVirtualizeFrom, configureModelInMenu: true, openTurnChanges },
 			);
 			this.paneScopes.set(pane, resources);
 			return pane;

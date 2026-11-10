@@ -1640,8 +1640,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			}
 			if (history?.status === 'fulfilled') {
 				this.setHistoryFailure('conversation', undefined);
-				const value = history.value;
-				if (!background || state.uncertain || state.parentId !== value.parentId || state.title !== value.title || !equals(state.messages, value.messages)) {
+				const value = this.retainNativeHistory(history.value, state.conversationId === history.value.id ? state : undefined);
+				if (!background || state.uncertain || state.parentId !== value.parentId || state.title !== value.title
+					|| state.olderCursor !== value.olderCursor || !equals(state.messages, value.messages)) {
 					this.restoreHistory(value, !!background);
 					this.rememberConversation(value.id);
 				} else {
@@ -1819,7 +1820,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	/** Retain the loaded prefix only when the new tail belongs to the same branch. */
-	private retainNativeHistory(history: ChatGPTHistory, saved: ChatTimeline['history']): ChatGPTHistory {
+	private retainNativeHistory(history: ChatGPTHistory, saved: Pick<ChatGPTHistory, 'messages' | 'olderCursor'> | undefined): ChatGPTHistory {
 		if (!this.native || !history.olderCursor || !saved) return history;
 		const prefixLength = saved.messages.findIndex(message => message.id === history.messages[0]?.id);
 		if (prefixLength <= 0) return history;
@@ -1836,13 +1837,20 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		history = this.retainNativeHistory(history, saved?.history);
 		const localId = this.localIdsByRemoteId.get(history.id) ?? saved?.localId ?? crypto.randomUUID();
 		const sameConversation = state.localConversationId === localId && (state.conversationId === history.id || !state.conversationId);
+		// Revalidating a cached conversation can return fresh objects for the same
+		// messages. Keep their identity so the adapter can reuse its decoded transcript.
+		const messages = sameConversation && equals(state.messages, history.messages) ? state.messages : history.messages;
 		this.bindConversation(history.id, localId);
-		this.persistHistory(history, saved?.tasks);
+		const cached = scoped?.history;
+		if (scoped?.localId !== localId || cached?.title !== history.title || cached.parentId !== history.parentId
+			|| cached.olderCursor !== history.olderCursor || !equals(cached.messages, messages)) {
+			this.persistHistory(history, saved?.tasks ?? []);
+		}
 		this.markHistoryValidated(history);
 		if (legacy) { this.timeline.remove(history.id); }
 		const draft = this.readDraft(localId);
 		this.update({
-			coworkTasks: sameConversation ? state.coworkTasks : saved?.tasks ?? [], localConversationId: localId, draft: draft?.text ?? '', attachments: draft?.attachments ?? [], conversationId: history.id, title: history.title, messages: history.messages, parentId: history.parentId, olderCursor: history.olderCursor,
+			coworkTasks: sameConversation ? state.coworkTasks : saved?.tasks ?? [], localConversationId: localId, draft: draft?.text ?? '', attachments: draft?.attachments ?? [], conversationId: history.id, title: history.title, messages, parentId: history.parentId, olderCursor: history.olderCursor,
 			...(!preserveModel ? this.historyModel(history) : {}),
 			...(!preserveLoading ? { busy: false, loading: undefined } : {}),
 			uncertain: false, stopped: false,

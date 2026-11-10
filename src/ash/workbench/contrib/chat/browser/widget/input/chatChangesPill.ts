@@ -15,6 +15,7 @@ import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } fr
 /** Presents conversation snapshots and polls the optional Git provider while New Chat is visible. */
 export class ChatChangesPill extends Disposable {
 	readonly domNode: HTMLDivElement;
+	readonly summaryVisible = observableValue(this, false);
 	private readonly button: Button;
 	private readonly counts: HTMLSpanElement;
 	private scope: 'workspace' | 'conversation' = 'conversation';
@@ -111,6 +112,7 @@ export class ChatChangesPill extends Disposable {
 			this.focusInput();
 		}
 		this.button.hidden = !visible;
+		this.summaryVisible.set(visible, undefined);
 		this.updateRowVisibility();
 		if (!visible || !statistics) return;
 		this.counts.classList.toggle('partial', statistics?.partial === true);

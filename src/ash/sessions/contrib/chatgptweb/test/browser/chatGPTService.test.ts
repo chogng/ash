@@ -650,6 +650,52 @@ suite('ChatGPT shared service', () => {
 		}
 	});
 
+	test('refresh and reopen reuse a cached native transcript after loading an older page', async () => {
+		const values = new Map<string, string>();
+		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
+		let earlierReads = 0;
+		let tailReads = 0;
+		const respond = async (path: string) => {
+			if (path.includes('/conversations/one/messages?')) {
+				earlierReads++;
+				return Response.json({ messages: [message('older', 'user', 'Earlier question')], page_info: { has_previous_page: false } });
+			}
+			if (path.includes('/conversations/one?')) {
+				tailReads++;
+				return Response.json({
+					title: 'One', current_node: 'reply', messages: [message('reply', 'assistant', 'Latest reply')],
+					page_info: { has_previous_page: true, start_cursor: 'earlier' },
+				});
+			}
+			return response(path);
+		};
+		{
+			using chat = fixture(respond, { values, native: true });
+			await chat.reload();
+			await chat.select('one');
+			await chat.loadOlderHistory();
+			const loaded = chat.state.get().messages;
+			assert.deepEqual(loaded.map(item => item.text), ['Earlier question', 'Latest reply']);
+			await chat.refresh();
+			assert.strictEqual(chat.state.get().messages, loaded);
+			assert.equal(chat.state.get().olderCursor, undefined);
+			assert.equal(tailReads, 2);
+		}
+		using reopened = fixture(respond, { values, native: true });
+		let cached: ReturnType<typeof reopened.state.get>['messages'] | undefined;
+		using listener = autorun(reader => {
+			const { messages, uncertain } = reopened.state.read(reader);
+			if (uncertain && messages.length) cached ??= messages;
+		});
+		await reopened.reload();
+		assert.ok(cached);
+		assert.deepEqual(cached.map(item => item.text), ['Earlier question', 'Latest reply']);
+		assert.strictEqual(reopened.state.get().messages, cached);
+		assert.equal(reopened.state.get().uncertain, false);
+		assert.equal(tailReads, 3);
+		assert.equal(earlierReads, 1);
+	});
+
 	test('cold restore and followup remain usable when only the recent list is rate-limited', async () => {
 		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
 		using clock = toDisposable(() => mock.timers.reset());

@@ -162,6 +162,8 @@ export interface IChatWidgetViewOptions {
 	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | null | undefined>;
 	readonly configureModelInMenu?: boolean;
 	readonly showPromptTimeline?: boolean;
+	/** Minimum number of loaded rows for virtualization. Undefined keeps the full transcript mounted. */
+	readonly virtualizeHistoryFrom?: import('../../../../base/common/observable.js').IObservable<number | undefined>;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly messagePresentation?: ChatMessagePresentation;

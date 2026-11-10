@@ -229,6 +229,15 @@ export class ChatAttachmentsContentPart extends Disposable {
 		}
 	}
 
+	get isPlaying(): boolean {
+		for (const [, row] of this.rows) {
+			if (!row.loaded || !row.media.matches('audio,video')) continue;
+			const media = row.media as HTMLMediaElement;
+			if (!media.paused && !media.ended) return true;
+		}
+		return false;
+	}
+
 	private async load(row: MediaRow): Promise<void> {
 		if (row.loaded || row.loading || row.isDisposed) return;
 		if (row.part.type === 'resource') { await this.loadResource(row); return; }

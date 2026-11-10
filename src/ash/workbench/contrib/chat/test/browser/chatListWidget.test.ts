@@ -1003,6 +1003,31 @@ suite('chatRenderer browser component', () => {
 		await expect(page.locator('[data-item-id="reply"]')).not.toHaveAttribute('data-transient');
 	});
 
+	test('offscreen Chat replies keep their measured scroll range on first reveal', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const viewport = page.locator('.ash-chat-list-widget > .ash-scrollbar-viewport');
+		await viewport.evaluate(element => {
+			element.parentElement!.classList.add('ash-chat-defer-completed');
+			window.ashChatTranscriptIntegration.renderItems(Array.from({ length: 40 }, (_, index) => ({
+				id: `history-${index}`, type: 'agentMessage', transient: false,
+				text: `## Reply ${index}\n\n` + 'A historical reply with variable height.\n\n'.repeat(index % 9 + 1),
+			})));
+		});
+		const oldest = viewport.locator('[data-item-id="history-0"]');
+		await expect(oldest).toHaveCSS('content-visibility', 'auto');
+		const heights = await viewport.evaluate(async element => {
+			const heights = [element.scrollHeight];
+			for (const fraction of [0.75, 0.5, 0.25, 0, 1]) {
+				element.scrollTop = (element.scrollHeight - element.clientHeight) * fraction;
+				await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+				heights.push(element.scrollHeight);
+			}
+			return heights;
+		});
+		expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+	});
+
 	test('long transcripts release offscreen code models and preserve focused code and text', async function () {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
@@ -1010,14 +1035,15 @@ suite('chatRenderer browser component', () => {
 			id: `code-${index}`, type: 'agentMessage', transient: false,
 			text: `Section ${index}.\n\n\`\`\`typescript\n${Array.from({ length: 30 }, (_, line) => `const value_${index}_${line} = ${line};`).join('\n')}\n\`\`\``,
 		}));
-		const firstFrameModels = await page.evaluate(async items => {
+		const firstFrame = await page.evaluate(async items => {
 			window.ashChatTranscriptIntegration.renderItems(items);
 			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-			return window.ashChatTranscriptIntegration.state().codeModelCount;
+			const { codeModelCount, editorCount } = window.ashChatTranscriptIntegration.state();
+			return { codeModelCount, editorCount };
 		}, items);
-		// Allocating every document and releasing it in the observer callback still
-		// raises the renderer's high-water mark on every session reconstruction.
-		expect(firstFrameModels).toBeLessThan(12);
+		// Offscreen fences reserve their height before allocating an editor or document.
+		expect(firstFrame.editorCount).toBeLessThan(12);
+		expect(firstFrame.codeModelCount).toBeLessThan(12);
 		await expect(page.locator('article[data-item-id]')).toHaveCount(60);
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBeLessThan(12);
 		const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
@@ -1026,6 +1052,7 @@ suite('chatRenderer browser component', () => {
 		await first.focus();
 		await first.press('ControlOrMeta+A');
 		const selection = await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection);
+		expect(selection).toMatchObject({ startLineNumber: 1, endLineNumber: 30 });
 		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
 		await expect(first).toBeFocused();
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBeLessThan(12);

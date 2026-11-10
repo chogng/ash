@@ -354,7 +354,10 @@ export class ScrollableElement extends Disposable {
 
 	private handleNativeScroll(): void {
 		const previous = this._state;
-		if (this.scrollableElement.scrollLeft !== previous.left || this.scrollableElement.scrollTop !== previous.top) this.smoothScroll.clear();
+		// Wheel, thumb and API scrolling already committed this position. Size
+		// changes are measured by the resize observer independently of this event.
+		if (this.scrollableElement.scrollLeft === previous.left && this.scrollableElement.scrollTop === previous.top) return;
+		this.smoothScroll.clear();
 		this.layout();
 		if (
 			previous.left === this._state.left &&
