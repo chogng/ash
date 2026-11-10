@@ -80,6 +80,12 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		this.button?.focus();
 	}
 
+	setLabel(label: string, ariaLabel = label): void {
+		if (!this.button) return;
+		this.button.label = label;
+		this.button.domNode.setAttribute('aria-label', ariaLabel);
+	}
+
 	override setTabbable(tabbable: boolean): void {
 		if (this.button) this.button.domNode.tabIndex = tabbable ? 0 : -1;
 	}

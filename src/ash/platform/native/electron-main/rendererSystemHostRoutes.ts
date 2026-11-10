@@ -5,10 +5,10 @@ import { toDisposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { Notification, systemPreferences, type BrowserWindow } from 'electron/main';
 import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
-import { ElectronOpenerService, validateLocalImage } from '../../opener/electron-main/electronOpenerService.js';
+import { ElectronOpenerService, validateImageOpenExtension, validateImageOpenRequest } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
-import { NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
+import { NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
 import { getScreenshot } from './nativeHostMainService.js';
 import { nativeToastRoutes, type INativeToast } from './nativeToast.js';
 import { REQUEST_MICROPHONE_ACCESS_CHANNEL, type IToastOptions } from '../common/native.js';
@@ -104,8 +104,13 @@ export function rendererSystemHostRoutes(
 		{ channel: 'ash:host:openExternal', validate: text, invoke: value => opener.openExternal(value as string) },
 		{
 			channel: NATIVE_HOST_OPEN_IMAGE_CHANNEL,
-			validate: validateLocalImage,
-			invoke: value => opener.openImageInDefaultApp(value as ReturnType<typeof validateLocalImage>),
+			validate: validateImageOpenRequest,
+			invoke: value => opener.openImage(value as ReturnType<typeof validateImageOpenRequest>),
+		},
+		{
+			channel: NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL,
+			validate: validateImageOpenExtension,
+			invoke: value => opener.listImageOpeningApplications(value as ReturnType<typeof validateImageOpenExtension>),
 		},
 		{
 			channel: 'ash:host:triggerPaste',

@@ -105,9 +105,15 @@ export class ContextView
 		return popupRevisions.get(document) ?? 0;
 	}
 
+	static getContainingDialog(target: Element): ContextView | undefined {
+		return findLast(visibleContextViews.get(target.ownerDocument) ?? [], view =>
+			view.options?.presentation === 'dialog' && view.element.contains(target));
+	}
+
 	static getHoverScope(target: HTMLElement): ContextView | undefined {
 		return findLast(visibleContextViews.get(target.ownerDocument) ?? [], view =>
-			view.options?.blockOutsidePointer && !isTargetInAnotherModal(target, view.element));
+			(view.options?.blockOutsidePointer || (view.options?.presentation === 'dialog' && view.contains(target))) &&
+			!isTargetInAnotherModal(target, view.element));
 	}
 
 	contains(target: Node): boolean {

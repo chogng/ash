@@ -2,7 +2,9 @@ import { app, shell } from 'electron';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { normalizeExternalUrl, type IExternalOpener } from '../common/opener.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { normalizeExternalUrl, type IExternalOpener, type IImageOpeningApplication, type ImageOpenExtension } from '../common/opener.js';
 
 /** Electron shell adapter for validated external URLs. */
 export class ElectronOpenerService implements IExternalOpener {
@@ -11,13 +13,31 @@ export class ElectronOpenerService implements IExternalOpener {
 		return true;
 	}
 
-	async openImageInDefaultApp({ bytes, extension }: LocalImage): Promise<void> {
+	async listImageOpeningApplications(extension: ImageOpenExtension): Promise<readonly IImageOpeningApplication[]> {
+		if (process.platform !== 'darwin') return [];
+		const directory = await mkdtemp(join(app.getPath('temp'), 'ash-preview-types-'));
+		try {
+			const target = join(directory, `Image.${extension}`);
+			await writeFile(target, '', { mode: 0o600 });
+			return (await findMacImageApplications(target, true)).map(({ id, name, isDefault, icon }) => ({ id, name, isDefault, icon }));
+		} finally {
+			await rm(directory, { recursive: true, force: true }).catch(() => { });
+		}
+	}
+
+	async openImage({ bytes, extension, applicationId }: LocalImage): Promise<void> {
 		const directory = await mkdtemp(join(app.getPath('temp'), 'ash-preview-'));
 		try {
 			const target = join(directory, `Image.${extension}`);
 			await writeFile(target, bytes, { mode: 0o600 });
-			const error = await shell.openPath(target);
-			if (error) throw new Error(error);
+			if (applicationId === undefined) {
+				const error = await shell.openPath(target);
+				if (error) throw new Error(error);
+			} else {
+				const application = (await findMacImageApplications(target)).find(candidate => candidate.id === applicationId);
+				if (!application) throw new Error('The selected application is no longer available for this image');
+				await runFile('/usr/bin/open', ['-a', application.path, target], { timeout: 10_000 });
+			}
 			retainPreview(directory);
 		} catch (error) {
 			await rm(directory, { recursive: true, force: true }).catch(() => { });
@@ -26,10 +46,26 @@ export class ElectronOpenerService implements IExternalOpener {
 	}
 }
 
-interface LocalImage { readonly bytes: Uint8Array; readonly extension: 'png' | 'jpg' | 'gif' | 'webp'; }
+interface LocalImage { readonly bytes: Uint8Array; readonly extension: ImageOpenExtension; readonly applicationId?: string; }
+
+export function validateImageOpenExtension(value: unknown): ImageOpenExtension {
+	if (value === 'png' || value === 'jpg' || value === 'gif' || value === 'webp') return value;
+	throw new TypeError('Unsupported image format');
+}
+
+export function validateImageOpenRequest(value: unknown): LocalImage {
+	if (!value || typeof value !== 'object' || !('bytes' in value) || Object.keys(value).some(key => key !== 'bytes' && key !== 'applicationId')) {
+		throw new TypeError('Invalid image open request');
+	}
+	const applicationId = 'applicationId' in value ? value.applicationId : undefined;
+	if (applicationId !== undefined && (process.platform !== 'darwin' || !isBundleId(applicationId))) {
+		throw new TypeError('Invalid image application');
+	}
+	return { ...validateLocalImage(value.bytes), applicationId };
+}
 
 /** Choose the system file association from bytes. The renderer never supplies a path. */
-export function validateLocalImage(bytes: unknown): LocalImage {
+function validateLocalImage(bytes: unknown): LocalImage {
 	if (!(bytes instanceof Uint8Array) || bytes.length < 12 || bytes.length > 20 * 1024 * 1024) {
 		throw new TypeError('Invalid image bytes');
 	}
@@ -39,6 +75,67 @@ export function validateLocalImage(bytes: unknown): LocalImage {
 	if (/^GIF8[79]a/u.test(header)) return { bytes, extension: 'gif' };
 	if (header.startsWith('RIFF') && header.endsWith('WEBP')) return { bytes, extension: 'webp' };
 	throw new TypeError('Unsupported image format');
+}
+
+const runFile = promisify(execFile);
+
+function isBundleId(value: unknown): value is string {
+	return typeof value === 'string' && /^[a-z0-9.-]{1,255}$/iu.test(value);
+}
+
+async function findMacImageApplications(file: string, includeIcons = false): Promise<readonly (IImageOpeningApplication & { readonly path: string; })[]> {
+	const { stdout } = await runFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', `
+ObjC.import('AppKit');
+function applicationIcon(workspace, path) {
+	try {
+		const image = $.NSImage.alloc.initWithSize($.NSMakeSize(18, 18));
+		image.lockFocus;
+		try {
+			workspace.iconForFile(path).drawInRectFromRectOperationFraction(
+				$.NSMakeRect(0, 0, 18, 18), $.NSMakeRect(0, 0, 0, 0), $.NSCompositingOperationSourceOver, 1);
+		} finally {
+			image.unlockFocus;
+		}
+		const bitmap = $.NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation);
+		const png = bitmap.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $.NSDictionary.dictionary);
+		return ObjC.unwrap(png.base64EncodedStringWithOptions(0));
+	} catch {
+		return undefined;
+	}
+}
+function run(args) {
+	const workspace = $.NSWorkspace.sharedWorkspace;
+	const file = $.NSURL.fileURLWithPath(args[0]);
+	const urls = workspace.URLsForApplicationsToOpenURL(file);
+	const defaultURL = workspace.URLForApplicationToOpenURL(file);
+	const defaultPath = defaultURL.isNil() ? undefined : ObjC.unwrap(defaultURL.path);
+	const applications = [];
+	for (let i = 0; i < urls.count; i++) {
+		const url = urls.objectAtIndex(i);
+		const path = ObjC.unwrap(url.path);
+		const id = ObjC.unwrap($.NSBundle.bundleWithURL(url).bundleIdentifier);
+		// These apps register image formats for attachments or document editing.
+		if (id === 'com.anthropic.claudefordesktop' || id === 'org.libreoffice.script') continue;
+		const name = ObjC.unwrap($.NSFileManager.defaultManager.displayNameAtPath(url.path));
+		const icon = args[1] === 'icons' ? applicationIcon(workspace, url.path) : undefined;
+		applications.push({ id, path, name, isDefault: path === defaultPath, icon });
+	}
+	return JSON.stringify(applications);
+}`, file, includeIcons ? 'icons' : 'names'], { timeout: 5_000, maxBuffer: 1024 * 1024 });
+	const applications: unknown = JSON.parse(stdout);
+	if (!Array.isArray(applications)) throw new TypeError('Invalid system application list');
+	const unique = new Map<string, IImageOpeningApplication & { path: string; }>();
+	for (const application of applications) {
+		if (application && isBundleId(application.id) && typeof application.path === 'string' && application.path.startsWith('/') &&
+			typeof application.name === 'string' && (!unique.has(application.id) || application.isDefault === true)) {
+			unique.set(application.id, {
+				id: application.id, path: application.path, name: application.name.replace(/\.app$/iu, ''), isDefault: application.isDefault === true,
+				icon: typeof application.icon === 'string' && application.icon.length <= 48 * 1024 && application.icon.startsWith('iVBORw0KGgo')
+					? `data:image/png;base64,${application.icon}` : undefined,
+			});
+		}
+	}
+	return [...unique.values()];
 }
 
 const previewDirectories = new Set<string>();

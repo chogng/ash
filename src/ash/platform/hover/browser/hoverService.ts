@@ -157,7 +157,7 @@ export class HoverService extends Disposable implements IHoverService {
 				}
 				const listeners = nestedListeners.value = new DisposableStore();
 				if (scope) {
-					// A menu-owned hover must not replace the menu in the shared host.
+					// A scoped hover shares its parent's lifetime without replacing it.
 					nestedView.value = new ContextView(scope.element);
 					listeners.add(scope.onDidHide(() => managed.hide()));
 				} else {

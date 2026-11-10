@@ -621,7 +621,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 							if (!image?.naturalWidth) return localize('chat.context.previewFailed', 'Preview unavailable: {0}', previewName);
 							const summary = localize('chat.context.imagePreviewAccessibility', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', image.alt, image.naturalWidth, image.naturalHeight);
 							if (referencePreview.getAttribute('role') !== 'dialog') return summary;
-							const zoomHelp = localize('chat.context.imagePreviewZoomHelp', 'Focus Image viewport and press Plus or Minus to zoom, or 0 to fit.');
+							const zoomHelp = localize('chat.context.imagePreviewZoomHelp', 'Open the zoom percentage menu to choose a level or Zoom to fit. In the image viewport, press Plus or Minus to zoom, or 0 to fit. Use Left or Right Arrow to move between image preview actions.');
 							const annotationHelp = referencePreview.querySelector('.ash-image-annotation')
 								? localize('chat.image.annotationHelp', 'Choose Annotate image to draw in the preview. Use Undo stroke or Cancel annotation to make changes, or Done annotating to add the image to this draft.') : '';
 							return [summary, zoomHelp, annotationHelp].filter(Boolean).join('\n');

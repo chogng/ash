@@ -63,7 +63,10 @@
 	display: flex;
 	align-items: stretch;
 	gap: 0;
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
 }
 
 .ash-split-action-primary,
@@ -79,8 +82,8 @@
 }
 
 .ash-split-action-primary > .ash-button {
-	border-radius: var(--ash-cornerRadius-small) 0 0
-		var(--ash-cornerRadius-small);
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
 }
 
 .ash-toolbar
@@ -112,8 +115,8 @@
 		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
 	);
 	padding: 0 var(--ash-spacing-size20);
-	border-radius: 0 var(--ash-cornerRadius-small) var(--ash-cornerRadius-small)
-		0;
+	border-start-start-radius: 0;
+	border-end-start-radius: 0;
 }
 
 .ash-toolbar .ash-split-action-dropdown > .ash-button-primary {

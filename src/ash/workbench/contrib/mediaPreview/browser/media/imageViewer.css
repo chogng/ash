@@ -14,6 +14,8 @@
 	min-height: 100%;
 	width: max-content;
 	height: max-content;
+	/* A transient pinch must not change the enclosing scroll range. */
+	overflow: clip;
 }
 
 .ash-image-viewer-image {
@@ -32,6 +34,7 @@
 .ash-image-viewer-media {
 	position: relative;
 	flex: 0 0 auto;
+	transform-origin: top left;
 }
 
 .ash-image-annotation {

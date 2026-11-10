@@ -1220,26 +1220,84 @@ test('Code image preview zooms, saves, opens in the system viewer, and attaches 
 		const preview = page.getByRole('dialog', { name: 'Preview annotate.png', exact: true });
 		const image = preview.getByRole('img', { name: 'annotate.png', exact: true });
 		await expect(image).toBeVisible();
+		await expect(page.locator('.ash-context-view-dialog').filter({ has: preview })).toHaveCSS('-webkit-app-region', 'no-drag');
+		const toolbar = preview.getByRole('toolbar', { name: 'Image preview actions', exact: true });
+		const zoom = toolbar.getByRole('button', { name: /^Zoom: \d+%$/u });
+		await expect(zoom).toBeEnabled();
+		const iconButtons = [
+			toolbar.getByRole('button', { name: 'Save image', exact: true }),
+			toolbar.getByRole('button', { name: process.platform === 'darwin' ? 'Choose image app' : 'Open', exact: true }),
+			toolbar.getByRole('button', { name: 'Annotate image', exact: true }),
+			preview.getByRole('button', { name: 'Close image preview', exact: true }),
+		];
+		for (const button of iconButtons) {
+			await expect(button).toHaveCSS('width', '28px');
+			await expect(button).toHaveCSS('height', '28px');
+		}
 		await testInfo.attach('image-preview-actions', { body: await preview.screenshot(), contentType: 'image/png' });
 		const width = () => image.evaluate(element => element.getBoundingClientRect().width);
 		const fitted = await width();
-		await preview.getByRole('button', { name: 'Zoom in', exact: true }).click();
-		await expect.poll(width).toBeGreaterThan(fitted);
-		await preview.getByRole('button', { name: 'Fit to window', exact: true }).click();
+		await zoom.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(toolbar.getByRole('button', { name: 'Save image', exact: true })).toBeFocused();
+		await zoom.press('ArrowDown');
+		const zoomMenu = page.getByRole('menu');
+		const fit = zoomMenu.getByRole('menuitemradio', { name: 'Zoom to fit', exact: true });
+		await expect(fit).toHaveAttribute('aria-checked', 'true');
+		await zoomMenu.getByRole('menuitemradio', { name: '100%', exact: true }).click();
+		await expect(zoom).toHaveText('100%');
+		await expect.poll(width).toBe(256);
+		await zoom.click();
+		await expect(zoomMenu.getByRole('menuitemradio', { name: '100%', exact: true })).toHaveAttribute('aria-checked', 'true');
+		await fit.click();
 		await expect.poll(width).toBe(fitted);
+		const fittedLabel = await zoom.textContent();
 		await preview.locator('.ash-image-viewer').dispatchEvent('wheel', { deltaY: -45, ctrlKey: true });
 		await expect.poll(width).toBeGreaterThan(fitted);
+		await expect(zoom).not.toHaveText(fittedLabel!);
 		await image.click({ button: 'right' });
 		await expect(preview).toBeVisible();
 
 		await preview.getByRole('button', { name: 'Save image', exact: true }).click();
 		await expect.poll(async () => readFile(savePath, 'base64').catch(() => '')).toBe(original);
-		await preview.getByRole('button', { name: 'Open in default image app', exact: true }).click();
+		const openImage = toolbar.getByRole('button', { name: /^Open(?: with .+)?$/u });
 		const opened = () => application.evaluate(() => (globalThis as { openedChatImage?: string; }).openedChatImage);
+		if (process.platform === 'darwin') {
+			const chooseApp = toolbar.getByRole('button', { name: 'Choose image app', exact: true });
+			await expect(openImage.locator('img')).toBeVisible();
+			await openImage.focus();
+			await page.keyboard.press('ArrowRight');
+			await expect(chooseApp).toBeFocused();
+			await chooseApp.press('Enter');
+			const openMenu = page.getByRole('menu');
+			const defaultApp = openMenu.locator('[role="menuitemradio"][aria-checked="true"]');
+			await expect(defaultApp).toHaveAttribute('aria-checked', 'true');
+			const defaultName = (await defaultApp.innerText()).trim();
+			const defaultEntry = openMenu.getByRole('menuitemradio', { name: defaultName, exact: true });
+			await expect(defaultEntry).toHaveCount(1);
+			await expect(openMenu.getByRole('menuitemradio').first()).toHaveText(defaultName);
+			await expect(openImage).toHaveAccessibleName(`Open with ${defaultName}`);
+			await expect(defaultApp.locator('.ash-menu-leading-slot img')).toBeVisible();
+			await expect(defaultApp.locator('.ash-menu-trailing-slot .ash-icon-check')).toBeVisible();
+			await expect(openMenu.getByRole('menuitemradio', { name: /^(Default application|Claude|LibreOffice(?:Dev)?)$/iu })).toHaveCount(0);
+			const alternative = openMenu.locator('[role="menuitemradio"][aria-checked="false"]').last();
+			await expect(alternative).toBeVisible();
+			const appName = await alternative.innerText();
+			await alternative.click();
+			await expect(openImage).toHaveAccessibleName(`Open with ${appName.trim()}`);
+			await expect(openImage).toHaveText('Open');
+			expect(await opened()).toBeUndefined();
+			await chooseApp.click();
+			await expect(openMenu.getByRole('menuitemradio', { name: appName.trim(), exact: true })).toHaveAttribute('aria-checked', 'true');
+			await defaultEntry.click();
+			await expect(openImage).toHaveAccessibleName(`Open with ${defaultName}`);
+		}
+		await openImage.click();
 		await expect.poll(opened).toMatch(/\.png$/u);
 		expect(await readFile((await opened())!, 'base64')).toBe(original);
 
-		await preview.getByRole('button', { name: 'Fit to window', exact: true }).click();
+		await zoom.click();
+		await fit.click();
 		const annotate = preview.getByRole('button', { name: 'Annotate image', exact: true });
 		const done = preview.getByRole('button', { name: 'Done annotating', exact: true });
 		await annotate.click();
