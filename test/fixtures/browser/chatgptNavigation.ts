@@ -1,7 +1,7 @@
+import './chatFixtureLocalization.js';
 import { projectMaterialFilesScheme } from '../../../src/ash/platform/projects/common/projectMaterialFiles.js';
 import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
-import './chatFixtureLocalization.js';
 import '../../../src/ash/sessions/browser/actions/sessionsChatActions.js';
 import '../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js';
 import '../../../src/ash/sessions/contrib/projects/browser/projects.contribution.js';
@@ -46,6 +46,7 @@ import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
 import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
 import { IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
+import { ChatListForks } from '../../../src/ash/sessions/contrib/chat/browser/chatListForks.js';
 import { SessionActionsService } from '../../../src/ash/sessions/browser/sessionActionsService.js';
 import { IAgentSessionActionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
@@ -409,7 +410,7 @@ if (parameters.has('mixedCatalog')) {
 	}));
 	sources.push(resources.add(ashServices.createInstance(NativeChatCatalogSource)));
 }
-services.registerInstance(IChatListCatalog, { sources });
+services.registerInstance(IChatListCatalog, { sources, forks: resources.add(new ChatListForks(sources, services.get(IStorageService))) });
 services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));
 const titlebarContent = document.createElement('div');
 titlebarContent.className = 'ash-sessions-titlebar-page-content';

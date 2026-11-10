@@ -452,6 +452,33 @@ export class ChatGPTClient {
 		return { id, ...this.readGraphHistory(value, mapping, head, id), ...historyProjectId(value) };
 	}
 
+	async readForkEvidence(id: string, signal: AbortSignal) {
+		const { value, mapping, head } = await this.conversationGraph(id, signal);
+		const readSource = (metadata: Record<string, unknown>) => {
+			const parent = metadata.branching_from_conversation_id;
+			const title = metadata.branching_from_conversation_title;
+			return typeof parent === 'string' && parent !== id && /^[A-Za-z0-9_-]{1,240}$/u.test(parent)
+				? { id: parent, title: typeof title === 'string' && title.trim() ? title : undefined }
+				: undefined;
+		};
+		let source = readSource(value);
+		let hasMarker = !!source;
+		const messages = new Map<string, number>();
+		for (const node of activeNodes(mapping, head)) {
+			const message = node.message;
+			if (!isRecord(message)) continue;
+			if (!hasMarker && isRecord(message.metadata)) {
+				source = readSource(message.metadata);
+				const owner = message.metadata.branching_from_conversation_owner;
+				hasMarker = !!source || typeof owner === 'string' && !!owner;
+			}
+			if (!isRecord(message.author) || message.author.role !== 'user' && message.author.role !== 'assistant' || typeof message.id !== 'string') continue;
+			const time = conversationTimestamp(message.create_time);
+			if (time !== undefined) messages.set(message.id, time);
+		}
+		return { source, hasMarker, createdAt: conversationTimestamp(value.create_time), messages };
+	}
+
 	async fork(id: string, messageId: string, signal: AbortSignal): Promise<Omit<ChatGPTHistory, 'id'> & { readonly projectId?: string; }> {
 		const result: unknown = await (await this.request('/conversation/new_branch', signal, {
 			method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversation_id: id, message_id: messageId }),

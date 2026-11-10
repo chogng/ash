@@ -525,6 +525,7 @@
 		"--scm-graph-row-inset",
 		"--sessions-accent",
 		"--sessions-accent-strong",
+		"--sessions-fork-depth",
 		"--sessions-muted-surface",
 		"--sessions-row-background",
 		"--sessions-row-title-distance",

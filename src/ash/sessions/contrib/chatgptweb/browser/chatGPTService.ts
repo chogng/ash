@@ -231,6 +231,8 @@ export interface IChatGPTService {
 	readonly newDraftRevision: number;
 	/** Reports permanent removal or replacement of an identity within the current catalog. */
 	readonly onDidRetireConversationIdentity: Event<{ readonly id: string; readonly replacementId?: string; }>;
+	readonly onDidCreateFork?: Event<{ readonly id: string; readonly parentId: string; }>;
+	readForkEvidence?(id: string, signal: AbortSignal): ReturnType<ChatGPTClient['readForkEvidence']>;
 	initialize(): void;
 	refresh(): Promise<void>;
 	setNetworkAvailable(available: boolean): void;
@@ -343,6 +345,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private readonly projectRequests = this._register(new ResourceQueue());
 	private readonly retiredConversationIdentity = this._register(new Emitter<{ readonly id: string; readonly replacementId?: string; }>());
 	public readonly onDidRetireConversationIdentity = this.retiredConversationIdentity.event;
+	private readonly createdFork = this._register(new Emitter<{ readonly id: string; readonly parentId: string; }>());
+	public readonly onDidCreateFork = this.createdFork.event;
 	private draftRevision = 0;
 	public get newDraftRevision(): number { return this.draftRevision; }
 	private readonly client: ChatGPTClient;
@@ -953,6 +957,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	public share(id: string, messageId?: string): Promise<string | undefined> { return this.manage(id, signal => this.client.share(id, signal, messageId)); }
+
+	public readForkEvidence(id: string, signal: AbortSignal): ReturnType<ChatGPTClient['readForkEvidence']> {
+		return this.client.readForkEvidence(id, AbortSignal.any([signal, this.management.signal, this.historyConnection.signal]));
+	}
 
 	public async fork(id: string, messageId: string): Promise<void> {
 		const state = this.model.get();
@@ -2452,6 +2460,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					// The preview stays a draft until the server identifies the separate conversation.
 					if (!event.conversationId) { continue; }
 					if (event.conversationId === state.branch.conversationId) { break; }
+					this.createdFork.fire({ id: event.conversationId, parentId: state.branch.conversationId });
 				}
 				if (!acknowledged) {
 					acknowledged = true;

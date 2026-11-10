@@ -10,6 +10,7 @@ import { appendIcon } from '../../../../../../base/browser/ui/lxicons/lxicon.js'
 import type { IAction } from '../../../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
+import { Event } from '../../../../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../../base/common/uri.js';
@@ -18,6 +19,8 @@ import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../../editor/com
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { PLAINTEXT_LANGUAGE_ID } from '../../../../../../editor/common/languages/modesRegistry.js';
+import { ITreeSitterLibraryService } from '../../../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { localize } from '../../../../../../nls.js';
 import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
 import { MenuId } from '../../../../../../platform/actions/common/actions.js';
@@ -27,6 +30,8 @@ import { IConfigurationService } from '../../../../../../platform/configuration/
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
+import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
+import { createTreeSitterSyntaxSession } from '../../../../../services/treeSitter/browser/treeSitterLibraryService.js';
 import { CodeEditorConfiguration } from '../../../../codeEditor/common/editorConfiguration.js';
 import { CopyCodeBlockActionId } from '../../actions/chatCodeblockActions.js';
 import { ChatEditorConfiguration } from '../../../common/constants.js';
@@ -65,6 +70,7 @@ export class CodeBlockPart extends Disposable {
 	private readonly language: HTMLElement;
 	private readonly pendingActions = new Set<string>();
 	private data: ICodeBlockData | undefined;
+	private languageId = PLAINTEXT_LANGUAGE_ID;
 	private readonly relayout: RunOnceScheduler;
 	private editor: CodeEditorWidget | undefined;
 	private layoutWidth: number | undefined;
@@ -82,6 +88,8 @@ export class CodeBlockPart extends Disposable {
 		@ILanguageService private readonly languages: ILanguageService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IActionViewItemService private readonly actionViewItems: IActionViewItemService,
+		@ITreeSitterLibraryService private readonly syntax: ITreeSitterLibraryService,
+		@IThemeService private readonly themes: IThemeService,
 	) {
 		super();
 		this.element = h(document, 'div');
@@ -140,6 +148,9 @@ export class CodeBlockPart extends Disposable {
 		this.editorContainer = h(document, 'div', { className: 'ash-chat-code-block-editor' });
 		this.element.append(header, this.editorContainer);
 		this.relayout = this._register(new RunOnceScheduler(() => this.layout(), 0));
+		this._register(this.languages.onDidChange(() => {
+			if (this.data) this.updateLanguage(this.data.languageId);
+		}));
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
@@ -253,20 +264,21 @@ export class CodeBlockPart extends Disposable {
 		return editor;
 	}
 
-	public render(data: ICodeBlockData, width?: number): void {
-		if (this.data?.languageId !== data.languageId) {
-			let label = data.languageId;
-			if (this.presentation === 'card') {
-				if (!label) {
-					label = localize('chat.code.plainLabel', 'Code');
-				} else if (this.languages.getRegisteredLanguageIds().includes(label)) {
-					label = this.languages.getLanguageName(label) ?? label;
-				} else {
-					label = label.charAt(0).toUpperCase() + label.slice(1);
-				}
-			}
-			this.language.textContent = label;
+	private updateLanguage(info: string): void {
+		const resolved = this.languages.getRegisteredLanguageIds().includes(info) ? info : this.languages.getLanguageIdByLanguageName(info);
+		this.languageId = resolved ?? PLAINTEXT_LANGUAGE_ID;
+		let label = info;
+		if (this.presentation === 'card') {
+			const name = resolved ? this.languages.getLanguageName(resolved) : null;
+			label = info ? name ?? (info.charAt(0).toUpperCase() + info.slice(1)) : localize('chat.code.plainLabel', 'Code');
 		}
+		if (this.language.textContent !== label) this.language.textContent = label;
+		const model = this.documentModel.value;
+		if (model && model.getLanguageId() !== this.languageId) model.setLanguage(this.languageId);
+	}
+
+	public render(data: ICodeBlockData, width?: number): void {
+		if (this.data?.languageId !== data.languageId) this.updateLanguage(data.languageId);
 		this.data = data;
 		this.toolbar.setAttribute('aria-label', localize('chat.code.numberedActions', 'Code block {0} actions', data.codeBlockIndex + 1));
 		if (!this.visible) {
@@ -280,18 +292,20 @@ export class CodeBlockPart extends Disposable {
 			}
 			return;
 		}
-		// Fence info can be empty, incomplete, or an alias rather than a valid registry ID.
-		const languageId = this.languages.getRegisteredLanguageIds().includes(data.languageId) ? data.languageId
-			: this.languages.getLanguageIdByLanguageName(data.languageId) ?? 'plaintext';
 		const editor = this.editor ??= this.createEditor();
 		const model = this.documentModel.value;
 		if (!model) {
-			const created = new TextModel(data.text, { languageId });
+			const created = new TextModel(data.text, {
+				languageId: this.languageId,
+				tokenization: {
+					createSyntaxSession: model => createTreeSitterSyntaxSession(model, this.configuration, this.syntax, this.themes),
+					onDidChangeSyntaxBackend: this.syntax.onDidChange,
+					onDidChangeLanguageSupport: Event.map(this.themes.onDidColorThemeChange, () => undefined),
+				},
+			});
 			editor.setModel(created);
 			this.documentModel.value = created;
 		} else {
-			// A completed language fence changes highlighting, not the response document's lifetime.
-			if (model.getLanguageId() !== languageId) model.setLanguage(languageId);
 			const previous = model.getValue();
 			if (previous !== data.text) {
 				const selections = editor.getSelections();

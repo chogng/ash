@@ -29,6 +29,7 @@ export interface SessionsCatalogRow {
 	readonly disabled?: boolean;
 	readonly actionsDisabled?: boolean;
 	readonly defaultIcon: Icon;
+	readonly forkSource?: { readonly id: string; readonly title: string; readonly open?: () => void; };
 	readonly iconId?: string;
 	readonly setIcon?: (icon: Icon | undefined) => void;
 	readonly pinned?: boolean;
@@ -70,6 +71,7 @@ interface SessionsCatalogSection {
 
 export interface SessionsCatalogSnapshot {
 	readonly sections: readonly SessionsCatalogSection[];
+	readonly forkEntries?: readonly SessionsCatalogRow[];
 	readonly loading: boolean;
 }
 

@@ -28,6 +28,8 @@ Desktop Chat and Code each retain a Sessions tree with its own grouping, sorting
 
 Shared Ash code sees conversations through the Ash Chat catalog contract. The adapter translates ChatGPT conversations into that contract before the views and actions consume them.
 
+Ash Chat owns the conversation experience across response backends. The shared catalog supplies Fork relationships and navigation to the sidebar. Native Chat uses the parent Thread recorded by App Server. For contributed conversations, Ash stores the relationship under the account-scoped catalog identity, using the backend's confirmed Fork result or verifiable history evidence. Response backends supply those facts and implement conversation operations through the catalog contract.
+
 | Layer                   | Works with                                                                           | Responsibility                                                                                                                              |
 | ----------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Ash views and actions   | Ash catalog conversations with an opaque identity, state, and supported capabilities | Render conversations and invoke Ash capabilities. For example, `agentSession.archive` calls the selected conversation's Archive capability. |

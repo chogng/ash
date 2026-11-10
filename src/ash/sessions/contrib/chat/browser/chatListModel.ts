@@ -4,7 +4,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { canOpenThreadInCode } from '../../../services/sessions/common/session.js';
+import { canOpenThreadInCode, type IChat, type ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
@@ -34,8 +34,22 @@ import { ISessionsListModelService } from '../../../services/sessions/browser/se
 
 import { sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
 import { NativeConversationShare } from './nativeConversationShare.js';
+import { ChatListForks } from './chatListForks.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { URI } from '../../../../base/common/uri.js';
+
+export interface ChatListForkReference {
+	readonly id: string;
+	readonly title?: string;
+	readonly preferenceKey?: string;
+}
+
+export interface ChatListForkEvidence {
+	readonly source?: ChatListForkReference;
+	readonly hasMarker: boolean;
+	readonly createdAt?: number;
+	readonly messages: ReadonlyMap<string, number>;
+}
 
 export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
@@ -55,6 +69,9 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly disabled?: boolean;
 	readonly actionsDisabled?: boolean;
 	readonly defaultIcon: Icon;
+	readonly forkSource?: { readonly id: string; readonly title: string; readonly open?: (signal: AbortSignal) => Promise<void>; };
+	readonly loadForkEvidence?: (signal: AbortSignal) => Promise<ChatListForkEvidence>;
+	readonly openForkSource?: (source: ChatListForkReference, signal: AbortSignal) => Promise<void>;
 	/** Opaque profile identity for catalog conversation preferences. */
 	readonly preferenceKey?: string;
 	readonly open: (signal: AbortSignal, threadId?: string) => Promise<void>;
@@ -124,6 +141,8 @@ export interface ChatListProject {
 
 export interface ChatListSnapshot {
 	readonly entries: readonly ChatListEntry[];
+	/** Threads within an existing session appear as shortcuts in its fork tree. */
+	readonly forkEntries?: readonly ChatListEntry[];
 	readonly projects?: readonly ChatListProject[];
 	readonly groups?: readonly SessionGroup[];
 	readonly loading?: boolean;
@@ -132,6 +151,7 @@ export interface ChatListSnapshot {
 /** Catalog owners supply records and operations. The list owns their placement. */
 export interface ChatListSource {
 	readonly snapshot: IObservable<ChatListSnapshot>;
+	readonly onDidCreateFork?: Event<{ readonly key: string; readonly parent: ChatListForkReference; }>;
 	readonly onDidRetirePreferenceIdentity?: Event<{ readonly key: string; readonly replacementKey?: string; }>;
 	/** Returns the project member references this source confirmed archived. */
 	archiveProjectMembers?(references: ReadonlySet<string>): Promise<ReadonlySet<string>>;
@@ -141,16 +161,19 @@ export interface ChatListSource {
 
 export interface IChatListCatalog {
 	readonly sources: readonly ChatListSource[];
+	readonly forks?: Pick<ChatListForks, 'project'>;
 }
 
 export const IChatListCatalog = createServiceIdentifier<IChatListCatalog>('chatListCatalog');
 
 export class ChatListCatalog extends Disposable implements IChatListCatalog {
 	readonly sources: readonly ChatListSource[];
+	readonly forks: ChatListForks;
 
 	constructor(adapters: readonly SyncDescriptor<ChatListSource>[],
 		@IInstantiationService instantiation: IInstantiationService,
 		@ISessionsListModelService list: ISessionsListModelService,
+		@IStorageService storage: IStorageService,
 	) {
 		super();
 		this.sources = adapters.map(adapter => {
@@ -168,6 +191,7 @@ export class ChatListCatalog extends Disposable implements IChatListCatalog {
 			}
 			return source;
 		});
+		this.forks = this._register(new ChatListForks(this.sources, storage));
 	}
 }
 
@@ -203,23 +227,60 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 			groupsChanged.read(reader);
 			const active = view.chatSelection.read(reader);
 			const selectedId = visible.read(reader) && active?.kind === 'thread' ? active.sessionId : undefined;
-			const rows: ChatListEntry[] = [];
-			for (const session of catalog.read(reader)) {
-				if (session.kind !== 'chat' || session.backendSessionId !== undefined || session.status !== 'active'
-					|| session.sessionId !== selectedId && !list.isSessionListed(session)) continue;
+			const selectedThread = selectedId && active?.kind === 'thread' ? active.threadId : undefined;
+			const sessions = catalog.read(reader).filter(session => session.kind === 'chat' && session.backendSessionId === undefined && session.status === 'active');
+			const roots = new Map<string, IChat>();
+			const threads = new Map<string, { readonly session: ISession; readonly thread: IChat; readonly id: string; }>();
+			for (const session of sessions) {
 				const chats = session.chats.filter(chat => chat.status === 'active');
-				const thread = chats.find(chat => chat.threadId === session.sessionId)
-					?? chats.find(chat => chat.origin.type === 'root') ?? chats[0];
+				const root = chats.find(chat => chat.threadId === session.sessionId) ?? chats.find(chat => chat.origin.type === 'root') ?? chats[0];
+				if (!root) continue;
+				roots.set(session.sessionId, root);
+				for (const thread of chats) {
+					const id = thread === root ? `ash:${session.sessionId}` : `ash:thread:${JSON.stringify([session.sessionId, thread.threadId])}`;
+					threads.set(thread.threadId, { session, thread, id });
+				}
+			}
+			const openThread = async (signal: AbortSignal, sessionId: string, threadId: string) => {
+				await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
+				if (!signal.aborted) view.selectChatThread(sessionId, threadId);
+			};
+			const forkSource = (thread: IChat): ChatListEntry['forkSource'] => {
+				if (thread.origin.type !== 'fork') return undefined;
+				const parent = threads.get(thread.origin.parentThreadId);
+				if (!parent) return {
+					id: `ash:unlisted-thread:${thread.origin.parentThreadId}`,
+					title: localize('sessions.list.forkSourceUnavailable', 'Source conversation unavailable'),
+				};
+				return {
+					id: parent.id, title: parent.thread.title || parent.session.title,
+					open: signal => openThread(signal, parent.session.sessionId, parent.thread.threadId),
+				};
+			};
+			const rows: ChatListEntry[] = [];
+			const forkEntries: ChatListEntry[] = [];
+			for (const session of sessions) {
+				if (session.sessionId !== selectedId && !list.isSessionListed(session)) continue;
+				const thread = roots.get(session.sessionId);
 				if (!thread) continue;
 				const id = session.sessionId;
 				const title = session.title || localize('sessions.list.untitled', 'Untitled Session');
-				const selectedThreadId = selectedId === id && active?.kind === 'thread' ? active.threadId : undefined;
+				const selectedThreadId = selectedId === id ? selectedThread : undefined;
 				const isPinned = list.isSessionPinned(session);
-				const open = async (signal: AbortSignal, threadId = thread.threadId) => {
-					await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
-					if (signal.aborted) return;
-					view.selectChatThread(id, threadId);
-				};
+				const open = (signal: AbortSignal, threadId = thread.threadId) => openThread(signal, id, threadId);
+				for (const child of session.chats) {
+					if (child === thread || child.status !== 'active' || child.origin.type !== 'fork') continue;
+					forkEntries.push({
+						id: threads.get(child.threadId)!.id,
+						title: child.title || localize('sessions.list.untitledChat', 'Untitled Chat'),
+						createdAt: child.createdAt?.getTime(),
+						updatedAt: (child.updatedAt ?? child.createdAt)?.getTime(),
+						selected: selectedThreadId === child.threadId,
+						defaultIcon: Lxicon.chatSession,
+						forkSource: forkSource(child),
+						open: signal => openThread(signal, id, child.threadId),
+					});
+				}
 				rows.push({
 					id: `ash:${id}`,
 					title,
@@ -231,6 +292,7 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 					selectedThreadId,
 					status: session.management?.status === 'working' ? working : undefined,
 					defaultIcon: Lxicon.chatSession,
+					forkSource: forkSource(thread),
 					pinned: isPinned,
 					setPinned: pinned => pinned ? list.pinSession(session) : list.unpinSession(session),
 					moveToGroup: group => groups.move(id, group),
@@ -265,7 +327,7 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 					},
 				});
 			}
-			return { entries: rows, groups: groups.groups.filter(group => group.kind !== 'comparison') };
+			return { entries: rows, forkEntries, groups: groups.groups.filter(group => group.kind !== 'comparison') };
 		});
 		this._register(search.registerSource(this.snapshot.map(snapshot => snapshot.entries.map(entry => ({
 			id: entry.id, category: 'sessions', title: entry.title, icon: entry.defaultIcon,
@@ -351,7 +413,10 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			listChanged.read(reader);
 			const projects = this.projects.state.read(reader).projects.filter(project => !project.archived);
 			this.membershipVersion.read(reader);
-			const snapshots = this.catalog.sources.map(source => source.snapshot.read(reader));
+			const snapshots = this.catalog.sources.map(source => {
+				const snapshot = source.snapshot.read(reader);
+				return this.catalog.forks ? { ...snapshot, entries: this.catalog.forks.project(snapshot.entries, reader) } : snapshot;
+			});
 			const localProjects = new Map(projects.map(project => [project.id, project]));
 			for (const id of this.membership.keys()) {
 				if (!localProjects.has(id)) this.membership.delete(id);
@@ -389,6 +454,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 
 			return {
 				loading: snapshots.some(snapshot => snapshot.loading),
+				forkEntries: snapshots.flatMap(snapshot => (snapshot.forkEntries ?? []).map(entry => this.toRow(entry, projects))),
 				sections: groups.map(group => {
 					const { key } = group;
 					const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id))
@@ -487,8 +553,18 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		};
 	}
 
+	private openConversation(open: (signal: AbortSignal) => Promise<void>): void {
+		const controller = new AbortController();
+		this.opening.value = toDisposable(() => controller.abort());
+		void open(controller.signal).catch(error => {
+			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
+		});
+	}
+
 	private toRow(entry: ChatListEntry, destinations: readonly { readonly id: string; readonly name: string; }[], parentProject?: string): SessionsCatalogRow {
 		const sessionId = entry.sessionId;
+		const forkSource = entry.forkSource;
+		const openSource = forkSource?.open;
 		const iconKey = sessionId ? `session:${sessionId}` : entry.preferenceKey;
 		const iconScope = sessionId ? undefined : 'catalog';
 		const project = sessionId ? () => {
@@ -530,6 +606,11 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			disabled: entry.disabled,
 			actionsDisabled: entry.actionsDisabled,
 			defaultIcon: entry.defaultIcon,
+			forkSource: forkSource && {
+				id: forkSource.id,
+				title: forkSource.title,
+				open: openSource && (() => this.openConversation(openSource)),
+			},
 			iconId: iconKey ? this.list.getRowIcon(iconKey, iconScope) : undefined,
 			setIcon: iconKey ? icon => this.list.setRowIcon(iconKey, icon?.id, iconScope) : undefined,
 			pinned: entry.pinned,
@@ -537,13 +618,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			organization: () => entry.disabled || entry.actionsDisabled ? undefined : {
 				pinned: entry.pinned, setPinned: entry.setPinned, moveToGroup: entry.moveToGroup, project: project(),
 			},
-			open: threadId => {
-				const controller = new AbortController();
-				this.opening.value = toDisposable(() => controller.abort());
-				void entry.open(controller.signal, threadId).catch(error => {
-					if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
-				});
-			},
+			open: threadId => this.openConversation(signal => entry.open(signal, threadId)),
 			getActions: async (signal, restoreFocus) => {
 				const contributed = await entry.getActions?.(signal, restoreFocus);
 				const actions = [...contributed ?? []];

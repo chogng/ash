@@ -780,7 +780,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			branching_from_conversation_id: 'fixture-chat', branching_from_message_id: 'previous-reply', parent_message_id: 'previous-reply',
 		});
 		expect(continuation).not.toHaveProperty('conversation_id');
-		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		await page.getByRole('button', { name: 'Fork 自：Synthetic conversation', exact: true }).click();
 		await expect(reply).toBeVisible();
 	});
 

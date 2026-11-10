@@ -389,7 +389,8 @@ test.describe('Unified Chat sidebar', () => {
 
 	test('renders the shared code card for Ash and ChatGPT replies', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }, testInfo) => {
 		const application = browser as ElectronApplication;
-		const fence = '\n\n```bash\nprintf "%s\\n" hello\necho "Ash code card"\n```';
+		const lines = ['const label: string = "Ash code card";', 'const count = 42;'];
+		const fence = '\n\n```ts\n' + lines.join('\n') + '\n```';
 		await installService(application, false, fence);
 		await application.evaluate(({ clipboard }) => { clipboard.writeText = async () => { }; });
 		await using catalog = createAshModelServer([], fence);
@@ -408,7 +409,7 @@ test.describe('Unified Chat sidebar', () => {
 				commandId: 'shared-code-card-turn', sessionId, request: {
 					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence,
 					model: ashFixtureModel, mode: 'agent', approvalMode: 'manual',
-					input: [{ type: 'text', text: 'Show a shell example' }],
+					input: [{ type: 'text', text: 'Show a TypeScript example' }],
 				},
 			});
 			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
@@ -419,8 +420,14 @@ test.describe('Unified Chat sidebar', () => {
 			] as const) {
 				await page.locator(`[data-item="${selector}"] .ash-sessions-list-item`).click();
 				const card = page.locator('.ash-chat-code-block-card:visible');
-				await expect(card.locator('.ash-chat-code-block-language')).toHaveText('Bash');
-				await expect(card.locator('.stanza-editor-line-text')).toHaveText(['printf "%s\\n" hello', 'echo "Ash code card"']);
+				await expect(card.locator('.ash-chat-code-block-language')).toHaveText('TypeScript');
+				const editorLines = card.locator('.stanza-editor-line-text');
+				await expect(editorLines).toHaveText(lines);
+				await expect.poll(() => editorLines.first().locator('.stanza-editor-token').evaluateAll(tokens => {
+					const keyword = tokens.find(token => token.textContent === 'const');
+					const string = tokens.find(token => token.textContent?.includes('Ash code card'));
+					return !!keyword && !!string && getComputedStyle(keyword).color !== getComputedStyle(string).color;
+				})).toBe(true);
 				await testInfo.attach(`${source}-code-card`, { body: await card.screenshot(), contentType: 'image/png' });
 				const copyCode = card.getByRole('button', { name: '复制', exact: true });
 				const copyMessage = page.locator('.ash-chat-item-agentMessage:visible').filter({ has: card })

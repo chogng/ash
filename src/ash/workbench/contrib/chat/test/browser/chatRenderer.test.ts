@@ -344,17 +344,19 @@ test('unchanged response media keeps its DOM and corrected metadata updates its 
 	} finally { observer.disconnect(); }
 });
 
-test('changing a completed code fence language retains the response document', () => {
+test('a code card resolves a late language alias without replacing the response document', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
-	resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript' }));
-	using part = services.createInstance(CodeBlockPart, document, undefined);
+	using part = services.createInstance(CodeBlockPart, document, 'card');
 	const data = { text: 'const value = 1;', languageId: 'plaintext', codeBlockIndex: 0, element: response, chatSessionResource: undefined };
 	part.render(data, 300);
 	const model = part.model!;
-	part.render({ ...data, languageId: 'typescript' }, 300);
+	part.render({ ...data, languageId: 'ts' }, 300);
+	assert.equal(model.getLanguageId(), 'plaintext');
+	resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript', aliases: ['TypeScript', 'ts'] }));
 	assert.equal(part.model, model);
 	assert.equal(model.getLanguageId(), 'typescript');
+	assert.equal(part.element.querySelector('.ash-chat-code-block-language')?.textContent, 'TypeScript');
 	assert.equal(model.isDisposed(), false);
 });
 

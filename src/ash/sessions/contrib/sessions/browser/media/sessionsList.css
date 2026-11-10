@@ -441,6 +441,7 @@
 .ash-sessions-list-row {
 	position: relative;
 	min-width: 0;
+	--sessions-fork-depth: 0;
 	--sessions-row-background: var(--ash-sideBar-background);
 }
 
@@ -555,7 +556,10 @@
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
 	.ash-sessions-list-row
 	> .ash-session-leading-icon {
-	inset-inline-start: var(--ash-sessions-sidebar-item-inset);
+	inset-inline-start: calc(
+		var(--ash-sessions-sidebar-item-inset) + var(--sessions-fork-depth) *
+			var(--ash-spacing-size120)
+	);
 }
 
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
@@ -563,7 +567,8 @@
 	> .ash-sessions-list-item {
 	padding-inline-start: calc(
 		var(--ash-sessions-sidebar-item-inset) + var(--ash-toolbar-actionSize) +
-			var(--ash-spacing-size60)
+			var(--ash-spacing-size60) + var(--sessions-fork-depth) *
+			var(--ash-spacing-size120)
 	);
 }
 

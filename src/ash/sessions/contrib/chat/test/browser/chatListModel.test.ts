@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { constObservable } from '../../../../../base/common/observable.js';
+import { constObservable, derived } from '../../../../../base/common/observable.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { type IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget, type IStorageValueChangeEvent } from '../../../../../platform/storage/common/storage.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
-import { ChatListCatalog, groupChatList, type ChatListEntry, type ChatListSource } from '../../browser/chatListModel.js';
+import { ChatListCatalog, groupChatList, type ChatListEntry, type ChatListForkReference, type ChatListSource } from '../../browser/chatListModel.js';
+import { ChatListForks } from '../../browser/chatListForks.js';
 
 suite('Ash chat list model', () => {
 	test('owns catalog icon storage and moves an icon when a source replaces an identity', () => {
@@ -25,6 +27,7 @@ suite('Ash chat list model', () => {
 		const list = new SessionsListModelService(storage);
 		using services = new InstantiationService();
 		services.registerInstance(ISessionsListModelService, list);
+		services.registerInstance(IStorageService, storage);
 		using catalog = services.createInstance(ChatListCatalog, [new SyncDescriptor(Source)]);
 
 		assert.equal(list.getRowIcon('opaque-original', 'catalog'), 'folder');
@@ -67,5 +70,46 @@ suite('Ash chat list model', () => {
 			['empty', []],
 			['other', ['opaque-c']],
 		]);
+	});
+
+	test('owns confirmed and recovered fork sources in the Ash catalog', async () => {
+		using changes = new Emitter<IStorageValueChangeEvent>();
+		using created = new Emitter<{ key: string; parent: ChatListForkReference; }>();
+		const values = new Map<string, string>();
+		const storage = {
+			onDidChangeValue: changes.event,
+			get: (key: string) => values.get(key),
+			store: (key: string, value: string) => {
+				values.set(key, value);
+				changes.fire({ key, scope: StorageScope.PROFILE, target: StorageTarget.MACHINE, external: false });
+			},
+		} as unknown as IStorageService;
+		const opened: string[] = [];
+		const row = (id: string, title: string, createdAt: number, hasMarker: boolean, messages: readonly [string, number][]): ChatListEntry => ({
+			id, title, preferenceKey: `scope:${id}`, defaultIcon: Lxicon.chatSession, selected: false,
+			open: async () => { opened.push(id); },
+			loadForkEvidence: async () => ({ createdAt, hasMarker, messages: new Map(messages) }),
+		});
+		const entries = [
+			row('root', 'Root', 1, false, [['shared-root', 2]]),
+			row('fork', 'Branch · Root', 3, true, [['shared-root', 2], ['shared-fork', 4]]),
+			row('nested', 'Branch · Branch · Root', 5, true, [['shared-root', 2], ['shared-fork', 4]]),
+			row('lookalike', 'Note · Root', 6, false, [['shared-root', 2]]),
+			row('new', 'Renamed fork', 7, false, []),
+		];
+		const source = { snapshot: constObservable({ entries }), onDidCreateFork: created.event };
+		using forks = new ChatListForks([source], storage);
+		const projected = derived(reader => forks.project(entries, reader));
+		const recovered = new DeferredPromise<void>();
+		using subscription = projected.onDidChange(rows => {
+			if (rows[2]?.forkSource) void recovered.complete();
+		});
+		created.fire({ key: 'scope:new', parent: { id: 'fork', preferenceKey: 'scope:fork' } });
+		await recovered.p;
+		assert.deepEqual(projected.get().map(row => row.forkSource?.id), [undefined, 'root', 'fork', undefined, 'fork']);
+		await projected.get()[2]!.forkSource!.open!(new AbortController().signal);
+		assert.deepEqual(opened, ['fork']);
+		using restored = new ChatListForks([], storage);
+		assert.equal(derived(reader => restored.project(entries, reader)).get()[2]?.forkSource?.title, 'Branch · Root');
 	});
 });
