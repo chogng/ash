@@ -8,7 +8,7 @@ import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ChatGPTAuthenticationError, type ChatGPTRequest, type ChatGPTResponse } from '../common/chatGPTTransport.js';
 import type { ChatGPTRecentHistoryGate } from './chatGPTRecentHistoryGate.js';
-import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
+import type { ChatGPTRequestHeaderHandler, IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAuthentication.js';
 
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
@@ -22,7 +22,6 @@ const projectDetailsPath = (path: string): boolean => /^\/backend-api\/gizmos\/g
 const projectUpdatePath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
 const projectFilesPath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}\/files$/u.test(path);
 const projectFilePath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}\/files\/file[-_][A-Za-z0-9_-]{1,240}$/u.test(path);
-const projectFileDownloadPath = (path: string): boolean => /^\/backend-api\/files\/download\/file[-_][A-Za-z0-9_-]{1,240}$/u.test(path);
 const projectFileId = (value: unknown): boolean => typeof value === 'string' && /^file[-_][A-Za-z0-9_-]{1,240}$/u.test(value);
 const projectId = (value: unknown): boolean => typeof value === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(value);
 const processProjectUploadPath = '/backend-api/files/process_upload_stream';
@@ -34,6 +33,7 @@ const synthesisPath = '/backend-api/synthesize';
 const validIdentifier = (value: unknown): boolean => typeof value === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(value);
 const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'];
 const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', 'chatgpt-project-id', ...proofHeaders.map(name => name.toLowerCase())]);
+const credentialHeaders = new Set(['authorization', 'chatgpt-account-id', 'x-openai-fedramp']);
 interface PendingRequest {
 	readonly controller: AbortController;
 	authorization?: IChatGPTAuthorization;
@@ -47,7 +47,7 @@ export interface ChatGPTTransportOptions {
 	readonly recentHistoryGate?: ChatGPTRecentHistoryGate;
 	readonly authentication: IChatGPTAuthentication;
 	readonly readVerificationScript: (signal: AbortSignal) => Promise<string>;
-	readonly createRuntime: (authorize: (url: URL) => Promise<Headers>) => IChatGPTVerificationRuntime;
+	readonly createRuntime: (prepareRequestHeaders: ChatGPTRequestHeaderHandler) => IChatGPTVerificationRuntime;
 }
 
 /** A window-owned HTTP/credential adapter. It has no conversation model, drafts or UI messages. */
@@ -173,7 +173,8 @@ export class ChatGPTTransport extends Disposable {
 			if (retryAfter !== null) { headers.set('Retry-After', retryAfter); }
 			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
 			const audio = url.pathname === synthesisPath && /^audio\/(?:mpeg|mp3)(?:;|$)/iu.test(contentType);
-			if (response.status !== 204 && !sdp && !audio && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
+			const uploadEvents = request.method === 'POST' && url.pathname === processProjectUploadPath && /^application\/x-ndjson(?:;|$)/iu.test(contentType);
+			if (response.status !== 204 && !sdp && !audio && !uploadEvents && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
 				await response.body?.cancel();
 				return new Response(null, { status: response.ok ? 502 : response.status, headers });
 			}
@@ -275,19 +276,23 @@ export class ChatGPTTransport extends Disposable {
 	private getRuntime(context: string): IChatGPTVerificationRuntime {
 		if (this.runtime && (this.runtime.isDisposed || this.runtimeContext !== context)) { this.runtime.dispose(); this.runtime = undefined; }
 		this.runtimeContext = context;
-		return this.runtime ??= this.options.createRuntime(async url => {
-			// Empty values remove stale account routing and credentials from Chromium
-			// subrequests before the current owner's headers are applied.
-			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '', 'X-OpenAI-Fedramp': '' });
+		return this.runtime ??= this.options.createRuntime(async (url, method, incomingHeaders) => {
+			// Clear stale credentials and account routing before applying the current owner's headers.
+			const headers = { ...incomingHeaders };
+			for (const name of Object.keys(headers)) {
+				if (credentialHeaders.has(name.toLowerCase())) { delete headers[name]; }
+			}
 			const path = url.pathname;
 			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(path)) return headers;
+			const projectFileWrite = !url.search && (method === 'POST' && projectFilesPath(path) || method === 'DELETE' && projectFilePath(path));
+			const projectFileDownload = method === 'GET' && isProjectFileDownloadUrl(url);
 			if (!(readPaths.has(path) || writePaths.has(path) || uploadedPath(path) || conversationPath(path)
 				|| this.options.native && nativeHistoryPath(path) || renamePath(path) || deletePath(path)
 				|| projectDetailsPath(path) || projectConversationsPath(path) || projectUpdatePath(path)
-				|| projectFilesPath(path) || projectFilePath(path) || projectFileDownloadPath(path)
+				|| projectFileWrite || projectFileDownload
 				|| filePath(path) || path.startsWith('/backend-api/sentinel/'))) return headers;
 			using authorization = await this.options.authentication.authorize(randomUUID(), context, new AbortController().signal);
-			for (const [name, value] of authorization.headers) { headers.set(name, value); }
+			for (const [name, value] of authorization.headers) { headers[name] = value; }
 			return headers;
 		});
 	}
@@ -430,12 +435,15 @@ function readUploadUrl(value: string): URL {
 	return url;
 }
 
+function isProjectFileDownloadUrl(url: URL): boolean {
+	return /^\/backend-api\/files\/download\/file[-_][A-Za-z0-9_-]{1,240}$/u.test(url.pathname)
+		&& url.searchParams.size === 2 && projectId(url.searchParams.get('gizmo_id')) && url.searchParams.get('inline') === 'false';
+}
+
 function readResourceUrl(value: string): URL {
 	const url = new URL(value, 'https://chatgpt.com');
 	if (value.length > 8192 || url.protocol !== 'https:' || url.port || url.username || url.password || url.hash || /[\r\n\0\\]|%(?:2f|5c|00|25)/iu.test(url.pathname)) { throw new TypeError('Invalid ChatGPT resource URL'); }
-	const projectDownload = projectFileDownloadPath(url.pathname) && url.searchParams.size === 2
-		&& projectId(url.searchParams.get('gizmo_id')) && url.searchParams.get('inline') === 'false';
-	const webAsset = url.origin === 'https://chatgpt.com' && (filePath(url.pathname) || projectDownload);
+	const webAsset = url.origin === 'https://chatgpt.com' && (filePath(url.pathname) || isProjectFileDownloadUrl(url));
 	const signedAsset = ['oaiusercontent.com', 'blob.core.windows.net'].some(domain => url.hostname.endsWith('.' + domain));
 	if (!webAsset && !signedAsset) { throw new TypeError('Invalid ChatGPT resource origin'); }
 	return url;

@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { TaskQueue } from '../../../../base/common/async.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 
+export type ChatGPTRequestHeaderHandler = (url: URL, method: string, headers: Readonly<Record<string, string>>) => Promise<Record<string, string>>;
+
 export interface IChatGPTVerificationRuntime extends IDisposable {
 	readonly isDisposed: boolean;
 	readonly session: Pick<Session, 'fetch' | 'getUserAgent'>;
@@ -27,7 +29,7 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 	get verificationPhase(): IChatGPTVerificationRuntime['verificationPhase'] { return this.phase; }
 	get verificationRequests(): readonly VerificationRequest[] { return [...this.requests.values()]; }
 
-	constructor(authorize: (url: URL) => Promise<Headers>) {
+	constructor(prepareRequestHeaders: ChatGPTRequestHeaderHandler) {
 		super();
 		this.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 		this.session.setPermissionCheckHandler(() => false);
@@ -40,13 +42,8 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 				const route = /^\/(backend-api|backend-anon|unauth-mweb)\/sentinel\/(chat-requirements(?:\/prepare|\/finalize)?)$/u.exec(url.pathname);
 				if (route) this.requests.set(details.id, { route: `${route[1]}/${route[2]}`, outcome: 'pending' });
 			}
-			void authorize(url).then(headers => {
+			void prepareRequestHeaders(url, details.method, details.requestHeaders).then(requestHeaders => {
 				if (this.isDisposed) { callback({ cancel: true }); return; }
-				const requestHeaders = { ...details.requestHeaders };
-				for (const [name, value] of headers) {
-					for (const key of Object.keys(requestHeaders)) { if (key.toLowerCase() === name.toLowerCase()) { delete requestHeaders[key]; } }
-					if (value) { requestHeaders[name] = value; }
-				}
 				callback({ requestHeaders });
 			}, () => {
 				this.finishRequest(details.id, 'authorization');

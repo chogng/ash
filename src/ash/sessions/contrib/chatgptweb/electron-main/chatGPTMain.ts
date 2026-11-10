@@ -62,7 +62,7 @@ export class ChatGPTMain extends Disposable {
 			native: role === 'credentials-codex',
 			recentHistoryGate: this.recentHistoryGate ??= this._register(this.instantiation.createInstance(ChatGPTRecentHistoryGate)),
 			readVerificationScript: signal => this.readVerificationScript(signal),
-			createRuntime: authorize => new ChatGPTVerificationRuntime(authorize),
+			createRuntime: prepareRequestHeaders => new ChatGPTVerificationRuntime(prepareRequestHeaders),
 		} satisfies ChatGPTTransportOptions));
 		return transport.getChannel();
 	}
