@@ -1505,7 +1505,6 @@
     "sessions.titlebar.sessionName": "会话名称",
     "sessions.titlebar.invalidName": "请输入 1 到 256 个字符的名称。",
     "sessions.titlebar.share": "分享",
-    "sessions.titlebar.delete": "删除对话",
     "sessions.titlebar.ashChatHelp": "对于已保存的聊天，聚焦标题并按 Enter 可重命名。使用标题旁的「更多会话操作」可置顶、归档或删除。标题栏右侧的「分享」会在确认后创建并复制对话正文的链接。",
     "sessions.titlebar.chatGPTHelp": "对于已保存的聊天，聚焦标题并按 Enter 可重命名。使用标题旁的「更多会话操作」可置顶、归档或删除。标题栏右侧的「分享」会在确认后创建并复制整段对话的链接。",
     "sessions.chat.shareServiceInvalid": "请输入 HTTPS 服务地址，或用于本地测试的 HTTP 回环地址。",

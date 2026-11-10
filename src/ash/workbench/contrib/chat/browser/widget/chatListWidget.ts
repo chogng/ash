@@ -136,7 +136,7 @@ export class ChatListWidget extends DomWidget {
 	private visible = true;
 	private shouldFollow = true;
 	private pausedReplyScrollTop: number | undefined;
-	private activeRequestEdit: { readonly id: string; readonly close: (restoreFocus: boolean) => boolean; } | undefined;
+	private activeRequestEdit: { readonly id: string; readonly close: (restoreFocus: boolean) => boolean } | undefined;
 	private readonly refreshAfterRequestEdit = this._register(new RunOnceScheduler(() => this.render(this.items, this.working), 0));
 	private readingPosition: ReadingAnchor | undefined;
 	private layingOut = false;
@@ -148,9 +148,9 @@ export class ChatListWidget extends DomWidget {
 	private readonly refreshViewport = this._register(new RunOnceScheduler(() => this.refreshRowViewports(), 0));
 	private virtualRows: ChatVirtualRows | undefined;
 	private virtualPadding = 0;
-	private virtualWindow: { readonly start: number; readonly end: number; } | undefined;
+	private virtualWindow: { readonly start: number; readonly end: number } | undefined;
 	private virtualPins: readonly number[] = [];
-	private readonly virtualGaps = new Map<number, { readonly end: number; readonly element: HTMLDivElement; }>();
+	private readonly virtualGaps = new Map<number, { readonly end: number; readonly element: HTMLDivElement }>();
 	private readonly rowResizeObserver: ResizeObserver | undefined;
 	private selectionStart: string | undefined;
 	private readonly refreshSelection = this._register(new RunOnceScheduler(() => this.refreshVirtualWindow(), 0));
@@ -477,7 +477,8 @@ export class ChatListWidget extends DomWidget {
 			},
 		}));
 		this._register(AccessibleViewRegistry.register(new ChatResponseAccessibleView({
-			getItems: () => this.items,
+			// Retained rows own the current items; DOM order also reflects message reordering.
+			getItems: () => Array.from(this.transcript.children, element => this.renderedItems.get((element as HTMLElement).dataset.itemId!)!.item),
 			onDidChangeContent: this._onDidChangeContent.event,
 			getFocusedElement: () => {
 				const active = this.element.ownerDocument.activeElement;
@@ -580,20 +581,15 @@ export class ChatListWidget extends DomWidget {
 			needsLayout = true;
 			if (this.visible && !viewportOnly) {
 				this.captureFollowState();
+				anchor = this.shouldFollow ? undefined : this.readingPosition;
+			} else if (this.visible && !this.shouldFollow) {
+				anchor = this.readingPosition;
 			}
-			if (this.visible && !this.shouldFollow) anchor = this.readingPosition;
 		};
-		const active = this.element.ownerDocument.activeElement;
-		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
-		const focusedReferenceId = isHTMLElement(active) ? active.dataset.chatReferenceId : undefined;
-		const focusedActionRowId = focusedRow?.element.contains(active)
-			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.requestEdit || focusedRow.item.requestHasVersions
-				|| focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
-			? focusedRow.item.id : undefined;
 		if (!viewportOnly) {
 			// Galleries share a renderer across rows. MCP Apps own a live view that
 			// cannot be recreated when its row leaves and re-enters the viewport.
-			const useVirtualRows = items.length > 0 && items.length >= (this.options.virtualizeHistoryFrom?.get() ?? Infinity) && !this.accessibilityService.isScreenReaderOptimized()
+			const useVirtualRows = items.length >= (this.options.virtualizeHistoryFrom?.get() ?? Infinity) && !this.accessibilityService.isScreenReaderOptimized()
 				&& !items.some(item => item.toolInvocation && (isImageGenerationToolInvocation(item.toolInvocation)
 					|| item.toolInvocation.result?.content?.some(part => part.type === 'artifact' && part.artifact.source.type === 'mcpApp')));
 			const changedVirtualMode = useVirtualRows !== (this.virtualRows !== undefined);
@@ -623,6 +619,13 @@ export class ChatListWidget extends DomWidget {
 			}
 		}
 		const entries = this.renderEntries(items, top);
+		const active = this.element.ownerDocument.activeElement;
+		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
+		const focusedReferenceId = isHTMLElement(active) ? active.dataset.chatReferenceId : undefined;
+		const focusedActionRowId = focusedRow?.element.contains(active)
+			&& (focusedReferenceId || focusedRow.item.requestSource || focusedRow.item.requestEdit || focusedRow.item.requestHasVersions
+				|| focusedRow.item.queueTarget || focusedRow.item.historyRedoTarget || focusedRow.item.turnChanges)
+			? focusedRow.item.id : undefined;
 		const focusedActionId = focusedActionRowId ? active?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 		const imageFocus = isHTMLElement(active) && [...this.imageBatches].some(([, entry]) => entry.part.domNode.contains(active)) ? active : undefined;
 		let changed = needsLayout;
@@ -631,8 +634,8 @@ export class ChatListWidget extends DomWidget {
 			if (ids.has(id)) continue;
 			beforeLayout();
 			if (this.virtualRows?.indexOf(id) !== undefined) this.rememberDisclosures(id, row);
-			this.rowResizeObserver?.unobserve(row.element);
 			this.viewportObserver?.unobserve(row.element);
+			this.rowResizeObserver?.unobserve(row.element);
 			this.renderedItems.deleteAndDispose(id);
 			this.pendingViewportMeasurements.delete(id);
 			changed = true;
@@ -649,6 +652,7 @@ export class ChatListWidget extends DomWidget {
 				continue;
 			}
 			let row = this.renderedItems.get(item.id);
+			if (row && this.virtualRows && !viewportOnly) this.rowResizeObserver?.observe(row.element);
 			const update = row?.update(item, beforeLayout);
 			if (row && update === 'unchanged') {
 				if (row.element !== next) {
@@ -656,7 +660,6 @@ export class ChatListWidget extends DomWidget {
 					this.transcript.insertBefore(row.element, next);
 					changed = true;
 				}
-				if (this.virtualRows && !viewportOnly) this.rowResizeObserver?.observe(row.element);
 				next = row.element.nextSibling;
 				continue;
 			}
@@ -679,12 +682,12 @@ export class ChatListWidget extends DomWidget {
 					refreshRequestAfterEdit: () => this.refreshAfterRequestEdit.schedule(),
 					classPrefix: this.classPrefix,
 					deferCodeBlockModels: !!this.viewportObserver,
+					synchronousInitialRender: this.virtualRows !== undefined && !item.transient,
 					isVisible: () => this.visible,
 					advisorExpansion: this.advisorExpansion,
 					contextExpansion: this.contextExpansion,
 					thinkingExpansion: this.thinkingExpansion,
 					onDidChangeHeight: () => this.relayout.schedule(),
-					synchronousInitialRender: this.virtualRows !== undefined && !item.transient,
 					beginRequestEdit: (close: (restoreFocus: boolean) => boolean) => {
 						if (this.activeRequestEdit && !this.activeRequestEdit.close(false)) return undefined;
 						const edit = this.activeRequestEdit = { id: item.id, close };
@@ -713,16 +716,16 @@ export class ChatListWidget extends DomWidget {
 					},
 					onDidChangeContent: () => this._onDidChangeContent.fire(),
 				}, this.layoutTrace));
+				const toolExpansion = this.toolExpansion.get(item.id);
+				if (toolExpansion) row.toolPart?.restoreDisclosure(toolExpansion);
 				this.viewportObserver?.observe(row.element);
+				if (this.virtualRows) this.rowResizeObserver?.observe(row.element);
 				if (this.viewportObserver) this.pendingViewportMeasurements.add(item.id);
 			}
 			if (this.viewportObserver && row.markdownPart && (update !== 'queued' || row.element !== next)) this.pendingViewportMeasurements.add(item.id);
 			if (row.element !== next) {
 				beforeLayout();
-				const toolExpansion = this.toolExpansion.get(item.id);
-				if (toolExpansion) row.toolPart?.restoreDisclosure(toolExpansion);
 				this.transcript.insertBefore(row.element, next);
-				if (this.virtualRows) this.rowResizeObserver?.observe(row.element);
 			}
 			next = row.element.nextSibling;
 		}
@@ -792,7 +795,7 @@ export class ChatListWidget extends DomWidget {
 		return parseFloat(this.transcript.ownerDocument.defaultView!.getComputedStyle(this.transcript).paddingTop) || 0;
 	}
 
-	private windowAt(rows: ChatVirtualRows, top: number): { readonly start: number; readonly end: number; } {
+	private windowAt(rows: ChatVirtualRows, top: number): { readonly start: number; readonly end: number } {
 		const start = top - this.virtualPadding;
 		const end = start + (this.scrollable.state.height || this.scrollable.scrollableElement.clientHeight || 800);
 		const window = this.virtualWindow;
@@ -805,7 +808,7 @@ export class ChatListWidget extends DomWidget {
 		};
 	}
 
-	private pinnedRows(rows: ChatVirtualRows, window: { readonly start: number; readonly end: number; }): number[] {
+	private pinnedRows(rows: ChatVirtualRows, window: { readonly start: number; readonly end: number }): number[] {
 		const document = this.transcript.ownerDocument;
 		const indexOf = (node: Node | null) => {
 			const id = this.rowId(node);
@@ -943,13 +946,13 @@ export class ChatListWidget extends DomWidget {
 		return [...row.querySelectorAll<HTMLElement>(focusableSelector)].filter(control => control.tabIndex >= 0
 			&& !control.matches(':disabled') && control.getClientRects().length > 0);
 	}
+
 	private renderWorkingStatus(): void {
 		if (!this.workingStatus) {
 			const document = this.transcript.ownerDocument;
 			const element = h(document, 'div');
 			element.className = 'ash-chat-transcript-working';
 			const label = h(document, 'span');
-
 			const logo = this._register(this.instantiationService.createInstance(ChatWorkingLogo, document));
 			element.append(logo.domNode, label);
 			this.transcript.append(element);
@@ -1067,12 +1070,13 @@ export class ChatListWidget extends DomWidget {
 			}
 			this.layout(this.pendingReadingPosition?.anchor, false);
 			this.pendingReadingPosition = undefined;
+			this.refreshVirtualWindow();
 			this.refreshRowViewports();
 		}
 	}
 
 	private refreshRowViewports(): void {
-		if (!this.visible || this.refreshVirtualWindow()) return;
+		if (!this.visible) return;
 		const viewport = this.pendingViewportMeasurements.size ? this.scrollable.scrollableElement.getBoundingClientRect() : undefined;
 		const rows: ChatListItemRenderer[] = [];
 		for (const [id, row] of this.renderedItems) {
@@ -1116,6 +1120,7 @@ export class ChatListWidget extends DomWidget {
 			this.updateStickyPrompt();
 			this.updateScrollToLatestVisibility();
 		} finally { this.layingOut = false; }
+		this.refreshVirtualWindow();
 	}
 
 	private updateRowViewports(rows: readonly ChatListItemRenderer[]): void {
@@ -1123,11 +1128,13 @@ export class ChatListWidget extends DomWidget {
 		const document = this.element.ownerDocument;
 		const active = document.activeElement;
 		const selection = document.getSelection();
-		// Read the selection once before activating code editors, which can affect layout.
+		// Read the selection once after recording all measured rows. Selection
+		// reads can flush pending styles before any code editors are activated.
 		const ranges = selection && !selection.isCollapsed
 			? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index))
 			: [];
-		// Keep focused and selected editors available while their response is out of view.
+		// Keyboard focus and a native selection pin their response even if a user
+		// scrolls it out of view; scrolling must not interrupt editing or copying.
 		for (const row of rows) {
 			row.markdownPart?.setViewportVisible(row.inViewport || row.element.contains(active) || ranges.some(range => range.intersectsNode(row.element)));
 		}
@@ -1137,10 +1144,10 @@ export class ChatListWidget extends DomWidget {
 	public getViewState(): ChatListViewState {
 		if (this.visible) this.captureFollowState();
 		const active = this.element.ownerDocument.activeElement;
+		let focus: ChatListViewState['focus'];
 		const contextExpansion = new Map(this.contextExpansion);
 		const thinkingExpansion = new Map(this.thinkingExpansion);
 		const toolExpansion = new Map(this.toolExpansion);
-		let focus: ChatListViewState['focus'];
 		for (const [itemId, row] of this.renderedItems) {
 			if (row.context) contextExpansion.set(itemId, row.context.disclosure.open);
 			if (row.thinkingPart) thinkingExpansion.set(itemId, row.thinkingPart.domNode.open);
@@ -1172,13 +1179,13 @@ export class ChatListWidget extends DomWidget {
 		for (const [id, expanded] of state.contextExpansion ?? []) this.contextExpansion.set(id, expanded);
 		for (const [id, expanded] of state.advisorExpansion) this.advisorExpansion.set(id, expanded);
 		for (const [id, expanded] of state.thinkingExpansion ?? []) this.thinkingExpansion.set(id, expanded);
+		for (const [id, disclosure] of state.toolExpansion ?? []) this.toolExpansion.set(id, disclosure);
 		this.render(items, working);
 		this.lastFocusedItemId = state.lastFocusedItemId && this.itemById(state.lastFocusedItemId) ? state.lastFocusedItemId : undefined;
 		for (const [id, expanded] of state.contextExpansion ?? []) {
 			const context = this.renderedItems.get(id)?.context;
 			if (context) context.disclosure.open = expanded;
 		}
-		for (const [id, disclosure] of state.toolExpansion ?? []) this.toolExpansion.set(id, disclosure);
 		for (const [id, disclosure] of state.toolExpansion ?? []) {
 			this.renderedItems.get(id)?.toolPart?.restoreDisclosure(disclosure);
 		}
@@ -1212,6 +1219,7 @@ export class ChatListWidget extends DomWidget {
 	private scrollToLatest(): void {
 		if (!this.visible) return;
 		this.pausedReplyScrollTop = undefined;
+		if (this.virtualRows) this.moveVirtualViewport(this.scrollable.state.maximumTop);
 		this.layingOut = true;
 		try {
 			this.scrollable.layout();
@@ -1221,7 +1229,6 @@ export class ChatListWidget extends DomWidget {
 			this.updateStickyPrompt();
 			this.updateScrollToLatestVisibility();
 		} finally { this.layingOut = false; }
-		this.refreshVirtualWindow();
 	}
 
 	private updateScrollToLatestVisibility(): void {
@@ -1303,13 +1310,13 @@ export class ChatListWidget extends DomWidget {
 		}
 		return this.renderedItems.get(id)!.element.getBoundingClientRect().top;
 	}
+
 	private updateStickyPrompt(): void {
 		let item: IChatListItem | undefined;
 		let index = 0;
 		const { prompts } = this.promptModel;
 		const total = prompts.length;
 		if (this.visible && !this.transcript.style.paddingTop) {
-
 			const viewport = this.scrollable.scrollableElement.getBoundingClientRect();
 			// A reveal can round the scroll position, leaving its prompt just below the top edge.
 			index = this.promptModel.firstPromptAfter(viewport.top + 1);
@@ -1348,18 +1355,18 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	private readingAnchor(): ReadingAnchor | undefined {
-		const viewport = this.scrollable.scrollableElement.getBoundingClientRect();
-		const children = this.transcript.children;
-		// Rows are in normal document flow. Find the first possible intersection
-		// without reading the geometry of the entire loaded conversation on scroll.
-		let low = 0;
-		let high = children.length;
 		if (this.virtualRows) {
 			const top = this.scrollable.scrollableElement.scrollTop - this.virtualPadding;
 			const index = Math.min(this.virtualRows.count - 1, this.virtualRows.indexAt(top));
 			const item = this.virtualRows.itemAt(index);
 			return item && { id: item.id, viewportTop: this.virtualRows.positionAt(index) - top };
 		}
+		const viewport = this.scrollable.scrollableElement.getBoundingClientRect();
+		const children = this.transcript.children;
+		// Rows are in normal document flow. Find the first possible intersection
+		// without reading the geometry of the entire loaded conversation on scroll.
+		let low = 0;
+		let high = children.length;
 		while (low < high) {
 			const middle = (low + high) >>> 1;
 			if (children[middle].getBoundingClientRect().bottom <= viewport.top) low = middle + 1;

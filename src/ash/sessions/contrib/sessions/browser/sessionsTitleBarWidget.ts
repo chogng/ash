@@ -252,7 +252,7 @@ export class SessionsTitleBarWidget extends Disposable {
 						});
 					}
 					if (entry.sessionId || entry.remove) actions.push({
-						id: 'agentSession.delete', label: localize('sessions.titlebar.delete', 'Delete conversation'),
+						id: 'agentSession.delete', label: localize('sessions.list.delete', 'Delete'),
 						icon: Lxicon.trash, class: 'ash-session-delete-action', enabled: true, tooltip: '',
 						run: () => activeKey() === key ? commands.executeCommand('agentSession.delete', entry.sessionId ?? { catalogId: entry.id, preferenceKey: entry.preferenceKey }) : undefined,
 					});
