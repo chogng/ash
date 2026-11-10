@@ -1,4 +1,5 @@
 import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
+import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import type { ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel, type PromptTurnChanges } from '../promptTimeline/promptTimelineModel.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
@@ -59,6 +60,7 @@ interface ChatListWidgetOptions {
 	readonly showPromptTimeline?: boolean;
 	readonly virtualizeHistoryFrom?: IObservable<number | undefined>;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
+	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly onDidChangeFindVisibility?: (visible: boolean) => void;

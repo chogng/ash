@@ -1125,7 +1125,7 @@ test('ChatGPT streaming reuses math while prose grows and renders one new ordere
 });
 
 
-test('ChatGPT streaming applies corrected rich content without splitting its table row', async ({ page }) => {
+test('ChatGPT streaming updates an entity label without splitting its table row', async ({ page }) => {
 	const table = (value: string) => [
 		'| Framework | Notes |',
 		'| --- | --- |',
@@ -1156,11 +1156,11 @@ test('ChatGPT streaming applies corrected rich content without splitting its tab
 	await fillMessage(page, 'Synthetic structured reply');
 	await page.getByRole('button', { name: '发送', exact: true }).click();
 	const rows = page.locator('.ash-chat-item-agentMessage .ash-chat-markdown-part tbody tr');
-	const details = rows.locator('td details');
+	const entity = rows.getByRole('cell').first();
 	await expect(rows).toHaveCount(1);
-	await expect(details).toContainText('First value');
+	await expect(entity).toHaveText('First value');
 	await page.evaluate(text => Reflect.get(globalThis, 'pushStructuredReply')(text), corrected);
-	await expect(details).toContainText('Corrected value');
+	await expect(entity).toHaveText('Corrected value');
 	await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
 		json: {
 			title: 'Synthetic conversation',
@@ -1177,7 +1177,7 @@ test('ChatGPT streaming applies corrected rich content without splitting its tab
 	await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
 	await expect(rows).toHaveCount(1);
 	await expect(rows.locator('td:last-child')).toHaveText('Same row');
-	await expect(details).toContainText('Corrected value');
+	await expect(entity).toHaveText('Corrected value');
 });
 
 test('ChatGPT retains semantic content and gives custom cards and charts local interaction', async ({ page }, testInfo) => {

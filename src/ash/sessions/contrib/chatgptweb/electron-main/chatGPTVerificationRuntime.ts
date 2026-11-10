@@ -10,7 +10,7 @@ export interface IChatGPTVerificationRuntime extends IDisposable {
 	readonly session: Pick<Session, 'fetch' | 'getUserAgent'>;
 	readonly verificationPhase?: 'navigation' | 'install' | 'proof';
 	readonly verificationRequests?: readonly VerificationRequest[];
-	prepareHeaders(script: string, signal: AbortSignal): Promise<unknown>;
+	prepareHeaders(script: string, signal: AbortSignal, sidebar?: boolean): Promise<unknown>;
 }
 
 interface VerificationRequest {
@@ -66,7 +66,7 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 		if (request?.outcome === 'pending') this.requests.set(id, { route: request.route, outcome });
 	}
 
-	prepareHeaders(script: string, signal: AbortSignal): Promise<unknown> {
+	prepareHeaders(script: string, signal: AbortSignal, sidebar = false): Promise<unknown> {
 		return this.sequencer.schedule(async () => {
 			signal.throwIfAborted();
 			if (this.isDisposed) { throw new Error('ChatGPT verification is closed'); }
@@ -79,7 +79,7 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 			await this.ready;
 			signal.throwIfAborted();
 			this.phase = 'proof';
-			const value: unknown = await this.view!.webContents.executeJavaScript('globalThis.__ashPrepareChatGPTHeaders()');
+			const value: unknown = await this.view!.webContents.executeJavaScript(`globalThis.__ashPrepareChatGPTHeaders(${sidebar})`);
 			signal.throwIfAborted();
 			this.phase = undefined;
 			return value;

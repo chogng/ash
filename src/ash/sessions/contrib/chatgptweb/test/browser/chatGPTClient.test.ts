@@ -317,6 +317,67 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(reply.references?.map(reference => [reference.id, reference.title, reference.snippet]), [['turn0search0', 'CSV', ''], ['turn0search1', 'Writer', 'Writer documentation']]);
 	});
 
+	test('associates a grouped citation with its explicitly supplied safe URLs', async () => {
+		const citation = '\uE200cite\uE202turn0search2\uE201';
+		const url = 'https://example.test/docs';
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						...message('reply', 'assistant', `See the documentation ${citation}.`),
+						metadata: { content_references: [{ type: 'grouped_webpages', matched_text: citation, safe_urls: ['javascript:alert(1)', url] }] },
+					}
+				}
+			}
+		})) as typeof fetch);
+		const reply = (await client.history('conversation', signal())).messages[0]!;
+		assert.deepEqual(reply.references, [{ id: url, url, title: 'example.test', snippet: '' }]);
+		assert.equal(reply.text, `See the documentation \uE200cite\uE202${url}\uE201.`);
+	});
+
+	test('keeps trusted image results associated with their markers and components in history', async () => {
+		const marker = '\uE200image_group\uE202{"query":["project screenshots"]}\uE201';
+		const image = 'https://images.openai.com/static-rsc-4/fixture-image?purpose=fullsize';
+		const source = 'https://example.test/docs';
+		const entry = { image_result: { content_url: image, title: 'Project screenshot', url: source } };
+		const query = 'Saved screenshot search';
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'reply', mapping: {
+				reply: {
+					parent: null, message: {
+						...message('reply', 'assistant', `${marker}\n\n<AsyncImage query="${query}"/>\n\nProject summary`),
+						metadata: {
+							model_dil_v2: {
+								appData: {
+									opGenui: {
+										componentResults: {
+											component: { componentName: 'AsyncImage', state: { images: [{ ...entry.image_result, image_search_query: query }] } },
+										}
+									}
+								}
+							},
+							content_references: [{
+								type: 'image_group', matched_text: marker, images: [
+									entry, entry,
+									{ image_result: { content_url: 'https://images.openai.com.example.test/static-rsc-4/wrong' } },
+									{ image_result: { content_url: 'https://images.openai.com/static-rsc-4/other', title: 'Another screenshot', url: 'javascript:alert(1)' } },
+								],
+							}]
+						},
+					}
+				},
+			}
+		})) as typeof fetch);
+		const reply = (await client.history('conversation', signal())).messages[0]!;
+		assert.deepEqual(reply.imageGroups, [{ query, images: [{ uri: image, label: 'Project screenshot', source }] }, {
+			marker, images: [
+				{ uri: image, label: 'Project screenshot', source },
+				{ uri: 'https://images.openai.com/static-rsc-4/other', label: 'Another screenshot', source: undefined },
+			]
+		}]);
+		assert.equal(reply.resources, undefined);
+	});
+
 	test('resolves a sandbox file through the web download endpoint and signed resource bytes', async () => {
 		const requests: string[] = [];
 		const client = new ChatGPTClient((async input => {

@@ -7,6 +7,7 @@ import { localize } from '../../../../nls.js';
 import type { ChatReplyReference, ChatReplyResource } from '../../../common/chatReplyBackend.js';
 import { ChatMarkdownRichContentBuilder, type ChatMarkdownRichContent, type ChatMarkdownRichPart, type ChatMarkdownRichStyle } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
+import type { ChatGPTImageGroup } from './chatGPTClient.js';
 
 interface RichTag {
 	readonly name: string;
@@ -235,6 +236,8 @@ function richContentLexer(): Marked {
 			start: source => source.indexOf('\uE200'),
 			tokenizer(source) {
 				if (this.lexer.state.inRawBlock) return undefined;
+				const imageGroup = /^\uE200image_group\uE202[^\uE200\uE201\r\n]*(?:\uE201|$)/u.exec(source);
+				if (imageGroup) return { type: 'chatgptWebReference', raw: imageGroup[0], kind: 'image_group' };
 				const match = /^\uE200(cite|url|entity)\uE202([^\uE200\uE201\r\n]*)\uE201/u.exec(source);
 				if (!match) return undefined;
 				return { type: 'chatgptWebReference', raw: match[0], kind: match[1], payload: match[2] };
@@ -259,8 +262,15 @@ function dataUri(mimeType: string, source: string): string {
 	return 'data:' + mimeType + ';charset=utf-8,' + encodeURIComponent(source);
 }
 
+function entityPart(label: string, category: unknown, disambiguation: unknown, block: boolean): ChatMarkdownRichPart {
+	if (typeof category !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/u.test(category) || label.length > 256) {
+		return { kind: 'textLiteral', label, block };
+	}
+	return { kind: 'entity', entity: { label, category, disambiguation: typeof disambiguation === 'string' ? disambiguation.slice(0, 1024) : '' }, block };
+}
+
 /** Projects Web-specific syntax and resources into Ash's response model. */
-export function decodeChatGPTReply(text: string, references: readonly ChatReplyReference[] = [], conversationId?: string): {
+export function decodeChatGPTReply(text: string, references: readonly ChatReplyReference[] = [], conversationId?: string, imageGroups: readonly ChatGPTImageGroup[] = []): {
 	readonly text: string;
 	readonly richContent?: ChatMarkdownRichContent;
 	readonly resources: readonly ChatReplyResource[];
@@ -289,6 +299,25 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		if (tag.closing) return '';
 		const block = !token.inline;
 		const values = attributes(tag);
+		if (tag.name === 'asyncimage') {
+			const query = values.get('query');
+			const group = imageGroups.find(group => 'query' in group && group.query === query);
+			return group ? { kind: 'imageGallery', images: group.images, compact: true, block } : { kind: 'unavailableMedia', fallback, block };
+		}
+		if (tag.name === 'entity') {
+			// Saved replies can carry the label as an attribute or inside a data object.
+			const value = values.get('value');
+			if (value?.trim()) return entityPart(value, values.get('category'), values.get('disambig'), block);
+			const data = values.get('data');
+			if (data) {
+				try {
+					const entity: unknown = JSON.parse(data);
+					if (typeof entity === 'object' && entity !== null && 'value' in entity && typeof entity.value === 'string' && entity.value.trim()) {
+						return entityPart(entity.value, 'category' in entity ? entity.category : undefined, 'disambig' in entity ? entity.disambig : undefined, block);
+					}
+				} catch { /* Keep the generic fallback for malformed entity data. */ }
+			}
+		}
 		const label = description(tag);
 		if (hiddenTags.has(tag.name)) return citationPart(values.get('refs')?.match(/turn\d+[a-z]+\d+/giu) ?? [], block);
 		if (mediaTags.has(tag.name)) {
@@ -332,17 +361,23 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 	}
 
 	function projectReference(token: Tokens.Generic): ChatMarkdownRichPart | '' {
+		if (token.kind === 'image_group') {
+			const group = imageGroups.find(group => 'marker' in group && group.marker === token.raw);
+			// The marker contains search terms. Only its matching metadata can supply gallery images.
+			return group ? { kind: 'imageGallery', images: group.images, block: true } : '';
+		}
 		const payload = token.payload as string;
 		if (token.kind === 'entity') {
 			try {
 				const entity: unknown = JSON.parse(payload);
-				return Array.isArray(entity) && typeof entity[1] === 'string' ? { kind: 'textLiteral', label: entity[1], block: false } : '';
+				return Array.isArray(entity) && typeof entity[1] === 'string' && entity[1].trim() ? entityPart(entity[1], entity[0], entity[2], false) : '';
 			} catch { return ''; }
 		}
 		const parts = payload.split('\uE202');
 		if (token.kind === 'cite') return citationPart(parts, false);
 		const [label = '', ...targets] = parts;
-		let href = references.find(reference => targets.includes(reference.id))?.url;
+		const reference = references.find(reference => targets.includes(reference.id));
+		let href = reference?.url;
 		const direct = targets.find(target => /^https?:\/\//iu.test(target));
 		if (!href && direct) {
 			try {
@@ -350,7 +385,9 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 				if (!url.username && !url.password) href = url.href;
 			} catch { /* Keep the readable label when the destination is invalid. */ }
 		}
-		return href ? { kind: 'link', link: { href, label }, block: false } : { kind: 'textLiteral', label, block: false };
+		const snippet = reference?.snippet.trim();
+		const title = snippet && reference?.title && reference.title !== label ? `${reference.title}\n${snippet}` : snippet;
+		return href ? { kind: 'link', link: { href, label }, title, block: false } : { kind: 'textLiteral', label, block: false };
 	}
 
 	function project(token: Token, inline: boolean): ChatMarkdownRichPart | '' | undefined {

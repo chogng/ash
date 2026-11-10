@@ -8,20 +8,23 @@ import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
 import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import type { ChatMarkdownEntity } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
 import { decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
 import { mergeChatGPTResources } from '../browser/chatGPTClient.js';
-import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
+import type { ChatGPTMessage } from '../browser/chatGPTClient.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
+import { IChatGPTEntityDetails, type ChatGPTEntityDetails } from './chatGPTEntityDetails.js';
 
 export const ChatGPTResponseCanOpenOriginalContext = 'sessions.chatgpt.responseCanOpenOriginal';
 export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
@@ -66,16 +69,20 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	private ashCatalogRequest = 0;
 	private currentItems: readonly IChatListItem[] = [];
 	private transcriptState: ChatGPTState | undefined;
-	private readonly decoded = new WeakMap<ChatReplyMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
+	private readonly decoded = new WeakMap<ChatGPTMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
 	private sources = new Map<string, { readonly messageId: string; readonly conversationId: string | undefined; }>();
 	private readonly playback = this._register(new MutableDisposable());
+	readonly inspectResponseEntity?: IReplyChatEditorModel['inspectResponseEntity'];
 
 	constructor(
 		@IChatGPTService private readonly backend: IChatGPTService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ICommandService private readonly commands: ICommandService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		const entityDetails = instantiation.getOptional(IChatGPTEntityDetails);
+		if (entityDetails) this.inspectResponseEntity = (item, entity, anchor) => this.inspectEntity(entityDetails, item, entity, anchor);
 		const ashModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
 		this.webEntries = chatGPTModelEntries(backend);
 		this.ashEntries = derived(reader => {
@@ -319,6 +326,13 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return blob;
 	}
 
+	private async inspectEntity(details: ChatGPTEntityDetails, item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement): Promise<void> {
+		const source = this.sources.get(item.id);
+		if (source?.conversationId) {
+			await details.open(this.backend, { conversationId: source.conversationId, messageId: source.messageId }, entity, anchor);
+		}
+	}
+
 	async submitRequestEdit(item: IChatListItem, text: string, commandId: string): Promise<void> {
 		const source = this.sources.get(item.id);
 		if (this.isDisposed || !item.requestEdit || !source?.conversationId) throw canceled();
@@ -401,10 +415,10 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return result;
 	}
 
-	private decodeReply(message: ChatReplyMessage, conversationId: string | undefined): ReturnType<typeof decodeChatGPTReply> {
+	private decodeReply(message: ChatGPTMessage, conversationId: string | undefined): ReturnType<typeof decodeChatGPTReply> {
 		const cached = this.decoded.get(message);
 		if (cached && cached.conversationId === conversationId) return cached.reply;
-		const reply = decodeChatGPTReply(message.text, message.references, conversationId);
+		const reply = decodeChatGPTReply(message.text, message.references, conversationId, message.imageGroups);
 		this.decoded.set(message, { conversationId, reply });
 		return reply;
 	}

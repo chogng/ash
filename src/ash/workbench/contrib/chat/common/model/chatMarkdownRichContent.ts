@@ -15,6 +15,12 @@ interface ChatMarkdownRichLink {
 	readonly href: string;
 }
 
+export interface ChatMarkdownEntity {
+	readonly label: string;
+	readonly category: string;
+	readonly disambiguation: string;
+}
+
 export type ChatMarkdownRichPart =
 	| ({ readonly kind: 'markdown'; } & ChatMarkdownRichBody)
 	| ({ readonly kind: 'box' | 'row' | 'text'; readonly style: ChatMarkdownRichStyle; readonly fallback?: ChatMarkdownRichLink; } & ChatMarkdownRichBody)
@@ -22,7 +28,9 @@ export type ChatMarkdownRichPart =
 	| ({ readonly kind: 'details'; readonly label: string; readonly data: string; } & ChatMarkdownRichBody)
 	| { readonly kind: 'citations'; readonly entries: readonly { readonly number: number; readonly title: string; readonly url: string; readonly snippet: string; }[]; readonly block: boolean; }
 	| { readonly kind: 'textLiteral'; readonly label: string; readonly block: boolean; }
-	| { readonly kind: 'link'; readonly link: ChatMarkdownRichLink; readonly block: false; }
+	| { readonly kind: 'entity'; readonly entity: ChatMarkdownEntity; readonly block: boolean; }
+	| { readonly kind: 'imageGallery'; readonly images: readonly { readonly uri: string; readonly label: string; readonly source?: string; }[]; readonly block: boolean; readonly compact?: boolean; }
+	| { readonly kind: 'link'; readonly link: ChatMarkdownRichLink; readonly title?: string; readonly block: false; }
 	| ({ readonly kind: 'resource'; readonly label: string; readonly uri?: string; readonly title?: string; readonly data?: string; } & ChatMarkdownRichBody)
 	| { readonly kind: 'unavailableMedia'; readonly fallback: ChatMarkdownRichLink; readonly block: boolean; };
 

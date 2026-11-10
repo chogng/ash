@@ -1,9 +1,11 @@
 import { triggerDownload } from '../../../../../base/browser/fileAccess.js';
+import { allowedMarkdownHtmlAttributes } from '../../../../../base/browser/markdownRenderer.js';
 import { isPortableLinkTarget } from '../../../../../base/common/htmlContent.js';
 import { equals } from '../../../../../base/common/objects.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { openLinkFromMarkdown } from '../../../../../platform/markdown/browser/markdownRenderer.js';
-import { CHAT_RESPONSE_DOWNLOAD_SCHEME, chatMarkdownRichContentExtension } from './chatMarkdownRichContent.js';
+import { CHAT_RESPONSE_DOWNLOAD_SCHEME, CHAT_RESPONSE_ENTITY_SCHEME, chatMarkdownRichContentExtension } from './chatMarkdownRichContent.js';
+import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
@@ -99,6 +101,7 @@ interface ChatListItemRendererOptions {
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly onDidRequestLink?: (target: string) => void;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
+	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
@@ -788,6 +791,15 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private async openResponseLink(target: string, externalLinks: boolean, signal: AbortSignal): Promise<void> {
+		if (target.startsWith(CHAT_RESPONSE_ENTITY_SCHEME + ':')) {
+			const index = target.slice(CHAT_RESPONSE_ENTITY_SCHEME.length + 1);
+			if (!/^\d+$/u.test(index) || signal.aborted) return;
+			const item = this.item;
+			const part = item.markdown?.richContent?.parts[Number(index)];
+			const anchor = this.element.querySelector<HTMLAnchorElement>(`a[href="${target}"]`);
+			if (part?.kind === 'entity' && anchor) await this.options.inspectResponseEntity?.(item, part.entity, anchor);
+			return;
+		}
 		if (target.startsWith(CHAT_RESPONSE_DOWNLOAD_SCHEME + ':')) {
 			const item = this.item;
 			const index = target.slice(CHAT_RESPONSE_DOWNLOAD_SCHEME.length + 1);
@@ -921,12 +933,16 @@ export class ChatListItemRenderer extends Disposable {
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
 			const { richContent, linkPolicy } = item.markdown ?? {};
 			const canDownload = !!this.options.readResponseResource && !!richContent?.parts.some(part => part.kind === 'resource' && part.uri);
+			const canInspect = !!this.options.inspectResponseEntity && !!richContent?.parts.some(part => part.kind === 'entity');
+			const canReadGallery = !!this.options.readResponseResource && !!richContent?.parts.some(part => part.kind === 'imageGallery');
 			const externalLinks = linkPolicy === 'external';
-			const linkLifetime = canDownload || externalLinks ? new AbortController() : undefined;
+			const linkLifetime = canDownload || canInspect || externalLinks ? new AbortController() : undefined;
 			if (linkLifetime) disposables.add(toDisposable(() => linkLifetime.abort()));
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				getChatItem: () => this.item,
+				readGalleryImage: canReadGallery
+					? (uri: URI, signal: AbortSignal) => this.options.readResponseResource!(this.item, uri, signal) : undefined,
 				codeBlockPresentation: item.type === 'agentMessage' ? this.options.codeBlockPresentation : undefined,
 				visible: this.options.isVisible() && (item.type !== 'reasoning' || this.options.thinkingExpansion.get(item.id) === true),
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
@@ -945,10 +961,20 @@ export class ChatListItemRenderer extends Disposable {
 					}
 					: this.options.onDidRequestLink,
 				sanitizerConfig: {
+					allowedAttributes: canReadGallery ? {
+						override: [...allowedMarkdownHtmlAttributes, {
+							attributeName: 'data-ash-chat-gallery-index',
+							shouldKeep: (element: Element, attribute: { readonly attrValue: string; }) => element.classList.contains('ash-chat-image-gallery') && /^\d+$/u.test(attribute.attrValue),
+						}, {
+							attributeName: 'role',
+							shouldKeep: (element: Element, attribute: { readonly attrValue: string; }) => element.classList.contains('ash-chat-image-gallery') && attribute.attrValue === 'group',
+						}]
+					} : undefined,
 					allowedLinkSchemes: {
 						augment: [
 							...(externalLinks ? [] : [OPEN_SESSION_LINK_SCHEME]),
 							...(canDownload ? [CHAT_RESPONSE_DOWNLOAD_SCHEME] : []),
+							...(canInspect ? [CHAT_RESPONSE_ENTITY_SCHEME] : []),
 						]
 					},
 					resolveFileLink: !externalLinks && item.type === 'agentMessage' && this.options.onDidRequestLink

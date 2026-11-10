@@ -24,6 +24,9 @@ import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import type { IChatContentPart } from './chatContentParts.js';
 import type { IChatCodeBlockInfo } from '../../chat.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
+import { ImageAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
+import { URI } from '../../../../../../base/common/uri.js';
+import { localize } from '../../../../../../nls.js';
 
 interface RenderedBlock {
 	node: ChildNode;
@@ -68,6 +71,7 @@ interface MarkdownFragment {
 
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly getChatItem?: () => IChatListItem | undefined;
+	readonly readGalleryImage?: (uri: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly ownerDocument: Document;
 	readonly codeBlockPresentation?: 'card';
 	readonly fileReferenceDirectory?: FileSearchDirectory;
@@ -94,6 +98,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private readonly plainLexer = new Marked();
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
+	private readonly galleryImages = new Set<ImageAttachmentWidget>();
 	private fragments: readonly MarkdownFragment[] = [];
 	private markdown: IMarkdownString | undefined;
 	// Code actions retain this response, rather than a full historical string per code block.
@@ -180,6 +185,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	public setVisible(visible: boolean): void {
 		this.incrementalRendering.setVisible(visible, !this.options.synchronousInitialRender || this.markdown !== undefined);
 		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
+		if (!visible) for (const image of this.galleryImages) image.closePreview();
 	}
 
 	/** Retains readable Markdown while offscreen code blocks release their derived documents. */
@@ -387,6 +393,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			}
 			if (!patch) {
 				wrapTablesWithScrollable(element);
+				this.renderImageGalleries(element, lifetime);
 				for (const rich of element.querySelectorAll<HTMLElement>('.ash-chat-rich')) {
 					for (const variant of rich.classList) {
 						const color = /^(background|border)-rgba-(\d{1,3})-(\d{1,3})-(\d{1,3})-([01](?:p\d+)?)$/u.exec(variant);
@@ -437,6 +444,43 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		} catch (error) {
 			lifetime.dispose();
 			throw error;
+		}
+	}
+
+	private renderImageGalleries(element: HTMLElement, lifetime: DisposableStore): void {
+		const readImage = this.options.readGalleryImage;
+		if (!readImage) return;
+		const parts = this.options.getChatItem?.()?.markdown?.richContent?.parts;
+		for (const gallery of element.querySelectorAll<HTMLElement>('.ash-chat-image-gallery[data-ash-chat-gallery-index]')) {
+			const part = parts?.[Number(gallery.dataset.ashChatGalleryIndex)];
+			if (part?.kind !== 'imageGallery') continue;
+			const document = gallery.ownerDocument;
+			const controller = new AbortController();
+			lifetime.add(toDisposable(() => controller.abort()));
+			for (const [index, image] of part.images.entries()) {
+				const tile = h(document, 'div', { className: 'ash-chat-image-gallery-tile' });
+				gallery.append(tile);
+				const widget = lifetime.add(this.instantiation.createInstance(ImageAttachmentWidget, {
+					id: String(index), name: image.label,
+					resolve: async () => {
+						const blob = await readImage(URI.parse(image.uri), controller.signal);
+						return { content: blob.type.startsWith('image/') ? blob : undefined };
+					},
+				}, { imagePresentation: 'thumbnail', retryOnFailure: true, supportsDeletion: false, shouldFocusClearButton: false }, tile));
+				this.galleryImages.add(widget);
+				lifetime.add(toDisposable(() => this.galleryImages.delete(widget)));
+				lifetime.add(widget.onDidResolvePreview(() => this.changedHeight.fire()));
+				if (image.source) {
+					const source = URI.parse(image.source);
+					if (source.scheme !== 'https' && source.scheme !== 'http') continue;
+					tile.append(h(document, 'a', {
+						attributes: {
+							href: image.source, rel: 'noopener noreferrer',
+							'aria-label': localize('chat.imageGallery.source', 'Source for {0}', image.label),
+						},
+					}, source.authority));
+				}
+			}
 		}
 	}
 

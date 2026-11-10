@@ -277,6 +277,7 @@ export interface IChatGPTService {
 	selectMessageVersion(conversationId: string, messageId: string, expectedHead: string, head: string): Promise<void>;
 	stop(): Promise<void>;
 	readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob>;
+	inspectEntity(...args: Parameters<ChatGPTClient['inspectEntity']>): ReturnType<ChatGPTClient['inspectEntity']>;
 	getAccessibleContent(showAgentReplyTimestamps?: boolean): string;
 }
 export const IChatGPTService = createServiceIdentifier<IChatGPTService>('chatGPTService');
@@ -1280,10 +1281,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob> {
 		return this.client.readResource(resource, conversationId, messageId, signal);
 	}
+	public inspectEntity(source: Parameters<ChatGPTClient['inspectEntity']>[0], entity: Parameters<ChatGPTClient['inspectEntity']>[1], locale: string, signal: AbortSignal): ReturnType<ChatGPTClient['inspectEntity']> {
+		return this.client.inspectEntity(source, entity, locale, AbortSignal.any([signal, this.management.signal, AbortSignal.timeout(120_000)]));
+	}
 	public getAccessibleContent(showAgentReplyTimestamps = true): string {
 		const state = this.model.get();
 		const messages = state.messages.filter(message => !message.activity).map(message => {
-			const reply = message.role === 'assistant' ? decodeChatGPTReply(message.text, message.references) : undefined;
+			const reply = message.role === 'assistant' ? decodeChatGPTReply(message.text, message.references, undefined, message.imageGroups) : undefined;
 			return [message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 			message.timestamp !== undefined && message.role === 'assistant' && showAgentReplyTimestamps ? formatChatMessageTime(message.timestamp) : undefined,
 			reply ? renderChatRichContentText(reply.text, reply.richContent) : message.text,

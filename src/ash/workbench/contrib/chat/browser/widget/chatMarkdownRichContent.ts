@@ -8,6 +8,8 @@ import { localize } from '../../../../../nls.js';
 import type { ChatMarkdownRichContent, ChatMarkdownRichPart, ChatMarkdownRichStyle } from '../../common/model/chatMarkdownRichContent.js';
 
 export const CHAT_RESPONSE_DOWNLOAD_SCHEME = 'chat-response-download';
+export const CHAT_RESPONSE_ENTITY_SCHEME = 'chat-response-entity';
+export const chatSourcePreviewClass = 'ash-chat-source-preview';
 
 const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', 'arrow-down-up': '⇅', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
 const iconAliases = new Map([
@@ -50,13 +52,25 @@ function classes(kind: 'box' | 'row' | 'text' | 'icon', style: ChatMarkdownRichS
 	return result.join(' ');
 }
 
-const link = (href: string, label: string): string => `<a href="${escapeHTML(href)}">${escapeHTML(label)}</a>`;
+const link = (href: string, label: string, title?: string): string => {
+	const previewAttributes = title ? ` class="${chatSourcePreviewClass}" title="${escapeHTML(title)}"` : '';
+	return `<a href="${escapeHTML(href)}"${previewAttributes}>${escapeHTML(label)}</a>`;
+};
 
 function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inLink: boolean, textOnly: boolean): string {
 	switch (part.kind) {
 		case 'markdown': return body;
 		case 'textLiteral': return escapeHTML(part.label);
-		case 'link': return inLink ? escapeHTML(part.link.label) : link(part.link.href, part.link.label);
+		case 'entity': return textOnly || inLink ? escapeHTML(part.entity.label) : link(`${CHAT_RESPONSE_ENTITY_SCHEME}:${index}`, part.entity.label);
+		case 'imageGallery': {
+			const label = localize('chat.imageGallery.label', 'Image gallery');
+			if (textOnly || inLink) {
+				const description = part.images.map(image => image.source && !inLink ? link(image.source, image.label) : escapeHTML(image.label)).join('<br>');
+				return `<span>${escapeHTML(label)}<br>${description}</span>`;
+			}
+			return `<div class="ash-chat-image-gallery${part.compact ? ' compact' : ''}" data-ash-chat-gallery-index="${index}" role="group" aria-label="${escapeHTML(label)}"></div>`;
+		}
+		case 'link': return inLink ? escapeHTML(part.link.label) : link(part.link.href, part.link.label, textOnly ? undefined : part.title);
 		case 'resource': {
 			const label = body || escapeHTML(part.label);
 			if (textOnly) return `<span>${label}</span>${part.data ? `<pre>${escapeHTML(part.data)}</pre>` : ''}`;

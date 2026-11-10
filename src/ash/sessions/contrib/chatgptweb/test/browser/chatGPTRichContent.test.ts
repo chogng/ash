@@ -71,6 +71,9 @@ suite('ChatGPT rich content', () => {
 		assert.equal(root.querySelectorAll('details.ash-chat-citation').length, 2);
 		assert.match(root.querySelector('details')?.textContent ?? '', /CSV documentation[\s\S]*Read and write tabular data/u);
 		assert.equal(root.querySelector('a')?.href, references[0]!.url);
+		const annotatedLink = [...root.querySelectorAll('a')].find(link => link.textContent === 'Python docs');
+		assert.equal(annotatedLink?.href, references[0]!.url);
+		assert.equal(annotatedLink?.title, 'CSV documentation\nRead and write tabular data.');
 		assert.equal(root.querySelector('code')?.textContent, 'citeturn2search1');
 		assert.equal((root.textContent?.match(/cite/gu) ?? []).length, 1);
 		assert.match(getChatGPTRichContentText(source, references), /CSV documentation[\s\S]*Read and write tabular data/u);
@@ -100,6 +103,7 @@ suite('ChatGPT rich content', () => {
 		root.innerHTML = render(source, references);
 		assert.equal(root.querySelector('ol > li > a')?.getAttribute('href'), 'https://example.test/repo?a=1&b=2');
 		assert.equal(root.querySelector('ol > li > a')?.textContent, 'Example / Repo');
+		assert.equal(root.querySelector('ol > li > a')?.getAttribute('title'), null);
 		assert.match(root.querySelector('ol > li')?.textContent ?? '', /Repo：使用 Rust。/u);
 		assert.equal(root.querySelector('ol details.ash-chat-citation a')?.textContent, 'Source');
 		assert.deepEqual([...root.querySelectorAll('ol ul > li')].map(item => item.textContent), ['GPUI Kit', 'Blocked link', link]);
@@ -118,6 +122,23 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(html, /<\/?(?:box|row|text|icon)\b/u);
 		assert.match(getChatGPTRichContentText(source), /Before[\s\S]*First[\s\S]*↓[\s\S]*Second[\s\S]*After/u);
 		assert.doesNotMatch(getChatGPTRichContentText(source), /\*\*|<box>/u);
+	});
+
+	test('hides image search metadata in complete and streaming replies while preserving literal code', () => {
+		const marker = '\uE200image_group\uE202{"layout":"carousel","query":["public project"]}\uE201';
+		assert.match(render(`${marker}\n\n**Project summary**`), /<strong>Project summary<\/strong>/u);
+		assert.doesNotMatch(render(`${marker}\n\nProject summary`), /image_group|public project/u);
+		assert.doesNotMatch(getChatGPTRichContentText(`Project summary ${marker.slice(0, -3)}`), /image_group|public project/u);
+		assert.match(render('`' + marker + '`'), /<code>.*image_group/u);
+		const image = { uri: 'https://images.openai.com/static-rsc-4/fixture-image', label: 'Project screenshot', source: 'https://example.test/project' };
+		const reply = decodeChatGPTReply(`Before\n\n${marker}\n\nAfter`, [], 'fixture', [{ marker, images: [image] }]);
+		assert.deepEqual(reply.richContent?.parts, [{ kind: 'imageGallery', images: [image], block: true }]);
+		assert.match(renderChatRichContentText(reply.text, reply.richContent), /Before[\s\S]*Image gallery[\s\S]*Project screenshot[\s\S]*After/u);
+		assert.doesNotMatch(reply.text, /image_group|public project/u);
+		const query = 'public project';
+		const inline = decodeChatGPTReply(`<row><AsyncImage query="${query}"/>\n\n**Project summary**</row>`, [], 'fixture', [{ query, images: [image] }]);
+		assert.ok(inline.richContent?.parts.some(part => part.kind === 'imageGallery' && part.compact));
+		assert.match(renderChatRichContentText(inline.text, inline.richContent), /Project screenshot[\s\S]*Project summary/u);
 	});
 
 	test('leaves inline and fenced code examples literal', () => {
@@ -189,25 +210,26 @@ suite('ChatGPT rich content', () => {
 		assert.match(html, /data-latex="x\^2 \+ y\^2 = z\^2"/u);
 	});
 
-	test('keeps rich content and its formatted data in one Markdown table cell', () => {
+	test('renders Entity labels as literal text in Markdown table cells and accessible text', () => {
 		const source = [
 			'| Framework | Notes |',
 			'| --- | --- |',
+			'| <Entity category="software" value="GPUI" disambig="Zed Rust GPU UI framework"/> | Native GPU toolkit |',
 			String.raw`| Zed \| Rust <Entity data={{"category":"software","value":"GPUI","disambig":"Zed \| Rust"}}/> | Original row |`,
-			'| Zed | Rust |',
+			String.raw`| <Entity data={{"value":"界面 \| <em>Kit</em> *UI*"}}/> | Second row |`,
 		].join('\n');
-		const decoded = decodeChatGPTReply(source);
-		assert.doesNotMatch(decoded.text, /<details|<pre|&#10;/u);
-		assert.equal(decoded.richContent?.parts[0]?.kind, 'details');
 		const root = document.createElement('div');
 		root.innerHTML = render(source);
-		const rows = [...root.querySelectorAll('tbody tr')];
-		assert.equal(rows.length, 2);
-		assert.equal(rows[0]?.children.length, 2);
-		assert.equal(rows[0]?.children[1]?.textContent, 'Original row');
-		assert.equal(rows[1]?.children[0]?.textContent, 'Zed');
-		const data = rows[0]?.querySelector('td details pre code')?.textContent;
-		assert.equal(data, JSON.stringify({ category: 'software', value: 'GPUI', disambig: 'Zed | Rust' }, null, 2));
+		const rows = [...root.querySelectorAll<HTMLTableRowElement>('tbody tr')];
+		assert.deepEqual(rows.map(row => [...row.cells].map(cell => cell.textContent)), [
+			['GPUI', 'Native GPU toolkit'],
+			['Zed | Rust GPUI', 'Original row'],
+			['界面 | <em>Kit</em> *UI*', 'Second row'],
+		]);
+		assert.equal(root.querySelector('td :is(details, pre, em)'), null);
+		const accessibleText = getChatGPTRichContentText(source);
+		assert.match(accessibleText, /Zed \| Rust GPUI[\s\S]*界面 \| <em>Kit<\/em> \*UI\*/u);
+		assert.doesNotMatch(accessibleText, /category|disambig/u);
 	});
 
 	test('shows media and opaque components without running or loading their source', () => {

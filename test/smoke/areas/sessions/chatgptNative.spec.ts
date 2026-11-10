@@ -16,11 +16,16 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly cancelledEntityDetails: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void; };
+}
+
+interface FixtureReply {
+	readonly suffix: string;
+	readonly sources: readonly { readonly ref_id: string; readonly url: string; readonly title: string; readonly snippet: string; }[];
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
-async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix = '', historyImage = false, projectFiles = false): Promise<void> {
+async function installService(application: ElectronApplication, holdInitialization = false, historyReplySuffix: string | FixtureReply = '', historyImage = false, projectFiles = false): Promise<void> {
 	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization, historyReplySuffix, historyImage, projectFiles }) => {
 		const fs = process.getBuiltinModule('fs/promises');
 		const path = process.getBuiltinModule('path');
@@ -29,6 +34,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		await fs.writeFile(path.join(home, 'auth.json'), authentication);
 		let sends = 0; let step = 0; let reply: ReadableStreamDefaultController<Uint8Array> | undefined;
 		let cancelledInitializations = 0;
+		let cancelledEntityDetails = 0;
 		let offline = false;
 		let recentHistoryRateLimited = false;
 		let recentHistoryRequests = 0;
@@ -52,6 +58,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		};
 		globalThis.ashNativeFixture = {
 			get sends() { return sends; },
+			get cancelledEntityDetails() { return cancelledEntityDetails; },
 			get pendingInitializations() { return initializing.size; },
 			get cancelledInitializations() { return cancelledInitializations; },
 			setOffline(value) { offline = value; },
@@ -86,8 +93,20 @@ async function installService(application: ElectronApplication, holdInitializati
 			storage.protocol.handle('https', request => {
 				const url = new URL(request.url);
 				if (url.hostname !== 'chatgpt.com') { return new Response(null, { status: 404 }); }
+				if (url.pathname === '/backend-api/sentinel/chat-requirements/prepare') { return Response.json({ prepare_token: 'synthetic-sidebar-proof' }); }
 				if (url.pathname === '/sentinel-fixture.js') {
-					return new Response('export const api = { finalizeChatRequirements: async () => ({ chatRequirementsToken: "synthetic-proof" }) };', { headers: { 'Content-Type': 'text/javascript' } });
+					return new Response(`
+						let authenticated = false;
+						export const api = {
+							primeChatRequirements(value) { authenticated = value; },
+							async finalizeChatRequirements({ allowPreparedOnly }) {
+								if (!allowPreparedOnly) return { chatRequirementsToken: 'synthetic-proof' };
+								if (!authenticated) throw new Error('Expected authenticated preparation');
+								const response = await fetch('/backend-api/sentinel/chat-requirements/prepare');
+								return { chatRequirementsPrepareToken: (await response.json()).prepare_token };
+							},
+						};
+					`, { headers: { 'Content-Type': 'text/javascript' } });
 				}
 				return new Response('<!doctype html><title>ChatGPT verification fixture</title><script type="module" src="/sentinel-fixture.js"></script>', { headers: { 'Content-Type': 'text/html' } });
 			});
@@ -97,7 +116,41 @@ async function installService(application: ElectronApplication, holdInitializati
 					uploadedFiles[decodeURIComponent(url.pathname.slice(1))] = Buffer.from(init.body as Uint8Array).toString('utf8');
 					return new Response(null, { status: 204 });
 				}
+				if (url.href === 'https://images.openai.com/static-rsc-4/fixture-zed?purpose=fullsize') {
+					if (init?.credentials !== 'omit' || new Headers(init.headers).has('Authorization')) throw new Error('Image CDN requests must be unauthenticated');
+					return new Response(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64'), { headers: { 'Content-Type': 'image/png' } });
+				}
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
+				if (url.pathname === '/backend-api/sidebar/conversation') {
+					const input = JSON.parse(String(init?.body));
+					if (input.conversation_id !== 'history-one' || input.message_id !== 'answer' || !['GPUI', 'Floem'].includes(input.generic_entity_params.name) || input.locale !== 'zh-CN'
+						|| new Headers(init?.headers).get('OpenAI-Sentinel-Chat-Requirements-Prepare-Token') !== 'synthetic-sidebar-proof') {
+						throw new Error('Unexpected entity detail request');
+					}
+					if (input.generic_entity_params.name === 'Floem') {
+						const frame = { c: 0, o: 'add', p: '', v: { type: 'message', data: message('floem-detail', 'assistant', 'Floem 详情首段') } };
+						return new Response(new ReadableStream({
+							start(controller) { controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(frame)}\n\n`)); },
+							cancel() { cancelledEntityDetails++; },
+						}), { headers: { 'Content-Type': 'text/event-stream' } });
+					}
+					const imageMarker = '\uE200image_group\uE202{"layout":"carousel","query":["Zed screenshots"]}\uE201';
+					const gallery = {
+						type: 'image_group', matched_text: imageMarker, images: [{
+							image_result: {
+								content_url: 'https://images.openai.com/static-rsc-4/fixture-zed?purpose=fullsize', title: 'Zed 截图', url: 'https://example.com/zed',
+							}
+						}]
+					};
+					const frames = [
+						{ c: 0, o: 'add', p: '', v: { type: '__debug', data: {} } },
+						{ c: 1, v: { type: 'message', data: message('detail', 'assistant', 'GPUI 使用 ') } },
+						{ o: 'patch', v: [{ o: 'append', p: '/data/content/parts/0', v: '**GPU**' }] },
+						{ v: [{ o: 'append', p: '/data/content/parts/0', v: ' 渲染。 [Zed 文档](https://example.com/zed)\n\n' + imageMarker }] },
+						{ v: [{ o: 'add', p: '/data/metadata', v: { content_references: [gallery] } }] },
+					];
+					return new Response(frames.map(frame => `event: delta\ndata: ${JSON.stringify(frame)}\n\n`).join('') + 'data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+				}
 				if (historyImage && url.pathname === '/backend-api/files/file_diagram/download') {
 					return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="#396da8"/></svg>', { headers: { 'Content-Type': 'image/svg+xml' } });
 				}
@@ -215,10 +268,12 @@ async function installService(application: ElectronApplication, holdInitializati
 						},
 						metadata: { attachments: [{ id: 'file_diagram', name: 'diagram.svg', mime_type: 'image/svg+xml', size: 126 }] },
 					} : message('question', 'user', 'History question');
+					const historyReply = typeof historyReplySuffix === 'string' ? { suffix: historyReplySuffix } : historyReplySuffix;
+					const answer = message('answer', 'assistant', first ? 'History one answer' + historyReply.suffix : 'History two answer');
 					return Response.json({
 						title: first ? 'First native history' : 'Second native history', current_node: 'answer', mapping: {
 							question: { parent: null, message: question },
-							answer: { parent: 'question', message: message('answer', 'assistant', first ? 'History one answer' + historyReplySuffix : 'History two answer') },
+							answer: { parent: 'question', message: first && 'sources' in historyReply ? { ...answer, metadata: { content_references: historyReply.sources } } : answer },
 						}
 					});
 				}
@@ -376,6 +431,80 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('renders ChatGPT entity labels and previews explicit source links', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+		const reply = '\n\n' + [
+			'| 框架 | 核心特点 |',
+			'| --- | --- |',
+			'| <Entity category="software" value="GPUI" disambig="Zed Rust GPU UI framework"/> | Zed 使用的 GPU UI 框架 |',
+			'| <Entity data={{"category":"software","value":"Floem","disambig":"Lapce"}}/> | Lapce 使用的响应式 UI |',
+			'',
+			'参见 urlFloem 文档turn2search1。',
+		].join('\n');
+		const source = { ref_id: 'turn2search1', url: 'https://example.com/floem', title: 'Floem 文档', snippet: '介绍响应式组件与布局。' };
+		await installService(application as ElectronApplication, false, { suffix: reply, sources: [source] });
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const table = chat.getByRole('table');
+		await expect(table).toBeVisible();
+		await expect(table.getByRole('cell')).toHaveText(['GPUI', 'Zed 使用的 GPU UI 框架', 'Floem', 'Lapce 使用的响应式 UI']);
+		const entity = table.getByRole('link', { name: 'GPUI', exact: true });
+		await entity.press('Enter');
+		const details = page.getByRole('heading', { name: 'GPUI', exact: true });
+		await expect(details).toBeVisible();
+		const sourceLink = page.getByRole('link', { name: 'Zed 文档', exact: true });
+		await expect(sourceLink).toBeInViewport({ ratio: 1 });
+		await expect(sourceLink).toHaveAttribute('href', 'https://example.com/zed');
+		const detailPane = page.locator('.ash-chatgpt-entity-details');
+		await expect(detailPane.locator('strong')).toHaveText('GPU');
+		const gallery = detailPane.getByRole('group', { name: '图集', exact: true });
+		const image = gallery.getByRole('button', { name: '预览 Zed 截图', exact: true });
+		await expect(image).toBeVisible();
+		await expect(gallery.getByRole('link', { name: 'Zed 截图 的图片来源', exact: true })).toHaveAttribute('href', 'https://example.com/zed');
+		await image.press('Enter');
+		const imagePreview = page.getByRole('dialog', { name: '预览 Zed 截图', exact: true });
+		await expect(imagePreview).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(imagePreview).toBeHidden();
+		await expect(image).toBeFocused();
+		await expect(table).toBeVisible();
+		const [chatBounds, detailBounds] = await Promise.all([chat.boundingBox(), detailPane.boundingBox()]);
+		expect(detailBounds!.x).toBeGreaterThanOrEqual(chatBounds!.x + chatBounds!.width - 1);
+		const closeDetails = page.getByRole('button', { name: '关闭详情', exact: true });
+		await closeDetails.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/实体详情在对话旁打开/u);
+		await page.keyboard.press('Escape');
+		await expect(closeDetails).toBeFocused();
+		await expect(sourceLink).toBeInViewport({ ratio: 1 });
+		await testInfo.attach('chatgpt-entity-details', { body: await page.screenshot(), contentType: 'image/png' });
+		await closeDetails.press('Escape');
+		await expect(details).toBeHidden();
+		await expect(entity).toBeFocused();
+		const link = chat.getByRole('link', { name: 'Floem 文档', exact: true });
+		await expect(link).toHaveAttribute('href', source.url);
+		await link.focus();
+		const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+		await page.keyboard.press(`${modifier}+k`);
+		await page.keyboard.press(`${modifier}+i`);
+		const preview = page.getByRole('tooltip').filter({ hasText: source.snippet });
+		await expect(preview).toBeVisible();
+		await testInfo.attach('chatgpt-source-preview', { body: await preview.screenshot(), contentType: 'image/png' });
+		await page.keyboard.press('Escape');
+		await expect(preview).toBeHidden();
+		await expect(link).toBeFocused();
+		await link.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/如果回复中的链接附有来源摘要/u);
+		await page.keyboard.press('Escape');
+		await expect(link).toBeFocused();
+		await table.getByRole('link', { name: 'Floem', exact: true }).click();
+		await expect(detailPane).toContainText('Floem 详情首段');
+		await page.getByRole('button', { name: 'Second native history', exact: true }).click();
+		await expect(detailPane).toBeHidden();
+		await expect(chat).toContainText('History two answer');
+		await expect.poll(() => (application as ElectronApplication).evaluate(() => globalThis.ashNativeFixture.cancelledEntityDetails)).toBe(1);
+		expect(await (application as ElectronApplication).evaluate(() => globalThis.ashNativeFixture.sends)).toBe(0);
+	});
 
 	test('opens one sent SVG thumbnail inside Chat without opening Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 		await installService(application as ElectronApplication, false, '', true);

@@ -6,7 +6,7 @@ import type { Event } from '../../../../base/common/event.js';
 import { isRecord } from '../../../../base/common/types.js';
 import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { ChatGPTAuthenticationError, type ChatGPTRequest, type ChatGPTResponse } from '../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, chatGPTEntityDetailPath, chatGPTPrepareTokenHeader, readChatGPTGalleryImageUrl, type ChatGPTRequest, type ChatGPTResponse } from '../common/chatGPTTransport.js';
 import type { ChatGPTRecentHistoryGate } from './chatGPTRecentHistoryGate.js';
 import type { ChatGPTRequestHeaderHandler, IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAuthentication.js';
@@ -14,7 +14,7 @@ import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAut
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
 const createProjectPath = '/backend-api/projects';
 const forkPath = '/backend-api/conversation/new_branch';
-const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', createProjectPath, forkPath, '/realtime/vp']);
+const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', createProjectPath, forkPath, '/realtime/vp', chatGPTEntityDetailPath]);
 const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
 const nativeHistoryPath = (path: string): boolean => /^\/backend-api\/conversations\/[A-Za-z0-9_-]{1,240}(?:\/messages)?$/u.test(path);
 const conversationPath = (path: string): boolean => path !== forkPath && /^\/backend-api\/conversation\/[^/]+$/u.test(path);
@@ -31,7 +31,7 @@ const deletePath = (path: string): boolean => /^\/backend-api\/conversation\/id\
 const filePath = (path: string): boolean => /^\/backend-api\/(?:files\/[^/]+(?:\/download)?|conversation\/[^/]+\/(?:interpreter\/download|files\/[^/]+(?:\/download)?)|estuary\/content)$/u.test(path);
 const synthesisPath = '/backend-api/synthesize';
 const validIdentifier = (value: unknown): boolean => typeof value === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(value);
-const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'];
+const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token', chatGPTPrepareTokenHeader];
 const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', 'chatgpt-project-id', ...proofHeaders.map(name => name.toLowerCase())]);
 const credentialHeaders = new Set(['authorization', 'chatgpt-account-id', 'x-openai-fedramp']);
 interface PendingRequest {
@@ -149,7 +149,7 @@ export class ChatGPTTransport extends Disposable {
 		const headersOnly = request.path.startsWith('/service/.headers/');
 		const url = new URL(request.path.replace(headersOnly ? '/service/.headers' : '/service', ''), 'https://chatgpt.com');
 		if (headersOnly) {
-			return this.prepareVerification(context, signal);
+			return this.prepareVerification(context, signal, url.pathname === chatGPTEntityDetailPath);
 		}
 		try {
 			const send = async () => {
@@ -189,21 +189,27 @@ export class ChatGPTTransport extends Disposable {
 		const runtime = this.getRuntime(context);
 		for (let redirects = 0; redirects < 5; redirects++) {
 			signal.throwIfAborted();
+			const galleryImage = !!readChatGPTGalleryImageUrl(url.href);
 			const response = url.origin === 'https://chatgpt.com'
 				? await this.fetchAuthorized(runtime, url, { credentials: 'omit', redirect: 'manual', signal }, authorization)
-				: await runtime.session.fetch(url.href, { credentials: 'omit', redirect: 'manual', signal });
+				: await runtime.session.fetch(url.href, { credentials: 'omit', redirect: galleryImage ? 'error' : 'manual', signal });
+			const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
+			if (galleryImage && (!response.ok || !/^image\/(?:avif|gif|jpeg|png|webp)(?:;|$)/iu.test(contentType))) {
+				await response.body?.cancel();
+				return new Response(null, { status: response.ok ? 502 : response.status });
+			}
 			if ([301, 302, 303, 307, 308].includes(response.status)) {
 				await response.body?.cancel();
 				url = readResourceUrl(new URL(response.headers.get('location') ?? '', url).href);
 				continue;
 			}
-			if (Number(response.headers.get('content-length')) > 64 * 1024 * 1024) { await response.body?.cancel(); throw new Error('ChatGPT resource exceeds the limit'); }
-			return new Response(response.body, { status: response.status, headers: { 'Content-Type': response.headers.get('content-type') ?? 'application/octet-stream' } });
+			if (Number(response.headers.get('content-length')) > (galleryImage ? 16 : 64) * 1024 * 1024) { await response.body?.cancel(); throw new Error('ChatGPT resource exceeds the limit'); }
+			return new Response(response.body, { status: response.status, headers: { 'Content-Type': contentType } });
 		}
 		throw new Error('ChatGPT resource redirected too many times');
 	}
 
-	private async prepareVerification(context: string, signal: AbortSignal): Promise<Response> {
+	private async prepareVerification(context: string, signal: AbortSignal, sidebar: boolean): Promise<Response> {
 		// Only the proof request can be retried here. The message has not been submitted.
 		for (let attempt = 1; attempt <= 2; attempt++) {
 			signal.throwIfAborted();
@@ -217,7 +223,7 @@ export class ChatGPTTransport extends Disposable {
 				const script = await raceCancellationError(this.options.readVerificationScript(proofSignal), proofSignal);
 				if (script.length > 128 * 1024) { throw new Error('ChatGPT verification script exceeds the limit'); }
 				phase = 'runtime';
-				const value = await raceCancellationError(runtime.prepareHeaders(script, proofSignal), proofSignal);
+				const value = await raceCancellationError(runtime.prepareHeaders(script, proofSignal, sidebar), proofSignal);
 				if (!isRecord(value)) { throw new Error('Invalid ChatGPT verification headers'); }
 				const stage = value.failedPhase;
 				if (stage === 'discovery' || stage === 'import' || stage === 'requirements' || stage === 'headers') {
@@ -232,7 +238,7 @@ export class ChatGPTTransport extends Disposable {
 					if (typeof token !== 'string' || !token || token.length > 65536 || /[\r\n\0]/u.test(token)) { throw new Error('Invalid ChatGPT verification header'); }
 					headers[name] = token;
 				}
-				if (!headers[proofHeaders[0]]) { throw new Error('ChatGPT verification headers are unavailable'); }
+				if (!headers[sidebar ? chatGPTPrepareTokenHeader : proofHeaders[0]]) { throw new Error('ChatGPT verification headers are unavailable'); }
 				if (attempt > 1) {
 					this.logService.info('chatgpt', 'ChatGPT send verification recovered', { attempt, durationMs: Date.now() - started, requests: runtime.verificationRequests });
 				}
@@ -345,7 +351,7 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 		&& query.size === (query.has('cursor') ? 3 : 2) && (!query.has('cursor') || (query.get('cursor')?.length ?? 0) > 0);
 	const projectDetails = projectDetailsPath(url.pathname) && (!url.search || query.size === 1 && query.get('include_file_limits') === 'true');
 	const allowed = url.origin === 'https://chatgpt.com' && !/%(?:2f|5c|00|25)/iu.test(url.pathname) && (headersOnly
-		? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
+		? value.method === 'POST' && (url.pathname === '/backend-api/f/conversation' || url.pathname === chatGPTEntityDetailPath) && !url.search && value.body === undefined
 		: value.method === 'GET'
 			? readPaths.has(url.pathname) || conversationPath(url.pathname) || nativeHistory || projectConversations || projectDetails || synthesis
 			: !url.search && (value.method === 'POST'
@@ -355,6 +361,13 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 	if (!allowed || (value.method === 'GET' && value.body !== undefined)) { throw new TypeError('Invalid ChatGPT endpoint'); }
 	if (value.method === 'DELETE' && value.body !== undefined) { throw new TypeError('Invalid ChatGPT deletion'); }
 	validateProjectFileRequest(url.pathname, value.method, new Headers(value.headers as Record<string, string>), value.body);
+	if (!headersOnly && url.pathname === chatGPTEntityDetailPath) {
+		const headers = new Headers(value.headers as Record<string, string>);
+		if (!headers.get(chatGPTPrepareTokenHeader) || headers.get('content-type') !== 'application/json' || headers.get('accept') !== 'text/event-stream') {
+			throw new TypeError('Invalid ChatGPT entity detail headers');
+		}
+		validateEntityDetailRequest(value.body);
+	}
 	if (value.method === 'POST' && url.pathname === createProjectPath) {
 		let body: unknown;
 		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
@@ -397,6 +410,25 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 	return value as unknown as ChatGPTRequest;
 }
 
+function validateEntityDetailRequest(source: unknown): void {
+	let body: unknown;
+	try { body = typeof source === 'string' ? JSON.parse(source) : undefined; }
+	catch { throw new TypeError('Invalid ChatGPT entity detail request'); }
+	if (!isRecord(body) || Object.keys(body).length !== 5 || body.category !== 'generic_entity'
+		|| !validIdentifier(body.conversation_id) || !validIdentifier(body.message_id)
+		|| typeof body.locale !== 'string' || !/^[A-Za-z0-9-]{1,35}$/u.test(body.locale)) {
+		throw new TypeError('Invalid ChatGPT entity detail request');
+	}
+	const entity = body.generic_entity_params;
+	if (!isRecord(entity) || Object.keys(entity).length !== 4 || entity.multi_message_mode !== true
+		|| typeof entity.category !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/u.test(entity.category)
+		|| typeof entity.name !== 'string' || !entity.name.trim() || entity.name.length > 256
+		|| !isRecord(entity.extra_params) || Object.keys(entity.extra_params).length !== 1
+		|| typeof entity.extra_params.disambiguation !== 'string' || entity.extra_params.disambiguation.length > 1024) {
+		throw new TypeError('Invalid ChatGPT entity detail request');
+	}
+}
+
 function validateProjectFileRequest(path: string, method: unknown, headers: Headers, body: unknown): void {
 	const scope = headers.get('chatgpt-project-id');
 	const processing = path === processProjectUploadPath;
@@ -431,7 +463,7 @@ function validateProjectFileRequest(path: string, method: unknown, headers: Head
 
 function readUploadUrl(value: string): URL {
 	const url = readResourceUrl(value);
-	if (url.origin === 'https://chatgpt.com' || !url.search) { throw new TypeError('Invalid ChatGPT upload origin'); }
+	if (url.origin === 'https://chatgpt.com' || readChatGPTGalleryImageUrl(url.href) || !url.search) { throw new TypeError('Invalid ChatGPT upload origin'); }
 	return url;
 }
 
@@ -445,6 +477,6 @@ function readResourceUrl(value: string): URL {
 	if (value.length > 8192 || url.protocol !== 'https:' || url.port || url.username || url.password || url.hash || /[\r\n\0\\]|%(?:2f|5c|00|25)/iu.test(url.pathname)) { throw new TypeError('Invalid ChatGPT resource URL'); }
 	const webAsset = url.origin === 'https://chatgpt.com' && (filePath(url.pathname) || isProjectFileDownloadUrl(url));
 	const signedAsset = ['oaiusercontent.com', 'blob.core.windows.net'].some(domain => url.hostname.endsWith('.' + domain));
-	if (!webAsset && !signedAsset) { throw new TypeError('Invalid ChatGPT resource origin'); }
+	if (!webAsset && !signedAsset && !readChatGPTGalleryImageUrl(url.href)) { throw new TypeError('Invalid ChatGPT resource origin'); }
 	return url;
 }

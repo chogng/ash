@@ -178,6 +178,61 @@ suite('ChatGPT transport', () => {
 		}
 	}));
 
+	test('limits entity detail requests to their exact endpoint, method and body', async () => fixture(async auth => {
+		let fetched = 0;
+		using transport = new ChatGPTTransport({
+			authentication: auth, readVerificationScript: async () => '', createRuntime: () => runtime(async () => {
+				fetched++;
+				return new Response(null, { status: 204 });
+			}),
+		}, new NullLoggerService());
+		const channel = scopedChannel(transport, auth);
+		const body = {
+			category: 'generic_entity', conversation_id: 'conversation', message_id: 'reply', locale: 'zh-CN',
+			generic_entity_params: { category: 'software', name: 'GPUI', extra_params: { disambiguation: 'Zed toolkit' }, multi_message_mode: true },
+		};
+		const request = {
+			path: '/service/backend-api/sidebar/conversation', method: 'POST', body: JSON.stringify(body),
+			headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json', 'OpenAI-Sentinel-Chat-Requirements-Prepare-Token': 'fixture' },
+		};
+		for (const change of [{ path: request.path + '?unexpected=1' }, { method: 'GET', body: undefined }, { headers: {} },
+		{ body: JSON.stringify({ ...body, message_id: 'invalid/reply' }) }, { body: JSON.stringify({ ...body, messages: [] }) }]) {
+			await assert.rejects(channel.call('', 'request', [randomUUID(), { ...request, ...change }]), TypeError);
+		}
+		assert.equal(fetched, 0);
+		const id = randomUUID();
+		assert.equal((await channel.call<ChatGPTResponse>('', 'request', [id, request])).status, 204);
+		await channel.call('', 'cancel', [id]);
+		assert.equal(fetched, 1);
+	}));
+
+	test('uses a separate sidebar preparation for each entity opened on an experimental account', async () => fixture(async auth => {
+		let runtimes = 0;
+		let preparations = 0;
+		const submitted: (string | null)[] = [];
+		const tokenHeader = 'OpenAI-Sentinel-Chat-Requirements-Prepare-Token';
+		using transport = new ChatGPTTransport({
+			native: true, authentication: auth, readVerificationScript: async () => '', createRuntime: () => {
+				runtimes++;
+				return runtime(async (url, init) => {
+					assert.equal(new URL(String(url)).pathname, '/backend-api/sidebar/conversation');
+					submitted.push(new Headers(init?.headers).get(tokenHeader));
+					return new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+				}, async (_script, _signal, sidebar) => {
+					assert.equal(sidebar, true);
+					return { [tokenHeader]: `preparation-${++preparations}` };
+				});
+			},
+		}, new NullLoggerService());
+		const client = new ChatGPTClient(createChatGPTFetch(adapt(transport, auth)));
+		for (const [label, disambiguation] of [['GPUI', 'Zed toolkit'], ['Floem', 'Lapce toolkit']]) {
+			const details = client.inspectEntity({ conversationId: 'conversation', messageId: 'reply' }, { label, category: 'software', disambiguation }, 'en', new AbortController().signal);
+			assert.equal((await details.next()).done, true);
+		}
+		assert.equal(runtimes, 1);
+		assert.deepEqual(submitted, ['preparation-1', 'preparation-2']);
+	}));
+
 	test('uses the Chromium user agent for conversation history reads only', async () => fixture(async auth => {
 		const agents: (string | null)[] = [];
 		using transport = new ChatGPTTransport({

@@ -15,6 +15,8 @@
     "chat.input.stagedFiles": "附件",
     "chat.input.stagedImagesHelp": "附加的图片显示在消息正文上方。从消息输入框按 Shift+Tab 可到达图片操作。按 Enter 或空格预览或移除图片，按 Escape 关闭预览。",
     "chat.input.stagedImageHelp": "粘贴的图片显示在输入框内的消息文字上方。按 Tab 聚焦“预览”或“移除”，再按 Enter 或空格激活。按 Esc 关闭预览并将焦点返回图片。",
+    "chat.imageGallery.label": "图集",
+    "chat.imageGallery.source": "{0} 的图片来源",
     "chat.input.fileUploading": "正在上传…",
     "chat.input.filePreparing": "正在准备…",
     "chat.input.fileUploadFailed": "上传失败",

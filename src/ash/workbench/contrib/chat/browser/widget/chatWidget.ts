@@ -1,4 +1,5 @@
 import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
+import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import type { ChatResponseActions } from './chatListRenderer.js';
 import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -88,6 +89,7 @@ export interface IChatWidgetModel extends IDisposable {
 		stop(): Promise<void>;
 	};
 	readResponseResource?(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob>;
+	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	getResponseActions?(item: IChatListItem): ChatResponseActions | undefined;
 	submitRequestEdit?(item: IChatListItem, text: string, commandId: string): Promise<void>;
 	getRequestVersions?(item: IChatListItem): Promise<readonly import('../chat.js').ChatRequestVersion[]>;
@@ -270,6 +272,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
 			virtualizeHistoryFrom: this.viewOptions?.virtualizeHistoryFrom,
 			readResponseResource: model.readResponseResource?.bind(model),
+			inspectResponseEntity: model.inspectResponseEntity,
 			getResponseActions: model.getResponseActions?.bind(model),
 			openTurnChanges,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),

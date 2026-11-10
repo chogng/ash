@@ -5,7 +5,7 @@ import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { SSEParser } from '../../../../base/common/sseParser.js';
-import { chatGPTHistoryCooldownMs, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
+import { chatGPTEntityDetailPath, chatGPTHistoryCooldownMs, chatGPTPrepareTokenHeader, readChatGPTGalleryImageUrl, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
 
 const projectFileId = /^file[-_][A-Za-z0-9_-]{1,240}$/u;
 export interface ChatGPTBranchSource {
@@ -88,7 +88,14 @@ export interface ChatGPTVoiceUpdate {
 	readonly parentId?: string;
 	readonly message?: ChatGPTMessage;
 }
-export type ChatGPTMessage = ChatReplyMessage & { readonly editableText?: string; readonly hasVersions?: boolean; };
+export type ChatGPTImageGroup = {
+	readonly images: readonly { readonly uri: string; readonly label: string; readonly source?: string; }[];
+} & ({ readonly marker: string; } | { readonly query: string; });
+export type ChatGPTMessage = ChatReplyMessage & {
+	readonly editableText?: string;
+	readonly hasVersions?: boolean;
+	readonly imageGroups?: readonly ChatGPTImageGroup[];
+};
 export interface ChatGPTMessageVersion {
 	readonly head: string;
 	readonly text: string;
@@ -767,6 +774,28 @@ export class ChatGPTClient {
 		});
 	}
 
+	async *inspectEntity(source: ChatGPTBranchSource, entity: { readonly label: string; readonly category: string; readonly disambiguation: string; }, locale: string, signal: AbortSignal): AsyncGenerator<ChatGPTMessage> {
+		const path = chatGPTEntityDetailPath.slice('/backend-api'.length);
+		const verification: unknown = await (await this.request(path, signal, { method: 'POST' }, true)).json();
+		if (!isRecord(verification) || typeof verification[chatGPTPrepareTokenHeader] !== 'string') { throw this.invalidResponse(); }
+		const headers: Record<string, string> = { Accept: 'text/event-stream', 'Content-Type': 'application/json' };
+		for (const name of [chatGPTPrepareTokenHeader, 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token']) {
+			const token = verification[name];
+			if (typeof token === 'string') { headers[name] = token; }
+		}
+		const response = await this.request(path, signal, {
+			method: 'POST', headers,
+			body: JSON.stringify({
+				category: 'generic_entity', conversation_id: source.conversationId, message_id: source.messageId, locale,
+				generic_entity_params: { category: entity.category, name: entity.label, extra_params: { disambiguation: entity.disambiguation }, multi_message_mode: true },
+			}),
+		});
+		if (!response.headers.get('content-type')?.includes('text/event-stream') || !response.body) { throw this.invalidResponse(); }
+		for await (const frame of decodeChatGPTStream(response.body, signal, 'sidebar')) {
+			if (frame.message?.role === 'assistant' && !frame.message.activity && (frame.message.text.trim() || frame.message.resources?.length)) { yield frame.message; }
+		}
+	}
+
 	async readResource(resource: string, conversationId: string | undefined, messageId: string, signal: AbortSignal): Promise<Blob> {
 		if (resource.startsWith('data:')) { return (await globalThis.fetch(resource, { signal })).blob(); }
 		let url: string;
@@ -942,6 +971,49 @@ export function mergeChatGPTResources(resources: readonly ChatGPTResource[]): Ch
 	return [...merged.values()];
 }
 
+function readSearchImage(result: Record<string, unknown>): ChatGPTImageGroup['images'][number] | undefined {
+	const image = readChatGPTGalleryImageUrl(result.content_url) ?? readChatGPTGalleryImageUrl(result.thumbnail_url);
+	if (!image) return undefined;
+	let source: URL | undefined;
+	if (typeof result.url === 'string' && result.url.length <= 2048 && result.show_url !== false) {
+		try {
+			const url = new URL(result.url);
+			if ((url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password) source = url;
+		} catch { /* The image can still be previewed. */ }
+	}
+	const title = typeof result.title === 'string' ? result.title.trim().slice(0, 256) : '';
+	return { uri: image.href, label: title || source?.hostname || localize('sessions.chatgpt.image', 'Image'), source: source?.href };
+}
+
+function readImageGroup(reference: Record<string, unknown>, text: string): ChatGPTImageGroup | undefined {
+	const marker = reference.matched_text;
+	if (typeof marker !== 'string' || !marker || marker.length > 8192 || !text.includes(marker) || !Array.isArray(reference.images)) return undefined;
+	const images = new Map<string, ChatGPTImageGroup['images'][number]>();
+	for (const entry of reference.images.slice(0, 12)) {
+		if (!isRecord(entry) || !isRecord(entry.image_result)) continue;
+		const image = readSearchImage(entry.image_result);
+		if (image && !images.has(image.uri)) images.set(image.uri, image);
+	}
+	return images.size ? { marker, images: [...images.values()] } : undefined;
+}
+
+/** Saved AsyncImage components keep their result separately from the Markdown. */
+function readAsyncImages(metadata: Record<string, unknown>): ChatGPTImageGroup[] {
+	const model = metadata.model_dil_v2;
+	if (!isRecord(model) || !isRecord(model.appData) || !isRecord(model.appData.opGenui)) return [];
+	const results = model.appData.opGenui.componentResults;
+	if (!isRecord(results)) return [];
+	const images: ChatGPTImageGroup[] = [];
+	for (const result of Object.values(results).slice(0, 64)) {
+		if (!isRecord(result) || result.componentName !== 'AsyncImage' || !isRecord(result.state) || !Array.isArray(result.state.images)) continue;
+		const first = result.state.images[0];
+		if (!isRecord(first) || typeof first.image_search_query !== 'string' || !first.image_search_query || first.image_search_query.length > 1024) continue;
+		const image = readSearchImage(first);
+		if (image) images.push({ query: first.image_search_query, images: [image] });
+	}
+	return images;
+}
+
 function readMessage(value: unknown, conversationId: string | undefined): ChatGPTMessage | undefined {
 	if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.author) || !['user', 'assistant', 'tool'].includes(value.author.role as string)
 		|| !isRecord(value.content)) { return undefined; }
@@ -1019,7 +1091,8 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		}
 	}
 	const references: ChatGPTReference[] = [];
-	const addReference = (entry: unknown): void => {
+	const imageGroups: ChatGPTImageGroup[] = [];
+	const addReference = (entry: unknown): string | undefined => {
 		if (!isRecord(entry) || typeof entry.url !== 'string') return;
 		let url: URL; try { url = new URL(entry.url); } catch { return; }
 		if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return;
@@ -1029,16 +1102,34 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		for (const id of ids.length ? ids : [url.href]) {
 			if (!references.some(item => item.id === id)) references.push({ id, url: url.href, title: typeof entry.title === 'string' ? entry.title : url.hostname, snippet: typeof entry.snippet === 'string' ? entry.snippet : '' });
 		}
+		return url.href;
 	};
 	if (isRecord(value.metadata)) {
+		imageGroups.push(...readAsyncImages(value.metadata));
 		for (const group of Array.isArray(value.metadata.search_result_groups) ? value.metadata.search_result_groups : []) {
 			if (isRecord(group) && Array.isArray(group.entries)) group.entries.forEach(addReference);
 		}
 		for (const reference of Array.isArray(value.metadata.content_references) ? value.metadata.content_references : []) {
 			if (!isRecord(reference)) continue;
+			if (reference.type === 'image_group') {
+				const group = readImageGroup(reference, text);
+				if (group) imageGroups.push(group);
+				continue;
+			}
 			addReference(reference);
 			addReference(reference.item);
 			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(addReference);
+			// Sidebar replies can bind a whole citation marker to URLs without supplying per-result IDs.
+			const marker = reference.matched_text;
+			if (reference.type === 'grouped_webpages' && typeof marker === 'string' && /^\uE200cite\uE202[^\uE200\uE201\r\n]+\uE201$/u.test(marker)
+				&& text.includes(marker) && Array.isArray(reference.safe_urls) && !reference.url && !reference.item
+				&& ![reference.sources, reference.items].some(items => Array.isArray(items) && items.length)) {
+				const urls = reference.safe_urls.slice(0, 20).flatMap(url => {
+					const href = typeof url === 'string' && url.length <= 8192 ? addReference({ url }) : undefined;
+					return href ? [href] : [];
+				});
+				if (urls.length) text = text.replaceAll(marker, `\uE200cite\uE202${urls.join('\uE202')}\uE201`);
+			}
 		}
 	}
 	const timestamp = conversationTimestamp(value.create_time);
@@ -1048,12 +1139,13 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 		...(edit && { editableText: edit.text }),
 		...(isRecord(value.metadata) && value.metadata.has_versions === true && { hasVersions: true }),
 		...(timestamp !== undefined && Number.isFinite(new Date(timestamp).getTime()) ? { timestamp } : {}),
-		...(resources.length ? { resources: mergeChatGPTResources(resources) } : {}), ...(references.length ? { references } : {})
+		...(resources.length ? { resources: mergeChatGPTResources(resources) } : {}),
+		...(references.length ? { references } : {}), ...(imageGroups.length ? { imageGroups } : {}),
 	};
 }
 
 /** SSE framing is independent of HTTP chunks; delta paths are restricted to ordinary JSON properties. */
-export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal): AsyncGenerator<ChatGPTStreamFrame> {
+export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal, mode: 'conversation' | 'sidebar' = 'conversation'): AsyncGenerator<ChatGPTStreamFrame> {
 	const reader = stream.getReader();
 	const cancel = (): void => { void reader.cancel().catch(() => { }); };
 	signal.addEventListener('abort', cancel, { once: true });
@@ -1084,6 +1176,7 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 	};
 	let snapshot: Record<string, unknown> = {};
 	let previousPath = '';
+	const sidebar = mode === 'sidebar' ? new SidebarConversationDeltas() : undefined;
 	let done = false;
 	try {
 		while (!done) {
@@ -1101,6 +1194,11 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 					const value: unknown = JSON.parse(data);
 					if (!isRecord(value)) { continue; }
 					if (value.error) { throw new Error(localize('sessions.chatgpt.streamFailed', 'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.')); }
+					if (sidebar) {
+						const message = sidebar.apply(value);
+						if (message) { yield { message }; }
+						continue;
+					}
 					if (value.type === 'resume_conversation_token') {
 						if (typeof value.token !== 'string' || !value.token || value.token.length > 16384 || /[\r\n\0]/u.test(value.token)) { throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
 						yield { resumeToken: value.token };
@@ -1138,6 +1236,37 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 			}
 		}
 	} finally { signal.removeEventListener('abort', cancel); await reader.cancel().catch(() => { }); reader.releaseLock(); }
+}
+
+/** Sidebar delta frames multiplex message envelopes and inherit omitted path and operation fields. */
+class SidebarConversationDeltas {
+	private readonly channels = new Map<number, Record<string, unknown>>();
+	private channel = 0;
+	private path = '';
+	private operation: unknown;
+
+	apply(frame: Record<string, unknown>): ChatGPTMessage | undefined {
+		if (typeof frame.type === 'string') { return undefined; }
+		if (frame.c !== undefined) {
+			if (typeof frame.c !== 'number' || !Number.isInteger(frame.c) || frame.c < 0 || frame.c >= 64) { return undefined; }
+			this.channel = frame.c;
+		}
+		const value = frame.v;
+		const path = this.path = typeof frame.p === 'string' ? frame.p : this.path;
+		const operation = this.operation = typeof frame.o === 'string' ? frame.o : this.operation;
+		let envelope = this.channels.get(this.channel);
+		if ((frame.c !== undefined || path === '') && isRecord(value) && typeof value.type === 'string') {
+			envelope = value;
+			this.channels.set(this.channel, envelope);
+		} else if (envelope && operation === 'patch' && Array.isArray(value)) {
+			for (const patch of value) {
+				if (isRecord(patch) && typeof patch.p === 'string') { applyDelta(envelope, patch.p, patch.o, patch.v); }
+			}
+		} else if (envelope) {
+			applyDelta(envelope, path, operation, value);
+		}
+		return envelope?.type === 'message' ? readMessage(envelope.data, typeof envelope.conversation_id === 'string' ? envelope.conversation_id : undefined) : undefined;
+	}
 }
 
 function waitForChatGPTProcessing(signal: AbortSignal): Promise<void> {

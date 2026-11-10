@@ -19,6 +19,7 @@ Chat 模式的「新建」打开一个可选 ChatGPT 或 Ash 模型的草稿。�
 - Ash 的 `ChatWidget` 及共享组件根据通用模型组织消息列表、输入框、模型选择器和操作栏。Workbench 只依赖共享契约。各入口保留自己的权威状态，共享组件通过不透明的引用选择模型，由适配器解析 ChatGPT 的标识。
 - Web 草稿用适配器提供的 `draftIdentity` 区分，Ash 原生的 Session、Thread 和未命名会话标识只用于原生会话。ChatGPT 模型菜单使用适配器目录，回复里的网页链接由适配器处理。ChatGPT 新消息始终由 Web 适配器发送，包括要求生成文件或报告的提示词。历史里已有的 Cowork 结果保留其 Ash 会话引用，可以打开对应的原生会话。
 - [`ChatGPTClient`](browser/chatGPTClient.ts) 解码 Web 响应，[`ChatGPTReplyBackend`](browser/chatGPTReplyBackend.ts) 将流式回复、停止和错误语义转换为 Sessions 的 [`IChatReplyBackend`](../../common/chatReplyBackend.ts) 契约。App Server 的 profile 级认证服务管理 ChatGPT 登录，Electron Main 的传输适配器负责获授权的请求。共享组件只接收转换后的数据。
+- 实体详情由 Ash 的辅助侧栏呈现，ChatGPT Web 适配器按原会话和原回复读取独立的详情流。关闭详情、切换会话或账号时取消读取；详情独立于主聊天的消息、草稿和历史。
 
 ## 接入其他 Web 服务
 
