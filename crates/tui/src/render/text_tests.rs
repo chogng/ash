@@ -76,10 +76,10 @@ fn wrapped_height_uses_ratatui_word_wrapping() {
 #[test]
 fn truncation_keeps_combined_terminal_glyphs_whole() {
     let text = "abｶﾞc";
-    assert_eq!(display_width(text), 4);
-    assert_eq!(truncate_to_width(text, 2), "ab");
-    assert_eq!(truncate_to_width(text, 3), "abｶﾞ");
-    assert_eq!(truncate_to_width(text, 4), text);
+    assert_eq!(display_width(text), 5);
+    assert_eq!(truncate_to_width(text, 3), "ab");
+    assert_eq!(truncate_to_width(text, 4), "abｶﾞ");
+    assert_eq!(truncate_to_width(text, 5), text);
     assert_eq!(truncate_with_ellipsis(text, 3), "ab…");
 }
 

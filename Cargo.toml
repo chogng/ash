@@ -352,7 +352,7 @@ hyper-util = "0.1"
 ash-memory-diagnostics = { path = "crates/memory-diagnostics" }
 allocation-counter = "=0.8.1"
 anyhow = "1"
-ansi-to-tui = "7.0.0"
+ansi-to-tui = "8.0.1"
 arboard = { version = "3", features = ["wayland-data-control"] }
 clipboard-win = "5.4.3"
 base64 = "0.22"
@@ -405,10 +405,10 @@ p256 = { version = "0.14", default-features = false, features = ["arithmetic", "
 percent-encoding = "2.3"
 pretty_assertions = "1"
 sherpa-onnx = { version = "=1.13.8", default-features = false, features = ["static"] }
-crossterm = "0.28.1"
+crossterm = "0.29.0"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 pulldown-cmark = { version = "0.13.6", default-features = false }
-ratatui = "0.29.0"
+ratatui = "0.30.2"
 regex = "1"
 regex-syntax = "0.8"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider"] }

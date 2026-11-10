@@ -1,3 +1,4 @@
+use ratatui::buffer::CellWidth;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -112,7 +113,12 @@ pub(crate) fn prefix_width(width: usize, desired: usize) -> usize {
 }
 
 pub(crate) fn display_width(text: &str) -> usize {
-    text.width()
+    // Ratatui counts halfwidth sound marks separately. Keep the total in usize for long lines.
+    let halfwidth_mark_cells: usize = text
+        .matches(['\u{ff9e}', '\u{ff9f}'])
+        .map(|mark| usize::from(mark.cell_width()) - mark.width())
+        .sum();
+    text.width() + halfwidth_mark_cells
 }
 
 pub(crate) fn truncate_to_width(text: &str, width: usize) -> String {
