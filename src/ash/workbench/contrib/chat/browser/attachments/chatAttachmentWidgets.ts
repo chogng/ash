@@ -5,6 +5,7 @@ import { OpenSettingsCommandId } from '../../../preferences/common/preferences.j
 import './chatAttachmentWidgets.css';
 import { h, addDisposableListener, getWindow } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
@@ -545,7 +546,14 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 
 	constructor(
 		attachment: ImageAttachment,
-		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; imagePresentation?: 'inline' | 'thumbnail'; allowProviderImageUrls?: boolean; imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined; },
+		options: {
+			shouldFocusClearButton: boolean;
+			supportsDeletion: boolean;
+			imagePresentation?: 'inline' | 'thumbnail';
+			allowProviderImageUrls?: boolean;
+			retryOnFailure?: boolean;
+			imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined;
+		},
 		container: HTMLElement,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -554,6 +562,8 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		const tile = options.imagePresentation === 'thumbnail';
 		const element = this.element = h(document, 'div');
 		element.className = tile ? 'ash-chat-image-attachment-thumbnail' : 'ash-chat-attachment-chip ash-chat-image-reference-control';
+		const previewLabel = localize('chat.context.previewImage', 'Preview {0}', attachment.name);
+		const loadingLabel = localize('chat.context.imageLoading', 'Loading preview: {0}', attachment.name);
 		const fallback = tile ? h(document, 'span', { className: 'ash-chat-image-attachment-name' }, attachment.name) : undefined;
 		if (fallback) element.append(fallback);
 		else {
@@ -566,8 +576,8 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		const source = this._register(new Button(element, {
 			...defaultButtonStyles,
 			label: tile ? '' : attachment.name,
-			ariaLabel: localize('chat.context.previewImage', 'Preview {0}', attachment.name),
-			title: localize('chat.context.imageLoading', 'Loading preview: {0}', attachment.name),
+			ariaLabel: previewLabel,
+			title: loadingLabel,
 			icon: tile ? undefined : Lxicon.image,
 			enabled: false, size: 'small', presentation: 'quiet',
 		}));
@@ -586,8 +596,13 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		const objectUrl = this._register(new MutableDisposable());
 		this._register(toDisposable(() => thumbnail.removeAttribute('src')));
 		let imageContent: Blob | string | undefined;
-		const open = () => {
-			if (this.isDisposed || !source.enabled || !imageContent) return;
+		let isLoading = false;
+		const activate = () => {
+			if (this.isDisposed || !source.enabled || isLoading) return;
+			if (!imageContent) {
+				void load();
+				return;
+			}
 			const image = typeof imageContent === 'string'
 				? imageContent.startsWith('data:') ? imageDataUrlToBlob(imageContent) : undefined
 				: imageContent;
@@ -607,14 +622,29 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 				icon: Lxicon.close, iconOnly: true, size: 'small', presentation: 'secondary',
 			});
 		}
-		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, open, event => this.deleted.fire(event), this.thumbnailRemove));
+		const finishLoading = () => {
+			loading.clear();
+			isLoading = false;
+			source.domNode.removeAttribute('aria-disabled');
+		};
 		const unavailable = () => {
 			if (this.isDisposed) return;
-			loading.clear();
+			const announce = source.enabled && source.hasFocus();
+			finishLoading();
+			imageContent = undefined;
 			thumbnail.removeAttribute('src');
 			objectUrl.clear();
-			if (!tile) {
-				const message = localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name);
+			const message = localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name);
+			if (fallback && options.retryOnFailure) {
+				fallback.textContent = message;
+				const retryLabel = localize('chat.context.retryImagePreviewLabel', 'Retry preview for {0}', attachment.name);
+				source.label = localize('chat.context.retryImagePreview', 'Retry');
+				source.domNode.setAttribute('aria-label', retryLabel);
+				source.setTitle(message);
+				source.domNode.hidden = false;
+				source.enabled = true;
+				if (announce) status(message);
+			} else if (!tile) {
 				element.setAttribute('aria-busy', 'false');
 				element.setAttribute('aria-label', message);
 				source.domNode.setAttribute('aria-label', message);
@@ -623,13 +653,18 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 			}
 			this.previewResolved.fire(false);
 		};
-		loading.add(addDisposableListener(thumbnail, 'error', unavailable));
-		loading.add(addDisposableListener(thumbnail, 'load', () => {
-			if (!thumbnail.naturalWidth) { unavailable(); return; }
-			loading.clear();
+		const loaded = () => {
+			if (!thumbnail.naturalWidth) {
+				unavailable();
+				return;
+			}
+			const announce = source.enabled && source.hasFocus();
+			finishLoading();
 			if (fallback) {
 				fallback.hidden = true;
 				element.classList.add('loaded');
+				source.label = '';
+				source.domNode.setAttribute('aria-label', previewLabel);
 			} else {
 				element.setAttribute('aria-busy', 'false');
 			}
@@ -638,29 +673,46 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 			thumbnail.hidden = false;
 			source.domNode.hidden = false;
 			source.enabled = true;
+			if (announce) status(localize('chat.context.imagePreviewLoaded', 'Preview loaded: {0}', attachment.name));
 			this.previewResolved.fire(true);
-		}));
-		void attachment.resolve().then(({ content }) => {
-			if (this.isDisposed) return;
-			if (!content || typeof content === 'string'
-				&& !/^data:image\/(png|jpeg|gif|webp);base64,/u.test(content)
-				&& !(options.allowProviderImageUrls && /^(?:https?:\/\/|data:image\/svg\+xml;base64,)/iu.test(content))) { unavailable(); return; }
-			imageContent = content;
-			// Captured bytes can outlive their original source. A data URL alone does not
-			// establish that the browser can display them; native loading gates preview.
-			if (typeof content === 'string') {
-				thumbnail.src = content;
-			} else {
-				const { URL } = getWindow(element);
-				try {
+		};
+		const load = async () => {
+			isLoading = true;
+			if (source.enabled) {
+				// Keep the focused retry button in the tab order until it becomes the preview button.
+				source.domNode.setAttribute('aria-disabled', 'true');
+				const retrying = localize('chat.context.retryingImagePreview', 'Retrying…');
+				source.label = retrying;
+				source.domNode.setAttribute('aria-label', retrying);
+				source.setTitle(loadingLabel);
+			}
+			try {
+				const { content } = await attachment.resolve();
+				if (this.isDisposed) return;
+				if (!content || typeof content === 'string'
+					&& !/^data:image\/(png|jpeg|gif|webp);base64,/u.test(content)
+					&& !(options.allowProviderImageUrls && /^(?:https?:\/\/|data:image\/svg\+xml;base64,)/iu.test(content))) {
+					unavailable();
+					return;
+				}
+				imageContent = content;
+				// Resolving bytes or a URL does not establish that the browser can display the image.
+				loading.add(addDisposableListener(thumbnail, 'error', unavailable));
+				loading.add(addDisposableListener(thumbnail, 'load', loaded));
+				if (typeof content === 'string') {
+					thumbnail.src = content;
+				} else {
+					const { URL } = getWindow(element);
 					const url = URL.createObjectURL(content);
 					objectUrl.value = toDisposable(() => URL.revokeObjectURL(url));
 					thumbnail.src = url;
-				} catch {
-					unavailable();
 				}
+			} catch {
+				unavailable();
 			}
-		}, unavailable);
+		};
+		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, activate, event => this.deleted.fire(event), this.thumbnailRemove));
+		void load();
 	}
 
 	setThumbnailState(pending: boolean, readOnly: boolean): void {

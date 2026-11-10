@@ -308,7 +308,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 				}
 				return { content: content?.type.startsWith('image/') ? content : undefined };
 			},
-		}, { imagePresentation: 'thumbnail', allowProviderImageUrls: true, supportsDeletion: false, shouldFocusClearButton: false }, container));
+		}, { imagePresentation: 'thumbnail', allowProviderImageUrls: true, retryOnFailure: true, supportsDeletion: false, shouldFocusClearButton: false }, container));
 		lifetime.add(widget.onDidResolvePreview(() => this._onDidChangeHeight.fire()));
 		return Object.assign(lifetime, { part, source, widget });
 	}
