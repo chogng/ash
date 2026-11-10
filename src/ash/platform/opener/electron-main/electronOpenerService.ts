@@ -8,12 +8,15 @@ import { normalizeExternalUrl, type IExternalOpener, type IImageOpeningApplicati
 
 /** Electron shell adapter for validated external URLs. */
 export class ElectronOpenerService implements IExternalOpener {
+	constructor(private readonly windowsImageOpener: string | undefined) { }
+
 	async openExternal(target: string): Promise<boolean> {
 		await shell.openExternal(normalizeExternalUrl(target));
 		return true;
 	}
 
 	async listImageOpeningApplications(extension: ImageOpenExtension): Promise<readonly IImageOpeningApplication[]> {
+		if (process.platform === 'win32') return this.listWindowsImageApplications(extension);
 		if (process.platform !== 'darwin') return [];
 		const directory = await mkdtemp(join(app.getPath('temp'), 'ash-preview-types-'));
 		try {
@@ -25,6 +28,23 @@ export class ElectronOpenerService implements IExternalOpener {
 		}
 	}
 
+	private async listWindowsImageApplications(extension: ImageOpenExtension): Promise<readonly IImageOpeningApplication[]> {
+		if (!this.windowsImageOpener) return [];
+		const { stdout } = await runFile(this.windowsImageOpener, ['list', extension], { timeout: 5_000, maxBuffer: 1024 * 1024, windowsHide: true });
+		const applications: unknown = JSON.parse(stdout);
+		if (!Array.isArray(applications)) throw new TypeError('Invalid system application list');
+		const result: IImageOpeningApplication[] = [];
+		for (const application of applications) {
+			if (!application || typeof application.name !== 'string' || !application.name.trim()
+				|| typeof application.isDefault !== 'boolean'
+				|| !(isWindowsApplicationId(application.id) || application.id === 'default' && application.isDefault)) continue;
+			result.push({
+				id: application.id, name: application.name, isDefault: application.isDefault, icon: pngIcon(application.icon),
+			});
+		}
+		return result;
+	}
+
 	async openImage({ bytes, extension, applicationId }: LocalImage): Promise<void> {
 		const directory = await mkdtemp(join(app.getPath('temp'), 'ash-preview-'));
 		try {
@@ -33,6 +53,9 @@ export class ElectronOpenerService implements IExternalOpener {
 			if (applicationId === undefined) {
 				const error = await shell.openPath(target);
 				if (error) throw new Error(error);
+			} else if (process.platform === 'win32') {
+				if (!this.windowsImageOpener) throw new Error('Windows image application selection is unavailable');
+				await runFile(this.windowsImageOpener, ['open', target, applicationId], { timeout: 10_000, windowsHide: true });
 			} else {
 				const application = (await findMacImageApplications(target)).find(candidate => candidate.id === applicationId);
 				if (!application) throw new Error('The selected application is no longer available for this image');
@@ -58,7 +81,8 @@ export function validateImageOpenRequest(value: unknown): LocalImage {
 		throw new TypeError('Invalid image open request');
 	}
 	const applicationId = 'applicationId' in value ? value.applicationId : undefined;
-	if (applicationId !== undefined && (process.platform !== 'darwin' || !isBundleId(applicationId))) {
+	if (applicationId !== undefined && !(process.platform === 'darwin' && isBundleId(applicationId)
+		|| process.platform === 'win32' && isWindowsApplicationId(applicationId))) {
 		throw new TypeError('Invalid image application');
 	}
 	return { ...validateLocalImage(value.bytes), applicationId };
@@ -81,6 +105,15 @@ const runFile = promisify(execFile);
 
 function isBundleId(value: unknown): value is string {
 	return typeof value === 'string' && /^[a-z0-9.-]{1,255}$/iu.test(value);
+}
+
+function isWindowsApplicationId(value: unknown): value is string {
+	return typeof value === 'string' && /^win-[a-f0-9]{64}$/u.test(value);
+}
+
+function pngIcon(icon: unknown): string | undefined {
+	return typeof icon === 'string' && icon.length <= 48 * 1024 && icon.startsWith('iVBORw0KGgo')
+		? `data:image/png;base64,${icon}` : undefined;
 }
 
 async function findMacImageApplications(file: string, includeIcons = false): Promise<readonly (IImageOpeningApplication & { readonly path: string; })[]> {
@@ -130,8 +163,7 @@ function run(args) {
 			typeof application.name === 'string' && (!unique.has(application.id) || application.isDefault === true)) {
 			unique.set(application.id, {
 				id: application.id, path: application.path, name: application.name.replace(/\.app$/iu, ''), isDefault: application.isDefault === true,
-				icon: typeof application.icon === 'string' && application.icon.length <= 48 * 1024 && application.icon.startsWith('iVBORw0KGgo')
-					? `data:image/png;base64,${application.icon}` : undefined,
+				icon: pngIcon(application.icon),
 			});
 		}
 	}

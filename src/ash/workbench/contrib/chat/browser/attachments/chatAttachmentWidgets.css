@@ -346,9 +346,19 @@
 	font-variant-numeric: tabular-nums;
 }
 
+.ash-chat-image-open-app-icon-slot,
 .ash-chat-image-open-app-icon {
 	inline-size: var(--ash-lxiconFontSize-large);
 	block-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-chat-image-open-app-icon-slot {
+	display: grid;
+	place-items: center;
+	flex: none;
+}
+
+.ash-chat-image-open-app-icon {
 	object-fit: contain;
 }
 

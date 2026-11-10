@@ -21,11 +21,12 @@ const projects = ['tsconfig.main.json', 'tsconfig.preload.json'] as const;
 
 /** Package only the selected native generation; development can retain running Windows executables. */
 export async function copyHostOutput(source: string, destination: string): Promise<void> {
-	const { hostLogExecutable, hostIntegrityExecutable } = await import(pathToFileURL(join(source, '.build/desktop/hostLogs.js')).href);
+	const { hostLogExecutable, hostIntegrityExecutable, imageOpenerExecutable } = await import(pathToFileURL(join(source, '.build/desktop/hostLogs.js')).href);
 	await cp(source, destination, {
 		recursive: true, filter: path => {
 			const entry = relative(source, path).replaceAll('\\', '/');
-			return !['host-logs/', 'host-integrity/'].some(prefix => entry.startsWith(prefix)) || [hostLogExecutable, hostIntegrityExecutable].some(executable => executable === entry || executable?.startsWith(`${entry}/`));
+			return !['host-logs/', 'host-integrity/', 'image-opener/'].some(prefix => entry.startsWith(prefix))
+				|| [hostLogExecutable, hostIntegrityExecutable, imageOpenerExecutable].some(executable => executable === entry || executable?.startsWith(`${entry}/`));
 		}
 	});
 }
@@ -139,8 +140,8 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	let sourceEntries = new Set<string>();
 	// Keep TS7's dependency-tree FSEvents watcher away from build caches and
 	// runtime files. Watch source inputs here and invoke its incremental build once.
-	const roots = ['src', 'crates/host-logs', 'crates/host-integrity', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
-	const nativeRoots = roots.slice(1, 3);
+	const nativeRoots = ['crates/host-logs', 'crates/host-integrity', 'crates/image-opener'].map(path => resolve(sourceRoot, path));
+	const roots = [...nativeRoots, ...['src', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path))];
 	const directories = new Map<string, ts.FileWatcher>();
 	const nativeDirectories: FSWatcher[] = [];
 	const files = new Map<string, ts.FileWatcher>();
@@ -397,7 +398,7 @@ async function prepareHostBuild(): Promise<void> {
 }
 
 async function prepareHostLogs(signal?: AbortSignal): Promise<void> {
-	await runPython(['-B', 'build/desktop/host_logs.py'], { cwd: sourceRoot, operation: 'Rust host logging build', signal });
+	await runPython(['-B', 'build/desktop/host_logs.py'], { cwd: sourceRoot, operation: 'Rust desktop helper build', signal });
 }
 
 async function verifyPreload(): Promise<void> {

@@ -29,6 +29,7 @@ members = [
     "crates/diagnostics",
     "crates/host-logs",
     "crates/host-integrity",
+    "crates/image-opener",
     "crates/response-debug-context",
     "crates/feedback",
     "crates/feedback-contract",

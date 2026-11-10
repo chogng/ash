@@ -878,11 +878,10 @@ class ImageApplicationMenuItem extends MenuActionViewItem {
 }
 
 class ImageOpenActionViewItem extends DropdownWithPrimaryActionViewItem {
-	private icon: HTMLImageElement | undefined;
-	private fallbackIcon: HTMLElement | undefined;
+	private iconSlot: HTMLElement | undefined;
 
 	constructor(
-		private readonly getApplication: () => IImageOpeningApplication | undefined,
+		private readonly getApplication: () => IImageOpeningApplication | null | undefined,
 		...args: ConstructorParameters<typeof DropdownWithPrimaryActionViewItem>
 	) {
 		super(...args);
@@ -891,23 +890,40 @@ class ImageOpenActionViewItem extends DropdownWithPrimaryActionViewItem {
 	override render(container: HTMLElement): void {
 		super.render(container);
 		const button = this.primaryButton!;
-		this.icon = h(button.ownerDocument, 'img', { className: 'ash-chat-image-open-app-icon', properties: { alt: '', draggable: false } });
-		this.fallbackIcon = h(button.ownerDocument, 'span', { attributes: { 'aria-hidden': 'true' } });
-		appendIcon(Lxicon.openInProduct, this.fallbackIcon);
-		button.prepend(this.icon, this.fallbackIcon);
+		this.iconSlot = h(button.ownerDocument, 'span', {
+			className: 'ash-chat-image-open-app-icon-slot',
+			attributes: { 'aria-hidden': 'true' },
+		});
+		button.prepend(this.iconSlot);
 		this.refreshApplication();
 	}
 
 	refreshApplication(): void {
-		if (this.isDisposed || !this.icon || !this.fallbackIcon || !this.primaryButton) return;
+		const slot = this.iconSlot;
+		if (this.isDisposed || !slot || !this.primaryButton) return;
 		const application = this.getApplication();
-		if (application?.icon) this.icon.src = application.icon;
-		else this.icon.removeAttribute('src');
-		this.icon.hidden = !application?.icon;
-		this.fallbackIcon.hidden = !this.icon.hidden;
 		this.primaryButton.setAttribute('aria-label', application
 			? localize('chat.context.openWithImageApp', 'Open with {0}', application.name)
 			: this.action.label);
+		slot.replaceChildren();
+		// Leave the slot empty while discovering the default application.
+		if (application === undefined) return;
+		if (!application?.icon) {
+			appendIcon(Lxicon.openInProduct, slot);
+			return;
+		}
+		const icon = h(slot.ownerDocument, 'img', {
+			className: 'ash-chat-image-open-app-icon',
+			properties: { src: application.icon, alt: '', draggable: false, hidden: true },
+		});
+		slot.append(icon);
+		void icon.decode().then(() => {
+			if (!this.isDisposed && icon.parentElement === slot) icon.hidden = false;
+		}, () => {
+			if (this.isDisposed || icon.parentElement !== slot) return;
+			icon.remove();
+			appendIcon(Lxicon.openInProduct, slot);
+		});
 	}
 }
 
@@ -963,10 +979,10 @@ class ImageAttachmentPreview {
 		const listApps = host.listImageOpeningApplications?.bind(host);
 		let openItem: ImageOpenActionViewItem | undefined;
 		let selectedApp: IImageOpeningApplication | undefined;
-		let defaultApp: IImageOpeningApplication | undefined;
+		let defaultApp: IImageOpeningApplication | null | undefined;
 		const applications = listApps?.(openFormat ?? 'png').catch(() => []).then(apps => {
 			const systemDefault = apps.find(app => app.isDefault);
-			defaultApp = systemDefault;
+			defaultApp = systemDefault ?? null;
 			if (!lifetime.signal.aborted) openItem?.refreshApplication();
 			return systemDefault ? [systemDefault, ...apps.filter(app => app.id !== systemDefault.id)] : apps;
 		});

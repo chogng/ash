@@ -234,19 +234,22 @@ test('packaging selects the current Rust host executables and excludes old runni
 	const source = join(root, 'main');
 	await mkdir(join(source, '.build/desktop'), { recursive: true });
 	await writeFile(join(source, 'package.json'), '{"type":"module"}');
-	await writeFile(join(source, '.build/desktop/hostLogs.js'), 'export const hostLogExecutable = "host-logs/current/ash-host-logs.exe"; export const hostIntegrityExecutable = "host-integrity/current/ash-host-integrity.exe";');
-	for (const generation of ['old', 'current']) {
-		await mkdir(join(source, 'host-logs', generation), { recursive: true });
-		await writeFile(join(source, 'host-logs', generation, 'ash-host-logs.exe'), generation);
-	}
-	for (const generation of ['old', 'current']) {
-		await mkdir(join(source, 'host-integrity', generation), { recursive: true });
-		await writeFile(join(source, 'host-integrity', generation, 'ash-host-integrity.exe'), generation);
+	await writeFile(join(source, '.build/desktop/hostLogs.js'), [
+		'export const hostLogExecutable = "host-logs/current/ash-host-logs.exe";',
+		'export const hostIntegrityExecutable = "host-integrity/current/ash-host-integrity.exe";',
+		'export const imageOpenerExecutable = "image-opener/current/ash-image-opener.exe";',
+	].join('\n'));
+	const directories = ['host-logs', 'host-integrity', 'image-opener'];
+	for (const directory of directories) {
+		for (const generation of ['old', 'current']) {
+			await mkdir(join(source, directory, generation), { recursive: true });
+			await writeFile(join(source, directory, generation, `ash-${directory}.exe`), generation);
+		}
 	}
 	const destination = join(root, 'package');
 	await copyHostOutput(source, destination);
-	assert.equal(await readFile(join(destination, 'host-logs/current/ash-host-logs.exe'), 'utf8'), 'current');
-	await assert.rejects(stat(join(destination, 'host-logs/old')), { code: 'ENOENT' });
-	assert.equal(await readFile(join(destination, 'host-integrity/current/ash-host-integrity.exe'), 'utf8'), 'current');
-	await assert.rejects(stat(join(destination, 'host-integrity/old')), { code: 'ENOENT' });
+	for (const directory of directories) {
+		assert.equal(await readFile(join(destination, directory, 'current', `ash-${directory}.exe`), 'utf8'), 'current');
+		await assert.rejects(stat(join(destination, directory, 'old')), { code: 'ENOENT' });
+	}
 });

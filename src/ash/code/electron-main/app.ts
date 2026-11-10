@@ -86,6 +86,7 @@ import { MeteredConnectionChannel } from '../../platform/meteredConnection/elect
 import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, validateNativeContextMenuClose, validateNativeContextMenuRequest, type INativeContextMenuRequest } from '../../base/parts/contextmenu/common/contextmenu.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
+import { ElectronOpenerService } from '../../platform/opener/electron-main/electronOpenerService.js';
 import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from '../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
 import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from '../../platform/menubar/electron-main/menubarMainService.js';
@@ -155,7 +156,7 @@ import { DesktopStorageChannel } from '../../platform/storage/electron-main/desk
 import { desktopStorageChannelName } from '../../platform/storage/common/profileStorageService.js';
 import { LoggerService } from '../../platform/log/electron-main/loggerService.js';
 import { spawn } from 'node:child_process';
-import { hostLogExecutable, hostIntegrityExecutable } from '../../../../.build/desktop/hostLogs.js';
+import { hostLogExecutable, hostIntegrityExecutable, imageOpenerExecutable } from '../../../../.build/desktop/hostLogs.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
 import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
@@ -253,6 +254,7 @@ export class AshApplication extends Disposable {
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
+	private readonly opener = new ElectronOpenerService(imageOpenerExecutable ? join(mainOutput, imageOpenerExecutable) : undefined);
 	private remoteConnections: RemoteConnections | undefined;
 	private readonly wslHosts = new WSLRemoteAgentHostService();
 	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
@@ -1796,7 +1798,7 @@ export class AshApplication extends Disposable {
 			}),
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
-			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
+			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService, this.opener),
 			...this.windowImageRoutes(window, windowDisposables),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
@@ -2232,7 +2234,7 @@ export class AshApplication extends Disposable {
 						...this.remoteAgentHostRoutes(window, sessionsEntry.url, windowDisposables),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
-						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
+						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService, this.opener),
 						...this.windowImageRoutes(window, windowDisposables),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,

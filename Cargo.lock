@@ -2174,6 +2174,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-image-opener"
+version = "0.1.0"
+dependencies = [
+ "ash-process-hardening",
+ "base64 0.22.1",
+ "image",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "windows",
+]
+
+[[package]]
 name = "ash-immutable-generation-store"
 version = "0.1.0"
 dependencies = [

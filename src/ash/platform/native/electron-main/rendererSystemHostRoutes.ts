@@ -5,7 +5,7 @@ import { toDisposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { Notification, systemPreferences, type BrowserWindow } from 'electron/main';
 import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
-import { ElectronOpenerService, validateImageOpenExtension, validateImageOpenRequest } from '../../opener/electron-main/electronOpenerService.js';
+import { type ElectronOpenerService, validateImageOpenExtension, validateImageOpenRequest } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
 import { NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
@@ -51,9 +51,9 @@ export function rendererSystemHostRoutes(
 	window: BrowserWindow,
 	directoryPermissionPrompt: (request: DirectoryPermissionRequest) => DialogRequest,
 	auxiliaryWindows: IAuxiliaryWindowsMainService,
+	opener: ElectronOpenerService,
 ): readonly IpcRoute<unknown, unknown>[] {
 	const clipboard = new ElectronMainClipboardService(window);
-	const opener = new ElectronOpenerService();
 	const text = (value: unknown): string => { if (typeof value !== 'string' || value.length > 1_000_000) { throw new Error('Invalid host text'); } return value; };
 	const clipboardType = (value: unknown): 'clipboard' | 'selection' | undefined => {
 		if (value !== undefined && value !== 'clipboard' && value !== 'selection') {

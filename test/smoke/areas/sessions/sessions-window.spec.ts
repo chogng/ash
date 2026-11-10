@@ -1224,9 +1224,10 @@ test('Code image preview zooms, saves, opens in the system viewer, and attaches 
 		const toolbar = preview.getByRole('toolbar', { name: 'Image preview actions', exact: true });
 		const zoom = toolbar.getByRole('button', { name: /^Zoom: \d+%$/u });
 		await expect(zoom).toBeEnabled();
+		const hasAppPicker = process.platform === 'darwin' || process.platform === 'win32';
 		const iconButtons = [
 			toolbar.getByRole('button', { name: 'Save image', exact: true }),
-			toolbar.getByRole('button', { name: process.platform === 'darwin' ? 'Choose image app' : 'Open', exact: true }),
+			toolbar.getByRole('button', { name: hasAppPicker ? 'Choose image app' : 'Open', exact: true }),
 			toolbar.getByRole('button', { name: 'Annotate image', exact: true }),
 			preview.getByRole('button', { name: 'Close image preview', exact: true }),
 		];

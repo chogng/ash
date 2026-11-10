@@ -6,7 +6,7 @@ import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { INativeHostService } from '../../../common/services.js';
 import { NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, NATIVE_HOST_OPEN_IMAGE_CHANNEL, type INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import type { IImageOpeningApplication, ImageOpenExtension } from '../../../../platform/opener/common/opener.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
+import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } from '../../../../platform/window/common/window.js';
 import { BrowserHostService } from '../browser/browserHostService.js';
 import { ILifecycleService } from '../../lifecycle/common/lifecycle.js';
@@ -38,7 +38,7 @@ export class NativeHostService extends BrowserHostService {
 
 	public override getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined> { return this.host.getScreenshot(rect); }
 	public openImage(image: Uint8Array, applicationId?: string): Promise<void> { return invoke<void>(NATIVE_HOST_OPEN_IMAGE_CHANNEL, { bytes: image, applicationId }); }
-	public readonly listImageOpeningApplications = isMacintosh
+	public readonly listImageOpeningApplications = isMacintosh || isWindows
 		? (extension: ImageOpenExtension) => invoke<readonly IImageOpeningApplication[]>(NATIVE_HOST_IMAGE_APPLICATIONS_CHANNEL, extension)
 		: undefined;
 
