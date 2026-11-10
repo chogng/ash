@@ -914,8 +914,25 @@ impl GitRuntime {
                 let action = payload["actionId"].as_str().unwrap_or_default();
                 let mut segments = action.splitn(3, ':');
                 let kind = segments.next().unwrap_or_default();
-                let _group = segments.next();
+                let context = segments.next();
                 let path = segments.next();
+                if matches!(kind, "continueIntegration" | "abortIntegration") {
+                    let version = context
+                        .filter(|version| {
+                            version.len() == 64
+                                && version.bytes().all(|byte| byte.is_ascii_hexdigit())
+                        })
+                        .ok_or_else(|| invalid("Invalid Git integration action"))?;
+                    return self.command(
+                        if kind == "continueIntegration" {
+                            "git.continue"
+                        } else {
+                            "git.abort"
+                        },
+                        &[json!(repository.descriptor.id), json!(version)],
+                        token,
+                    );
+                }
                 let scope = match kind {
                     "viewStagedChanges" => Some("staged"),
                     "viewChanges" => Some("changes"),

@@ -35,6 +35,10 @@
 	gap: var(--ash-spacing-size80);
 }
 
+.ash-scm-merge-actions[hidden] {
+	display: none;
+}
+
 .ash-scm-merge-file-choices {
 	display: flex;
 	gap: var(--ash-spacing-size80);

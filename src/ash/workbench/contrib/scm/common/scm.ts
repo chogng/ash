@@ -83,7 +83,8 @@ export interface ISCMConflictFile {
 export type ISCMConflictResolution = { readonly kind: 'edited'; readonly text: string; } | { readonly kind: 'current'; } | { readonly kind: 'incoming'; };
 
 export interface ISCMConflictProvider {
-	resolve(path: string): Promise<ISCMConflictFile>;
+	/** An absent result means the provider confirmed that the path has no conflict. */
+	resolve(path: string, signal?: AbortSignal): Promise<ISCMConflictFile | undefined>;
 	complete(path: string, stageIds: readonly (string | null)[], resultObjectId: string | null, resolution: ISCMConflictResolution): Promise<void>;
 	errorMessage(error: unknown): string;
 }
@@ -101,6 +102,7 @@ export interface ISCMProvider {
 	readonly activeRepositoryName: string | undefined;
 	readonly statusBarCommands: readonly ISCMStatusBarCommand[];
 	readonly statusMessage: string;
+	readonly statusMessageVisible?: boolean;
 	readonly isBusy: boolean;
 	readonly historyProvider?: ISCMHistoryProvider;
 	readonly mergeProvider?: ISCMConflictProvider;

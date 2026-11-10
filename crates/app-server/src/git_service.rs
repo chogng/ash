@@ -285,6 +285,22 @@ impl GitService {
         )
     }
 
+    pub(crate) fn staged_commit_version(
+        &self,
+        repository: &GitRepository,
+        snapshot: &GitRepositorySnapshot,
+    ) -> Result<String, GitServiceError> {
+        if self.dir_root() != repository.worktree_root() {
+            return Err(GitServiceError::Boundary);
+        }
+        run(&self.runtime, async {
+            self.client()
+                .staged_commit_version(repository, snapshot)
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
     pub(crate) fn snapshot(
         &self,
     ) -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError> {

@@ -1,12 +1,18 @@
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::Component;
 use std::path::PathBuf;
 
+use crate::GitChangeStatus;
 use crate::GitClient;
 use crate::GitError;
 use crate::GitHead;
 use crate::GitRepository;
+use crate::GitRepositorySnapshot;
 use crate::GitResult;
+use crate::path::path_from_git_bytes;
+use sha2::Digest;
+use sha2::Sha256;
 
 const MAX_COMMIT_MESSAGE_BYTES: usize = 64 * 1024;
 
@@ -65,6 +71,8 @@ pub struct GitCommitRequest {
     hooks: CommitHooks,
     identity: CommitIdentity,
     expected_head: Option<GitHead>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_staged_version: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -131,6 +139,7 @@ impl<'de> serde::Deserialize<'de> for GitCommitRequest {
             #[serde(default)]
             identity: CommitIdentity,
             expected_head: Option<GitHead>,
+            expected_staged_version: Option<String>,
         }
         let fields = Fields::deserialize(deserializer)?;
         let mut request = Self::new(fields.message).map_err(serde::de::Error::custom)?;
@@ -142,6 +151,11 @@ impl<'de> serde::Deserialize<'de> for GitCommitRequest {
         request.hooks = fields.hooks;
         request.identity = fields.identity;
         request.expected_head = fields.expected_head;
+        if let Some(version) = fields.expected_staged_version {
+            request = request
+                .with_expected_staged_version(version)
+                .map_err(serde::de::Error::custom)?;
+        }
         Ok(request)
     }
 }
@@ -170,11 +184,24 @@ impl GitCommitRequest {
             hooks: CommitHooks::Skip,
             identity: CommitIdentity::Inferred,
             expected_head: None,
+            expected_staged_version: None,
         })
     }
 
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    /// Binds an index-only commit to the HEAD and index reviewed in a staged preview.
+    pub fn with_expected_staged_version(mut self, version: String) -> GitResult<Self> {
+        if version.len() != 64 || !version.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(GitError::InvalidConfiguration {
+                field: "expected staged version",
+                requirement: "must be a SHA-256 digest",
+            });
+        }
+        self.expected_staged_version = Some(version);
+        Ok(self)
     }
 
     pub fn with_tracked_changes(mut self) -> Self {
@@ -262,6 +289,89 @@ impl GitCommitResult {
 }
 
 impl GitClient {
+    /// Fingerprints staged paths, modes and object IDs independently of worktree edits
+    /// or index stat-cache rewrites. Rename detection is a presentation concern.
+    pub async fn staged_commit_version(
+        &self,
+        repository: &GitRepository,
+        snapshot: &GitRepositorySnapshot,
+    ) -> GitResult<String> {
+        let metadata = repository.git_dir();
+        if self.integration_state(repository).is_some()
+            || metadata.join("REVERT_HEAD").is_file()
+            || metadata.join("rebase-apply").is_dir()
+        {
+            return Err(GitError::IndexChanged);
+        }
+        let output = self
+            .run_query(
+                repository.worktree_root(),
+                [
+                    "diff",
+                    "--cached",
+                    "--raw",
+                    "-z",
+                    "--no-abbrev",
+                    "--no-renames",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-relative",
+                    "--ignore-submodules=none",
+                    "--ita-invisible-in-index",
+                    "--",
+                ],
+            )
+            .await?;
+        // A status preference (such as ignoring submodules) may hide staged paths.
+        // Never authorize a preview unless it covers the entire cached diff.
+        let mut paths = HashSet::new();
+        for change in snapshot.changes() {
+            if change.is_conflicted() {
+                return Err(GitError::IndexChanged);
+            }
+            if change.index_status() != GitChangeStatus::Unmodified {
+                paths.insert(change.path());
+                if change.index_status() == GitChangeStatus::Renamed
+                    && let Some(original) = change.original_path()
+                {
+                    paths.insert(original);
+                }
+            }
+        }
+        let mut entries = output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|entry| !entry.is_empty());
+        while let Some(header) = entries.next() {
+            let path = entries
+                .next()
+                .filter(|_| header.starts_with(b":"))
+                .ok_or_else(|| {
+                    GitError::invalid_output(&output.command, "invalid cached raw diff")
+                })?;
+            if !paths.remove(path_from_git_bytes(path, &output.command)?.as_path()) {
+                return Err(GitError::IndexChanged);
+            }
+        }
+        if !paths.is_empty() {
+            return Err(GitError::IndexChanged);
+        }
+        let mut digest = Sha256::new();
+        let (branch, object_id) = match snapshot.head() {
+            GitHead::Branch {
+                name, object_id, ..
+            } => (name.as_str(), object_id.as_str()),
+            GitHead::Unborn { name } => (name.as_str(), ""),
+            GitHead::Detached { object_id } => ("", object_id.as_str()),
+        };
+        digest.update(branch.as_bytes());
+        digest.update(b"\0");
+        digest.update(object_id.as_bytes());
+        digest.update(b"\0");
+        digest.update(output.stdout);
+        Ok(format!("{:x}", digest.finalize()))
+    }
+
     /// Adds the selected repository-relative paths to the index.
     pub async fn stage(&self, repository: &GitRepository, paths: &GitPathspecSet) -> GitResult<()> {
         self.run_mutation(repository.worktree_root(), paths.arguments(&["add"]))
@@ -399,6 +509,13 @@ impl GitClient {
                 field: "commit",
                 requirement: "must resolve all conflicts before committing",
             });
+        }
+        if let Some(expected) = &request.expected_staged_version
+            && (request.scope != CommitScope::Staged
+                || request.mode != CommitMode::Create
+                || &self.staged_commit_version(repository, &snapshot).await? != expected)
+        {
+            return Err(GitError::IndexChanged);
         }
         let root = repository.worktree_root();
         match request.scope {

@@ -4,6 +4,10 @@ use crate::GitRepository;
 use crate::GitResult;
 use crate::client::validate_argument;
 use crate::error::invalid_command as invalid;
+use crate::history::CATALOG_TAG_LIMIT;
+use crate::history::ReferenceQuery;
+use sha2::Digest;
+use sha2::Sha256;
 
 /// Git-owned integration state survives renderer and server restarts.
 /// Whether checkout may first fast-forward an unoccupied branch to its fetched upstream.
@@ -18,6 +22,13 @@ pub enum GitIntegration {
     Merge,
     Rebase,
     CherryPick,
+}
+
+/// A checkout-local Git integration step that can be reviewed and acted on.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitIntegrationState {
+    pub operation: GitIntegration,
+    pub version: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -86,9 +97,13 @@ pub enum GitCommand {
     },
     Continue {
         operation: GitIntegration,
+        #[serde(default)]
+        expected_version: Option<String>,
     },
     Abort {
         operation: GitIntegration,
+        #[serde(default)]
+        expected_version: Option<String>,
     },
     Stash {
         message: String,
@@ -143,6 +158,7 @@ pub struct GitReferenceState {
     pub base_reference: Option<crate::GitReference>,
     pub remotes: Vec<crate::GitRemote>,
     pub catalog: GitCatalog,
+    pub integration: Option<GitIntegrationState>,
 }
 
 impl GitClient {
@@ -150,11 +166,20 @@ impl GitClient {
         &self,
         repository: &GitRepository,
     ) -> GitResult<GitReferenceState> {
-        // Capture remotes once for both consumers. These independent reads stay under
-        // the caller's repository operation, without a second remote URL round trip.
-        let (references, remotes) =
-            tokio::try_join!(self.references(repository), self.remotes(repository),)?;
-        let catalog = self.catalog_with_remotes(repository, &remotes).await?;
+        let (snapshot, remotes, stashes) = tokio::try_join!(
+            self.read_references(repository, ReferenceQuery::WithCatalog),
+            self.remotes(repository),
+            self.stashes(repository),
+        )?;
+        let references = snapshot.references;
+        let integration = self.integration_status(repository);
+        let catalog = self.build_catalog(
+            &remotes,
+            snapshot.tags,
+            stashes,
+            snapshot.upstream_remote,
+            integration.as_ref().map(|state| state.operation),
+        );
         // Use Git's symbolic default; branch names such as main/master are not reliable defaults.
         let remote = catalog.upstream_remote.as_deref().or_else(|| {
             if catalog.remotes.len() == 1 {
@@ -201,27 +226,20 @@ impl GitClient {
             base_reference,
             remotes,
             catalog,
+            integration,
         })
     }
 
     pub async fn catalog(&self, repository: &GitRepository) -> GitResult<GitCatalog> {
-        let remote_details = self.remotes(repository).await?;
-        self.catalog_with_remotes(repository, &remote_details).await
-    }
-
-    async fn catalog_with_remotes(
-        &self,
-        repository: &GitRepository,
-        remote_details: &[crate::GitRemote],
-    ) -> GitResult<GitCatalog> {
-        // Three bounded queries can make progress together on the same runtime.
-        // Keep parsing and publication after all have completed successfully.
-        let (tags, stashes, upstream) = tokio::try_join!(
+        // Catalog-only callers do not need commit objects or remote branch refs.
+        let tag_count = format!("--count={CATALOG_TAG_LIMIT}");
+        let (remote_details, tags, stashes, upstream) = tokio::try_join!(
+            self.remotes(repository),
             self.run_query(
                 repository.worktree_root(),
                 [
                     "for-each-ref",
-                    "--count=5000",
+                    &tag_count,
                     "--format=%(refname:strip=2)%00%(objectname)",
                     "refs/tags",
                 ],
@@ -236,7 +254,6 @@ impl GitClient {
                 ],
             ),
         )?;
-        let tags = tags.require_success()?;
         let tags = std::str::from_utf8(&tags.stdout)
             .map_err(|_| invalid("invalid ref encoding"))?
             .lines()
@@ -247,12 +264,7 @@ impl GitClient {
                 Ok((name.to_owned(), object_id.to_owned()))
             })
             .collect::<GitResult<Vec<_>>>()?;
-        let remotes: Vec<_> = remote_details
-            .iter()
-            .map(|remote| remote.name().to_owned())
-            .collect();
         // Remote names can contain slashes; the display upstream ref cannot identify its owner.
-        let upstream = upstream.require_success()?;
         let upstream_remote = std::str::from_utf8(&upstream.stdout)
             .map_err(|_| invalid("invalid upstream encoding"))?
             .lines()
@@ -260,37 +272,58 @@ impl GitClient {
                 let (head, remote) = line
                     .split_once('\0')
                     .ok_or_else(|| invalid("invalid upstream record"))?;
-                if head == "*" && remotes.iter().any(|name| name == remote) {
+                if head == "*" && !remote.is_empty() {
                     Ok(Some(remote.to_owned()))
                 } else {
                     Ok(selected)
                 }
             })?;
-        let upstream_read_only = remote_details
-            .iter()
-            .find(|remote| Some(remote.name()) == upstream_remote.as_deref())
-            .is_some_and(|remote| {
-                remote.push_urls().is_empty()
-                    || remote
-                        .push_urls()
-                        .first()
-                        .is_some_and(|url| url == "no_push")
-            });
-        Ok(GitCatalog {
+        Ok(self.build_catalog(
+            &remote_details,
             tags,
             stashes,
-            remotes,
             upstream_remote,
-            upstream_read_only,
-            operation: self.integration_state(repository),
-        })
+            self.integration_state(repository),
+        ))
+    }
+
+    fn build_catalog(
+        &self,
+        remote_details: &[crate::GitRemote],
+        tags: Vec<(String, String)>,
+        stashes: Vec<(String, String)>,
+        upstream_remote: Option<String>,
+        operation: Option<GitIntegration>,
+    ) -> GitCatalog {
+        let upstream = remote_details
+            .iter()
+            .find(|remote| Some(remote.name()) == upstream_remote.as_deref());
+        GitCatalog {
+            tags,
+            stashes,
+            remotes: remote_details
+                .iter()
+                .map(|remote| remote.name().to_owned())
+                .collect(),
+            upstream_remote: upstream.map(|remote| remote.name().to_owned()),
+            upstream_read_only: upstream.is_some_and(|remote| {
+                remote
+                    .push_urls()
+                    .first()
+                    .is_none_or(|url| url == "no_push")
+            }),
+            operation,
+        }
     }
 
     pub fn integration_state(&self, repository: &GitRepository) -> Option<GitIntegration> {
         let metadata = repository.git_dir();
-        if metadata.join("rebase-merge").is_dir() || metadata.join("rebase-apply").is_dir() {
+        if metadata.join("rebase-merge").is_dir()
+            || metadata.join("rebase-apply/rebasing").is_file()
+        {
             Some(GitIntegration::Rebase)
-        } else if metadata.join("CHERRY_PICK_HEAD").is_file() || metadata.join("sequencer").is_dir()
+        } else if metadata.join("CHERRY_PICK_HEAD").is_file()
+            || metadata.join("sequencer").is_dir() && !metadata.join("REVERT_HEAD").is_file()
         {
             Some(GitIntegration::CherryPick)
         } else if metadata.join("MERGE_HEAD").is_file() {
@@ -298,6 +331,43 @@ impl GitClient {
         } else {
             None
         }
+    }
+
+    pub(crate) fn integration_status(
+        &self,
+        repository: &GitRepository,
+    ) -> Option<GitIntegrationState> {
+        let operation = self.integration_state(repository)?;
+        let markers: &[&str] = match operation {
+            GitIntegration::Merge => &["MERGE_HEAD"],
+            GitIntegration::Rebase => &[
+                "REBASE_HEAD",
+                "rebase-merge/orig-head",
+                "rebase-merge/msgnum",
+                "rebase-apply/orig-head",
+                "rebase-apply/next",
+            ],
+            GitIntegration::CherryPick => &["CHERRY_PICK_HEAD", "sequencer/todo"],
+        };
+        let mut version = Sha256::new();
+        // Git replaces these markers as steps change. Index edits leave them alone,
+        // so a conflict can be resolved without invalidating the current step.
+        for marker in markers {
+            version.update(marker.as_bytes());
+            if let Ok(metadata) = std::fs::symlink_metadata(repository.git_dir().join(marker)) {
+                version.update(format!(
+                    "{:?}:{:?}:{}",
+                    metadata.created().ok(),
+                    metadata.modified().ok(),
+                    metadata.len(),
+                ));
+            }
+            version.update(b"\0");
+        }
+        Some(GitIntegrationState {
+            operation,
+            version: format!("{:x}", version.finalize()),
+        })
     }
 
     /// A conflict is a durable, inspectable Git state rather than a lost command failure.
@@ -484,8 +554,21 @@ impl GitClient {
                 self.start_integration(repository, "cherry-pick", reference, *mainline)
                     .await
             }
-            GitCommand::Continue { operation } | GitCommand::Abort { operation } => {
-                if current != Some(*operation) {
+            GitCommand::Continue {
+                operation,
+                expected_version,
+            }
+            | GitCommand::Abort {
+                operation,
+                expected_version,
+            } => {
+                if current != Some(*operation)
+                    || expected_version.as_ref().is_some_and(|expected| {
+                        self.integration_status(repository).is_none_or(|state| {
+                            state.operation != *operation || state.version != *expected
+                        })
+                    })
+                {
                     return Err(invalid("integration state changed"));
                 }
                 let action = if matches!(command, GitCommand::Continue { .. }) {

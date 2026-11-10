@@ -115,6 +115,9 @@
           "changeFiles": {
             "route": "git/changeFiles"
           },
+          "stagedCommitPreview": {
+            "route": "git/stagedCommitPreview"
+          },
           "conflictFile": {
             "route": "git/conflictFile"
           },
@@ -650,6 +653,17 @@
         "enablement": "!scmBusy"
       },
       {
+        "command": "git.previewStagedCommit",
+        "title": "%git.previewStagedCommit%",
+        "category": "Git"
+      },
+      {
+        "command": "git.commitReviewedStaged",
+        "title": "%git.menu.commitStaged%",
+        "category": "Git",
+        "enablement": "!scmBusy"
+      },
+      {
         "command": "git.commitFromChanges",
         "title": "git.commitFromChanges",
         "enablement": "!scmBusy"
@@ -1012,6 +1026,10 @@
       ],
       "git.commitMenu": [
         {
+          "command": "git.previewStagedCommit",
+          "group": "1@0"
+        },
+        {
           "command": "git.commitStaged",
           "group": "1"
         },
@@ -1236,6 +1254,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "git.commitReviewedStaged",
+          "when": "false"
+        },
         {
           "command": "git.getChangesSummary",
           "when": "false"

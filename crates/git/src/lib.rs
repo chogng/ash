@@ -60,6 +60,7 @@ pub use references::GitCheckoutPolicy;
 pub use references::GitCommand;
 pub use references::GitCommandOutcome;
 pub use references::GitIntegration;
+pub use references::GitIntegrationState;
 pub use references::GitReferenceState;
 pub use references::GitStashMode;
 pub use remote::GitPullMode;

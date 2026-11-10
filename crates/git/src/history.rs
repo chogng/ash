@@ -691,11 +691,13 @@ mod tests;
 
 mod graph;
 
+pub(crate) use graph::CATALOG_TAG_LIMIT;
 pub use graph::GitGraph;
 pub use graph::GitGraphCursor;
 pub use graph::GitReference;
 pub use graph::GitReferenceCommit;
 pub use graph::GitReferenceKind;
+pub(crate) use graph::ReferenceQuery;
 pub use summary::GitCommitSummary;
 mod summary;
 

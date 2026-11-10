@@ -18,6 +18,7 @@ fn status(stream: &str, revision: u64) -> Status {
             name: "main".into(),
         },
         changes: Vec::new(),
+        integration: None,
     }
 }
 

@@ -127,6 +127,7 @@ fn git_status_change_updates_tui_owned_status_state() {
                 name: "main".into(),
             },
             changes: Vec::new(),
+            integration: None,
         },
     };
 

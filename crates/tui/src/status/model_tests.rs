@@ -409,6 +409,7 @@ fn git_status(change_count: usize) -> GitStatusResult {
             upstream: None,
         },
         changes: (0..change_count).map(|_| test_change()).collect(),
+        integration: None,
     }
 }
 

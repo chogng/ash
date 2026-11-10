@@ -833,6 +833,39 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
         }
         client.configuration.lock().unwrap()["supportCancellation"] = json!(false);
         verify_terminal_helpers(&supervisor, &client, directory.path());
+        let mut status = client.status();
+        status["revision"] = json!(client.revision.fetch_add(1, Ordering::Relaxed) + 1);
+        status["integration"] = json!({"operation":"rebase","version":"a".repeat(64)});
+        *client.status_override.lock().unwrap() = Some(status);
+        execute(
+            &supervisor,
+            &client,
+            invocation(
+                "ash.scm",
+                "scm",
+                json!({"method":"refresh","providerId":"root"}),
+            ),
+        );
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let provider = loop {
+            let provider = client.snapshots.lock().unwrap().last().unwrap()[0].clone();
+            if provider["statusMessageVisible"] == true && provider["isBusy"] == false {
+                break provider;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "missing Git integration progress"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert_eq!(
+            provider["statusMessage"],
+            if language == "zh-CN" {
+                "变基进行中 · 0 个文件待解决"
+            } else {
+                "Rebase in progress · 0 unresolved files"
+            }
+        );
         supervisor.shutdown().unwrap();
         let reads = client.requests.lock().unwrap().len();
         std::thread::sleep(Duration::from_millis(600));

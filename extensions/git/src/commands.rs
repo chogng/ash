@@ -141,6 +141,9 @@ impl GitRuntime {
             .or_else(|| context["repositoryId"].as_str())
             .or_else(|| context["repository"]["provider"]["id"].as_str());
         let repository = self.repository(id)?;
+        if command == "git.previewStagedCommit" {
+            return self.show_staged_commit_preview(&repository, token);
+        }
         if command == "git.openChangesSource" {
             let scope = arguments
                 .get(1)
@@ -294,7 +297,7 @@ impl GitRuntime {
                 }
                 Ok(Value::Null)
             }
-            id if id.starts_with("git.commit") => self.commit(repository, id, token),
+            id if id.starts_with("git.commit") => self.commit(repository, id, arguments, token),
             "git.stageAll" | "git.unstageAll" | "git.cleanAll" | "git.stageFile"
             | "git.unstageFile" | "git.discardFile" => self.mutate_paths(
                 repository,
@@ -365,7 +368,12 @@ impl GitRuntime {
                 }
                 Ok(result)
             }
-            _ => self.repository_command(repository, command, token),
+            _ => self.repository_command(
+                repository,
+                command,
+                arguments.get(1).and_then(Value::as_str),
+                token,
+            ),
         }
     }
     pub(crate) fn execute(
@@ -576,10 +584,32 @@ impl GitRuntime {
         &self,
         repository: &Repository,
         command: &str,
+        arguments: &[Value],
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
         let config = &repository.configuration;
-        let mut before = self.api.status(repository, Some(token))?;
+        let reviewed_version = if command == "git.commitReviewedStaged" {
+            Some(
+                arguments
+                    .get(1)
+                    .and_then(Value::as_str)
+                    .filter(|version| {
+                        version.len() == 64 && version.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    })
+                    .ok_or_else(|| invalid(&self.api.text("git.stagedPreviewChanged", &[])))?,
+            )
+        } else {
+            None
+        };
+        let mut before = if let Some(reviewed) = reviewed_version {
+            let current = self.api.staged_commit_preview(repository, token)?;
+            if current.version != reviewed {
+                return Err(invalid(&self.api.text("git.stagedPreviewChanged", &[])));
+            }
+            current.status
+        } else {
+            self.api.status(repository, Some(token))?
+        };
         if before.changes.iter().any(|change| change.conflicted) {
             return Err(invalid(&self.api.text("git.resolveConflicts", &[])));
         }
@@ -646,6 +676,11 @@ impl GitRuntime {
                 }
             };
             if create {
+                if reviewed_version.is_some() {
+                    return Err(invalid(
+                        &self.api.text("git.stagedPreviewSwitchBranch", &[]),
+                    ));
+                }
                 if self.branch(repository, "git.branchForCommit", token)? == false {
                     return Ok(Value::Null);
                 }
@@ -682,7 +717,7 @@ impl GitRuntime {
         if command.contains("Amend") && !self.api.confirm("git.amendConfirm", &[], token)? {
             return Ok(Value::Null);
         }
-        if command.ends_with("FromChanges") {
+        if command.ends_with("FromChanges") || reviewed_version.is_some() {
             let Some(value) = self.api.input("git.commitMessageTitle", &message, token)? else {
                 return Ok(Value::Null);
             };
@@ -889,6 +924,7 @@ impl GitRuntime {
             },
             expected_head: (!matches!(before.head, Head::Unborn { .. }))
                 .then(|| before.head.clone()),
+            expected_staged_version: reviewed_version.map(str::to_owned),
             mode: if command.contains("Amend") {
                 CommitMode::Amend
             } else {
@@ -1081,7 +1117,7 @@ impl GitRuntime {
             };
             let remote = if index == remotes.len() {
                 if self
-                    .repository_command(repository, "git.addRemote", token)?
+                    .repository_command(repository, "git.addRemote", None, token)?
                     .is_null()
                 {
                     return Ok(Value::Null);
@@ -1834,6 +1870,7 @@ impl GitRuntime {
         &self,
         repository: &Repository,
         command: &str,
+        reviewed_version: Option<&str>,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
         let kind = match command {
@@ -1844,18 +1881,38 @@ impl GitRuntime {
         };
         let intent = match kind {
             "continue" | "abort" => {
-                let catalog = json!(self.api.catalog(repository, Some(token))?);
-                if catalog["operation"].is_null() {
+                let status = self.api.status(repository, Some(token))?;
+                let integration = status.integration.clone();
+                let has_conflicts = status.changes.iter().any(|change| change.conflicted);
+                self.accept_status(status);
+                if reviewed_version.is_some_and(|reviewed| {
+                    integration
+                        .as_ref()
+                        .is_none_or(|state| state.version != reviewed)
+                }) {
+                    return Err(invalid(&self.api.text("git.integrationChanged", &[])));
+                }
+                let Some(integration) = integration else {
                     return Ok(Value::Null);
+                };
+                if kind == "continue" && has_conflicts {
+                    return Err(invalid(
+                        &self.api.text("git.integrationResolveBeforeContinue", &[]),
+                    ));
                 }
                 if kind == "abort" && !self.api.confirm("git.abortConfirm", &[], token)? {
                     return Ok(Value::Null);
                 }
-                let operation = decode(catalog["operation"].clone())?;
                 if kind == "abort" {
-                    RepositoryCommand::Abort { operation }
+                    RepositoryCommand::Abort {
+                        operation: integration.operation,
+                        expected_version: integration.version,
+                    }
                 } else {
-                    RepositoryCommand::Continue { operation }
+                    RepositoryCommand::Continue {
+                        operation: integration.operation,
+                        expected_version: integration.version,
+                    }
                 }
             }
             "merge" | "rebase" | "cherryPick" => {

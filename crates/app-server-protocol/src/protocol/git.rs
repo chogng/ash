@@ -352,6 +352,10 @@ pub struct GitStatusResult {
     pub path: String,
     pub head: GitHeadDto,
     pub changes: Vec<GitRepositoryChangeDto>,
+    /// The Git integration step in this checkout, if one is in progress.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub integration: Option<GitIntegrationStateDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -732,6 +736,15 @@ pub struct GitChangeFilesResult {
     pub files: Vec<GitChangeFileResult>,
 }
 
+/// A checkout-wide staged comparison and the identity required to commit it.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitStagedCommitPreviewResult {
+    pub status: GitStatusResult,
+    pub version: String,
+}
+
 /// Identifies a conflicted path in the selected repository.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1103,6 +1116,11 @@ pub struct GitCommitParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub expected_head: Option<GitHeadDto>,
+    /// When supplied, only a new index-only commit matching this preview may run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(min = 64, max = 64))]
+    pub expected_staged_version: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -1140,6 +1158,13 @@ pub enum GitIntegrationDto {
     Merge,
     Rebase,
     CherryPick,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitIntegrationStateDto {
+    pub operation: GitIntegrationDto,
+    pub version: String,
 }
 
 /// Closed repository intents; this API never accepts executable names or Git argument arrays.
@@ -1214,9 +1239,15 @@ pub enum GitCommandDto {
     },
     Continue {
         operation: GitIntegrationDto,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        expected_version: Option<String>,
     },
     Abort {
         operation: GitIntegrationDto,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        expected_version: Option<String>,
     },
     Stash {
         message: String,

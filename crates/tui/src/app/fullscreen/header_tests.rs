@@ -28,6 +28,7 @@ fn app_with_branch() -> App {
             name: "main".into(),
         },
         changes: vec![],
+        integration: None,
     }));
     app
 }

@@ -1342,6 +1342,8 @@ use crate::protocol::git::GitInitParams;
 use crate::protocol::git::GitInstallationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitIntegrationDto;
+#[cfg(feature = "export")]
+use crate::protocol::git::GitIntegrationStateDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitNamedRefDto;
 #[cfg(any(test, feature = "export"))]
@@ -1376,6 +1378,8 @@ use crate::protocol::git::GitRepositoryDto;
 use crate::protocol::git::GitRepositoryIdentityDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitRepositoryParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitStagedCommitPreviewResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitStashDto;
 #[cfg(any(test, feature = "export"))]
@@ -5584,6 +5588,11 @@ client_methods! {
         response: GitStatusResult,
         serialization: RepositoryExclusive,
     },
+    GitStagedCommitPreview => "git/stagedCommitPreview" {
+        params: GitRepositoryParams,
+        response: GitStagedCommitPreviewResult,
+        serialization: RepositoryExclusive,
+    },
     GitCheckIgnore => "git/checkIgnore" {
         params: GitCheckIgnoreParams,
         response: GitCheckIgnoreResult,
@@ -7908,6 +7917,7 @@ typescript_bindings! {
     FsDeleteParams,
     FsChanged,
     GitIntegrationDto,
+    GitIntegrationStateDto,
     GitCommitScopeDto,
     GitCommitModeDto,
     GitCommitSignoffDto,
@@ -7967,6 +7977,7 @@ typescript_bindings! {
     GitRepositoriesResult,
     GitRepositoryChangeDto,
     GitStatusResult,
+    GitStagedCommitPreviewResult,
     GitCheckIgnoreParams,
     GitCheckIgnoreCancelParams,
     GitCheckIgnoreCancelResult,

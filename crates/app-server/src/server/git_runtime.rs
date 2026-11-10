@@ -22,6 +22,8 @@ use ash_app_server_protocol::protocol::git::GitGraphResult;
 use ash_app_server_protocol::protocol::git::GitHeadDto;
 use ash_app_server_protocol::protocol::git::GitHistoryRefsResult;
 use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
+use ash_app_server_protocol::protocol::git::GitIntegrationDto;
+use ash_app_server_protocol::protocol::git::GitIntegrationStateDto;
 use ash_app_server_protocol::protocol::git::GitReferenceCommitDto;
 use ash_app_server_protocol::protocol::git::GitReferenceDto;
 use ash_app_server_protocol::protocol::git::GitReferenceKindDto;
@@ -31,6 +33,7 @@ use ash_app_server_protocol::protocol::git::GitRepositoriesResult;
 use ash_app_server_protocol::protocol::git::GitRepositoryChangeDto;
 use ash_app_server_protocol::protocol::git::GitRepositoryDto;
 use ash_app_server_protocol::protocol::git::GitRepositoryIdentityDto;
+use ash_app_server_protocol::protocol::git::GitStagedCommitPreviewResult;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::GitSubmoduleStateDto;
 use ash_app_server_protocol::protocol::git::GitTextDiffDto;
@@ -662,6 +665,25 @@ impl GitRuntime {
         self.repository(repository_id)?.status()
     }
 
+    pub(super) fn staged_commit_preview_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitStagedCommitPreviewResult, GitRuntimeError> {
+        let runtime = self.repository(repository_id)?;
+        let _operation = lock_current_operation(&runtime.operation)
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let (repository, snapshot) = runtime
+            .service
+            .snapshot()
+            .map_err(GitRuntimeError::Service)?;
+        let version = runtime
+            .service
+            .staged_commit_version(&repository, &snapshot)
+            .map_err(GitRuntimeError::Service)?;
+        let status = runtime.accept(repository, snapshot)?;
+        Ok(GitStagedCommitPreviewResult { status, version })
+    }
+
     pub(super) fn published_statuses_for(
         &self,
         repositories: &[GitRepositoryDto],
@@ -793,14 +815,7 @@ impl GitRuntime {
         repository_id: Option<&str>,
         command: &ash_git::GitCommand,
         cancellation: &CancellationToken,
-    ) -> Result<
-        (
-            GitStatusResult,
-            ash_git::GitCommandOutcome,
-            Option<ash_git::GitIntegration>,
-        ),
-        GitRuntimeError,
-    > {
+    ) -> Result<(GitStatusResult, ash_git::GitCommandOutcome), GitRuntimeError> {
         let runtime = self.repository(repository_id)?;
         let _operation = lock_operation_for_request(&runtime.operation, cancellation)
             .map_err(GitRuntimeError::Service)?;
@@ -815,13 +830,7 @@ impl GitRuntime {
             }
         };
         let status = runtime.accept_status(repository, snapshot, StatusNotification::Always)?;
-        let outcome = outcome.map_err(GitRuntimeError::Service)?;
-        let operation = runtime
-            .service
-            .catalog()
-            .map_err(GitRuntimeError::Service)?
-            .operation;
-        Ok((status, outcome, operation))
+        Ok((status, outcome.map_err(GitRuntimeError::Service)?))
     }
 
     pub(super) fn index_diff_for(
@@ -2401,6 +2410,16 @@ impl GitRepositoryRuntime {
         notification: StatusNotification,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
+        if projected.path.is_empty() {
+            projected.integration =
+                references
+                    .integration
+                    .as_ref()
+                    .map(|state| GitIntegrationStateDto {
+                        operation: integration_dto(state.operation),
+                        version: state.version.clone(),
+                    });
+        }
         if let GitHeadDto::Branch {
             upstream: Some(upstream),
             ..
@@ -3618,7 +3637,16 @@ fn project_status(
         path: wire_path(dir_prefix)?,
         head: head(snapshot.head()),
         changes,
+        integration: None,
     })
+}
+
+pub(super) fn integration_dto(operation: ash_git::GitIntegration) -> GitIntegrationDto {
+    match operation {
+        ash_git::GitIntegration::Merge => GitIntegrationDto::Merge,
+        ash_git::GitIntegration::Rebase => GitIntegrationDto::Rebase,
+        ash_git::GitIntegration::CherryPick => GitIntegrationDto::CherryPick,
+    }
 }
 
 fn structural_index_status(status: GitChangeStatus) -> bool {

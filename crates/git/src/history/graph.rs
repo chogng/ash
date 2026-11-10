@@ -9,6 +9,8 @@ use crate::GitRepository;
 use crate::GitResult;
 use crate::client::GitQueryStream;
 
+pub(crate) const CATALOG_TAG_LIMIT: usize = 5000;
+
 /// The ref kinds that can be shown in a repository graph.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GitReferenceKind {
@@ -34,6 +36,19 @@ pub struct GitReference {
     remote_name: Option<String>,
     current: bool,
     commit_details: Option<GitReferenceCommit>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ReferenceQuery {
+    Graph,
+    WithCatalog,
+}
+
+#[derive(Default)]
+pub(crate) struct ReferenceSnapshot {
+    pub(crate) references: Vec<GitReference>,
+    pub(crate) tags: Vec<(String, String)>,
+    pub(crate) upstream_remote: Option<String>,
 }
 
 impl GitReference {
@@ -305,41 +320,80 @@ impl GitClient {
 
     /// Lists branches and tags. Annotated tags point at their target so graph labels attach to commits.
     pub async fn references(&self, repository: &GitRepository) -> GitResult<Vec<GitReference>> {
+        Ok(self
+            .read_references(repository, ReferenceQuery::Graph)
+            .await?
+            .references)
+    }
+
+    pub(crate) async fn read_references(
+        &self,
+        repository: &GitRepository,
+        query: ReferenceQuery,
+    ) -> GitResult<ReferenceSnapshot> {
+        // Starred atoms describe an annotated tag's target. The catalog still uses the
+        // unpeeled tag ID to identify the exact ref it was built from.
+        let mut format = String::from(
+            "--format=%(refname)%00%(objectname)%00%(symref)%00%(HEAD)%00%(*objectname)%00%(objecttype)%00%(authorname)%00%(committerdate:unix)%00%(subject)%00%(*objecttype)%00%(*authorname)%00%(*committerdate:unix)%00%(*subject)",
+        );
+        if matches!(query, ReferenceQuery::WithCatalog) {
+            format.push_str("%00%(upstream:remotename)");
+        }
         let output = self
             .run_query(
                 repository.worktree_root(),
                 [
                     "for-each-ref",
-                    // Read commit metadata in the same snapshot as the refs. Starred atoms
-                    // describe an annotated tag's target rather than the tag annotation.
-                    "--format=%(refname)%00%(objectname)%00%(symref)%00%(HEAD)%00%(*objectname)%00%(objecttype)%00%(authorname)%00%(committerdate:unix)%00%(subject)%00%(*objecttype)%00%(*authorname)%00%(*committerdate:unix)%00%(*subject)",
+                    &format,
                     "refs/heads",
                     "refs/remotes",
                     "refs/tags",
                 ],
             )
             .await?;
-        parse_references(&output.stdout, &output.command)
+        parse_references(&output.stdout, &output.command, query)
     }
 }
 
-fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>> {
+fn parse_references(
+    bytes: &[u8],
+    command: &str,
+    query: ReferenceQuery,
+) -> GitResult<ReferenceSnapshot> {
     let text = std::str::from_utf8(bytes)
         .map_err(|_| GitError::invalid_output(command, "ref output was not UTF-8"))?;
-    let mut references = Vec::new();
+    let mut snapshot = ReferenceSnapshot::default();
+    let with_catalog = matches!(query, ReferenceQuery::WithCatalog);
+    let field_count = if with_catalog { 14 } else { 13 };
     for line in text.lines().filter(|line| !line.is_empty()) {
         let fields = line.split('\0').collect::<Vec<_>>();
-        if fields.len() != 13 {
+        if fields.len() != field_count {
             return Err(GitError::invalid_output(
                 command,
-                format!("ref record had {} fields instead of 13", fields.len()),
+                format!(
+                    "ref record had {} fields instead of {field_count}",
+                    fields.len()
+                ),
             ));
+        }
+        let Some(full_name) = fields[0].strip_prefix("refs/") else {
+            continue;
+        };
+        let ref_path = full_name.split_once('/');
+        let (namespace, name) = ref_path.unwrap_or((full_name, ""));
+        let object_id = fields[1];
+        if with_catalog {
+            // Keep the raw tag ID, including symbolic tags and the exact refs/tags ref.
+            if namespace == "tags" && snapshot.tags.len() < CATALOG_TAG_LIMIT {
+                snapshot.tags.push((name.to_owned(), object_id.to_owned()));
+            }
+            if namespace == "heads" && fields[3] == "*" && !fields[13].is_empty() {
+                snapshot.upstream_remote = Some(fields[13].to_owned());
+            }
         }
         if !fields[2].is_empty() {
             continue;
         }
-        let full_name = fields[0];
-        let object_id = fields[1];
         if object_id.is_empty() {
             return Err(GitError::invalid_output(
                 command,
@@ -364,59 +418,44 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
                 subject: metadata[2].to_string(),
             })
         };
-        let reference = if let Some(name) = full_name.strip_prefix("refs/heads/") {
-            if name.is_empty() {
+        if ref_path.is_none() {
+            continue;
+        }
+        let (kind, remote_name) = match namespace {
+            "heads" if name.is_empty() => {
                 return Err(GitError::invalid_output(command, "local ref omitted name"));
             }
-            GitReference {
-                name: name.to_string(),
-                object_id: object_id.to_string(),
-                kind: GitReferenceKind::LocalBranch,
-                remote_name: None,
-                current: fields[3] == "*",
-                commit_details,
+            "heads" => (GitReferenceKind::LocalBranch, None),
+            "remotes" => {
+                let (remote, _) = name
+                    .split_once('/')
+                    .filter(|(remote, branch)| !remote.is_empty() && !branch.is_empty())
+                    .ok_or_else(|| {
+                        GitError::invalid_output(
+                            command,
+                            "remote ref omitted remote or branch name",
+                        )
+                    })?;
+                (GitReferenceKind::RemoteBranch, Some(remote.to_owned()))
             }
-        } else if let Some(name) = full_name.strip_prefix("refs/remotes/") {
-            let Some((remote_name, branch_name)) = name.split_once('/') else {
-                return Err(GitError::invalid_output(
-                    command,
-                    "remote ref omitted remote or branch name",
-                ));
-            };
-            if remote_name.is_empty() || branch_name.is_empty() {
-                return Err(GitError::invalid_output(
-                    command,
-                    "remote ref omitted remote or branch name",
-                ));
-            }
-            GitReference {
-                name: name.to_string(),
-                object_id: object_id.to_string(),
-                kind: GitReferenceKind::RemoteBranch,
-                remote_name: Some(remote_name.to_string()),
-                current: false,
-                commit_details,
-            }
-        } else if let Some(name) = full_name.strip_prefix("refs/tags/") {
-            GitReference {
-                name: name.to_string(),
-                object_id: if fields[4].is_empty() {
-                    object_id
-                } else {
-                    fields[4]
-                }
-                .to_string(),
-                kind: GitReferenceKind::Tag,
-                remote_name: None,
-                current: false,
-                commit_details,
-            }
-        } else {
-            continue;
+            "tags" => (GitReferenceKind::Tag, None),
+            _ => continue,
         };
-        references.push(reference);
+        let object_id = if kind == GitReferenceKind::Tag && !fields[4].is_empty() {
+            fields[4]
+        } else {
+            object_id
+        };
+        snapshot.references.push(GitReference {
+            name: name.to_owned(),
+            object_id: object_id.to_owned(),
+            kind,
+            remote_name,
+            current: kind == GitReferenceKind::LocalBranch && fields[3] == "*",
+            commit_details,
+        });
     }
-    Ok(references)
+    Ok(snapshot)
 }
 
 #[cfg(test)]

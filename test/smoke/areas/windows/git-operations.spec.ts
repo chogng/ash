@@ -8,6 +8,51 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
+test.describe('Staged commit preview', () => {
+	test.use({ gitRepository: true, electronUserSettings: { 'workbench.locale': 'zh-CN', 'git.branchProtectionPrompt': 'alwaysCommit' } });
+
+	test('commits only the staged preview and rejects index changes made during the message prompt', { tag: ['@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
+		const cwd = testWorkspace.directory;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		const head = await git('rev-parse', 'HEAD');
+		await writeFile(testWorkspace.file, 'const value = "reviewed stage";\n');
+		await git('add', 'main.ts');
+		await writeFile(testWorkspace.file, 'const value = "unreviewed stage";\n');
+		await writeFile(join(cwd, 'outside.ts'), 'untracked outside preview\n');
+		await workbench.git.open();
+		const page = workbench.page;
+		const editor = workbench.editors.groupAt(0).content;
+		const preview = editor.locator('.stanza-multi-diff-editor:visible');
+		const commit = editor.getByRole('button', { name: '提交暂存的更改', exact: true });
+		const message = page.getByRole('dialog', { name: '提交消息', exact: true }).getByRole('textbox');
+		await workbench.menus.select(application, () => page.getByRole('button', { name: '更多提交操作', exact: true }).click(), ['预览暂存提交']);
+		await expect(editor.getByText('预览暂存提交', { exact: true })).toBeVisible();
+		await expect(preview).toContainText('reviewed stage');
+		await expect(preview).not.toContainText('unreviewed stage');
+		await expect(preview).not.toContainText('outside.ts');
+		await expect(preview.getByRole('button', { name: '取消暂存更改', exact: true })).toHaveCount(0);
+		await commit.click();
+		await expect(message).toBeFocused();
+		await git('add', 'main.ts');
+		await message.fill('必须拒绝这次提交');
+		await message.press('Enter');
+		await expect(editor.getByRole('status').filter({ hasText: '暂存内容或提交目标已变化' })).toBeVisible();
+		expect(await git('rev-parse', 'HEAD')).toBe(head);
+		await expect(preview).not.toContainText('unreviewed stage');
+
+		await workbench.quickaccess.runCommand('git.previewStagedCommit');
+		await expect(preview).toContainText('unreviewed stage');
+		await writeFile(testWorkspace.file, 'const value = "worktree only";\n');
+		await commit.click();
+		await expect(message).toBeFocused();
+		await message.fill('提交已预览的暂存内容');
+		await message.press('Enter');
+		await expect.poll(() => git('log', '-1', '--format=%s')).toBe('提交已预览的暂存内容');
+		expect(await git('show', 'HEAD:main.ts')).toBe('const value = "unreviewed stage";');
+		expect(await git('status', '--porcelain')).toBe('M main.ts\n?? outside.ts');
+	});
+});
+
 test.describe('Git blame live documents', () => {
 	test.use({ gitRepository: true, electronUserSettings: { 'git.blame.statusBarItem.enabled': true, 'git.blame.statusBarItem.template': '${subject}' } });
 	test('Git blame follows unsaved edits and undo without an idle discovery tick', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }) => {

@@ -193,6 +193,7 @@ fn configured_app(mode: ScreenMode) -> App {
                 name: "branch-layout".into(),
             },
             changes: vec![],
+            integration: None,
         },
     ));
     app.insert_text("keep this draft");
