@@ -80,6 +80,50 @@ test('Markdown preview loads an image relative to a workspace document', { tag: 
 	});
 });
 
+test('pasting a Markdown image creates a sibling asset and dropped images share the same preview', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, runningApplication }) => {
+	const file = join(testWorkspace.directory, 'pasted-image.md');
+	const existing = join(testWorkspace.directory, 'image.png');
+	const pasted = join(testWorkspace.directory, 'image-1.png');
+	const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
+	await Promise.all([writeFile(file, '# Pasted image\n\n'), writeFile(existing, 'existing file')]);
+	await workbench.openExplorer();
+	await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'pasted-image.md', exact: true }).dblclick();
+	const group = workbench.editors.groupAt(0);
+	await group.editor.waitForEditorContents(text => text.includes('# Pasted image'));
+	await group.editor.input.press('ControlOrMeta+End');
+	await group.editor.input.evaluate((input, data) => {
+		const clipboardData = new DataTransfer();
+		const bytes = Uint8Array.from(atob(data), char => char.charCodeAt(0));
+		clipboardData.items.add(new File([bytes], 'image.png', { type: 'image/png' }));
+		input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+	}, png);
+	await group.editor.waitForEditorContents(text => text.includes('![alt text](image-1.png)'));
+	expect(await readFile(pasted)).toEqual(Buffer.from(png, 'base64'));
+	expect(await readFile(existing, 'utf8')).toBe('existing file');
+	await group.editor.input.press('Escape');
+	await group.editor.input.press('ControlOrMeta+End');
+	await workbench.page.keyboard.insertText('\n\nDrop target: ');
+	await group.editor.lines.filter({ hasText: 'Drop target:' }).evaluate((line, data) => {
+		const dataTransfer = new DataTransfer();
+		const bytes = Uint8Array.from(atob(data), char => char.charCodeAt(0));
+		dataTransfer.items.add(new File([bytes], 'another image.png', { type: 'image/png' }));
+		const bounds = line.getBoundingClientRect();
+		line.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.right - 1, clientY: bounds.top + bounds.height / 2 }));
+	}, png);
+	await group.editor.waitForEditorContents(text => text.includes('![alt text](another%20image.png)'));
+	expect(await readFile(join(testWorkspace.directory, 'another image.png'))).toEqual(Buffer.from(png, 'base64'));
+	await group.editor.input.press('Escape');
+	await group.editor.input.press('ControlOrMeta+s');
+	await expect.poll(() => readFile(file, 'utf8')).toContain('![alt text](image-1.png)');
+	await runningApplication.driver.diagnostics.waitFor(async () => {
+		await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
+		const preview = group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
+		const images = preview.getByRole('img', { name: 'alt text' });
+		await expect(images).toHaveCount(2);
+		await expect.poll(() => images.evaluateAll(elements => elements.map(image => (image as HTMLImageElement).naturalWidth))).toEqual([1, 1]);
+	});
+});
+
 test('Markdown extension owns preview commands and shares unsaved text across editor views', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');

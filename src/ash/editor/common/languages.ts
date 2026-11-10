@@ -12,6 +12,7 @@ import { type LanguageToken, type LanguageTokenResult } from './tokens/languageT
 import { isPositiveSafeInteger } from '../../base/common/numbers.js';
 import { type CancellationToken } from '../../base/common/cancellation.js';
 import { type IReadonlyVSDataTransfer } from '../../base/common/dataTransfer.js';
+import type { VSBuffer } from '../../base/common/buffer.js';
 import { type HierarchicalKind } from '../../base/common/hierarchicalKind.js';
 import { type Color } from '../../base/common/color.js';
 import { type ExtensionIdentifier } from '../../platform/extensions/common/extensions.js';
@@ -45,6 +46,7 @@ export type WorkspaceEditEntry = {
 	readonly oldResource?: URI;
 	readonly newResource?: URI;
 	readonly options?: {
+		readonly contents?: Promise<VSBuffer>;
 		readonly overwrite?: boolean;
 		readonly ignoreIfExists?: boolean;
 		readonly ignoreIfNotExists?: boolean;

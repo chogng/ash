@@ -508,6 +508,8 @@
     "problems.warningCount": "警告：{0}",
     "problems.noProblems": "没有问题",
     "problems.summary": "{0}，{1}",
+    "markdown.image.altText": "图片说明",
+    "markdown.image.insert": "插入 Markdown 图片",
     "markdown.math.invalidFormula": "无法渲染此公式。",
     "markdown.math.outputLimit": "此公式超出渲染输出限制。",
     "theme.documentTooLarge": "主题超出 1 MiB 文档大小限制",

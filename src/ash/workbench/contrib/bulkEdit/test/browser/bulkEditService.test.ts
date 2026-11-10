@@ -174,6 +174,23 @@ test('cancellation while file contents resolve prevents the transaction from sta
 	assert.equal(fixture.files.has(first), false);
 });
 
+test('binary asset creation and its document reference revert as one workspace edit', async () => {
+	using fixture = new BulkEditTestServices([[first, '']]);
+	const asset = URI.file('/workspace/image.png');
+	const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0xff]);
+	const reference = '![alt text](image.png)';
+	const result = await fixture.service.apply([
+		new ResourceTextEdit(first, { range: new Range(1, 1, 1, 1), text: reference }),
+		new ResourceFileEdit(undefined, asset, { contents: Promise.resolve(VSBuffer.wrap(bytes)) }),
+	]);
+	if (!result.isApplied) assert.fail('The image paste must apply');
+	assert.equal(fixture.store.text(first), reference);
+	assert.deepEqual((await fixture.files.readFile(asset)).bytes, bytes);
+	await result.undo();
+	assert.equal(fixture.store.text(first), '');
+	assert.equal(fixture.files.has(asset), false);
+});
+
 test('confirmation metadata requests preview even when ordinary preview is disabled', async () => {
 	using fixture = new BulkEditTestServices([[first, '']]);
 	let previews = 0;
