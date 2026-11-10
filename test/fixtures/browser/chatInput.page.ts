@@ -328,6 +328,10 @@ services.registerInstance(IHostService, {
 		getWindows: async () => [],
 	hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, reload: async () => { }, openWindow: async () => { },
 	showToast: async () => ({ supported: false, clicked: false }),
+	...(new URLSearchParams(location.search).has('imageApp') ? {
+		openImage: async () => { throw new Error('Unexpected external image open'); },
+		listImageOpeningApplications: async () => [{ id: 'photos', name: 'Photos', isDefault: true, icon: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }],
+	} : {}),
 	async getScreenshot() {
 		screenshotCalls++;
 		screenshotVisibleOverlays.push([...document.querySelectorAll('dialog[open], [role="dialog"]')].filter(element => element.checkVisibility()).length);
@@ -1198,8 +1202,10 @@ window.ashChatInputIntegration = {
 	},
 	contextAccessibility: () => {
 		const content = (type: AccessibleViewType): string | undefined => {
-			for (const entry of AccessibleViewRegistry.getImplementations()) {
-				if (entry.type !== type || !entry.name.startsWith(inlineCode ? 'chatAttachments-' : 'chatContextUsage-')) continue;
+			const implementations = AccessibleViewRegistry.getImplementations()
+				.filter(entry => entry.type === type && (entry.name.startsWith('imagePreviewPopup-') || entry.name.startsWith(inlineCode ? 'chatAttachments-' : 'chatContextUsage-')))
+				.sort((left, right) => right.priority - left.priority);
+			for (const entry of implementations) {
 				const provider = entry.getProvider(services);
 				if (!provider) continue;
 				try { return provider.provideContent(); }

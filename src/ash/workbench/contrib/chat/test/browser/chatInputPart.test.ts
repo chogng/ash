@@ -4850,7 +4850,7 @@ suite('chatInput browser component', () => {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
-			await page.goto(`/chatInput.html?inlineCode=1&locale=zh-CN&theme=${theme}`);
+			await page.goto(`/chatInput.html?inlineCode=1&imageApp&locale=zh-CN&theme=${theme}`);
 			await page.setViewportSize({ width: 400, height: 640 });
 			await page.locator('main').evaluate(element => { element.style.width = '320px'; });
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
@@ -4895,6 +4895,9 @@ suite('chatInput browser component', () => {
 			await preview.press('Enter');
 			const dialog = page.getByRole('dialog', { name: `预览 ${name}` });
 			await expect(dialog.getByRole('img', { name })).toBeVisible();
+			const firstImage = dialog.locator('img').first();
+			await expect(firstImage).toHaveClass('ash-image-preview-app-icon');
+			await expect(firstImage).toBeVisible();
 			const accessiblePreview = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
 			expect(accessiblePreview.content).toContain(`图片预览：${name}`);
 			expect(accessiblePreview.content).toContain('尺寸：320 × 180');
