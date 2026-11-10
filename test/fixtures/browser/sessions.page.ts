@@ -155,7 +155,11 @@ if (new URL(location.href).searchParams.has('creator') || new URL(location.href)
 		accounts: { ...disconnectedApi.accounts, read: async () => ({ revision: '1', accounts: [] }) },
 		model: {
 			...disconnectedApi.model,
-			listModels: async () => ({ models: [{ model, displayName: 'Layout fixture', longContext: null }] }),
+			listModels: async () => ({ models: [{
+				model, displayName: 'Layout fixture', longContext: null,
+				defaultReasoningEffort: 'low',
+				supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }],
+			}] }),
 			listProviders: async () => ({ providers: [] }),
 			readDefaults: async () => ({ revision: 1, model, reasoningEffort: null, commitMessageModel: null, commitMessageEnabled: false, codeReviewModel: null }),
 		},

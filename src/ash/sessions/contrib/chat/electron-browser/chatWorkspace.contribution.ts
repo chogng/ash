@@ -4,15 +4,12 @@ import { autorun, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../platform/agentHost/common/openSessionLink.js';
-import type { SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ModelRef, ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
-import type { ResolvedChatContext } from '../../../../workbench/services/chat/common/chatContextService.js';
-import { ChatRequestQueueKind, type ChatMode, type ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
 import { modelRefIdentity } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -30,8 +27,8 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
-import { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
+import { AshChatModel } from '../browser/ashChatModel.js';
 import { SessionWorkspaceStatus } from '../browser/sessionWorkspaceStatus.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
 import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../browser/chatListModel.js';
@@ -64,14 +61,8 @@ const ashChatEditor = {
 } satisfies Omit<ReplyChatEditorOptions, 'model'>;
 
 /** Binds the compact editor to a Sessions slot and contributes cross-source draft choices. */
-class NativeReplyEditorModel extends ChatWidgetModel implements IReplyChatEditorModel {
-	readonly memoryNamespace = 'chat' as const;
+class NativeReplyEditorModel extends AshChatModel implements IReplyChatEditorModel {
 	private readonly draftModels: ChatDraftModelSource;
-	protected override get useCodeModelDefaults(): boolean { return false; }
-	protected override get commandInterpretation(): 'literal' { return 'literal'; }
-	protected override get isCodeConversation(): boolean { return false; }
-	override get mode(): ChatMode { return 'agent'; }
-	override get isAutomaticModel(): boolean { return false; }
 
 	constructor(
 		modelSource: SyncDescriptor<ChatDraftModelSource>,
@@ -86,7 +77,7 @@ class NativeReplyEditorModel extends ChatWidgetModel implements IReplyChatEditor
 	) {
 		const initial = view.getChatSelection();
 		if (!initial) throw new Error('The compact Chat editor needs a restored Sessions selection');
-		super(primary.chat, initial, management, primary.prompts, primary.models, primary.execution, configuration, storage, contexts);
+		super(initial, management, primary, configuration, storage, contexts);
 		this.draftModels = instantiation.createInstance(modelSource);
 		let previous: ReturnType<typeof view.chatSelection.get>;
 		this._register(autorun(reader => {
@@ -107,11 +98,7 @@ class NativeReplyEditorModel extends ChatWidgetModel implements IReplyChatEditor
 
 	override get inputState() {
 		const state = super.inputState;
-		const models = this.untitledSessionId ? [...state.models, ...this.draftModels.models.get()] : state.models;
-		return {
-			...state, models, canSelectModel: state.phase !== 'submitting', canSelectAgent: false, slashCommands: [], skillSelectors: [],
-			inputBlocked: state.inputBlocked || !state.selectedModel || !state.models.some(entry => modelRefIdentity(entry.model) === modelRefIdentity(state.selectedModel!)),
-		};
+		return this.untitledSessionId ? { ...state, models: [...state.models, ...this.draftModels.models.get()] } : state;
 	}
 
 	override async selectModel(model: ModelRef): Promise<void> {
@@ -120,22 +107,13 @@ class NativeReplyEditorModel extends ChatWidgetModel implements IReplyChatEditor
 		}
 		const generation = this.composerGeneration;
 		await super.selectModel(model);
-		if (generation === this.composerGeneration) {
-			await super.selectReasoningEffort(undefined);
-			if (generation === this.composerGeneration) this.view.setChatModelPreference({ model });
-		}
+		if (generation === this.composerGeneration) this.view.setChatModelPreference({ model });
 	}
 
 	override async selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
 		const generation = this.composerGeneration;
 		await super.selectReasoningEffort(effort);
 		if (generation === this.composerGeneration) this.view.setChatModelPreference({ model: this.selectedModel, effort });
-	}
-
-	override send(text: string, _mode: ChatMode, _skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
-		return super.send(text, 'agent', undefined, contexts, {
-			...options, queue: options?.queue ?? ChatRequestQueueKind.Queued,
-		});
 	}
 
 	async submitRequestEdit(item: IChatListItem, text: string, commandId: string): Promise<void> {

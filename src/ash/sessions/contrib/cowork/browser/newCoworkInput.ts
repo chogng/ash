@@ -55,7 +55,6 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		private readonly model: ICoworkWidgetModel,
-		private readonly presentation: 'conversation' | 'embedded',
 		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
 		@IVoiceInputModeService voiceInputMode: IVoiceInputModeService,
 		@IContextMenuService contextMenus: IContextMenuService,
@@ -98,7 +97,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		}, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
-				placeholder: presentation === 'embedded' ? localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question') : '',
+				placeholder: '',
 				height: { minimum: 32, maximum: 240 },
 			}),
 		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors, providedContexts);
@@ -106,7 +105,6 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.element.classList.add('ash-sessions-cowork-input');
 		this.inputContainer.classList.add('ash-sessions-chat-input-card', 'floating-card', 'stacked');
 		this.element.classList.add('cowork-composer');
-		this.element.classList.toggle('embedded-composer', presentation === 'embedded');
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-cowork-tip-slot';
 		this.element.append(tipContainer);
@@ -224,7 +222,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		const hasConversation = this.submittedMessage || this.model.items.length > 0;
 		this.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
 		this.element.classList.toggle('has-conversation', hasConversation);
-		this.heading.hidden = hasConversation || this.presentation === 'embedded';
+		this.heading.hidden = hasConversation;
 		this.tips.update();
 	}
 }

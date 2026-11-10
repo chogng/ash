@@ -88,20 +88,81 @@ suite('Projects toolbar', () => {
 		test(`returns to the Projects overview and retains the draft when a project is reopened (${locale})`, async () => {
 			const { page, info } = browser;
 			const chinese = locale === 'zh-CN';
-			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await page.goto(`/sessions.html?search&catalog&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('models.hidden', [
+				{ provider: 'fixture', model: 'layout-model', visible: true },
+			]));
 			const projectsEntry = page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item');
 			const card = page.locator('.ash-projects-card');
 			await projectsEntry.click();
 			await card.click();
 			const composer = page.locator('.ash-projects-composer');
 			await expect(composer).toHaveAccessibleName(chinese ? '在项目中新建聊天' : 'New chat in project');
-			await expect(composer.locator('.ash-sessions-cowork-input.embedded-composer')).toBeVisible();
-			await expect(composer.locator('.ash-sessions-chat-input')).toHaveCount(0);
+			const form = composer.locator('.ash-chat-input-adaptive');
+			await expect(form).toBeVisible();
 			const editor = new Editor(composer);
 			const input = editor.input;
 			await editor.waitForEditorFocus();
+			await expect(composer.getByRole('button', { name: chinese ? '项目或文件夹' : 'Project or folder', exact: true })).toHaveCount(0);
+			await expect(page.locator('.ash-projects-materials').getByRole('button', { name: chinese ? '使用文件夹' : 'Use a folder' })).toBeVisible();
+
+			const editorHost = form.locator('.ash-chat-input-editor-host');
+			const attach = form.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
+			const model = composer.locator('.ash-chat-input-footer .ash-chat-input-model-action');
+			const voice = form.locator('.ash-chat-input-voice');
+			await expect(model).toHaveAccessibleName(chinese ? '选择模型' : 'Select model');
+			const [editorBounds, attachBounds, voiceBounds, modelBounds, formBounds] = await Promise.all(
+				[editorHost, attach, voice, model, form].map(control => control.boundingBox()),
+			);
+			expect(attachBounds!.y + attachBounds!.height / 2).toBeCloseTo(editorBounds!.y + editorBounds!.height / 2);
+			expect(voiceBounds!.y).toBe(attachBounds!.y);
+			expect(attachBounds!.x + attachBounds!.width).toBeLessThanOrEqual(editorBounds!.x);
+			expect(voiceBounds!.x).toBeGreaterThanOrEqual(editorBounds!.x + editorBounds!.width);
+			expect(modelBounds!.y).toBeGreaterThanOrEqual(formBounds!.y + formBounds!.height);
+			expect(modelBounds!.x).toBeGreaterThan(formBounds!.x + formBounds!.width / 2);
+
+			await model.press('Enter');
+			const picker = page.getByRole('dialog', { name: chinese ? '选择聊天模型' : 'Choose a chat model' });
+			const fixtureModel = picker.getByRole('menuitemradio', { name: 'Layout fixture' });
+			await expect(fixtureModel).toBeVisible();
+			await fixtureModel.press('Enter');
+			const effort = picker.getByRole('slider', { name: chinese ? '推理强度' : 'Effort' });
+			await expect(effort).toHaveAttribute('aria-valuetext', chinese ? '低' : 'Low');
+			await effort.press('ArrowRight');
+			await expect(effort).toHaveAttribute('aria-valuetext', chinese ? '高' : 'High');
+			await effort.press('Escape');
+			await expect(picker).toBeHidden();
+			await expect(model).toBeFocused();
+			await expect(model).toHaveAccessibleName(chinese ? 'Layout fixture 高' : 'Layout fixture High');
+
+			await input.focus();
+			await input.evaluate(element => {
+				const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
+				const clipboard = new DataTransfer();
+				clipboard.items.add(new File([bytes], 'image.png', { type: 'image/png' }));
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+			});
+			const thumbnail = form.getByRole('button', { name: chinese ? '预览 image.png' : 'Preview image.png', exact: true });
+			await expect(thumbnail.locator('img')).toBeVisible();
+			await editor.waitForEditorContents(text => text === '');
+			await expect(form.getByRole('button', { name: chinese ? '发送' : 'Send', exact: true })).toBeEnabled();
+			const thumbnailBounds = (await thumbnail.boundingBox())!;
+			expect(thumbnailBounds.y + thumbnailBounds.height).toBeLessThanOrEqual((await editorHost.boundingBox())!.y);
+			await page.screenshot({ path: info.outputPath(`project-image-composer-${locale}.png`) });
+			await thumbnail.click();
+			const preview = page.getByRole('dialog', { name: chinese ? '预览 image.png' : 'Preview image.png', exact: true });
+			await expect(preview.getByRole('img', { name: 'image.png' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(thumbnail).toBeFocused();
+			await input.focus();
 			await editor.waitForTypeInEditor('Draft for this project');
+			await input.press('Shift+Enter');
+			await expect(form).toHaveClass(/\bexpanded\b/u);
+			const expandedEditor = (await editorHost.boundingBox())!;
+			expect((await attach.boundingBox())!.y).toBeGreaterThanOrEqual(expandedEditor.y + expandedEditor.height);
+			await input.press('Backspace');
+			await expect(form).not.toHaveClass(/\bexpanded\b/u);
 			await input.press('ArrowLeft');
 			const originalEditor = await input.elementHandle();
 			await page.evaluate(() => window.ashSessionsIntegration.refreshProject());
@@ -127,6 +188,7 @@ suite('Projects toolbar', () => {
 			await card.click();
 			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
 			expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
+			await expect(thumbnail).toBeVisible();
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 				for (const width of [1280, 600]) {
@@ -139,12 +201,35 @@ suite('Projects toolbar', () => {
 					expect(bounds.width).toBeGreaterThan(200);
 					expect(bounds.height).toBeGreaterThan(30);
 					expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+					const detail = (await page.locator('.ash-projects-detail').boundingBox())!;
+					const content = (await page.locator(width === 600 ? '.ash-projects-detail-content' : '.ash-projects-overview').boundingBox())!;
+					expect(bounds.y).toBeGreaterThanOrEqual(content.y + content.height);
+					expect(bounds.y + bounds.height).toBeCloseTo(detail.y + detail.height);
+					expect(bounds.x + bounds.width / 2).toBeCloseTo(detail.x + detail.width / 2);
+					expect(bounds.width).toBeCloseTo(Math.min(detail.width, 902));
+					await expect(composer).toBeInViewport({ ratio: 1 });
 					await expect(page.locator('.ash-projects-materials .ash-projects-goals')).toContainText(chinese ? '项目目标' : 'Project goals');
-					await expect(composer.locator('.embedded-composer')).toHaveCSS('padding', '0px');
-					await expect(composer.locator('.ash-sessions-cowork-welcome-heading')).toBeHidden();
+					await expect(composer.locator('.ash-chat-input-part')).toHaveCSS('padding', '0px');
 					await page.screenshot({ path: info.outputPath(`project-composer-${locale}-${theme}-${width}.png`) });
+					if (width === 600) {
+						const scrollArea = page.locator('.ash-projects-detail-content');
+						expect(await scrollArea.evaluate(element => {
+							element.scrollTop = element.scrollHeight;
+							return element.scrollTop;
+						})).toBeGreaterThan(0);
+						expect((await composer.boundingBox())!.y).toBeCloseTo(bounds.y);
+						await scrollArea.evaluate(element => { element.scrollTop = 0; });
+					}
 				}
 			}
+			await thumbnail.focus();
+			await page.keyboard.press('Tab');
+			const remove = form.getByRole('button', { name: chinese ? '移除 image.png' : 'Remove image.png', exact: true });
+			await expect(remove).toBeFocused();
+			await remove.press('Enter');
+			await expect(thumbnail).toHaveCount(0);
+			await expect(input).toBeFocused();
+			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
 		});
 
 		test(`keeps project dialog sizing and content insets independent of stylesheet order (${locale})`, async () => {

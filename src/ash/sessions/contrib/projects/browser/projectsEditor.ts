@@ -223,6 +223,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.projectList.stopUpdatingTimes();
 		this.content.clear();
 		if (!retainDetail) this.body.replaceChildren();
+		this.domNode.classList.toggle('project-detail-open', !!state.selected && !selected);
 		this.domNode.setAttribute('aria-label', projectName ?? localize('projects.title', 'Projects'));
 		this.message.textContent =
 			state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
@@ -265,18 +266,28 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private renderProject(project: Project, chats: readonly ChatListEntry[], conversationProject: ChatListGroup['project']): void {
 		const document = this.domNode.ownerDocument;
 		const layout = this.body.querySelector<HTMLElement>('.ash-projects-detail:not(.ash-projects-skeleton)') ?? h(document, 'div', { className: 'ash-projects-detail' });
+		const detailContent = layout.querySelector<HTMLElement>('.ash-projects-detail-content') ?? h(document, 'div', { className: 'ash-projects-detail-content' });
 		const overview = layout.querySelector<HTMLElement>('.ash-projects-overview') ?? h(document, 'section', { className: 'ash-projects-overview' });
 		let input = this.projectInputs.get(project.id);
 		// Only start a fresh composer on return. A late project refresh must not
 		// dispose a successful sender before its scheduled conversation navigation.
 		if (!input || input.submitted && this.activeProjectInput !== input) {
 			this.projectInputs.deleteAndDispose(project.id);
-			input = this.instantiationService.createInstance(ProjectChatInput, document, project.id);
+			input = this.instantiationService.createInstance(ProjectChatInput, document, project.id, () => {
+				if (this.activeProjectInput !== input) return;
+				this.activeProjectInput = undefined;
+				this.projectInputs.deleteAndDispose(project.id);
+				void this.projects.openProject(project.id);
+			});
 			this.projectInputs.set(project.id, input);
 		}
 		if (this.activeProjectInput !== input) this.activeProjectInput?.setVisible(false);
 		this.activeProjectInput = input;
-		if (!overview.contains(input.element)) overview.replaceChildren(input.element);
+		if (detailContent.parentElement !== layout) layout.append(detailContent);
+		if (input.element.parentElement !== layout) {
+			layout.querySelector('.ash-projects-composer')?.remove();
+			layout.append(input.element);
+		}
 		input.setVisible(this.isVisible());
 		overview.querySelector('.ash-projects-conversations')?.remove();
 		this.projectList.renderConversations(overview, chats, conversationProject, this.content);
@@ -308,8 +319,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		layout.querySelector('.ash-projects-materials')?.remove();
 		const materials = this.projectMaterials.render(document, project, this.projects.state.get().busy, this.content);
 		materials.append(goals);
-		if (overview.parentElement !== layout) layout.append(overview);
-		layout.append(materials);
+		if (overview.parentElement !== detailContent) detailContent.append(overview);
+		detailContent.append(materials);
 		if (layout.parentElement !== this.body) this.body.append(layout);
 	}
 

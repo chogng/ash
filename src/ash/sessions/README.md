@@ -409,7 +409,7 @@ controls. Each product owns its composition, model policy and draft lifecycle.
 | Host                | Ash component and owner                                                                                   | VS Code relationship                                                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Agent Window Code   | `SharedChatInputComposer` in `contrib/chat/browser/sharedChatInputComposer.ts`                            | Composes Sessions input policy for new and existing Code conversations around Workbench `ChatInputPart`.                                       |
-| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy. Its embedded presentation is used by project pages.             |
+| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy.                                                                 |
 | Agent Window Chat   | Shared `ChatWidget` and `ChatInputPart`                                                                   | The desktop host's `ChatGPTWidgetModel` projects the ChatGPT service into Ash's transcript and composer and connects the host's model routing. |
 | IDE Chat            | `ChatInputPart` in `workbench/contrib/chat/browser/widget/input/chatInputPart.ts`, hosted by `ChatWidget` | Same upstream owner, path and public class name. Sessions layout and product policy stay in Sessions.                                          |
 
@@ -417,8 +417,10 @@ In VS Code, `sessions/contrib/chat/browser/newChatComposerInput.ts` defines the
 new-session host options and send contracts; it does not export an input widget.
 `SharedChatInputComposer` delegates submission to its host and participates in the
 normal Chat input command scope. Its public contract does not describe all three
-Ash Agent Window products. Project pages compose the Cowork input and use
-`IProjectService` for membership; they do not own a fifth editor implementation.
+Ash Agent Window products. Local Chat project pages share the Ash Chat model and
+reply input. They pass the current project ID on the draft, and Sessions
+management links the conversation before the first request
+or voice session can start.
 
 ## Execution path
 

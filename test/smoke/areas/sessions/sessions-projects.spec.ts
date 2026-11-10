@@ -297,13 +297,17 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 	test.setTimeout(120_000);
 	const model = { provider: 'custom-project-chat-fixture', model: 'project-chat-fixture' };
 	const reply = 'Project chat fixture reply';
+	let receivedImage = false;
 	const server = createServer((request, response) => {
 		if (request.method === 'GET') {
 			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
 			return;
 		}
-		request.resume();
+		let body = '';
+		request.setEncoding('utf8');
+		request.on('data', chunk => { body += chunk; });
 		request.on('end', () => {
+			receivedImage ||= body.includes('data:image/');
 			const chunk = (delta: object, finish_reason: string | null) =>
 				`data: ${JSON.stringify({ id: 'project-chat', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
 			response.writeHead(200, { 'content-type': 'text/event-stream' }).end(chunk({ content: reply }, null) + chunk({}, 'stop') + 'data: [DONE]\n\n');
@@ -358,8 +362,22 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		await openProject();
 		await expect(page.getByText('No chats in this project', { exact: true })).toBeVisible();
 		for (const prompt of prompts) {
-			await send(new Editor(page.locator('.ash-projects-composer')), prompt);
+			const composer = page.locator('.ash-projects-composer');
+			await composer.getByRole('button', { name: 'Select model', exact: true }).click();
+			await page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('menuitemradio', { name: model.model, exact: true }).click();
+			const input = new Editor(composer);
+			if (prompt === prompts[0]) {
+				await input.input.evaluate(element => {
+					const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
+					const clipboard = new DataTransfer();
+					clipboard.items.add(new File([bytes], 'project-image.png', { type: 'image/png' }));
+					element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+				});
+				await expect(composer.getByRole('button', { name: 'Preview project-image.png', exact: true }).locator('img')).toBeVisible();
+			}
+			await send(input, prompt);
 			await expect(activeChat()).toContainText(reply);
+			if (prompt === prompts[0]) expect(receivedImage).toBe(true);
 			const threadId = (await activeChat().getAttribute('data-thread-id'))!;
 			threadIds.push(threadId);
 			const { sessions } = await client.request(APP_SERVER_METHODS['session/list'], {});
