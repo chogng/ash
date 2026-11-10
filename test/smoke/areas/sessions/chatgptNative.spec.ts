@@ -142,7 +142,11 @@ async function installService(application: ElectronApplication, holdInitializati
 				}
 				if (url.pathname.endsWith('/conversations')) {
 					if (recentHistoryRateLimited) return new Response(null, { status: 429 });
-					const items = [{ id: 'history-one', title: 'First native history' }, { id: 'history-two', title: 'Second native history' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `history-extra-${index}`, title: `Additional history ${index}` }))];
+					const first = { id: 'history-one', title: 'First native history', ...(projectFiles && { gizmo_id: 'g-p-files-fixture' }) };
+					if (projectFiles && url.pathname === '/backend-api/gizmos/g-p-files-fixture/conversations') {
+						return Response.json({ items: [first], cursor: null });
+					}
+					const items = [first, { id: 'history-two', title: 'Second native history' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `history-extra-${index}`, title: `Additional history ${index}` }))];
 					return Response.json({ items, total: items.length });
 				}
 				if (url.pathname === '/backend-api/conversations/history-one') {
@@ -1234,6 +1238,61 @@ test.describe('Ash project file copies', () => {
 		await restored.getByRole('region', { name: '上下文', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
 		const restoredEditor = restored.getByRole('tabpanel', { name: 'project-fixture.txt', exact: true });
 		await new Editor(restoredEditor).waitForEditorContents(text => text === 'Saved project material fixture');
+	});
+});
+
+test.describe('ChatGPT project conversation title', () => {
+	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('shows the active conversation title next to the project shortcut', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, '', false, true);
+		const page = await workbench.openAgentsWindow('electron');
+		const sidebar = page.locator('.ash-chat-navigation-list');
+		const titleBar = page.locator('.ash-sessions-titlebar');
+		const conversation = titleBar.getByRole('button', { name: '重命名会话（First native history）', exact: true });
+		const project = titleBar.getByRole('button', { name: 'File project fixture', exact: true });
+		const separator = titleBar.locator('.ash-sessions-titlebar-separator');
+		await sidebar.getByRole('button', { name: 'File project fixture', exact: true }).press('ArrowRight');
+		await sidebar.getByRole('button', { name: 'First native history', exact: true }).press('Enter');
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
+		await expect(project).toBeVisible();
+		await expect(conversation).toBeVisible();
+		await expect(separator).toHaveText('/');
+		await expect(separator).toHaveAttribute('aria-hidden', 'true');
+		const assertTitlePlacement = async () => {
+			const [projectBounds, separatorBounds, titleBounds] = await Promise.all([project.boundingBox(), separator.boundingBox(), conversation.boundingBox()]);
+			expect(projectBounds).not.toBeNull();
+			expect(separatorBounds).not.toBeNull();
+			expect(titleBounds).not.toBeNull();
+			expect(separatorBounds!.x).toBeGreaterThanOrEqual(projectBounds!.x + projectBounds!.width);
+			expect(separatorBounds!.x + separatorBounds!.width).toBeLessThanOrEqual(titleBounds!.x);
+			const gap = titleBounds!.x - (projectBounds!.x + projectBounds!.width);
+			expect(gap).toBeGreaterThanOrEqual(0);
+			expect(gap).toBeLessThanOrEqual(16);
+			expect(titleBounds!.y + titleBounds!.height / 2).toBeCloseTo(projectBounds!.y + projectBounds!.height / 2, 0);
+		};
+		await assertTitlePlacement();
+		await page.screenshot({ path: testInfo.outputPath('project-and-conversation-title.png') });
+		const browserWindow = await application.browserWindow(page);
+		await browserWindow.evaluate(value => value.setSize(720, 780));
+		await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(720);
+		await assertTitlePlacement();
+		await page.screenshot({ path: testInfo.outputPath('project-and-conversation-title-narrow.png') });
+
+		await page.getByRole('textbox', { name: '询问 ChatGPT', exact: true }).press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/聚焦回复中的文件链接并按 Enter 可下载文件/u);
+		await page.keyboard.press('Escape');
+		await project.press('Enter');
+		await expect(titleBar.getByRole('navigation', { name: '项目导航', exact: true })).toBeVisible();
+		await expect(conversation).toBeHidden();
+		await expect(separator).toBeHidden();
+		const showSidebar = titleBar.getByRole('button', { name: '显示侧边栏', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await sidebar.getByRole('button', { name: 'Second native history', exact: true }).press('Enter');
+		await expect(titleBar.getByRole('button', { name: '重命名会话（Second native history）', exact: true })).toBeVisible();
+		await expect(project).toBeHidden();
+		await expect(separator).toBeHidden();
 	});
 });
 

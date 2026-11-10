@@ -167,6 +167,10 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 				action, options, instantiationService, getWindowId(ownerWindow) ?? 0,
 			),
 		}));
+		this.pageContent.append(h(container.ownerDocument, 'span', {
+			className: 'ash-sessions-titlebar-separator',
+			attributes: { 'aria-hidden': 'true' },
+		}, '/'));
 		const updatePageVisibility = (): void => {
 			this.pageContent.hidden = pageActions.element.hidden;
 			this.domNode.classList.toggle('has-page-content', !this.pageContent.hidden);
@@ -245,17 +249,19 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this.domNode.style.setProperty('--ash-sessions-titlebar-background', getSessionsTitlebarBackground(this.theme) ?? '');
 	}
 
-	public setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable {
+	public setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>, showAlongsidePage: IObservable<boolean>): IDisposable {
 		this.sessionContent.replaceChildren(content);
 		const menuState = autorun(reader => {
 			if (content.parentElement === this.sessionContent) {
 				this.sessionContent.classList.toggle('session-menu-open', menuOpen.read(reader));
+				this.domNode.classList.toggle('show-session-alongside-page', showAlongsidePage.read(reader));
 			}
 		});
 		return toDisposable(() => {
 			menuState.dispose();
 			if (content.parentElement === this.sessionContent) {
 				this.sessionContent.classList.remove('session-menu-open');
+				this.domNode.classList.remove('show-session-alongside-page');
 				content.remove();
 			}
 		});
