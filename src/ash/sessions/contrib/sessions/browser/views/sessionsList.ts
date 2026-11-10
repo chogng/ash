@@ -2176,7 +2176,7 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 			expandOnDoubleClick: false,
 			indent: 0,
 			defaultIndent: 0,
-			indentGuides: 'none',
+			indentGuides: 'always',
 			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
 			modelOptions: { identityProvider: { getId: SessionsListTree.id } },
 			reuseRows: true,
@@ -2189,6 +2189,14 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 		if (dnd) this._register(dnd);
 		this.element.classList.add('ash-sessions-list-tree');
 		this.element.tabIndex = -1;
+		// The shared tree owns the indent outside the retained conversation button.
+		this._register(this.onPointer(({ element, browserEvent }) => {
+			const target = browserEvent.target;
+			if (browserEvent.button === 0 && isHTMLElement(target) && target.classList.contains('ash-tree-row')
+				&& element.dataset.parentProjectId && !element.classList.contains('ash-sessions-list-project-row')) {
+				element.querySelector<HTMLButtonElement>('.ash-sessions-list-item')?.click();
+			}
+		}));
 		// Move real focus between the nested row buttons when navigating the hierarchy.
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			const button = event.target;

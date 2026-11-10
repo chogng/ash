@@ -83,6 +83,43 @@
 	margin-block-start: var(--ash-spacing-size20);
 }
 
+.ash-sessions-list-tree
+	.ash-tree-row:has(
+		.ash-sessions-list-row[data-parent-project-id]:not(
+				.ash-sessions-list-project-row
+			)
+	) {
+	--ash-list-row-padding-start: var(--ash-spacing-size240);
+}
+
+.ash-sessions-list-tree .ash-tree-indent {
+	/* The project icon occupies the leading slot in place of the tree twistie. */
+	left: calc(
+		var(--ash-sessions-sidebar-item-inset) + var(--ash-toolbar-actionSize) /
+			2
+	);
+}
+
+.ash-sessions-list-tree
+	.ash-tree-row:has([data-parent-project-id])
+	+ .ash-tree-row:has([data-parent-project-id]) {
+	/* The shared guide is clipped to its row by default. Bridge the sidebar's row gap. */
+	overflow: clip;
+	overflow-clip-margin: var(--ash-spacing-size20);
+
+	& > .ash-tree-row-inner > .ash-tree-indent {
+		top: calc(-1 * var(--ash-spacing-size20));
+	}
+}
+
+.ash-sessions-list-tree
+	.ash-tree-indent-guide:not(
+		[data-tree-parent-id^="section:project:"],
+		[data-tree-parent-id^="section:catalog-project:"]
+	) {
+	display: none;
+}
+
 .ash-sessions-list[data-mode="chat"]:not(.ash-chat-navigation)
 	.ash-tree-row[data-tree-depth="3"]
 	.ash-tree-contents {
