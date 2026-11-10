@@ -59,6 +59,7 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly rename?: (title: string) => Promise<void>;
 	readonly share?: () => Promise<void>;
 	readonly archive?: () => Promise<boolean>;
+	/** Deletes this conversation after the host confirms the action. */
 	readonly remove?: () => Promise<void>;
 	readonly getActions?: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
 }
@@ -196,7 +197,6 @@ export class NativeChatCatalogSource extends Disposable implements ChatListSourc
 					moveToGroup: group => groups.move(id, group),
 					open,
 					rename: title => management.renameSession(id, title),
-					remove: () => commands.executeCommand('agentSession.delete', id),
 					share: () => sharing.share(id, selectedThreadId ?? thread.threadId, title),
 					getActions: signal => {
 						const saved = management.sessions.find(session => session.sessionId === id);
@@ -500,15 +500,21 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			getActions: async (signal, restoreFocus) => {
 				const contributed = await entry.getActions?.(signal, restoreFocus);
 				const actions = [...contributed ?? []];
-				if (entry.archive && !signal.aborted) {
+				if (signal.aborted || !(entry.archive || entry.remove)) return actions;
+				if (actions.length) actions.push(new Separator());
+				if (entry.archive) {
 					const presentation = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(this.configuration)).archive;
-					const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
-					actions.splice(separator < 0 ? actions.length : separator + 1, 0, {
+					actions.push({
 						id: 'agentSession.archive',
 						label: presentation.title.value, tooltip: presentation.title.value, icon: presentation.icon, enabled: true,
 						run: () => this.commands.executeCommand('agentSession.archive', { catalogId: entry.id }),
 					});
 				}
+				if (entry.remove) actions.push({
+					id: 'agentSession.delete', label: localize('sessions.list.delete', 'Delete'),
+					icon: Lxicon.trash, class: 'ash-session-delete-action', enabled: true, tooltip: '',
+					run: () => this.commands.executeCommand('agentSession.delete', { catalogId: entry.id, preferenceKey: entry.preferenceKey }),
+				});
 				return actions;
 			},
 		};

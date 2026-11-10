@@ -892,7 +892,18 @@ test.describe('Unified Chat sidebar', () => {
 		expect(ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
 		await more.press('Enter');
 		await page.getByRole('menuitem', { name: '删除对话', exact: true }).press('Enter');
-		await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+		const deleteConfirmation = page.getByRole('dialog');
+		const deleteButton = deleteConfirmation.getByRole('button', { name: '永久删除', exact: true });
+		await expect(deleteConfirmation).toContainText('此对话及其历史记录将被永久删除。');
+		await expect(deleteConfirmation).toHaveCSS('border-radius', '12px');
+		await expect(deleteButton).toHaveClass(/\bash-button-danger\b/u);
+		await test.info().attach('chat-delete-confirmation', { body: await page.screenshot(), contentType: 'image/png' });
+		await page.keyboard.press('Escape');
+		await expect(deleteConfirmation).toHaveCount(0);
+		await expect(chatGPTRow).toBeVisible();
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: '删除对话', exact: true }).press('Enter');
+		await deleteButton.click();
 		await expect(chatGPTRow).toHaveCount(0);
 
 		await ashTitle.click();
@@ -911,7 +922,9 @@ test.describe('Unified Chat sidebar', () => {
 			await expect(restoredChat.locator('.ash-chat-input-model-action')).toHaveText(ashFixtureModel.model);
 			await restored.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: '更多会话操作' }).press('Enter');
 			await restored.getByRole('menuitem', { name: '删除对话', exact: true }).press('Enter');
-			await restored.getByRole('dialog').getByRole('button', { name: '永久删除', exact: true }).click();
+			const ashDelete = restored.getByRole('dialog').getByRole('button', { name: '永久删除', exact: true });
+			await expect(ashDelete).toHaveClass(/\bash-button-danger\b/u);
+			await ashDelete.click();
 			await expect(restored.locator(`[data-item="ash:${ashSessionId}"]`)).toHaveCount(0);
 			const window = await application.browserWindow(restored);
 			const closed = restored.waitForEvent('close');

@@ -251,11 +251,10 @@ export class SessionsTitleBarWidget extends Disposable {
 							run: () => activeKey() === key ? commands.executeCommand('agentSession.archive', entry.sessionId ?? { catalogId: entry.id }) : undefined,
 						});
 					}
-					const remove = entry.remove;
-					if (remove) actions.push({
+					if (entry.sessionId || entry.remove) actions.push({
 						id: 'agentSession.delete', label: localize('sessions.titlebar.delete', 'Delete conversation'),
 						icon: Lxicon.trash, class: 'ash-session-delete-action', enabled: true, tooltip: '',
-						run: () => activeKey() === key ? remove() : undefined,
+						run: () => activeKey() === key ? commands.executeCommand('agentSession.delete', entry.sessionId ?? { catalogId: entry.id, preferenceKey: entry.preferenceKey }) : undefined,
 					});
 					if (actions.length) {
 						menuChatKey = key;

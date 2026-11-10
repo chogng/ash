@@ -1230,6 +1230,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(page.locator('body')).toHaveAttribute('data-copied-link', 'https://chatgpt.com/share/fixture-link');
 			await openMore();
 			await page.getByRole('menuitem', { name: labels.delete, exact: true }).click();
+			await expect(dialog).toContainText(zh ? '要永久删除“Renamed conversation”吗？' : 'Permanently delete Renamed conversation?');
 			await dialog.getByRole('button', { name: labels.cancel, exact: true }).click();
 			expect(writes.some(write => write.method === 'DELETE')).toBe(false);
 			await expect(title).toBeVisible();
@@ -1246,7 +1247,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await third.hover();
 			await third.getByRole('button', { name: labels.more, exact: true }).click();
 			await page.getByRole('menuitem', { name: labels.delete, exact: true }).click();
-			await dialog.getByRole('button', { name: labels.delete, exact: true }).click();
+			await dialog.getByRole('button', { name: zh ? '永久删除' : 'Delete permanently', exact: true }).click();
 			await expect(third).toHaveCount(0);
 			await expect(page.locator('.ash-chat-navigation-row .ash-chat-navigation-item')).toHaveText(['Other chat']);
 			expect(writes.map(write => [write.method, write.path])).toEqual([

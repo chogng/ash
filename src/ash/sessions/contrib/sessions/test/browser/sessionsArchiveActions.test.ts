@@ -12,6 +12,8 @@ import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { observableValue } from '../../../../../base/common/observable.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { ChatSessionArchiveActionWordingSettingId } from '../../../../../platform/chat/common/sessionArchiveActions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -42,6 +44,8 @@ import type { IActiveSessionThread, ISession } from '../../../../services/sessio
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
+import { SessionActionsService } from '../../../../browser/sessionActionsService.js';
+import type { ChatListSnapshot, IChatListCatalog } from '../../../chat/browser/chatListModel.js';
 
 class Provider extends Disposable implements ISessionsProvider {
 	readonly id = 'test-provider';
@@ -86,7 +90,7 @@ function session(id: string): ISession {
 	return { sessionId: id, kind: 'code' as const, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-root`, origin: { type: 'root' }, status: 'active' }] };
 }
 
-async function fixture(wording: 'archive' | 'done', archived = false) {
+async function fixture(wording: 'archive' | 'done', archived = false, catalog?: IChatListCatalog) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => dom.window.close()));
@@ -115,7 +119,8 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	const commands = resources.add(new CommandService(services));
 	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
 	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
-	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(actionsDescriptor));
+	services.registerSingleton(IAgentSessionActionsService, () => catalog
+		? services.createInstance(SessionActionsService, catalog) : services.createInstance(actionsDescriptor));
 	return Object.assign(resources, { provider, sessions, services, commands, quickInput, opened, configuration, storage });
 }
 
@@ -373,6 +378,27 @@ test('closing the archived-deletion picker keeps the catalog and never opens a c
 	picker.hide();
 	await deletion;
 	assert.deepEqual(current.sessions.sessions.map(session => session.sessionId), ['first', 'second']);
+});
+
+test('catalog deletion rejects a stale account identity and delegates a confirmed current target', async () => {
+	const deleted: string[] = [];
+	const entry = {
+		id: 'conversation', preferenceKey: 'current-account:conversation', title: 'Current chat', selected: false,
+		defaultIcon: Lxicon.chatSession, open: async () => { }, remove: async () => { deleted.push('current-account'); },
+	};
+	const snapshot = observableValue<ChatListSnapshot>('catalog', { entries: [entry] });
+	using current = await fixture('archive', false, { sources: [{ snapshot }] });
+	let confirmations = 0;
+	current.services.registerInstance(IDialogService, {
+		confirm: async () => { confirmations++; return { confirmed: true }; },
+	} as unknown as IDialogService);
+	await assert.rejects(current.commands.executeCommand('agentSession.delete', { catalogId: entry.id, preferenceKey: 'previous-account:conversation' }));
+	assert.equal(confirmations, 0);
+	assert.deepEqual(deleted, []);
+	await current.commands.executeCommand('agentSession.delete', { catalogId: entry.id, preferenceKey: entry.preferenceKey });
+	assert.equal(confirmations, 1);
+	assert.deepEqual(deleted, ['current-account']);
+	assert.deepEqual(current.provider.items.map(session => session.sessionId), ['first', 'second']);
 });
 
 

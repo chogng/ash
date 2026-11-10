@@ -22,7 +22,6 @@ import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../.
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
-import type { ChatGPTConversation } from '../browser/chatGPTClient.js';
 import { chatGPTProjectConversationId, chatGPTProjectPreferenceKey, IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';
@@ -125,9 +124,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				const share = canManage && !conversation.local ? async () => {
 					if (currentAccount()) await shareChatGPTConversation(chat, this.dialogs, this.clipboard, id, title);
 				} : undefined;
-				const remove = async () => {
-					if (currentAccount()) await this.deleteConversation(conversation, currentAccount);
-				};
 				return {
 					id: catalogId,
 					externalConversationId: conversation.local || id.startsWith('pending:') ? undefined : chatGPTProjectConversationId(state.catalogScope, id),
@@ -145,7 +141,8 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					defaultIcon: id.startsWith('local:') ? Lxicon.cowork : Lxicon.chatSession,
 					preferenceKey: conversationPreferenceKey(id, state.catalogScope),
 					open: signal => this.open(id, signal),
-					rename, share, remove,
+					rename, share,
+					remove: async () => { if (currentAccount()) await chat.deleteConversation(id); },
 					archive: canManage ? async () => currentAccount() && await chat.archive(id) : undefined,
 					setPinned: !id.startsWith('pending:') ? async pinned => { if (currentAccount()) await chat.setPinned(id, pinned); } : undefined,
 					project: !conversation.local && !id.startsWith('pending:') && (!projectId || currentProject) && state.connected && state.networkAvailable ? {
@@ -162,7 +159,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 							await this.chat.moveToProject(id, destination ?? null);
 						},
 					} : undefined,
-					getActions: (_signal, restoreFocus) => this.getActions(conversation, rename, share, remove, restoreFocus),
+					getActions: (_signal, restoreFocus) => this.getActions(title, rename, share, restoreFocus),
 				};
 			});
 			return {
@@ -283,12 +280,11 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return `${this.chat.native ? 'chatgpt-native' : 'chatgpt'}:${id}`;
 	}
 
-	private getActions(conversation: ChatGPTConversation, rename: ChatListEntry['rename'], share: ChatListEntry['share'], removeConversation: () => Promise<void>, restoreFocus: () => void): readonly IAction[] {
-		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, removeConversation), class: 'ash-session-delete-action' };
-		if (!rename) return [remove];
+	private getActions(currentTitle: string, rename: ChatListEntry['rename'], share: ChatListEntry['share'], restoreFocus: () => void): readonly IAction[] {
+		if (!rename) return [];
 		const actions = [this.action('rename', localize('sessions.chatgpt.rename', 'Rename'), Lxicon.edit, async () => {
 			const title = await this.quickInput.input({
-				title: localize('sessions.chatgpt.rename', 'Rename'), value: conversation.title,
+				title: localize('sessions.chatgpt.rename', 'Rename'), value: currentTitle,
 				validateInput: async value => value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
 			});
 			if (title !== undefined) await rename(title);
@@ -297,17 +293,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		if (share) {
 			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, share));
 		}
-		actions.push(new Separator(), remove);
 		return actions;
-	}
-
-	private async deleteConversation(conversation: ChatGPTConversation, currentAccount: () => boolean): Promise<void> {
-		const result = await this.dialogs.confirm({
-			message: localize('sessions.chatgpt.deleteConfirm', 'Delete “{0}”?', conversation.title),
-			detail: localize('sessions.chatgpt.deleteDetail', 'This chat will be permanently deleted.'),
-			primaryButton: localize('sessions.chatgpt.delete', 'Delete'),
-		});
-		if (result.confirmed && currentAccount()) { await this.chat.deleteConversation(conversation.id); }
 	}
 
 }

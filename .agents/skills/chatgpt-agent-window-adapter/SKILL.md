@@ -9,6 +9,8 @@ ChatGPT 的账号、远端会话和项目记录、模型目录及回复协议由
 
 ## 沿生产入口检查
 
+同一动作在原生 Ash 和 ChatGPT 都可用时，分别从真实入口追到执行的命令或服务，核对共享交互（包括确认框）在哪里处理、谁最终修改记录。如果调用链在共享交互处提前分叉，优先复用已有的 Ash 入口，把来源差异留在目录或编辑器能力中。最后从状态归属方反查界面如何取得结果，核对各入口的界面从同一份状态派生。
+
 1. 从 `src/ash/sessions/sessions.desktop.main.ts` 追到 `registerChatWorkspace`。在桌面入口装配 `contrib/chatgptweb`，向共享工作区传入契约。Sidebar、Projects、搜索、共享命令和 Workbench 只依赖 Ash 的类型与能力。发现它们导入 ChatGPT 实现、按远端 ID 前缀分支或自行发送请求时，把这些判断移回适配器。
 2. 在 `contrib/chat/browser/chatListModel.ts` 和 `replyChatEditor.ts` 找现有边界。用 `ChatListSource` 提供会话、项目和可用操作，用 `IReplyChatEditorModel` 提供消息与输入状态。以 `ChatGPTList` 和 `ChatGPTWidgetModel` 为映射点，让共享层从可观察的 Ash 记录派生界面。来源缺少操作时省略相应能力。
 3. 复用已经拥有相同职责的基座。原生 Ash 会话的目录、读取和创建走 `ISessionsManagementService`，渲染沿用共享会话组件。拆除旧服务前核对草稿 ID、已保存链接和会话恢复的调用者。ChatGPT 会话的 Ash 投影通过目录与编辑器契约提供，不额外创建本地 App Server Session 或 Thread 来镜像它。

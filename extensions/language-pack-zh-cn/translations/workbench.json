@@ -347,6 +347,7 @@
     "chatSession.delete": "聊天: 删除已归档会话",
     "chatSession.delete.pick": "选择要删除的已归档会话",
     "chatSession.delete.confirm": "要永久删除“{0}”吗？",
+    "chatSession.delete.conversationDetail": "此对话及其历史记录将被永久删除。",
     "chatSession.delete.detail": "这会移除会话及其对话历史，且无法撤销。此会话中恢复运行的工作也会停止。其他会话和未发送的草稿会保留。",
     "chatSession.delete.button": "永久删除",
     "chatSession.delete.help": "在命令面板中运行“聊天: 删除已归档会话”，用方向键选择会话并按 Enter，然后确认永久删除。按 Escape 可取消。删除无法撤销。",
