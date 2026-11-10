@@ -81,7 +81,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			? getCatalogProjectRename(selected?.project?.editDetails)
 			: undefined;
 		return {
-			kind: 'breadcrumb',
 			name: selected?.title ?? project?.name ?? '',
 			editor: this.domNode,
 			loading,

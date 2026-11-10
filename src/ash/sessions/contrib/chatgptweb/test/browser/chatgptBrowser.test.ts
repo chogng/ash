@@ -229,7 +229,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(page.getByRole('textbox', { name: '询问 ChatGPT', exact: true })).toBeFocused();
 	});
 
-	test('a project chat shows its project in the title bar only while visible', async () => {
+	test('a project chat leaves the page title slot empty', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
@@ -242,18 +242,11 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			json: { items: [{ id: 'fixture-chat', title: 'Synthetic conversation', gizmo_id: 'g-p-research' }], total: 1 },
 		}));
 		await page.goto('/chatgptNavigation.html?locale=zh-CN');
-		const titlebar = page.locator('.ash-sessions-titlebar-page-content');
-		const name = titlebar.getByRole('button', { name: 'Research', exact: true });
-		await expect(name).toHaveCount(0);
 		await page.locator('#navigation').getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-		await expect(name).toBeVisible();
-		await expect(page.locator('#editor .ash-project-titlebar')).toHaveCount(0);
-		await page.evaluate(() => window.ashChatGPTIntegration.setVisible(false));
-		await expect(name).toHaveCount(0);
-		await page.evaluate(() => window.ashChatGPTIntegration.setVisible(true));
-		await expect(name).toBeVisible();
-		await page.evaluate(() => window.ashChatGPTIntegration.newChat());
-		await expect(name).toHaveCount(0);
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+		const titlebar = page.locator('.ash-sessions-titlebar-page-content');
+		await expect(titlebar).toBeHidden();
+		await expect(titlebar.getByRole('button', { name: 'Research', exact: true, includeHidden: true })).toHaveCount(0);
 	});
 
 	test('a new Chat can choose a project and a folder independently and upload selected files', async () => {

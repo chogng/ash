@@ -1419,55 +1419,44 @@ test.describe('Ash project file copies', () => {
 test.describe('ChatGPT project conversation title', () => {
 	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
-	test('shows the active conversation title next to the project shortcut', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
+	test('uses the shared session title for a ChatGPT project conversation', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
 		const application = browser as ElectronApplication;
 		await installService(application, false, '', false, true);
 		const page = await workbench.openAgentsWindow('electron');
 		const sidebar = page.locator('.ash-chat-navigation-list');
 		const titleBar = page.locator('.ash-sessions-titlebar');
 		const conversation = titleBar.getByRole('button', { name: '重命名会话（First native history）', exact: true });
-		const project = titleBar.getByRole('button', { name: 'File project fixture', exact: true });
-		const separator = titleBar.locator('.ash-sessions-titlebar-separator');
+		const pageTitle = titleBar.locator('.ash-sessions-titlebar-page-content');
+		const sessionTitle = titleBar.locator('.ash-sessions-titlebar-widget');
 		await sidebar.getByRole('button', { name: 'File project fixture', exact: true }).press('ArrowRight');
 		await sidebar.getByRole('button', { name: 'First native history', exact: true }).press('Enter');
 		await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
-		await expect(project).toBeVisible();
-		await expect(conversation).toBeVisible();
-		await expect(separator).toHaveText('/');
-		await expect(separator).toHaveAttribute('aria-hidden', 'true');
-		const assertTitlePlacement = async () => {
-			const [projectBounds, separatorBounds, titleBounds] = await Promise.all([project.boundingBox(), separator.boundingBox(), conversation.boundingBox()]);
-			expect(projectBounds).not.toBeNull();
-			expect(separatorBounds).not.toBeNull();
-			expect(titleBounds).not.toBeNull();
-			expect(separatorBounds!.x).toBeGreaterThanOrEqual(projectBounds!.x + projectBounds!.width);
-			expect(separatorBounds!.x + separatorBounds!.width).toBeLessThanOrEqual(titleBounds!.x);
-			const gap = titleBounds!.x - (projectBounds!.x + projectBounds!.width);
-			expect(gap).toBeGreaterThanOrEqual(0);
-			expect(gap).toBeLessThanOrEqual(16);
-			expect(titleBounds!.y + titleBounds!.height / 2).toBeCloseTo(projectBounds!.y + projectBounds!.height / 2, 0);
-		};
-		await assertTitlePlacement();
-		await page.screenshot({ path: testInfo.outputPath('project-and-conversation-title.png') });
+		await expect(pageTitle).toBeHidden();
+		await expect(sessionTitle.getByRole('button', { name: '重命名会话（First native history）', exact: true })).toBeVisible();
+		await expect(sessionTitle.getByRole('button', { name: '更多会话操作', exact: true })).toBeVisible();
+		await page.screenshot({ path: testInfo.outputPath('project-conversation-title.png') });
 		const browserWindow = await application.browserWindow(page);
 		await browserWindow.evaluate(value => value.setSize(720, 780));
 		await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(720);
-		await assertTitlePlacement();
-		await page.screenshot({ path: testInfo.outputPath('project-and-conversation-title-narrow.png') });
+		await expect(conversation).toBeInViewport({ ratio: 1 });
+		await expect(pageTitle).toBeHidden();
+		await page.screenshot({ path: testInfo.outputPath('project-conversation-title-narrow.png') });
 
 		await page.getByRole('textbox', { name: '询问 ChatGPT', exact: true }).press('Alt+F1');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/聚焦回复中的文件链接并按 Enter 可下载文件/u);
+		const help = page.locator('.ash-accessible-view-content');
+		await expect(help).toHaveValue(/聚焦回复中的文件链接并按 Enter 可下载文件/u);
+		await expect(help).not.toHaveValue(/激活窗口标题栏中的项目名称/u);
 		await page.keyboard.press('Escape');
-		await project.press('Enter');
-		await expect(titleBar.getByRole('navigation', { name: '项目导航', exact: true })).toBeVisible();
-		await expect(conversation).toBeHidden();
-		await expect(separator).toBeHidden();
 		const showSidebar = titleBar.getByRole('button', { name: '显示侧边栏', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+		await page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		await expect(pageTitle.getByRole('navigation', { name: '项目导航', exact: true })).toBeVisible();
+		await expect(conversation).toBeHidden();
+		if (await showSidebar.isVisible()) await showSidebar.click();
 		await sidebar.getByRole('button', { name: 'Second native history', exact: true }).press('Enter');
-		await expect(titleBar.getByRole('button', { name: '重命名会话（Second native history）', exact: true })).toBeVisible();
-		await expect(project).toBeHidden();
-		await expect(separator).toBeHidden();
+		await expect(sessionTitle.getByRole('button', { name: '重命名会话（Second native history）', exact: true })).toBeVisible();
+		await expect(pageTitle).toBeHidden();
 	});
 });
 

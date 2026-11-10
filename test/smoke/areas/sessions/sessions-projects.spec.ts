@@ -287,6 +287,9 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect(conversation).toBeVisible();
 		await conversation.click();
 		await expect(conversation).toHaveAttribute('aria-current', 'page');
+		const titleBar = page.locator('.ash-sessions-titlebar');
+		await expect(titleBar.locator('.ash-sessions-titlebar-page-content')).toBeHidden();
+		await expect(titleBar.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: `Rename session (${title})`, exact: true })).toBeVisible();
 		await expect(code).toBeVisible();
 		await conversation.click({ button: 'right' });
 		await expectConversationMenu('code');
@@ -413,6 +416,9 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		await expect(projectChats().last()).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
+		const titleBar = page.locator('.ash-sessions-titlebar');
+		await expect(titleBar.locator('.ash-sessions-titlebar-page-content')).toBeHidden();
+		await expect(titleBar.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: `Rename session (${prompts[0]})`, exact: true })).toBeVisible();
 		await expect(projectName()).toHaveAttribute('aria-expanded', 'false');
 		await expect(sidebarChats()).toHaveCount(0);
 		await expect(sidebar().locator('[data-parent-section="recent"] .ash-chat-navigation-item')).toHaveCount(0);

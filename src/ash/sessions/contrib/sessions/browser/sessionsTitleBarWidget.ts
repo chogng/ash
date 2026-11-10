@@ -395,7 +395,6 @@ export class SessionsTitleBarWidget extends Disposable {
 					: workspaceDetails;
 			});
 		}));
-		const showAlongsidePage = derived(reader => !!activeChat.read(reader) && !customViews.activeCustomView.read(reader));
-		this._register(getSessionsTitlebarPart(titleService, layout.mainContainer).setSessionContent(element, menuOpen, showAlongsidePage));
+		this._register(getSessionsTitlebarPart(titleService, layout.mainContainer).setSessionContent(element, menuOpen));
 	}
 }

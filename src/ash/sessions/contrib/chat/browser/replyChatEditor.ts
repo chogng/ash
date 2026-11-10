@@ -1,5 +1,3 @@
-import { toErrorMessage } from '../../../../base/common/errorMessage.js';
-import { IChatListCatalog } from './chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { autorun, derived, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
@@ -24,7 +22,6 @@ import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/brows
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import type { ProjectTitleBarContent } from '../../projects/browser/projectTitleBarWidget.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import { ChatPromptStarters, getChatPromptStartersHelp } from './chatPromptStarters.js';
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
@@ -79,22 +76,6 @@ export class ReplyChatEditor extends EditorPane {
 	readonly id: string;
 	private widget: ChatWidget<IReplyChatEditorModel> | undefined;
 	private readonly shown = observableValue(this, false);
-	readonly projectTitleBarContent = derived<ProjectTitleBarContent | undefined>(reader => {
-		if (!this.shown.read(reader)) return undefined;
-		const snapshots = this.chatCatalog.sources.map(source => source.snapshot.read(reader));
-		const entry = snapshots.flatMap(snapshot => snapshot.entries).find(entry => entry.selected);
-		const project = entry?.projectId && snapshots.flatMap(snapshot => snapshot.projects ?? [])
-			.find(project => project.id === entry.projectId && !project.archived);
-		if (!project) return undefined;
-		return {
-			kind: 'shortcut',
-			name: project.title,
-			open: () => {
-				void this.commands.executeCommand('sessions.open.projects', project.id)
-					.catch(error => this.notifications.error(toErrorMessage(error)));
-			},
-		};
-	});
 	constructor(
 		private readonly options: ReplyChatEditorOptions,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
@@ -109,7 +90,6 @@ export class ReplyChatEditor extends EditorPane {
 		@IEditorService private readonly editors: IEditorService,
 		@IThemeService theme: IThemeService,
 		@IStorageService profileStorage: IStorageService,
-		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
 	) {
 		super(options.id, theme, profileStorage);
 		this.id = options.id;

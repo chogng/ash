@@ -5,7 +5,6 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, autorunWithStore, derived, observableFromEvent, type IObservable } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -18,7 +17,6 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { Menus } from '../../../browser/menus.js';
 import { renderInlineRenameInput, showInlineRenameInput } from '../../../browser/parts/titlebar/inlineRenameInput.js';
-import { ReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { ProjectsEditorPane } from './projectsEditor.js';
 import './media/projectTitleBarWidget.css';
 
@@ -27,8 +25,7 @@ interface ProjectTitleRenameTarget {
 	readonly save: (name: string, signal: AbortSignal) => Promise<boolean>;
 }
 
-interface ProjectBreadcrumbContent {
-	readonly kind: 'breadcrumb';
+export interface ProjectTitleBarContent {
 	readonly name: string;
 	readonly open: () => void;
 	readonly editor: HTMLElement;
@@ -38,12 +35,6 @@ interface ProjectBreadcrumbContent {
 	readonly busy: boolean;
 	readonly rename: ProjectTitleRenameTarget | undefined;
 }
-
-export type ProjectTitleBarContent = ProjectBreadcrumbContent | {
-	readonly kind: 'shortcut';
-	readonly name: string;
-	readonly open: () => void;
-};
 
 class ProjectTitleBarWidget extends ActionViewItem {
 	private tabbable = false;
@@ -60,18 +51,9 @@ class ProjectTitleBarWidget extends ActionViewItem {
 	}
 
 	override render(container: HTMLElement): void {
-		const kind = derived(reader => this.content.read(reader)?.kind);
+		const visible = this.content.map(content => !!content);
 		this._register(autorunWithStore((reader, store) => {
-			switch (kind.read(reader)) {
-				case 'breadcrumb':
-					this.buttons = this.renderBreadcrumb(container, store);
-					break;
-				case 'shortcut':
-					this.buttons = [this.renderShortcut(container, store)];
-					break;
-				default:
-					this.buttons = [];
-			}
+			this.buttons = visible.read(reader) ? this.renderBreadcrumb(container, store) : [];
 			this.setTabbable(this.tabbable);
 		}));
 	}
@@ -86,30 +68,6 @@ class ProjectTitleBarWidget extends ActionViewItem {
 		for (const button of this.buttons) button.domNode.tabIndex = tabbable ? 0 : -1;
 	}
 
-	private renderShortcut(container: HTMLElement, store: DisposableStore): Button {
-		const element = h(container.ownerDocument, 'div', { className: 'ash-project-titlebar' });
-		container.append(element);
-		store.add(toDisposable(() => element.remove()));
-		const button = store.add(new Button(element, {
-			...defaultButtonStyles,
-			label: '',
-			icon: Lxicon.projects,
-			onClick: () => this.content.get()?.open(),
-		}));
-		button.domNode.classList.add('ash-project-titlebar-name');
-		store.add(autorun(reader => {
-			const content = this.content.read(reader);
-			if (content?.kind !== 'shortcut') return;
-			if (button.label !== content.name) {
-				button.label = content.name;
-				button.setTitle(content.name || undefined);
-				button.domNode.setAttribute('aria-label', content.name);
-			}
-			button.hidden = !content.name;
-		}));
-		return button;
-	}
-
 	private renderBreadcrumb(container: HTMLElement, store: DisposableStore): readonly Button[] {
 		const document = container.ownerDocument;
 		const nav = h(document, 'nav', {
@@ -118,14 +76,10 @@ class ProjectTitleBarWidget extends ActionViewItem {
 		});
 		container.append(nav);
 		store.add(this.contextKeys.createScoped(nav)).createKey('sessionsProjectsFocused', true);
-		const readBreadcrumb = (): ProjectBreadcrumbContent | undefined => {
-			const content = this.content.get();
-			return content?.kind === 'breadcrumb' ? content : undefined;
-		};
 		const back = store.add(new Button(nav, {
 			...defaultButtonStyles,
 			label: localize('projects.title', 'Projects'),
-			onClick: () => readBreadcrumb()?.open(),
+			onClick: () => this.content.get()?.open(),
 		}));
 		const separator = h(document, 'span', {
 			className: 'ash-projects-breadcrumb-separator',
@@ -152,7 +106,7 @@ class ProjectTitleBarWidget extends ActionViewItem {
 			onBlur: () => { void saveRename(); },
 		}, store);
 		const beginRename = (): void => {
-			const content = readBreadcrumb();
+			const content = this.content.get();
 			if (!content?.rename || content.busy || edit) return;
 			edit = { target: content.rename, originalName: nameButton.label, saving: false, controller: new AbortController() };
 			showInlineRenameInput(input, edit.originalName);
@@ -169,7 +123,7 @@ class ProjectTitleBarWidget extends ActionViewItem {
 		};
 		const saveRename = async (): Promise<void> => {
 			const draft = edit;
-			const current = readBreadcrumb();
+			const current = this.content.get();
 			if (!draft || draft.saving || current?.rename?.id !== draft.target.id || current.busy) return;
 			const name = input.value.trim();
 			if (!name || name === draft.originalName) {
@@ -186,7 +140,7 @@ class ProjectTitleBarWidget extends ActionViewItem {
 					status(localize('projects.renamed', 'Project renamed to {0}.', name));
 				} else {
 					// Retry against the refreshed revision while preserving the user's text.
-					const refreshed = readBreadcrumb()?.rename;
+					const refreshed = this.content.get()?.rename;
 					if (refreshed?.id === draft.target.id) draft.target = refreshed;
 					draft.originalName = nameButton.label;
 				}
@@ -202,14 +156,14 @@ class ProjectTitleBarWidget extends ActionViewItem {
 		store.add(toDisposable(() => nav.remove()));
 		store.add(addDisposableListener(nav, 'focusin', event => {
 			const from = event.relatedTarget as Node | null;
-			if (!nav.contains(from) && !readBreadcrumb()?.editor.contains(from) &&
+			if (!nav.contains(from) && !this.content.get()?.editor.contains(from) &&
 				this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Projects)) {
 				status(localize('projects.helpHint', 'Press Alt+F1 for Projects accessibility help.'));
 			}
 		}));
 		store.add(autorun(reader => {
 			const content = this.content.read(reader);
-			if (content?.kind !== 'breadcrumb') return;
+			if (!content) return;
 			const { name, rename, loading, busy, showSeparator, catalogCurrent } = content;
 			if (edit && edit.target.id !== rename?.id) finishRename(false);
 			const label = rename ? localize('projects.rename', 'Rename project {0}', name) : name;
@@ -252,7 +206,7 @@ export class ProjectTitleBarContribution extends Disposable {
 		const activePane = observableFromEvent(this, editorPart.onDidChangeEditors, () => editorPart.activeGroup.activePane);
 		const content = derived(reader => {
 			const pane = activePane.read(reader);
-			return pane instanceof ProjectsEditorPane || pane instanceof ReplyChatEditor
+			return pane instanceof ProjectsEditorPane
 				? pane.projectTitleBarContent.read(reader) : undefined;
 		});
 		const visible = projectTitleVisible.bindTo(contextKeys);
