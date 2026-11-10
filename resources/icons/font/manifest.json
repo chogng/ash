@@ -368,7 +368,9 @@
     "primitive-square-filled": "E16D",
     "deepseek": "E16E",
     "gemini": "E16F",
-    "grok": "E170"
+    "grok": "E170",
+    "new-chat-session": "E171",
+    "paintbrush": "E172"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -586,6 +588,7 @@
     "motion": "27dfd147ac007ce27607cb8797be11abbd98b7a7d9b67e2e307fcea2fdb46fd3",
     "multitask": "abb75a5a0083e45e493a61ea1056b411b4b32380551b3e4966334666ec480401",
     "mute": "71e5930888ff194c5c3752a06b88ebb96108aecbfbfb739fa527cc9c4a782b84",
+    "new-chat-session": "20781a3f9cf9535a6ab6cbcc55c5a43a455df994aae26a482643901ca1e5fa35",
     "new-file": "e9b99be816657425edc1edbaada3889ecd36c7b392f2cec7f7b9816ce10d9d69",
     "new-folder": "3cf718c0061744861cbe9c47ce741e60c32e3b2441a92ae2c63370b0a002d3cf",
     "open-in-product": "b206ba8c8d706a57b6dcd2cb8aa93f21c0189fd3767434480bbb998d9de5d8f7",
@@ -593,6 +596,7 @@
     "open-preview": "89b59e96966a3654bbcc2ccc9395df15e9f036ff4b2d0f64182d8955a4066b15",
     "openai": "4b0f2799e8b75e6d379bd524cfec5aa39c31e8d9085b6cdb2278cafa5132b636",
     "origin": "1e0058aab9fe02411d9b02d9ce298011b8ae4d7d313ce520c6d3da8bfba57f7e",
+    "paintbrush": "98956d36347dcfd71a6f162d8879a4a48fe6adfd0a0ee42424431c34bec5c904",
     "paperclip": "2e34460f2f853519726b6c696060d48ba5f9018a7944bdc9d5727681f9a45e9b",
     "parameters": "8f6d931c1fb45f7f805cf53ad9c57efc70a9b4fa218bfdb4d4be6602b40dc2d4",
     "pass-filled": "2551ae6553e9efbd8b714251961f683667a16361e3f4b7a66daa858f679e0bb8",
