@@ -14,7 +14,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { INotificationService, type INotification, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, Severity, type INotification, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
 import { NotificationsModel } from '../../../../../workbench/common/notifications.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -29,6 +29,7 @@ const lifecycle = { onWillShutdown: Event.None } as ILifecycleService;
 
 function notificationService(model?: NotificationsModel): INotificationService {
 	return {
+		error: (message: string) => { model?.addNotification({ severity: Severity.Error, message }); },
 		notify: (notification: INotification): INotificationHandle => model?.addNotification(notification) ?? ({
 			onDidClose: Event.None, onDidChangeVisibility: Event.None,
 			progress: { infinite() { }, total() { }, worked() { }, done() { } },
@@ -65,6 +66,28 @@ function response(path: string): Response {
 	const id = path.split('/').at(-1)!;
 	return Response.json({ title: id, current_node: 'reply', mapping: { reply: { parent: null, message: { id: 'reply', author: { role: 'assistant' }, content: { parts: [id + ' reply'] } } } } });
 }
+function voiceWindow() {
+	const channel = { readyState: 'open', onmessage: undefined as ((event: { data: string; }) => void) | undefined, close() { this.readyState = 'closed'; } };
+	class Peer {
+		connectionState = 'new';
+		localDescription: RTCSessionDescriptionInit | undefined;
+		onconnectionstatechange: (() => void) | undefined;
+		createDataChannel() { return channel; }
+		addTrack() { } addTransceiver() { }
+		async createOffer() { return { type: 'offer', sdp: 'v=0\r\ns=Offer\r\n' }; }
+		async setLocalDescription(value: RTCSessionDescriptionInit) { this.localDescription = value; }
+		async setRemoteDescription() { this.connectionState = 'connected'; this.onconnectionstatechange?.(); }
+		close() { this.connectionState = 'closed'; }
+	}
+	const track = { stop() { } }; const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
+	const audio = { setAttribute() { }, async play() { }, pause() { }, remove() { } };
+	const window = {
+		RTCPeerConnection: Peer, document: { createElement: () => audio, body: { append() { } } },
+		navigator: { userActivation: { isActive: true }, mediaDevices: { getUserMedia: async () => stream } },
+	} as unknown as Window & typeof globalThis;
+	return { window, channel };
+}
+
 suite('ChatGPT shared service', () => {
 	// The jsdom main window belongs to the suite, including when it registers lazily.
 	const mainWindowDisposables = getWindowById(1)?.disposables;
@@ -453,24 +476,7 @@ suite('ChatGPT shared service', () => {
 				}
 				return response(path);
 			});
-			const channel = { readyState: 'open', onmessage: undefined as ((event: { data: string; }) => void) | undefined, close() { this.readyState = 'closed'; } };
-			class Peer {
-				connectionState = 'new';
-				localDescription: RTCSessionDescriptionInit | undefined;
-				onconnectionstatechange: (() => void) | undefined;
-				createDataChannel() { return channel; }
-				addTrack() { } addTransceiver() { }
-				async createOffer() { return { type: 'offer', sdp: 'v=0\r\ns=Offer\r\n' }; }
-				async setLocalDescription(value: RTCSessionDescriptionInit) { this.localDescription = value; }
-				async setRemoteDescription() { this.connectionState = 'connected'; this.onconnectionstatechange?.(); }
-				close() { this.connectionState = 'closed'; }
-			}
-			const track = { stop() { } }; const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
-			const audio = { setAttribute() { }, async play() { }, pause() { }, remove() { } };
-			const window = {
-				RTCPeerConnection: Peer, document: { createElement: () => audio, body: { append() { } } },
-				navigator: { userActivation: { isActive: true }, mediaDevices: { getUserMedia: async () => stream } },
-			} as unknown as Window & typeof globalThis;
+			const { window, channel } = voiceWindow();
 			await chat.reload(); await chat.startVoice(window);
 			assert.equal(chat.state.get().voice, 'connected');
 			channel.onmessage!({ data: JSON.stringify({ type: 'conversation_update', payload: { conversation_id: 'created-voice', parent_message_id: 'voice-reply' } }) });
@@ -488,6 +494,119 @@ suite('ChatGPT shared service', () => {
 			assert.equal(chat.state.get().messages[0]?.text, 'Spoken reply');
 		});
 	}
+	for (const failure of ['history read error', 'save timeout'] as const) {
+		test(`Reload recovers a new voice conversation without a transcript after a ${failure}`, async () => {
+			mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+			using clock = toDisposable(() => mock.timers.reset());
+			let saved = false;
+			let historyReads = 0;
+			const voiceTargets: { conversation_id?: string; parent_message_id: string; }[] = [];
+			const sendTargets: { id: string; parentId: string; }[] = [];
+			using chat = fixture(async (path, _signal, request) => {
+				if (path.startsWith('/service/realtime/vp?')) {
+					assert.ok(request.body instanceof VSBuffer);
+					const form = await new Response(new Uint8Array(request.body.buffer), { headers: request.headers }).formData();
+					const session = form.get('session');
+					assert.ok(typeof session === 'string');
+					voiceTargets.push(JSON.parse(session));
+					return new Response('v=0\r\ns=Answer\r\n');
+				}
+				if (path.endsWith('/conversation/created-voice')) {
+					historyReads++;
+					if (!saved) {
+						if (failure === 'history read error') { return new Response(null, { status: 503 }); }
+						mock.timers.tick(8_000);
+						return response(path);
+					}
+					return Response.json({
+						title: 'Saved voice conversation', current_node: 'voice-reply', mapping: {
+							'voice-reply': { parent: null, message: { id: 'voice-reply', author: { role: 'assistant' }, content: { parts: ['Spoken reply'] } } },
+						},
+					});
+				}
+				if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
+				if (path.endsWith('/prepare')) { return Response.json({ conduit_token: 'fixture' }); }
+				if (path.endsWith('/f/conversation')) {
+					const body = JSON.parse(String(request.body));
+					sendTargets.push({ id: body.conversation_id, parentId: body.parent_message_id });
+					return new Response('data: {"conversation_id":"created-voice","message":{"id":"next","author":{"role":"assistant"},"content":{"parts":["Text reply"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+				}
+				return response(path);
+			});
+			const { window, channel } = voiceWindow();
+			await chat.reload();
+			const draftId = chat.state.get().localConversationId;
+			await chat.startVoice(window);
+			const parent = failure === 'save timeout' ? { parent_message_id: 'voice-reply' } : {};
+			channel.onmessage!({ data: JSON.stringify({ type: 'conversation_update', payload: { conversation_id: 'created-voice', ...parent } }) });
+			assert.deepEqual(chat.state.get().voiceTranscript, []);
+			await chat.stopVoice();
+			assert.equal(historyReads, 1);
+			assert.equal(chat.state.get().voice, 'idle');
+			assert.equal(chat.state.get().conversationId, undefined);
+			assert.equal(chat.state.get().uncertain, true);
+			await chat.startVoice(voiceWindow().window);
+			assert.equal(voiceTargets.length, 1);
+			assert.equal(voiceTargets[0]?.conversation_id, undefined);
+			chat.setDraft('Next message');
+			await chat.send();
+			assert.deepEqual(sendTargets, []);
+			await chat.select('two');
+			assert.equal(chat.state.get().conversationId, 'two');
+			assert.equal(chat.state.get().uncertain, false);
+			chat.newChat();
+			assert.equal(chat.state.get().localConversationId, draftId);
+			assert.equal(chat.state.get().uncertain, true);
+			assert.equal(chat.state.get().draft, 'Next message');
+
+			await chat.reload();
+			assert.equal(historyReads, 2);
+			assert.equal(chat.state.get().uncertain, true);
+			assert.equal(chat.state.get().conversations.some(item => item.id === 'created-voice'), false);
+			saved = true;
+			await chat.reload();
+			assert.equal(historyReads, 3);
+			assert.equal(chat.state.get().uncertain, false);
+			assert.equal(chat.state.get().conversationId, 'created-voice');
+			assert.equal(chat.state.get().localConversationId, draftId);
+			assert.equal(chat.state.get().draft, 'Next message');
+			assert.equal(chat.state.get().parentId, 'voice-reply');
+			assert.equal(chat.state.get().messages[0]?.text, 'Spoken reply');
+			assert.equal(chat.state.get().conversations.find(item => item.id === 'created-voice')?.title, 'Saved voice conversation');
+
+			chat.setDraft('');
+			await chat.startVoice(voiceWindow().window);
+			assert.equal(voiceTargets.length, 2);
+			assert.equal(voiceTargets[1]?.conversation_id, 'created-voice');
+			assert.equal(voiceTargets[1]?.parent_message_id, 'voice-reply');
+			await chat.stopVoice();
+			chat.setDraft('Next message');
+			await chat.send();
+			assert.deepEqual(sendTargets, [{ id: 'created-voice', parentId: 'voice-reply' }]);
+		});
+	}
+	test('New abandons the unsaved voice history target', async () => {
+		let historyReads = 0;
+		using chat = fixture(async path => {
+			if (path.startsWith('/service/realtime/vp?')) { return new Response('v=0\r\ns=Answer\r\n'); }
+			if (path.endsWith('/conversation/created-voice')) {
+				historyReads++;
+				return new Response(null, { status: 404 });
+			}
+			return response(path);
+		});
+		const { window, channel } = voiceWindow();
+		await chat.reload();
+		await chat.startVoice(window);
+		channel.onmessage!({ data: JSON.stringify({ type: 'conversation_update', payload: { conversation_id: 'created-voice' } }) });
+		await chat.stopVoice();
+		assert.equal(chat.state.get().uncertain, true);
+		chat.newChat();
+		await chat.reload();
+		assert.equal(historyReads, 1);
+		assert.equal(chat.state.get().uncertain, false);
+		assert.equal(chat.state.get().conversationId, undefined);
+	});
 	test('pinned history merges once without advancing recent pagination, including after an archive', async () => {
 		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
 		using clock = toDisposable(() => mock.timers.reset());

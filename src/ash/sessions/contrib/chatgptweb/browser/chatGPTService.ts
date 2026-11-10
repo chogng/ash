@@ -260,6 +260,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private voiceMedia: ChatGPTVoiceSession | undefined;
 	private voiceMessageId: string | undefined;
 	private pendingVoiceConversationId: string | undefined;
+	// Keep an unconfirmed room with its draft across navigation until it is saved or discarded.
+	private readonly pendingVoiceHistory = new Map<string, { readonly id: string; readonly messageId: string | undefined; }>();
 	private voiceCreatedConversation = false;
 	private voiceStopping: Promise<void> | undefined;
 	private operation: AbortController | undefined;
@@ -346,6 +348,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.management.abort();
 		this.olderRead?.abort();
 		this.management = new AbortController();
+		this.pendingVoiceConversationId = undefined;
+		this.pendingVoiceHistory.clear();
 		void this.endVoice(false);
 		for (const upload of this.uploads.values()) { upload.abort(); }
 		this.uploads.clear(); this.attachmentFiles.clear(); this.drafts.clear();
@@ -723,9 +727,15 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	public async reload(): Promise<void> {
-		if (this.model.get().busy || this.model.get().sending || this.model.get().managing) { return; }
+		const state = this.model.get();
+		if (this.isDisposed || state.busy || state.sending || state.managing) { return; }
 		if (this.voiceController) { await this.endVoice(true); return; }
-		const id = selectedChatConversationId(this.model.get());
+		const pending = this.pendingVoiceHistory.get(state.localConversationId);
+		if (pending) {
+			if (state.networkAvailable) { await this.saveVoiceHistory(pending.id, pending.messageId, state.localConversationId, true); }
+			return;
+		}
+		const id = selectedChatConversationId(state);
 		if (id?.startsWith('local:')) { this.watchCoworkTasks(); }
 		await this.loadCatalog(undefined, true);
 		await this.syncOutbox();
@@ -817,7 +827,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			if (this.voiceController === controller && !controller.signal.aborted) { this.update({ voice: 'connected' }); }
 		} catch (error) {
 			if (this.voiceController === controller && !controller.signal.aborted) {
-				await this.endVoice(!!this.voiceMessageId);
+				await this.endVoice(!!(this.voiceMessageId || this.pendingVoiceConversationId));
 				if (error instanceof DOMException && error.name === 'NotAllowedError') {
 					this.notifications.warn(isNative && isMacintosh
 						? localize('sessions.chatgpt.voicePermissionDeniedMac', 'Microphone access was denied. In System Settings, open Privacy & Security, select Microphone, and enable access for Ash. Then try again.')
@@ -838,33 +848,38 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.voiceController = undefined;
 		controller.abort();
 		this.voiceMedia?.dispose(); this.voiceMedia = undefined;
-		const id = this.pendingVoiceConversationId ?? this.model.get().conversationId;
+		const pendingId = this.pendingVoiceConversationId;
 		this.pendingVoiceConversationId = undefined;
-		const messageId = this.voiceMessageId;
-		if (!refresh || this.isDisposed) { this.update({ voice: 'idle', voiceTranscript: [] }); return; }
-		if (!messageId && this.voiceCreatedConversation) {
-			this.update({ voice: 'idle', voiceTranscript: [], conversationId: undefined }); this.rememberConversation(undefined); return;
+		const id = pendingId ?? this.model.get().conversationId;
+		if (!refresh || this.isDisposed || !id) {
+			this.update({ voice: 'idle', voiceTranscript: [] });
+			return;
 		}
+		const localId = this.draftKey();
+		if (pendingId) { this.pendingVoiceHistory.set(localId, { id: pendingId, messageId: this.voiceMessageId }); }
+		await this.saveVoiceHistory(id, this.voiceMessageId, localId, this.voiceCreatedConversation);
+	}
+
+	private async saveVoiceHistory(id: string, messageId: string | undefined, localId: string, createdConversation: boolean): Promise<void> {
+		const target = createdConversation ? this.drafts.get(localId)?.target : undefined;
 		const { signal, generation } = this.beginOperation();
 		this.update({ voice: 'stopping', busy: true });
 		this.voiceStopping = (async () => {
 			try {
-				if (id) {
-					const history = await this.client.voiceHistory(id, messageId, signal);
-					const target = this.voiceCreatedConversation ? this.drafts.get(this.draftKey())?.target : undefined;
-					const move = await this.assignNewConversationToProject(id, target, signal);
-					if (generation === this.generation) {
-						if (this.voiceCreatedConversation) this.forgetDraft(this.draftKey());
-						this.bindConversation(history.id, this.draftKey());
-						this.bindLocalTimeline(this.draftKey(), history.id);
-						this.restoreHistory(history);
-						this.rememberHistory(history, { projectId: move?.projectId });
-						if (move?.error) this.notifications.error(move.error);
-					}
-				}
+				const history = await this.client.voiceHistory(id, messageId, signal);
+				if (generation !== this.generation) { return; }
+				const move = await this.assignNewConversationToProject(id, target, signal);
+				if (generation !== this.generation) { return; }
+				this.pendingVoiceHistory.delete(localId);
+				this.bindConversation(history.id, localId);
+				this.bindLocalTimeline(localId, history.id);
+				this.restoreHistory(history, false, true);
+				this.rememberConversation(history.id);
+				this.rememberHistory(history, { projectId: move?.projectId });
+				if (move?.error) this.notifications.error(move.error);
 			} catch (error) {
 				if (generation === this.generation) {
-					this.update({ uncertain: !!messageId });
+					if (this.draftKey() === localId) { this.update({ uncertain: !!messageId }); }
 					this.notifications.error(this.errorText(error));
 				}
 			} finally {
@@ -1386,6 +1401,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const draft = this.drafts.get(next.localConversationId);
 		this.model.set({
 			...next, catalogScope: this.cacheScope, canQueue: !!this.outbox, pendingSync: this.outbox?.hasPending() === true,
+			uncertain: next.uncertain || this.pendingVoiceHistory.has(next.localConversationId),
 			pendingCreation: creation && !creation.cancelled ? creation.submittedAgainst ? 'submitted' : 'queued' : undefined,
 			explicitDraftModel: !next.conversationId && !!draft?.selection,
 			draftTarget: !next.conversationId && !creation ? draft?.target : undefined,
@@ -1699,7 +1715,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public newChat(options?: { readonly clearDraft: boolean; }): void {
 		if (this.isDisposed || this.model.get().sending || this.model.get().managing || this.voiceStopping) { return; }
 		if (this.voiceController) { void this.endVoice(true).then(() => this.newChat(options)); return; }
-		if (options?.clearDraft) { this.forgetDraft(this.newConversationId); }
+		this.pendingVoiceHistory.delete(this.draftKey());
+		if (options?.clearDraft) {
+			this.pendingVoiceHistory.delete(this.newConversationId);
+			this.forgetDraft(this.newConversationId);
+		}
 		this.openNewChat();
 	}
 
@@ -1727,6 +1747,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		await this.endVoice(true);
 		const current = this.model.get();
 		if (this.isDisposed || account !== this.management || current.sending || current.managing || this.outbox?.isDeleted(id)) { return; }
+		for (const [localId, pending] of this.pendingVoiceHistory) {
+			if (pending.id === id) {
+				if (current.networkAvailable && !current.busy) { await this.saveVoiceHistory(id, pending.messageId, localId, true); }
+				return;
+			}
+		}
 		if (id.startsWith('pending:')) {
 			const entry = this.outbox?.creation(id.slice('pending:'.length));
 			if (entry && !entry.cancelled) {
