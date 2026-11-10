@@ -2529,9 +2529,11 @@ focusTest(
 			.click();
 		await replaceChatInput(targetEditor, 'Keep this Code draft during handoff');
 
+		const sessionsWindow = await application.browserWindow(sessionsPage);
 		const closed = sessionsPage.waitForEvent('close');
-		await returnFromSessions(sessionsPage, application);
+		await sessionsWindow.evaluate(window => window.close());
 		await closed;
+		await sessionsWindow.dispose();
 		await workbenchPage.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 		await sourceDraft.focus();
 		await workbenchPage.keyboard.insertText('Keep this second draft in the IDE');

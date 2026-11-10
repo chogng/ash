@@ -543,12 +543,15 @@ pub enum PullRequestChecksStatus {
     Neutral,
 }
 
-#[derive(Clone, Copy, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequestChecks {
     pub status: PullRequestChecksStatus,
     /// Latest applicable check's completion time, or its start time if completion is unavailable.
     pub latest_check_at_unix_ms: Option<i64>,
+    /// Required contexts for which GitHub has no matching check result.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreported_required_checks: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

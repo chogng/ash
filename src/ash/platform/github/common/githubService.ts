@@ -196,6 +196,7 @@ export interface GitHubChecks { readonly state: string; readonly statuses: reado
 export type GitHubPullRequestChecksStatus = 'pending' | 'success' | 'failure' | 'neutral';
 export interface GitHubPullRequestChecks {
 	readonly status: GitHubPullRequestChecksStatus;
+	readonly unreportedRequiredChecks?: readonly string[];
 	readonly latestCheckAtUnixMs?: number;
 }
 export interface GitHubLabel { readonly name: string; readonly color: string; }

@@ -1342,7 +1342,7 @@ use crate::protocol::git::GitInitParams;
 use crate::protocol::git::GitInstallationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitIntegrationDto;
-#[cfg(feature = "export")]
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitIntegrationStateDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitNamedRefDto;

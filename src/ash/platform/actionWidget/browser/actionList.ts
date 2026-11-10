@@ -472,6 +472,7 @@ export class ActionList<T> extends Disposable {
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeyBinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
+			getTooltip: action => this.options.showRowTooltips ? entries.get(action.id)?.detail : undefined,
 			actionViewItemProvider: action => {
 				const entry = entries.get(action.id);
 				if (!entry || action instanceof SubmenuAction) { return undefined; }

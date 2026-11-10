@@ -1041,8 +1041,15 @@ suite('automations browser component', () => {
 			await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
 			const connect = (name: string) => hosts.getByRole('button', { name: chinese ? `连接：${name}` : `Connect: ${name}`, exact: true });
 			await expect(connect('build-a')).toBeVisible();
+			await expect(connect('build-a')).toHaveAccessibleDescription(chinese ? '连接到此已保存的主机。' : 'Connect to this saved host.');
+			const offline = hosts.getByRole('cell', { name: chinese ? '主机离线' : 'Host offline', exact: true }).first();
+			await expect(offline.locator('[data-ash-icon-id="circle"]')).toBeVisible();
+			await expect(offline.locator('[data-ash-icon-id="circle"]')).toHaveAttribute('aria-hidden', 'true');
 			for (const name of ['build-a', 'build-b']) {
 				await connect(name).press('Enter');
+				const row = hosts.getByRole('row').filter({ has: page.getByRole('rowheader', { name: new RegExp(name) }) });
+				const connected = row.getByRole('cell', { name: chinese ? '已连接' : 'Connected', exact: true });
+				await expect(connected.locator('[data-ash-icon-id="check"]')).toBeVisible();
 				await expect.poll(() => page.evaluate(() => window.ashAutomations.connectedHosts())).toContain(name);
 				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toBeVisible();
 				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toContainText(name);

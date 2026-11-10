@@ -433,8 +433,8 @@ test('GitHub reads required CI for the exact PR head on the shared connection', 
 	assert.deepEqual({ ...(request.params as object), operationId: 'generated' }, {
 		accountId: '42', repository: githubRepository, number: 7, headCommit, operationId: 'generated',
 	});
-	transport.respondAt(-1, { status: 'failure', latestCheckAtUnixMs: 10_000 });
-	assert.deepEqual(await status, { status: 'failure', latestCheckAtUnixMs: 10_000 });
+	transport.respondAt(-1, { status: 'failure', latestCheckAtUnixMs: 10_000, unreportedRequiredChecks: ['gate'] });
+	assert.deepEqual(await status, { status: 'failure', latestCheckAtUnixMs: 10_000, unreportedRequiredChecks: ['gate'] });
 });
 
 test('GitHub cancels its original operation and releases cancellation listeners', async () => {

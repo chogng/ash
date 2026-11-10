@@ -1287,8 +1287,9 @@ export abstract class Workbench extends Disposable {
 		}
 		else if (options.draft) {
 			const selected = this.sessionsView.activeSelection;
-			if (selected?.kind !== 'untitled' || !sameWorkspace(selected.session.workspace, this.workspaceSelection())) {
-				this.sessionsView.openNewSession();
+			const workspace = this.workspaceSelection();
+			if (selected?.kind !== 'untitled' || !sameWorkspace(selected.session.workspace, workspace)) {
+				this.sessionsView.openNewSession(undefined, { workspace });
 			}
 		}
 		await this.showChat();

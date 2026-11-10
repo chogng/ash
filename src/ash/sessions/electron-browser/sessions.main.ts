@@ -1,4 +1,4 @@
-import { isCancellationError } from '../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../base/common/errors.js';
 import type { IWorkspaceTrustApi, DirectoryPermissionRequest } from '../../platform/workspace/common/workspaceTrust.js';
 import { createSessionFolderTrustRequestService } from '../contrib/workspace/browser/workspace.contribution.js';
 import { removePartsSplash } from '../../workbench/contrib/splash/browser/splash.js';
@@ -83,6 +83,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	if (!container) throw new Error('Sessions renderer requires an #app container');
 	const sessions = new DisposableStore();
 	let workbench: Workbench | undefined;
+	let workspaceGeneration = 0;
+	let workspaceChange: Promise<void>;
 	let drainRequested = false;
 	let draining = false;
 	const drainHandoffs = async (): Promise<void> => {
@@ -94,6 +96,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				let handoff: { readonly id: string; readonly options: IOpenAgentsWindowOptions; } | undefined;
 				while ((handoff = await invoke<typeof handoff>(AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL))) {
 					try {
+						if (handoff.options.draft && !handoff.options.conversation && api.appServer.isAvailable) {
+							// Main publishes the new context before delivering the handoff.
+							// The composer must wait for that context's directory binding.
+							const generation = workspaceGeneration;
+							await workspaceChange;
+							if (sessions.isDisposed || generation !== workspaceGeneration) throw new CancellationError();
+						}
 						await workbench.acceptHandoff(handoff.options);
 						await invoke<void>(AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, { id: handoff.id });
 					} catch (error) {
@@ -228,7 +237,6 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		});
 		let workspace: typeof initialWorkspace = { id: initialWorkspace.id, folders: [] };
 		let workspaceSelection = selectionFromWorkspace(workspace);
-		let workspaceGeneration = 0;
 		const initialWorkspaceReady = api.workspaceDirectoriesReady.then(async () => {
 			const state = await api.appServer.getConnectionState();
 			if (sessions.isDisposed || workspaceGeneration !== 0 || state !== 'ready') return;
@@ -241,18 +249,20 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		});
 		// Workbench construction will take ownership of startup errors.
 		void initialWorkspaceReady.catch(() => undefined);
-		let workspaceChange = initialWorkspaceReady.catch(() => undefined);
+		workspaceChange = initialWorkspaceReady;
 		const workspaceSubscription = workspaceContext.onDidChange(value => {
 			const next = parseWorkspace(value);
 			const generation = ++workspaceGeneration;
-			workspaceChange = workspaceChange.then(async () => {
+			workspaceChange = workspaceChange.catch(() => undefined).then(async () => {
 				if (sessions.isDisposed || generation !== workspaceGeneration) return;
 				await api.reloadWorkspaceDirectories();
 				const state = await api.appServer.getConnectionState();
-				if (sessions.isDisposed || generation !== workspaceGeneration || state !== 'ready') return;
+				if (sessions.isDisposed || generation !== workspaceGeneration) return;
+				if (state !== 'ready') throw new CancellationError();
 				workspace = next;
 				workspaceSelection = selectionFromWorkspace(workspace);
-			}).catch(error => { if (!isCancellationError(error)) onUnexpectedError(error); });
+			});
+			void workspaceChange.catch(error => { if (!isCancellationError(error)) onUnexpectedError(error); });
 		});
 		sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 		const hostColorScheme = await api.nativeHost.getOSColorScheme();

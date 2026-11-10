@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import { IGitHubService, type GitHubChecks, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
+import { IGitHubService, type GitHubPullRequestChecks, type GitHubPullRequest } from '../../../../../platform/github/common/githubService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { LazyGitHubResourceResolver, parseGitHubReferenceTarget } from '../../browser/lazyGitHubResourceHover.js';
 
@@ -18,16 +18,17 @@ test('public reference parsing rejects enterprise hosts and unsafe reference ide
 	assert.throws(() => URI.parse('https://user@github.com/team/repo/pull/7'), /credentials/);
 });
 
-test('hover intent loads all checks pages once while retaining prefetched core metadata', async () => {
+test('hover intent loads the required check summary once for the prefetched PR head', async () => {
 	using services = new InstantiationService();
 	const reads: string[] = [];
 	services.registerInstance(IGitHubService, {
 		...createDisconnectedGitHubService(),
 		readPullRequest: async () => { reads.push('core'); return pullRequest; },
-		readChecks: async (_repository, commit, page) => {
+		readPullRequestChecks: async (_repository, number, commit) => {
+			assert.equal(number, pullRequest.number);
 			assert.equal(commit, pullRequest.headCommit);
-			reads.push(`checks:${page}`);
-			return { state: 'success', statuses: [], checks: [{ id: page, name: `test-${page}`, status: 'completed', conclusion: 'success', detailsUrl: null }], nextPage: page === 1 ? 2 : null };
+			reads.push('checks');
+			return { status: 'pending', unreportedRequiredChecks: ['gate'] };
 		},
 	});
 	using resolver = services.createInstance(LazyGitHubResourceResolver);
@@ -35,18 +36,18 @@ test('hover intent loads all checks pages once while retaining prefetched core m
 	assert.deepEqual(reads, ['core']);
 	const [first, second] = await Promise.all([resolver.resolvePullRequest(target), resolver.resolvePullRequest(target)]);
 	await resolver.resolvePullRequest(target);
-	assert.deepEqual({ reads, sameResult: first === second, checks: first.checks?.checks.length, state: resolver.getPullRequestState(target).get() }, {
-		reads: ['core', 'checks:1', 'checks:2'], sameResult: true, checks: 2, state: { status: 'resolved', value: first },
+	assert.deepEqual({ reads, sameResult: first === second, checks: first.checks, state: resolver.getPullRequestState(target).get() }, {
+		reads: ['core', 'checks'], sameResult: true, checks: { status: 'pending', unreportedRequiredChecks: ['gate'] }, state: { status: 'resolved', value: first },
 	});
 });
 
-test('failed optional checks can be retried without losing the loaded PR', async () => {
+test('a failed checks request can be retried without losing the loaded PR', async () => {
 	using services = new InstantiationService();
 	let attempts = 0;
 	services.registerInstance(IGitHubService, {
-		...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readChecks: async () => {
+		...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readPullRequestChecks: async () => {
 			if (++attempts === 1) { throw new Error('Checks temporarily unavailable'); }
-			return { state: 'success', statuses: [], checks: [], nextPage: null };
+			return { status: 'success' };
 		}
 	});
 	using resolver = services.createInstance(LazyGitHubResourceResolver);
@@ -58,15 +59,15 @@ test('failed optional checks can be retried without losing the loaded PR', async
 
 test('retiring a link cancels in-flight checks and prevents late state from reappearing', async () => {
 	using services = new InstantiationService();
-	let release!: (checks: GitHubChecks) => void;
+	let release!: (checks: GitHubPullRequestChecks) => void;
 	let cancellation!: CancellationToken;
 	let entered!: () => void;
 	const started = new Promise<void>(resolve => { entered = resolve; });
 	services.registerInstance(IGitHubService, {
-		...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readChecks: async (_repository, _commit, _page, token) => {
+		...createDisconnectedGitHubService(), readPullRequest: async () => pullRequest, readPullRequestChecks: async (_repository, _number, _commit, token) => {
 			cancellation = token!;
 			entered();
-			return new Promise<GitHubChecks>(resolve => { release = resolve; });
+			return new Promise<GitHubPullRequestChecks>(resolve => { release = resolve; });
 		}
 	});
 	using resolver = services.createInstance(LazyGitHubResourceResolver);
@@ -74,7 +75,7 @@ test('retiring a link cancels in-flight checks and prevents late state from reap
 	const pending = resolver.resolvePullRequest(target);
 	await started;
 	resolver.retain([]);
-	release({ state: 'success', statuses: [], checks: [], nextPage: null });
+	release({ status: 'success' });
 	await pending;
 	assert.deepEqual({ canceled: cancellation.isCancellationRequested, state: state.get() }, { canceled: true, state: { status: 'resolved', value: { pullRequest, checks: undefined } } });
 });

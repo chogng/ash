@@ -1106,6 +1106,7 @@ impl GitHubRequestProcessor {
                     Ok::<_, github::Error>(GitHubPullRequestChecksResult {
                         status,
                         latest_check_at_unix_ms: checks.latest_check_at_unix_ms,
+                        unreported_required_checks: checks.unreported_required_checks,
                     })
                 })
             }

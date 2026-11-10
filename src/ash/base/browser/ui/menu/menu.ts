@@ -30,6 +30,7 @@ export interface MenuActionViewItemOptions extends ActionViewItemOptions {
 	readonly useEventAsContext?: boolean;
 	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly ariaDescription?: string;
+	readonly tooltip?: string;
 	readonly onDidSelect?: () => void;
 	readonly submenuLayer?: number;
 	readonly contextViewContainer?: HTMLElement;
@@ -91,6 +92,7 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 		this.button = this.createButton(container, {
 			label: this.action.label,
 			ariaLabel: this.action.label,
+			title: this.menuOptions.tooltip,
 			enabled: this.action.enabled,
 			onClick: event => this.runAction(event),
 		});
@@ -551,6 +553,7 @@ export interface IMenuOptions {
 	readonly buttonStyles?: IButtonStyles;
 	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly getAriaDescription?: (action: IAction) => string | undefined;
+	readonly getTooltip?: (action: IAction) => string | undefined;
 	readonly enableMnemonics?: boolean;
 	readonly useEventAsContext?: boolean;
 	/** Applies only to submenu actions in this menu, not nested menus they create. */
@@ -825,6 +828,7 @@ export class Menu extends ActionBar {
 			buttonStyles: this.options.buttonStyles,
 			keybindingLabelStyles: this.options.keybindingLabelStyles,
 			ariaDescription: this.options.getAriaDescription?.(action),
+			tooltip: this.options.getTooltip?.(action),
 			onDidSelect: this.options.onDidSelect,
 			openSubmenusImmediatelyOnHover: this.options.openSubmenusImmediatelyOnHover,
 			submenuLayer: (this.options.layer ?? 20) + 1,

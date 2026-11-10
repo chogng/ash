@@ -3,6 +3,7 @@ import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaul
 import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { agentHostConnectionAddress, IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
@@ -13,15 +14,15 @@ import { RemotesWidget } from './remotesWidget.js';
 import { canonicalRemoteConnectionDefinition, IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 
-function hostStatus(state: IAgentHostConnectionInfo['state']): string {
+function hostStatus(state: IAgentHostConnectionInfo['state']) {
 	switch (state) {
-		case 'ready': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.connected' }, 'Connected');
+		case 'ready': return { label: localize({ bundle: 'ash.workbench', key: 'agentHosts.status.connected' }, 'Connected'), icon: Lxicon.check };
 		case 'starting':
-		case 'initializing': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.connecting' }, 'Connecting');
-		case 'restarting': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.reconnecting' }, 'Reconnecting');
-		case 'stopping': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.disconnecting' }, 'Disconnecting');
+		case 'initializing': return { label: localize({ bundle: 'ash.workbench', key: 'agentHosts.status.connecting' }, 'Connecting'), icon: Lxicon.progress };
+		case 'restarting': return { label: localize({ bundle: 'ash.workbench', key: 'agentHosts.status.reconnecting' }, 'Reconnecting'), icon: Lxicon.progress };
+		case 'stopping': return { label: localize({ bundle: 'ash.workbench', key: 'agentHosts.status.disconnecting' }, 'Disconnecting'), icon: Lxicon.progress };
 		case 'stopped':
-		case 'crashed': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.disconnected' }, 'Disconnected');
+		case 'crashed': return { label: localize('sessions.remotes.offline', 'Host offline'), icon: Lxicon.circle };
 	}
 }
 
@@ -120,10 +121,12 @@ export class SSHAgentHostContribution extends Disposable {
 					actions: [
 						...(canReconnect(info) ? [{
 							id: 'reconnect', label: localize('sessions.remotes.reconnect', 'Reconnect'),
+							tooltip: localize('sessions.remotes.reconnectHelp', 'Try to reconnect to this host.'),
 							run: () => this.remoteHosts.reconnect(info.id),
 						}] : []),
 						{
 							id: 'disconnect', label: localize('sessions.remotes.disconnect', 'Disconnect'),
+							tooltip: localize('sessions.remotes.disconnectHelp', 'Close the connection to this host.'),
 							run: () => this.remoteHosts.disconnect(info.id),
 						},
 					],
@@ -131,7 +134,11 @@ export class SSHAgentHostContribution extends Disposable {
 			});
 			return [...connected, ...saved.filter(target => !connected.some(row => row.id === agentHostConnectionAddress(target))).map(target => ({
 				id: agentHostConnectionAddress(target), name: target.name, address: `${target.host} · ${target.workspace}`, status: hostStatus('stopped'),
-				actions: [{ id: 'connect', label: localize('sessions.remotes.connect', 'Connect'), run: () => this.connect(target) }],
+				actions: [{
+					id: 'connect', label: localize('sessions.remotes.connect', 'Connect'),
+					tooltip: localize('sessions.remotes.connectHelp', 'Connect to this saved host.'),
+					run: () => this.connect(target),
+				}],
 			}))];
 		}, this.hosts.onDidChangeConnections, reportError);
 		this.manager.value = manager;

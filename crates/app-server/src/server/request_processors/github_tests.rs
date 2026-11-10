@@ -223,6 +223,7 @@ impl github::GitHubProvider for CiProvider {
                     github::PullRequestChecks {
                         status: github::PullRequestChecksStatus::Failure,
                         latest_check_at_unix_ms: Some(1_791_280_800_000),
+                        unreported_required_checks: vec!["gate".into()],
                     },
                 ))
             }
@@ -292,7 +293,7 @@ fn ci_requests_cross_the_real_domain_provider_and_return_generated_dto_fields() 
             .unwrap();
         assert_eq!(
             checks,
-            serde_json::json!({"status":"failure","latestCheckAtUnixMs":1_791_280_800_000_i64})
+            serde_json::json!({"status":"failure","latestCheckAtUnixMs":1_791_280_800_000_i64,"unreportedRequiredChecks":["gate"]})
         );
         let mut details_params = params.clone();
         details_params["page"] = 2.into();

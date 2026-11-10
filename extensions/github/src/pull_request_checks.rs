@@ -223,6 +223,7 @@ impl GitHub {
         let stale_checks = PullRequestChecks {
             status: PullRequestChecksStatus::Pending,
             latest_check_at_unix_ms: None,
+            unreported_required_checks: Vec::new(),
         };
         let mut checks = Vec::new();
         let mut cursor: Option<String> = None;
@@ -398,9 +399,12 @@ fn summarize_checks(checks: &[Check], mut unreported: HashSet<String>) -> PullRe
     if status != Failure && !unreported.is_empty() {
         status = Pending;
     }
+    let mut unreported_required_checks: Vec<_> = unreported.into_iter().collect();
+    unreported_required_checks.sort_unstable();
     PullRequestChecks {
         status,
         latest_check_at_unix_ms,
+        unreported_required_checks,
     }
 }
 

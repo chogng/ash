@@ -71,16 +71,17 @@ class GitHubTransport implements AppServerTransport {
 				this.respond(request, { number: 8, title: 'Fix GitHub links', body: 'Pull request details', url: 'https://github.com/team/repo/pull/8', state: state === 'merged' || state === 'closed' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06T00:00:00Z' : null, headCommit: sha, headBranch: 'feature/links', headRepository: query.has('deletedSource') ? null : 'contributor/fork', baseBranch: 'main', mergeable: query.has('conflicts') ? false : null, autoMerge: false });
 				break;
 			}
-			case 'github/checks': this.heldChecks = request; break;
+			case 'github/pullRequest/checks': this.heldChecks = request; break;
 			case 'github/commit/read': this.respond(request, { sha, url: `https://github.com/team/repo/commit/${sha}`, message: 'Improve links\n\nCommit description', author: 'Alex', committedAt: '2026-10-04T12:00:00Z', additions: 12, deletions: 3 }); break;
 			case 'github/cancel': this.respond(request, { status: 'requested' }); break;
 			default: throw new Error(`Unexpected GitHub request: ${request.method}`);
 		}
 	}
 	private respond(request: Request, result: unknown): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) }); }
-	public releaseChecks(outcome: 'success' | 'failure' | 'mixed' = 'success'): void {
+	public releaseChecks(outcome: 'success' | 'failure' | 'mixed' | 'pending' = 'success'): void {
 		if (!this.heldChecks) { throw new Error('No pending checks'); }
-		this.respond(this.heldChecks, { state: outcome === 'success' ? 'success' : 'failure', statuses: outcome === 'mixed' ? [{ state: 'pending', context: 'build', description: null, targetUrl: null }] : [], checks: [{ id: 1, name: 'tests', status: 'completed', conclusion: outcome === 'success' ? 'success' : 'failure', detailsUrl: null }], nextPage: null });
+		const unreportedRequiredChecks = outcome === 'mixed' || outcome === 'pending' ? ['gate'] : undefined;
+		this.respond(this.heldChecks, { status: outcome === 'mixed' ? 'failure' : outcome, unreportedRequiredChecks });
 		this.heldChecks = undefined;
 	}
 	public releaseIssue(): void {
@@ -148,6 +149,6 @@ window.ashGitHubIntegration = {
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 declare global {
 	interface Window {
-		ashGitHubIntegration: { requests: Request[]; opened: string[]; releaseChecks(outcome?: 'success' | 'failure' | 'mixed'): void; releaseIssue(): void; render(text: string): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; setVerbosity(value: boolean): Promise<void>; accessibleContent(type: AccessibleViewType): string; dispose(): void; };
+		ashGitHubIntegration: { requests: Request[]; opened: string[]; releaseChecks(outcome?: 'success' | 'failure' | 'mixed' | 'pending'): void; releaseIssue(): void; render(text: string): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; setVerbosity(value: boolean): Promise<void>; accessibleContent(type: AccessibleViewType): string; dispose(): void; };
 	}
 }

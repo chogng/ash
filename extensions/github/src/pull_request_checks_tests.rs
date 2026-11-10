@@ -54,6 +54,7 @@ async fn combines_classic_protection_with_rulesets_and_waits_for_an_unreported_r
         .await
         .unwrap();
     assert_eq!(status.status, PullRequestChecksStatus::Pending);
+    assert_eq!(status.unreported_required_checks, ["gate"]);
     let requests = http.requests.lock().unwrap();
     assert!(requests[1].url().ends_with("branches/release%2Fstable"));
     assert!(
@@ -213,6 +214,7 @@ fn no_branch_requirements_use_all_reported_checks_and_an_empty_rollup_is_neutral
         PullRequestChecks {
             status: PullRequestChecksStatus::Neutral,
             latest_check_at_unix_ms: None,
+            unreported_required_checks: Vec::new(),
         },
     );
 }
@@ -231,6 +233,7 @@ fn failing_rollup_keeps_the_latest_timestamp_after_the_first_failure() {
         PullRequestChecks {
             status: PullRequestChecksStatus::Failure,
             latest_check_at_unix_ms: Some(25_125),
+            unreported_required_checks: Vec::new(),
         },
     );
 }

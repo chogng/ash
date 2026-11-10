@@ -5,13 +5,11 @@ import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js'
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import type { ILinkPresentation, ILinkPresentationStatus } from '../../../../platform/dataChannel/common/dataChannel.js';
-import type { GitHubChecks, GitHubCommit, GitHubIssueDetails, GitHubPullRequest, GitHubRepositoryInfo } from '../../../../platform/github/common/githubService.js';
+import type { GitHubCommit, GitHubIssueDetails, GitHubPullRequest, GitHubPullRequestChecks, GitHubPullRequestChecksStatus, GitHubRepositoryInfo } from '../../../../platform/github/common/githubService.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { computeIssueIcon } from '../../../common/chatIssue.js';
 import { computePullRequestIcon, type ChatPullRequestState } from '../../../common/chatPullRequest.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
-
-export type GitHubChecksStatus = 'pending' | 'success' | 'failure' | 'neutral';
 
 export interface IGitHubResourceHover extends IDisposable {
 	readonly element: HTMLElement;
@@ -36,7 +34,7 @@ export interface IIssueResourceHoverData extends ResourceHoverData {
 export interface IPullRequestResourceHoverData extends ResourceHoverData {
 	readonly number: number;
 	readonly pullRequest: GitHubPullRequest;
-	readonly checksStatus?: GitHubChecksStatus;
+	readonly checks?: GitHubPullRequestChecks;
 	readonly onDidClickBaseBranch: () => void;
 	readonly headBranchLink: { readonly href: string; readonly onClick: () => void; } | undefined;
 }
@@ -87,7 +85,7 @@ export function createIssueResourceHover(data: IIssueResourceHoverData): IGitHub
 export function createPullRequestResourceHover(data: IPullRequestResourceHoverData): IGitHubResourceHover {
 	const state = getPullRequestResourceStatus(data.pullRequest);
 	const card = resourceHover(data, data.pullRequest.title, `#${data.number}`, state.label, data.pullRequest.body);
-	const icon = computePullRequestIcon(state.kind, { hasMergeConflicts: data.pullRequest.mergeable === false, hasFailingChecks: data.checksStatus === 'failure' });
+	const icon = computePullRequestIcon(state.kind, { hasMergeConflicts: data.pullRequest.mergeable === false, hasFailingChecks: data.checks?.status === 'failure' });
 	const status = card.element.querySelector<HTMLElement>('.ash-github-hover-metadata')!;
 	const glyph = appendIcon(icon, status);
 	glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
@@ -102,10 +100,18 @@ export function createPullRequestResourceHover(data: IPullRequestResourceHoverDa
 	} else {
 		branches.append($('span', undefined, data.pullRequest.headBranch));
 	}
-	if (data.checksStatus) {
-		card.element.append($('span.ash-github-hover-metadata', undefined, getPullRequestChecksStatusLabel(data.checksStatus)));
+	card.element.dataset.githubContent += `\n\n${data.pullRequest.baseBranch} ← ${data.pullRequest.headBranch}`;
+	if (data.checks && data.checks.status !== 'neutral') {
+		const label = getPullRequestChecksStatusLabel(data.checks.status);
+		card.element.append($('span.ash-github-hover-metadata', undefined, label));
+		card.element.dataset.githubContent += `\n${label}`;
 	}
-	card.element.dataset.githubContent += `\n\n${data.pullRequest.baseBranch} ← ${data.pullRequest.headBranch}${data.checksStatus ? `\n${getPullRequestChecksStatusLabel(data.checksStatus)}` : ''}`;
+	const missing = data.checks?.unreportedRequiredChecks;
+	if (missing?.length) {
+		const label = localize('github.checks.unreportedRequired', 'Waiting for required checks to report: {0}', missing.join(', '));
+		card.element.append($('span.ash-github-hover-metadata', undefined, label));
+		card.element.dataset.githubContent += `\n${label}`;
+	}
 	return card;
 }
 
@@ -144,25 +150,11 @@ export function getPullRequestResourceStatus(pullRequest: GitHubPullRequest): IL
 	return { kind: 'open', label: pullRequest.mergeable === false ? `${label} · ${localize('github.mergeConflicts', 'Merge conflicts')}` : label };
 }
 
-export function getPullRequestChecksStatus(checks: GitHubChecks | undefined): GitHubChecksStatus | undefined {
-	if (!checks || checks.checks.length + checks.statuses.length === 0) {
-		return undefined;
-	}
-	if (checks.checks.some(check => ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'stale'].includes(check.conclusion!)) || checks.statuses.some(status => status.state === 'failure' || status.state === 'error')) {
-		return 'failure';
-	}
-	if (checks.checks.some(check => check.status !== 'completed') || checks.statuses.some(status => status.state === 'pending' || status.state === 'expected')) {
-		return 'pending';
-	}
-	return checks.checks.some(check => check.conclusion === 'success') || checks.statuses.some(status => status.state === 'success') ? 'success' : 'neutral';
-}
-
-export function getPullRequestChecksStatusLabel(status: GitHubChecksStatus): string {
+export function getPullRequestChecksStatusLabel(status: Exclude<GitHubPullRequestChecksStatus, 'neutral'>): string {
 	switch (status) {
 		case 'pending': return localize('github.checks.pending', 'Checks pending');
 		case 'failure': return localize('github.checks.failure', 'Checks failed');
 		case 'success': return localize('github.checks.success', 'Checks passed');
-		case 'neutral': return localize('github.checks.neutral', 'Checks completed');
 	}
 }
 

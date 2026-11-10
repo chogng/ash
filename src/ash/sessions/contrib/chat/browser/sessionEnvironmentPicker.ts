@@ -98,6 +98,7 @@ export class SessionEnvironmentPicker extends Disposable {
 				className: 'ash-sessions-environment-menu ash-action-widget-accent-checks',
 				menuIconPlacement: 'leading-with-trailing-check',
 				showFilter: true,
+				showRowTooltips: true,
 				focusFilterOnOpen: true,
 				filterPlaceholder: localize('sessions.environment.search', 'Search environments'),
 				ariaLabel: localize('sessions.environment.menu', 'Run on'),
@@ -236,6 +237,9 @@ export class SessionEnvironmentPicker extends Disposable {
 			kind: ActionListItemKind.Action,
 			id: `provider:${provider.id}`,
 			label: this.label(provider.id, provider.label),
+			detail: provider.id === LOCAL_AGENT_HOST_PROVIDER_ID
+				? localize('sessions.environment.localHelp', 'Run on this computer.')
+				: localize('sessions.environment.remoteHostHelp', 'Run on {0}.', provider.label),
 			group: { title: '', icon: provider.id === LOCAL_AGENT_HOST_PROVIDER_ID ? Lxicon.local : Lxicon.remote },
 			checked: provider.id === draft.providerId && !draft.environment,
 			disabled: provider.connectionStatus?.get() === 'disconnected',
@@ -252,6 +256,7 @@ export class SessionEnvironmentPicker extends Disposable {
 			if (wslProviders.some(provider => provider.label === distro)) continue;
 			items.push({
 				kind: ActionListItemKind.Action, id: `wsl:${distro}`, label: localize('sessions.environment.wslDistro', 'WSL: {0}', distro), checked: false,
+				detail: localize('sessions.environment.wslHelp', 'Connect to the {0} WSL distribution.', distro),
 				group: { title: '', icon: Lxicon.remote },
 				item: async () => {
 					const target = await this.commands.executeCommand<RemoteAgentHostConnection | undefined>('sessions.action.connectWSLAgentHost', distro);
@@ -293,13 +298,14 @@ export class SessionEnvironmentPicker extends Disposable {
 			label: target.name,
 			group: { title: '', icon: Lxicon.remote },
 			badge: localize('sessions.environment.disconnectedStatus', 'Disconnected'),
-			detail: target.host,
+			detail: localize('sessions.environment.sshHostHelp', 'Connect to the saved SSH host {0}.', target.host),
 			checked: false,
 			item: () => this.connect(draft, target),
 		})));
 		items.push(...offlineTunnels.map(endpoint => ({
 			kind: ActionListItemKind.Action,
 			label: tunnelEnvironmentLabel(endpoint),
+			detail: localize('sessions.environment.tunnelHostHelp', 'Reconnect to this saved Ash Tunnel.'),
 			group: { title: '', icon: Lxicon.remote },
 			badge: localize('sessions.environment.disconnectedStatus', 'Disconnected'),
 			checked: false,
@@ -322,6 +328,7 @@ export class SessionEnvironmentPicker extends Disposable {
 			const provider = this.providers.getProvider(saved.providerId);
 			items.push({
 				kind: ActionListItemKind.Action, id: key, label: saved.environment.name,
+				detail: localize('sessions.environment.profileHelp', 'Use the saved environment settings.'),
 				disabled: !provider || provider.connectionStatus?.get() === 'disconnected',
 				checked: draft.environment?.id === saved.environment.id && draft.providerId === saved.providerId,
 				item: () => this.applyEnvironment(draft, saved.providerId, saved.environment),
@@ -334,14 +341,17 @@ export class SessionEnvironmentPicker extends Disposable {
 			};
 			items.push({
 				kind: ActionListItemKind.Action, id: 'remote', label: localize('sessions.environment.remote', 'Remote'),
+				detail: localize('sessions.environment.remoteHelp', 'Choose how to connect to a remote host.'),
 				group: { title: '', icon: Lxicon.remote },
 				submenu: [
 					{
 						kind: ActionListItemKind.Action, label: localize('sessions.environment.ssh', 'SSH'),
+						detail: localize('sessions.environment.sshHelp', 'Add an SSH connection using an OpenSSH host alias.'),
 						disabled: !this.connections.available, item: () => connect('ssh'),
 					},
 					{
 						kind: ActionListItemKind.Action, label: localize('sessions.environment.tunnel', 'Ash Tunnel'),
+						detail: localize('sessions.environment.tunnelHelp', 'Connect using an authenticated Ash Tunnel URL.'),
 						item: () => connect('tunnel'),
 					},
 				],
@@ -349,9 +359,11 @@ export class SessionEnvironmentPicker extends Disposable {
 		}
 		items.push({
 			kind: ActionListItemKind.Action, label: localize('sessions.environment.cloud', 'Cloud'),
+			detail: localize('sessions.environment.cloudHelp', 'Cloud execution is unavailable.'),
 			group: { title: '', icon: Lxicon.cloud }, disabled: true,
 		}, { kind: ActionListItemKind.Separator, label: '' }, {
 			kind: ActionListItemKind.Action, id: 'newEnvironment', label: localize('sessions.environment.newEnvironment', 'New Environment'),
+			detail: localize('sessions.environment.newEnvironmentHelp', 'Save a reusable environment for this conversation.'),
 			group: { title: '', icon: Lxicon.add },
 			item: openNewEnvironment,
 		});

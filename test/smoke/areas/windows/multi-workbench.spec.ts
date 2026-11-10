@@ -1,7 +1,7 @@
 import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { readFile, readdir, realpath } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { expect, test } from '../../../automation/test.js';
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from '../../../automation/testWorkspace.js';
@@ -125,10 +125,11 @@ focusTest('Open in Agents reuses one window across Workbench workspaces', { tag:
 		// Renderer restoration and the OS focus transition complete independently.
 		await waitForElectronWindowState(application, agentsPage, { focused: true });
 		await expect.poll(() => readWindowLogs(application, agentsWindowId!)).toContainEqual(expect.objectContaining({ source: `window-${agentsWindowId}`, category: 'lifecycle', message: 'Agents restored' }));
-		await secondPage.evaluate(async () => {
-			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<void>; }; }; }).ash.ipcRenderer;
-			await ipc.invoke('ash:native-host:open-agents-window');
-		});
+		const draftText = 'Unsent draft from the second workspace';
+		await secondPage.evaluate(async draft => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, options?: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
+			await ipc.invoke('ash:native-host:open-agents-window', draft ? { draft: { mode: 'agent', text: draft, contexts: [] } } : undefined);
+		}, target.appServerMode === 'required' ? draftText : undefined);
 
 		await waitForElectronWindowState(application, agentsPage, { focused: true });
 		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(window => window.webContents.getURL().includes('sessions/electron-browser/sessions.html')).length)).toBe(1);
@@ -136,6 +137,11 @@ focusTest('Open in Agents reuses one window across Workbench workspaces', { tag:
 		await expect.poll(() => canonicalWorkspacePath(agentsPage)).toBe(await realpath(secondWorkspace.directory));
 		await expect(agentsPage.locator('.ash-code-sessions-window')).toBeVisible();
 		if (target.appServerMode === 'required') {
+			await agentsPage.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+			const composer = agentsPage.locator('.ash-sessions-chat-slot.active:visible');
+			await expect(composer.locator('.ash-chat-input-editor .stanza-editor-line-text').first()).toHaveText(draftText);
+			const folder = composer.locator('.ash-sessions-workspace-picker');
+			await expect.poll(() => folder.getAttribute('aria-label')).toContain(basename(secondWorkspace.directory));
 			const reusedConnection = await agentsPage.evaluate(async () => {
 				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ generation: number; }>; }; }; }).ash.ipcRenderer;
 				return ipc.invoke('ash:remote:connection');

@@ -28,6 +28,16 @@
 	gap: var(--ash-spacing-size40);
 }
 
+.ash-remote-environments-connection-status {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--ash-spacing-size60);
+}
+
+.ash-remote-environments-connection-status .ash-icon {
+	flex-shrink: 0;
+}
+
 .ash-remote-environments [role="status"]:empty {
 	display: none;
 }
