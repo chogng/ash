@@ -10,7 +10,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { groupChatList, IChatListCatalog, type ChatListGroup } from '../../chat/browser/chatListModel.js';
 import type { ConversationProjectEditor, SessionsCatalogProjectOperations } from '../../sessions/browser/views/sessionsCatalogList.js';
-import type { ChatProjectEdit } from './projectDialogService.js';
+import { readCatalogProjectEdit, type ChatProjectEdit } from './projectDialogService.js';
 import { IProjectsService, type ProjectSortOrder } from './projectsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { type MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
@@ -24,10 +24,7 @@ export const ARCHIVE_PROJECT_COMMAND = 'projects.archive';
 const sidebarProjectActions = [
 	{ key: 'pin', group: '1_edit', order: 0, icon: Lxicon.pin, title: localize('sessions.list.pinProject', 'Pin') },
 	{ key: 'unpin', group: '1_edit', order: 0, icon: Lxicon.pinFilled, title: localize('sessions.list.unpinProject', 'Unpin') },
-	{ key: 'rename', group: '1_edit', order: 1, icon: Lxicon.edit, title: localize('sessions.list.rename', 'Rename') },
 	{ key: 'edit', group: '2_appearance', order: 1, icon: Lxicon.gear, title: localize({ bundle: 'ash.menu', key: 'edit' }, 'Edit') },
-	{ key: 'icon', group: '2_appearance', order: 1, title: localize('sessions.list.changeProjectIcon', 'Change Icon...') },
-	{ key: 'color', group: '2_appearance', order: 2, title: localize('sessions.list.changeProjectColor', 'Change Color...') },
 	{ key: 'archive', group: '3_remove', order: 1, icon: Lxicon.archive, title: localize('projects.archive', 'Archive') },
 	{ key: 'remove', group: '3_remove', order: 2, icon: Lxicon.trash, title: localize('projects.delete', 'Delete'), destructive: true },
 ] as const;
@@ -47,15 +44,15 @@ CommandsRegistry.registerMany(sidebarProjectActions.map(({ key }) => ({
 	},
 })));
 
-function registerSidebarProjectActions(menuId: MenuId): void {
+function registerSidebarProjectActions(menuId: MenuId, editTitle: string): void {
 	MenusRegistry.appendMenuItems(sidebarProjectActions.map(({ key, group, order, title, ...appearance }) => ({
 		id: menuId,
-		item: { command: { id: `sessions.sidebarProject.${key}`, title, ...appearance }, group, order, when: ContextKeyExpr.has(`sidebarProject.${key}`) },
+		item: { command: { id: `sessions.sidebarProject.${key}`, title: key === 'edit' ? editTitle : title, ...appearance }, group, order, when: ContextKeyExpr.has(`sidebarProject.${key}`) },
 	})));
 }
 
-registerSidebarProjectActions(Menus.SidebarChatProjectContext);
-registerSidebarProjectActions(Menus.SidebarCodeProjectContext);
+registerSidebarProjectActions(Menus.SidebarChatProjectContext, localize('projects.edit', 'Edit details'));
+registerSidebarProjectActions(Menus.SidebarCodeProjectContext, localize({ bundle: 'ash.menu', key: 'edit' }, 'Edit'));
 
 export function showSidebarProjectMenu(contextMenus: IContextMenuService, context: IContextKeyService,
 	mode: 'chat' | 'code', target: SidebarProjectMenuTarget, presentation: Pick<IContextMenuMenuDelegate, 'getAnchor' | 'onHide'>): void {
@@ -195,23 +192,19 @@ export class ProjectsActions extends Disposable {
 
 	getConversationProjectActions(project: ChatListGroup): readonly IAction[] {
 		const editor = project.project?.editDetails;
+		const key = project.project?.preferenceKey;
 		const editLabel = localize('projects.edit', 'Edit details');
-		const editActions: IAction[] = editor ? [{
+		const editActions: IAction[] = editor || key ? [{
 			id: 'projects.edit',
 			label: editLabel,
 			tooltip: editLabel,
 			icon: Lxicon.edit,
 			enabled: true,
-			run: () => this.editConversationProject(editor),
+			run: () => {
+				const appearance = key ? this.projects.getCatalogProjectAppearance(key) : undefined;
+				return this.loadProjectEdit(signal => readCatalogProjectEdit(project.title, appearance, editor, signal));
+			},
 		}] : [];
-		const key = project.project?.preferenceKey;
-		if (key) {
-			const label = localize({ bundle: 'ash.menu', key: 'edit' }, 'Edit');
-			editActions.unshift({
-				id: 'projects.editAppearance', label, tooltip: label, icon: Lxicon.gear, enabled: true,
-				run: () => this.options.showDialog({ title: project.title, appearance: this.projects.getCatalogProjectAppearance(key) }),
-			});
-		}
 		const archive = project.project?.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog'));
 		const remove = project.project?.remove;
 		return [...editActions, ...getProjectRemovalActions(this.dialogs, project.title, { archive, remove }, operation => this.runRemoval(operation), !this.projects.state.get().busy)];
@@ -272,12 +265,16 @@ export class ProjectsActions extends Disposable {
 		}
 	}
 
-	async editConversationProject(read: (signal: AbortSignal) => Promise<ConversationProjectEditor>, instructionsOnly?: boolean): Promise<void> {
+	editConversationProject(read: (signal: AbortSignal) => Promise<ConversationProjectEditor>, instructionsOnly?: boolean): Promise<void> {
+		return this.loadProjectEdit(async signal => ({ conversation: await read(signal), instructionsOnly }));
+	}
+
+	private async loadProjectEdit(read: (signal: AbortSignal) => Promise<ChatProjectEdit>): Promise<void> {
 		const controller = new AbortController();
 		this.readConversationProject.value = toDisposable(() => controller.abort());
 		try {
-			const editor = await read(controller.signal);
-			if (!controller.signal.aborted && this.options.isVisible()) this.options.showDialog({ conversation: editor, instructionsOnly });
+			const edit = await read(controller.signal);
+			if (!controller.signal.aborted && this.options.isVisible()) this.options.showDialog(edit);
 		} catch (error) {
 			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
 		}

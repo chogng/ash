@@ -18,7 +18,7 @@ import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWor
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogProjectOperations, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
@@ -76,11 +76,12 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly preferenceKey?: string;
 	readonly open: (signal: AbortSignal, threadId?: string) => Promise<void>;
 	readonly rename?: (title: string) => Promise<void>;
+	readonly validateRename?: (title: string) => string | undefined;
 	readonly share?: () => Promise<void>;
 	readonly archive?: () => Promise<boolean>;
 	/** Deletes this conversation after the host confirms the action. */
 	readonly remove?: () => Promise<void>;
-	readonly getActions?: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
+	readonly getActions?: (signal: AbortSignal) => readonly IAction[] | Promise<readonly IAction[]>;
 }
 
 type ProjectHistory =
@@ -343,7 +344,7 @@ export interface ChatListGroup {
 	readonly project?: ChatListProject;
 }
 
-export function getCatalogProjectRename(editDetails: ChatListProject['editDetails']): SessionsCatalogProjectOperations['rename'] {
+export function getCatalogProjectRename(editDetails: ChatListProject['editDetails']): ((name: string, signal: AbortSignal) => Promise<void>) | undefined {
 	if (!editDetails) return undefined;
 	return async (name, signal) => {
 		const editor = await editDetails(signal);
@@ -540,7 +541,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			localProject,
 			appearance: project.project?.preferenceKey ? this.projects.getCatalogProjectAppearance(project.project.preferenceKey) : undefined,
 			operations: {
-				rename: getCatalogProjectRename(project.project?.editDetails),
+				editDetails: project.project?.editDetails,
 				archive: project.project?.archive,
 				remove: project.project?.remove,
 			},
@@ -615,12 +616,14 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			setIcon: iconKey ? icon => this.list.setRowIcon(iconKey, icon?.id, iconScope) : undefined,
 			pinned: entry.pinned,
 			setPinned: entry.setPinned,
+			rename: entry.rename,
+			validateRename: entry.validateRename,
 			organization: () => entry.disabled || entry.actionsDisabled ? undefined : {
 				pinned: entry.pinned, setPinned: entry.setPinned, moveToGroup: entry.moveToGroup, project: project(),
 			},
 			open: threadId => this.openConversation(signal => entry.open(signal, threadId)),
-			getActions: async (signal, restoreFocus) => {
-				const contributed = await entry.getActions?.(signal, restoreFocus);
+			getActions: async signal => {
+				const contributed = await entry.getActions?.(signal);
 				const actions = [...contributed ?? []];
 				if (signal.aborted || !(entry.archive || entry.remove)) return actions;
 				if (actions.length) actions.push(new Separator());

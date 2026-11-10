@@ -1,6 +1,5 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableWindowInterval, disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
-import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -15,7 +14,6 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
@@ -66,7 +64,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		@ICommandService private readonly commands: ICommandService,
 		@IEditorService private readonly editors: IEditorService,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IStorageService private readonly storage: IStorageService,
@@ -165,6 +162,9 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					} : undefined,
 					open: signal => this.open(id, signal),
 					rename, share,
+					validateRename: name => name.length >= 1 && name.length <= 256
+						? undefined
+						: localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
 					remove: async () => { if (currentAccount()) await chat.deleteConversation(id); },
 					archive: canManage ? async () => currentAccount() && await chat.archive(id) : undefined,
 					setPinned: !id.startsWith('pending:') ? async pinned => { if (currentAccount()) await chat.setPinned(id, pinned); } : undefined,
@@ -182,7 +182,12 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 							await this.chat.moveToProject(id, destination ?? null);
 						},
 					} : undefined,
-					getActions: (_signal, restoreFocus) => this.getActions(title, rename, share, restoreFocus),
+					getActions: share && (() => [{
+						id: 'sessions.chatgpt.share',
+						label: localize('sessions.chatgpt.share', 'Share'),
+						tooltip: localize('sessions.chatgpt.share', 'Share'),
+						icon: Lxicon.share, enabled: true, run: share,
+					}]),
 				};
 			});
 			return {
@@ -341,32 +346,12 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		if (!signal.aborted) this.editors.focusActiveEditor();
 	}
 
-	private action(id: string, label: string, icon: IAction['icon'], run: () => unknown): IAction {
-		return { id: `sessions.chatgpt.${id}`, label, tooltip: label, icon, enabled: true, run };
-	}
-
 	private conversationCatalogId(id: string): string {
 		return `${this.chat.native ? 'chatgpt-native' : 'chatgpt'}:${id}`;
 	}
 
 	private forkReference(id: string, state: ChatGPTState, title: string | undefined): ChatListForkReference {
 		return { id: this.conversationCatalogId(id), preferenceKey: conversationPreferenceKey(id, state.catalogScope), title };
-	}
-
-	private getActions(currentTitle: string, rename: ChatListEntry['rename'], share: ChatListEntry['share'], restoreFocus: () => void): readonly IAction[] {
-		if (!rename) return [];
-		const actions = [this.action('rename', localize('sessions.chatgpt.rename', 'Rename'), Lxicon.edit, async () => {
-			const title = await this.quickInput.input({
-				title: localize('sessions.chatgpt.rename', 'Rename'), value: currentTitle,
-				validateInput: async value => value.trim() && value.trim().length <= 256 ? undefined : localize('sessions.chatgpt.invalidTitle', 'Enter a name between 1 and 256 characters.'),
-			});
-			if (title !== undefined) await rename(title);
-			restoreFocus();
-		})];
-		if (share) {
-			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, share));
-		}
-		return actions;
 	}
 
 }

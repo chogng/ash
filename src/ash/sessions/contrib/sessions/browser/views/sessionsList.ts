@@ -7,14 +7,14 @@ import * as chatInputStatePersistence from '../../../../../workbench/contrib/cha
 import { projectForFolder, projectFolders, readCodeProjects, unassignedCodeFolder, workspaceFolderKey } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
-import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
+import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
-import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, isNode } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
-import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
+import { renderInlineRenameInput, showInlineRenameInput } from '../../../../browser/parts/titlebar/inlineRenameInput.js';
 import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -53,9 +53,10 @@ import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
+import { readCatalogProjectEdit, type ChatProjectEdit } from '../../../projects/browser/projectDialogService.js';
 import { IProjectsService, type CatalogProjectAppearance } from '../../../projects/browser/projectsService.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
-import { defaultButtonStyles, defaultInputBoxStyles, defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -63,7 +64,7 @@ import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.
 import { Menus } from '../../../../browser/menus.js';
 import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
-import { DeferredPromise, raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
+import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
@@ -77,6 +78,7 @@ import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js
 import { createSessionPreviewHover, loadSessionHoverBranch } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
+import { IAgentSessionActionsService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
 import { DragAndDropDataKind } from '../../../../../base/browser/ui/dnd/dnd.js';
 import { ObjectTreeElementCollapseState, type TreeDragAndDrop, type TreeDragData } from '../../../../../base/browser/ui/tree/tree.js';
@@ -112,11 +114,11 @@ const codeManagementIcons: typeof managementIcons = {
 };
 
 export type SessionsListPresentation = 'chat' | 'code'
-	| { readonly createProject: () => Promise<void>; }
+	| { readonly createProject: () => Promise<void>; readonly editProject: (id: string, restoreFocus: () => void) => Promise<void>; }
 	| { readonly openCommand: string; readonly activeContext: string; }
 	| {
 		readonly catalog: SessionsCatalogListInput; readonly accessibility: SessionsCatalogAccessibility;
-		readonly editProject?: (title: string, appearance: CatalogProjectAppearance, restoreFocus: () => void) => void;
+		readonly editProject?: (read: (signal: AbortSignal) => Promise<ChatProjectEdit>, restoreFocus: () => void) => Promise<void>;
 	};
 
 interface SessionsListDragOptions {
@@ -223,6 +225,7 @@ export class SessionsList extends DomWidget {
 	private readonly mode: 'chat' | 'code';
 	private readonly entry: Extract<SessionsListPresentation, { openCommand: string; }> | undefined;
 	private readonly editCatalogProject: Extract<SessionsListPresentation, { catalog: SessionsCatalogListInput; }>['editProject'];
+	private readonly editCodeProject: Extract<SessionsListPresentation, { createProject: unknown; }>['editProject'] | undefined;
 	private readonly search: SessionsListSearch;
 	private readonly tree: SessionsListTree;
 	private readonly feedback = this._register(new SessionActionFeedback());
@@ -249,7 +252,7 @@ export class SessionsList extends DomWidget {
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
 	private expandedForkRow: string | undefined;
 	private readonly catalogMenu = this._register(new MutableDisposable());
-	private readonly projectRename = this._register(new MutableDisposable());
+	private readonly inlineRename = this._register(new MutableDisposable<DisposableStore>());
 	private readonly catalogProjects = new Map<string, { readonly load?: () => void; readonly anchor?: HTMLElement; }>();
 	private readonly catalogPaging = this._register(new RunOnceScheduler(() => {
 		if (!this.domNode.isConnected || !this.domNode.clientHeight) return;
@@ -291,12 +294,14 @@ export class SessionsList extends DomWidget {
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
 		@IInstantiationService private readonly instantiation?: IInstantiationService,
 		@IConfigurationService configuration?: IConfigurationService,
+		@IAgentSessionActionsService private readonly sessionActions?: IAgentSessionActionsService,
 	) {
 		super();
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
 		this.editCatalogProject = contributed?.editProject;
 		const code = typeof presentation !== 'string' && 'createProject' in presentation ? presentation : undefined;
+		this.editCodeProject = code?.editProject;
 		const mode = this.mode = typeof presentation === 'string' ? presentation : code ? 'code' : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
 		const showAttention = observableFromEvent(this, listModel.onDidChange, () => !this.entry && listModel.showAttentionGroup);
@@ -648,9 +653,17 @@ export class SessionsList extends DomWidget {
 		const controller = new AbortController();
 		this.catalogMenu.value = toDisposable(() => controller.abort());
 		try {
-			const focus = () => this.tree.focusRow(item.domNode);
-			const actions = [...await row.getActions(controller.signal, focus)];
+			let actions = [...await row.getActions(controller.signal)];
 			if (controller.signal.aborted || !item.domNode.isConnected) return;
+			const rename = row.rename;
+			if (!row.sessionId && rename) {
+				actions = Separator.join([{
+					id: 'sessions.list.renameConversation',
+					label: localize('sessions.list.rename', 'Rename'),
+					tooltip: '', enabled: true, icon: Lxicon.edit,
+					run: () => this.renameConversation(item, row.title, rename, row.validateRename),
+				}], actions);
+			}
 			const project = row.organization()?.project;
 			if (project) {
 				const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
@@ -770,22 +783,22 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showLocalProjectMenu(title: string, project: ProjectSummary, row: ProjectMenuRow, anchor: ContextMenuAnchor): void {
-		this.showProjectMenu(project.id, title, field => this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), {
-			rename: async (name, signal) => {
-				const current = await this.projectService.read(project.id, this.mode);
-				signal.throwIfAborted();
-				await this.projectService.update(current, name, current.description, current.materials);
-			},
+		const editCode = this.editCodeProject;
+		const editChat = this.editCatalogProject;
+		const edit = editCode ? (restoreFocus: () => void) => editCode(project.id, restoreFocus)
+			: editChat && ((restoreFocus: () => void) => editChat(async () => ({
+				project: await this.projectService.read(project.id, 'chat'),
+			}), restoreFocus));
+		this.showProjectMenu(project.id, title, {
 			archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, this.mode),
 			remove: { removesContents: false, run: () => this.projectService.remove(project) },
-		}, row, anchor);
+		}, row, anchor, edit);
 	}
 
-	private showProjectMenu(projectId: string, title: string, change: ((field: 'icon' | 'color') => Promise<void>) | undefined,
-		operations: SessionsCatalogProjectOperations, row: ProjectMenuRow, anchor: ContextMenuAnchor,
-		edit?: (restoreFocus: () => void) => void): void {
+	private showProjectMenu(projectId: string, title: string, operations: SessionsCatalogProjectOperations,
+		row: ProjectMenuRow, anchor: ContextMenuAnchor, edit?: (restoreFocus: () => void) => Promise<void>): void {
 		if (!this.menuContext) return;
-		const { rename, archive, remove } = operations;
+		const { archive, remove } = operations;
 		const trigger = row.getMenuTrigger(anchor);
 		const pinned = this.projectPreferences.isPinned(projectId);
 		const runRemoval = async (operation: () => Promise<boolean | void>): Promise<void> => {
@@ -798,14 +811,11 @@ export class SessionsList extends DomWidget {
 			actions: {
 				pin: pinned ? undefined : () => this.setProjectPinned(projectId, true),
 				unpin: pinned ? () => this.setProjectPinned(projectId, false) : undefined,
-				rename: rename && (() => this.renameProject(title, row.domNode, trigger ?? row.button, rename)),
 				edit: edit && (() => edit(() => {
 					const target = trigger ?? row.button;
 					if (target.isConnected) target.focus({ preventScroll: true });
 					else this.focus();
 				})),
-				icon: change && (() => change('icon')),
-				color: change && (() => change('color')),
 				archive: archive && (() => runRemoval(archive)),
 				remove: remove && (async () => {
 					if (!await confirmProjectDelete(this.dialogs, title, remove.removesContents)) return;
@@ -832,94 +842,64 @@ export class SessionsList extends DomWidget {
 		if (row) this.tree.focusRow(row);
 	}
 
-	private async renameProject(title: string, anchor: HTMLElement, trigger: HTMLElement, rename: NonNullable<SessionsCatalogProjectOperations['rename']>): Promise<void> {
-		if (this.isDisposed || !anchor.isConnected) return;
-		const controller = new AbortController();
-		const lifetime = new DisposableStore();
-		lifetime.add(toDisposable(() => controller.abort()));
-		this.projectRename.value = lifetime;
-		try {
-			const name = await this.promptProjectName(title, anchor, trigger, lifetime);
-			if (controller.signal.aborted || !name || name === title) return;
-			await rename(name, controller.signal);
-			if (!controller.signal.aborted) status(localize('sessions.list.projectRenamed', 'Project renamed to {0}.', name));
-		} catch (error) {
-			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
-		} finally {
-			if (this.projectRename.value === lifetime) this.projectRename.clear();
-		}
-	}
-
-	private promptProjectName(title: string, anchor: HTMLElement, trigger: HTMLElement, lifetime: DisposableStore): Promise<string | undefined> {
-		const document = anchor.ownerDocument;
-		const heading = localize('sessions.list.renameProject', 'Rename project');
-		const form = h(document, 'form', {
-			className: 'ash-sessions-project-rename',
-			attributes: { role: 'dialog', 'aria-label': heading },
-		});
-		const view = lifetime.add(new ContextView(this.domNode));
-		const header = h(document, 'header', { className: 'ash-sessions-project-rename-header' });
-		header.append(h(document, 'h2', { attributes: { title: heading } }, heading));
-		const close = localize('sessions.list.closeProjectRename', 'Close rename dialog');
-		lifetime.add(new Button(header, {
-			...defaultButtonStyles,
-			label: close,
-			title: close,
-			icon: Lxicon.dialogClose,
-			iconOnly: true,
-			onClick: () => view.hide(),
-		}));
-		form.append(header);
-		const input = lifetime.add(new InputBox(form, {
-			ariaLabel: localize('sessions.list.projectName', 'Project name'),
-			inputBoxStyles: defaultInputBoxStyles,
-			presentation: 'field',
-		}));
-		input.value = title;
-		const actions = h(document, 'div', { className: 'ash-sessions-project-rename-actions' });
-		form.append(actions);
-		const result = new DeferredPromise<string | undefined>();
-		lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			size: 'small',
-			label: localize('sessions.list.cancelProjectRename', 'Cancel'),
-			onClick: () => view.hide(),
-		}));
-		lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			presentation: 'primary',
-			size: 'small',
-			label: localize('sessions.list.rename', 'Rename'),
-			type: 'submit',
-		}));
-		lifetime.add(input.onDidChange(() => input.showValidation('')));
-		lifetime.add(addDisposableListener(form, 'submit', event => {
-			event.preventDefault();
-			const name = input.value.trim();
-			if (!name) {
-				input.showValidation(localize('sessions.list.projectNameRequired', 'Enter a project name.'));
-				input.focus();
+	private renameConversation(
+		item: SessionListItem, name: string, rename: (title: string) => Promise<void>,
+		validate = (title: string): string | undefined => title && Array.from(title).length <= 256
+			? undefined : localize('sessions.titlebar.invalidName', 'Enter a name with 1 to 256 characters.'),
+	): void {
+		const row = item.domNode;
+		if (this.isDisposed || !row.isConnected) return;
+		const label = item.button.querySelector('.ash-sessions-list-label')!;
+		const labelBounds = label.getBoundingClientRect();
+		const rowBounds = row.getBoundingClientRect();
+		// Keep the existing title's inset when a row has leading status or pull request icons.
+		const titleInset = getWindow(row).getComputedStyle(row).direction === 'rtl'
+			? rowBounds.right - labelBounds.right : labelBounds.left - rowBounds.left;
+		const store = new DisposableStore();
+		this.inlineRename.value = store;
+		row.classList.add('renaming');
+		store.add(toDisposable(() => row.classList.remove('renaming')));
+		item.hidePreviewHover();
+		let saving = false;
+		const finish = (restoreFocus: boolean): void => {
+			if (this.inlineRename.value !== store) return;
+			this.inlineRename.clear();
+			if (restoreFocus) this.tree.focusRow(row, true);
+		};
+		const save = async (): Promise<void> => {
+			if (saving) return;
+			const title = input.value.trim();
+			const error = validate(title);
+			if (error) {
+				input.setCustomValidity(error);
+				input.setAttribute('aria-invalid', 'true');
+				input.reportValidity();
 				return;
 			}
-			void result.complete(name);
-			view.hide();
-		}));
-		trigger.focus({ preventScroll: true });
-		if (view.show({
-			anchor,
-			content: form,
-			presentation: 'dialog',
-			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-			gap: 8,
-			focusRestore: ContextViewFocusRestore.Previous,
-			onHide: () => { if (!result.isSettled) void result.complete(undefined); },
-		})) {
-			input.focus();
-			input.select();
-		} else if (!result.isSettled) {
-			void result.complete(undefined);
-		}
-		return result.p;
+			if (title === name) {
+				finish(true);
+				return;
+			}
+			saving = input.readOnly = true;
+			try {
+				await rename(title);
+				finish(getActiveElement(input.ownerDocument) === input);
+			} catch (error) {
+				if (!store.isDisposed) {
+					saving = input.readOnly = false;
+					this.notifications.error(toErrorMessage(error));
+					if (getActiveElement(input.ownerDocument) !== input) finish(false);
+				}
+			}
+		};
+		const input = renderInlineRenameInput(row, {
+			label: localize('sessions.titlebar.sessionName', 'Session name'),
+			onAccept: () => { void save(); },
+			onCancel: () => { if (!saving) finish(true); },
+			onBlur: () => { if (!saving) finish(false); },
+		}, store);
+		input.style.setProperty('--sessions-rename-start', `${titleInset}px`);
+		showInlineRenameInput(input, name);
 	}
 
 	private appearanceActions(id: string, change: (field: 'icon' | 'color') => Promise<void>, iconLabel: string, colorLabel: string): IAction[] {
@@ -963,7 +943,7 @@ export class SessionsList extends DomWidget {
 		if (selection.kind === 'untitled') {
 			this.showConversationMenu(item, anchor, [...actions, ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
 				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }))]);
+				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }))], { untitledSessionId: selection.session.untitledSessionId });
 			return;
 		}
 		const { session, threadId } = selection.active;
@@ -974,7 +954,7 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showConversationMenu(item: SessionListItem, anchor: ContextMenuAnchor, actions: IAction[],
-		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; }, pinned = false): void {
+		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; } | { readonly untitledSessionId: string; }, pinned = false): void {
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
 		const workspace = this.mode === 'code' && target && 'sessionId' in target && target.threadId
@@ -992,7 +972,19 @@ export class SessionsList extends DomWidget {
 		}
 		const menu = this.mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
 		this.showRowMenu(item, anchor, {
-			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context)).map(action => {
+			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context))).map(action => {
+				const sessionActions = this.sessionActions;
+				if (action.id === 'agentSession.rename' && sessionActions && target && !('catalogId' in target)) {
+					return {
+						...action,
+						run: () => {
+							const captured = sessionActions.resolveTarget(target);
+							this.renameConversation(item, captured.title, async title => {
+								await sessionActions.renameSession((await captured.resolve()).sessionId, title);
+							});
+						},
+					};
+				}
 				if (action.id === 'agentSession.changeDirectory' && workspace) {
 					return { ...action, label: workspace.label, tooltip: workspace.label, badge: workspace.busyBadge, run: () => action.run() };
 				}
@@ -1009,7 +1001,7 @@ export class SessionsList extends DomWidget {
 					}
 				};
 				return action;
-			})),
+			}),
 			onHide: () => {
 				if (this.rowMenuContext.value === context) this.rowMenuContext.clear();
 			},
@@ -1228,9 +1220,11 @@ export class SessionsList extends DomWidget {
 				} else if (catalogProjectId) {
 					const operations = projectOperations ?? {};
 					const edit = this.editCatalogProject;
-					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, undefined, operations, section, anchor,
-						edit && projectAppearance
-							? restoreFocus => edit(title, projectAppearance, restoreFocus) : undefined));
+					const readDetails = operations.editDetails;
+					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, operations, section, anchor,
+						edit && (readDetails || projectAppearance) ? restoreFocus => edit(
+							signal => readCatalogProjectEdit(title, projectAppearance, readDetails, signal), restoreFocus,
+						) : undefined));
 				} else {
 					section.setContextMenu(undefined);
 				}
@@ -1737,6 +1731,8 @@ class SessionListItem extends AbstractDisposable {
 			}),
 		];
 	}
+
+	hidePreviewHover(): void { this.previewHover.value?.hide(); }
 
 	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
 		this.contextMenu = menu;

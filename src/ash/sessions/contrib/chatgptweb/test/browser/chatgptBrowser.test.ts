@@ -344,8 +344,8 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await research.press('Enter');
 		const sidebarProject = page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Research', exact: true });
 		await sidebarProject.press('Shift+F10');
-		await page.getByRole('menuitem', { name: '编辑', exact: true }).click();
-		const appearanceEditor = page.getByRole('dialog', { name: '编辑项目外观', exact: true });
+		await page.getByRole('menuitem', { name: '编辑详情', exact: true }).click();
+		const appearanceEditor = page.getByRole('dialog', { name: '编辑详情', exact: true });
 		await appearanceEditor.getByRole('button', { name: '更改项目外观' }).press('Enter');
 		const appearancePicker = page.getByRole('dialog', { name: '更改项目外观', exact: true });
 		await appearancePicker.getByRole('combobox', { name: '搜索图标' }).fill('chat');

@@ -116,7 +116,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(requests).toEqual(['first page', 'next page', 'first', 'second', 'first page', 'next page', 'second']);
 	});
 
-	test('sidebar project menu renames, archives, and confirms deletion through the ChatGPT catalog', async () => {
+	test('sidebar project menu edits details, archives, and confirms deletion through the ChatGPT catalog', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		const writes: unknown[] = [];
@@ -144,30 +144,31 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const project = (name: string) => sidebar.getByRole('button', { name, exact: true });
 		const action = (name: string) => page.getByRole('menuitem', { name, exact: true });
 		const more = sidebar.locator('[data-project-id="g-p-sidebar-0"]').getByRole('button', { name: '更多项目操作', exact: true });
-		const openRename = async () => {
+		const openEdit = async () => {
 			await project('Research').press('Shift+F10');
-			await action('重命名').press('Enter');
+			await expect(action('重命名')).toHaveCount(0);
+			await action('编辑详情').press('Enter');
 		};
-		const rename = page.getByRole('dialog', { name: '重命名项目', exact: true });
-		const input = rename.getByRole('textbox', { name: '项目名称', exact: true });
-		await openRename();
-		await expect(rename).not.toHaveAttribute('aria-modal', 'true');
+		const editor = page.getByRole('dialog', { name: '编辑详情', exact: true });
+		const input = editor.getByRole('textbox', { name: '你正在做什么？', exact: true });
+		await openEdit();
 		await expect(input).toBeFocused();
 		await expect(input).toHaveValue('Research');
-		expect(await input.evaluate((element: HTMLInputElement) => element.value.slice(element.selectionStart!, element.selectionEnd!))).toBe('Research');
 		await page.keyboard.press('Escape');
-		await expect(rename).toHaveCount(0);
+		await expect(editor).toHaveCount(0);
 		await expect(project('Research')).toBeFocused();
 		expect(writes).toEqual([]);
 
 		await project('Research').hover();
 		await more.click();
 		await expect(more).toHaveAttribute('aria-expanded', 'true');
-		await action('重命名').click();
+		await action('编辑详情').click();
+		await expect(editor).toBeVisible();
 		await expect(more).toHaveAttribute('aria-expanded', 'false');
-		await input.fill('Discarded');
+		await editor.getByRole('button', { name: '取消', exact: true }).click();
+		await expect(editor).toHaveCount(0);
+
 		await project('Writing').click({ button: 'right' });
-		await expect(rename).toHaveCount(0);
 		const deleteAction = action('删除');
 		const dangerColor = 'rgb(244, 135, 113)';
 		await expect(deleteAction.getByText('删除', { exact: true })).toHaveCSS('color', dangerColor);
@@ -179,14 +180,12 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await page.keyboard.press('Escape');
 		expect(writes).toEqual([]);
 
-		await openRename();
+		await openEdit();
+		const save = editor.getByRole('button', { name: '保存更改', exact: true });
 		await input.fill('   ');
-		await input.press('Enter');
-		await expect(rename).toContainText('请输入项目名称。');
-		await expect(input).toBeFocused();
-		expect(writes).toEqual([]);
+		await expect(save).toBeDisabled();
 		await input.fill('  Updated research  ');
-		await input.press('Enter');
+		await save.click();
 		await expect(project('Updated research')).toBeVisible();
 		expect(writes).toEqual([{ name: 'Updated research', instructions: 'Saved notes', emoji: null, theme: 'blue' }]);
 		await project('Updated research').press('Shift+F10');
@@ -232,8 +231,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const research = sidebar.getByRole('button', { name: 'Research', exact: true });
 		const writing = sidebar.getByRole('button', { name: 'Writing', exact: true });
 		const iconSlot = research.locator('.ash-sessions-list-project-icon');
-		const edit = page.getByRole('menuitem', { name: '编辑', exact: true });
-		const editor = page.getByRole('dialog', { name: '编辑项目外观', exact: true });
+		const edit = page.getByRole('menuitem', { name: '编辑详情', exact: true });
+		const editor = page.getByRole('dialog', { name: '编辑详情', exact: true });
 		const appearance = editor.getByRole('button', { name: '更改项目外观' });
 		const picker = page.getByRole('dialog', { name: '更改项目外观', exact: true });
 		const search = picker.getByRole('combobox', { name: '搜索图标' });
@@ -303,7 +302,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(iconSlot.locator('[data-ash-icon-id="projects"]')).toHaveCount(1);
 		await expect(card.locator('[data-ash-icon-id="projects"]')).toBeVisible();
 		await expect(iconSlot).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
-		expect(projectRequests).toBe(0);
+		expect(projectRequests).toBeGreaterThan(0);
 	});
 
 	test('the Chat sidebar shows Ash and ChatGPT rows and excludes Code', async () => {
@@ -943,7 +942,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.getByRole('menuitem', { name: zh ? '编辑详情' : 'Edit details', exact: true }).click();
 			const dialog = page.getByRole('dialog');
 			await expect(dialog.getByRole('textbox').nth(1)).toHaveValue('Saved notes');
-			await expect(dialog.getByRole('button', { name: zh ? '更改项目外观' : 'Change project appearance' })).toHaveCount(0);
+			await expect(dialog.getByRole('button', { name: zh ? '更改项目外观' : 'Change project appearance' })).toBeVisible();
 			await dialog.getByRole('textbox').first().fill('Updated research');
 			const [write] = await Promise.all([
 				page.waitForRequest(request => request.method() === 'PATCH' && request.url().endsWith('/projects/g-p-research')),
@@ -1608,11 +1607,46 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await row.dragTo(recent);
 			await expect.poll(() => writes.some(write => write.body?.is_starred === false)).toBe(true);
 			await expect(row).toHaveAttribute('data-parent-section', 'recent');
+			const titleBounds = (await title.locator('.ash-sessions-list-label').boundingBox())!;
+			await title.click({ button: 'right' });
+			await page.getByRole('menuitem', { name: labels.rename, exact: true }).click();
+			const name = row.getByRole('textbox', { name: zh ? '会话名称' : 'Session name', exact: true });
+			await expect(name).toBeFocused();
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			await page.locator('#editor').hover();
+			await expect(toolbar).toBeHidden();
+			await expect(name).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(name).toHaveCSS('border-top-width', '0px');
+			if (zh) {
+				await expect(row).toHaveCSS('outline-style', 'solid');
+			} else {
+				await expect(row).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			}
+			const inputBounds = (await name.boundingBox())!;
+			const rowBounds = (await row.boundingBox())!;
+			expect(Math.abs(inputBounds.x - titleBounds.x)).toBeLessThanOrEqual(1);
+			expect(Math.abs(inputBounds.y + inputBounds.height / 2 - titleBounds.y - titleBounds.height / 2)).toBeLessThanOrEqual(1);
+			expect(inputBounds.y).toBeGreaterThanOrEqual(rowBounds.y);
+			expect(inputBounds.y + inputBounds.height).toBeLessThanOrEqual(rowBounds.y + rowBounds.height);
+			expect(await name.evaluate(input => {
+				const field = input as HTMLInputElement;
+				return field.value.slice(field.selectionStart!, field.selectionEnd!);
+			})).toBe('Synthetic conversation');
+			await name.fill('  ');
+			await name.press('Enter');
+			await expect(name).toHaveAttribute('aria-invalid', 'true');
+			await name.fill('Cancelled name');
+			await name.press('Escape');
+			await expect(name).toHaveCount(0);
+			await expect(title).toBeFocused();
+			expect(writes.some(write => write.path.endsWith('/rename'))).toBe(false);
 			await openMore();
 			await page.getByRole('menuitem', { name: labels.rename, exact: true }).click();
-			const name = page.getByRole('textbox', { name: labels.rename, exact: true });
-			await name.fill('Renamed conversation');
+			await expect(name).toBeFocused();
+			await expect(name).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await name.fill('  Renamed conversation  ');
 			await name.press('Enter');
+			await expect(name).toHaveCount(0);
 			await expect(title).toHaveText('Renamed conversation');
 			await openMore();
 			await page.getByRole('menuitem', { name: labels.share, exact: true }).click();

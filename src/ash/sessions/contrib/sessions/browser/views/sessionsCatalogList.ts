@@ -34,9 +34,11 @@ export interface SessionsCatalogRow {
 	readonly setIcon?: (icon: Icon | undefined) => void;
 	readonly pinned?: boolean;
 	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
+	readonly rename?: (title: string) => Promise<void>;
+	readonly validateRename?: (title: string) => string | undefined;
 	organization(): SessionListOrganization | undefined;
 	open(threadId?: string): void;
-	getActions(signal: AbortSignal, restoreFocus: () => void): readonly IAction[] | Promise<readonly IAction[]>;
+	getActions(signal: AbortSignal): readonly IAction[] | Promise<readonly IAction[]>;
 }
 
 export interface SessionsCatalogProject {
@@ -58,7 +60,7 @@ export interface ConversationProjectEditor {
 }
 
 export interface SessionsCatalogProjectOperations {
-	readonly rename?: (name: string, signal: AbortSignal) => Promise<void>;
+	readonly editDetails?: (signal: AbortSignal) => Promise<ConversationProjectEditor>;
 	readonly archive?: () => Promise<boolean>;
 	readonly remove?: { readonly removesContents: boolean; run(): Promise<void>; };
 }
