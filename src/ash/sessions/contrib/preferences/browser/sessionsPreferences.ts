@@ -583,6 +583,7 @@ export class SessionsPreferences extends Disposable {
 		const defaults = new DefaultSettings();
 		const appearanceSettings: readonly ISetting[] = [
 			...[SESSIONS_LAYOUT_SCOPE_SETTING, SessionsConfiguration.layoutStyle, SessionsConfiguration.activityBarLocation].map(id => defaults.get(id)),
+			defaults.get(SessionsConfiguration.showSessionActivityBar),
 			defaults.get(SessionsConfiguration.interfaceFontFamily),
 			{
 				...defaults.get(ChatConfiguration.FontFamily),

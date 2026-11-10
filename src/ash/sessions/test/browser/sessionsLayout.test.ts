@@ -1208,6 +1208,61 @@ suite('sessions browser component', () => {
 		}
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`the session activity bar moves Code tools beside the conversation in ${locale}`, async () => {
+		const { page } = browserTests;
+		const chinese = locale === 'zh-CN';
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto(`/sessions.html?multiHost&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const conversation = page.locator('[data-part="sessions"]');
+		const grid = conversation.locator('.ash-sessions-chat-grid');
+		const bar = conversation.getByRole('toolbar', { name: chinese ? '会话活动栏' : 'Session Activity Bar', exact: true });
+		const filesSelector = '[data-action-id="ash.sessions.toggleFiles"] button';
+		const changesSelector = '[data-action-id="ash.sessions.toggleChanges"] button';
+		const width = (locator: Locator) => locator.evaluate(element => element.getBoundingClientRect().width);
+		await expect(titlebar.locator(filesSelector)).toBeVisible();
+		await expect(bar).toHaveCount(0);
+		const originalWidth = await width(grid);
+
+		await new QuickAccess(page).runCommand('ash.sessions.toggleSessionActivityBar');
+		await expect(bar).toBeVisible();
+		await expect(bar).toHaveAttribute('aria-orientation', 'vertical');
+		await expect(titlebar.locator(filesSelector)).toHaveCount(0);
+		await expect(titlebar.locator(changesSelector)).toHaveCount(0);
+		await expect.poll(async () => await width(grid) + await width(bar)).toBeCloseTo(originalWidth, 0);
+		const files = bar.locator(filesSelector);
+		const changes = bar.locator(changesSelector);
+		await expect(files).toHaveCSS('width', '24px');
+		await changes.focus();
+		await changes.press('End');
+		await expect(files).toBeFocused();
+		await files.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /按 Tab 进入会话活动栏/u : /Use Tab to reach the Session Activity Bar/u);
+		await page.keyboard.press('Escape');
+		await expect(files).toBeFocused();
+		await files.press('Enter');
+		await expect(page.locator('[data-part="editor"]')).toBeVisible();
+		await expect(files).toHaveAttribute('aria-pressed', 'true');
+		if (chinese) {
+			await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+			await expect(files).toHaveCSS('border-top-color', 'rgb(255, 255, 255)');
+		}
+		await files.press('Shift+F10');
+		const toggle = page.getByRole('menuitem', { name: chinese ? '切换会话活动栏' : 'Toggle Session Activity Bar', exact: true });
+		await expect(toggle).toBeVisible();
+		await toggle.press('Escape');
+		await expect(files).toBeFocused();
+		await files.press('Shift+F10');
+		await toggle.click();
+		await expect(bar).toHaveCount(0);
+		await expect(titlebar.locator(filesSelector)).toHaveAttribute('aria-pressed', 'true');
+		await expect(conversation.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container').getByRole('textbox')).toBeFocused();
+	});
+
 	test('Code window actions and card headers follow opposite sides of the tool divider', async function () {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1440, height: 900 });

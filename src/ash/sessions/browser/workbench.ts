@@ -12,7 +12,7 @@ import { IAgentSessionActionsService, IAgentSessionsService } from '../../workbe
 import { SessionActionsService } from './sessionActionsService.js';
 import { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
 import { ChatHistoryModel } from './chatHistoryModel.js';
-import { Menus } from './menus.js';
+import { Menus, sessionToolMenuItems } from './menus.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { StatusbarService } from '../../workbench/browser/parts/statusbar/statusbarPart.js';
 import { ILanguageServerStatusService } from '../../workbench/services/language/common/languageServerStatusService.js';
@@ -357,6 +357,7 @@ import { installWorkbenchServiceContributions } from '../../workbench/browser/wo
 import { AuxiliaryBarPart } from './parts/auxiliaryBarPart.js';
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
 import { ActivityBar } from './parts/activitybar/activityBarPart.js';
+import { SessionActivityBar } from './parts/sessionActivityBar.js';
 import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompositePart.js';
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
@@ -927,6 +928,9 @@ export abstract class Workbench extends Disposable {
 			services.createInstance(SessionsPart, this.domNode, {
 				newDraftVisible,
 				createComparisonControls: container => services.createInstance(SessionComparisonControls, container),
+				createSessionActivityBar: container => services.createInstance(
+					SessionActivityBar, container, conversationVisible, () => sessionsPart?.focus(),
+				),
 				createCoworkPane: (container, panelId, selection) =>
 					cowork.createPane(container, panelId, selection, () => {
 						view.openNewSession();
@@ -1166,19 +1170,21 @@ export abstract class Workbench extends Disposable {
 				}
 				updateBrowserContext();
 			}));
-			this._register(MenusRegistry.appendMenuItems([Menus.TitleBarRightLayout, MenuId.CommandPalette].map(id => ({
-				id, item: {
-					command: {
-						id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
-						icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
-					},
-					when: ContextKeyExpr.and(
-						ContextKeyExpr.equals('sessions.toolsAvailable', true),
-						id === Menus.TitleBarRightLayout ? ContextKeyExpr.not(IsNewSessionContext.key) : undefined,
-					),
-					group: 'navigation', order: 4.5
+			const browserTool = {
+				command: {
+					id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
+					icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
 				},
-			}))));
+				when: ContextKeyExpr.equals('sessions.toolsAvailable', true),
+				group: 'navigation', order: 4.5,
+			};
+			this._register(MenusRegistry.appendMenuItems([
+				{ id: MenuId.CommandPalette, item: browserTool },
+				...sessionToolMenuItems({
+					...browserTool,
+					when: ContextKeyExpr.and(browserTool.when, ContextKeyExpr.not(IsNewSessionContext.key)),
+				}),
+			]));
 		}
 		setActivityBarLocation(activityBarLocation);
 		const customViews = services.get(ICustomViewService);

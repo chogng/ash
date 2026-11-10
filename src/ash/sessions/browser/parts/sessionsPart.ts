@@ -11,6 +11,7 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import './media/sessionsPart.css';
 import { addDisposableListener, Dimension, h } from '../../../base/browser/dom.js';
+import { observeResize } from '../../../base/browser/observer.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
@@ -54,6 +55,7 @@ export interface SessionsPartOptions {
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
 	readonly createComparisonControls?: (container: HTMLElement) => IDisposable;
+	readonly createSessionActivityBar?: (container: HTMLElement) => IDisposable;
 }
 
 /** Owns one conversation grid and one retained view per visible Session. */
@@ -156,13 +158,14 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		if (options.createComparisonControls) {
 			this._register(options.createComparisonControls(this.contentDomNode));
 		}
-		if (options.createComparisonControls && typeof ResizeObserver !== 'undefined') {
-			const observer = new ResizeObserver(() => {
-				const { width, height } = this.content.getBoundingClientRect();
+		if (options.createSessionActivityBar) {
+			this._register(options.createSessionActivityBar(this.content));
+		}
+		if (options.createComparisonControls || options.createSessionActivityBar) {
+			this._register(observeResize(this.grid.element, () => {
+				const { width, height } = this.grid.element.getBoundingClientRect();
 				if (width && height) this.grid.layout(width, height);
-			});
-			observer.observe(this.content);
-			this._register(toDisposable(() => observer.disconnect()));
+			}));
 		}
 		this._register(
 			storageService.onDidChangeValue(event => {
@@ -508,7 +511,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	override layout(dimension: Dimension): void {
-		const bounds = this.content.getBoundingClientRect();
+		const bounds = this.grid.element.getBoundingClientRect();
 		this.grid.layout(bounds.width || dimension.width, bounds.height || dimension.height);
 	}
 

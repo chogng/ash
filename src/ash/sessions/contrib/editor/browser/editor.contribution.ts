@@ -21,7 +21,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { Menus } from '../../../browser/menus.js';
+import { Menus, sessionToolMenuItems } from '../../../browser/menus.js';
 import { SessionsCategories } from '../../../common/categories.js';
 import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
@@ -287,36 +287,31 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 						order: 100,
 					},
 				},
-				{
-					id: Menus.TitleBarRightLayout,
-					item: {
-						command: {
-							id: 'ash.sessions.toggleFiles',
-							title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
-							icon: Lxicon.folder,
-							toggled: filesVisibleContext.isEqualTo(true),
-						},
-						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.or(
-							IsNewSessionContext.isEqualTo(false),
-							NewSessionHasUsableWorkspaceContext.isEqualTo(true),
-						)),
-						group: 'navigation',
-						order: 5,
+				...sessionToolMenuItems({
+					command: {
+						id: 'ash.sessions.toggleFiles',
+						title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
+						icon: Lxicon.folder,
+						toggled: filesVisibleContext.isEqualTo(true),
 					},
-				},
-				{
-					id: Menus.TitleBarRightLayout,
-					item: {
-						command: {
-							id: 'ash.sessions.toggleChanges',
-							title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
-							icon: Lxicon.diffChanges,
-							toggled: changesVisibleContext.isEqualTo(true),
-						},
-						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.not(IsNewSessionContext.key)),
-						group: 'navigation', order: 4,
+					when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.or(
+						IsNewSessionContext.isEqualTo(false),
+						NewSessionHasUsableWorkspaceContext.isEqualTo(true),
+					)),
+					group: 'navigation',
+					order: 5,
+				}),
+				...sessionToolMenuItems({
+					command: {
+						id: 'ash.sessions.toggleChanges',
+						title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
+						icon: Lxicon.diffChanges,
+						toggled: changesVisibleContext.isEqualTo(true),
 					},
-				},
+					when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.not(IsNewSessionContext.key)),
+					group: 'navigation',
+					order: 4,
+				}),
 				{
 					id: MenuId.EditorTitle,
 					item: {
