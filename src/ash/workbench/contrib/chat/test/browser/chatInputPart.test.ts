@@ -4769,6 +4769,7 @@ suite('chatInput browser component', () => {
 				const testInfo = browserTests.info;
 
 				await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&history=1&sendFailure=1`);
+				await page.emulateMedia({ reducedMotion: 'no-preference' });
 				await page.evaluate(() => window.ashChatInputIntegration.showModels());
 				const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
 				await input.focus();
@@ -4776,6 +4777,16 @@ suite('chatInput browser component', () => {
 				await input.press('Home');
 				for (let index = 0; index < 7; index++) await input.press('ArrowRight');
 				const prevented = await input.evaluate((element, method) => {
+					// Pause only the image read so the actual composer can display its preparing state.
+					const read = FileReader.prototype.readAsArrayBuffer;
+					FileReader.prototype.readAsArrayBuffer = function (blob) {
+						if (blob instanceof File && blob.name === 'preview.png') {
+							FileReader.prototype.readAsArrayBuffer = read;
+							window.addEventListener('finish-preview-read', () => read.call(this, blob), { once: true });
+						} else {
+							read.call(this, blob);
+						}
+					};
 					const transfer = new DataTransfer();
 					transfer.items.add(new File(['const captured = 42;'], 'sample.ts', { type: 'text/plain' }));
 					const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), char => char.charCodeAt(0));
@@ -4787,6 +4798,17 @@ suite('chatInput browser component', () => {
 					return event.defaultPrevented;
 				}, method);
 				expect(prevented).toBe(true);
+				const preparing = page.locator('.ash-chat-staged-file.image.pending');
+				const preparingPreview = preparing.getByRole('button', { name: locale === 'en' ? 'Preview preview.png' : '预览 preview.png', exact: true });
+				await expect(preparingPreview.locator('img')).toBeVisible();
+				await expect(preparing.getByText(locale === 'en' ? 'Preparing…' : '正在准备…', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
+				const animation = () => preparingPreview.evaluate(element => getComputedStyle(element, '::after').animationName);
+				expect(await animation()).toBe('ash-chat-staged-image-sweep');
+				await page.emulateMedia({ reducedMotion: 'reduce' });
+				expect(await animation()).toBe('none');
+				expect(await preparingPreview.evaluate(element => getComputedStyle(element, '::after').content)).toBe('""');
+				await page.evaluate(() => window.dispatchEvent(new Event('finish-preview-read')));
+				await expect(preparing).toHaveCount(0);
 				const reference = page.locator('.ash-chat-code-reference');
 				await expect(reference).toHaveText('sample.ts');
 				const bar = page.locator('.ash-chat-input-attachments');

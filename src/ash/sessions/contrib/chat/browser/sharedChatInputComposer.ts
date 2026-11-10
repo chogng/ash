@@ -86,6 +86,7 @@ export class SharedChatInputComposer extends Disposable {
 			}),
 		} satisfies Pick<IChatInputEditorProvider, 'create'>, [], {
 			layout: 'compact', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
+			stageImages: true,
 			contextUsageInFooter: true,
 			get modePicker() { return chatPresentation.get() ? 'hidden' : 'visible'; },
 			get chatModelSlider() { return chatPresentation.get(); },

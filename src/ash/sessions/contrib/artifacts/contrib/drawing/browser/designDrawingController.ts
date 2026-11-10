@@ -1,5 +1,6 @@
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
+import { FreehandStroke } from '../../../../../../base/common/freehandStroke.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
 import type { DesignPoint } from '../../../common/core/geometry.js';
@@ -23,7 +24,7 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 	private nodes: { x: number; y: number; incoming: DesignPoint; outgoing: DesignPoint; mirroring?: DesignPathNode['mirroring']; }[] = [];
 	private draft: DesignShape | undefined;
 	private isPen = false;
-	private isFreehand = false;
+	private freehand: FreehandStroke | undefined;
 
 	constructor(private readonly host: DrawingHost, private readonly commands: DocumentCommands) {
 		super();
@@ -36,7 +37,8 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 		this.start = undefined;
 		this.draft = undefined;
 		this.nodes = [];
-		this.isPen = this.isFreehand = false;
+		this.isPen = false;
+		this.freehand = undefined;
 		if (hadDraft && !this.isDisposed) { this.changeEmitter.fire(); }
 	}
 
@@ -50,11 +52,11 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 		if (modifiers?.shift && this.isPen && this.nodes.length) { point = this.constrain(this.nodes.at(-1)!, point); }
 		this.start = point;
 		this.isPen = tool === DesignTool.Pen && this.host.getMode() === DesignMode.Design;
-		this.isFreehand = tool === DesignTool.Pen && this.host.getMode() === DesignMode.Draw;
+		this.freehand = tool === DesignTool.Pen && this.host.getMode() === DesignMode.Draw ? new FreehandStroke(point) : undefined;
 		if (tool === DesignTool.Text) {
 			this.draft = { id: generateUuid(), kind: 'text', ...point, width: 1, height: 1, rotation: 0, fill: '#808080', text: localize('sessions.design.text', 'Text'), fontSize: 24, textAutoResize: 'width' };
 		} else if (tool === DesignTool.Pen) {
-			this.nodes.push({ ...point, incoming: point, outgoing: point });
+			if (!this.freehand) this.nodes.push({ ...point, incoming: point, outgoing: point });
 			this.updatePath();
 		} else {
 			this.draft = { id: generateUuid(), kind: tool === DesignTool.Rectangle ? 'rectangle' : 'ellipse', ...point, width: 1, height: 1, rotation: 0, fill: '#808080' };
@@ -64,10 +66,8 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 	}
 
 	public update(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean; }): void {
-		if (this.isFreehand) {
-			const last = this.nodes.at(-1)!;
-			if (Math.hypot(point.x - last.x, point.y - last.y) < 2) { return; }
-			this.nodes.push({ ...point, incoming: point, outgoing: point });
+		if (this.freehand) {
+			if (!this.freehand.append(point)) return;
 			this.updatePath();
 		} else if (this.isPen) {
 			const node = this.nodes.at(-1)!;
@@ -93,13 +93,14 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 
 	private updatePath(): void {
 		// A stable local box keeps the draft independent of canvas zoom.
-		const points = this.nodes.flatMap(node => [node, node.incoming, node.outgoing]);
+		const source = this.freehand?.points.map(point => ({ ...point, incoming: point, outgoing: point, mirroring: undefined })) ?? this.nodes;
+		const points = source.flatMap(node => [node, node.incoming, node.outgoing]);
 		const x = Math.min(...points.map(point => point.x));
 		const y = Math.min(...points.map(point => point.y));
 		const width = Math.max(1, Math.max(...points.map(point => point.x)) - x);
 		const height = Math.max(1, Math.max(...points.map(point => point.y)) - y);
 		const normalize = (point: DesignPoint): DesignPoint => ({ x: (point.x - x) / width, y: (point.y - y) / height });
-		const nodes: DesignPathNode[] = this.nodes.map(node => ({ ...normalize(node), incoming: normalize(node.incoming), outgoing: normalize(node.outgoing), mirroring: node.mirroring }));
+		const nodes: DesignPathNode[] = source.map(node => ({ ...normalize(node), incoming: normalize(node.incoming), outgoing: normalize(node.outgoing), mirroring: node.mirroring }));
 		if (nodes.length === 1) { nodes.push(nodes[0]); }
 		this.draft = { id: this.draft?.id ?? generateUuid(), kind: 'path', x, y, width, height, rotation: 0, fill: '#808080', strokeWidth: 2, closed: false, nodes };
 	}
@@ -112,7 +113,7 @@ export class DesignDrawingController extends Disposable implements DesignDrawing
 
 	private finish(): void {
 		const shape = this.draft;
-		const canCommit = shape && (shape.kind !== 'path' || this.nodes.length >= 2);
+		const canCommit = shape && (shape.kind !== 'path' || (this.freehand?.points.length ?? this.nodes.length) >= 2);
 		this.cancel();
 		if (canCommit) { this.commands.insertShape(shape); this.host.selectShape(shape.id); if (shape.kind === 'text') { this.host.editText(shape.id); } }
 	}

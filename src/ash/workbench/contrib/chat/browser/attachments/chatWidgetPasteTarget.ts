@@ -40,6 +40,16 @@ export class ChatWidgetPasteTarget extends AbstractDisposable implements IChatPa
 	}
 
 	public addAttachments(entries: readonly ChatContextAttachment[], signal?: AbortSignal): readonly ChatContextAttachment[] {
+		const images = entries.filter(entry => this.references.shouldStageImage(entry));
+		if (!images.length) return this.addInlineAttachments(entries, signal);
+		this.assertCurrent(signal);
+		this.model.addContext(...images);
+		const staged = new Map(this.references.variables.map(entry => [entry.id, entry]));
+		const inline = this.addInlineAttachments(entries.filter(entry => !this.references.shouldStageImage(entry)), signal).values();
+		return entries.map(entry => this.references.shouldStageImage(entry) ? staged.get(entry.id)! : inline.next().value!);
+	}
+
+	private addInlineAttachments(entries: readonly ChatContextAttachment[], signal?: AbortSignal): readonly ChatContextAttachment[] {
 		if (entries.length > 1 && entries.every(entry => entry.kind !== 'toolSelection' && entry.lifetime !== 'source')) {
 			this.assertCurrent(signal);
 			const selection = this.input.getSelection();

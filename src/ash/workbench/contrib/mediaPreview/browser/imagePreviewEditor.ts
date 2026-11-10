@@ -68,7 +68,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane, IEdit
 		this.domNode.tabIndex = 0;
 		this.domNode.setAttribute('role', 'region');
 		const content = h(parent.ownerDocument, 'div', { className: 'ash-image-preview-content' });
-		this.viewer = this._register(this.instantiation.createInstance(ImageViewer, content));
+		this.viewer = this._register(this.instantiation.createInstance(ImageViewer, content, {}));
 		this._register(this.viewer.onDidChangeScale(() => { this.updateSummary(); this.imageInfoChanged.fire(); }));
 		this._register(this.viewer.onDidFailCopy(error => {
 			this.summaryDomNode.classList.remove('hidden');

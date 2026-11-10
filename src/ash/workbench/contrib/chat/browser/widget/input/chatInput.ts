@@ -89,6 +89,8 @@ export interface ChatInputDelegate {
 	readonly draft?: {
 		setText(text: string): void;
 		attachFiles(files: readonly File[]): Promise<void>;
+		/** Reads the original staged image from the current draft for local display. */
+		readImage?(id: string): Promise<Blob | undefined>;
 		retryFile(id: string): Promise<void>;
 		removeFile(id: string): void;
 	};

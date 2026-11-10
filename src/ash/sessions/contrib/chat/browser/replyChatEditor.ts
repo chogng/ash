@@ -172,6 +172,7 @@ export class ReplyChatEditor extends EditorPane {
 						}),
 					}, [], {
 						layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
+						stageImages: !delegate.draft,
 						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement === true,
 						chatModelSlider: true, configureModelInMenu: true,
 						renderSecondaryToolbar: false, draftStorage: 'host',

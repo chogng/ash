@@ -5,6 +5,7 @@ import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Editor } from '../../../automation/editor.js';
+import { drawImageAnnotation } from '../../../automation/design.js';
 import type { Workbench } from '../../../automation/workbench.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
@@ -35,6 +36,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		const now = Date.now;
 		const uploadedFiles: Record<string, string> = {};
 		const initializing = new Set<() => void>();
+		const pendingUploads = new Set<() => void>();
 		const message = (id: string, role: string, text: string, create_time?: number) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] }, create_time });
 		const live: Record<string, { parent: string | null; message: ReturnType<typeof message>; }> = {};
 		let head: string | null = null;
@@ -53,7 +55,10 @@ async function installService(application: ElectronApplication, holdInitializati
 			setRecentHistoryRateLimited(value) { recentHistoryRateLimited = value; },
 			setClockOffset(milliseconds) { Date.now = milliseconds === 0 ? now : () => now() + milliseconds; },
 			get recentHistoryRequests() { return recentHistoryRequests; },
-			holdUploads(value) { uploadsHeld = value; },
+			holdUploads(value) {
+				uploadsHeld = value;
+				if (!value) for (const release of pendingUploads) release();
+			},
 			get heldUploads() { return heldUploads; },
 			get uploadedFiles() { return uploadedFiles; },
 			releaseInitialization() {
@@ -94,9 +99,13 @@ async function installService(application: ElectronApplication, holdInitializati
 					const { file_name: name } = JSON.parse(String(init.body));
 					if (uploadsHeld) {
 						heldUploads++;
-						await new Promise<never>((_, reject) => {
-							init.signal!.throwIfAborted();
-							init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+						await new Promise<void>((resolve, reject) => {
+							const signal = init.signal!;
+							const release = () => { pendingUploads.delete(release); signal.removeEventListener('abort', abort); resolve(); };
+							const abort = () => { pendingUploads.delete(release); reject(signal.reason); };
+							signal.throwIfAborted();
+							pendingUploads.add(release);
+							signal.addEventListener('abort', abort, { once: true });
 						});
 					}
 					return Response.json({ file_id: 'file-' + name.replace(/[^a-z0-9]/gu, '-'), upload_url: 'https://fixture.oaiusercontent.com/' + encodeURIComponent(name) + '?fixture=1' });
@@ -935,6 +944,106 @@ test.describe('Unified Chat sidebar', () => {
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`ChatGPT initialization lifecycle in ${locale}`, () => {
 		test.use({ openWorkspace: false, useDefaultLanguageServer: false, electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': locale, 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+		test('pasted images stay inside the ChatGPT composer and can be previewed and removed', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench }, testInfo) => {
+			const application = browser as ElectronApplication;
+			await installService(application);
+			const page = await workbench.openAgentsWindow(target.kind);
+			const history = page.getByRole('button', { name: 'First native history', exact: true });
+			await page.emulateMedia({ reducedMotion: 'no-preference' });
+			await expect(history).toBeVisible();
+			const editor = page.locator('.ash-chatgpt-widget');
+			const composer = new Editor(editor);
+			await composer.waitForEditorFocus();
+			await composer.waitForTypeInEditor('Keep this draft');
+			const name = 'clipboard.png';
+			const form = editor.locator('.ash-chat-input-container');
+			await application.evaluate(() => globalThis.ashNativeFixture.holdUploads(true));
+			await composer.input.evaluate((element, name) => {
+				const canvas = document.createElement('canvas');
+				canvas.width = 96;
+				canvas.height = 64;
+				canvas.getContext('2d')!.fillRect(0, 0, 96, 64);
+				const bytes = Uint8Array.from(atob(canvas.toDataURL().split(',')[1]), character => character.charCodeAt(0));
+				const clipboard = new DataTransfer();
+				clipboard.items.add(new File([bytes], name, { type: 'image/png' }));
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+			}, name);
+			const previewLabel = locale === 'en' ? `Preview ${name}` : `预览 ${name}`;
+			const thumbnail = form.getByRole('button', { name: previewLabel, exact: true });
+			const remove = form.getByRole('button', { name: locale === 'en' ? `Remove ${name}` : `移除 ${name}`, exact: true });
+			await expect(thumbnail.locator('img')).toBeVisible();
+			const pending = form.locator('.ash-chat-staged-file.image.pending');
+			await expect(pending).toHaveCount(1);
+			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '0.5');
+			await expect(pending.getByText(locale === 'en' ? 'Uploading…' : '正在上传…', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
+			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('ash-chat-staged-image-sweep');
+			await history.hover();
+			await expect(remove).toHaveCSS('opacity', '0');
+			await expect(remove).toHaveCSS('pointer-events', 'none');
+			await testInfo.attach(`chatgpt-pending-image-${locale}`, { body: await form.screenshot(), contentType: 'image/png' });
+			await thumbnail.hover();
+			await expect(remove).toHaveCSS('opacity', '1');
+			await expect(remove.locator('.ash-icon')).toHaveCSS('font-size', '12px');
+			const formBounds = (await form.boundingBox())!;
+			const thumbnailBounds = (await thumbnail.boundingBox())!;
+			const removeBounds = (await remove.boundingBox())!;
+			expect(thumbnailBounds.y).toBeGreaterThan(formBounds.y);
+			expect(thumbnailBounds.y + thumbnailBounds.height).toBeLessThan(formBounds.y + formBounds.height);
+			expect(removeBounds.x).toBeGreaterThan(thumbnailBounds.x + thumbnailBounds.width / 2);
+			expect(removeBounds.y).toBeLessThan(thumbnailBounds.y + thumbnailBounds.height / 2);
+			expect(removeBounds.width).toBeCloseTo(removeBounds.height);
+			await application.evaluate(() => globalThis.ashNativeFixture.holdUploads(false));
+			await expect.poll(() => application.evaluate(() => Object.keys(globalThis.ashNativeFixture.uploadedFiles))).toContain(name);
+			await expect(pending).toHaveCount(0);
+			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '1');
+			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
+			await thumbnail.click();
+			const preview = page.getByRole('dialog', { name: previewLabel, exact: true });
+			await expect(preview.getByRole('img', { name, exact: true })).toBeVisible();
+			await expect(preview.getByRole('button', { name: locale === 'en' ? 'Zoom in' : '放大', exact: true })).toBeEnabled();
+			await expect(preview.getByRole('button', { name: locale === 'en' ? 'Save image' : '保存图片', exact: true })).toBeEnabled();
+			const annotateLabel = locale === 'en' ? 'Annotate image' : '标注图片';
+			await expect(preview.getByRole('button', { name: annotateLabel, exact: true })).toBeEnabled();
+			await page.keyboard.press('Escape');
+			await expect(preview).toBeHidden();
+			await expect(thumbnail).toBeFocused();
+			await history.hover();
+			await expect(remove).toHaveCSS('opacity', '1');
+			await page.keyboard.press('Tab');
+			await expect(remove).toBeFocused();
+			await expect(remove).toHaveCSS('opacity', '1');
+			await composer.waitForEditorFocus();
+			await expect(remove).toHaveCSS('opacity', '0');
+			await testInfo.attach(`chatgpt-pasted-image-${locale}`, { body: await form.screenshot(), contentType: 'image/png' });
+			const reopened = await workbench.reopenAgentsWindow(application, page);
+			const restoredForm = reopened.locator('.ash-chatgpt-widget .ash-chat-input-container');
+			const restored = new Editor(restoredForm);
+			const restoredThumbnail = restoredForm.getByRole('button', { name: previewLabel, exact: true });
+			await expect(restoredThumbnail.locator('img')).toBeVisible();
+			const heldBefore = await application.evaluate(() => globalThis.ashNativeFixture.heldUploads);
+			await application.evaluate(() => globalThis.ashNativeFixture.holdUploads(true));
+			await restoredThumbnail.click();
+			const restoredPreview = reopened.getByRole('dialog', { name: previewLabel, exact: true });
+			await restoredPreview.getByRole('button', { name: annotateLabel, exact: true }).click();
+			await drawImageAnnotation(restoredPreview);
+			await restoredPreview.getByRole('button', { name: locale === 'en' ? 'Done annotating' : '完成标注', exact: true }).click();
+			await expect(restoredPreview).toBeHidden();
+			await expect(restored.input).toBeFocused();
+			const copy = 'clipboard-annotated.png';
+			const annotated = restoredForm.getByRole('button', { name: locale === 'en' ? `Preview ${copy}` : `预览 ${copy}`, exact: true });
+			await expect(annotated.locator('img')).toBeVisible();
+			await expect(restoredThumbnail).toBeVisible();
+			await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.heldUploads)).toBe(heldBefore + 1);
+			await application.evaluate(() => globalThis.ashNativeFixture.holdUploads(false));
+			await expect.poll(() => application.evaluate(() => Object.keys(globalThis.ashNativeFixture.uploadedFiles))).toContain(copy);
+			await restoredForm.getByRole('button', { name: locale === 'en' ? `Remove ${name}` : `移除 ${name}`, exact: true }).press('Enter');
+			await expect(restoredThumbnail).toHaveCount(0);
+			await restoredForm.getByRole('button', { name: locale === 'en' ? `Remove ${copy}` : `移除 ${copy}`, exact: true }).press('Enter');
+			await expect(annotated).toHaveCount(0);
+			await expect(restored.input).toBeFocused();
+			await restored.waitForEditorContents(text => text === 'Keep this draft');
+		});
+
 		test('closing and reopening during pending initialization cancels the old window and restores a usable chat', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, driver }, testInfo) => {
 			const application = browser as ElectronApplication;
 			await installService(application, true);

@@ -43,6 +43,7 @@ export class ImageViewer extends Disposable {
 
 	constructor(
 		container: HTMLElement,
+		options: { readonly contextMenu?: boolean; readonly overlay?: SVGSVGElement; },
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -55,7 +56,11 @@ export class ImageViewer extends Disposable {
 		const stage = h(container.ownerDocument, 'div', { className: 'ash-image-viewer-stage' });
 		this.imageDomNode = h(container.ownerDocument, 'img', { className: 'ash-image-viewer-image' });
 		this.imageDomNode.draggable = false;
-		stage.append(this.imageDomNode);
+		if (options.overlay) {
+			const media = h(container.ownerDocument, 'div', { className: 'ash-image-viewer-media' });
+			media.append(this.imageDomNode, options.overlay);
+			stage.append(media);
+		} else stage.append(this.imageDomNode);
 		this.domNode.append(stage);
 		container.append(this.domNode);
 		this._register(toDisposable(() => { this.clear(); this.domNode.remove(); }));
@@ -94,6 +99,7 @@ export class ImageViewer extends Disposable {
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => {
 			if (!this.hasImage) return;
 			event.preventDefault();
+			if (options.contextMenu === false) return;
 			this.menus.showContextMenu({ getAnchor: () => ({ x: event.clientX, y: event.clientY }), getActions: () => this.getActions() });
 		}));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
@@ -103,7 +109,7 @@ export class ImageViewer extends Disposable {
 			else if (event.key === '0') this.setScale('fit');
 			else if (event.key === '1') this.setScale(1);
 			else if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) {
-				if (!this.hasImage) return;
+				if (!this.hasImage || options.contextMenu === false) return;
 				this.menus.showContextMenu({ getAnchor: () => this.domNode, getActions: () => this.getActions() });
 			} else return;
 			event.preventDefault();

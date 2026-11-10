@@ -143,6 +143,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	readonly draft: NonNullable<IReplyChatEditorModel['draft']> = {
 		setText: text => this.backend.setDraft(text),
 		attachFiles: files => this.backend.attachFiles(files),
+		readImage: id => this.backend.readDraftImage(id),
 		retryFile: id => this.backend.retryAttachment(id),
 		removeFile: id => this.backend.removeAttachment(id),
 	};

@@ -5,10 +5,10 @@ import { toDisposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { Notification, systemPreferences, type BrowserWindow } from 'electron/main';
 import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
-import { ElectronOpenerService } from '../../opener/electron-main/electronOpenerService.js';
+import { ElectronOpenerService, validateLocalImage } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
-import { validateScreenshotRectangle } from '../common/nativeHost.js';
+import { NATIVE_HOST_OPEN_IMAGE_CHANNEL, validateScreenshotRectangle } from '../common/nativeHost.js';
 import { getScreenshot } from './nativeHostMainService.js';
 import { nativeToastRoutes, type INativeToast } from './nativeToast.js';
 import { REQUEST_MICROPHONE_ACCESS_CHANNEL, type IToastOptions } from '../common/native.js';
@@ -102,6 +102,11 @@ export function rendererSystemHostRoutes(
 		),
 		{ channel: 'ash:memory:collect', validate: value => { if (value !== undefined) { throw new Error('Unexpected memory collection arguments'); } }, invoke: () => collectElectronMemory(window) },
 		{ channel: 'ash:host:openExternal', validate: text, invoke: value => opener.openExternal(value as string) },
+		{
+			channel: NATIVE_HOST_OPEN_IMAGE_CHANNEL,
+			validate: validateLocalImage,
+			invoke: value => opener.openImageInDefaultApp(value as ReturnType<typeof validateLocalImage>),
+		},
 		{
 			channel: 'ash:host:triggerPaste',
 			validate: value => {

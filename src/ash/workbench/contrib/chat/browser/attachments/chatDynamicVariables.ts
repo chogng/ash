@@ -67,7 +67,7 @@ export class ChatDynamicVariableModel extends Disposable {
 	private readonly history = new Map<number, readonly InlineContext[]>();
 	private adjustingSelection = false;
 
-	constructor(private readonly input: IChatInputEditor, private readonly attachments: ChatAttachmentModel) {
+	constructor(private readonly input: IChatInputEditor, private readonly attachments: ChatAttachmentModel, private readonly stageImages = false) {
 		super();
 		this.text = input.value;
 		this._register(attachments.onDidChange(event => this.updateAttachments(event)));
@@ -107,7 +107,16 @@ export class ChatDynamicVariableModel extends Disposable {
 	}
 
 	get variables(): readonly ChatContextAttachment[] {
-		return this.references;
+		return this.stageImages ? [...this.references, ...this.stagedImages] : this.references;
+	}
+
+	get stagedImages(): readonly ChatContextAttachment[] {
+		return this.stageImages ? this.attachments.attachments.filter(entry => this.shouldStageImage(entry)
+			&& !this.references.some(reference => reference.id === entry.id)) : [];
+	}
+
+	shouldStageImage(context: ChatContextAttachment): boolean {
+		return this.stageImages && context.kind === 'image' && context.lifetime !== 'source' && !context.reference;
 	}
 
 	addReference(context: ChatContextAttachment, focus = true): ChatContextAttachment {
@@ -143,9 +152,13 @@ export class ChatDynamicVariableModel extends Disposable {
 	}
 
 	setInputState(contexts: readonly ChatContextAttachment[]): void {
+		const stagedIds = this.stagedImages
+			.filter(image => !contexts.some(context => context.id === image.id && context.reference))
+			.map(image => image.id);
 		this.history.clear();
 		this.text = this.input.value;
 		this.references = contexts.filter((context): context is InlineContext => context.reference !== undefined);
+		if (this.stageImages) this.attachments.updateContext(stagedIds, contexts.filter(context => this.shouldStageImage(context)));
 		for (const source of this.attachments.attachments) {
 			if (source.lifetime === 'source' && !this.references.some(reference => reference.id === source.id)) this.addReference(source, false);
 		}
@@ -162,7 +175,10 @@ export class ChatDynamicVariableModel extends Disposable {
 			for (const id of event.deleted) this.removeReference(id);
 			for (const entry of [...event.added, ...event.updated]) {
 				const previous = this.references.find(reference => reference.id === entry.id);
-				if (!previous) { this.addReference(entry, false); continue; }
+				if (!previous) {
+					if (!this.shouldStageImage(entry)) this.addReference(entry, false);
+					continue;
+				}
 				if (previous.name === entry.name) {
 					this.projected = this.projected.map(reference => reference.id === entry.id ? { ...entry, reference: reference.reference } : reference);
 					this.refresh();
@@ -207,7 +223,10 @@ export class ChatDynamicVariableModel extends Disposable {
 
 	removeReference(id: string): void {
 		const context = this.references.find(reference => reference.id === id);
-		if (!context) return;
+		if (!context) {
+			if (this.stagedImages.some(attachment => attachment.id === id)) this.attachments.delete(id);
+			return;
+		}
 		this.input.setSelection({ anchor: context.reference.start, active: context.reference.end });
 		this.input.insertText('');
 	}

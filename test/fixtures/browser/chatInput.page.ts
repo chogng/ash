@@ -25,6 +25,8 @@ const codeFeatures = registerTestCodeEditorFeatures();
 import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
+import { IWebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
@@ -425,6 +427,7 @@ const gitHubContextService: Pick<IGitHubService, 'listAccounts' | 'listIssues' |
 services.registerInstance(IGitHubService, gitHubContextService as unknown as IGitHubService);
 services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
+services.registerInstance(IWebWorkerService, new WebWorkerService());
 services.registerInstance(ILabelService, { getUriLabel: resource => resource.scheme === 'file' ? resource.fsPath : resource.toString() } as ILabelService);
 services.registerSingleton(IContextMenuService, () => new BrowserContextMenuService(
 	services.get(IMenuService), contextKeys,

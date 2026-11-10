@@ -37,6 +37,8 @@ export const NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL = 'ash:native-host:get-titl
 
 export const NATIVE_HOST_IS_ADMIN_CHANNEL = 'ash:native-host:is-admin';
 
+export const NATIVE_HOST_OPEN_IMAGE_CHANNEL = 'ash:host:openImageInDefaultApp';
+
 export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
 	'ash:native-host:toggle-developer-tools';
 export const NATIVE_HOST_PICK_FOLDER_CHANNEL =

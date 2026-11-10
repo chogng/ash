@@ -218,6 +218,7 @@ export interface IChatGPTService {
 	setDraftTarget(change: Partial<ChatGPTDraftTarget>): void;
 	setModel(value: string, preset?: string): void;
 	attachFiles(files: readonly File[]): Promise<void>;
+	readDraftImage(id: string): Promise<Blob | undefined>;
 	removeAttachment(id: string): void;
 	retryAttachment(id: string): Promise<void>;
 	startVoice(window: Window & typeof globalThis): Promise<void>;
@@ -924,6 +925,17 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		await this.deleteAttachmentFiles(scope, sources.filter(source => !draft?.attachments.some(attachment => attachment.id === source.id)).map(source => source.id));
 	}
 
+	public async readDraftImage(id: string): Promise<Blob | undefined> {
+		const attachment = this.model.get().attachments.find(item => item.id === id);
+		if (!attachment || this.isDisposed) { return undefined; }
+		const account = this.management.signal;
+		const scope = this.cacheScope;
+		const source = this.attachmentFiles.get(id) ?? (scope ? await this.draftAttachments.readFile(scope, attachment) : undefined);
+		if (!source?.type.startsWith('image/') || account.aborted || this.isDisposed
+			|| !this.model.get().attachments.some(item => item.id === id)) { return undefined; }
+		return source;
+	}
+
 	public removeAttachment(id: string): void {
 		const state = this.model.get();
 		if (state.sending || !state.attachments.some(attachment => attachment.id === id)) { return; }
@@ -965,7 +977,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			if (!source) { throw new Error(localize('sessions.chatgpt.draftAttachmentUnavailable', 'The original file is unavailable. Remove the attachment and add the file again.')); }
 			const file = await this.client.upload(source, AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]));
 			update({ status: 'ready', file });
-			this.attachmentFiles.delete(id);
+			if (scope) { this.attachmentFiles.delete(id); }
 		} catch (error) { update({ status: 'failed', error: this.errorText(error) }); }
 		finally { if (this.uploads.get(id) === controller) { this.uploads.delete(id); } }
 	}

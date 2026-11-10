@@ -19,6 +19,8 @@ export interface IHostService {
 	reload(options?: { disableExtensions?: boolean; }): Promise<void>;
 	/** Raw PNG capture without workbench editing; browser hosts ask the user to choose a display surface. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
+	/** Desktop can present image bytes in the OS-associated viewer. */
+	openImageInDefaultApp?(image: Uint8Array): Promise<void>;
 	showToast(options: IToastOptions, token: CancellationToken): Promise<IToastResult>;
 }
 

@@ -104,7 +104,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			const { textArea, element } = this.editor.controller;
 			(textArea ?? element).setAttribute('aria-describedby', options.ariaDescribedBy);
 		}
-		this.inlineAttachments = this._register(instantiationService.createInstance(ChatInlineAttachments, this.editor));
+		this.inlineAttachments = this._register(instantiationService.createInstance(ChatInlineAttachments, this.editor, options.imageAnnotationTarget));
 		if (options.slashCommands) { this._register(new InputEditorCommandArgumentHint(this.editor, options.slashCommands)); }
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {

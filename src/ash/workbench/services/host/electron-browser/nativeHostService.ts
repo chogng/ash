@@ -4,7 +4,7 @@ import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { INativeHostService } from '../../../common/services.js';
-import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
+import { NATIVE_HOST_OPEN_IMAGE_CHANNEL, type INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
 import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } from '../../../../platform/window/common/window.js';
 import { BrowserHostService } from '../browser/browserHostService.js';
 import { ILifecycleService } from '../../lifecycle/common/lifecycle.js';
@@ -35,6 +35,7 @@ export class NativeHostService extends BrowserHostService {
 	public override restart(): Promise<void> { return invoke<void>(HOST_RESTART_CHANNEL); }
 
 	public override getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined> { return this.host.getScreenshot(rect); }
+	public openImageInDefaultApp(image: Uint8Array): Promise<void> { return invoke<void>(NATIVE_HOST_OPEN_IMAGE_CHANNEL, image); }
 
 	public override async showToast(options: IToastOptions, token: CancellationToken): Promise<IToastResult> {
 		const result = await this.host.showToast(options, token);

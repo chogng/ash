@@ -3,7 +3,7 @@ import { DetachedTerminalSnapshotMirror } from '../../../terminal/browser/chatTe
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import './chatAttachmentWidgets.css';
-import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
+import { h, addDisposableListener, getWindow } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -46,6 +46,14 @@ import { isRemoteResource } from '../../../../../platform/remote/common/remote.j
 import { basename, dirname } from '../../../../../base/common/resources.js';
 import { extname } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { decodeBase64 } from '../../../../../base/common/buffer.js';
+import { ImageViewer } from '../../../mediaPreview/browser/imageViewer.js';
+import { mediaImageFileName, saveMediaImageAs } from '../../../mediaPreview/browser/mediaPreviewSaveAs.js';
+import { IHostService } from '../../../../services/host/browser/host.js';
+import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
+import { encodeImageBlobAsPng } from '../../../mediaPreview/browser/imageEncoder.js';
+import { ImageAnnotation } from '../../../mediaPreview/browser/imageAnnotation.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 
 /** Generic sources keep their original navigation; source-less contexts expose their saved-content intent. */
 export class DefaultChatAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
@@ -520,96 +528,148 @@ function isAttachmentResource(resource: URI | undefined): resource is URI {
 	return !!resource && (resource.scheme === Schemas.file || isRemoteResource(resource) || resource.scheme === Schemas.untitled || resource.scheme === Schemas.vscodeUserData);
 }
 
-/** Displays the image already prepared by the attachment owner; no source resource is reread. */
+interface ImageAttachment {
+	readonly id: string;
+	readonly name: string;
+	readonly resource?: URI;
+	resolve(): Promise<{ readonly content: Blob | string | undefined; }>;
+}
+
+export interface IChatImageAnnotationTarget {
+	readonly signal: AbortSignal;
+	attach(file: File, signal: AbortSignal): Promise<void>;
+	focus(): void;
+}
+
+/** Displays the image supplied by the attachment owner in either input presentation. */
 export class ImageAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
 	readonly element: HTMLElement;
+	private readonly previewResolved = this._register(new Emitter<boolean>());
+	readonly onDidResolvePreview = this.previewResolved.event;
 	private readonly deleted = this._register(new Emitter<globalThis.Event>());
 	readonly onDidDelete = this.deleted.event;
 	private readonly opened = this._register(new Emitter<void>());
 	readonly onDidOpen = this.opened.event;
 	private readonly preview = this._register(new MutableDisposable<DisposableStore>());
+	private readonly thumbnailRemove?: Button;
 
 	constructor(
-		attachment: ChatContextAttachment,
-		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; },
+		attachment: ImageAttachment,
+		options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; imagePresentation?: 'inline' | 'thumbnail'; imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined; },
 		container: HTMLElement,
-		@IContextViewService contextViews: IContextViewService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		const document = container.ownerDocument;
+		const tile = options.imagePresentation === 'thumbnail';
 		const element = this.element = h(document, 'div');
-		element.className = 'ash-chat-attachment-chip ash-chat-image-reference-control';
-		element.setAttribute('role', 'group');
-		element.setAttribute('aria-label', attachment.name);
+		element.className = tile ? 'ash-chat-image-attachment-thumbnail' : 'ash-chat-attachment-chip ash-chat-image-reference-control';
+		const fallback = tile ? h(document, 'span', { className: 'ash-chat-image-attachment-name' }, attachment.name) : undefined;
+		if (fallback) element.append(fallback);
+		else {
+			element.setAttribute('role', 'group');
+			element.setAttribute('aria-label', attachment.name);
+			element.setAttribute('aria-busy', 'true');
+		}
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
 		const source = this._register(new Button(element, {
 			...defaultButtonStyles,
-			label: attachment.name,
+			label: tile ? '' : attachment.name,
 			ariaLabel: localize('chat.context.previewImage', 'Preview {0}', attachment.name),
 			title: localize('chat.context.imageLoading', 'Loading preview: {0}', attachment.name),
-			icon: Lxicon.image,
+			icon: tile ? undefined : Lxicon.image,
 			enabled: false, size: 'small', presentation: 'quiet',
 		}));
-		source.domNode.classList.add('ash-chat-attachment-source');
+		source.domNode.classList.add(tile ? 'ash-chat-image-attachment-source' : 'ash-chat-attachment-source');
+		source.domNode.hidden = tile;
 		if (isAttachmentResource(attachment.resource)) {
 			this._register(instantiation.createInstance(AttachmentResourceActions,
 				element, source.domNode, attachment.resource, false, MenuId.ChatInputResourceAttachmentContext));
 		}
 		const thumbnail = h(document, 'img');
 		thumbnail.draggable = false;
-		thumbnail.alt = attachment.name;
+		thumbnail.alt = tile ? '' : attachment.name;
 		thumbnail.hidden = true;
 		source.domNode.prepend(thumbnail);
-		element.setAttribute('aria-busy', 'true');
 		const loading = this._register(new DisposableStore());
+		const objectUrl = this._register(new MutableDisposable());
 		this._register(toDisposable(() => thumbnail.removeAttribute('src')));
+		let imageContent: Blob | string | undefined;
 		const open = () => {
-			if (this.isDisposed || !source.enabled) return;
+			if (this.isDisposed || !source.enabled || !imageContent) return;
+			const image = typeof imageContent === 'string' ? imageDataUrlToBlob(imageContent) : imageContent;
 			const resources = new DisposableStore();
 			this.preview.value = resources;
-			const frame = createAttachmentPreview(attachment, source.domNode, contextViews, resources, {
-				className: 'ash-chat-image-reference-preview',
-				label: localize('chat.context.previewImage', 'Preview {0}', attachment.name),
-				closeLabel: localize('chat.context.closeImagePreview', 'Close image preview'),
-			}, () => { if (this.preview.value === resources) this.preview.clear(); });
-			const image = h(document, 'img');
-			image.alt = attachment.name;
-			image.src = thumbnail.src;
-			frame.content.append(image);
-			if (frame.show()) this.opened.fire();
+			const preview = instantiation.createInstance(ImageAttachmentPreview, attachment, image, thumbnail.src, source.domNode, resources, options.imageAnnotationTarget?.(),
+				() => { if (this.preview.value === resources) this.preview.clear(); });
+			if (preview.show()) this.opened.fire();
 			else this.preview.clear();
 		};
-		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, open, event => this.deleted.fire(event)));
+		if (tile && options.supportsDeletion) {
+			const label = localize('chat.input.removeFile', 'Remove {0}', attachment.name);
+			this.thumbnailRemove = new Button(element, {
+				...defaultButtonStyles, label, title: label,
+				icon: Lxicon.close, iconOnly: true, size: 'small', presentation: 'secondary',
+			});
+		}
+		this._register(wireAttachmentActions(element, source.domNode, attachment.name, options, open, event => this.deleted.fire(event), this.thumbnailRemove));
 		const unavailable = () => {
 			if (this.isDisposed) return;
 			loading.clear();
 			thumbnail.removeAttribute('src');
-			const message = localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name);
-			element.setAttribute('aria-busy', 'false');
-			element.setAttribute('aria-label', message);
-			source.domNode.setAttribute('aria-label', message);
-			source.setTitle(message);
-			source.icon = Lxicon.warning;
+			objectUrl.clear();
+			if (!tile) {
+				const message = localize('chat.context.previewFailed', 'Preview unavailable: {0}', attachment.name);
+				element.setAttribute('aria-busy', 'false');
+				element.setAttribute('aria-label', message);
+				source.domNode.setAttribute('aria-label', message);
+				source.setTitle(message);
+				source.icon = Lxicon.warning;
+			}
+			this.previewResolved.fire(false);
 		};
 		loading.add(addDisposableListener(thumbnail, 'error', unavailable));
 		loading.add(addDisposableListener(thumbnail, 'load', () => {
 			if (!thumbnail.naturalWidth) { unavailable(); return; }
 			loading.clear();
-			element.setAttribute('aria-busy', 'false');
+			if (fallback) {
+				fallback.hidden = true;
+				element.classList.add('loaded');
+			} else {
+				element.setAttribute('aria-busy', 'false');
+			}
 			source.setTitle(attachment.name);
 			source.icon = undefined;
 			thumbnail.hidden = false;
+			source.domNode.hidden = false;
 			source.enabled = true;
+			this.previewResolved.fire(true);
 		}));
-		void attachment.resolve().then(context => {
+		void attachment.resolve().then(({ content }) => {
 			if (this.isDisposed) return;
-			if (!/^data:image\/(png|jpeg|gif|webp);base64,/u.test(context.content)) { unavailable(); return; }
+			if (!content || typeof content === 'string' && !/^data:image\/(png|jpeg|gif|webp);base64,/u.test(content)) { unavailable(); return; }
+			imageContent = content;
 			// Captured bytes can outlive their original source. A data URL alone does not
 			// establish that the browser can display them; native loading gates preview.
-			thumbnail.src = context.content;
+			if (typeof content === 'string') {
+				thumbnail.src = content;
+			} else {
+				const { URL } = getWindow(element);
+				try {
+					const url = URL.createObjectURL(content);
+					objectUrl.value = toDisposable(() => URL.revokeObjectURL(url));
+					thumbnail.src = url;
+				} catch {
+					unavailable();
+				}
+			}
 		}, unavailable);
+	}
+
+	setThumbnailState(pending: boolean, readOnly: boolean): void {
+		this.element.classList.toggle('pending', pending);
+		if (this.thumbnailRemove) this.thumbnailRemove.enabled = !readOnly;
 	}
 }
 
@@ -757,20 +817,21 @@ function wireAttachmentActions(
 	options: { shouldFocusClearButton: boolean; supportsDeletion: boolean; },
 	open: () => void,
 	remove: (event: globalThis.Event) => void,
+	removeButton?: Button,
 ): DisposableStore {
 	const resources = new DisposableStore();
 	resources.add(addDisposableListener(source, 'click', open));
 	resources.add(addDisposableListener(element, 'click', event => { if (event.target === element) open(); }));
 	resources.add(addDisposableListener(element, 'keydown', event => {
 		if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
-		if (options.supportsDeletion && (event.key === 'Delete' || event.key === 'Backspace')) {
+		if (options.supportsDeletion && removeButton?.enabled !== false && (event.key === 'Delete' || event.key === 'Backspace')) {
 			event.preventDefault();
 			event.stopPropagation();
 			remove(event);
 		}
 	}));
 	if (options.supportsDeletion) {
-		const button = resources.add(new Button(element, {
+		const button = resources.add(removeButton ?? new Button(element, {
 			...defaultButtonStyles,
 			label: localize('chat.attach.remove', 'Remove {0}', name),
 			icon: Lxicon.close, iconOnly: true, size: 'small', presentation: 'quiet',
@@ -778,7 +839,7 @@ function wireAttachmentActions(
 		button.domNode.classList.add('ash-chat-attachment-remove');
 		resources.add(button.onDidClick(remove));
 		resources.add(addDisposableListener(element, 'auxclick', event => {
-			if (event.button !== 1) return;
+			if (event.button !== 1 || !button.enabled) return;
 			event.preventDefault();
 			event.stopPropagation();
 			remove(event);
@@ -788,9 +849,132 @@ function wireAttachmentActions(
 	return resources;
 }
 
+function imageDataUrlToBlob(source: string): Blob {
+	const dataStart = source.indexOf(',') + 1;
+	return new Blob([new Uint8Array(decodeBase64(source.slice(dataStart)).buffer)], { type: source.slice(5, source.indexOf(';')) });
+}
+
+class ImageAttachmentPreview {
+	private readonly frame: ReturnType<typeof createAttachmentPreview>;
+
+	constructor(
+		attachment: ImageAttachment,
+		image: Blob,
+		src: string,
+		anchor: HTMLElement,
+		resources: DisposableStore,
+		target: IChatImageAnnotationTarget | undefined,
+		onHide: () => void,
+		@IContextViewService contextViews: IContextViewService,
+		@IInstantiationService instantiation: IInstantiationService,
+		@INotificationService notifications: INotificationService,
+		@IHostService host: IHostService,
+		@IWebWorkerService workers: IWebWorkerService,
+	) {
+		const frame = this.frame = createAttachmentPreview(attachment, anchor, contextViews, resources, {
+			className: 'ash-chat-image-reference-preview',
+			label: localize('chat.context.previewImage', 'Preview {0}', attachment.name),
+			closeLabel: localize('chat.context.closeImagePreview', 'Close image preview'),
+		}, onHide);
+		const document = anchor.ownerDocument;
+		const viewport = h(document, 'div', { className: 'ash-chat-image-reference-viewport' });
+		frame.content.append(viewport);
+		const annotation = target && resources.add(new ImageAnnotation(document, src));
+		// The dialog and the viewer's context menu use the same popup host.
+		const viewer = resources.add(instantiation.createInstance(ImageViewer, viewport, { contextMenu: false, overlay: annotation?.overlay }));
+		const lifetime = new AbortController();
+		resources.add(toDisposable(() => lifetime.abort()));
+		if (target) resources.add(addDisposableListener(target.signal, 'abort', () => contextViews.hide()));
+		const read = async () => new Uint8Array(await image.arrayBuffer());
+		const name = mediaImageFileName(attachment.name, image.type);
+		const actions = h(document, 'div', { className: 'ash-chat-image-reference-actions' });
+		frame.header.insertBefore(actions, frame.header.lastElementChild);
+		const reportError = (error: unknown) => {
+			if (!lifetime.signal.aborted && !isCancellationError(error)) notifications.error(error instanceof Error ? error : String(error));
+		};
+		const action = (label: string, icon: Icon | undefined, run: () => void | Promise<void>, presentation: 'quiet' | 'primary' = 'quiet'): Button => {
+			const button = resources.add(new Button(actions, {
+				...defaultButtonStyles, label, title: label, icon,
+				iconOnly: !!icon, size: 'small', presentation
+			}));
+			resources.add(button.onDidClick(() => { void Promise.resolve().then(run).catch(reportError); }));
+			return button;
+		};
+		const zoom = [
+			action(localize('media.image.zoomOut', 'Zoom out'), Lxicon.zoomOut, () => viewer.zoomOut()),
+			action(localize('media.image.zoomIn', 'Zoom in'), Lxicon.zoomIn, () => viewer.zoomIn()),
+			action(localize('media.image.fit', 'Fit to window'), Lxicon.openInWindow, () => viewer.setScale('fit')),
+		];
+		for (const button of zoom) button.enabled = false;
+		resources.add(viewer.onDidChangeScale(() => { for (const button of zoom) button.enabled = true; }));
+		resources.add(viewer.onDidFailCopy(reportError));
+		const save = action(localize('chat.context.saveImage', 'Save image'), Lxicon.download,
+			() => instantiation.invokeFunction(saveMediaImageAs, image, name, document));
+		const openImage = host.openImageInDefaultApp?.bind(host);
+		const external = openImage && action(localize('chat.context.openImageInDefaultApp', 'Open in default image app'), Lxicon.openInProduct, async () => {
+			const nativeFormat = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.type);
+			try { await openImage(await (nativeFormat ? read() : encodeImageBlobAsPng(image, document, workers))); }
+			catch (error) { throw new Error(localize('chat.context.openFailed', 'Could not open {0}: {1}', name, String(error)), { cause: error }); }
+		});
+		if (annotation && target) {
+			let editing = false;
+			let busy = false;
+			const toggle = (active: boolean) => {
+				editing = active;
+				for (const button of [save, external, draw]) if (button) button.domNode.hidden = active;
+				for (const button of [undo, cancel, done]) button.domNode.hidden = !active;
+				update();
+			};
+			const update = () => {
+				draw.enabled = viewer.hasImage;
+				undo.enabled = editing && annotation.hasStrokes && !busy;
+				done.enabled = undo.enabled;
+				cancel.enabled = !busy;
+			};
+			const draw = action(localize('chat.image.annotate', 'Annotate image'), Lxicon.edit, () => {
+				if (!viewer.naturalSize) return;
+				annotation.start(viewer.naturalSize);
+				toggle(true);
+				viewer.domNode.focus();
+			});
+			const undo = action(localize('chat.image.undoStroke', 'Undo stroke'), undefined, () => annotation.undo());
+			const cancel = action(localize('chat.image.cancelAnnotation', 'Cancel annotation'), undefined, () => {
+				annotation.clear();
+				toggle(false);
+				draw.focus();
+			});
+			const done = action(localize('chat.image.doneAnnotating', 'Done annotating'), undefined, async () => {
+				if (busy || !annotation.hasStrokes) return;
+				busy = true;
+				annotation.overlay.style.pointerEvents = 'none';
+				update();
+				try {
+					const blob = await annotation.renderPng(lifetime.signal);
+					const fileName = `${name.slice(0, name.length - extname(name).length)}-annotated.png`;
+					await target.attach(new (getWindow(anchor).File)([blob], fileName, { type: 'image/png' }), lifetime.signal);
+					if (!lifetime.signal.aborted) contextViews.hide();
+					target.focus();
+				} finally {
+					if (!lifetime.signal.aborted) {
+						busy = false;
+						annotation.overlay.style.pointerEvents = '';
+						update();
+					}
+				}
+			}, 'primary');
+			toggle(false);
+			resources.add(viewer.onDidChangeScale(update));
+			resources.add(annotation.onDidChange(update));
+		}
+		void viewer.setSource(src, { alt: attachment.name, data: { mimeType: image.type, read } }).catch(reportError);
+	}
+
+	show(): boolean { return this.frame.show(); }
+}
+
 /** Dialog chrome is shared; each widget owns its content, pending work and visible lifetime. */
 function createAttachmentPreview(
-	attachment: ChatContextAttachment,
+	attachment: Pick<ChatContextAttachment, 'id' | 'name'>,
 	anchor: HTMLElement,
 	contextViews: IContextViewService,
 	resources: DisposableStore,
