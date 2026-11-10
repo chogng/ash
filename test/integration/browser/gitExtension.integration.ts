@@ -22,6 +22,9 @@ import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRe
 import '../../../src/ash/editor/browser/widget/diffEditor/registrations.contribution.js';
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
+import { ILifecycleService, LifecyclePhase } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
@@ -65,6 +68,7 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContra
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
+import '../../../src/ash/workbench/browser/media/notifications.css';
 import '../../../src/ash/workbench/contrib/scm/browser/media/scm.css';
 import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
 import { MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
@@ -284,6 +288,11 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
 const workerCatalog = { ...catalog, list: async () => { const snapshot = await catalog.list('cached'); return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') }; } };
 services.registerSingleton(IWorkspaceTrustManagementService, () => services.createInstance(TestWorkspaceTrustManagementService));
+services.registerInstance(ILogService, new NullLoggerService());
+services.registerInstance(IStorageService, storage);
+const lifecycle = lifetime.add(services.createInstance(BrowserLifecycleService, { ownerWindow: window, onError: console.error }));
+lifecycle.phase = LifecyclePhase.Eventually;
+services.registerInstance(ILifecycleService, lifecycle);
 const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));
 const host = lifetime.add(new RustGitHostFixture(catalog, genericHost, () => createExtensionHostInitialization(workspace, configuration)));
 const scm = lifetime.add(new SCMService());
