@@ -22,7 +22,13 @@ export class SessionsAccountMenu {
 		const ideLabel = localize('sessions.menu.openIde', 'Open IDE');
 		const shortcutsLabel = localize('sessions.accountMenu.shortcuts', 'Shortcuts');
 		const actions: IAction[] = [
-			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, icon: Lxicon.gear, enabled: true, run: () => this.preferences.open() },
+			{
+				id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, icon: Lxicon.gear, enabled: true, run: () => {
+					// Dialog captures the active element as its focus return target.
+					anchor.focus();
+					return this.preferences.open();
+				}
+			},
 			{ id: 'workbench.action.manageAccounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run: () => this.commands.executeCommand('workbench.action.manageAccounts') },
 			{ id: OPEN_ASH_WINDOW_COMMAND_ID, label: ideLabel, tooltip: ideLabel, icon: Lxicon.code, enabled: true, run: () => this.commands.executeCommand(OPEN_ASH_WINDOW_COMMAND_ID) },
 			{ id: OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID, label: shortcutsLabel, tooltip: shortcutsLabel, icon: Lxicon.recordKeys, enabled: true, run: () => this.commands.executeCommand(OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID) },

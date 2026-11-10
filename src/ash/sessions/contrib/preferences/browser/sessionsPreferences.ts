@@ -251,6 +251,7 @@ export class SessionsPreferences extends Disposable {
 			dialogStyles: defaultDialogStyles,
 			checkboxStyles: defaultCheckboxStyles,
 			inputBoxStyles: defaultInputBoxStyles,
+			layout: 'form',
 			extraClasses: ['ash-sessions-settings-dialog'],
 			closeOnBackdropClick: true,
 			canClose: async () => (storageContent?.canClose() ?? true) && await (memoryContent?.canClose() ?? true),
@@ -294,7 +295,7 @@ export class SessionsPreferences extends Disposable {
 		};
 		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsPageRenderer =>
 			resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
-				categoryId: id, title, description, help: description, fields,
+				categoryId: id, title, description, help: description, fields, hideInnerTitle: true,
 				onDidChange: Event.None, setVisible: () => { },
 			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
 		const settingOptions: SettingWidgetOptions = {
@@ -316,7 +317,7 @@ export class SessionsPreferences extends Disposable {
 		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, closeDialog));
 		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
-		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
+		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, { container: list, hideInnerTitle: true }, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
 		const executionSettings = resources.add(contentServices.createInstance(ExecutionSettingsModel));
 		const executionContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, executionSettings, AccessibleViewProviderId.ExecutionSettings, AccessibilityVerbositySettingId.ExecutionSettings));
 		const management = new Map<string, SettingsPageRenderer>();
@@ -427,6 +428,7 @@ export class SessionsPreferences extends Disposable {
 				const index = buttons.length;
 				const button = resources.add(new Button(group, {
 					...defaultButtonStyles,
+					title: category.title,
 					label: category.title,
 					icon: category.icon,
 					presentation: 'quiet',
@@ -449,7 +451,13 @@ export class SessionsPreferences extends Disposable {
 				element: { kind: 'group', id: `sessions.category.${category.id}`, title: category.title, description: '' },
 				children: [
 					...category.settings.map(setting => ({ element: { kind: 'item' as const, id: setting.id, title: setting.title, description: setting.description, keywords: [setting.id, ...setting.keywords ?? []], tags: setting.tags, value: setting } })),
-					...categoryContents(category).flatMap(content => content.getNodes(query)),
+					...categoryContents(category).flatMap(content => content.getNodes(query).flatMap(node => {
+						const group = node.element;
+						// The category heading already labels these rows, including in search results.
+						return group.kind === 'group' && group.title === category.title && !group.header && !group.description
+							? node.children ?? []
+							: [node];
+					})),
 				],
 			}));
 			treeModel.setChildren(nodes);

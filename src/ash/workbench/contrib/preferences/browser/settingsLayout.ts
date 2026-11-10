@@ -709,7 +709,14 @@ export const SettingsNavigation = [
 				description: '',
 				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion', 'commit', 'commit message'],
 				presentation: 'general',
-				groups: [],
+				groups: [
+					{
+						id: 'model-evaluation',
+						label: localize({ bundle: 'ash.settings', key: 'categories.agents.label' }, 'Agents'),
+						description: '',
+						settings: ['sessions.chat.compareAgents.tools.enabled'],
+					},
+				],
 			},
 			{
 				id: 'teams',

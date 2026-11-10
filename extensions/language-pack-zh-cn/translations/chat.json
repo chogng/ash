@@ -1929,6 +1929,7 @@
     "chat.usage.subscriptionHelp": "订阅额度显示账户级额度和重置时间。按 Tab 找到“刷新”，然后打开辅助功能视图以阅读报告的额度。",
     "chat.usage.noSubscriptions": "没有已连接的订阅账户报告用量。",
     "chat.usage.title": "用量",
+    "chat.usage.currentChat": "当前对话用量",
     "chat.usage.description": "查看当前聊天的上下文估算和累计 token 用量。",
     "chat.usage.help": "用量设置显示当前聊天的上下文估算、类别明细、模型限制和累计 token 用量。上下文百分比以自动压缩使用的输入预算为基准。累计用量统计整个聊天中的模型调用，与当前上下文估算分别显示。缓存和推理 token 是已报告输入和输出的明细，不是额外总量。未报告的指标显示为“暂无数据”，不完整的总量标为“至少”。估算不包含尚未发送的草稿。激活“刷新”可读取最新指标。按 Tab 移动到“刷新”。关闭设置可返回聊天。",
     "chat.usage.unavailable": "暂无数据",

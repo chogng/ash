@@ -14,7 +14,7 @@ export class ChatUsageSettingsModel extends Disposable implements SettingsSectio
 	readonly categoryId = 'chat-usage';
 	readonly itemId = 'chat.usage';
 	readonly groupId = null;
-	get title(): string { return localize('chat.usage.title', 'Usage'); }
+	get title(): string { return localize('chat.usage.currentChat', 'Current chat usage'); }
 	get description(): string { return localize('chat.usage.description', 'Inspect the current chat’s context estimate and accumulated token usage.'); }
 	get keywords(): readonly string[] { return ['context', 'tokens', 'usage', 'budget', localize('chat.usage.title', 'Usage')]; }
 	get help(): string {

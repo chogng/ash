@@ -92,6 +92,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 			this.settings = this._register(this.instantiation.createInstance(SettingsSectionRenderer, this.panel, {
 				categoryId: 'customize-settings',
 				title: this.tabItems[0].label,
+				hideInnerTitle: true,
 				description: localize('sessions.customize.settingsDescription', 'Edit shared Workbench preferences using the settings editor or the current profile’s settings.json file.'),
 				help: localize('sessions.customize.settingsHelp', 'Open Workbench Settings to search, change or reset settings. Open User Settings (JSON) to edit the profile’s settings.json file. Both use the same configuration owner as the Workbench.'),
 				onDidChange: Event.None,
@@ -111,6 +112,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 			this.hooks = this._register(this.instantiation.createInstance(SettingsSectionRenderer, this.panel, {
 				categoryId: 'hooks',
 				title: localize({ bundle: 'ash.settings', key: 'hooks.aria' }, 'Agent Hooks'),
+				hideInnerTitle: true,
 				description: localize({ bundle: 'ash.settings', key: 'hooks.managementLink' }, 'Manage Hooks in Agent Customizations.'),
 				help: localize({ bundle: 'ash.settings', key: 'hooks.managementLinkHelp' }, 'Open Manage Hooks to search events, inspect declarations, edit TOML, or ask Ash to configure a Hook.'),
 				onDidChange: Event.None,
@@ -130,7 +132,7 @@ export class SessionsCustomizeContent extends SettingsPageRenderer {
 
 		}
 		const nodes: SettingsTreeNode<SettingsSectionReference>[] = [
-			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: this.settings?.getNodes() as readonly SettingsTreeNode<SettingsSectionReference>[] ?? [] },
+			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: this.settings?.getNodes().flatMap(node => node.children ?? [node]) ?? [] },
 			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[1].label, description: '' }, children: this.hooks?.getNodes() as readonly SettingsTreeNode<SettingsSectionReference>[] ?? [] },
 		];
 		this.treeModel.setChildren(nodes);

@@ -1527,43 +1527,45 @@ test.describe('Sessions settings components', () => {
 	}) => {
 		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const search = settings.getByRole('searchbox', { name: 'Search settings' });
-		const setting = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]');
+		const setting = settings.locator('[data-settings-item-id="chat.tips.enabled"]');
 		const empty = settings.locator('.ash-sessions-settings-empty');
-		await search.fill('@id:chat.disableAIFeatures');
+		await search.fill('@id:chat.tips.enabled');
+		await expect(setting.getByRole('switch')).toBeChecked();
 		await setting.getByRole('switch').focus();
 		await setting.getByRole('switch').press('Space');
-		await settings.getByRole('button', { name: 'Filter Settings', exact: true }).click();
-		await settings.getByRole('menuitem', { name: 'Modified', exact: true }).click();
-		await expect(search).toHaveValue('@id:chat.disableAIFeatures @modified');
+		await search.fill('@id:chat.tips.enabled @modified');
+		await expect(search).toHaveValue('@id:chat.tips.enabled @modified');
 		await expect(search).toBeFocused();
-		await expect(setting.getByRole('switch')).toBeChecked();
+		await expect(setting.getByRole('switch')).not.toBeChecked();
 		await expect(settings.locator('.ash-sessions-customize')).toHaveCount(0);
 		await page.evaluate(() =>
-			window.ashSessionsIntegration.updateConfiguration('chat.disableAIFeatures', undefined),
+			window.ashSessionsIntegration.updateConfiguration('chat.tips.enabled', undefined),
 		);
 		await expect(setting).toHaveCount(0);
 		await expect(empty).toBeVisible();
 		await expect(search).toBeFocused();
-		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('chat.disableAIFeatures', true));
-		await expect(setting.getByRole('switch')).toBeChecked();
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('chat.tips.enabled', false));
+		await expect(setting.getByRole('switch')).not.toBeChecked();
 		await expect(empty).toBeHidden();
 		await expect(search).toBeFocused();
-		await setting.hover();
-		const more = setting.getByRole('button', { name: 'More actions for Disable AI features', exact: true });
+		const more = setting.getByRole('button', { name: 'More actions for Show Chat tips', exact: true });
+		await search.press('ArrowDown');
+		await expect(more).toBeFocused();
+		await expect(more).toBeInViewport();
 		const actionBounds = await more.boundingBox();
-		expect(actionBounds).toMatchObject({ width: 22, height: 22 });
-		await expect(more.locator('.ash-icon')).toHaveCSS('width', '16px');
-		await more.click();
+		expect(actionBounds).toMatchObject({ width: 28, height: 28 });
+		await expect(more.locator('.ash-icon')).toHaveCSS('font-size', '18px');
+		await more.press('Enter');
 		await settings.getByRole('menuitem', { name: 'Reset Setting', exact: true }).click();
 		await expect(setting).toHaveCount(0);
 		await expect(empty).toBeVisible();
-		await expect(search).toHaveValue('@id:chat.disableAIFeatures @modified');
-		await search.fill('@id:chat.disableAIFeatures');
-		await expect(setting.getByRole('switch')).not.toBeChecked();
+		await expect(search).toHaveValue('@id:chat.tips.enabled @modified');
+		await search.fill('@id:chat.tips.enabled');
+		await expect(setting.getByRole('switch')).toBeChecked();
 		await expect(empty).toBeHidden();
 	});
 
-	test('preferences keyboard navigation clears search before handing off to shared shortcuts', async ({
+	test('preferences keyboard navigation works in a narrow window and opens Agent Window shortcuts', async ({
 		page,
 	}, testInfo) => {
 		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
@@ -1573,16 +1575,39 @@ test.describe('Sessions settings components', () => {
 		await expect(search).toHaveValue('');
 		await expect(search).toBeFocused();
 		await expect(settings).toBeVisible();
+		const viewport = page.viewportSize()!;
+		await page.setViewportSize({ width: 540, height: 500 });
+		const edgeGap = await settings.evaluate(dialog => {
+			const track = dialog.querySelector('.ash-sessions-settings-page-scrollable > .ash-scrollbar-track-vertical')!;
+			return dialog.getBoundingClientRect().right - parseFloat(getComputedStyle(dialog).borderRightWidth)
+				- track.getBoundingClientRect().right;
+		});
+		expect(edgeGap).toBeCloseTo(0, 1);
+		const header = settings.locator('.ash-dialog-header');
+		const close = header.getByRole('button', { name: 'Close Dialog', exact: true });
+		await expect(header).toHaveCSS('height', '28px');
+		expect(await header.evaluate(element => getComputedStyle(element, '::after').borderBlockStartWidth)).toBe('1px');
+		await expect(close).toHaveCSS('width', '28px');
+		await expect(close).toHaveCSS('height', '28px');
+		await close.hover();
+		await expect(close).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const title = await header.getByRole('heading', { name: 'Settings', exact: true }).boundingBox();
+		const closeBox = await close.boundingBox();
+		expect(title!.y + title!.height / 2).toBeCloseTo(closeBox!.y + closeBox!.height / 2, 1);
 		const general = settings.locator('[data-settings-category-id="general"]');
+		await expect(general).toBeInViewport();
 		await general.focus();
 		await general.press('End');
 		const shortcutsCategory = settings.locator('[data-settings-category-id="keyboard-shortcuts"]');
 		await expect(shortcutsCategory).toBeFocused();
+		await expect(shortcutsCategory).toBeInViewport();
 		await expect(shortcutsCategory).toHaveAttribute('aria-current', 'page');
 		await shortcutsCategory.press('ArrowDown');
 		await expect(general).toBeFocused();
+		await expect(general).toBeInViewport();
 		await expect(general).toHaveAttribute('aria-current', 'page');
-		await search.fill('shortcuts');
+		await page.setViewportSize(viewport);
+		await search.fill('keyboard shortcuts');
 		await search.press('ArrowDown');
 		const openShortcuts = settings
 			.locator('.ash-sessions-settings-page')
@@ -1590,26 +1615,22 @@ test.describe('Sessions settings components', () => {
 		await expect(openShortcuts).toBeFocused();
 		await openShortcuts.press('Enter');
 		await expect(settings).toHaveCount(0);
-		const sharedEditor = page.locator('.ash-keybindings-editor');
-		await expect(sharedEditor).toBeVisible();
+		const shortcuts = page.getByRole('dialog', { name: 'Agent Window Keyboard Shortcuts', exact: true });
+		await expect(shortcuts).toBeVisible();
 		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true });
 		await expect(chat).toHaveAttribute('aria-current', 'page');
-		await expect(sharedEditor.getByRole('searchbox')).toBeFocused();
-		await sharedEditor.getByRole('searchbox').fill('workbench.action.openSettings');
-		await expect(
-			sharedEditor
-				.locator('.ash-keybindings-command-id')
-				.filter({ hasText: /^workbench\.action\.openSettings$/u }),
-		).toBeVisible();
-		const shortcut = sharedEditor.locator('.ash-keybindings-key .ash-keybinding-label').first();
+		await expect(shortcuts.getByRole('searchbox')).toBeFocused();
+		await shortcuts.getByRole('searchbox').fill('Search sessions in the sidebar');
+		const shortcut = shortcuts.getByRole('listitem').filter({ hasText: 'Search sessions in the sidebar' });
+		await expect(shortcut).toBeVisible();
 		await expect(shortcut.locator('kbd')).toHaveCount(2);
 		for (const cap of await shortcut.locator('kbd').all()) {
 			await expect(cap).toHaveCSS('height', '20px');
 			await expect(cap).toHaveCSS('border-radius', '4px');
 		}
-		await sharedEditor.screenshot({ path: testInfo.outputPath('settings-keycaps.png') });
-		await page.locator('.ash-modal-editor-close').click();
-		await expect(sharedEditor).toBeHidden();
+		await shortcuts.screenshot({ path: testInfo.outputPath('settings-keycaps.png') });
+		await shortcuts.getByRole('button', { name: 'Close', exact: true }).click();
+		await expect(shortcuts).toBeHidden();
 		await expect(chat).toHaveAttribute('aria-current', 'page');
 	});
 
@@ -1634,7 +1655,8 @@ test.describe('Sessions settings components', () => {
 			body: await page.screenshot(),
 			contentType: 'image/png',
 		});
-		await page.getByRole('button', { name: 'Close Ash Settings', exact: true }).click();
+		const closeSharedSettings = page.getByRole('toolbar', { name: 'Close Ash Settings', exact: true }).getByRole('button', { name: 'Close', exact: true });
+		await closeSharedSettings.click();
 		await expect(chat).toHaveAttribute('aria-current', 'page');
 		for (const [category, label, target] of [
 			['browser', 'Open Browser settings', 'browser'],
@@ -1653,7 +1675,7 @@ test.describe('Sessions settings components', () => {
 				'data-active-settings-category',
 				target,
 			);
-			await page.getByRole('button', { name: 'Close Ash Settings', exact: true }).click();
+			await closeSharedSettings.click();
 		}
 	});
 

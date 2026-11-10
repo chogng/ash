@@ -1,25 +1,34 @@
 .ash-sessions-settings-dialog.ash-dialog {
-	width: min(960px, calc(100vw - var(--ash-spacing-size320)));
+	width: 960px;
 	height: min(640px, calc(100dvh - min(90px, 20dvh)));
-	border-radius: var(--ash-cornerRadius-xLarge);
 	container-type: inline-size;
 }
 
 .ash-sessions-settings-dialog.ash-dialog[open] {
 	display: grid;
 	grid-template-rows: auto minmax(0, 1fr);
+	overflow: hidden;
 }
 
 .ash-sessions-settings-dialog > .ash-dialog-header {
-	padding: var(--ash-spacing-size120);
-	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	position: relative;
+}
+
+.ash-sessions-settings-dialog > .ash-dialog-header::after {
+	position: absolute;
+	inset-block-start: calc(100% + var(--ash-spacing-size80));
+	inset-inline: 0;
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	content: "";
+	pointer-events: none;
 }
 
 .ash-sessions-settings-dialog > .ash-dialog-body {
 	display: grid;
 	min-width: 0;
 	min-height: 0;
-	grid-template-columns: clamp(184px, 22.5%, 232px) minmax(0, 1fr);
+	grid-template-columns: clamp(200px, 24%, 232px) minmax(0, 1fr);
 	grid-template-rows: minmax(0, 1fr);
 	padding: 0;
 }
@@ -37,8 +46,7 @@
 	box-sizing: border-box;
 	overflow: hidden;
 	flex-direction: column;
-	padding: var(--ash-spacing-size160) 0 0;
-	border-right: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-inline-end: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
 .ash-sessions-settings-search {
@@ -47,14 +55,14 @@
 	flex: 0 0 auto;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
-	margin: 0 var(--ash-spacing-size160);
+	margin-inline-end: var(--ash-spacing-size120);
 }
 
 .ash-sessions-settings-search > .ash-icon {
 	position: absolute;
 	z-index: 1;
 	top: 50%;
-	left: var(--ash-spacing-size100);
+	inset-inline-start: var(--ash-spacing-size100);
 	color: var(--ash-description-foreground);
 	transform: translateY(-50%);
 	pointer-events: none;
@@ -64,7 +72,7 @@
 	min-width: 0;
 	width: 100%;
 	flex: 1;
-	padding-left: var(--ash-spacing-size240);
+	padding-inline-start: var(--ash-spacing-size240);
 	border-radius: var(--ash-cornerRadius-large);
 }
 
@@ -77,14 +85,15 @@
 
 .ash-sessions-settings-navigation-scrollable,
 .ash-sessions-settings-page-scrollable {
-	width: 100%;
 	height: 100%;
 }
 
 .ash-sessions-settings-navigation-content {
 	display: flex;
 	flex-direction: column;
-	padding: 0 var(--ash-spacing-size160) var(--ash-spacing-size160);
+	gap: var(--ash-spacing-size160);
+	padding-block-end: var(--ash-spacing-size120);
+	padding-inline-end: var(--ash-spacing-size120);
 }
 
 .ash-sessions-settings-navigation-group {
@@ -93,26 +102,19 @@
 	gap: var(--ash-spacing-size20);
 }
 
-.ash-sessions-settings-navigation-group
-	+ .ash-sessions-settings-navigation-group {
-	margin-top: var(--ash-spacing-size120);
-	padding-top: var(--ash-spacing-size120);
-	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
-}
-
 .ash-sessions-settings-navigation .ash-sessions-settings-navigation-item {
 	width: 100%;
 	min-height: var(--ash-spacing-size320);
 	justify-content: flex-start;
-	border-radius: var(--ash-cornerRadius-large);
+	border-radius: var(--ash-cornerRadius-medium);
 	color: var(--ash-foreground);
-	text-align: left;
+	text-align: start;
 }
 
 .ash-sessions-settings-navigation
 	.ash-sessions-settings-navigation-item
 	> .ash-button-content {
-	gap: var(--ash-spacing-size120);
+	gap: var(--ash-spacing-size80);
 }
 
 .ash-sessions-settings-navigation-item:hover {
@@ -130,16 +132,22 @@
 	min-width: 0;
 	min-height: 0;
 	box-sizing: border-box;
-	overflow: hidden;
 	container: sessions-settings-page / inline-size;
 }
 
+.ash-sessions-settings-page-scrollable {
+	/* Extend the track into the dialog gutter while keeping the content inset. */
+	margin-inline-end: calc(0px - var(--ash-dialog-form-padding));
+}
+
 .ash-sessions-settings-page-content {
-	padding: var(--ash-spacing-size200) var(--ash-spacing-size320);
+	padding-block-end: var(--ash-spacing-size120);
+	padding-inline: var(--ash-spacing-size160)
+		calc(var(--ash-spacing-size160) + var(--ash-dialog-form-padding));
 }
 
 .ash-sessions-settings-page-title {
-	margin: 0 0 var(--ash-spacing-size120);
+	margin: 0 0 var(--ash-spacing-size160);
 	color: var(--ash-foreground);
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
@@ -147,6 +155,48 @@
 
 .ash-sessions-settings-page .ash-configuration-settings {
 	max-width: none;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-settings-page .ash-settings-tree {
+	gap: var(--ash-spacing-size240);
+}
+
+.ash-sessions-settings-page .ash-settings-tree-group-title {
+	margin: 0 0 var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-settings-page .ash-settings-tree-group-title .ash-button {
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-sessions-settings-page .is-settings-root > .ash-settings-tree-group-title {
+	margin-block-end: 0;
+}
+
+.ash-sessions-settings-page .ash-settings-tree-group-description:empty {
+	display: none;
+}
+
+.ash-sessions-settings-page
+	.ash-sessions-settings-list
+	> *
+	+ :is(
+		.ash-settings-tree-group,
+		.ash-settings-card-section,
+		.ash-sessions-agents
+	),
+.ash-sessions-settings-page
+	.ash-sessions-settings-list
+	> :is(
+		.ash-settings-tree-group,
+		.ash-settings-card-section,
+		.ash-sessions-agents
+	)
+	+ * {
+	margin-block-start: var(--ash-spacing-size200);
 }
 
 .ash-sessions-settings-page .ash-settings-card {
@@ -160,16 +210,92 @@
 
 .ash-sessions-settings-page
 	.ash-settings-card
+	> :is(
+		.ash-settings-tree-group,
+		.ash-settings-card-section,
+		.ash-sessions-agents
+	)
+	+ *::before,
+.ash-sessions-settings-page
+	.ash-settings-card
+	> :is(
+		.ash-settings-tree-group,
+		.ash-settings-card-section,
+		.ash-sessions-agents,
+		.ash-settings-section-actions
+	)::before,
+.ash-sessions-settings-page
+	.ash-chat-models-catalog
+	> .ash-chat-models-list::before {
+	content: none;
+}
+
+.ash-sessions-settings-page
+	.ash-settings-card
 	> *
 	+ .ash-local-transcription-model-controls::before {
 	content: "";
 }
 
-.ash-sessions-settings-page
-	:is(.ash-settings-card, .ash-local-transcription-model-controls)
-	> .ash-configuration-setting {
-	padding-inline: 0 var(--ash-spacing-size80);
+.ash-sessions-settings-page .ash-configuration-setting {
+	min-height: 0;
+	padding-block: var(--ash-spacing-size80);
 	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-settings-page
+	:is(
+		.ash-configuration-setting,
+		.ash-settings-field-row,
+		.ash-settings-section,
+		.ash-settings-section-status,
+		.ash-memories .memories-manager,
+		.ash-memories .memories-status:where(:not(:empty)),
+		.ash-sessions-storage-summary,
+		.ash-sessions-storage-management,
+		.ash-chat-models-catalog .ash-models-settings-model-row,
+		.ash-chat-models-list > .ash-models-settings-expand,
+		.ash-models-settings-search-row,
+		.ash-models-settings-api-row,
+		.ash-models-settings-subscription-row,
+		.ash-models-settings-subscription-empty
+	) {
+	padding-inline: 0 var(--ash-spacing-size80);
+}
+
+.ash-sessions-settings-page
+	.ash-settings-section:not(.ash-settings-card-section) {
+	padding-block-start: 0;
+}
+
+.ash-sessions-settings-page .ash-settings-card > .ash-settings-section-actions {
+	margin-block-start: var(--ash-spacing-size80);
+}
+
+.ash-sessions-settings-page .ash-models-settings-search-row {
+	padding-block-start: 0;
+}
+
+.ash-sessions-settings-page .ash-models-settings-search-row > .ash-input-box {
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-settings-page
+	.ash-chat-models-catalog
+	.ash-models-settings-model-row {
+	box-sizing: border-box;
+	min-block-size: calc(
+		var(--ash-spacing-size280) + 2 * var(--ash-spacing-size80)
+	);
+	padding-block: var(--ash-spacing-size80);
+}
+
+.ash-sessions-settings-page .ash-models-settings-provider-title {
+	flex-wrap: wrap;
+}
+
+.ash-sessions-settings-page .ash-model-context-button {
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-sessions-settings-page .ash-local-transcription-model-table :is(th, td) {
@@ -194,7 +320,7 @@
 
 .ash-sessions-settings-page .ash-local-transcription-model-table thead {
 	color: var(--ash-muted-foreground);
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-sessions-settings-page .ash-local-transcription-model-language-tags {
@@ -247,19 +373,29 @@
 	display: none;
 }
 
+.ash-sessions-settings-page .ash-configuration-setting.ash-setting-item {
+	padding-inline-end: calc(
+		var(--ash-spacing-size280) + var(--ash-spacing-size80)
+	);
+}
+
+.ash-sessions-settings-page
+	.ash-configuration-setting
+	> .ash-setting-item-actions {
+	--ash-toolbar-actionSize: var(--ash-spacing-size280);
+	inset-block-start: 50%;
+	inset-inline: auto 0;
+	inline-size: var(--ash-toolbar-actionSize);
+}
+
+.ash-sessions-settings-page .ash-setting-item-actions-trigger .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
 .ash-sessions-settings-page
 	.ash-setting-item-actions-trigger:not(:focus-visible) {
 	opacity: 0;
 	pointer-events: none;
-}
-
-.ash-sessions-settings-page
-	:is(
-		.ash-settings-field-row,
-		.ash-memories .memories-manager,
-		.ash-memories .memories-status:not(:empty)
-	) {
-	padding-inline: 0 var(--ash-spacing-size80);
 }
 
 .ash-sessions-settings-page .ash-configuration-setting-copy {
@@ -276,10 +412,19 @@
 		.ash-settings-field-description
 	) {
 	color: var(--ash-muted-foreground);
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-sessions-settings-page .ash-configuration-setting > .ash-select-box {
 	max-width: 100%;
+}
+
+.ash-sessions-settings-page
+	.ash-settings-section
+	> .ash-select-box
+	> .ash-select-box-button {
+	min-block-size: var(--ash-spacing-size280);
+	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-sessions-settings-page
@@ -369,13 +514,6 @@
 	border-radius: var(--ash-cornerRadius-large);
 }
 
-.ash-sessions-settings-section-title {
-	margin: 0 0 var(--ash-spacing-size120);
-	color: var(--ash-foreground);
-	font-size: var(--ash-fontSize-heading3);
-	font-weight: var(--ash-fontWeight-semiBold);
-}
-
 .ash-sessions-settings-status {
 	margin: var(--ash-spacing-size120) 0 0;
 }
@@ -391,20 +529,25 @@
 @container (max-width: 600px) {
 	.ash-sessions-settings-dialog > .ash-dialog-body {
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: auto minmax(0, 1fr);
+		/* The navigation's absolute scroll viewport has no intrinsic height. */
+		grid-template-rows: min(180px, 40%) minmax(0, 1fr);
 	}
 
 	.ash-sessions-settings-sidebar {
 		grid-column: 1;
 		grid-row: 1;
-		max-height: min(180px, 35vh);
-		border-right: 0;
-		border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+		border-inline-end: 0;
+		border-block-end: var(--ash-strokeThickness) solid
+			var(--ash-widget-border);
 	}
 
 	.ash-sessions-settings-page {
 		grid-column: 1;
 		grid-row: 2;
+	}
+
+	.ash-sessions-settings-page-content {
+		padding-block-start: var(--ash-spacing-size120);
 	}
 }
 
@@ -439,7 +582,8 @@
 }
 
 @container sessions-settings-page (max-width: 420px) {
-	.ash-sessions-settings-page .ash-configuration-setting {
+	.ash-sessions-settings-page
+		.ash-configuration-setting:not(.ash-configuration-toggle-setting) {
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--ash-spacing-size80);
 	}
