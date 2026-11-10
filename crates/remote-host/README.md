@@ -8,6 +8,10 @@
 `ash-app-server-client::AppServerSession` 提供；Local 与 Remote 都必须交付同一个 client/session
 contract。这个 crate 只服务于需要 loopback Tunnel 的产品能力。
 
+Desktop 通过随包分发的 `ash-remote-host forward <host> <remote-port> <ssh-executable>`
+为每条转发持有一个本机 helper。helper 通过 stdout 发布 JSON Lines 状态。关闭 stdin 租约会
+停止 OpenSSH，并在 worker 退出后关闭 helper。入站托管继续使用独立的命令入口。
+
 ## Ownership
 
 本 crate 负责活跃 Tunnel 的运行时生命周期：

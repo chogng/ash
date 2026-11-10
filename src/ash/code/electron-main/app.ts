@@ -60,7 +60,7 @@ import { AppServerConnectionRelay } from '../../platform/agentHost/electron-main
 import { DevelopmentAppServerReloader } from '../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from '../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { AppServerProcessDiagnostics } from '../../platform/app-server-daemon/electron-main/appServerProcessDiagnostics.js';
-import { remoteExecutablePath } from '../../platform/remote/node/remotePackage.js';
+import { remoteExecutablePath, remoteHostExecutablePath } from '../../platform/remote/node/remotePackage.js';
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platform/ipc/electron-main/trustedIpcRouter.js';
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
@@ -589,16 +589,16 @@ export class AshApplication extends Disposable {
 		}));
 		// Runtime binaries are needed only when inbound hosting actually starts.
 		// UI-only windows must not require a prepared backend package at startup.
-		const remoteExecutable = () => remoteExecutablePath({
+		const remotePackage = {
 			appPath: app.getAppPath(),
 			isPackaged: app.isPackaged,
 			platform: process.platform,
 			resourcesPath: process.resourcesPath
-		});
+		};
 		const tunnelServices = this._register(this.windowServices.createChild(new ServiceCollection([ILogService, this.logService])));
 		const coordinator = this._register(tunnelServices.createInstance(TunnelProcessCoordinator, {
-			get executable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'); },
-			get backendExecutable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'); },
+			get executable() { return remoteHostExecutablePath(remotePackage); },
+			get backendExecutable() { return join(dirname(remoteHostExecutablePath(remotePackage)), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'); },
 			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
 			assets: this.rendererRoot,
 			environment: { ...process.env, ASH_HOME: this.profileRoot },
@@ -1528,6 +1528,20 @@ export class AshApplication extends Disposable {
 		return bootstrap.processLauncher;
 	}
 
+	private createSshPortForwardingService(getWorkspace: () => IAnyWorkspaceIdentifier): SshPortForwardingService {
+		return new SshPortForwardingService({
+			getWorkspace,
+			forwardExecutable: () => remoteHostExecutablePath({
+				appPath: app.getAppPath(),
+				isPackaged: app.isPackaged,
+				platform: process.platform,
+				resourcesPath: process.resourcesPath,
+			}),
+			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
+			localEnvironment: process.env,
+		});
+	}
+
 	private async startAppServerWithRecovery(
 		supervisor: AppServerConnectionRelay,
 	): Promise<boolean> {
@@ -1641,11 +1655,7 @@ export class AshApplication extends Disposable {
 		this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
 		const workspaceHost = windowDisposables.add(new RendererWorkspaceHost(window.webContents));
 		windowDisposables.add(record.windowStateTracking);
-		const remotePortForwardingService = new SshPortForwardingService({
-			getWorkspace: () => workspaceContext.getWorkspace(),
-			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
-			localEnvironment: process.env,
-		});
+		const remotePortForwardingService = this.createSshPortForwardingService(() => workspaceContext.getWorkspace());
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 		const browserServices = this.createBrowserServices(window, workspaceContext, remotePortForwardingService, windowDisposables, supervisor, systemContextMenu);
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace, resolvedWorkspace }) => {
@@ -2202,11 +2212,7 @@ export class AshApplication extends Disposable {
 						: undefined;
 					if (localSessionsRelay) this.trackAppServerConnection(window, localSessionsRelay, windowDisposables);
 
-					const remotePortForwardingService = new SshPortForwardingService({
-						getWorkspace: () => session.workspaceContext.getWorkspace(),
-						sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
-						localEnvironment: process.env,
-					});
+					const remotePortForwardingService = this.createSshPortForwardingService(() => session.workspaceContext.getWorkspace());
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay, systemContextMenu);
 					this.chatGPTMain.attachWindow(window.id, windowDisposables);
