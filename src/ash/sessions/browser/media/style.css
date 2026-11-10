@@ -434,7 +434,8 @@
 		:where(.ash-sessions-window)
 			:is(
 				.ash-dialog-close-confirmation,
-				.ash-dialog-destructive-confirmation
+				.ash-dialog-destructive-confirmation,
+				.ash-dialog-form-confirmation
 			),
 		.ash-sessions-directory-permission-dialog
 	)
@@ -452,7 +453,8 @@
 		:where(.ash-sessions-window)
 			:is(
 				.ash-dialog-close-confirmation,
-				.ash-dialog-destructive-confirmation
+				.ash-dialog-destructive-confirmation,
+				.ash-dialog-form-confirmation
 			),
 		.ash-sessions-directory-permission-dialog
 	)

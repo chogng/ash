@@ -55,6 +55,8 @@ export interface IConfirmationDialogOptions extends IDialogOptions {
 	readonly primaryButton?: string;
 	readonly cancelButton?: string;
 	readonly destructive?: boolean;
+	/** Use the workbench form layout for this confirmation. */
+	readonly layout?: 'form';
 }
 
 /** Options for a modal decision with save, discard, and cancel-style outcomes. */

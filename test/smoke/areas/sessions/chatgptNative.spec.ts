@@ -16,7 +16,7 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -32,6 +32,8 @@ async function installService(application: ElectronApplication, holdInitializati
 		let offline = false;
 		let recentHistoryRateLimited = false;
 		let recentHistoryRequests = 0;
+		let shareRequests = 0;
+		let shareUrl = 'https://chatgpt.com/share/fixture-live';
 		let uploadsHeld = false;
 		let heldUploads = 0;
 		const now = Date.now;
@@ -56,6 +58,8 @@ async function installService(application: ElectronApplication, holdInitializati
 			setRecentHistoryRateLimited(value) { recentHistoryRateLimited = value; },
 			setClockOffset(milliseconds) { Date.now = milliseconds === 0 ? now : () => now() + milliseconds; },
 			get recentHistoryRequests() { return recentHistoryRequests; },
+			get shareRequests() { return shareRequests; },
+			setShareUrl(value) { shareUrl = value; },
 			holdUploads(value) {
 				uploadsHeld = value;
 				if (!value) for (const release of pendingUploads) release();
@@ -181,9 +185,12 @@ async function installService(application: ElectronApplication, holdInitializati
 					return Response.json({ success: true });
 				}
 				if (url.pathname.endsWith('/share/v2/create') && init?.method === 'POST') {
+					shareRequests++;
 					const body = JSON.parse(String(init.body));
-					if (body.conversation_id !== 'fixture-live' || body.current_node_id !== head) return Response.json({ error: 'Wrong share target' }, { status: 400 });
-					return Response.json({ share_url: 'https://chatgpt.com/share/fixture-live' });
+					if (body.conversation_id !== 'fixture-live' || body.current_node_id !== head || body.is_anonymous !== true) {
+						return Response.json({ error: 'Wrong share target' }, { status: 400 });
+					}
+					return Response.json({ share_url: shareUrl });
 				}
 				if (url.pathname.endsWith('/conversation/new_branch') && init?.method === 'POST') {
 					const body = JSON.parse(String(init.body));
@@ -1010,10 +1017,32 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(page.getByRole('menuitem', { name: '取消置顶', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await share.press('Enter');
-		const confirmation = page.getByRole('dialog');
+		const confirmation = page.getByRole('dialog', { name: '分享对话', exact: true });
 		await expect(confirmation).toContainText('ChatGPT title from the title bar');
+		await expect(confirmation).toHaveAccessibleDescription(/ChatGPT 分享链接/u);
+		await expect(confirmation).toHaveCSS('border-top-left-radius', '12px');
+		await expect(confirmation).toHaveCSS('padding-top', '12px');
+		await expect(confirmation.locator('.ash-dialog-icon')).toHaveCount(0);
+		const cancelShare = confirmation.getByRole('button', { name: '取消', exact: true });
+		await expect(cancelShare).toBeFocused();
+		await test.info().attach('chatgpt-share-confirmation', { body: await page.screenshot(), contentType: 'image/png' });
+		await cancelShare.press('Escape');
+		await expect(confirmation).toBeHidden();
+		await expect(share).toBeFocused();
+		expect(await application.evaluate(() => ashNativeFixture.shareRequests)).toBe(0);
+		expect(await copied()).toBeUndefined();
+		await application.evaluate(() => ashNativeFixture.setShareUrl('https://chatgpt.com/share/'));
+		await share.press('Enter');
+		await confirmation.getByRole('button', { name: '分享', exact: true }).click();
+		await expect(page.locator('.ash-notification-error')).toContainText('ChatGPT 返回了暂不支持的响应。');
+		expect(await application.evaluate(() => ashNativeFixture.shareRequests)).toBe(1);
+		expect(await copied()).toBeUndefined();
+		await application.evaluate(() => ashNativeFixture.setShareUrl('https://chatgpt.com/share/fixture-live'));
+		await share.press('Enter');
 		await confirmation.getByRole('button', { name: '分享', exact: true }).click();
 		await expect.poll(copied).toBe('https://chatgpt.com/share/fixture-live');
+		expect(await application.evaluate(() => ashNativeFixture.shareRequests)).toBe(2);
+		expect(shareService.records.size).toBe(0);
 		await expect(share).toBeFocused();
 		const titleBounds = (await titlebar.locator('.ash-sessions-titlebar-title').boundingBox())!;
 		const shareBounds = (await share.boundingBox())!;

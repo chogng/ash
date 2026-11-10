@@ -416,9 +416,13 @@ export class ChatGPTClient {
 			body: JSON.stringify({ conversation_id: id, current_node_id: node, is_anonymous: true }),
 		});
 		const value: unknown = await response.json();
+		signal.throwIfAborted();
 		if (!isRecord(value) || typeof value.share_url !== 'string') { throw this.invalidResponse(); }
-		const url = new URL(value.share_url);
-		if (url.origin !== 'https://chatgpt.com' || !url.pathname.startsWith('/share/') || url.username || url.password || url.hash) { throw this.invalidResponse(); }
+		const url = URL.parse(value.share_url);
+		if (url?.origin !== 'https://chatgpt.com' || !/^\/share\/(?:e\/)?[A-Za-z0-9_-]+$/u.test(url.pathname)
+			|| url.username || url.password || url.hash) {
+			throw this.invalidResponse();
+		}
 		return url.href;
 	}
 
