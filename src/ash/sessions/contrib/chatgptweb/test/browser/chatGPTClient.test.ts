@@ -447,6 +447,30 @@ suite('Bundled ChatGPT client', () => {
 		assert.match(messages[4]!.text, /File caption\n\nAttachment: &lt;report&gt;\\\[1\\\]\.pdf\n\n\[View this content/u);
 	});
 
+	test('joins a sent image pointer with its named attachment without injecting a caption', async () => {
+		const client = new ChatGPTClient((async () => json({
+			current_node: 'user', mapping: {
+				user: {
+					parent: null, message: {
+						id: 'user', author: { role: 'user' },
+						content: {
+							content_type: 'multimodal_text', parts: [
+								{ content_type: 'image_asset_pointer', asset_pointer: 'sediment://file_diagram', width: 32, height: 32 },
+								'What is this?',
+							]
+						},
+						metadata: { attachments: [{ id: 'file_diagram', name: 'diagram.svg', mime_type: 'image/svg+xml', size: 80 }] },
+					}
+				},
+			},
+		})) as typeof fetch);
+		const { messages } = await client.history('fixture', signal());
+		assert.equal(messages[0]?.text, 'What is this?');
+		assert.deepEqual(messages[0]?.resources, [{
+			uri: 'sediment://file_diagram', name: 'diagram.svg', kind: 'image', mimeType: 'image/svg+xml',
+		}]);
+	});
+
 	test('retains a structured part arriving in a streaming reply', async () => {
 		const initial = { conversation_id: 'stream-chat', message: { id: 'reply', author: { role: 'assistant' }, content: { content_type: 'multimodal_text', parts: ['Caption', { content_type: 'image_asset_pointer' }] } } };
 		const body = `data: ${JSON.stringify(initial)}\n\ndata: [DONE]\n\n`;

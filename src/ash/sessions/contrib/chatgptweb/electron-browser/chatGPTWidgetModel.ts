@@ -19,6 +19,7 @@ import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
 import { decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
+import { mergeChatGPTResources } from '../browser/chatGPTClient.js';
 import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
@@ -357,10 +358,10 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 				const itemId = id('message', message.id);
 				const decoded = message.role === 'assistant' ? this.decodeReply(message, state.conversationId) : undefined;
 				const candidates = [...decoded?.resources ?? [], ...message.resources ?? []];
-				const resources = candidates.length ? candidates.filter((resource, index) =>
-					(!resource.uri.startsWith('sandbox:') || state.conversationId) && candidates.findIndex(candidate => candidate.uri === resource.uri) === index) : undefined;
+				const resources = candidates.length ? mergeChatGPTResources(candidates.filter(resource => !resource.uri.startsWith('sandbox:') || state.conversationId)) : undefined;
 				sources.set(itemId, { messageId: message.id, conversationId: state.conversationId });
-				const text = decoded?.text ?? message.text;
+				const text = message.role === 'user' && resources?.some(resource => resource.kind === 'image')
+					? message.editableText ?? message.text : decoded?.text ?? message.text;
 				if (message.role === 'user' || text.trim() || resources?.length) result.push({
 					id: itemId,
 					type: message.role === 'user' ? 'userMessage' : 'agentMessage',

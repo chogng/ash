@@ -264,7 +264,7 @@ test('changing a completed code fence language retains the response document', (
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	resources.add(services.get(ILanguageService).registerLanguage({ id: 'typescript' }));
-	using part = services.createInstance(CodeBlockPart, document);
+	using part = services.createInstance(CodeBlockPart, document, undefined);
 	const data = { text: 'const value = 1;', languageId: 'plaintext', codeBlockIndex: 0, element: response, chatSessionResource: undefined };
 	part.render(data, 300);
 	const model = part.model!;

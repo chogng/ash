@@ -44,8 +44,13 @@ export class PanelChatAccessibilityHelp implements IAccessibleViewImplementation
 	}
 }
 
-export function getChatRequestAccessibilityHelp(): string {
-	return localize('chat.request.actionsHelp', 'Use Tab to reach Message actions below a sent message. Use Left or Right to choose Copy message or, when available, Edit message. Press Enter or Space to activate the action. You can also press Enter on a focused editable message. The editor opens in place. Press Tab to reach Cancel and Send, or use Control+Enter or Command+Enter to send the edit. Escape cancels and returns focus to Edit message.') + '\n' + localize('chat.showAgentReplyTimestamps.help', 'In Settings, search for Show Agent reply timestamps to change whether reply times are shown.');
+export function getChatRequestAccessibilityHelp(sessionsWindow = false): string {
+	return localize('chat.request.actionsHelp', 'Use Tab to reach Message actions below a sent message. Use Left or Right to choose Copy message or, when available, Edit message. Press Enter or Space to activate the action. You can also press Enter on a focused editable message. The editor opens in place. Press Tab to reach Cancel and Send, or use Control+Enter or Command+Enter to send the edit. Escape cancels and returns focus to Edit message.') + '\n' + localize('chat.showAgentReplyTimestamps.help', 'In Settings, search for Show Agent reply timestamps to change whether reply times are shown.')
+		+ (sessionsWindow ? '\n' + localize('chat.request.sentImagePreviewHelp', 'Use Tab to reach a sent image thumbnail. Press Enter or Space to open the image preview. Escape closes the preview and returns focus to the thumbnail.') : '');
+}
+
+export function getChatCodeBlockCardAccessibilityHelp(): string {
+	return localize('chat.code.cardHelp', 'Use Tab to reach the code block actions. Press Left or Right to move between More Actions and Copy. Open More Actions to insert the code at the cursor, open it in a new file, or apply it to the editor when available. Press Escape to close the menu and return to More Actions.');
 }
 
 /** Shared input operations; product composers append their own layout and session help. */

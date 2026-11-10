@@ -900,6 +900,7 @@ test('Sessions Projects keeps PDFs and arbitrary file references inside a projec
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
 		await expect(projects).toBeVisible();
+		await projects.getByRole('button', { name: 'Mixed materials', exact: true }).click();
 		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Mixed materials');
 		await projects.getByRole('button', { name: 'Remove paper.pdf from project', exact: true }).click();
 		await expect(projects.locator('.ash-projects-material')).toHaveCount(3);

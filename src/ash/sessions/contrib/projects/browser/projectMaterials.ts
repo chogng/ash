@@ -1,6 +1,9 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { basename } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
@@ -9,8 +12,17 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import type { Project, ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import type { ProjectMaterialRow } from '../../chat/browser/chatListModel.js';
 import { IProjectsService } from './projectsService.js';
 import './media/projectMaterials.css';
+
+interface ProjectMaterialsContent {
+	readonly rows: readonly ProjectMaterialRow[] | undefined;
+	readonly busy?: boolean;
+	readonly status?: { readonly text: string; readonly retry?: () => void; };
+	readonly addFiles?: (resources: readonly URI[]) => Promise<unknown>;
+	readonly addFolders?: (resources: readonly URI[]) => Promise<unknown>;
+}
 
 /** Presents project references and delegates their storage and file access to the owning services. */
 export class ProjectMaterials extends Disposable {
@@ -24,143 +36,106 @@ export class ProjectMaterials extends Disposable {
 		super();
 	}
 
-	/** The pane mounts the section with the rest of the details and owns this render's controls. */
-	render(document: Document, project: Project, busy: boolean, content: DisposableStore): HTMLElement {
-		const label = localize('projects.materials', 'Materials');
-		const materials = h(document, 'section', {
-			className: 'ash-projects-materials',
-			attributes: { 'aria-label': label },
-		});
-		const materialsHeading = h(
-			document,
-			'div',
-			{ className: 'ash-projects-section-heading' },
-			h(document, 'h2', {}, label),
-		);
-		this.button(
-			content,
-			materialsHeading,
-			{
-				label: localize('projects.addFiles', 'Add files'),
-				icon: Lxicon.add,
-				enabled: !busy,
-				onClick: () => {
-					void this.addMaterials(project, 'file');
+	renderLocal(document: Document, project: Project, busy: boolean, content: DisposableStore): HTMLElement {
+		const add = async (resources: readonly URI[], kind: ProjectMaterial['kind']) => {
+			const materials = [...project.materials];
+			for (const resource of resources) {
+				if (!materials.some(item => item.resource.toString() === resource.toString())) materials.push({ resource, name: basename(resource), kind });
+			}
+			await this.projects.update(project, project.name, project.description, materials);
+		};
+		return this.render(document, {
+			busy, addFiles: resources => add(resources, 'file'), addFolders: resources => add(resources, 'folder'),
+			rows: project.materials.map(material => ({
+				id: material.resource.toString(), name: material.name, kind: material.kind, tooltip: material.resource.fsPath,
+				open: () => this.openMaterial(material),
+				remove: async () => {
+					await this.projects.update(project, project.name, project.description,
+						project.materials.filter(item => item.resource.toString() !== material.resource.toString()));
 				},
-			},
-			'add-files',
-		);
-		materials.append(
-			materialsHeading,
-			h(
-				document,
-				'p',
-				{ className: 'ash-projects-muted' },
-				localize(
-					'projects.materialsDescription',
-					'Keep images, PDFs, documents and other files close at hand.',
-				),
-			),
-		);
-		if (!project.materials.length) {
-			materials.append(
-				h(
-					document,
-					'p',
-					{ className: 'ash-projects-materials-empty' },
-					localize('projects.noMaterials', 'Add your first material to this project.'),
-				),
-			);
+			})),
+		}, content);
+	}
+
+	/** The pane mounts the section with the rest of the details and owns this render's controls. */
+	render(document: Document, model: ProjectMaterialsContent, content: DisposableStore): HTMLElement {
+		const label = localize('projects.materials', 'Materials');
+		const materials = h(document, 'section', { className: 'ash-projects-materials', attributes: { 'aria-label': label } });
+		const heading = h(document, 'div', { className: 'ash-projects-section-heading' }, h(document, 'h2', {}, label));
+		materials.append(heading, h(document, 'p', { className: 'ash-projects-muted' },
+			localize('projects.materialsDescription', 'Keep images, PDFs, documents and other files close at hand.')));
+		if (model.addFiles) {
+			this.action(content, heading, 'add-files', { label: localize('projects.addFiles', 'Add files'), icon: Lxicon.add, enabled: !model.busy },
+				() => this.pickMaterials('file', model.addFiles!));
+		}
+		if (model.status) {
+			materials.append(h(document, 'p', { className: 'ash-projects-muted', attributes: { role: 'status' } }, model.status.text));
+			if (model.status.retry) this.action(content, materials, 'retry-details', { label: localize('projects.retry', 'Try again') }, model.status.retry);
+		}
+		if (model.rows?.length === 0) {
+			materials.append(h(document, 'p', { className: 'ash-projects-materials-empty' }, model.addFiles
+				? localize('projects.noMaterials', 'Add your first material to this project.')
+				: localize('projects.noMaterialsReadOnly', 'No materials in this project.')));
 		}
 		const list = h(document, 'ul', { className: 'ash-projects-material-list' });
-		for (const material of project.materials) {
+		for (const material of model.rows ?? []) {
 			const row = h(document, 'li', { className: 'ash-projects-material' });
-			const open = this.button(
-				content,
-				row,
-				{
+			if (material.open) {
+				const open = this.action(content, row, material.id, {
 					label: material.name,
+					ariaLabel: material.download ? localize('projects.downloadMaterial', 'Download {0}', material.name) : undefined,
 					icon: material.kind === 'folder' ? Lxicon.folders : Lxicon.file,
-					onClick: () => {
-						void this.openMaterial(material);
-					},
-				},
-				material.resource.toString(),
-			);
-			content.add(this.hover.setupDelayedHover(open.domNode, { content: material.resource.fsPath }));
-			this.button(
-				content,
-				row,
-				{
-					label: localize('projects.removeMaterial', 'Remove {0} from project', material.name),
-					icon: Lxicon.close,
-					iconOnly: true,
-					enabled: !busy,
-					onClick: () => {
-						void this.projects.update(
-							project,
-							project.name,
-							project.description,
-							project.materials.filter(item => item.resource.toString() !== material.resource.toString()),
-						);
-					},
-				},
-				`remove:${material.resource}`,
-			);
+				}, material.open);
+				content.add(this.hover.setupDelayedHover(open.domNode, { content: material.tooltip ?? material.name }));
+			} else {
+				row.append(h(document, 'span', { className: 'ash-projects-material-name', properties: { title: material.name } }, material.name));
+			}
+			if (material.remove) this.action(content, row, `remove:${material.id}`, {
+				label: localize('projects.removeMaterial', 'Remove {0} from project', material.name),
+				icon: Lxicon.close, iconOnly: true, enabled: !model.busy,
+			}, material.remove);
 			list.append(row);
 		}
 		materials.append(list);
-		this.button(
-			content,
-			materials,
-			{
-				label: localize('projects.useFolder', 'Use a folder'),
-				icon: Lxicon.folders,
-				enabled: !busy,
-				onClick: () => {
-					void this.addMaterials(project, 'folder');
-				},
-			},
-			'add-folder',
-		);
-		materials.append(
-			h(
-				document,
-				'p',
-				{ className: 'ash-projects-source-note' },
-				localize('projects.referenceHint', 'Files stay in their original location.'),
-			),
-		);
+		if (model.addFolders) {
+			this.action(content, materials, 'add-folder', {
+				label: localize('projects.useFolder', 'Use a folder'), icon: Lxicon.folders, enabled: !model.busy,
+			}, () => this.pickMaterials('folder', model.addFolders!));
+			materials.append(h(document, 'p', { className: 'ash-projects-source-note' }, localize('projects.referenceHint', 'Files stay in their original location.')));
+		}
 		return materials;
 	}
 
-	private button(content: DisposableStore, parent: HTMLElement, options: IButtonOptions, key: string): Button {
-		const button = content.add(new Button(parent, { ...defaultButtonStyles, ...options }));
+	private action(content: DisposableStore, parent: HTMLElement, key: string, options: IButtonOptions, run: () => unknown): Button {
+		let running = false;
+		const button = content.add(new Button(parent, {
+			...defaultButtonStyles, ...options, onClick: () => {
+				if (running) return;
+				running = true;
+				button.domNode.setAttribute('aria-busy', 'true');
+				void Promise.resolve().then(run).catch(error => {
+					if (!isCancellationError(error)) this.reportError(toErrorMessage(error));
+				}).finally(() => {
+					running = false;
+					button.domNode.removeAttribute('aria-busy');
+				});
+			}
+		}));
 		button.domNode.dataset.projectControl = key;
 		return button;
 	}
 
-	private async addMaterials(project: Project, kind: ProjectMaterial['kind']): Promise<void> {
+	private async pickMaterials(kind: ProjectMaterial['kind'], add: (resources: readonly URI[]) => Promise<unknown>): Promise<void> {
+		let resources: readonly URI[] | undefined;
 		try {
-			const resources = await this.files.showOpenDialog({
+			resources = await this.files.showOpenDialog({
 				title: localize('projects.addMaterials', 'Add project materials'),
-				canSelectFiles: kind === 'file',
-				canSelectFolders: kind === 'folder',
-				canSelectMany: true,
+				canSelectFiles: kind === 'file', canSelectFolders: kind === 'folder', canSelectMany: true
 			});
-			if (!resources || this.isDisposed) {
-				return;
-			}
-			const materials = [...project.materials];
-			for (const resource of resources) {
-				if (!materials.some(item => item.resource.toString() === resource.toString())) {
-					materials.push({ resource, name: basename(resource), kind });
-				}
-			}
-			await this.projects.update(project, project.name, project.description, materials);
 		} catch {
-			this.reportError(localize('projects.pickFailed', 'Could not add these materials. Try again.'));
+			throw new Error(localize('projects.pickFailed', 'Could not add these materials. Try again.'));
 		}
+		if (resources?.length && !this.isDisposed) await add(resources);
 	}
 
 	private async openMaterial(material: ProjectMaterial): Promise<void> {

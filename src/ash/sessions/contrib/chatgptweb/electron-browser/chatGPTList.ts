@@ -1,4 +1,5 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { streamToBuffer } from '../../../../base/common/buffer.js';
 import { disposableWindowInterval, disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { CancellationError } from '../../../../base/common/errors.js';
@@ -7,22 +8,28 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { autorun, derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
+import { isValidBasename } from '../../../../base/common/extpath.js';
+import { getMediaOrTextMime } from '../../../../base/common/mime.js';
+import { basename } from '../../../../base/common/resources.js';
+import { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../chat/common/constants.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
+import type { CatalogProjectDetails, ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
-import { chatGPTProjectConversationId, chatGPTProjectPreferenceKey, IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
+import { ChatGPTProjectDraftModel } from './chatGPTProjectDraftModel.js';
+import { chatGPTAttachmentLimitMessage, chatGPTAttachmentLimits, chatGPTProjectConversationId, chatGPTProjectPreferenceKey, IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';
 
@@ -67,6 +74,9 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IStorageService private readonly storage: IStorageService,
+		@IFileService private readonly files: IFileService,
+		@IFileDialogService private readonly fileDialogs: IFileDialogService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		const preferencesChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
@@ -165,6 +175,8 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			return {
 				entries,
 				projects: state.projects.map((project): ChatListProject => {
+					const scope = state.catalogScope;
+					const online = state.connected && state.networkAvailable;
 					const isCurrentAccount = () => this.chat.state.get().catalogScope === state.catalogScope;
 					const archiveKey = projectArchiveKey(project.id, state.catalogScope);
 					const setArchived = archiveKey ? (archived: boolean) => {
@@ -178,6 +190,12 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 						createdAt: project.createdAt,
 						updatedAt: project.updatedAt,
 						history: this.projectHistory(project.id, state),
+						details: scope ? this.projectDetails(project.id, scope, online) : undefined,
+						composer: scope ? {
+							key: JSON.stringify([chat.native === true, scope, project.id]),
+							create: isVisible => instantiation.createInstance(ChatGPTProjectDraftModel, project.id, scope, isVisible,
+								(id: string, signal: AbortSignal) => this.open(id, signal)),
+						} : undefined,
 						preferenceKey: chatGPTProjectPreferenceKey(state.catalogScope, project.id),
 						archived: archiveKey ? storage.getBoolean(archiveKey, StorageScope.PROFILE, false) : undefined,
 						restore: setArchived ? () => setArchived(false) : undefined,
@@ -199,6 +217,59 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				loading: state.loading?.kind === 'history',
 			};
 		});
+	}
+
+	private projectDetails(id: string, scope: string, online: boolean): CatalogProjectDetails {
+		return {
+			key: JSON.stringify([this.chat.native === true, scope, id]),
+			load: signal => this.chat.loadProjectDetails(id, scope, signal),
+			data: this.chat.projectDetails.map(values => {
+				const details = values.get(id);
+				if (!details) return undefined;
+				return {
+					description: details.description,
+					canEdit: online && details.canWrite,
+					materials: details.files?.map(file => ({
+						...file, kind: 'file' as const, download: true,
+						open: online ? () => this.downloadProjectFile(id, scope, file) : undefined,
+						remove: online && details.canWrite ? async () => {
+							const confirmation = await this.dialogs.confirm({
+								message: localize('sessions.chatgpt.removeProjectFile', 'Remove {0} from this project?', file.name),
+								detail: localize('sessions.chatgpt.removeProjectFileDetail', 'Anyone who shares this project will lose access to this file through the project.'),
+								primaryButton: localize('sessions.chatgpt.removeProjectFileAction', 'Remove'),
+							});
+							if (confirmation.confirmed) await this.chat.removeProjectFile(id, scope, file.id);
+						} : undefined,
+					})),
+				};
+			}),
+			addFiles: online ? resources => this.addProjectFiles(id, scope, resources) : undefined,
+		};
+	}
+
+	private async addProjectFiles(id: string, scope: string, resources: readonly URI[]): Promise<void> {
+		const limits = chatGPTAttachmentLimits;
+		if (resources.length > limits.count) throw new Error(chatGPTAttachmentLimitMessage());
+		const files: File[] = [];
+		let total = 0;
+		for (const resource of resources) {
+			if (resource.scheme !== 'file' || resource.authority || this.chat.state.get().catalogScope !== scope) throw new CancellationError();
+			const name = basename(resource);
+			const content = await this.files.readFileStream(resource, { limits: { size: Math.min(limits.fileBytes, limits.totalBytes - total) } });
+			const bytes = await streamToBuffer(content.value);
+			total += bytes.byteLength;
+			files.push(new File([new Uint8Array(bytes.buffer)], name, { type: getMediaOrTextMime(name), lastModified: content.modifiedAtMillis }));
+		}
+		await this.chat.addProjectFiles(id, scope, files);
+	}
+
+	private async downloadProjectFile(id: string, scope: string, file: { id: string; name: string; }): Promise<void> {
+		const target = await this.fileDialogs.showSaveDialog({ defaultUri: isValidBasename(file.name) ? URI.file('/' + file.name) : undefined });
+		if (!target) return;
+		const blob = await this.chat.readProjectFile(id, scope, file.id);
+		const bytes = new Uint8Array(await blob.arrayBuffer());
+		if (this.chat.state.get().catalogScope !== scope) return;
+		await this.files.writeFileBytes(target, bytes, { create: true, overwrite: true });
 	}
 
 	private projectHistory(projectId: string, state: ChatGPTState): ChatListProject['history'] {

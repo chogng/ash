@@ -268,6 +268,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			getRequestVersions: model.getRequestVersions?.bind(model),
 			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
 			messagePresentation: this.viewOptions?.messagePresentation,
+			codeBlockPresentation: this.viewOptions?.codeBlockPresentation,
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
 			virtualizeHistoryFrom: this.viewOptions?.virtualizeHistoryFrom,
 			readResponseResource: model.readResponseResource?.bind(model),

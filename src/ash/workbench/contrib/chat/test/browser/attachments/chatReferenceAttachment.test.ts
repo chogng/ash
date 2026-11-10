@@ -33,6 +33,15 @@ import { SCMHistoryItemUri } from '../../../../scm/common/history.js';
 import type { CancellationToken } from '../../../../../../base/common/cancellation.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
 
+import { BrowserClipboardService } from '../../../../../../platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IWebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
+import { IHostService } from '../../../../../services/host/browser/host.js';
+import { TestHostService } from '../../../../../services/host/test/browser/testHostService.js';
+
 suite('Registered Chat reference attachments', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -195,12 +204,22 @@ suite('Registered Chat reference attachments', () => {
 		await Promise.resolve();
 		assert.equal(thumbnail.getAttribute('src'), null);
 		assert.equal(container.childElementCount, 0);
-		assert.equal(document.querySelector('.ash-chat-image-reference-preview'), null);
+		assert.equal(document.querySelector('.ash-image-preview-popup'), null);
 	});
 
 	test('image preview borrows captured bytes and disposal cannot close a later context view', async () => {
 		using resources = new DisposableStore();
 		const { services, container, views } = specializedFixture(resources);
+		services.registerInstance(IClipboardService, resources.add(new BrowserClipboardService(undefined)));
+		services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
+		services.registerInstance(IHostService, new TestHostService());
+		const previousObserver = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+		Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: class { observe() { } disconnect() { } } });
+		resources.add(toDisposable(() => {
+			if (previousObserver) Object.defineProperty(window, 'ResizeObserver', previousObserver);
+			else Reflect.deleteProperty(window, 'ResizeObserver');
+		}));
 		let reads = 0;
 		const url = 'data:image/png;base64,Y2FwdHVyZWQ=';
 		using widget = services.createInstance(ImageAttachmentWidget, { ...attachment, kind: 'image', resolve: async () => { reads++; return { name: 'saved.png', content: url }; } }, { supportsDeletion: false, shouldFocusClearButton: false }, container);
@@ -230,7 +249,7 @@ suite('Registered Chat reference attachments', () => {
 		container.append(other);
 		other.focus();
 		source.click();
-		assert.equal(document.querySelector<HTMLImageElement>('.ash-chat-image-reference-preview > img')?.src, url);
+		assert.equal(document.querySelector('.ash-image-preview-popup')?.getAttribute('aria-label'), 'Preview Earlier design');
 		views.hide();
 		assert.equal(document.activeElement, source);
 		source.click();
@@ -269,7 +288,7 @@ suite('Registered Chat reference attachments', () => {
 		buttons[0]!.click();
 		widget.element.click();
 		assert.equal(buttons[0]!.disabled, true);
-		assert.equal(document.querySelector('.ash-chat-image-reference-preview'), null);
+		assert.equal(document.querySelector('.ash-image-preview-popup'), null);
 		let removed = 0;
 		resources.add(widget.onDidDelete(() => { removed++; }));
 		buttons[1]!.click();

@@ -322,9 +322,13 @@
 
 .ash-projects-detail {
 	display: grid;
-	grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+	grid-template-columns: minmax(0, 1fr);
 	gap: var(--ash-spacing-size400);
 	align-items: start;
+}
+
+.ash-projects:not(.narrow) .ash-projects-detail:has(.ash-projects-materials) {
+	grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
 }
 
 .ash-projects.project-detail-open .ash-projects-main {
@@ -343,7 +347,7 @@
 .ash-projects.project-detail-open .ash-projects-detail {
 	flex: 1 1 auto;
 	min-width: 0;
-	grid-template-rows: minmax(0, 1fr) auto;
+	grid-template-rows: minmax(0, 1fr);
 	row-gap: var(--ash-spacing-size240);
 	align-items: stretch;
 }
@@ -394,15 +398,17 @@
 	padding: 0;
 }
 
-.ash-projects-conversations h2 {
-	margin: 0 0 var(--ash-spacing-size80);
-	font-size: var(--ash-fontSize-heading3);
+.ash-projects-conversations {
+	display: grid;
+	justify-items: start;
+	gap: var(--ash-spacing-size80);
 }
 
 .ash-projects-conversation-list {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
-	gap: var(--ash-spacing-size40);
+	gap: var(--ash-spacing-size20);
+	justify-self: stretch;
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -410,8 +416,49 @@
 
 .ash-projects .ash-projects-conversation {
 	width: 100%;
+	min-height: var(--ash-spacing-size320);
 	justify-content: flex-start;
+	color: inherit;
 	text-align: start;
+}
+
+.ash-projects .ash-projects-conversation:not(:disabled):hover {
+	background: var(--ash-sessions-sidebar-hover-background);
+}
+
+.ash-projects-conversation-empty {
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-conversation-empty p {
+	margin: 0;
+}
+
+.ash-projects-conversation-empty {
+	display: grid;
+	justify-self: stretch;
+	justify-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size400) var(--ash-spacing-size160);
+	text-align: center;
+	line-height: 1.6;
+}
+
+.ash-projects-conversation-placeholder {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size60);
+	min-height: var(--ash-spacing-size320);
+	padding-inline: var(--ash-spacing-size80);
+}
+
+.ash-projects-conversation-placeholder > :first-child {
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+}
+
+.ash-projects-conversation-placeholder > :last-child {
+	width: 40%;
 }
 
 .ash-projects-goals {
@@ -530,7 +577,6 @@
 	white-space: nowrap;
 }
 .ash-projects.narrow .ash-projects-detail {
-	grid-template-columns: minmax(0, 1fr);
 	gap: var(--ash-spacing-size200);
 }
 .ash-projects.narrow .ash-projects-detail-content {

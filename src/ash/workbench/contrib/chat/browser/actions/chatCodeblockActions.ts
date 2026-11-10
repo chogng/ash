@@ -11,6 +11,8 @@ import { localize2 } from '../../../../../nls.js';
 import type { ICodeBlockActionContext } from '../widget/chatContentParts/codeBlockPart.js';
 import { ApplyCodeBlockOperation, InsertCodeBlockOperation } from './codeBlockOperations.js';
 
+export const CopyCodeBlockActionId = 'workbench.action.chat.copyCodeBlock';
+
 export function isCodeBlockActionContext(value: unknown): value is ICodeBlockActionContext {
 	if (!value || typeof value !== 'object') return false;
 	const context = value as Partial<ICodeBlockActionContext>;
@@ -46,7 +48,7 @@ export function registerChatCodeBlockActions(): void {
 		});
 	}
 	registerAction2(class CopyCodeBlockAction extends Action2 {
-		constructor() { super({ id: 'workbench.action.chat.copyCodeBlock', title: localize2('chat.code.copy', 'Copy') }); }
+		constructor() { super({ id: CopyCodeBlockActionId, title: localize2('chat.code.copy', 'Copy') }); }
 		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
 			if (isCodeBlockActionContext(context)) await accessor.get(IClipboardService).writeText(context.code);
 		}

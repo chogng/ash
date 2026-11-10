@@ -167,6 +167,7 @@ export interface IChatWidgetViewOptions {
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly messagePresentation?: ChatMessagePresentation;
+	readonly codeBlockPresentation?: 'card';
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }

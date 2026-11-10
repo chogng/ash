@@ -14,11 +14,14 @@ export const ImagePreviewConfiguration = {
 } as const;
 
 /** Explicit MIME types take precedence over filenames, including revision-backed resources. */
-export function isImageResource(input: IResourceEditorInput): boolean {
+export function getImageResourceMime(input: IResourceEditorInput): string | undefined {
 	const type = input.contentType?.split(';', 1)[0].trim().toLowerCase();
-	return /^(image\/(png|jpeg|gif|bmp|webp|avif|svg\+xml|x-icon|vnd\.microsoft\.icon))$/.test(
-		type && type !== 'application/octet-stream' ? type : getMediaMime(input.resource.path) ?? '',
-	);
+	const mimeType = type && type !== 'application/octet-stream' ? type : getMediaMime(input.resource.path);
+	return mimeType && /^(image\/(png|jpeg|gif|bmp|webp|avif|svg\+xml|x-icon|vnd\.microsoft\.icon))$/.test(mimeType) ? mimeType : undefined;
+}
+
+export function isImageResource(input: IResourceEditorInput): boolean {
+	return getImageResourceMime(input) !== undefined;
 }
 
 /** Git revisions may contain an LFS pointer instead of the checked-out media bytes. */

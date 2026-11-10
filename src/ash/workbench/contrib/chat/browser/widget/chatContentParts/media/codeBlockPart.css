@@ -31,3 +31,28 @@
 	border-radius: 0 0 var(--ash-cornerRadius-medium)
 		var(--ash-cornerRadius-medium);
 }
+
+.ash-chat-code-block-card {
+	border-radius: var(--ash-cornerRadius-xLarge);
+	padding-inline: var(--ash-spacing-size160);
+}
+
+.ash-chat-code-block-card > .ash-chat-code-block-toolbar {
+	flex-wrap: nowrap;
+	padding-block: var(--ash-spacing-size80) 0;
+	padding-inline: 0;
+}
+
+.ash-chat-code-block-card > .ash-chat-code-block-toolbar > .ash-icon {
+	flex: none;
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-code-block-card > .ash-chat-code-block-toolbar > .ash-toolbar {
+	flex: none;
+}
+
+.ash-chat-code-block-card > .ash-chat-code-block-editor {
+	/* The title and Stanza's paint layers share the code card's surface. */
+	--ash-editor-background: var(--ash-text-codeBlockBackground);
+}

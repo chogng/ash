@@ -5,7 +5,7 @@ import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/co
 import { addDisposableListener, getActiveElement, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableValue } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -13,7 +13,7 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import type { Project } from '../../../../platform/projects/common/projectService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { getProjectSessionRows, groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
+import { getProjectSessionRows, groupChatList, IChatListCatalog, type CatalogProjectDetails, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -39,6 +39,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private message!: HTMLElement;
 	private retry!: Button;
 	private readonly projectInputs = this._register(new DisposableMap<string, ProjectChatInput>());
+	private readonly catalogDetailsRequest = this._register(new MutableDisposable());
+	private readonly catalogDetailsLoad = observableValue<{ readonly key: string; readonly phase: 'loading' | 'loaded' | 'error'; } | undefined>(this, undefined);
 	private activeProjectInput: ProjectChatInput | undefined;
 	private readonly conversationProjects = derived(reader =>
 		this.chatCatalog.sources.map(source => source.snapshot.read(reader)));
@@ -139,9 +141,20 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const groups = this.projectGroups.read(reader);
 			const archived = this.showArchived.read(reader) && !id && !state.selectedId;
 			const selected = groups.find(group => group.key === id);
+			const details = selected?.project?.details;
+			const load = this.catalogDetailsLoad.read(reader);
+			const data = details?.data.read(reader);
 			const projectChats = state.selected
 				? getProjectSessionRows(snapshots.flatMap(snapshot => snapshot.entries), state.selected.sessionIds, state.selected.externalConversationIds) : [];
-			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined, projectChats);
+			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined, projectChats, data, load?.key === details?.key ? load?.phase : undefined);
+			if (this.shown.read(reader) && details && load?.key !== details.key) {
+				this.projectActions.cancelPendingEdit();
+				this.loadCatalogDetails(details);
+			} else if (!details && load) {
+				this.catalogDetailsRequest.clear();
+				this.catalogDetailsLoad.set(undefined);
+				this.projectActions.cancelPendingEdit();
+			}
 			const history = (selected ?? groups.find(group => group.key === state.selectedId))?.project?.history;
 			if (this.isVisible() && history?.state === 'idle') {
 				history.load();
@@ -182,6 +195,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const history = this.projectGroups.get().find(group => group.key === (state.conversationProjectId ?? state.selectedId))?.project?.history;
 			if (history?.state === 'idle') history.load();
 		} else {
+			this.catalogDetailsRequest.clear();
+			this.catalogDetailsLoad.set(undefined);
 			this.projectList.stopUpdatingTimes();
 			this.projectsView.closeSortMenu();
 			this.projectActions.cancelPendingEdit();
@@ -209,21 +224,38 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}
 	}
 
-	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, archived: readonly ChatListGroup[] | undefined, projectChats: readonly ChatListEntry[]): void {
+	private loadCatalogDetails(details: CatalogProjectDetails): void {
+		const controller = new AbortController();
+		this.catalogDetailsRequest.value = toDisposable(() => controller.abort());
+		this.catalogDetailsLoad.set({ key: details.key, phase: 'loading' });
+		const finish = (phase: 'loaded' | 'error') => {
+			if (!controller.signal.aborted) this.catalogDetailsLoad.set({ key: details.key, phase });
+		};
+		void details.load(controller.signal).then(() => finish('loaded'), () => finish('error'));
+	}
+
+	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, archived: readonly ChatListGroup[] | undefined, projectChats: readonly ChatListEntry[],
+		data: ReturnType<CatalogProjectDetails['data']['get']>, detailsPhase: 'loading' | 'loaded' | 'error' | undefined): void {
 		const loadingProject = !!state.selectedId && !state.selected && state.loading;
 		const projectName = selected?.title ?? state.selected?.name;
+		const projectId = selected?.key ?? state.selected?.id;
 		// Metadata can refresh while the editor has a selection or an IME composition.
 		// Keep the same detail DOM and composer in that case, replacing only its supporting content.
-		const retainedInput = this.activeProjectInput;
-		const retainDetail = !!state.selected && retainedInput === this.projectInputs.get(state.selected.id)
-			&& this.body.querySelector('.ash-projects-detail:not(.ash-projects-skeleton)') !== null;
-		const focusedInComposer = retainedInput?.element.contains(getActiveElement(this.domNode.ownerDocument)) ?? false;
 		const focused = getActiveElement(this.domNode.ownerDocument) as HTMLElement;
+		const focusedInComposer = this.activeProjectInput?.element.contains(focused) ?? false;
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
+		const detail = this.body.querySelector<HTMLElement>('.ash-projects-detail');
 		this.projectList.stopUpdatingTimes();
 		this.content.clear();
-		if (!retainDetail) this.body.replaceChildren();
-		this.domNode.classList.toggle('project-detail-open', !!state.selected && !selected);
+		const catalogInputs = new Set(groups.flatMap(group => group.project?.composer ? [group.project.composer.key] : []));
+		for (const [key, input] of this.projectInputs) {
+			if (!key.startsWith('local:') && !catalogInputs.has(key)) {
+				if (this.activeProjectInput === input) this.activeProjectInput = undefined;
+				this.projectInputs.deleteAndDispose(key);
+			}
+		}
+		if (projectId === undefined || detail?.dataset.projectDetail !== projectId) this.body.replaceChildren();
+		this.domNode.classList.toggle('project-detail-open', projectId !== undefined);
 		this.domNode.setAttribute('aria-label', projectName ?? localize('projects.title', 'Projects'));
 		this.message.textContent =
 			state.message ?? (state.loading ? localize('projects.loading', 'Loading projects…') : '');
@@ -234,15 +266,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.retry.enabled = !state.loading && !state.busy;
 		this.body.setAttribute('aria-busy', String(state.loading));
 		this.projectsView.render(state, !state.selectedId && !selected, groups, archived, this.content);
-		if (selected) {
-			this.projectList.renderConversations(this.body, selected.rows, selected.project, this.content);
-		} else if (state.selected) {
-			const conversations = groups.find(group => group.key === state.selectedId);
-			this.renderProject(state.selected, [...projectChats, ...(conversations?.rows ?? [])], conversations?.project);
+		if (projectId !== undefined) {
+			const conversations = selected ?? groups.find(group => group.key === state.selectedId);
+			this.renderProject(projectId, [...projectChats, ...(conversations?.rows ?? [])], conversations?.project, state.selected, data, detailsPhase);
 		} else if (loadingProject) {
 			this.renderDetailLoading();
 		}
-		if (!state.selected) {
+		if (projectId === undefined) {
 			this.activeProjectInput?.setVisible(false);
 			this.activeProjectInput = undefined;
 		}
@@ -250,7 +280,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const replacement = Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(
 				node => node.dataset.projectControl === focusKey,
 			);
-			if (replacement) replacement.focus();
+			if (replacement) replacement.focus({ preventScroll: replacement.classList.contains('ash-projects-conversation') });
 			else this.focusPage();
 		}
 	}
@@ -263,65 +293,100 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		return button;
 	}
 
-	private renderProject(project: Project, chats: readonly ChatListEntry[], conversationProject: ChatListGroup['project']): void {
+	private renderProject(id: string, chats: readonly ChatListEntry[], conversationProject: ChatListGroup['project'], localProject: Project | undefined,
+		data: ReturnType<CatalogProjectDetails['data']['get']>, detailsPhase: 'loading' | 'loaded' | 'error' | undefined): void {
 		const document = this.domNode.ownerDocument;
-		const layout = this.body.querySelector<HTMLElement>('.ash-projects-detail:not(.ash-projects-skeleton)') ?? h(document, 'div', { className: 'ash-projects-detail' });
+		const layout = this.body.querySelector<HTMLElement>('.ash-projects-detail') ?? h(document, 'div', { className: 'ash-projects-detail' });
+		layout.dataset.projectDetail = id;
 		const detailContent = layout.querySelector<HTMLElement>('.ash-projects-detail-content') ?? h(document, 'div', { className: 'ash-projects-detail-content' });
 		const overview = layout.querySelector<HTMLElement>('.ash-projects-overview') ?? h(document, 'section', { className: 'ash-projects-overview' });
-		let input = this.projectInputs.get(project.id);
+		overview.querySelector('.ash-projects-conversations')?.remove();
+		this.projectList.renderConversations(overview, chats, conversationProject, this.content);
+		if (overview.parentElement !== detailContent) detailContent.append(overview);
+		if (detailContent.parentElement !== layout) layout.append(detailContent);
+		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject);
+		layout.querySelector('.ash-projects-materials')?.remove();
+		const details = conversationProject?.details;
+		if (localProject) {
+			const materials = this.projectMaterials.renderLocal(document, localProject, this.projects.state.get().busy, this.content);
+			this.renderProjectTools(detailContent, materials, localProject.description, () => this.showProjectDialog({ project: localProject }));
+		} else if (details) {
+			const failed = detailsPhase === 'error' || detailsPhase === 'loaded' && !data?.materials;
+			const materials = this.projectMaterials.render(document, {
+				rows: data?.materials,
+				addFiles: data?.canEdit && data.materials ? details.addFiles : undefined,
+				status: failed ? {
+					text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
+				} : data ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
+			}, this.content);
+			materials.dataset.catalogProjectMaterials = '';
+			const editDetails = conversationProject?.editDetails;
+			this.renderProjectTools(detailContent, materials, data?.description,
+				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails); } : undefined);
+		}
+		if (layout.parentElement !== this.body) this.body.append(layout);
+	}
+
+	private renderProjectComposer(layout: HTMLElement, id: string, composer: NonNullable<ChatListGroup['project']>['composer'], isLocal: boolean): void {
+		if (!isLocal && !composer) {
+			this.activeProjectInput?.setVisible(false);
+			this.activeProjectInput = undefined;
+			layout.querySelector('.ash-projects-composer')?.remove();
+			return;
+		}
+		const key = composer?.key ?? `local:${id}`;
+		let input = this.projectInputs.get(key);
 		// Only start a fresh composer on return. A late project refresh must not
 		// dispose a successful sender before its scheduled conversation navigation.
 		if (!input || input.submitted && this.activeProjectInput !== input) {
-			this.projectInputs.deleteAndDispose(project.id);
-			input = this.instantiationService.createInstance(ProjectChatInput, document, project.id, () => {
+			this.projectInputs.deleteAndDispose(key);
+			input = this.instantiationService.createInstance(ProjectChatInput, layout.ownerDocument, composer ?? { projectId: id }, () => {
 				if (this.activeProjectInput !== input) return;
 				this.activeProjectInput = undefined;
-				this.projectInputs.deleteAndDispose(project.id);
-				void this.projects.openProject(project.id);
-			});
-			this.projectInputs.set(project.id, input);
+				this.projectInputs.deleteAndDispose(key);
+				if (isLocal) void this.projects.openProject(id);
+				else this.projects.openConversationProject(id);
+			}, () => this.isVisible() && this.activeProjectInput === input);
+			this.projectInputs.set(key, input);
 		}
 		if (this.activeProjectInput !== input) this.activeProjectInput?.setVisible(false);
 		this.activeProjectInput = input;
-		if (detailContent.parentElement !== layout) layout.append(detailContent);
 		if (input.element.parentElement !== layout) {
 			layout.querySelector('.ash-projects-composer')?.remove();
 			layout.append(input.element);
 		}
 		input.setVisible(this.isVisible());
-		overview.querySelector('.ash-projects-conversations')?.remove();
-		this.projectList.renderConversations(overview, chats, conversationProject, this.content);
+	}
+
+	private renderProjectTools(detailContent: HTMLElement, materials: HTMLElement, description: string | undefined, edit: (() => void) | undefined): void {
+		const document = detailContent.ownerDocument;
 		const heading = h(
 			document,
 			'div',
 			{ className: 'ash-projects-section-heading' },
 			h(document, 'h2', {}, localize('projects.goals', 'Project goals')),
 		);
-		this.button(
+		if (edit) this.button(
 			heading,
 			{
 				label: localize('projects.edit', 'Edit details'),
 				icon: Lxicon.edit,
-				onClick: () => this.showProjectDialog({ project }),
+				onClick: edit,
 			},
 			'edit',
 		);
 		const goals = h(document, 'section', { className: 'ash-projects-goals' });
-		goals.append(
-			heading,
-			h(
+		goals.append(heading);
+		if (description !== undefined) {
+			goals.append(h(
 				document,
 				'p',
 				{ className: 'ash-projects-description' },
-				project.description || localize('projects.noGoals', 'Add a description of what you want to achieve.'),
-			),
-		);
-		layout.querySelector('.ash-projects-materials')?.remove();
-		const materials = this.projectMaterials.render(document, project, this.projects.state.get().busy, this.content);
+				description || localize('projects.noGoals', 'Add a description of what you want to achieve.'),
+			));
+		}
 		materials.append(goals);
-		if (overview.parentElement !== detailContent) detailContent.append(overview);
 		detailContent.append(materials);
-		if (layout.parentElement !== this.body) this.body.append(layout);
 	}
 
 	private renderDetailLoading(): void {

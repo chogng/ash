@@ -19,6 +19,12 @@ const nativeHistoryPath = (path: string): boolean => /^\/backend-api\/conversati
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
 const projectDetailsPath = (path: string): boolean => /^\/backend-api\/gizmos\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
 const projectUpdatePath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
+const projectFilesPath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}\/files$/u.test(path);
+const projectFilePath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}\/files\/file[-_][A-Za-z0-9_-]{1,240}$/u.test(path);
+const projectFileDownloadPath = (path: string): boolean => /^\/backend-api\/files\/download\/file[-_][A-Za-z0-9_-]{1,240}$/u.test(path);
+const projectFileId = (value: unknown): boolean => typeof value === 'string' && /^file[-_][A-Za-z0-9_-]{1,240}$/u.test(value);
+const projectId = (value: unknown): boolean => typeof value === 'string' && /^g-p-[A-Za-z0-9_-]{1,240}$/u.test(value);
+const processProjectUploadPath = '/backend-api/files/process_upload_stream';
 const projectConversationsPath = (path: string): boolean => /^\/backend-api\/gizmos\/g-p-[A-Za-z0-9_-]{1,240}\/conversations$/u.test(path);
 const renamePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+\/rename$/u.test(path);
 const deletePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+$/u.test(path);
@@ -26,7 +32,7 @@ const filePath = (path: string): boolean => /^\/backend-api\/(?:files\/[^/]+(?:\
 const synthesisPath = '/backend-api/synthesize';
 const validIdentifier = (value: unknown): boolean => typeof value === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(value);
 const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'];
-const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', ...proofHeaders.map(name => name.toLowerCase())]);
+const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', 'chatgpt-project-id', ...proofHeaders.map(name => name.toLowerCase())]);
 interface PendingRequest {
 	readonly controller: AbortController;
 	authorization?: IChatGPTAuthorization;
@@ -325,16 +331,18 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 			: query.size === 2);
 	const projectConversations = projectConversationsPath(url.pathname) && query.get('limit') === '20' && query.get('owned_only') === 'false'
 		&& query.size === (query.has('cursor') ? 3 : 2) && (!query.has('cursor') || (query.get('cursor')?.length ?? 0) > 0);
+	const projectDetails = projectDetailsPath(url.pathname) && (!url.search || query.size === 1 && query.get('include_file_limits') === 'true');
 	const allowed = url.origin === 'https://chatgpt.com' && !/%(?:2f|5c|00|25)/iu.test(url.pathname) && (headersOnly
 		? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
 		: value.method === 'GET'
-			? readPaths.has(url.pathname) || conversationPath(url.pathname) || nativeHistory || projectConversations || (!url.search && projectDetailsPath(url.pathname)) || synthesis
+			? readPaths.has(url.pathname) || conversationPath(url.pathname) || nativeHistory || projectConversations || projectDetails || synthesis
 			: !url.search && (value.method === 'POST'
-				? writePaths.has(url.pathname) || uploadedPath(url.pathname) || renamePath(url.pathname)
+				? writePaths.has(url.pathname) || uploadedPath(url.pathname) || renamePath(url.pathname) || projectFilesPath(url.pathname) || url.pathname === processProjectUploadPath
 				: value.method === 'PATCH' ? conversationPath(url.pathname) || projectUpdatePath(url.pathname)
-					: value.method === 'DELETE' && (deletePath(url.pathname) || projectDetailsPath(url.pathname))));
+					: value.method === 'DELETE' && (deletePath(url.pathname) || projectDetailsPath(url.pathname) || projectFilePath(url.pathname))));
 	if (!allowed || (value.method === 'GET' && value.body !== undefined)) { throw new TypeError('Invalid ChatGPT endpoint'); }
 	if (value.method === 'DELETE' && value.body !== undefined) { throw new TypeError('Invalid ChatGPT deletion'); }
+	validateProjectFileRequest(url.pathname, value.method, new Headers(value.headers as Record<string, string>), value.body);
 	if (value.method === 'POST' && url.pathname === createProjectPath) {
 		let body: unknown;
 		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
@@ -376,6 +384,38 @@ function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 	return value as unknown as ChatGPTRequest;
 }
 
+function validateProjectFileRequest(path: string, method: unknown, headers: Headers, body: unknown): void {
+	const scope = headers.get('chatgpt-project-id');
+	const processing = path === processProjectUploadPath;
+	const creating = path === '/backend-api/files' && scope !== null;
+	const adding = method === 'POST' && projectFilesPath(path);
+	if (!processing && !creating && !adding && scope === null) return;
+	const invalid = () => new TypeError('Invalid ChatGPT project file request');
+	if (method !== 'POST' || !(processing || creating || adding) || adding && scope !== null) throw invalid();
+	let payload: unknown;
+	try { payload = typeof body === 'string' ? JSON.parse(body) : undefined; }
+	catch { throw invalid(); }
+	const name = (value: unknown) => typeof value === 'string' && !!value.trim() && value.length <= 1024 && !/[\r\n\0]/u.test(value);
+	const size = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 20 * 1024 * 1024;
+	const mime = (value: unknown) => typeof value === 'string' && /^[\w.+-]+\/[\w.+-]+$/u.test(value) && value.length <= 256;
+	if (!isRecord(payload)) throw invalid();
+	if (adding) {
+		if (Object.keys(payload).length !== 1 || !Array.isArray(payload.files) || payload.files.length !== 1) throw invalid();
+		const file: unknown = payload.files[0];
+		if (!isRecord(file) || Object.keys(file).some(key => !['file_id', 'last_modified', 'library_file_id', 'location', 'name', 'size', 'type'].includes(key))
+			|| !projectFileId(file.file_id) || !name(file.name) || !size(file.size) || !mime(file.type) || file.location !== 'fs'
+			|| typeof file.last_modified !== 'number' || !Number.isSafeInteger(file.last_modified)
+			|| file.library_file_id !== undefined && !validIdentifier(file.library_file_id)) throw invalid();
+		return;
+	}
+	if (!projectId(scope) || payload.gizmo_id !== scope || payload.use_case !== 'gizmo' || !name(payload.file_name) || !mime(payload.mime_type)) throw invalid();
+	if (creating && (Object.keys(payload).length !== 8 || !size(payload.file_size) || payload.reset_rate_limits !== false
+		|| payload.supports_direct_azure_multipart !== false || typeof payload.timezone_offset_min !== 'number'
+		|| !Number.isInteger(payload.timezone_offset_min) || Math.abs(payload.timezone_offset_min) > 24 * 60)) throw invalid();
+	if (processing && (Object.keys(payload).length !== 7 || !projectFileId(payload.file_id)
+		|| payload.entry_surface !== 'project_sources' || typeof payload.index_for_retrieval !== 'boolean')) throw invalid();
+}
+
 function readUploadUrl(value: string): URL {
 	const url = readResourceUrl(value);
 	if (url.origin === 'https://chatgpt.com' || !url.search) { throw new TypeError('Invalid ChatGPT upload origin'); }
@@ -385,7 +425,9 @@ function readUploadUrl(value: string): URL {
 function readResourceUrl(value: string): URL {
 	const url = new URL(value, 'https://chatgpt.com');
 	if (value.length > 8192 || url.protocol !== 'https:' || url.port || url.username || url.password || url.hash || /[\r\n\0\\]|%(?:2f|5c|00|25)/iu.test(url.pathname)) { throw new TypeError('Invalid ChatGPT resource URL'); }
-	const webAsset = url.origin === 'https://chatgpt.com' && filePath(url.pathname);
+	const projectDownload = projectFileDownloadPath(url.pathname) && url.searchParams.size === 2
+		&& projectId(url.searchParams.get('gizmo_id')) && url.searchParams.get('inline') === 'false';
+	const webAsset = url.origin === 'https://chatgpt.com' && (filePath(url.pathname) || projectDownload);
 	const signedAsset = ['oaiusercontent.com', 'blob.core.windows.net'].some(domain => url.hostname.endsWith('.' + domain));
 	if (!webAsset && !signedAsset) { throw new TypeError('Invalid ChatGPT resource origin'); }
 	return url;

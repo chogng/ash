@@ -13,7 +13,7 @@ description: Build, revise, or review visible components in the Ash Agent Window
 
 ## 选基座与变体
 
-- 查找已有组件、变体和生产调用方。对照其输入、状态、焦点及释放行为，确认哪些可直接复用，哪些由页面组合。修改共享默认值前查所有受影响的宿主，尤其是 IDE 和 Agent Window 使用同一控件时。
+- 查找已有组件、变体和生产调用方。对照其输入、状态、焦点及释放行为，确认哪些可直接复用，哪些由页面组合。Agent Window 专属需求通过窗口上下文或调用方显式启用，保留独立 IDE 的默认样式、文案和交互。
 - 用组件的实际职责选择实现。例如命令列表检查共享 `Menu`，带查询输入的选择器检查 `ActionWidget`，锚定与浮层生命周期检查 `ContextView`。优先通过现有变体表达页面需求；共享能力确实缺失时，在负责该行为的基座补齐并验证现有调用方。
 - 菜单可用两种不同的图标布局。例如需要左侧动作图标与右侧勾选或展开箭头的菜单可用 `leading-with-trailing-check`；命令图标也需要放右侧的菜单可用 `trailing`。从当前页面的行语义选变体。
 - 按任务使用 [设计](../design-philosophy/SKILL.md)、[无障碍](../accessibility/SKILL.md)、[布局](../ux-css-layout/SKILL.md) 和 [主题](../ux-theming/SKILL.md) 技能。涉及的业务状态继续由现有模型或服务持有。
@@ -25,6 +25,7 @@ description: Build, revise, or review visible components in the Ash Agent Window
 
 ## Learnings
 
+- **复制成功反馈。** Agent Window 的复制图标按钮使用 Sessions 提供的 `CopyActionViewItem`。剪贴板写入成功后在原按钮内把复制图标换成主题成功色的勾，短暂显示后自动恢复；保留按钮尺寸、键盘焦点和可访问名称，并播报成功。失败时沿用所属功能的错误反馈。悬停提示统一为「Copy／复制」；当需要区分复制对象时，用可访问名称说明对象，例如「复制消息」。
 - **设置页验收。** 修改 Agent Window 设置页时，必须选一个职责相近的现有设置项作参照。从正常入口打开本次构建的真实窗口，在相同主题、缩放和控件状态下，逐项对照字号、间距和控件样式，例如比较说明文字的字号、行内间距、下拉框的内边距与边框。功能测试通过后仍须完成这项视觉对照。
 - Agent Window 设置内容区的普通文字操作使用共享 `Button` 的 `secondary` 变体，例如 Install、Cancel 和 Manage accounts。由设置页统一提供默认浅灰底（深色主题使用对应的中性色）、悬停加深和无描边外观，保留键盘焦点环与高对比度描边。主操作、危险操作、纯图标按钮和进度指示使用各自的样式。
 - 表单弹窗使用共享 `Dialog` 的 `form` 布局。共享组件拥有标题截断、正文和底部插槽的布局规则，Agent Window 的 `style.css` 提供窗口级尺寸变量和配色，各功能的 CSS 负责自己的弹窗尺寸、字段和内容滚动。

@@ -77,6 +77,7 @@ import { FileContentSearchService } from '../../platform/search/browser/searchSe
 import { ISearchService } from '../../workbench/services/search/common/search.js';
 import { SearchService } from '../../workbench/services/search/common/searchService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { IUriIdentityService } from '../../platform/uriIdentity/common/uriIdentity.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -268,7 +269,9 @@ import type { DesktopEditorTool } from './parts/desktopEditorArea.js';
 import { type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
 import { SessionsLayoutService } from '../contrib/layout/browser/sessionsLayoutService.js';
-import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
+import { URI } from '../../base/common/uri.js';
+import { SessionsEditorService } from './sessionsEditorService.js';
+import { isImageResource } from '../../workbench/contrib/mediaPreview/common/mediaPreview.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
 import { IHistoryService } from '../../workbench/services/history/common/history.js';
@@ -772,6 +775,7 @@ export abstract class Workbench extends Disposable {
 		IsDevelopmentContext.bindTo(contextKeys).set(!services.get(IWorkbenchEnvironmentService).isBuilt);
 		AppServerAvailableContext.bindTo(contextKeys).set(options.api.appServer.isAvailable);
 		IsSessionsWindowContext.bindTo(contextKeys).set(true);
+		ChatContextKeys.imagePreviewPresentation.bindTo(contextKeys).set('popup');
 		const workspaceFolderCount = WorkspaceFolderCountContext.bindTo(contextKeys);
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
 		this._register(workspace.onDidChangeWorkspace(() => workspaceFolderCount.set(workspace.getWorkspace().folders.length)));
@@ -1094,9 +1098,9 @@ export abstract class Workbench extends Disposable {
 		const editor = this._register(services.createInstance(DesktopEditorParts, filesEditor, editorArea, tools));
 		const documentServices = this._register(services.createChild());
 		documentServices.registerInstance(IEditorPart, editor);
-		const documentEditors = this._register(new BrowserEditorService(editor));
-		documentServices.registerInstance(IEditorService, documentEditors);
-		documentServices.registerInstance(IEditorGroupsService, documentEditors);
+		const editors = this._register(services.createInstance(SessionsEditorService, editor));
+		documentServices.registerInstance(IEditorService, editors);
+		documentServices.registerInstance(IEditorGroupsService, editors);
 		if (!services.has(ISessionsLayoutService)) {
 			services.registerSingleton(ISessionsLayoutService, () => documentServices.createInstance(SessionsLayoutService));
 		}
@@ -1104,8 +1108,15 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IEditorPartsService, editorParts);
 		services.registerInstance(IEditorPart, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
-		const editors = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editors);
+		this._register(openerService.registerOpener({
+			open: async target => {
+				const resource = typeof target === 'string' ? URI.parse(target) : target;
+				if (!fileService.hasProvider(resource) || !isImageResource({ resource })) return false;
+				await editors.openEditor({ resource });
+				return true;
+			},
+		}));
 		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(SessionsDiffEditorCommandsService));
 		services.registerInstance(IEditorGroupsService, editors);
 		// The browser host resolves Workbench browsing, which borrows the window's editor services.

@@ -272,7 +272,7 @@ export class ProjectsActions extends Disposable {
 		}
 	}
 
-	private async editConversationProject(read: (signal: AbortSignal) => Promise<ConversationProjectEditor>): Promise<void> {
+	async editConversationProject(read: (signal: AbortSignal) => Promise<ConversationProjectEditor>): Promise<void> {
 		const controller = new AbortController();
 		this.readConversationProject.value = toDisposable(() => controller.abort());
 		try {

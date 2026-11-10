@@ -116,7 +116,7 @@ import { AccessibilityService } from '../../../src/ash/platform/accessibility/br
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; showFind(): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; readDownloadedMaterial(name: string): Promise<string | undefined>; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; showFind(): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; toggleArchivedProjects(): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -235,15 +235,19 @@ services.registerInstance(IAccessibilityService, resources.add(new Accessibility
 resources.add(services.createInstance(ChatCopyActionRendering));
 const attachmentFolder = URI.file('/fixture-folder');
 const attachmentFile = URI.joinPath(attachmentFolder, 'notes.txt');
-if (parameters.has('folderPicker')) {
+if (parameters.has('folderPicker') || parameters.has('projectMaterials')) {
 	await services.get(IFileService).writeFileBytes(attachmentFile, new TextEncoder().encode('fixture notes'));
 }
 services.registerInstance(IFileDialogService, {
 	async showOpenDialog(options) {
+		if (parameters.has('projectMaterials') && options.canSelectFiles) return [attachmentFile];
 		if (!parameters.has('folderPicker')) return undefined;
 		if (options.canSelectFolders) return [attachmentFolder];
 		if (options.defaultUri?.toString() === attachmentFolder.toString()) return [attachmentFile];
 		return undefined;
+	},
+	async showSaveDialog(options) {
+		return parameters.has('projectMaterials') && options.defaultUri ? URI.joinPath(attachmentFolder, 'saved-' + options.defaultUri.path.slice(1)) : undefined;
 	},
 } as IFileDialogService);
 const menuService = new MenuService(commands, services.get(IContextKeyService));
@@ -289,6 +293,8 @@ window.ashChatGPTIntegration = {
 	setMathMacros: macros => services.get(IConfigurationService).updateValue('markdown.math.macros', macros),
 	newChat: () => chat.newChat(),
 	draft: () => chat.state.get().draft,
+	readDownloadedMaterial: name => services.get(IFileService).readFile(URI.joinPath(attachmentFolder, 'saved-' + name))
+		.then(file => file.content, () => undefined),
 	storageKeys: () => storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE),
 	dictate: (text, final) => transcript?.(text, final),
 	dictationStops: () => dictationStops,

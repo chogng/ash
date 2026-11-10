@@ -3,6 +3,7 @@ import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/br
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { mockChatGPTRequests } from './chatGPTBrowserTestUtils.js';
+import { Editor } from '../../../../../../../test/automation/editor.js';
 
 const historyNotices = (page: Page) => page.evaluate(() => window.ashChatGPTIntegration.notifications().map(item => item.message));
 const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试。';
@@ -965,8 +966,9 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		});
 
 		test(`Projects opens conversation groups and pages their history on demand (${locale})`, async function () {
-			const { page } = browserTests;
+			const { page, info } = browserTests;
 			const zh = locale === 'zh-CN';
+			await page.setViewportSize({ width: 1280, height: 640 });
 			await mockChatGPTRequests(page);
 			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
 				json: {
@@ -982,11 +984,14 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const firstPageTitles = firstPage.map(item => item.title);
 			let releaseNextPage!: () => void;
 			const nextPage = new Promise<void>(resolve => { releaseNextPage = resolve; });
+			let releaseEmptyPage!: () => void;
+			const emptyPage = new Promise<void>(resolve => { releaseEmptyPage = resolve; });
 			await page.route('**/service/backend-api/pins?*', route => route.fulfill({ json: [{ item: pinned }] }));
 			const cursors: (string | null)[] = [];
 			let emptyReads = 0;
-			await page.route('**/gizmos/g-p-two/conversations?*', route => {
+			await page.route('**/gizmos/g-p-two/conversations?*', async route => {
 				emptyReads++;
+				await emptyPage;
 				return route.fulfill({ json: { items: [], cursor: null } });
 			});
 			await page.route('**/gizmos/g-p-one/conversations?*', async route => {
@@ -997,7 +1002,10 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 					await nextPage;
 					return route.fulfill({ status: 503 });
 				}
-				return route.fulfill({ json: { items: [{ id: 'one', title: 'First research chat' }, { id: 'two', title: 'Older research chat' }], cursor: null } });
+				if (cursor === 'page+two') {
+					return route.fulfill({ json: { items: [{ id: 'one', title: 'First research chat' }, { id: 'two', title: 'Older research chat' }], cursor: 'page+three' } });
+				}
+				return route.fulfill({ json: { items: [{ id: 'three', title: 'Oldest research chat' }], cursor: null } });
 			});
 			await page.goto(`/chatgptNavigation.html?projects&locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const sidebar = page.locator('.ash-chat-navigation-list');
@@ -1069,10 +1077,18 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 			await expect(children).toHaveCount(0);
 			await research.press('Enter');
-			const rows = projects.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' }).getByRole('button');
+			const overview = projects.locator('.ash-projects-detail .ash-projects-overview');
+			const list = overview.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' });
+			const rows = list.getByRole('button');
 			await expect(rows).toHaveText(firstPageTitles);
 			await expect(projects).toHaveAccessibleName('Research');
 			await expect(projects).toBeFocused();
+			await expect(list).toHaveAttribute('aria-busy', 'true');
+			const loading = overview.getByRole('status').filter({ hasText: zh ? '正在加载项目聊天…' : 'Loading project chats…' });
+			await expect(loading).toHaveCSS('clip-path', 'inset(50%)');
+			await expect(rows.first()).toHaveCSS('height', '32px');
+			await rows.first().press('ArrowDown');
+			await expect(rows.nth(1)).toBeFocused();
 			await expect(projects.getByRole('heading', { level: 1 })).toHaveCount(0);
 			await expect(page.locator('.ash-sessions-titlebar-page-content .ash-project-titlebar-name')).toHaveText('Research');
 			expect(emptyReads).toBe(0);
@@ -1083,21 +1099,193 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true })).toHaveCount(0);
 			await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
 			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat']);
+			await expect(rows.nth(1)).toBeFocused();
+			await expect(list).toHaveAttribute('aria-busy', 'false');
+			await page.screenshot({ path: info.outputPath(`project-conversations-${locale}.png`) });
 			await expect.poll(() => historyNotices(page)).toEqual([]);
-			expect(cursors).toEqual([null, 'page+two', 'page+two']);
+			await expect(overview.getByRole('button', { name: zh ? '加载更多项目聊天' : 'Load more project chats', exact: true })).toHaveCount(0);
+			const olderChat = rows.getByText('Older research chat', { exact: true });
+			if (zh) await rows.nth(1).press('End');
+			else await olderChat.scrollIntoViewIfNeeded();
+			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat', 'Oldest research chat']);
+			await expect(zh ? rows.filter({ hasText: 'Older research chat' }) : rows.nth(1)).toBeFocused();
+			expect(cursors).toEqual([null, 'page+two', 'page+two', 'page+three']);
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await expect(research).toBeFocused();
 			const writingToggle = sidebar.getByRole('button', { name: 'Writing', exact: true });
 			await expect(writingToggle).toHaveAttribute('aria-expanded', 'false');
 			await writingToggle.press('ArrowRight');
 			await expect.poll(() => emptyReads).toBe(1);
+			await writing.click();
+			await expect(overview.getByRole('status')).toHaveText(zh ? '正在加载项目聊天…' : 'Loading project chats…');
+			releaseEmptyPage();
 			await expect(writingToggle).not.toHaveAttribute('aria-expanded');
 			await expect(writingToggle.locator('.ash-sessions-list-project-chevron')).toHaveCount(0);
 			await expect(sidebar.getByText(zh ? '此项目中没有聊天' : 'No chats in this project', { exact: true })).toHaveCount(0);
-			await writing.click();
-			await expect(projects.getByRole('status').filter({ hasText: zh ? '此项目中没有聊天' : 'No chats in this project' })).toBeVisible();
-			expect(cursors).toHaveLength(3);
+			const empty = overview.getByRole('status').filter({ hasText: zh ? '此项目中没有聊天' : 'No chats in this project' });
+			await expect(empty).toBeVisible();
+			await expect(empty).toHaveCSS('text-align', 'center');
+			await expect(projects.locator('.ash-projects-materials')).toBeVisible();
+			await expect(projects.locator('.ash-projects-composer')).toBeVisible();
+			await page.screenshot({ path: info.outputPath(`project-conversations-empty-${locale}.png`) });
+			expect(cursors).toHaveLength(4);
 			expect(emptyReads).toBe(1);
+		});
+
+		test(`shows and edits ChatGPT materials and goals in the shared Projects pane (${locale})`, async () => {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			await mockChatGPTRequests(page);
+			const id = 'g-p-research';
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: { items: [{ gizmo: { id, display: { name: 'Research' } } }], cursor: null },
+			}));
+			let goals = 'Saved notes';
+			let projectFiles = [{ file_id: 'file-existing', name: 'Existing.txt' }];
+			let canWrite = true;
+			let reads = 0;
+			await page.route(`**/service/backend-api/gizmos/${id}*`, route => {
+				const url = new URL(route.request().url());
+				if (!url.pathname.endsWith(id)) return route.fallback();
+				if (++reads === 1) return route.fulfill({ status: 503 });
+				return route.fulfill({ json: { gizmo: { id, instructions: goals, current_user_permission: { can_write: canWrite }, display: { name: 'Research', emoji: '🔬', theme: 'blue' } }, files: projectFiles } });
+			});
+			await page.route(`**/service/backend-api/projects/${id}`, route => {
+				const body = route.request().postDataJSON();
+				expect(body).toEqual({ name: 'Research', instructions: 'New goals', emoji: '🔬', theme: 'blue' });
+				goals = body.instructions;
+				return route.fulfill({ status: 204 });
+			});
+			await page.route('**/service/backend-api/files', route => {
+				expect(route.request().postDataJSON()).toMatchObject({ file_name: 'notes.txt', gizmo_id: id, use_case: 'gizmo' });
+				return route.fulfill({ json: { file_id: 'file-new', upload_url: 'https://example.test/upload' } });
+			});
+			await page.route('**/service/.upload?*', route => {
+				expect(route.request().postData()).toBe('fixture notes');
+				return route.fulfill({ status: 201 });
+			});
+			await page.route('**/service/backend-api/files/process_upload_stream', route => {
+				expect(route.request().postDataJSON()).toMatchObject({ gizmo_id: id, file_id: 'file-new', entry_surface: 'project_sources' });
+				return route.fulfill({ contentType: 'application/x-ndjson', body: '{"event":"file.processing.completed","file_id":"file-new","extra":{"metadata_object_id":"library-fixture"}}\n' });
+			});
+			await page.route(`**/service/backend-api/projects/${id}/files`, route => {
+				expect(route.request().postDataJSON()).toMatchObject({ files: [{ file_id: 'file-new', name: 'notes.txt', library_file_id: 'library-fixture' }] });
+				projectFiles = [...projectFiles, { file_id: 'file-new', name: 'notes.txt' }];
+				return route.fulfill({ status: zh ? 503 : 204 });
+			});
+			await page.route(`**/service/backend-api/projects/${id}/files/file-existing`, route => {
+				expect(route.request().method()).toBe('DELETE');
+				projectFiles = projectFiles.filter(file => file.file_id !== 'file-existing');
+				return route.fulfill({ status: 204 });
+			});
+			let downloaded = false;
+			await page.route('**/service/.resource?*', route => {
+				const url = new URL(new URL(route.request().url()).searchParams.get('url')!);
+				expect(url.pathname).toBe('/backend-api/files/download/file-existing');
+				expect(url.searchParams.get('gizmo_id')).toBe(id);
+				downloaded = true;
+				return route.fulfill({ contentType: 'text/plain', body: 'Saved remote file' });
+			});
+			await page.goto(`/chatgptNavigation.html?projects&projectMaterials&locale=${locale}`);
+			const projects = page.locator('.ash-projects');
+			await projects.getByRole('button', { name: 'Research', exact: true }).click();
+			const materials = projects.getByRole('region', { name: zh ? '资料' : 'Materials' });
+			await materials.getByRole('button', { name: zh ? '重试' : 'Try again', exact: true }).press('Enter');
+			await expect(materials.getByText('Saved notes', { exact: true })).toBeVisible();
+			await materials.getByRole('button', { name: zh ? '编辑详情' : 'Edit details', exact: true }).press('Enter');
+			const dialog = page.getByRole('dialog');
+			await dialog.getByRole('textbox').nth(1).fill('New goals');
+			await dialog.getByRole('button', { name: zh ? '保存更改' : 'Save changes', exact: true }).click();
+			await expect(materials.getByText('New goals', { exact: true })).toBeVisible();
+			const download = materials.getByRole('button', { name: zh ? '下载 Existing.txt' : 'Download Existing.txt', exact: true });
+			await download.click();
+			await expect.poll(() => downloaded).toBe(true);
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readDownloadedMaterial('Existing.txt'))).toBe('Saved remote file');
+			await materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true }).click();
+			await expect(materials.getByText('notes.txt', { exact: true })).toBeVisible();
+			await materials.getByRole('button', { name: zh ? '从项目中移除 Existing.txt' : 'Remove Existing.txt from project', exact: true }).click();
+			await dialog.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click();
+			await expect(download).toHaveCount(0);
+			await expect(materials.getByText('New goals', { exact: true })).toBeVisible();
+			canWrite = false;
+			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
+			await projects.getByRole('button', { name: 'Research', exact: true }).click();
+			await expect(materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true })).toHaveCount(0);
+			await expect(materials.getByRole('button', { name: zh ? '编辑详情' : 'Edit details', exact: true })).toHaveCount(0);
+			await expect(materials.getByRole('button', { name: zh ? '下载 notes.txt' : 'Download notes.txt', exact: true })).toBeVisible();
+		});
+
+		test(`starts a new ChatGPT conversation from the current project (${locale})`, async () => {
+			const { page } = browserTests;
+			const zh = locale === 'zh-CN';
+			await mockChatGPTRequests(page);
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+				json: { items: ['Research', 'Writing'].map(name => ({ gizmo: { id: `g-p-${name.toLowerCase()}`, display: { name } } })), cursor: null },
+			}));
+			const sends: unknown[] = [];
+			const moves: unknown[] = [];
+			const uploads: (string | null)[] = [];
+			await page.route('**/service/backend-api/files', route => route.fulfill({
+				json: { file_id: 'file-project-note', upload_url: 'https://example.test/upload' },
+			}));
+			await page.route('**/service/.upload?*', route => {
+				uploads.push(route.request().postData());
+				return route.fulfill({ status: 201 });
+			});
+			await page.route('**/service/backend-api/files/file-project-note/uploaded', route => route.fulfill({ json: { status: 'success' } }));
+			await page.route('**/service/backend-api/f/conversation', route => {
+				sends.push(route.request().postDataJSON());
+				if (sends.length === 1) return route.fulfill({ status: 400 });
+				return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"conversation_id":"fixture-chat"}\n\ndata: [DONE]\n\n' });
+			});
+			await page.route('**/service/backend-api/conversation/fixture-chat', route => {
+				if (route.request().method() !== 'PATCH') return route.fallback();
+				moves.push(route.request().postDataJSON());
+				return route.fulfill({ json: {} });
+			});
+			await page.goto(`/chatgptNavigation.html?projects&locale=${locale}`);
+			const projects = page.locator('.ash-projects');
+			const card = (name: string) => projects.getByRole('button', { name, exact: true });
+			const back = page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true });
+			const composer = projects.getByRole('region', { name: zh ? '在项目中新建聊天' : 'New chat in project' });
+			const editor = new Editor(composer);
+			const send = composer.getByRole('button', { name: zh ? '发送' : 'Send', exact: true });
+			await card('Research').click();
+			await editor.input.focus();
+			await editor.waitForTypeInEditor('Research draft');
+			await back.click();
+			await card('Writing').click();
+			await editor.waitForEditorContents(text => text === '');
+			await editor.input.focus();
+			await editor.waitForTypeInEditor('Start in Writing');
+			await editor.input.evaluate(element => {
+				const clipboard = new DataTransfer();
+				clipboard.items.add(new File(['project note'], 'note.txt', { type: 'text/plain' }));
+				element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+			});
+			await expect(composer.getByText('note.txt', { exact: true })).toBeVisible();
+			expect(sends).toEqual([]);
+			expect(uploads).toEqual([]);
+			await send.click();
+			await expect.poll(() => sends.length).toBe(1);
+			await expect(send).toBeEnabled();
+			await editor.waitForEditorContents(text => text === 'Start in Writing');
+			await expect(composer.getByText('note.txt', { exact: true })).toBeVisible();
+			expect(moves).toEqual([]);
+			await send.click();
+			await expect.poll(() => moves).toEqual([{ gizmo_id: 'g-p-writing' }]);
+			expect(sends).toHaveLength(2);
+			expect(uploads).toEqual(['project note', 'project note']);
+			for (const request of sends) expect(request).toMatchObject({
+				messages: [{ content: { parts: ['Start in Writing'] }, metadata: { attachments: [{ id: 'file-project-note', name: 'note.txt' }] } }],
+			});
+			await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+			const writing = page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Writing', exact: true });
+			await writing.press('ArrowRight');
+			await expect(page.locator('[data-parent-project="project:g-p-writing"] .ash-chat-navigation-item')).toHaveText('Synthetic conversation');
+			await back.click();
+			await card('Research').click();
+			await editor.waitForEditorContents(text => text === 'Research draft');
 		});
 
 		test(`ChatGPT row actions manage the addressed chat and project submenu (${locale})`, async function () {

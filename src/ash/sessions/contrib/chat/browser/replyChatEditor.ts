@@ -163,7 +163,12 @@ export class ReplyChatEditor extends EditorPane {
 						starters.setDraft(this.shown.read(reader) && canShowStarters.read(reader) ? draft?.id : undefined);
 					}));
 					return input;
-				}, { showPromptTimeline: true, welcomeTitle: welcome.title, virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined) }));
+				}, {
+				showPromptTimeline: true,
+				welcomeTitle: welcome.title,
+				codeBlockPresentation: 'card',
+				virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined),
+			}));
 		} catch (error) {
 			model.dispose();
 			throw error;
