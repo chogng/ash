@@ -1000,7 +1000,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await thumbnail.click();
 			const preview = page.getByRole('dialog', { name: previewLabel, exact: true });
 			await expect(preview.getByRole('img', { name, exact: true })).toBeVisible();
-			await expect(preview.getByRole('button', { name: locale === 'en' ? 'Zoom in' : '放大', exact: true })).toBeEnabled();
+			await expect(preview.getByRole('button', { name: locale === 'en' ? /^Zoom: \d+%$/u : /^缩放：\d+%$/u })).toBeEnabled();
 			await expect(preview.getByRole('button', { name: locale === 'en' ? 'Save image' : '保存图片', exact: true })).toBeEnabled();
 			const annotateLabel = locale === 'en' ? 'Annotate image' : '标注图片';
 			await expect(preview.getByRole('button', { name: annotateLabel, exact: true })).toBeEnabled();
