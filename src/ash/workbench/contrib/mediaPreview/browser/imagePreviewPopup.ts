@@ -1,14 +1,16 @@
 import './media/imagePreviewPopup.css';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, isNode } from '../../../../base/browser/dom.js';
+import { createObjectUrl } from '../../../../base/browser/fileAccess.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore, type ContextViewAnchor } from '../../../../base/browser/ui/contextview/contextview.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { MenuActionViewItem, type MenuActionViewItemOptions } from '../../../../base/browser/ui/menu/menu.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { Icon } from '../../../../base/common/icon.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { extname } from '../../../../base/common/path.js';
 import { createUuid } from '../../../../base/common/uuid.js';
@@ -40,6 +42,14 @@ interface IImagePreviewSource {
 	readonly name: string;
 	readonly url: string;
 	readonly blob?: Blob;
+	readonly gallery?: IImagePreviewGallery;
+}
+
+export interface IImagePreviewGallery {
+	readonly index: number;
+	readonly labels: readonly string[];
+	readImage(index: number): Promise<Blob>;
+	onClose(index: number, restoreFocus: boolean): void;
 }
 
 const nativeImageFormats = new Map<string, ImageOpenExtension>([
@@ -124,20 +134,26 @@ export class ImagePreviewPopup {
 		target: IImagePreviewAnnotationTarget | undefined,
 		onHide: () => void,
 		@IContextViewService private readonly contextViews: IContextViewService,
-		@IContextMenuService menus: IContextMenuService,
-		@IInstantiationService instantiation: IInstantiationService,
-		@INotificationService notifications: INotificationService,
-		@IHostService host: IHostService,
-		@IWebWorkerService workers: IWebWorkerService,
+		@IContextMenuService private readonly menus: IContextMenuService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@INotificationService private readonly notifications: INotificationService,
+		@IHostService private readonly host: IHostService,
+		@IWebWorkerService private readonly workers: IWebWorkerService,
 	) {
-		const { blob: image, url: src } = source;
 		const document = isNode(anchor) ? anchor.ownerDocument : contextViews.container.ownerDocument;
+		const gallery = source.gallery;
+		let selected = gallery?.index ?? 0;
+		let name = source.name;
+		let viewer: ImageViewer | undefined;
 		const frame = this.frame = h(document, 'div', {
 			className: 'ash-image-preview-popup',
-			attributes: { role: 'dialog', 'aria-label': localize('media.image.previewNamed', 'Preview {0}', source.name) },
+			attributes: { role: 'dialog', 'aria-label': localize('media.image.previewNamed', 'Preview {0}', name) },
 		});
-		const header = h(document, 'div', { className: 'ash-image-preview-popup-header' },
-			h(document, 'span', {}, source.name));
+		const title = h(document, 'span', {}, name);
+		resources.add(getHoverDelegate().setupDelayedHover(title, () => ({
+			content: title.scrollWidth > title.clientWidth ? name : '',
+		})));
+		const header = h(document, 'div', { className: 'ash-image-preview-popup-header' }, title);
 		const actions = h(document, 'div', { className: 'ash-image-preview-popup-actions' });
 		header.append(actions);
 		this.close = resources.add(new Button(header, {
@@ -149,10 +165,114 @@ export class ImagePreviewPopup {
 		resources.add(toDisposable(hide));
 		this.onHide = () => {
 			this.visible = false;
+			gallery?.onClose(selected, getActiveElement(document) === anchor);
 			onHide();
 		};
 		const viewport = h(document, 'div', { className: 'ash-image-preview-popup-viewport' });
 		frame.append(header, viewport);
+		const slide = resources.add(new MutableDisposable<DisposableStore>());
+		const initial = slide.value = new DisposableStore();
+		viewer = this.renderImage(source, actions, viewport, initial, target, hide);
+		if (gallery && gallery.labels.length > 1) {
+			const stage = h(document, 'div', { className: 'ash-image-preview-gallery' });
+			viewport.replaceWith(stage);
+			const controls = h(document, 'div', { className: 'ash-image-preview-gallery-controls' });
+			const pagination = h(document, 'div', {
+				className: 'ash-image-preview-gallery-pagination',
+				attributes: { role: 'group', 'aria-label': localize('media.image.galleryPagination', 'Choose an image') },
+			});
+			const position = h(document, 'span', { className: 'ash-aria-live', attributes: { role: 'status', 'aria-atomic': 'true' } });
+			stage.append(viewport, controls, pagination, position);
+			const select = async (index: number) => {
+				if (index === selected) return;
+				dots[selected]!.domNode.removeAttribute('aria-current');
+				selected = index;
+				dots[index]!.domNode.setAttribute('aria-current', 'true');
+				name = gallery.labels[index]!;
+				title.textContent = name;
+				frame.setAttribute('aria-label', localize('media.image.previewNamed', 'Preview {0}', name));
+				position.textContent = localize('media.image.galleryPosition', 'Image {0} of {1}: {2}', index + 1, gallery.labels.length, name);
+				const current = slide.value = new DisposableStore();
+				viewer = undefined;
+				actions.replaceChildren();
+				const status = h(document, 'div', { className: 'ash-image-preview-gallery-message', attributes: { role: 'status' } }, localize('media.image.galleryLoading', 'Loading image…'));
+				viewport.replaceChildren(status);
+				const unavailable = () => {
+					if (current.isDisposed) return;
+					status.textContent = localize('media.image.galleryUnavailable', 'This image is unavailable.');
+					viewport.replaceChildren(status);
+					actions.replaceChildren();
+				};
+				try {
+					const blob = index === gallery.index && source.blob ? source.blob : await gallery.readImage(index);
+					if (current.isDisposed) return;
+					const { url, registration } = createObjectUrl(getWindow(document), blob);
+					current.add(registration);
+					status.remove();
+					viewer = this.renderImage({ name, blob, url: url.href }, actions, viewport, current, undefined, hide, unavailable);
+				} catch {
+					unavailable();
+				}
+			};
+			const dots = gallery.labels.map((label, index) => {
+				const title = localize('media.image.gallerySelect', 'Show image {0}: {1}', index + 1, label);
+				return resources.add(new Button(pagination, {
+					...defaultButtonStyles, label: '', ariaLabel: title, title, size: 'small',
+					onClick: () => { void select(index); },
+				}));
+			});
+			dots[selected]!.domNode.setAttribute('aria-current', 'true');
+			const nextIndex = (step: number) => (selected + step + gallery.labels.length) % gallery.labels.length;
+			const previousLabel = localize('media.image.galleryPrevious', 'Previous image');
+			const nextLabel = localize('media.image.galleryNext', 'Next image');
+			const navigation = resources.add(new WorkbenchToolBar(controls, menus, {
+				ariaLabel: localize('media.image.galleryNavigation', 'Image navigation'), tabNavigation: 'each-action',
+			}));
+			navigation.setActions([
+				{ id: 'imagePreview.previousImage', label: previousLabel, tooltip: previousLabel, icon: Lxicon.chevronLeft, enabled: true, run: () => select(nextIndex(-1)) },
+				{ id: 'imagePreview.nextImage', label: nextLabel, tooltip: nextLabel, icon: Lxicon.chevronRight, enabled: true, run: () => select(nextIndex(1)) },
+			]);
+			resources.add(addDisposableListener(frame, 'keydown', event => {
+				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+				// The file actions keep their own arrow navigation. In the image and
+				// gallery controls the same keys change slides without closing the popup.
+				const focused = getActiveElement(document);
+				if (focused && actions.contains(focused)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				const left = event.key === 'ArrowLeft';
+				const index = nextIndex(left ? -1 : 1);
+				if (focused && viewport.contains(focused)) navigation.focus(left ? 0 : 1);
+				void select(index);
+				if (focused && pagination.contains(focused)) dots[index]!.focus();
+			}, true));
+		}
+		const accessibleViewName = `imagePreviewPopup-${createUuid()}`;
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			resources.add(AccessibleViewRegistry.register({
+				name: accessibleViewName, type, priority: 100,
+				getProvider: (_, focusTarget) => {
+					const focused = focusTarget ?? getActiveElement(document);
+					if (!isHTMLElement(focused) || !frame.contains(focused)) return undefined;
+					return new AccessibleContentProvider(AccessibleViewProviderId.ImagePreview, { type }, () => {
+						const size = viewer?.naturalSize;
+						const summary = size
+							? localize('media.image.popupSummary', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', name, size.width, size.height)
+							: localize('media.image.empty', 'No image loaded.');
+						const zoom = localize('media.image.popupZoomHelp', 'Open the zoom percentage menu to choose a level or Zoom to fit. In the image viewport, press Plus or Minus to zoom, or 0 to fit. Use Left or Right Arrow to move between image preview actions.');
+						const galleryHelp = gallery && gallery.labels.length > 1
+							? localize('media.image.popupGalleryHelp', 'Image {0} of {1}. Activate a dot to jump to its image. In the image viewport or gallery controls, press Left or Right Arrow to change images.', selected + 1, gallery.labels.length) : undefined;
+						return [summary, zoom, galleryHelp, target?.accessibleHelp].filter(Boolean).join('\n');
+					}, () => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.ImagePreview);
+				},
+			}));
+		}
+	}
+
+	private renderImage(source: IImagePreviewSource, actions: HTMLElement, viewport: HTMLElement, resources: DisposableStore, target: IImagePreviewAnnotationTarget | undefined, hide: () => void, onUnavailable?: () => void): ImageViewer {
+		const { blob: image, url: src } = source;
+		const document = viewport.ownerDocument;
+		const { menus, instantiation, notifications, host, workers } = this;
 		const annotation = target && resources.add(new ImageAnnotation(document, src));
 		// The dialog and the viewer's context menu use the same popup host.
 		const viewer = resources.add(instantiation.createInstance(ImageViewer, viewport, { contextMenu: false, overlay: annotation?.overlay }));
@@ -339,31 +459,14 @@ export class ImagePreviewPopup {
 			update();
 			resources.add(annotation.onDidChange(update));
 		}
-		const accessibleViewName = `imagePreviewPopup-${createUuid()}`;
-		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			resources.add(AccessibleViewRegistry.register({
-				name: accessibleViewName, type, priority: 100,
-				getProvider: (_, focusTarget) => {
-					const focused = focusTarget ?? getActiveElement(document);
-					if (!isHTMLElement(focused) || !frame.contains(focused)) return undefined;
-					return new AccessibleContentProvider(AccessibleViewProviderId.ImagePreview, { type }, () => {
-						const size = viewer.naturalSize;
-						const summary = size
-							? localize('media.image.popupSummary', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', source.name, size.width, size.height)
-							: localize('media.image.empty', 'No image loaded.');
-						const zoom = localize('media.image.popupZoomHelp', 'Open the zoom percentage menu to choose a level or Zoom to fit. In the image viewport, press Plus or Minus to zoom, or 0 to fit. Use Left or Right Arrow to move between image preview actions.');
-						return [summary, zoom, target?.accessibleHelp].filter(Boolean).join('\n');
-					}, () => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.ImagePreview);
-				},
-			}));
-		}
 		toolbar.setActions(loadingActions);
 		void viewer.setSource(src, { alt: source.name, data: image && read ? { mimeType: image.type, read } : undefined }).then(loaded => {
 			if (loaded && !lifetime.signal.aborted) {
 				toolbar.setActions(previewActions);
 				updateZoomLabel();
 			}
-		}).catch(reportError);
+		}).catch(onUnavailable ?? reportError);
+		return viewer;
 	}
 
 	show(): boolean {

@@ -72,11 +72,12 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		this.contentDomNode.classList.add('ash-auxiliarybar-content');
 	}
 
-	public override showComposite(compositeId: string, focus = false): void {
-		super.showComposite(compositeId, focus);
-		const composite = this.getComposite(compositeId);
-		const projection = composite?.partTitleProjection;
-		this.fallbackTitle.textContent = composite?.title ?? '';
+	protected override updateTitleArea(): void {
+		super.updateTitleArea();
+		const composite = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
+		if (!composite) return;
+		const projection = composite.partTitleProjection;
+		this.fallbackTitle.textContent = composite.title;
 		this.setTitleProjection({ ...projection, content: projection?.content ?? this.fallbackTitle });
 	}
 }

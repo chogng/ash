@@ -30,6 +30,7 @@ import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { AshChatModel } from '../browser/ashChatModel.js';
+import { registerChatEntityDetails } from '../browser/chatEntityDetails.js';
 import { SessionWorkspaceStatus } from '../browser/sessionWorkspaceStatus.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
 import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../browser/chatListModel.js';
@@ -148,6 +149,7 @@ export function registerChatWorkspace(source: {
 }): void {
 	registerReplyChatEditor({ ...ashChatEditor, model: new SyncDescriptor(NativeReplyEditorModel, [source.draftModels]) });
 	registerAshChatAccessibility();
+	registerChatEntityDetails();
 	registerNativeConversationSharing();
 	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
 		source.catalog,

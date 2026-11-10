@@ -1,6 +1,11 @@
 .ash-workbench-titlebar.ash-sessions-titlebar {
-	padding: 0 var(--ash-titlebar-controls-rightInset, 0px) 0
-		var(--ash-titlebar-controls-leftInset, 0px);
+	padding: 0
+		max(
+			0px,
+			var(--ash-titlebar-controls-rightInset, 0px) -
+				var(--ash-titlebar-trailing-region-width, 0px)
+		)
+		0 var(--ash-titlebar-controls-leftInset, 0px);
 	background: linear-gradient(
 		to right,
 		var(--ash-sideBar-background) 0 var(--ash-sessions-sidebar-width, 0px),

@@ -16,7 +16,7 @@ export function registerTitleService(container: HTMLElement, productName: string
 		}
 		const titlebar = scope.createInstance(TitlebarPart, root, isMacintosh ? 'actions-only' : 'application-menu');
 		titlebar.domNode.classList.add('ash-electron-titlebar');
-		windowLifetime.add(bindWindowsTitlebarInsets(titlebar.domNode));
+		windowLifetime.add(bindWindowsTitlebarInsets(titlebar.domNode, root));
 		return titlebar;
 	};
 	services.registerSingleton(ITitleService, () =>

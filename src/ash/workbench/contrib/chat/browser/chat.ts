@@ -19,6 +19,7 @@ import type { IChatCopiedInlinePrompt } from './attachments/chatVariables.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import type { ChatListWidget } from './widget/chatListWidget.js';
 import type { ChatWidget } from './widget/chatWidget.js';
+import type { ChatMarkdownEntity } from '../common/model/chatMarkdownRichContent.js';
 import type { IChatListItem } from '../common/model/chatViewModel.js';
 import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
@@ -168,6 +169,7 @@ export interface IChatWidgetViewOptions {
 	readonly virtualizeHistoryFrom?: import('../../../../base/common/observable.js').IObservable<number | undefined>;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
+	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	readonly messagePresentation?: ChatMessagePresentation;
 	readonly codeBlockPresentation?: 'card';
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;

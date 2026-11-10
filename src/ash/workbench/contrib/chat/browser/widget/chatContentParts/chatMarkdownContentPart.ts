@@ -4,7 +4,7 @@ import { Emitter } from '../../../../../../base/common/event.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { renderWorkbenchMarkdown, sanitizeMarkdownHtmlToFragment, type MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Marked } from '../../../../../../base/common/marked/marked.js';
 import { htmlAttributeEncodeValue } from '../../../../../../base/common/strings.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
@@ -24,8 +24,9 @@ import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import type { IChatContentPart } from './chatContentParts.js';
 import type { IChatCodeBlockInfo } from '../../chat.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
-import { ImageAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
-import { URI } from '../../../../../../base/common/uri.js';
+import { ChatImageGallery } from './chatImageGallery.js';
+import type { URI } from '../../../../../../base/common/uri.js';
+import { ImagePreviewPopup } from '../../../../mediaPreview/browser/imagePreviewPopup.js';
 import { localize } from '../../../../../../nls.js';
 
 interface RenderedBlock {
@@ -98,7 +99,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	private readonly plainLexer = new Marked();
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
-	private readonly galleryImages = new Set<ImageAttachmentWidget>();
+	private readonly galleries = new Set<ChatImageGallery>();
+	private readonly inlineImagePreview = this._register(new MutableDisposable<DisposableStore & { readonly anchor: HTMLButtonElement; }>());
 	private fragments: readonly MarkdownFragment[] = [];
 	private markdown: IMarkdownString | undefined;
 	// Code actions retain this response, rather than a full historical string per code block.
@@ -185,7 +187,10 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	public setVisible(visible: boolean): void {
 		this.incrementalRendering.setVisible(visible, !this.options.synchronousInitialRender || this.markdown !== undefined);
 		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
-		if (!visible) for (const image of this.galleryImages) image.closePreview();
+		if (!visible) {
+			this.inlineImagePreview.clear();
+			for (const gallery of this.galleries) gallery.closePreviews();
+		}
 	}
 
 	/** Retains readable Markdown while offscreen code blocks release their derived documents. */
@@ -393,6 +398,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			}
 			if (!patch) {
 				wrapTablesWithScrollable(element);
+				this.enableInlineImagePreviews(element, lifetime);
 				this.renderImageGalleries(element, lifetime);
 				for (const rich of element.querySelectorAll<HTMLElement>('.ash-chat-rich')) {
 					for (const variant of rich.classList) {
@@ -447,6 +453,45 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		}
 	}
 
+	private enableInlineImagePreviews(element: HTMLElement, lifetime: DisposableStore): void {
+		for (const image of element.querySelectorAll<HTMLImageElement>('img')) {
+			// Images used as links keep the author's link action. Resource images
+			// receive their sanitized URL asynchronously from the Markdown renderer.
+			if (image.closest('a, button')) continue;
+			const ready = () => {
+				if (!image.naturalWidth || !element.contains(image)) return;
+				this.enableInlineImagePreview(image, lifetime);
+			};
+			if (image.complete && image.naturalWidth) ready();
+			else lifetime.add(addDisposableListener(image, 'load', ready, { once: true }));
+		}
+	}
+
+	private enableInlineImagePreview(image: HTMLImageElement, lifetime: DisposableStore): void {
+		const name = image.alt || image.title || localize('chat.markdown.imageName', 'Image');
+		const anchor = h(image.ownerDocument, 'button', {
+			className: 'ash-chat-media-preview-trigger',
+			attributes: { type: 'button', 'aria-haspopup': 'dialog', 'aria-label': localize('chat.markdown.previewImage', 'Preview {0}', name) },
+		});
+		image.replaceWith(anchor);
+		anchor.append(image);
+		lifetime.add(addDisposableListener(anchor, 'click', () => {
+			const url = image.currentSrc || image.src;
+			if (!url) return;
+			const resources = Object.assign(new DisposableStore(), { anchor });
+			this.inlineImagePreview.value = resources;
+			anchor.focus({ preventScroll: true });
+			const preview = this.instantiation.createInstance(ImagePreviewPopup, { name, url }, anchor, resources, undefined, () => {
+				if (this.inlineImagePreview.value === resources) this.inlineImagePreview.clear();
+			});
+			if (!preview.show()) this.inlineImagePreview.clear();
+		}));
+		lifetime.add(toDisposable(() => {
+			if (this.inlineImagePreview.value?.anchor === anchor) this.inlineImagePreview.clear();
+			anchor.replaceWith(...anchor.childNodes);
+		}));
+	}
+
 	private renderImageGalleries(element: HTMLElement, lifetime: DisposableStore): void {
 		const readImage = this.options.readGalleryImage;
 		if (!readImage) return;
@@ -454,33 +499,9 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		for (const gallery of element.querySelectorAll<HTMLElement>('.ash-chat-image-gallery[data-ash-chat-gallery-index]')) {
 			const part = parts?.[Number(gallery.dataset.ashChatGalleryIndex)];
 			if (part?.kind !== 'imageGallery') continue;
-			const document = gallery.ownerDocument;
-			const controller = new AbortController();
-			lifetime.add(toDisposable(() => controller.abort()));
-			for (const [index, image] of part.images.entries()) {
-				const tile = h(document, 'div', { className: 'ash-chat-image-gallery-tile' });
-				gallery.append(tile);
-				const widget = lifetime.add(this.instantiation.createInstance(ImageAttachmentWidget, {
-					id: String(index), name: image.label,
-					resolve: async () => {
-						const blob = await readImage(URI.parse(image.uri), controller.signal);
-						return { content: blob.type.startsWith('image/') ? blob : undefined };
-					},
-				}, { imagePresentation: 'thumbnail', retryOnFailure: true, supportsDeletion: false, shouldFocusClearButton: false }, tile));
-				this.galleryImages.add(widget);
-				lifetime.add(toDisposable(() => this.galleryImages.delete(widget)));
-				lifetime.add(widget.onDidResolvePreview(() => this.changedHeight.fire()));
-				if (image.source) {
-					const source = URI.parse(image.source);
-					if (source.scheme !== 'https' && source.scheme !== 'http') continue;
-					tile.append(h(document, 'a', {
-						attributes: {
-							href: image.source, rel: 'noopener noreferrer',
-							'aria-label': localize('chat.imageGallery.source', 'Source for {0}', image.label),
-						},
-					}, source.authority));
-				}
-			}
+			const widget = lifetime.add(this.instantiation.createInstance(ChatImageGallery, gallery, part.images, readImage, () => this.changedHeight.fire()));
+			this.galleries.add(widget);
+			lifetime.add(toDisposable(() => this.galleries.delete(widget)));
 		}
 	}
 
@@ -495,7 +516,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const renderOptions = getChatMarkdownRenderOptions(options);
 		const template = document.createElement('template');
 		const sanitizer = { ownerDocument: document, markdown, sanitizerConfig: renderOptions.sanitizerConfig };
-		const policy = JSON.stringify([markdown.isTrusted, markdown.baseUri?.toString(), renderOptions.markedOptions, renderOptions.sanitizerConfig]);
+		const policy = JSON.stringify([markdown.isTrusted, markdown.baseUri?.toString(), renderOptions.markedOptions, renderOptions.sanitizerConfig, !!renderOptions.markedExtensions?.length]);
 		const parse = (value: string): Element | undefined => {
 			template.innerHTML = renderWorkbenchMarkdown({ ...markdown, value }, false, renderOptions);
 			const raw = template.content.firstElementChild;

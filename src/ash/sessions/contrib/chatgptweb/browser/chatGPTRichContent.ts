@@ -1,6 +1,8 @@
 import { Marked, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
+import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
+import { isRecord } from '../../../../base/common/types.js';
 import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
 import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
@@ -238,6 +240,8 @@ function richContentLexer(): Marked {
 				if (this.lexer.state.inRawBlock) return undefined;
 				const imageGroup = /^\uE200image_group\uE202[^\uE200\uE201\r\n]*(?:\uE201|$)/u.exec(source);
 				if (imageGroup) return { type: 'chatgptWebReference', raw: imageGroup[0], kind: 'image_group' };
+				const genui = /^\uE200genui\uE202([^\uE200\uE201\r\n]*)(?:\uE201|$)/u.exec(source);
+				if (genui) return { type: 'chatgptWebReference', raw: genui[0], kind: 'genui', payload: genui[0].endsWith('\uE201') ? genui[1] : '' };
 				const match = /^\uE200(cite|url|entity)\uE202([^\uE200\uE201\r\n]*)\uE201/u.exec(source);
 				if (!match) return undefined;
 				return { type: 'chatgptWebReference', raw: match[0], kind: match[1], payload: match[2] };
@@ -367,6 +371,22 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			return group ? { kind: 'imageGallery', images: group.images, block: true } : '';
 		}
 		const payload = token.payload as string;
+		if (token.kind === 'genui') {
+			if (!payload) return '';
+			const group = imageGroups.find(group => 'marker' in group && group.marker === token.raw);
+			if (group) return { kind: 'imageGallery', images: group.images, block: true };
+			try {
+				const value: unknown = JSON.parse(payload);
+				const entities = isRecord(value) && isRecord(value.entity_thumbnail_list) ? value.entity_thumbnail_list.entities : undefined;
+				if (Array.isArray(entities)) {
+					const plain = (text: string) => escapeMarkdownSyntaxTokens(text.replace(/\s+/gu, ' ')).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+					const entries = entities.slice(0, 12).flatMap(entity => isRecord(entity) && typeof entity.name === 'string' && entity.name.trim()
+						? [`- **${plain(entity.name.slice(0, 256))}**${typeof entity.desc === 'string' ? ` — ${plain(entity.desc.slice(0, 1024))}` : ''}`] : []);
+					if (entries.length) return { kind: 'markdown', markdown: entries.join('\n'), block: true };
+				}
+			} catch { /* A malformed provider envelope has no renderable content. */ }
+			return { kind: 'unavailableMedia', fallback, block: true };
+		}
 		if (token.kind === 'entity') {
 			try {
 				const entity: unknown = JSON.parse(payload);

@@ -19,7 +19,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../platform/sto
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Part } from '../../workbench/browser/part.js';
-import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
+import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
 import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.js';
 import {
@@ -201,20 +201,18 @@ function createSessionsWorkbenchGridDescriptor(
 	): SerializedGridDescriptor => ({ type: 'leaf', data: partId, size, visible, priority });
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
-	const mainWidth = Math.max(0, dimension.width - (state.sidebar.visible ? state.sidebar.width : 0));
 	const editorPrimary = primaryPart === 'editor';
-	const contentWidth = mainWidth;
-	const contentHeight = bodyHeight;
-	const sidePaneWidth =
-		(state.editor.visible && !editorPrimary ? state.editor.width : 0) +
-		(state.auxiliarybar.visible ? state.auxiliarybar.width : 0);
-	const sessionsWidth = Math.max(0, contentWidth - sidePaneWidth);
+	const primaryWidth = Math.max(0, dimension.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
+	const sidebarWidth = state.sidebar.visible ? state.sidebar.width : 0;
+	const sidePaneWidth = state.editor.visible && !editorPrimary ? state.editor.width : 0;
+	const sessionsWidth = Math.max(0, primaryWidth - sidebarWidth - sidePaneWidth);
 	const content: SerializedGridDescriptor = {
 		type: 'branch',
 		orientation: Orientation.HORIZONTAL,
-		size: contentHeight,
+		size: bodyHeight,
 		priority: SESSIONS_LAYOUT_PRIORITY,
 		children: [
+			leaf('sidebar', state.sidebar.width, state.sidebar.visible),
 			leaf('sessions', sessionsWidth, !editorPrimary, editorPrimary ? LayoutPriority.Normal : SESSIONS_LAYOUT_PRIORITY),
 			...(views.has('customview') ? [leaf('customview', sessionsWidth, false, SESSIONS_LAYOUT_PRIORITY)] : []),
 			leaf(
@@ -223,23 +221,22 @@ function createSessionsWorkbenchGridDescriptor(
 				state.editor.visible,
 				editorPrimary ? SESSIONS_LAYOUT_PRIORITY : LayoutPriority.Normal,
 			),
-			leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		],
 	};
 	return {
 		type: 'branch',
-		orientation: Orientation.VERTICAL,
-		size: dimension.height,
+		orientation: Orientation.HORIZONTAL,
+		size: dimension.width,
 		priority: LayoutPriority.Normal,
 		children: [
-			leaf('titlebar', titlebarHeight),
 			{
 				type: 'branch',
-				orientation: Orientation.HORIZONTAL,
-				size: bodyHeight,
+				orientation: Orientation.VERTICAL,
+				size: primaryWidth,
 				priority: SESSIONS_LAYOUT_PRIORITY,
-				children: [leaf('sidebar', state.sidebar.width, state.sidebar.visible), ...content.children],
+				children: [leaf('titlebar', titlebarHeight), content],
 			},
+			leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		],
 	};
 }
@@ -434,6 +431,14 @@ export class DesktopWorkbenchLayout
 				),
 			);
 		}
+		const auxiliary = this.view('auxiliarybar');
+		auxiliary.frame.classList.add('ash-sessions-auxiliarybar-frame');
+		const updateAuxiliaryFrame = () => {
+			const height = this.titlebarHeight;
+			auxiliary.setFrameInsets({ ...NoWorkbenchPartFrameInsets, top: height });
+			auxiliary.frame.style.setProperty('--ash-sessions-titlebar-height', `${height}px`);
+		};
+		updateAuxiliaryFrame();
 		this._register(requiredPart(parts, 'editor').onDidChangeConstraints(() => {
 			if (this.responsiveLayout) return;
 			if (this.partUpdateDepth === 0 && this.grid.width > 0 && this.grid.height > 0) {
@@ -447,6 +452,7 @@ export class DesktopWorkbenchLayout
 		this.rebuildGrid(state, this.initialDimension);
 		this._register(
 			this.view('titlebar').part.onDidChangeConstraints(() => {
+				updateAuxiliaryFrame();
 				// Grid and overlays follow the titlebar's new height.
 				if (this.grid.width > 0 && this.grid.height > 0)
 					this.layout(new Dimension(this.grid.width, this.grid.height));
@@ -499,6 +505,7 @@ export class DesktopWorkbenchLayout
 		this.gridHandle.value = this.grid;
 		this.grid.layout(dimension.width, dimension.height);
 		this.restorePartVisibility();
+		this.updateTitlebarGeometry();
 		this.gridChangeHandle.value = combinedDisposable(this.grid.onDidSashChange(() => {
 			const area = this.view('editor').part;
 			if (area instanceof DesktopEditorArea && !this.compactTools && this.isPartVisible('sessions') && this.isPartVisible('editor')) {
@@ -522,7 +529,7 @@ export class DesktopWorkbenchLayout
 					this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 
 				this.updateContentCorners();
-				this.updateSidebarWidth();
+				this.updateTitlebarGeometry();
 				this.publishPartVisibility();
 				this.saveState();
 				// Publish completed sash geometry to overlays and the shared startup cache.
@@ -578,7 +585,7 @@ export class DesktopWorkbenchLayout
 			}
 		}
 		this.grid.layout(dimension.width, dimension.height);
-		this.updateSidebarWidth();
+		this.updateTitlebarGeometry();
 		if (this.partUpdateDepth > 0) return;
 		if (
 			this.primaryPart === 'editor' &&
@@ -661,7 +668,9 @@ export class DesktopWorkbenchLayout
 			this.setViewVisible(this.view('sessions'), wanted('sessions') && (!single || this.narrowConversation));
 			this.setViewVisible(this.view('editor'), wanted('editor') && (!single || !this.narrowConversation));
 		}
-		conversationView.setConversationOverflow(overflow && this.isPartVisible('editor'));
+		// A body wider than the window must not widen the titlebar above it.
+		conversationView.setConversationOverflow((overflow && this.isPartVisible('editor'))
+			|| (wanted('sessions') && dimension.width < conversationView.part.minimumWidth));
 	}
 
 	/** Part changes share one geometry commit when several Parts change together. */
@@ -767,6 +776,16 @@ export class DesktopWorkbenchLayout
 
 		if (partId === 'auxiliarybar') {
 			this.detailsWidth = dimension.width;
+		}
+		if ((partId === 'sidebar' || partId === 'sessions' || partId === 'editor') && this.isPartVisible(partId) && this.isPartVisible('auxiliarybar')) {
+			const otherMinimum = (['sidebar', 'sessions', 'editor'] as const)
+				.filter(id => id !== partId && this.isPartVisible(id))
+				.reduce((width, id) => width + this.view(id).minimumWidth, 0);
+			const requiredWidth = dimension.width + otherMinimum;
+			// An explicit resize can borrow room from the outer auxiliary column.
+			if (requiredWidth > this.getPartSize('titlebar').width) {
+				this.grid.resizeView(this.view('titlebar'), { width: requiredWidth });
+			}
 		}
 		if (this.primaryPart === 'sessions' && partId === 'editor') this.sidePaneWidth = dimension.width;
 		this.resizeView(this.view(partId as SessionsPartId), dimension);
@@ -886,11 +905,10 @@ export class DesktopWorkbenchLayout
 		}
 	}
 
-	private updateSidebarWidth(): void {
-		const width = this.isViewVisible(this.view('sidebar'))
-			? this.getViewSize(this.view('sidebar')).width
-			: 0;
-		this.mainContainer.style.setProperty('--ash-sessions-sidebar-width', `${width}px`);
+	private updateTitlebarGeometry(): void {
+		const visibleWidth = (id: 'sidebar' | 'auxiliarybar') => this.isPartVisible(id) ? this.getViewSize(this.view(id)).width : 0;
+		this.mainContainer.style.setProperty('--ash-sessions-sidebar-width', `${visibleWidth('sidebar')}px`);
+		this.mainContainer.style.setProperty('--ash-titlebar-trailing-region-width', `${visibleWidth('auxiliarybar')}px`);
 	}
 
 	private publishPartVisibility(): void {

@@ -26,6 +26,11 @@ records and supplies ordered sections and row operations. The view owns
 rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
 host's contracts. The [catalog project ownership contract](SESSIONS_LIST.md#catalog-project-ownership)
 defines which actions reach a provider.
+Ash Chat owns entity details, including the auxiliary pane, its controls and the
+local cache of completed replies and their fetched resources. Cache identities
+include the backend, verified account, conversation, reply, language and entity.
+The ChatGPT Web response backend supplies the stream and resources, and the
+shared Chat renderer presents galleries with previous and next actions.
 The Workbench message editor shares editing and resubmission between Ash Chat
 and Code. App Server owns their Thread rewrites. The ChatGPT adapter supplies
 the same editor with remote message capabilities and uses the web backend to

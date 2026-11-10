@@ -127,12 +127,14 @@ directly. Currently Ash constructs `DesktopWorkbench` with `DesktopWorkbenchLayo
 for both browser and Electron; the phone workbench remains unimplemented.
 
 ```text
-Title bar
-Content
-├── Sidebar
-└── Main region
-    └── Sessions Part | Editor | Auxiliary Bar | Custom View Grid
+Window
+├── Primary column
+│   ├── Title bar
+│   └── Sidebar | Sessions Part | Editor | Custom View Grid
+└── Auxiliary Bar column
 ```
+
+The window Auxiliary Bar shares a full-height divider with the primary column. Its view body starts below the window chrome. The Auxiliary Bar hosts the Entity details title and its projected close action at the same height as the window title bar. The main title bar and its actions follow the primary column width as the Auxiliary Bar opens, closes or resizes. Code tool headers dock within the primary column when the editor is split beside the conversation.
 
 The workbench omits the standard Activity Bar, Status Bar and Banner. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
 

@@ -129,12 +129,17 @@ async function installService(application: ElectronApplication, holdInitializati
 					uploadedFiles[decodeURIComponent(url.pathname.slice(1))] = Buffer.from(init.body as Uint8Array).toString('utf8');
 					return new Response(null, { status: 204 });
 				}
-				if (url.href === 'https://images.openai.com/static-rsc-4/fixture-zed?purpose=fullsize') {
+				if (url.origin === 'https://images.openai.com' && ['/static-rsc-4/fixture-zed', '/static-rsc-4/fixture-zed-alt'].includes(url.pathname)) {
+					if (offline) return new Response(null, { status: 503 });
 					if (init?.credentials !== 'omit' || new Headers(init.headers).has('Authorization')) throw new Error('Image CDN requests must be unauthenticated');
-					return new Response(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64'), { headers: { 'Content-Type': 'image/png' } });
+					const png = url.pathname.endsWith('-alt')
+						? 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGNQSbn0H4QBEisEs9MpNToAAAAASUVORK5CYII='
+						: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
+					return new Response(Buffer.from(png, 'base64'), { headers: { 'Content-Type': 'image/png' } });
 				}
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
 				if (url.pathname === '/backend-api/sidebar/conversation') {
+					if (offline) return new Response(null, { status: 503 });
 					const input = JSON.parse(String(init?.body));
 					if (input.conversation_id !== 'history-one' || input.message_id !== 'answer' || !['GPUI', 'Floem'].includes(input.generic_entity_params.name) || input.locale !== 'zh-CN'
 						|| new Headers(init?.headers).get('OpenAI-Sentinel-Chat-Requirements-Prepare-Token') !== 'synthetic-sidebar-proof') {
@@ -152,6 +157,10 @@ async function installService(application: ElectronApplication, holdInitializati
 						type: 'image_group', matched_text: imageMarker, images: [{
 							image_result: {
 								content_url: 'https://images.openai.com/static-rsc-4/fixture-zed?purpose=fullsize', title: 'Zed 截图', url: 'https://example.com/zed',
+							}
+						}, {
+							image_result: {
+								content_url: 'https://images.openai.com/static-rsc-4/fixture-zed-alt?purpose=fullsize', title: 'Zed 第二张截图', url: 'https://example.com/zed-alt',
 							}
 						}]
 					};
@@ -467,6 +476,69 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
+	test('splits the Chat titlebar at the resizable Entity details column', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+		const suffix = '\n\n<Entity category="software" value="GPUI" disambig="Zed Rust GPU UI framework"/>';
+		await installService(application as ElectronApplication, false, { suffix, sources: [] });
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const entity = chat.getByRole('link', { name: 'GPUI', exact: true });
+		const titlebar = page.locator('.ash-sessions-titlebar');
+		const share = titlebar.getByRole('button', { name: '分享', exact: true });
+		await expect(share).toBeVisible();
+		const fullTitlebar = (await titlebar.boundingBox())!;
+		await entity.press('Enter');
+		const closeDetails = page.getByRole('button', { name: '关闭详情', exact: true });
+		await expect(closeDetails).toBeVisible();
+
+		const auxiliary = page.locator('.ash-sessions-auxiliarybar-frame');
+		const auxiliaryTitle = auxiliary.locator('.ash-pane-composite-title');
+		await expect(auxiliaryTitle.getByText('实体详情', { exact: true })).toBeVisible();
+		await expect(auxiliaryTitle.getByRole('button', { name: '关闭详情', exact: true })).toBeFocused();
+		await expect(auxiliaryTitle).toHaveCSS('border-bottom-width', '1px');
+		await expect(auxiliaryTitle.locator('.ash-chat-entity-details-actions')).toHaveCSS('-webkit-app-region', 'no-drag');
+		const closeBounds = (await closeDetails.boundingBox())!;
+		expect(closeBounds.width).toBe(closeBounds.height);
+		const surface = await chat.evaluate(element => getComputedStyle(element.closest('.ash-desktop-editor-area')!).backgroundColor);
+		await expect(auxiliary.locator('.ash-sessions-auxiliarybar')).toHaveCSS('background-color', surface);
+		await expect(auxiliaryTitle).toHaveCSS('background-color', surface);
+		const splitTitlebar = (await titlebar.boundingBox())!;
+		const auxiliaryBounds = (await auxiliary.boundingBox())!;
+		const auxiliaryTitleBounds = (await auxiliaryTitle.boundingBox())!;
+		const shareBounds = (await share.boundingBox())!;
+		expect(auxiliaryBounds.y).toBeCloseTo(splitTitlebar.y, 0);
+		expect(auxiliaryTitleBounds.y).toBeCloseTo(splitTitlebar.y, 0);
+		expect(auxiliaryTitleBounds.height).toBeCloseTo(splitTitlebar.height, 0);
+		expect(auxiliaryBounds.x).toBeCloseTo(splitTitlebar.x + splitTitlebar.width, 0);
+		expect(auxiliaryBounds.x + auxiliaryBounds.width).toBeCloseTo(fullTitlebar.x + fullTitlebar.width, 0);
+		expect(shareBounds.x + shareBounds.width).toBeLessThanOrEqual(auxiliaryBounds.x);
+
+		const sash = page.locator('.ash-sessions-workbench-layout > .ash-grid > .ash-split-view > .ash-sash-vertical');
+		const sashBounds = (await sash.boundingBox())!;
+		expect(sashBounds.y).toBeCloseTo(splitTitlebar.y, 0);
+		expect(sashBounds.height).toBeCloseTo(auxiliaryBounds.height, 0);
+		await expect(sash).toHaveCSS('-webkit-app-region', 'no-drag');
+		const sashY = splitTitlebar.y + splitTitlebar.height / 2;
+		await page.mouse.move(auxiliaryBounds.x, sashY);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(auxiliaryBounds.x - 24, sashY, { steps: 4 });
+			await expect.poll(async () => (await auxiliary.boundingBox())!.x).toBeCloseTo(auxiliaryBounds.x - 24, 0);
+		} finally {
+			await page.mouse.up();
+		}
+		const resizedTitlebar = (await titlebar.boundingBox())!;
+		expect(resizedTitlebar.x + resizedTitlebar.width).toBeCloseTo(auxiliaryBounds.x - 24, 0);
+		const resizedShare = (await share.boundingBox())!;
+		expect(resizedShare.x).toBeCloseTo(shareBounds.x - 24, 0);
+		await testInfo.attach('chat-entity-titlebar-split', { body: await page.screenshot(), contentType: 'image/png' });
+
+		await closeDetails.click();
+		await expect(auxiliary).toBeHidden();
+		await expect(entity).toBeFocused();
+		await expect.poll(async () => (await titlebar.boundingBox())?.width).toBeCloseTo(fullTitlebar.width, 0);
+	});
+
 	test('renders ChatGPT entity labels and previews explicit source links', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 		const reply = '\n\n' + [
 			'| 框架 | 核心特点 |',
@@ -475,6 +547,8 @@ test.describe('Unified Chat sidebar', () => {
 			'| <Entity data={{"category":"software","value":"Floem","disambig":"Lapce"}}/> | Lapce 使用的响应式 UI |',
 			'',
 			'参见 urlFloem 文档turn2search1。',
+			'',
+			'![正文图片](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==)',
 		].join('\n');
 		const source = { ref_id: 'turn2search1', url: 'https://example.com/floem', title: 'Floem 文档', snippet: '介绍响应式组件与布局。' };
 		await installService(application as ElectronApplication, false, { suffix: reply, sources: [source] });
@@ -483,6 +557,15 @@ test.describe('Unified Chat sidebar', () => {
 		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
 		const table = chat.getByRole('table');
 		await expect(table).toBeVisible();
+		const inlineImage = chat.getByRole('button', { name: '预览 正文图片', exact: true });
+		await inlineImage.press('Enter');
+		const inlinePreview = page.getByRole('dialog', { name: '预览 正文图片', exact: true });
+		await expect(inlinePreview).toBeVisible();
+		await expect(inlinePreview.getByRole('toolbar', { name: '图片导航', exact: true })).toHaveCount(0);
+		await expect(inlinePreview.getByRole('group', { name: '选择图片', exact: true })).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await expect(inlinePreview).toBeHidden();
+		await expect(inlineImage).toBeFocused();
 		await expect(table.getByRole('cell')).toHaveText(['GPUI', 'Zed 使用的 GPU UI 框架', 'Floem', 'Lapce 使用的响应式 UI']);
 		const entity = table.getByRole('link', { name: 'GPUI', exact: true });
 		await entity.press('Enter');
@@ -491,17 +574,60 @@ test.describe('Unified Chat sidebar', () => {
 		const sourceLink = page.getByRole('link', { name: 'Zed 文档', exact: true });
 		await expect(sourceLink).toBeInViewport({ ratio: 1 });
 		await expect(sourceLink).toHaveAttribute('href', 'https://example.com/zed');
-		const detailPane = page.locator('.ash-chatgpt-entity-details');
+		const detailPane = page.locator('.ash-chat-entity-details');
 		await expect(detailPane.locator('strong')).toHaveText('GPU');
 		const gallery = detailPane.getByRole('group', { name: '图集', exact: true });
 		const image = gallery.getByRole('button', { name: '预览 Zed 截图', exact: true });
 		await expect(image).toBeVisible();
 		await expect(gallery.getByRole('link', { name: 'Zed 截图 的图片来源', exact: true })).toHaveAttribute('href', 'https://example.com/zed');
+		const next = gallery.getByRole('button', { name: '下一张图片', exact: true });
+		const secondImage = gallery.getByRole('button', { name: '预览 Zed 第二张截图', exact: true });
+		await expect(gallery.getByRole('status')).toHaveText('1 / 2');
+		await next.click();
+		await expect(secondImage).toBeVisible();
+		await expect(image).toBeHidden();
+		await expect(gallery.getByRole('status')).toHaveText('2 / 2');
+		await expect(gallery.getByRole('link', { name: 'Zed 第二张截图 的图片来源', exact: true })).toHaveAttribute('href', 'https://example.com/zed-alt');
+		expect(await gallery.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await secondImage.press('ArrowLeft');
+		await expect(image).toBeVisible();
 		await image.press('Enter');
 		const imagePreview = page.getByRole('dialog', { name: '预览 Zed 截图', exact: true });
 		await expect(imagePreview).toBeVisible();
+		const popup = page.locator('.ash-image-preview-popup');
+		const pagination = popup.getByRole('group', { name: '选择图片', exact: true });
+		const firstDot = pagination.getByRole('button', { name: '显示第 1 张图片：Zed 截图', exact: true });
+		const secondDot = pagination.getByRole('button', { name: '显示第 2 张图片：Zed 第二张截图', exact: true });
+		const popupNext = popup.getByRole('button', { name: '下一张图片', exact: true });
+		await expect(firstDot).toHaveAttribute('aria-current', 'true');
+		await popupNext.click();
+		await expect(popup).toHaveAccessibleName('预览 Zed 第二张截图');
+		await expect(popup.getByRole('img', { name: 'Zed 第二张截图', exact: true })).toHaveJSProperty('naturalWidth', 2);
+		await expect(secondDot).toHaveAttribute('aria-current', 'true');
+		await firstDot.click();
+		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
+		await expect(firstDot).toHaveAttribute('aria-current', 'true');
+		await secondDot.press('Enter');
+		await expect(secondDot).toHaveAttribute('aria-current', 'true');
+		await secondDot.press('ArrowLeft');
+		await expect(firstDot).toBeFocused();
+		await expect(firstDot).toHaveAttribute('aria-current', 'true');
+		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
+		await popup.locator('.ash-image-viewer').press('ArrowLeft');
+		await expect(popup.getByRole('img', { name: 'Zed 第二张截图', exact: true })).toHaveJSProperty('naturalWidth', 2);
+		await expect(secondDot).toHaveAttribute('aria-current', 'true');
+		await expect(pagination.locator('[aria-current]')).toHaveCount(1);
+		const markerWidths = await pagination.getByRole('button').evaluateAll(dots => dots.map(dot => parseFloat(getComputedStyle(dot, '::before').inlineSize)));
+		expect(markerWidths[1]!).toBeGreaterThan(markerWidths[0]!);
+		await page.mouse.move(0, 0);
+		await testInfo.attach('chatgpt-gallery-preview', { body: await page.screenshot(), contentType: 'image/png' });
 		await page.keyboard.press('Escape');
-		await expect(imagePreview).toBeHidden();
+		await expect(popup).toBeHidden();
+		await expect(secondImage).toBeFocused();
+		await expect(gallery.getByRole('status')).toHaveText('2 / 2');
+		await secondImage.press('ArrowLeft');
+		await expect(image).toBeVisible();
+		await image.focus();
 		await expect(image).toBeFocused();
 		await expect(table).toBeVisible();
 		const [chatBounds, detailBounds] = await Promise.all([chat.boundingBox(), detailPane.boundingBox()]);
@@ -539,6 +665,18 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(chat).toContainText('History two answer');
 		await expect.poll(() => (application as ElectronApplication).evaluate(() => globalThis.ashNativeFixture.cancelledEntityDetails)).toBe(1);
 		expect(await (application as ElectronApplication).evaluate(() => globalThis.ashNativeFixture.sends)).toBe(0);
+
+		const electron = application as ElectronApplication;
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		await expect(entity).toBeVisible();
+		await electron.evaluate(() => ashNativeFixture.setOffline(true));
+		const reopened = await workbench.reopenAgentsWindow(electron, page);
+		await reopened.getByRole('region', { name: 'ChatGPT', exact: true }).getByRole('link', { name: 'GPUI', exact: true }).press('Enter');
+		const cachedDetail = reopened.locator('.ash-chat-entity-details');
+		await expect(cachedDetail.getByRole('link', { name: 'Zed 文档', exact: true })).toBeVisible();
+		await expect(cachedDetail.getByRole('button', { name: '预览 Zed 截图', exact: true })).toBeVisible();
+		await cachedDetail.getByRole('button', { name: '下一张图片', exact: true }).click();
+		await expect(cachedDetail.getByRole('button', { name: '预览 Zed 第二张截图', exact: true })).toBeVisible();
 	});
 
 	test('opens one sent SVG thumbnail inside Chat without opening Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {

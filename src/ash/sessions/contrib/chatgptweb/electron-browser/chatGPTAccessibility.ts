@@ -43,7 +43,7 @@ export function registerChatGPTAccessibility(focusContext: string, contentServic
 						+ '\n\n' + localize('sessions.chatgpt.offlineHelp', 'While offline, Send in a new chat saves its first text message on this device. Delete removes a conversation from the sidebar. Ash syncs these changes when the connection returns. A saved chat is read-only until ChatGPT confirms it.')
 						+ '\n\n' + localize('sessions.chat.coworkHelp', 'Use the same input to ask questions or describe work to do. Clear text requests for actions or deliverables may run with Cowork. Progress and results appear in the conversation. Select Open Cowork task when the task needs input.'))
 					+ '\n\n' + getSessionsListGroupingHelp()
-					+ '\n\n' + localize('sessions.chatgpt.entityOpenHelp', 'Press Enter on an entity name to open its details in the auxiliary sidebar.')
+					+ '\n\n' + localize('sessions.chat.entityOpenHelp', 'Press Enter on an entity name to open its details in the auxiliary sidebar.')
 					+ '\n\n' + localize('sessions.chatgpt.imageGalleryHelp', 'Use Tab to reach images and their sources. Press Enter to preview an image and Escape to return to it.')
 					+ '\n\n' + getChatRequestAccessibilityHelp(true)
 					+ '\n\n' + getChatCodeBlockCardAccessibilityHelp()

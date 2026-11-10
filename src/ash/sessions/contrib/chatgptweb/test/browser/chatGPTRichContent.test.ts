@@ -141,6 +141,19 @@ suite('ChatGPT rich content', () => {
 		assert.match(renderChatRichContentText(inline.text, inline.richContent), /Project screenshot[\s\S]*Project summary/u);
 	});
 
+	test('renders entity thumbnail metadata as readable text without exposing the provider payload', () => {
+		const marker = '\uE200genui\uE202' + JSON.stringify({
+			entity_thumbnail_list: {
+				entities: [{ name: 'Zed', desc: 'An editor using <GPUI>.', thumbnail_query: 'private query' }],
+			}
+		}) + '\uE201';
+		const reply = decodeChatGPTReply(`Related projects\n\n${marker}\n\nAfter`);
+		const text = renderChatRichContentText(reply.text, reply.richContent);
+		assert.match(text, /Related projects[\s\S]*Zed[\s\S]*An editor using <GPUI>\.[\s\S]*After/u);
+		assert.doesNotMatch(text, /genui|entity_thumbnail_list|private query/u);
+		assert.doesNotMatch(render(`Related projects ${marker.slice(0, -4)}`), /genui|entity_thumbnail_list/u);
+	});
+
 	test('leaves inline and fenced code examples literal', () => {
 		const source = '`<box>inline</box>`\n\n```html\n<box>fenced</box>\n```';
 		const html = render(source);

@@ -1,0 +1,67 @@
+.ash-sessions-auxiliarybar-frame
+	> [data-active-composite="sessions.chat.entityDetails"] {
+	background: var(--ash-sessions-conversation-background);
+	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
+}
+
+.ash-chat-entity-details {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.ash-sessions-auxiliarybar-frame
+	> [data-active-composite="sessions.chat.entityDetails"]
+	> .ash-pane-composite-title {
+	position: absolute;
+	inset: 0 0 auto var(--ash-strokeThickness);
+	box-sizing: border-box;
+	background: inherit;
+	height: var(--ash-sessions-titlebar-height);
+	border-bottom: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	-webkit-app-region: drag;
+
+	.ash-sessions-tool-title {
+		align-self: center;
+	}
+}
+
+.ash-workbench[data-runtime="electron"]:not(
+		[data-os="mac"],
+		.ash-sessions-fullscreen
+	)
+	.ash-sessions-auxiliarybar-frame
+	> [data-active-composite="sessions.chat.entityDetails"]
+	> .ash-pane-composite-title {
+	/* Native caption buttons stay at the window's trailing edge. */
+	padding-right: max(
+		0px,
+		100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)
+	);
+}
+
+.ash-chat-entity-details-actions {
+	-webkit-app-region: no-drag;
+}
+
+.ash-chat-entity-details-heading {
+	min-width: 0;
+	margin: 0;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-body2);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-entity-details-status {
+	padding-inline: var(--ash-spacing-size120);
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-entity-details-transcript {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}

@@ -1,9 +1,10 @@
 .ash-electron-titlebar {
-	/* Use the titlebar's containing block, which can be narrower than the viewport at fractional DPI. */
+	/* Use the window content width, including any region beyond the titlebar. */
 	--ash-titlebar-controls-leftInset: env(titlebar-area-x, 0px);
 	--ash-titlebar-controls-rightInset: max(
 		0px,
-		100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%)
+		100% + var(--ash-titlebar-trailing-region-width, 0px) -
+			env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%)
 	);
 	padding-left: calc(12px + var(--ash-titlebar-controls-leftInset));
 	padding-right: calc(12px + var(--ash-titlebar-controls-rightInset));

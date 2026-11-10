@@ -228,7 +228,7 @@ test('Sessions Grid follows viewport resize synchronously and retains fractional
 			bounds = next;
 			dom.window.dispatchEvent(new dom.window.Event('resize'));
 			assert.deepEqual(layout.mainContainerDimension, new Dimension(next.width, next.height));
-			assert.equal(layout.getPartSize('titlebar').width, next.width);
+			assert.equal(layout.getPartSize('titlebar').width + layout.getPartSize('auxiliarybar').width, next.width);
 		}
 	} finally {
 		for (const part of parts.values()) part.dispose();
@@ -525,7 +525,10 @@ test('Sessions layout owns a fixed Sessions-first Part topology', () => {
 
 	layout.layout(new Dimension(1_200, 800));
 
-	assert.deepEqual(layout.getPartSize('titlebar'), new Dimension(1_200, WorkbenchWindowBarHeight));
+	const auxiliarySize = layout.getPartSize('auxiliarybar');
+	assert.deepEqual(layout.getPartSize('titlebar'), new Dimension(1_200 - auxiliarySize.width, WorkbenchWindowBarHeight));
+	assert.equal(auxiliarySize.height, 800);
+	assert.equal((parts.get('auxiliarybar') as TestSessionsPart).layouts.at(-1)?.height, 800 - WorkbenchWindowBarHeight);
 	assert.equal(container.querySelector('[data-part="activitybar"]'), null);
 	assert.equal(Math.abs(layout.getPartSize('sidebar').width - 300) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize('auxiliarybar').width - 340) <= 1, true);
@@ -535,6 +538,12 @@ test('Sessions layout owns a fixed Sessions-first Part topology', () => {
 	assert.equal(layout.state.editor.width, 600);
 	assert.ok(container.querySelector("[data-part='editor']"));
 	assert.ok(container.querySelector("[data-part='sessions']"));
+	layout.resizePart('auxiliarybar', new Dimension(380, 800));
+	assert.equal(layout.getPartSize('titlebar').width, 820);
+	layout.hidePart('auxiliarybar');
+	assert.equal(layout.getPartSize('titlebar').width, 1_200);
+	layout.showPart('auxiliarybar');
+	assert.equal(layout.getPartSize('titlebar').width, 820);
 
 	layout.dispose();
 	for (const part of parts.values()) part.dispose();
@@ -810,7 +819,7 @@ test('Sessions layout completion exposes settled Parts through the window contai
 	const observed: unknown[] = [];
 	using subscription = layout.onDidLayoutMainContainer(dimension => observed.push({ dimension, titlebar: layout.getPartSize('titlebar'), height: layout.getPartSize('sessions').height, offset: layout.mainContainerOffset.top }));
 	layout.layout(new Dimension(1_400, 900));
-	assert.deepEqual(observed, [{ dimension: new Dimension(1_400, 900), titlebar: new Dimension(1_400, WorkbenchWindowBarHeight), height: 900 - WorkbenchWindowBarHeight, offset: WorkbenchWindowBarHeight }]);
+	assert.deepEqual(observed, [{ dimension: new Dimension(1_400, 900), titlebar: new Dimension(1_400 - layout.getPartSize('auxiliarybar').width, WorkbenchWindowBarHeight), height: 900 - WorkbenchWindowBarHeight, offset: WorkbenchWindowBarHeight }]);
 	assert.equal(layout.mainContainer, container);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();

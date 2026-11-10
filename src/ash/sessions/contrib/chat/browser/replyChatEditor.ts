@@ -24,10 +24,14 @@ import type { ModelCatalogEntry } from '../../../../workbench/services/chat/comm
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import { ChatPromptStarters, getChatPromptStartersHelp } from './chatPromptStarters.js';
+import { IChatEntityDetails, type ChatEntityDetailsSource } from './chatEntityDetails.js';
+import type { IChatWidgetViewOptions } from '../../../../workbench/contrib/chat/browser/chat.js';
+import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
 import './media/chatView.css';
 
 export interface IReplyChatEditorModel extends IChatWidgetModel {
+	getEntityDetailsSource?(item: IChatListItem): ChatEntityDetailsSource | undefined;
 	newChat(): void;
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined;
 }
@@ -111,6 +115,7 @@ export class ReplyChatEditor extends EditorPane {
 		services.set(IContextKeyService, contextKeys);
 		const instantiation = this._register(this.instantiation.createChild(services));
 		const model = instantiation.createInstance(this.options.model);
+		const entityDetails = model.getEntityDetailsSource && instantiation.getOptional(IChatEntityDetails);
 		const createDraftPicker = this.options.createDraftPicker;
 		const inputFactory = instantiation.createInstance(ReplyChatInputFactory);
 		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, this.options.advanceWelcomePhrase !== false));
@@ -144,11 +149,15 @@ export class ReplyChatEditor extends EditorPane {
 					}));
 					return input;
 				}, {
-				showPromptTimeline: true,
-				welcomeTitle: welcome.title,
-				codeBlockPresentation: 'card',
-				virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined),
-			}));
+					showPromptTimeline: true,
+					inspectResponseEntity: entityDetails && (async (item, entity, anchor) => {
+						const source = model.getEntityDetailsSource?.(item);
+						if (source) await entityDetails.open(source, entity, anchor);
+					}),
+					welcomeTitle: welcome.title,
+					codeBlockPresentation: 'card',
+					virtualizeHistoryFrom: scrollOptimization && derived(reader => scrollOptimization.read(reader) ? 100 : undefined),
+				} satisfies IChatWidgetViewOptions));
 		} catch (error) {
 			model.dispose();
 			throw error;

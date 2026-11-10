@@ -32,9 +32,6 @@ import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../commo
 import { canUseAshModels } from './chatGPTWidgetModel.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
-import { ViewContainerLocation } from '../../../../workbench/common/views.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
-import { chatGPTEntityDetailsActiveContext, chatGPTEntityDetailsContainerId, chatGPTEntityDetailsViewId, ChatGPTEntityDetails, ChatGPTEntityDetailsView, IChatGPTEntityDetails, registerChatGPTEntityDetailsAccessibility } from './chatGPTEntityDetails.js';
 
 export const chatGPTWorkspaceSource = {
 	catalog: new SyncDescriptor(ChatGPTList),
@@ -49,17 +46,6 @@ registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
 registerSingleton(IChatGPTNativeService, ChatGPTNativeService, InstantiationType.Delayed);
 registerSingleton(IChatGPTNativeTransport, ElectronChatGPTNativeTransport, InstantiationType.Delayed);
-registerSingleton(IChatGPTEntityDetails, ChatGPTEntityDetails, InstantiationType.Delayed);
-const entityDetailsTitle = localize('sessions.chatgpt.entityDetails', 'Entity details');
-SessionsViewRegistry.registerStaticViewContainer({
-	id: chatGPTEntityDetailsContainerId, title: entityDetailsTitle, localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.entityDetails' },
-	location: ViewContainerLocation.AuxiliaryBar, hideIfEmpty: true,
-});
-SessionsViewRegistry.registerStaticViews(chatGPTEntityDetailsContainerId, [{
-	id: chatGPTEntityDetailsViewId, title: entityDetailsTitle, localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.entityDetails' },
-	ctorDescriptor: new SyncDescriptor(ChatGPTEntityDetailsView), canToggleVisibility: false, when: ContextKeyExpr.has(chatGPTEntityDetailsActiveContext),
-}]);
-registerChatGPTEntityDetailsAccessibility();
 registerReplyChatEditor(chatGPTReplyEditor);
 registerReplyChatEditor(experimentalChatGPTEditor);
 registerChatGPTResponseActions();
