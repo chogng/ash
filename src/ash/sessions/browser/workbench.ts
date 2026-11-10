@@ -89,6 +89,7 @@ import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
 import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
+import { IProjectDialogService, ProjectDialogService } from '../contrib/projects/browser/projectDialogService.js';
 import { IConnectorService } from '../../platform/connectors/common/connectorService.js';
 import { AppServerConnectorService } from '../../workbench/services/connectors/browser/appServerConnectorService.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
@@ -655,7 +656,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAgentToolsApi, options.api.agentTools);
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
 		services.registerInstance(IMcpServerManagementService, options.api.mcpServerManagement);
-		if (options.api.memories) { services.registerInstance(IMemoriesService, options.api.memories); }
+		const memories = options.api.memories;
+		if (memories) { services.registerInstance(IMemoriesService, memories); }
+		services.registerSingleton(IProjectDialogService, () => services.createInstance(ProjectDialogService,
+			memories ? { records: memories, readEnabled: async () => (await memories.readModelMemoryEnabled()).chat } : undefined), { instantiation: InstantiationType.Delayed });
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(options.api.connectors, options.api.events)));
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));

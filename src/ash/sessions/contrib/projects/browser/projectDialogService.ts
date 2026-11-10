@@ -1,7 +1,10 @@
-import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { ContextView } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
+import { Hover } from '../../../../base/browser/ui/hover/hover.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -9,29 +12,45 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, type IReader } from '../../../../base/common/observable.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import { EditorCoreCommandId } from '../../../../editor/browser/coreCommands.js';
+import { EditorContributionInstantiation } from '../../../../editor/browser/editorExtensions.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { TextModelChangeReason } from '../../../../editor/common/core/textChange.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { EndOfLinePreference } from '../../../../editor/common/model.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
+import { PlaceholderTextContribution } from '../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js';
 import { localize } from '../../../../nls.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IMemoriesService } from '../../../../platform/memories/common/memoriesService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService, type Project, type ProjectAppearance, type ProjectMaterial, type ProjectScope } from '../../../../platform/projects/common/projectService.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createWorkbenchDialogOptions } from '../../../../workbench/browser/parts/dialogs/dialog.js';
-import { IChatListCatalog } from '../../chat/browser/chatListModel.js';
-import type { CatalogProjectCreator, ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
+import { OPEN_MEMORIES_COMMAND_ID } from '../../../../workbench/contrib/memories/browser/memorySettings.js';
+import { IChatListCatalog, type CatalogProjectDetails } from '../../chat/browser/chatListModel.js';
+import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ProjectAppearancePicker } from './projectAppearancePicker.js';
+import { ProjectMemoryDialog } from './projectMemoryDialog.js';
 import { ProjectTextInput } from './projectTextInput.js';
 import { IProjectsService, type CatalogProjectAppearance } from './projectsService.js';
 import './media/projectForm.css';
+
+function projectMemoryOptions() {
+	return [
+		{ value: 'default', label: localize('projects.defaultMemory', 'Default memory'), description: localize('projects.defaultMemoryDescription', 'Uses your ChatGPT memory settings.') },
+		{ value: 'projectOnly', label: localize('projects.projectOnlyMemory', 'Project-only memory'), description: localize('projects.projectOnlyMemoryDescription', 'References conversations only within this project.') },
+	] satisfies readonly { value: CatalogProjectMemoryMode; label: string; description: string; }[];
+}
 
 function createProjectFormDialog(
 	container: HTMLElement,
 	title: string,
 	form: HTMLFormElement,
 	actions: HTMLElement,
-	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; instructionsOnly?: boolean; withSource?: boolean; textContent?: boolean; },
+	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; instructionsOnly?: boolean; withCreationDetails?: boolean; textContent?: boolean; },
 ): Dialog {
 	return new Dialog(container, title, [], createWorkbenchDialogOptions({
 		extraClasses: [
@@ -39,7 +58,7 @@ function createProjectFormDialog(
 			...(options.code ? ['ash-code-project-dialog'] : []),
 			...(options.appearanceOnly ? ['ash-project-appearance-dialog'] : []),
 			...(options.instructionsOnly ? ['ash-project-instructions-dialog'] : []),
-			...(options.withSource ? ['ash-project-source-dialog'] : []),
+			...(options.withCreationDetails ? ['ash-project-creation-dialog'] : []),
 			...(options.textContent ? ['ash-project-text-dialog'] : []),
 		],
 		layout: 'form',
@@ -76,8 +95,13 @@ interface CodeProjectEdit {
 	readonly restoreFocus: () => void;
 }
 
+type ProjectMemoryTarget =
+	| { readonly localProjectId: string; }
+	| { readonly editMemory: CatalogProjectDetails['editMemory']; };
+
 export interface IProjectDialogService {
 	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit, creator?: CatalogProjectCreator): void;
+	showProjectMemories(owner: HTMLElement, target: ProjectMemoryTarget, isCurrent: (reader?: IReader) => boolean, restoreFocus: () => void): void;
 	showAddTextDialog(owner: HTMLElement, restoreFocus: () => void, save: (title: string, content: string) => Promise<void>): void;
 	showTextPreview(owner: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, isCurrent: (reader?: IReader) => boolean, restoreFocus: () => void): void;
 	showCodeProjectDialog(owner: HTMLElement, edit?: CodeProjectEdit): Promise<void>;
@@ -96,6 +120,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 	private readonly active = this._register(new MutableDisposable<ActiveProjectDialog>());
 
 	constructor(
+		private readonly memoryHost: { readonly readEnabled: () => Promise<boolean>; readonly records?: IMemoriesService; } | undefined,
 		@IProjectsService private readonly chatProjects: IProjectsService,
 		@IProjectService private readonly projects: IProjectService,
 		@IFileDialogService private readonly files: IFileDialogService,
@@ -104,6 +129,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IModelService private readonly models: IModelService,
 		@ILanguageService private readonly languages: ILanguageService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
 	}
@@ -112,12 +138,62 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		if (this.active.value?.owner === owner) this.active.clear();
 	}
 
+	showProjectMemories(owner: HTMLElement, target: ProjectMemoryTarget, isCurrent: (reader?: IReader) => boolean, restoreFocus: () => void): void {
+		if (!isCurrent()) return;
+		const active = this.begin(owner);
+		if (!active) return;
+		const memories = this.memoryHost?.records;
+		const source = 'localProjectId' in target
+			? (memories ? { scope: { type: 'chatProject', projectId: target.localProjectId } as const, memories } : undefined)
+			: (target.editMemory ? { open: target.editMemory } : undefined);
+		const dialog = active.store.add(this.instantiation.createInstance(ProjectMemoryDialog, owner, source));
+		active.store.add(autorun(reader => {
+			if (!isCurrent(reader)) this.active.clear();
+		}));
+		void dialog.show().then(() => {
+			if (this.active.value !== active) return;
+			this.active.clear();
+			restoreFocus();
+		});
+	}
+
 	private begin(owner: HTMLElement): ActiveProjectDialog | undefined {
 		if (this.active.value) return undefined;
 		const store = new DisposableStore();
 		const active = Object.assign(toDisposable(() => store.dispose()), { owner, store });
 		this.active.value = active;
 		return active;
+	}
+
+	private createMemoryButton(container: HTMLElement, readEnabled: () => Promise<boolean>, store: DisposableStore): Button {
+		const openSettings = localize('projects.openMemorySettings', 'Open memory settings');
+		let readVersion = 0;
+		const updateMemory = async () => {
+			const version = ++readVersion;
+			const enabled = await readEnabled().catch(() => undefined);
+			if (store.isDisposed || version !== readVersion) return;
+			button.label = enabled === undefined ? openSettings : enabled
+				? localize('projects.memoryOn', 'Memory is on')
+				: localize('projects.memoryOff', 'Memory is off');
+		};
+		const button = store.add(new Button(container, {
+			label: openSettings,
+			icon: Lxicon.brain,
+			size: 'small',
+			onClick: () => {
+				void this.commands.executeCommand(OPEN_MEMORIES_COMMAND_ID)
+					.then(updateMemory, error => this.notifications.error(toErrorMessage(error)));
+			},
+		}));
+		button.domNode.classList.add('ash-project-memory');
+		button.domNode.setAttribute('aria-description', openSettings);
+		store.add(new Hover({
+			target: button.domNode,
+			content: openSettings,
+			contextViewProvider: store.add(new ContextView(container)),
+		}));
+		void updateMemory();
+		return button;
 	}
 
 	private async saveProjectAppearance(project: Project, appearance: ProjectAppearance, scope: ProjectScope): Promise<Project> {
@@ -311,27 +387,34 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			nameField.append(leadingIcon);
 		}
 		nameField.append(name);
-		const nameGroup = h(document, 'div', { className: 'ash-project-name-group' },
+		const nameGroup = h(document, 'div', { className: 'ash-project-form-field' },
 			nameLabel, nameField);
 		const instructionsLabel = localize('projects.instructions', 'Instructions');
-		const description = h(document, 'textarea', {
-			properties: {
-				value: project?.description ?? conversation?.details.description ?? '',
-				maxLength: 20000,
-				placeholder: localize('projects.instructionsPlaceholder', 'For example, use concise explanations and include examples where helpful.'),
-			},
-		});
+		const instructionsTitle = h(document, 'label', {}, instructionsLabel);
+		const instructionsViewport = h(document, 'div', { className: 'ash-project-text-viewport' });
+		const instructionsHost = h(document, 'div', { className: 'ash-project-instructions-editor' }, instructionsViewport);
+		const instructionsError = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
+		instructionsError.id = generateUuid();
+		const instructionsField = h(document, 'div', { className: 'ash-project-form-field' },
+			instructionsOnly ? undefined : instructionsTitle, instructionsHost, instructionsError);
+		const instructionsModel = store.add(this.models.createModel(
+			project?.description ?? conversation?.details.description ?? '',
+			this.languages.createById('markdown'), undefined, true,
+		));
+		const instructionsValue = () => instructionsModel.getValue(EndOfLinePreference.LF);
+		const instructionsTooLong = () => instructionsModel.getValueLength(EndOfLinePreference.LF) > 20000;
 		const initialName = name.value;
-		const initialDescription = description.value;
+		const initialDescription = instructionsValue();
 		let materials = [...(project?.materials ?? [])];
 		let base = project;
-		const instructionsChanged = () => description.value !== (base?.description ?? initialDescription).replace(/\r\n?/g, '\n');
+		const instructionsChanged = () => instructionsValue() !== (base?.description ?? initialDescription).replace(/\r\n?/g, '\n');
 		let needsMerge = false;
-		const unresolved = new Set<HTMLInputElement | HTMLTextAreaElement>();
+		const unresolved = new Set<'name' | 'instructions'>();
 		const mergeControls = store.add(new DisposableStore());
 		let chosenFolder: Extract<ProjectMaterial, { kind: 'folder'; }> | undefined;
 		let pickingFolder = false;
 		const folderRow = h(document, 'div', { className: 'ash-projects-folder-choice' });
+		const locationRow = h(document, 'div', { className: 'ash-project-location' }, folderRow);
 		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
 		const folder = store.add(
 			new Button(folderRow, {
@@ -378,56 +461,38 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			const available = source.snapshot.get().projectCreator;
 			return available ? [available] : [];
 		});
-		const sourceHint = h(document, 'p', { className: 'ash-project-instructions-intro', attributes: { 'aria-live': 'polite' } });
-		sourceHint.id = generateUuid();
-		const sourceChoice = catalogCreators.length ? h(document, 'select', {
-			attributes: { 'aria-describedby': sourceHint.id }, properties: { disabled: !!creator },
-		}, ...(creator ? [] : [h(document, 'option', 'Ash')]), ...catalogCreators.map(source => h(document, 'option', source.label))) : undefined;
-		const selectedCreator = () => creator ?? (sourceChoice ? catalogCreators[sourceChoice.selectedIndex - 1] : undefined);
-		const initialMemoryMode = instructionsOnly ? undefined : conversation?.details.memoryMode;
-		const memoryChoice = initialMemoryMode || catalogCreators.some(source => source.supportsMemoryMode)
-			? h(document, 'select', {},
-				h(document, 'option', { properties: { value: 'default' } }, localize('projects.defaultMemory', 'Default memory')),
-				h(document, 'option', { properties: { value: 'projectOnly' } }, localize('projects.projectOnlyMemory', 'Project-only memory')))
+		const sourceControls = h(document, 'div', { className: 'ash-project-source-controls' });
+		const readMemory = !edit && !creator ? this.memoryHost?.readEnabled : undefined;
+		const initialMemoryMode = !instructionsOnly ? conversation?.details.memoryMode : undefined;
+		const memoryLabel = localize('projects.memoryMode', 'Project memory');
+		const memoryField = initialMemoryMode || catalogCreators.some(source => source.supportsMemoryMode)
+			? h(document, 'div', { className: 'ash-project-form-field', properties: { hidden: !initialMemoryMode } }, h(document, 'span', {}, memoryLabel))
 			: undefined;
-		const memoryField = memoryChoice ? h(document, 'div', {}, h(document, 'label', {}, localize('projects.memoryMode', 'Project memory'), memoryChoice)) : undefined;
-		if (memoryChoice) memoryChoice.value = initialMemoryMode ?? 'default';
-		const memoryMode = (): ConversationProjectEditor['details']['memoryMode'] => {
+		const memoryMode = (): CatalogProjectMemoryMode | undefined => {
+			if (memoryField?.hidden !== false) return undefined;
 			const value = memoryChoice?.value;
-			return !memoryField?.hidden && (value === 'default' || value === 'projectOnly') ? value : undefined;
+			return value === 'default' || value === 'projectOnly' ? value : undefined;
 		};
 		const memoryModeChanged = () => {
 			const mode = memoryMode();
 			return mode !== undefined && mode !== (initialMemoryMode ?? 'default');
 		};
-		if (sourceChoice) {
-			const updateSource = () => {
-				const selected = selectedCreator();
-				folderRow.hidden = !!selected;
-				if (memoryField) memoryField.hidden = !selected?.supportsMemoryMode;
-				sourceHint.textContent = selected?.description ?? localize('projects.localCreationDescription', 'Saved locally in Ash.');
-			};
-			store.add(addDisposableListener(sourceChoice, 'change', updateSource));
-			updateSource();
-		}
+		if (catalogCreators.length) locationRow.append(sourceControls);
+		const hasCreationDetails = catalogCreators.length > 0 || !!readMemory;
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
+		const footer = readMemory ? h(document, 'div', { className: 'ash-project-creation-footer' }) : actions;
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
-		if (instructionsOnly) {
-			const intro = h(document, 'p', { className: 'ash-project-instructions-intro' },
-				localize('projects.instructionsIntro', 'Write the instructions and background for this project.'));
+		const intro = instructionsOnly ? h(document, 'p', { className: 'ash-project-instructions-intro' },
+			localize('projects.instructionsIntro', 'Write the instructions and background for this project.')) : undefined;
+		if (intro) {
 			intro.id = generateUuid();
-			description.setAttribute('aria-label', instructionsLabel);
-			description.setAttribute('aria-describedby', intro.id);
-			form.append(intro, description);
+			form.append(intro, instructionsField);
 		} else {
 			form.append(nameGroup);
-			if (!appearanceEdit) form.append(h(document, 'label', {}, instructionsLabel, description));
-			if (!conversation && !appearanceEdit) form.append(folderRow);
-			if (sourceChoice) {
-				form.append(h(document, 'label', {}, localize('projects.source', 'Project source'), sourceChoice), sourceHint);
-			}
+			if (!appearanceEdit) form.append(instructionsField);
+			if (!conversation && !appearanceEdit) form.append(locationRow);
+			if (memoryField) form.append(memoryField);
 		}
-		if (memoryField) form.append(memoryField);
 		form.append(feedback, conflicts);
 		let didSave = false;
 		const dialog = store.add(
@@ -437,11 +502,11 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 					: edit ? localize('projects.edit', 'Edit details')
 						: localize('projects.createTitle', 'Create a project'),
 				form,
-				actions,
+				footer,
 				{
 					appearanceOnly: !!appearanceEdit,
 					instructionsOnly,
-					withSource: !!sourceChoice,
+					withCreationDetails: hasCreationDetails,
 					canClose: () => !name.disabled && !pickingFolder,
 					shouldConfirmDiscard: () => name.value !== (base?.name ?? initialName) ||
 						instructionsChanged() ||
@@ -449,6 +514,84 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				},
 			),
 		);
+		const style = getWindow(container).getComputedStyle(container);
+		const fontSize = Number.parseFloat(style.fontSize);
+		const instructionsEditor = appearanceEdit ? undefined : store.add(this.instantiation.createInstance(CodeEditorWidget, {
+			container: instructionsViewport,
+			model: instructionsModel,
+			presentation: 'embedded',
+			ariaLabel: instructionsLabel,
+			placeholder: localize('projects.instructionsPlaceholder', 'For example, use concise explanations and include examples where helpful.'),
+			fontFamily: style.fontFamily,
+			fontSize,
+			lineHeight: Math.round(fontSize * 1.5),
+			automaticLayout: true,
+			tabFocusMode: true,
+			multiCursorLimit: 1,
+			lineDecorationsWidth: 0,
+			folding: false,
+			glyphMargin: false,
+			overviewRulerLanes: 0,
+			wordWrap: 'on',
+			scrollBeyondLastLine: false,
+			padding: { top: 12, bottom: 12 },
+			contributionIds: [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices'],
+			contributions: [{ id: PlaceholderTextContribution.ID, ctor: PlaceholderTextContribution, instantiation: EditorContributionInstantiation.Eager }],
+		}));
+		const instructionsInput = instructionsEditor?.controller.textArea ?? instructionsEditor?.controller.element;
+		if (instructionsInput) {
+			instructionsInput.id = generateUuid();
+			instructionsTitle.htmlFor = instructionsInput.id;
+			instructionsInput.setAttribute('aria-describedby', intro ? `${intro.id} ${instructionsError.id}` : instructionsError.id);
+		}
+		const setInstructionsReadOnly = (readOnly: boolean) => {
+			instructionsEditor?.updateOptions({ readOnly, domReadOnly: readOnly, tabIndex: readOnly ? -1 : 0 });
+		};
+		const focusDraft = () => (instructionsOnly ? instructionsEditor : name)?.focus();
+		// The shared dropdown and hover stay inside the dialog's top layer.
+		const sourceChoice = catalogCreators.length ? store.add(new SelectBox(sourceControls, {
+			options: [
+				...(creator ? [] : [{ value: 'ash', label: 'Ash' }]),
+				...catalogCreators.map((source, index) => ({ value: String(index), label: source.label })),
+			],
+			ariaLabel: localize('projects.source', 'Project source'),
+			presentation: 'field',
+		}, defaultSelectBoxStyles)) : undefined;
+		const selectedCreator = () => creator ?? (sourceChoice ? catalogCreators[sourceChoice.selectedIndex - 1] : undefined);
+		const memoryChoice = memoryField ? store.add(new SelectBox(memoryField, {
+			options: projectMemoryOptions(),
+			selectedValue: initialMemoryMode ?? 'default',
+			ariaLabel: memoryLabel,
+			presentation: 'field',
+		}, defaultSelectBoxStyles)) : undefined;
+		const memory = readMemory ? this.createMemoryButton(footer, readMemory, store) : undefined;
+		if (readMemory) footer.append(actions);
+		if (sourceChoice) {
+			sourceChoice.enabled = !creator;
+			const helpLabel = localize('projects.sourceHelp', 'About the project source');
+			const help = store.add(new Button(sourceControls, {
+				label: helpLabel,
+				icon: Lxicon.question,
+				iconOnly: true,
+				onClick: () => sourceHover.show(true),
+			}));
+			const sourceHover = store.add(new Hover({
+				target: help.domNode,
+				content: undefined,
+				contextViewProvider: store.add(new ContextView(form)),
+			}));
+			const updateSource = () => {
+				const selected = selectedCreator();
+				folderRow.hidden = !!selected;
+				if (memory) memory.hidden = !!selected;
+				if (memoryField) memoryField.hidden = !selected?.supportsMemoryMode;
+				const hint = selected?.description ?? localize('projects.localCreationDescription', 'Saved locally in Ash.');
+				help.domNode.setAttribute('aria-description', hint);
+				sourceHover.update(hint);
+			};
+			store.add(sourceChoice.onDidSelect(updateSource));
+			updateSource();
+		}
 		const reload = store.add(
 			new Button(actions, {
 				...defaultButtonStyles,
@@ -481,10 +624,19 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		);
 		submit.domNode.setAttribute('form', form.id);
 		const updateSubmit = () => {
-			submit.enabled = !needsMerge && unresolved.size === 0 && (instructionsOnly ? instructionsChanged() : !!name.value.trim());
+			const tooLong = instructionsTooLong();
+			const message = tooLong ? localize('projects.textTooLong', 'Keep the content to 20,000 characters or fewer.') : '';
+			if (instructionsError.textContent !== message) {
+				instructionsError.textContent = message;
+				if (tooLong) instructionsInput?.setAttribute('aria-invalid', 'true');
+				else instructionsInput?.removeAttribute('aria-invalid');
+			}
+			submit.enabled = !name.disabled && !tooLong && !needsMerge && unresolved.size === 0 &&
+				(instructionsOnly ? instructionsChanged() : !!name.value.trim());
 		};
 		store.add(addDisposableListener(name, 'input', updateSubmit));
-		if (instructionsOnly) store.add(addDisposableListener(description, 'input', updateSubmit));
+		store.add(instructionsModel.onDidChangeContent(updateSubmit));
+		updateSubmit();
 		const offerMerge = (): boolean => {
 			const latest = this.chatProjects.state.get().projects.find(item => item.id === base?.id);
 			if (!base || !latest || latest.revision === base.revision) {
@@ -501,22 +653,27 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			return true;
 		};
 		const mergeField = (
-			input: HTMLInputElement | HTMLTextAreaElement,
+			field: 'name' | 'instructions',
 			previous: string,
 			saved: string,
 			label: string,
 		): void => {
-			let draft = input.value;
+			const read = field === 'name' ? () => name.value : instructionsValue;
+			const write = (value: string) => {
+				if (field === 'name') name.value = value;
+				else instructionsModel.setValue(value);
+			};
+			let draft = read();
 			const value = instructionsOnly ? draft : draft.trim();
-			const textAreaValue = (text: string) => input === description ? text.replace(/\r\n?/g, '\n') : text;
-			if (value === textAreaValue(previous) || value === textAreaValue(saved)) {
-				input.value = saved;
+			const normalize = (text: string) => field === 'instructions' ? text.replace(/\r\n?/g, '\n') : text;
+			if (value === normalize(previous) || value === normalize(saved)) {
+				write(saved);
 				return;
 			}
 			if (saved === previous) {
 				return;
 			}
-			unresolved.add(input);
+			unresolved.add(field);
 			const choiceLabel = h(document, 'label', {}, label);
 			const choice = h(
 				document,
@@ -546,21 +703,25 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				choice,
 			);
 			conflicts.append(choiceLabel);
-			mergeControls.add(
-				addDisposableListener(input, 'input', () => {
-					draft = input.value;
-					choice.value = 'draft';
-					unresolved.delete(input);
-					updateSubmit();
-				}),
-			);
+			const keepEditedDraft = () => {
+				draft = read();
+				choice.value = 'draft';
+				unresolved.delete(field);
+				updateSubmit();
+			};
+			mergeControls.add(field === 'name'
+				? addDisposableListener(name, 'input', keepEditedDraft)
+				: instructionsModel.onDidChangeContent(event => {
+					// Switching the merge choice replaces the model without changing the stored draft.
+					if (event.reason !== TextModelChangeReason.Reset) keepEditedDraft();
+				}));
 			mergeControls.add(
 				addDisposableListener(choice, 'change', () => {
 					if (!choice.value) {
-						unresolved.add(input);
+						unresolved.add(field);
 					} else {
-						input.value = choice.value === 'saved' ? saved : draft;
-						unresolved.delete(input);
+						write(choice.value === 'saved' ? saved : draft);
+						unresolved.delete(field);
 					}
 					updateSubmit();
 				}),
@@ -572,7 +733,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			}
 			reload.enabled = false;
 			name.disabled = true;
-			description.disabled = true;
+			setInstructionsReadOnly(true);
 			folder.enabled = false;
 			await this.chatProjects.reload();
 			if (store.isDisposed) {
@@ -591,13 +752,13 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				conflicts.replaceChildren();
 				unresolved.clear();
 				mergeField(
-					name,
+					'name',
 					base.name,
 					latest.name,
 					localize('projects.nameConflict', 'The project name changed in both versions.'),
 				);
 				mergeField(
-					description,
+					'instructions',
 					base.description,
 					latest.description,
 					localize('projects.descriptionConflict', 'The project instructions changed in both versions.'),
@@ -629,10 +790,12 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			}
 			reload.enabled = true;
 			name.disabled = false;
-			description.disabled = false;
+			setInstructionsReadOnly(false);
 			folder.enabled = true;
 			updateSubmit();
-			(conflicts.querySelector('select') ?? (instructionsOnly ? description : name)).focus();
+			const conflict = conflicts.querySelector('select');
+			if (conflict) conflict.focus();
+			else focusDraft();
 		};
 		const id = generateUuid();
 		store.add(
@@ -650,7 +813,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				}
 				const remote = selectedCreator();
 				if (
-					name.disabled || pickingFolder || (instructionsOnly ? !instructionsChanged() : !name.value.trim()) ||
+					name.disabled || pickingFolder || instructionsTooLong() || (instructionsOnly ? !instructionsChanged() : !name.value.trim()) ||
 					(!remote && this.chatProjects.state.get().busy) ||
 					needsMerge ||
 					unresolved.size ||
@@ -661,14 +824,15 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				submit.enabled = false;
 				feedback.textContent = '';
 				name.disabled = true;
-				description.disabled = true;
+				setInstructionsReadOnly(true);
 				folder.enabled = false;
-				if (sourceChoice) sourceChoice.disabled = true;
-				if (memoryChoice) memoryChoice.disabled = true;
+				if (sourceChoice) sourceChoice.enabled = false;
+				if (memory) memory.enabled = false;
+				if (memoryChoice) memoryChoice.enabled = false;
 				if (appearance) appearance.enabled = false;
 				const details = instructionsOnly
-					? { name: name.value, description: description.value }
-					: { name: name.value.trim(), description: description.value.trim(), memoryMode: memoryMode() };
+					? { name: name.value, description: instructionsValue() }
+					: { name: name.value.trim(), description: instructionsValue().trim(), memoryMode: memoryMode() };
 				let creationWarning: string | undefined;
 				const save = async (): Promise<boolean> => {
 					try {
@@ -712,13 +876,14 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 						const message = this.chatProjects.state.get().message;
 						if (!conversation && !remote && message && !feedback.textContent) feedback.textContent = message;
 						name.disabled = false;
-						description.disabled = false;
+						setInstructionsReadOnly(false);
 						folder.enabled = true;
-						if (sourceChoice) sourceChoice.disabled = !!creator;
-						if (memoryChoice) memoryChoice.disabled = false;
+						if (sourceChoice) sourceChoice.enabled = !creator;
+						if (memory) memory.enabled = true;
+						if (memoryChoice) memoryChoice.enabled = true;
 						if (appearance) appearance.enabled = true;
 						updateSubmit();
-						if (!offerMerge() && getActiveElement(document) === document.body) (instructionsOnly ? description : name).focus();
+						if (!offerMerge() && getActiveElement(document) === document.body) focusDraft();
 					}
 				});
 			}),
@@ -733,7 +898,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			}
 		});
 		if (appearanceEdit) appearance?.focus();
-		else (instructionsOnly ? description : name).focus();
+		else focusDraft();
 	}
 
 	async showCodeProjectDialog(container: HTMLElement, edit?: CodeProjectEdit): Promise<void> {

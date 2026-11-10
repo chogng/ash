@@ -261,6 +261,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return {
 			key: JSON.stringify([this.chat.native === true, scope, id]),
 			load: online ? signal => this.chat.loadProjectDetails(id, scope, signal) : undefined,
+			editMemory: signal => this.chat.editProjectMemory(id, scope, signal),
 			data: this.chat.projectDetails.map(values => {
 				const details = values.get(id);
 				if (!details) return undefined;
@@ -268,6 +269,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				return {
 					description: details.description,
 					canEdit,
+					memoryMode: details.memoryMode,
 					materials: details.files?.map(file => ({
 						...file, kind: 'file' as const,
 						read: online ? signal => this.chat.readProjectFile(id, scope, file.id, signal) : undefined,

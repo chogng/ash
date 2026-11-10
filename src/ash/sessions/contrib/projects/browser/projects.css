@@ -403,11 +403,16 @@
 }
 
 .ash-projects-detail-card
-	> :is(.ash-projects-instructions-content, .ash-projects-file-content) {
+	> :is(
+		.ash-projects-instructions-content,
+		.ash-projects-memory-content,
+		.ash-projects-file-content
+	) {
 	padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
 }
 
-.ash-projects-detail-card > .ash-projects-file-content {
+.ash-projects-detail-card
+	> :is(.ash-projects-memory-content, .ash-projects-file-content) {
 	border-block-start: var(--ash-strokeThickness) solid
 		var(
 			--ash-contrastBorder,
@@ -526,7 +531,7 @@
 	font-size: var(--ash-fontSize-heading3);
 }
 
-.ash-projects-guidance > p {
+:is(.ash-projects-guidance, .ash-projects-memory-content) > p {
 	margin-block: var(--ash-spacing-size40) 0;
 	overflow-wrap: anywhere;
 }

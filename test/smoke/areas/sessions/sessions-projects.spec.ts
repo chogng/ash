@@ -603,9 +603,8 @@ test(
 		await dialog
 			.getByRole('textbox', { name: 'What are you working on?', exact: true })
 			.fill('Inline rename fixture');
-		await dialog
-			.getByRole('textbox', { name: 'Instructions', exact: true })
-			.fill('Keep the project goals when renaming.');
+		await new Editor(dialog).waitForEditorFocus();
+		await page.keyboard.insertText('Keep the project goals when renaming.');
 		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		const breadcrumb = page.locator('.ash-sessions-titlebar .ash-projects-breadcrumb');
@@ -738,7 +737,8 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	await projects.getByRole('button', { name: 'New project', exact: true }).first().click();
 	const dialog = page.getByRole('dialog', { name: 'Create a project' });
 	await dialog.getByRole('textbox', { name: 'What are you working on?' }).fill('Research workspace');
-	await dialog.getByRole('textbox', { name: 'Instructions' }).fill('Collect images, papers and working documents.');
+	await new Editor(dialog).waitForEditorFocus();
+	await page.keyboard.insertText('Collect images, papers and working documents.');
 	await page.screenshot({ path: testInfo.outputPath('projects-create.png') });
 	await dialog.getByRole('button', { name: 'Create', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
@@ -763,11 +763,12 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	const editInstructions = projects.getByRole('button', { name: 'Edit instructions', exact: true });
 	await editInstructions.press('Enter');
 	const edit = page.getByRole('dialog', { name: 'Set project instructions', exact: true });
-	const instructions = edit.getByRole('textbox', { name: 'Instructions', exact: true });
-	await expect(instructions).toHaveValue('Collect images, papers and working documents.');
-	await expect(instructions).toBeFocused();
+	const instructions = new Editor(edit);
+	await instructions.waitForEditorContents(contents => contents === 'Collect images, papers and working documents.');
+	await expect(instructions.input).toBeFocused();
 	await page.screenshot({ path: testInfo.outputPath('projects-instructions.png') });
-	await instructions.fill('Organize the final evidence.');
+	await instructions.input.press('ControlOrMeta+a');
+	await page.keyboard.insertText('Organize the final evidence.');
 	await edit.getByRole('button', { name: 'Save instructions', exact: true }).click();
 	await expect(editInstructions).toBeFocused();
 	await expect(edit).toHaveCount(0);
@@ -852,7 +853,7 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
 		await expect(edit.getByRole('button', { name: 'Reload and merge', exact: true })).toBeFocused();
 		await edit.getByRole('button', { name: 'Reload and merge', exact: true }).click();
-		await expect(edit.getByRole('textbox', { name: 'Instructions' })).toHaveValue('Goals from another window');
+		await new Editor(edit).waitForEditorContents(contents => contents === 'Goals from another window');
 		await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
 		await expect(edit).toHaveCount(0);
 		await expect(page.locator('.ash-projects h1')).toHaveText('Projects');
@@ -955,8 +956,8 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 		if (!('windows' in application)) { throw new Error('Expected Electron application'); }
 		const copy = locale === 'zh-CN'
-			? { projects: '项目', edit: '编辑详情', name: '你正在做什么？', goals: '指令', save: '保存更改', reload: '重载并合并', folder: '使用文件夹', saved: '使用已保存的值', draft: '保留草稿' }
-			: { projects: 'Projects', edit: 'Edit details', name: 'What are you working on?', goals: 'Instructions', save: 'Save changes', reload: 'Reload and merge', folder: 'Use a folder', saved: 'Use saved value', draft: 'Keep draft' };
+			? { projects: '项目', edit: '编辑详情', name: '你正在做什么？', save: '保存更改', reload: '重载并合并', folder: '使用文件夹', saved: '使用已保存的值', draft: '保留草稿' }
+			: { projects: 'Projects', edit: 'Edit details', name: 'What are you working on?', save: 'Save changes', reload: 'Reload and merge', folder: 'Use a folder', saved: 'Use saved value', draft: 'Keep draft' };
 		const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 		const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 		try {
@@ -977,7 +978,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.getByRole('menuitem', { name: copy.edit, exact: true }).click();
 			const dialog = page.getByRole('dialog', { name: copy.edit });
 			const name = dialog.getByRole('textbox', { name: copy.name });
-			const goals = dialog.getByRole('textbox', { name: copy.goals });
+			const goals = new Editor(dialog);
 			await name.fill('My draft name');
 			await application.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, directory);
 			await dialog.getByRole('button', { name: copy.folder, exact: true }).click();
@@ -987,10 +988,11 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(dialog.getByRole('button', { name: copy.reload })).toBeFocused();
 			await expect(name).toHaveValue('My draft name');
 			await dialog.getByRole('button', { name: copy.reload }).press('Enter');
-			await expect(goals).toHaveValue(remote.description);
+			await goals.waitForEditorContents(contents => contents === remote.description);
 			await expect(name).toHaveValue('My draft name');
 			await expect(dialog.getByRole('combobox')).toHaveCount(0);
-			await goals.fill('My draft goals');
+			await goals.input.press('ControlOrMeta+a');
+			await page.keyboard.insertText('My draft goals');
 			const newer = (await client.request(APP_SERVER_METHODS['project/details/update'], { commandId: randomUUID(), projectId, expectedRevision: remote.revision, name: 'Name from another window', description: 'Newer saved goals', materials: remote.materials })).project;
 			await dialog.getByRole('button', { name: copy.save }).click();
 			await dialog.getByRole('button', { name: copy.reload }).click();
@@ -999,11 +1001,12 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(choices.first()).toBeFocused();
 			await expect(dialog.getByRole('button', { name: copy.save })).toBeDisabled();
 			await choices.first().selectOption({ label: copy.saved });
-			await goals.fill('My revised draft goals');
+			await goals.input.press('ControlOrMeta+a');
+			await page.keyboard.insertText('My revised draft goals');
 			await choices.last().selectOption({ label: copy.saved });
 			await choices.last().selectOption({ label: copy.draft });
 			await expect(name).toHaveValue(newer.name);
-			await expect(goals).toHaveValue('My revised draft goals');
+			await goals.waitForEditorContents(contents => contents === 'My revised draft goals');
 			await page.screenshot({ path: testInfo.outputPath(`projects-conflict-${locale}.png`) });
 			await dialog.getByRole('button', { name: copy.save }).click();
 			await expect(dialog).toHaveCount(0);

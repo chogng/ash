@@ -1,5 +1,4 @@
-.ash-projects-form input:not(.ash-input-box input),
-.ash-projects-form textarea:not(.stanza-editor-input),
+.ash-projects-form input:not(:where(.ash-input-box input)),
 .ash-projects-form select {
 	width: 100%;
 	min-width: 0;
@@ -14,8 +13,7 @@
 	user-select: text;
 }
 
-.ash-projects-form input:not(.ash-input-box input)::placeholder,
-.ash-projects-form textarea:not(.stanza-editor-input)::placeholder {
+.ash-projects-form input:not(.ash-input-box input)::placeholder {
 	color: var(--ash-input-placeholderForeground);
 }
 
@@ -38,15 +36,39 @@
 	line-height: 1.5;
 }
 
-.ash-project-instructions-dialog .ash-projects-form textarea {
+.ash-project-instructions-editor {
+	block-size: 88px;
+	min-block-size: 88px;
+	overflow: hidden;
+	resize: vertical;
+}
+
+.ash-project-instructions-dialog .ash-project-instructions-editor {
 	block-size: clamp(120px, 40dvh, 320px);
-	line-height: 1.5;
+}
+
+:is(.ash-project-instructions-editor, .ash-project-memory-editor):focus-within {
+	border-color: var(--ash-focusBorder);
+}
+
+:is(.ash-project-instructions-editor, .ash-project-memory-editor)
+	.stanza-editor-input:focus {
+	outline: none;
+}
+
+.ash-project-instructions-editor .stanza-editor-placeholder-text {
+	white-space: normal;
 }
 
 .ash-project-text-source {
 	block-size: clamp(120px, 36dvh, 256px);
-	min-inline-size: 0;
 	overflow: clip;
+}
+
+.ash-project-text-source,
+.ash-project-memory-editor,
+.ash-project-instructions-editor {
+	min-inline-size: 0;
 	box-sizing: border-box;
 	padding-inline: var(--ash-spacing-size120);
 	border: var(--ash-strokeThickness) solid
@@ -136,21 +158,13 @@
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-projects-form input:not(.ash-input-box input),
-.ash-projects-form textarea:not(.stanza-editor-input) {
-	border-radius: var(--ash-cornerRadius-large);
-}
-
 .ash-projects-form input:not(.ash-input-box input) {
+	border-radius: var(--ash-cornerRadius-large);
 	min-height: var(--ash-spacing-size360);
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
 	line-height: 1.5;
 }
 
-.ash-projects-form textarea:not(.stanza-editor-input) {
-	min-height: 88px;
-	resize: vertical;
-}
 .ash-projects-conflicts:not([hidden]) {
 	display: flex;
 	flex-direction: column;
@@ -173,12 +187,45 @@
 .ash-projects-dialog:is(
 	.ash-code-project-dialog,
 	.ash-project-appearance-dialog,
-	.ash-project-source-dialog
+	.ash-project-creation-dialog,
+	.ash-project-memory-dialog
 ) {
 	height: fit-content;
 }
 
-.ash-project-name-group {
+.ash-project-memory-picker:not([hidden]),
+.ash-project-memory-status:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-project-memory-dialog p.ash-projects-muted {
+	margin: 0;
+}
+
+.ash-project-memory-dialog .ash-input-box-field {
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-project-memory-dialog .ash-input-box-field input:focus,
+.ash-project-memory-picker
+	.ash-select-box-field
+	> .ash-select-box-button:focus-visible {
+	outline: none;
+}
+
+.ash-project-memory-editor {
+	block-size: clamp(112px, 36dvh, 280px);
+	overflow: clip;
+}
+
+.ash-project-memory-status {
+	color: var(--ash-description-foreground);
+}
+
+.ash-project-form-field:not([hidden]) {
 	display: grid;
 	gap: var(--ash-spacing-size80);
 }
@@ -210,6 +257,7 @@
 
 .ash-project-name > input {
 	border: 0;
+	border-radius: 0;
 	background: transparent;
 }
 
@@ -217,8 +265,84 @@
 	outline: none;
 }
 
-.ash-project-name:focus-within {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+.ash-project-name:has(> input:focus) {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-project-location,
+.ash-project-creation-footer,
+.ash-project-source-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-project-source-controls,
+.ash-project-creation-footer > .ash-sessions-form-actions {
+	margin-inline-start: auto;
+}
+
+.ash-project-source-controls > .ash-select-box-field > .ash-select-box-button {
+	--ash-select-style-select-border: var(--ash-contrastBorder, transparent);
+	--ash-select-style-select-background: transparent;
+	--ash-select-style-select-foreground: var(--ash-foreground);
+	min-block-size: var(--ash-spacing-size280);
+	padding-inline: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-project-source-controls
+	> .ash-select-box-field
+	> .ash-select-box-button:hover:enabled,
+.ash-project-source-controls
+	> .ash-select-box-field.ash-dropdown-open
+	> .ash-select-box-button {
+	--ash-select-style-select-background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-project-source-controls
+	> .ash-select-box-field
+	> .ash-select-box-button:focus-visible {
+	border-color: var(--ash-select-style-select-border);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-project-creation-dialog
+	.ash-context-view-default:has(> .ash-select-box-list) {
+	color: var(--ash-menu-foreground);
+	background: var(--ash-menu-background);
+	border-color: var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-xxLarge);
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-project-creation-dialog
+	.ash-context-view-default:has(> .ash-select-box-list) {
+	box-shadow: none;
+}
+
+.ash-project-creation-dialog .ash-select-box-list.ash-list {
+	--ash-list-rowHeight: var(--ash-spacing-size280);
+	--ash-list-hoverBackground: var(--ash-menu-hoverBackground);
+	padding: var(--ash-spacing-size60);
+	color: inherit;
+	background: inherit;
+}
+
+.ash-project-creation-dialog .ash-select-box-option {
+	padding-inline: var(--ash-spacing-size120);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-project-source-controls > .ash-button,
+.ash-project-memory {
+	color: var(--ash-description-foreground);
+}
+
+.ash-project-source-controls > .ash-button .ash-icon,
+.ash-project-memory .ash-icon {
+	font-size: var(--ash-lxiconFontSize-compact);
 }
 
 .ash-project-appearance {

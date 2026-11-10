@@ -2,10 +2,87 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { realpath } from 'node:fs/promises';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { Editor } from '../../../automation/editor.js';
 import { expect, test } from '../../../automation/test.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 test.use({ gitRepository: true, electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+
+test('views and saves only the selected Ash project memory', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }, testInfo) => {
+	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+	try {
+		const { client } = connection;
+		const add = async (name: string, title: string) => {
+			const projectId = randomUUID();
+			await client.request(APP_SERVER_METHODS['project/create'], {
+				commandId: randomUUID(), projectId, name, description: '', materials: [], scope: 'chat',
+			});
+			const scope = { type: 'chatProject', projectId } as const;
+			const memoryId = randomUUID();
+			await client.request(APP_SERVER_METHODS['memory/add'], {
+				commandId: randomUUID(), memoryId, scope, title, body: '初始内容',
+			});
+			return { scope, memoryId };
+		};
+		const first = await add('项目记忆样本', '本项目记忆');
+		const other = await add('另一个项目', '其他项目记忆');
+		await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(), name: '空记忆项目', description: '', materials: [], scope: 'chat',
+		});
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
+		const projects = page.locator('.ash-projects');
+		const view = projects.getByRole('button', { name: '查看记忆', exact: true });
+		const dialog = page.getByRole('dialog', { name: '项目记忆', exact: true });
+		const content = new Editor(dialog);
+		const save = dialog.getByRole('button', { name: '保存', exact: true });
+		const memories = dialog.getByRole('combobox', { name: '已保存的记忆' });
+		await projects.getByRole('button', { name: '空记忆项目', exact: true }).click();
+		await view.press('Enter');
+		await expect(content.input).toBeEditable();
+		await expect(save).toBeDisabled();
+		await content.waitForEditorFocus();
+		await page.keyboard.insertText('新建的项目记忆');
+		await save.click();
+		await expect(view).toBeFocused();
+		await view.press('Enter');
+		await content.waitForEditorContents(text => text === '新建的项目记忆');
+		await page.keyboard.press('Escape');
+		await expect(view).toBeFocused();
+		await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
+		await projects.getByRole('button', { name: '项目记忆样本', exact: true }).click();
+		await view.press('Enter');
+		await expect(memories).toHaveText('本项目记忆');
+		await expect(dialog).not.toHaveAttribute('aria-modal', 'true');
+		await content.waitForEditorContents(text => text === '初始内容');
+		await expect(content.input).toHaveAccessibleName('内容');
+		await expect(dialog.getByText('记忆已开启', { exact: true })).toBeVisible();
+		await expect(save).toBeDisabled();
+		await memories.press('Enter');
+		await expect(dialog.getByRole('option')).toHaveText(['本项目记忆']);
+		await page.keyboard.press('Escape');
+		await page.screenshot({ path: testInfo.outputPath('project-memory-dialog.png') });
+		await dialog.getByRole('textbox', { name: '标题', exact: true }).press('Tab');
+		await expect(content.input).toBeFocused();
+		await content.input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('取消后丢弃的内容');
+		await expect(save).toBeEnabled();
+		await content.input.press('Escape');
+		await page.getByRole('button', { name: '放弃更改', exact: true }).click();
+		await expect(view).toBeFocused();
+		await view.press('Enter');
+		await content.waitForEditorContents(text => text === '初始内容');
+		await content.input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('更新的项目记忆\n保留换行');
+		await save.click();
+		await expect(view).toBeFocused();
+		const read = (memory: typeof first) => client.request(APP_SERVER_METHODS['memory/read'], memory);
+		expect((await read(first)).body).toBe('更新的项目记忆\n保留换行');
+		expect((await read(other)).body).toBe('初始内容');
+	} finally {
+		await connection.close();
+	}
+});
 
 test('Code and Chat recall separate memories from the same project', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	test.setTimeout(120_000);

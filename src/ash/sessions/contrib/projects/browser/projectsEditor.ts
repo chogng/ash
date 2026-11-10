@@ -18,6 +18,7 @@ import type { Project } from '../../../../platform/projects/common/projectServic
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { getCatalogProjectRename, getProjectSessionRows, groupChatList, IChatListCatalog, type CatalogProjectDetails, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
+import type { CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -38,6 +39,7 @@ interface ProjectDetail extends IDisposable {
 	readonly chats: HTMLElement;
 	readonly card: HTMLElement;
 	readonly instructions: HTMLElement;
+	readonly memory: HTMLElement;
 	readonly files: HTMLElement;
 	section: ProjectSection;
 }
@@ -415,15 +417,29 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private renderProject(id: string, chats: readonly ChatListEntry[], conversationProject: ChatListGroup['project'], localProject: Project | undefined,
 		data: ReturnType<CatalogProjectDetails['data']['get']>, detailsPhase: 'loading' | 'loaded' | 'error' | undefined): void {
 		const detail = this.projectDetail.value ?? this.createProjectDetail(id);
-		const { element: layout, card, chats: chatContent, instructions, files } = detail;
+		const { element: layout, card, chats: chatContent, instructions, memory, files } = detail;
 		const details = conversationProject?.details;
 		chatContent.replaceChildren();
 		this.projectList.renderConversations(chatContent, chats, conversationProject, this.content);
 		files.replaceChildren();
-		card.hidden = !localProject && !details;
+		memory.replaceChildren();
+		memory.hidden = true;
+		card.hidden = !localProject && !conversationProject;
 		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject, detail.section !== 'files');
+		const isCurrent = (reader?: IReader) => {
+			if (!this.shown.read(reader)) return false;
+			const state = this.projects.state.read(reader);
+			if (localProject) return state.selectedId === id;
+			return state.conversationProjectId === id && this.projectGroups.read(reader).some(group =>
+				group.key === id && group.project?.preferenceKey === conversationProject?.preferenceKey
+				&& group.project?.details?.key === details?.key);
+		};
+		if (localProject || conversationProject) {
+			const target = localProject && !localProject.archived ? { localProjectId: localProject.id } : { editMemory: details?.editMemory };
+			this.renderProjectMemory(memory, () => this.projectDialogs.showProjectMemories(this.domNode, target, isCurrent,
+				() => memory.querySelector<HTMLButtonElement>('[data-project-control="memory"]')?.focus()), data?.memoryMode);
+		}
 		if (localProject) {
-			const isCurrent = (reader?: IReader) => this.shown.read(reader) && this.projects.state.read(reader).selectedId === id;
 			instructions.replaceChildren(this.renderProjectInstructions(localProject.description,
 				() => this.showProjectDialog({ project: localProject, instructionsOnly: true })));
 			files.append(this.projectMaterials.renderLocal(files, localProject, this.projects.state.get().busy, isCurrent, this.content));
@@ -438,8 +454,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			files.append(this.projectMaterials.renderCatalog(files, details.key, {
 				rows: materialsSnapshot,
 				upload: data?.canEdit && data.materials ? details.upload : undefined,
-				isCurrent: reader => this.shown.read(reader) && this.projects.state.read(reader).conversationProjectId === id
-					&& this.projectGroups.read(reader).find(group => group.key === id)?.project?.details?.key === details.key,
+				isCurrent,
 				status: !details.load ? undefined : failed ? {
 					text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
 				} : materialsSnapshot ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
@@ -450,6 +465,18 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				rows: [], isCurrent: () => false,
 			}, this.content));
 		}
+	}
+
+	private renderProjectMemory(section: HTMLElement, openMemory: () => void, mode?: CatalogProjectMemoryMode): void {
+		const document = section.ownerDocument;
+		section.hidden = false;
+		section.setAttribute('aria-label', localize('projects.projectMemories', 'Project memory'));
+		const heading = h(document, 'div', { className: 'ash-projects-section-heading' },
+			h(document, 'h2', {}, localize('projects.memoryHeading', 'Memory')));
+		this.button(heading, { label: localize('projects.viewMemory', 'View memory'), size: 'small', onClick: openMemory }, 'memory');
+		section.append(heading);
+		if (mode) section.append(h(document, 'p', { className: 'ash-projects-muted' },
+			mode === 'default' ? localize('projects.defaultMemory', 'Default memory') : localize('projects.projectOnlyMemory', 'Project-only memory')));
 	}
 
 	private createProjectDetail(id: string): ProjectDetail {
@@ -472,8 +499,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		};
 		const chats = h(document, 'div', { className: 'ash-projects-chat-content' });
 		const instructions = h(document, 'div', { className: 'ash-projects-instructions-content' });
+		const memory = h(document, 'section', { className: 'ash-projects-memory-content', properties: { hidden: true } });
 		const files = h(document, 'div', { className: 'ash-projects-file-content' });
-		const card = h(document, 'div', { className: 'ash-projects-detail-card' }, instructions, files);
+		const card = h(document, 'div', { className: 'ash-projects-detail-card' }, instructions, memory, files);
 		panels.overview.append(chats, card);
 		const tabList = new TabList<ProjectSection>(navigation, {
 			ariaLabel: localize('projects.sections', 'Project sections'),
@@ -509,7 +537,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const detail: ProjectDetail = Object.assign(toDisposable(() => {
 			tabList.dispose();
 			element.remove();
-		}), { element, panels, chats, card, instructions, files, section: 'overview' as const });
+		}), { element, panels, chats, card, instructions, memory, files, section: 'overview' as const });
 		this.projectDetail.value = detail;
 		return detail;
 	}

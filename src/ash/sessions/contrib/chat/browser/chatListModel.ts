@@ -18,7 +18,7 @@ import { getChatSessionArchiveActionPresentation, getChatSessionArchiveActionWor
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { CatalogProjectCreator, ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { CatalogProjectCreator, CatalogProjectMemoryMode, ConversationProjectEditor, SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
@@ -101,14 +101,22 @@ export interface ProjectMaterialRow {
 	readonly remove?: () => Promise<void>;
 }
 
+export interface CatalogProjectMemoryEditor {
+	readonly body: string;
+	readonly storageDescription: string;
+	readonly save?: (body: string) => Promise<void>;
+}
+
 export interface CatalogProjectDetails {
 	readonly key: string;
 	readonly data: IObservable<{
 		readonly description: string;
 		readonly materials: readonly ProjectMaterialRow[] | undefined;
 		readonly canEdit: boolean;
+		readonly memoryMode?: CatalogProjectMemoryMode;
 	} | undefined>;
 	readonly load?: (signal: AbortSignal) => Promise<void>;
+	readonly editMemory?: (signal: AbortSignal) => Promise<CatalogProjectMemoryEditor>;
 	readonly upload?: {
 		readonly limits: { readonly count: number; readonly fileBytes: number; readonly totalBytes: number; };
 		readonly limitMessage: string;
