@@ -41,7 +41,7 @@ export interface ChatGPTProjectDetails {
 	readonly emoji: string | null;
 	readonly theme: string | null;
 	readonly canWrite: boolean;
-	readonly files?: readonly { readonly id: string; readonly name: string; }[];
+	readonly files?: readonly { readonly id: string; readonly name: string; readonly sizeBytes?: number; }[];
 }
 export type ChatGPTProjectCursor = { readonly kind: 'project'; readonly value: string; } | { readonly kind: 'recent'; readonly offset: number; };
 
@@ -259,12 +259,13 @@ export class ChatGPTClient {
 			|| (gizmo.instructions != null && typeof gizmo.instructions !== 'string')
 			|| (display.emoji != null && typeof display.emoji !== 'string')
 			|| (display.theme != null && typeof display.theme !== 'string')) throw this.invalidResponse();
-		const files = new Map<string, { id: string; name: string; }>();
+		const files = new Map<string, NonNullable<ChatGPTProjectDetails['files']>[number]>();
 		if (isRecord(value) && Array.isArray(value.files)) {
 			for (const file of value.files) {
 				if (isRecord(file) && typeof file.file_id === 'string' && projectFileId.test(file.file_id)
 					&& typeof file.name === 'string' && file.name.trim() && file.name.length <= 1024) {
-					files.set(file.file_id, { id: file.file_id, name: file.name });
+					const sizeBytes = typeof file.size === 'number' && Number.isSafeInteger(file.size) && file.size >= 0 ? file.size : undefined;
+					files.set(file.file_id, { id: file.file_id, name: file.name, ...(sizeBytes !== undefined && { sizeBytes }) });
 				}
 			}
 		}

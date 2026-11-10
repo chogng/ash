@@ -2,12 +2,11 @@ import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-/** References retain their source location and never authorize reading or modifying it. */
-export interface ProjectMaterial {
-	readonly resource: URI;
-	readonly name: string;
-	readonly kind: 'file' | 'folder';
-}
+/** Project text and source references that never grant file access. */
+export type ProjectMaterial =
+	| { readonly kind: 'file'; readonly name: string; readonly resource: URI; }
+	| { readonly kind: 'folder'; readonly name: string; readonly resource: URI; }
+	| { readonly kind: 'text'; readonly id: string; readonly name: string; readonly content: string; };
 
 export interface ProjectAppearance {
 	readonly icon?: string;

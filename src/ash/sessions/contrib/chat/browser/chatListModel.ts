@@ -94,6 +94,7 @@ export interface ProjectMaterialRow {
 	readonly name: string;
 	readonly kind: 'file' | 'folder';
 	readonly tooltip?: string;
+	readonly sizeBytes?: number;
 	/** Reads the provider's source bytes. Ash owns the lifecycle of any local copy. */
 	readonly read?: (signal: AbortSignal) => Promise<Blob>;
 	readonly open?: () => Promise<void>;

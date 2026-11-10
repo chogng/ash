@@ -41,6 +41,7 @@ import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
 import { ChatInputAction, ChatInputButtonViewItem, ChatInputSurface } from './chatInputSurface.js';
 import { ImageAttachmentWidget, type IChatImageAnnotationTarget } from '../../attachments/chatAttachmentWidgets.js';
+import { FileCardContents } from '../../../../../../platform/files/browser/fileCardContents.js';
 import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { ChatChangesPill } from './chatChangesPill.js';
 import { ChatWorkingLogo } from '../chatWorkingLogo.js';
@@ -2528,7 +2529,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 }
 
-type StagedFile = IChatInputDraft['files'][number] | { readonly id: string; readonly name: string; readonly status: 'preparing'; readonly error?: undefined; };
+type StagedFile = IChatInputDraft['files'][number] | { readonly id: string; readonly name: string; readonly size: number; readonly status: 'preparing'; readonly error?: undefined; };
 
 interface StagedFileActions {
 	readImage?(id: string): Promise<Blob | string | undefined>;
@@ -2578,7 +2579,7 @@ class StagedFileList extends Disposable {
 
 	/** The preparing operation owns this row until it accepts or discards the file. */
 	showPreparingImage(name: string, image: Blob): IDisposable {
-		const file: StagedFile = { id: createUuid(), name, status: 'preparing' };
+		const file: StagedFile = { id: createUuid(), name, size: image.size, status: 'preparing' };
 		const row = new StagedFileRow(this.list.ownerDocument, file, this.instantiation, { readImage: async () => image });
 		row.update(file, true);
 		this.list.append(row.domNode);
@@ -2602,15 +2603,19 @@ class StagedFileRow extends Disposable {
 	private readonly error: HTMLElement;
 	private readonly retry?: Button;
 	private readonly image: ImageAttachmentWidget;
+	private readonly facts: FileCardContents;
 
 	constructor(document: Document, file: StagedFile, instantiation: IInstantiationService, actions?: StagedFileActions) {
 		super();
 		const row = this.domNode = h(document, 'div', { className: 'ash-chat-staged-file preview-loading', attributes: { role: 'listitem' } });
 		this._register(toDisposable(() => row.remove()));
+		const card = h(document, 'div', { className: 'ash-chat-staged-file-card' });
+		row.append(card);
+		this.facts = this._register(new FileCardContents(card, file.name));
 		this.image = this._register(instantiation.createInstance(ImageAttachmentWidget, {
 			id: file.id, name: file.name,
 			resolve: async () => ({ content: await actions?.readImage?.(file.id) }),
-		}, { imagePresentation: 'thumbnail', supportsDeletion: !!actions?.removeFile, shouldFocusClearButton: false, imageAnnotationTarget: actions?.imageAnnotationTarget }, row));
+		}, { imagePresentation: 'thumbnail', supportsDeletion: !!actions?.removeFile, shouldFocusClearButton: false, imageAnnotationTarget: actions?.imageAnnotationTarget }, this.facts.preview));
 		this._register(this.image.onDidResolvePreview(hasPreview => {
 			row.classList.toggle('image', hasPreview);
 			row.classList.remove('preview-loading');
@@ -2629,6 +2634,7 @@ class StagedFileRow extends Disposable {
 	}
 
 	update(file: StagedFile, readOnly: boolean): void {
+		this.facts.setSize(file.size);
 		const failed = file.status === 'failed';
 		const status = file.status === 'preparing' ? localize('chat.input.filePreparing', 'Preparing…')
 			: file.status === 'uploading' ? localize('chat.input.fileUploading', 'Uploading…')

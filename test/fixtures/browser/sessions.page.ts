@@ -206,7 +206,7 @@ if (new URL(location.href).searchParams.has('projectCreation')) {
 			},
 			create: async (id, name, description, materials, scope = 'chat', appearance) => {
 				if (codeProjectCreation) {
-					if (scope !== 'code' || description || materials.length !== 1 || materials[0]?.resource.fsPath !== '/workspace/second') {
+					if (scope !== 'code' || description || materials.length !== 1 || materials[0]?.kind !== 'folder' || materials[0].resource.fsPath !== '/workspace/second') {
 						throw new Error('Expected only the remaining source folder in the Code project');
 					}
 					if (failCodeSave) {

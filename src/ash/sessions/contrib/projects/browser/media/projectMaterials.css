@@ -90,16 +90,147 @@ section.ash-projects-materials {
 	white-space: nowrap;
 }
 
-.ash-projects-source-note {
-	margin: 0;
-	color: var(--ash-description-foreground);
-	line-height: 1.5;
-	font-size: var(--ash-fontSize-body2);
+.ash-projects-material-list:has(> .ash-projects-material-card) {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size120);
+	margin-block-start: var(--ash-spacing-size80);
 }
 
-.ash-projects-materials-footer {
+.ash-projects.stack-project-details
+	.ash-projects-material-list:has(> .ash-projects-material-card) {
+	grid-template-columns: repeat(2, minmax(0, 152px));
+}
+
+.ash-projects-material:not(.ash-projects-material-card) {
+	grid-column: 1 / -1;
+}
+
+.ash-projects-material-card {
+	position: relative;
+	aspect-ratio: 1.23;
+	min-block-size: 104px;
+	padding: 0;
+	align-items: stretch;
+}
+
+.ash-projects-material-card > .ash-projects-material-card-open {
+	display: grid;
+	flex: 1;
+	min-inline-size: 0;
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: auto auto minmax(0, 1fr) auto;
+	justify-items: start;
+	align-items: start;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size100);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: var(--ash-sessions-soft-shadow);
+	text-align: start;
+}
+
+.ash-projects-material-card
+	> .ash-button.ash-projects-material-card-open:focus-visible {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-projects-material-card-open > .ash-file-card-name {
+	grid-row: 1;
+	inline-size: 100%;
+}
+
+.ash-projects-material-card-open > .ash-file-card-size {
+	grid-row: 2;
+}
+
+.ash-projects-material-card-open > .ash-file-card-format {
+	grid-row: 4;
+}
+
+.ash-projects-material-card-open > .ash-file-card-preview {
+	position: relative;
+	display: grid;
+	grid-row: 3;
+	justify-self: stretch;
+	align-self: stretch;
+	overflow: clip;
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-description-foreground);
+}
+
+.ash-projects-material-card-open > .ash-file-card-preview > img {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	object-fit: contain;
+}
+
+.ash-projects-material-card-excerpt {
+	display: -webkit-box;
+	align-self: start;
+	justify-self: stretch;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.4;
+}
+
+:is(.hc-black, .hc-light)
+	.ash-projects-material-card
+	> .ash-projects-material-card-open {
+	box-shadow: none;
+}
+
+.ash-projects-material-card > .ash-button.ash-projects-material-card-remove {
+	position: absolute;
+	inset-block-start: calc(-1 * var(--ash-spacing-size60));
+	inset-inline-end: calc(-1 * var(--ash-spacing-size60));
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-editor-background);
+}
+
+.ash-projects-material-card:not(:hover, :focus-within)
+	> .ash-projects-material-card-remove {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-projects-drop-overlay {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-content: center;
+	justify-items: center;
+	gap: var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size160);
+	border-radius: inherit;
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	text-align: center;
+	pointer-events: none;
+}
+
+.ash-projects-drop-icons {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	gap: var(--ash-spacing-size160);
+	color: var(--ash-focusBorder);
+	--ash-lxiconFontSize: var(--ash-lxiconFontSize-large);
+}
+
+.ash-projects-drop-icons > :first-child {
+	transform: rotate(-12deg);
+}
+
+.ash-projects-drop-icons > :last-child {
+	transform: rotate(12deg);
 }

@@ -360,13 +360,52 @@
 	display: none;
 }
 
-.ash-chat-staged-file.preview-loading > .ash-chat-image-attachment-thumbnail {
+.ash-chat-staged-file-card {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	min-inline-size: 0;
+	max-inline-size: min(100%, 160px);
+}
+
+.ash-chat-staged-file-card > .ash-file-card-name {
+	grid-row: 1;
+	grid-column: 1;
+}
+
+.ash-chat-staged-file-card > .ash-file-card-preview {
+	grid-row: 1;
+	grid-column: 2;
+}
+
+.ash-chat-staged-file-card > :is(.ash-file-card-size, .ash-file-card-format) {
+	grid-row: 3;
+}
+
+.ash-chat-staged-file-card > .ash-file-card-format {
+	grid-column: 2;
+	justify-self: start;
+}
+
+.ash-chat-staged-file.preview-loading .ash-file-card-preview,
+.ash-chat-staged-file-card .ash-chat-image-attachment-name {
 	display: none;
 }
 
 .ash-chat-staged-file.image {
 	flex-direction: column;
 	align-items: flex-start;
+}
+
+.ash-chat-staged-file.image .ash-file-card-preview {
+	grid-column: 1 / -1;
+	justify-self: start;
+}
+
+.ash-chat-staged-file.image .ash-file-card-name {
+	grid-row: 2;
+	grid-column: 1 / -1;
 }
 
 .ash-chat-staged-file.image.ready > .ash-chat-staged-file-status {

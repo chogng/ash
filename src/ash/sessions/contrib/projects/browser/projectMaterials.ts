@@ -1,47 +1,81 @@
-import { h } from '../../../../base/browser/dom.js';
+import { containsDragType, DataTransfers } from '../../../../base/browser/dnd.js';
+import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
+import { createObjectUrl, pickFiles } from '../../../../base/browser/fileAccess.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import type { IAction } from '../../../../base/common/actions.js';
 import { streamToBuffer } from '../../../../base/common/buffer.js';
-import { Disposable, type DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
+import { Disposable, type DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
+import { LRUCache } from '../../../../base/common/map.js';
 import { observableFromEvent } from '../../../../base/common/observable.js';
+import { isWeb } from '../../../../base/common/platform.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { basename } from '../../../../base/common/resources.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { getPathForFile } from '../../../../platform/dnd/browser/dnd.js';
+import { FileCardContents } from '../../../../platform/files/browser/fileCardContents.js';
+import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { projectMaterialFilesLocation, projectMaterialFilesRoot, projectMaterialFilesScheme } from '../../../../platform/projects/common/projectMaterialFiles.js';
 import type { Project, ProjectMaterial } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { ChatInputAttachMenu } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputAttachMenu.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { IWorkbenchEnvironmentService } from '../../../../workbench/services/environment/common/environmentService.js';
 import type { CatalogProjectDetails, ProjectMaterialRow } from '../../chat/browser/chatListModel.js';
+import { IProjectDialogService } from './projectDialogService.js';
 import { ProjectMaterialFiles } from './projectMaterialFiles.js';
 import { IProjectsService } from './projectsService.js';
 import './media/projectMaterials.css';
 
+interface ProjectMaterialPresentation extends ProjectMaterialRow {
+	readonly readText?: (signal: AbortSignal) => Promise<string>;
+	readonly previewText?: string;
+	readonly resolveFile?: () => Promise<URI>;
+	readonly selectedFile?: File;
+}
+
 interface ProjectMaterialsContent {
-	readonly rows: readonly ProjectMaterialRow[] | undefined;
+	readonly rows: readonly ProjectMaterialPresentation[] | undefined;
 	readonly busy?: boolean;
 	readonly status?: { readonly text: string; readonly retry?: () => void; };
-	readonly addFiles?: (resources: readonly URI[]) => Promise<unknown>;
-	readonly addFolders?: (resources: readonly URI[]) => Promise<unknown>;
+	readonly pickFiles?: () => Promise<void>;
+	readonly pickFolders?: () => Promise<void>;
+	readonly addText?: (id: string, title: string, content: string) => Promise<void>;
+	readonly dropFiles?: (transfer: DataTransfer) => Promise<void>;
+	readonly isCurrent: () => boolean;
 }
 
 type CatalogMaterialUpload = NonNullable<CatalogProjectDetails['upload']>;
+
+const thumbnailFileLimit = 8 * 1024 * 1024;
+const textThumbnailLength = 512;
+
+function materialId(material: ProjectMaterial): string {
+	return material.kind === 'text' ? `text:${material.id}` : material.resource.toString();
+}
 
 /** Presents project references and delegates their storage and file access to the owning services. */
 export class ProjectMaterials extends Disposable {
 	readonly fileRoot;
 	private readonly localFiles = this._register(new MutableDisposable<ProjectMaterialFiles>());
+	// A native selection can preview its File without granting the referenced directory to the agent.
+	private readonly selectedFiles = new LRUCache<string, File>(64);
 	private catalogFileScope: string | undefined;
+	private readonly pendingAdds = new Set<string>();
 
 	constructor(
+		private readonly owner: HTMLElement,
 		private readonly reportError: (message: string) => void,
 		@IProjectsService private readonly projects: IProjectsService,
 		@IFileDialogService private readonly files: IFileDialogService,
@@ -51,8 +85,11 @@ export class ProjectMaterials extends Disposable {
 		@IFileService private readonly fileService: IFileService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService,
+		@IProjectDialogService private readonly projectDialogs: IProjectDialogService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
+		this._register(toDisposable(() => this.selectedFiles.clear()));
 		this.fileRoot = observableFromEvent(this, listener => configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(projectMaterialFilesLocation)) listener(event);
 		}), () => {
@@ -69,41 +106,73 @@ export class ProjectMaterials extends Disposable {
 		this.localFiles.value = key !== undefined && root ? new ProjectMaterialFiles(this.fileService, root, key) : undefined;
 	}
 
-	renderCatalog(document: Document,
-		model: Omit<ProjectMaterialsContent, 'addFiles' | 'addFolders'> & { readonly upload?: CatalogMaterialUpload; readonly isCurrent: () => boolean; },
+	renderCatalog(target: HTMLElement, key: string,
+		model: Omit<ProjectMaterialsContent, 'pickFiles' | 'pickFolders' | 'dropFiles' | 'addText'> & { readonly upload?: CatalogMaterialUpload; },
 		content: DisposableStore): HTMLElement {
 		const localFiles = this.localFiles.value;
-		const rows = localFiles ? model.rows?.map(file => ({
-			...file,
-			open: file.open ?? (file.kind === 'file' ? async () => {
-				const isCurrent = () => this.localFiles.value === localFiles && model.isCurrent();
-				if (!isCurrent()) return;
-				const resource = await localFiles.ensure(file, file.read);
-				if (isCurrent()) await this.editors.openEditor({ resource, readOnly: true, showBreadcrumbs: false });
-			} : undefined),
-		})) : model.rows;
+		const isCurrent = () => !this.isDisposed && this.localFiles.value === localFiles && model.isCurrent();
+		const rows = model.rows?.map((file): ProjectMaterialPresentation => {
+			if (file.open || file.kind !== 'file') return file;
+			const resolveFile = localFiles ? async () => {
+				if (!isCurrent()) throw new CancellationError();
+				return localFiles.ensure(file, file.read);
+			} : undefined;
+			if (/\.md$/iu.test(file.name)) {
+				const read = file.read;
+				const readText = resolveFile ? async (signal: AbortSignal) => {
+					const resource = await resolveFile();
+					signal.throwIfAborted();
+					if (!isCurrent()) throw new CancellationError();
+					return new TextDecoder().decode((await this.fileService.readFileBytes(resource)).bytes);
+				} : read ? async (signal: AbortSignal) => {
+					if (!isCurrent()) throw new CancellationError();
+					return (await read(signal)).text();
+				} : undefined;
+				return {
+					...file,
+					readText, resolveFile,
+				};
+			}
+			return {
+				...file,
+				resolveFile,
+				open: resolveFile ? async () => {
+					if (!isCurrent()) return;
+					const resource = await resolveFile();
+					if (isCurrent()) await this.editors.openEditor({ resource, readOnly: true, showBreadcrumbs: false });
+				} : undefined,
+			};
+		});
 		const { upload } = model;
-		return this.render(document, {
-			rows, busy: model.busy, status: model.status,
-			addFiles: upload ? resources => this.uploadCatalogFiles(resources, upload, model.isCurrent) : undefined,
+		const add = upload && (async (files: readonly File[]) => {
+			if (this.isDisposed || !model.isCurrent()) return;
+			const { limits } = upload;
+			if (files.length > limits.count || files.some(file => file.size > limits.fileBytes)
+				|| files.reduce((bytes, file) => bytes + file.size, 0) > limits.totalBytes) {
+				throw new Error(upload.limitMessage);
+			}
+			await upload.addFiles(files.map(file => {
+				if (file.type) return file;
+				const type = getMediaOrTextMime(file.name);
+				return type ? new File([file], file.name, { type, lastModified: file.lastModified }) : file;
+			}));
+		});
+		return this.render(target, key, {
+			rows, busy: model.busy, status: model.status, isCurrent: model.isCurrent,
+			pickFiles: add ? async () => {
+				const files = await pickFiles({
+					ownerDocument: target.ownerDocument, selection: 'multiple',
+					ariaLabel: localize('projects.addMaterials', 'Add project materials'),
+				});
+				if (files?.length) await add(files);
+			} : undefined,
+			dropFiles: add ? transfer => add([...transfer.files]) : undefined,
+			addText: add ? (_id, title, content) => {
+				const safeTitle = title.replace(/[<>:"/\\|?*]/gu, '_');
+				const name = /\.md$/iu.test(safeTitle) ? safeTitle : `${safeTitle}.md`;
+				return add([new File([content], name, { type: 'text/markdown' })]);
+			} : undefined,
 		}, content);
-	}
-
-	private async uploadCatalogFiles(resources: readonly URI[], upload: CatalogMaterialUpload, isCurrent: () => boolean): Promise<void> {
-		const { limits } = upload;
-		if (resources.length > limits.count) throw new Error(upload.limitMessage);
-		const files: File[] = [];
-		let remaining = limits.totalBytes;
-		for (const resource of resources) {
-			if (this.isDisposed || !isCurrent() || resource.scheme !== 'file' || resource.authority) throw new CancellationError();
-			const name = basename(resource);
-			const content = await this.fileService.readFileStream(resource, { limits: { size: Math.min(limits.fileBytes, remaining) } });
-			const bytes = await streamToBuffer(content.value);
-			remaining -= bytes.byteLength;
-			files.push(new File([new Uint8Array(bytes.buffer)], name, { type: getMediaOrTextMime(name), lastModified: content.modifiedAtMillis }));
-		}
-		if (this.isDisposed || !isCurrent()) throw new CancellationError();
-		await upload.addFiles(files);
 	}
 
 	async syncCatalog(rows: readonly ProjectMaterialRow[]): Promise<void> {
@@ -115,39 +184,128 @@ export class ProjectMaterials extends Disposable {
 		}
 	}
 
-	renderLocal(document: Document, project: Project, busy: boolean, content: DisposableStore): HTMLElement {
-		const add = async (resources: readonly URI[], kind: ProjectMaterial['kind']) => {
-			const materials = [...project.materials];
-			for (const resource of resources) {
-				if (!materials.some(item => item.resource.toString() === resource.toString())) materials.push({ resource, name: basename(resource), kind });
+	renderLocal(target: HTMLElement, project: Project, busy: boolean, isCurrent: () => boolean, content: DisposableStore): HTMLElement {
+		const previewKey = (resource: URI) => JSON.stringify([project.id, resource.toString()]);
+		const add = async (entries: readonly { resource: URI; file?: File; }[], kind: 'file' | 'folder') => {
+			const current = this.projects.state.get().selected;
+			if (this.isDisposed || !isCurrent() || current?.id !== project.id) return;
+			const materials = [...current.materials];
+			const previews: string[] = [];
+			for (const { resource, file } of entries) {
+				if (materials.some(item => item.kind !== 'text' && item.resource.toString() === resource.toString())) continue;
+				materials.push({ resource, name: basename(resource), kind });
+				if (file) {
+					const key = previewKey(resource);
+					this.selectedFiles.set(key, file);
+					previews.push(key);
+				}
 			}
-			await this.projects.update(project, project.name, project.description, materials);
+			if (materials.length === current.materials.length) return;
+			let saved = false;
+			try {
+				saved = !!await this.projects.update(current, current.name, current.description, materials);
+			} finally {
+				if (!saved) for (const key of previews) this.selectedFiles.delete(key);
+			}
 		};
-		return this.render(document, {
-			busy, addFiles: resources => add(resources, 'file'), addFolders: resources => add(resources, 'folder'),
+		const invalid = () => new Error(localize('projects.dropLocalFilesOnly', 'Drop local files or use the menu to add a folder.'));
+		const addFiles = (files: readonly File[]) => add(files.map(file => {
+			const path = getPathForFile(file);
+			if (!path) throw invalid();
+			return { resource: URI.file(path), file };
+		}), 'file');
+		return this.render(target, `local:${project.id}`, {
+			busy, isCurrent,
+			pickFiles: isWeb ? () => this.pickMaterials('file', resources => add(resources.map(resource => ({ resource })), 'file')) : async () => {
+				const files = await pickFiles({
+					ownerDocument: target.ownerDocument, selection: 'multiple',
+					ariaLabel: localize('projects.addMaterials', 'Add project materials'),
+				});
+				if (files?.length) await addFiles(files);
+			},
+			pickFolders: () => this.pickMaterials('folder', resources => add(resources.map(resource => ({ resource })), 'folder')),
+			addText: async (id, name, content) => {
+				const current = this.projects.state.get().selected;
+				if (current?.id !== project.id) throw new Error(localize('projects.addTextFailed', 'Could not add text content. Try again.'));
+				if (current.materials.some(item => item.kind === 'text' && item.id === id)) return;
+				const saved = await this.projects.update(current, current.name, current.description, [...current.materials, { kind: 'text', id, name, content }]);
+				if (!saved) throw new Error(this.projects.state.get().message ?? localize('projects.addTextFailed', 'Could not add text content. Try again.'));
+			},
+			dropFiles: isWeb ? undefined : async transfer => {
+				if ([...transfer.items].some(item => item.webkitGetAsEntry()?.isDirectory)) throw invalid();
+				await addFiles([...transfer.files]);
+			},
 			rows: project.materials.map(material => ({
-				id: material.resource.toString(), name: material.name, kind: material.kind, tooltip: material.resource.fsPath,
-				open: () => this.openMaterial(material),
+				id: materialId(material), name: material.name, kind: material.kind === 'text' ? 'file' : material.kind,
+				tooltip: material.kind === 'text' ? undefined : material.resource.fsPath,
+				sizeBytes: material.kind === 'text' ? new TextEncoder().encode(material.content).length : undefined,
+				readText: material.kind === 'text' ? async () => material.content : undefined,
+				previewText: material.kind === 'text' ? material.content.slice(0, textThumbnailLength) : undefined,
+				resolveFile: material.kind === 'file' ? async () => material.resource : undefined,
+				selectedFile: material.kind === 'file' ? this.selectedFiles.get(previewKey(material.resource)) : undefined,
+				open: material.kind !== 'text' ? () => this.openMaterial(material) : undefined,
 				remove: async () => {
-					await this.projects.update(project, project.name, project.description,
-						project.materials.filter(item => item.resource.toString() !== material.resource.toString()));
+					const saved = await this.projects.update(project, project.name, project.description,
+						project.materials.filter(item => item !== material));
+					if (saved && material.kind === 'file') this.selectedFiles.delete(previewKey(material.resource));
 				},
 			})),
 		}, content);
 	}
 
 	/** The pane mounts the section with the rest of the details and owns this render's controls. */
-	render(document: Document, model: ProjectMaterialsContent, content: DisposableStore): HTMLElement {
+	private render(target: HTMLElement, key: string, model: ProjectMaterialsContent, content: DisposableStore): HTMLElement {
+		const document = target.ownerDocument;
 		const label = localize('projects.context', 'Context');
 		const materials = h(document, 'section', { className: 'ash-projects-materials', attributes: { 'aria-label': label } });
 		const heading = h(document, 'div', { className: 'ash-projects-section-heading' }, h(document, 'h2', {}, label));
 		materials.append(heading);
-		const { addFiles, addFolders } = model;
-		if (addFiles) {
-			const addLabel = localize('projects.addFiles', 'Add files');
-			this.action(content, heading, 'add-files', {
+		const { pickFiles, pickFolders, dropFiles, addText, isCurrent } = model;
+		if (pickFiles) {
+			const addLabel = localize('projects.addMaterials', 'Add project materials');
+			const button = content.add(new Button(heading, {
+				...defaultButtonStyles,
 				label: addLabel, title: addLabel, icon: Lxicon.add, iconOnly: true, enabled: !model.busy,
-			}, () => this.pickMaterials('file', addFiles));
+			}));
+			button.domNode.dataset.projectControl = 'add-materials';
+			button.domNode.setAttribute('aria-haspopup', 'menu');
+			button.domNode.setAttribute('aria-expanded', 'false');
+			const additionalActions: IAction[] = [];
+			if (addText) additionalActions.push({
+				id: 'add-text',
+				label: localize('projects.addTextContent', 'Add text content'),
+				tooltip: '',
+				icon: Lxicon.fileText,
+				enabled: true,
+				run: () => {
+					const id = generateUuid();
+					this.projectDialogs.showAddTextDialog(this.owner, () => {
+						if (isCurrent()) this.owner.querySelector<HTMLElement>('[data-project-control="add-materials"]')?.focus();
+					}, async (title, text) => {
+						if (!await this.performAdd(key, isCurrent, () => addText(id, title, text))) {
+							throw new Error(localize('projects.addTextFailed', 'Could not add text content. Try again.'));
+						}
+					});
+				},
+			});
+			if (pickFolders) additionalActions.push({
+				id: 'add-folder',
+				label: localize('projects.useFolder', 'Use a folder'),
+				tooltip: '',
+				icon: Lxicon.folders,
+				enabled: true,
+				run: () => this.runAdd(key, isCurrent, pickFolders),
+			});
+			const menu = content.add(this.instantiation.createInstance(ChatInputAttachMenu, {
+				anchor: button.domNode,
+				onUploadFiles: () => void this.runAdd(key, isCurrent, pickFiles),
+				showUploadKeybinding: false,
+				host: { additionalActions },
+			}));
+			content.add(button.onDidClick(() => menu.show()));
+		}
+		if (dropFiles && !model.busy) {
+			this.installDropTarget(target, content, transfer => this.runAdd(key, isCurrent, () => dropFiles(transfer)));
 		}
 		if (model.status) {
 			materials.append(h(document, 'p', { className: 'ash-projects-muted', attributes: { role: 'status' } }, model.status.text));
@@ -163,45 +321,170 @@ export class ProjectMaterials extends Disposable {
 				illustration.append(sheet);
 			}
 			materials.append(h(document, 'div', { className: 'ash-projects-materials-empty' }, illustration,
-				h(document, 'p', {}, addFiles
+				h(document, 'p', {}, pickFiles
 					? localize('projects.contextEmpty', 'Add PDFs, documents, or other files to reference in this project.')
 					: localize('projects.noMaterialsReadOnly', 'No materials in this project.'))));
 		}
 		const list = h(document, 'ul', { className: 'ash-projects-material-list' });
+		const previews = new CancellationTokenSource();
+		content.add(toDisposable(() => previews.dispose(true)));
 		for (const material of model.rows ?? []) {
 			const row = h(document, 'li', { className: 'ash-projects-material' });
 			const { open, remove } = material;
-			if (open) {
+			const isFile = material.kind === 'file';
+			row.classList.toggle('ash-projects-material-card', isFile);
+			if (isFile) {
+				this.renderFileCard(row, material, isCurrent, content, previews.token);
+			} else if (open) {
 				const button = this.action(content, row, material.id, {
 					label: material.name,
-					icon: material.kind === 'folder' ? Lxicon.folders : Lxicon.file,
+					icon: Lxicon.folders,
 				}, open);
 				content.add(this.hover.setupDelayedHover(button.domNode, { content: material.tooltip ?? material.name }));
 			} else {
 				row.append(h(document, 'span', { className: 'ash-projects-material-name', properties: { title: material.name } }, material.name));
 			}
-			if (remove) this.action(content, row, `remove:${material.id}`, {
-				label: localize('projects.removeMaterial', 'Remove {0} from project', material.name),
-				icon: Lxicon.close, iconOnly: true, enabled: !model.busy,
-			}, async () => {
-				const confirmation = await this.dialogs.confirm({
-					message: localize('projects.confirmRemoveMaterial', 'Remove {0} from this project?', material.name),
-					primaryButton: localize('projects.confirmRemoveMaterialAction', 'Remove'),
+			if (remove) {
+				const removeButton = this.action(content, row, `remove:${material.id}`, {
+					label: localize('projects.removeMaterial', 'Remove {0} from project', material.name),
+					icon: Lxicon.close, iconOnly: true, enabled: !model.busy,
+				}, async () => {
+					const confirmation = await this.dialogs.confirm({
+						message: localize('projects.confirmRemoveMaterial', 'Remove {0} from this project?', material.name),
+						primaryButton: localize('projects.confirmRemoveMaterialAction', 'Remove'),
+					});
+					if (confirmation.confirmed && !this.isDisposed) await remove();
 				});
-				if (confirmation.confirmed && !this.isDisposed) await remove();
-			});
+				if (isFile) removeButton.domNode.classList.add('ash-projects-material-card-remove');
+			}
 			list.append(row);
 		}
 		if (list.childElementCount) materials.append(list);
-		if (addFolders) {
-			const footer = h(document, 'div', { className: 'ash-projects-materials-footer' });
-			this.action(content, footer, 'add-folder', {
-				label: localize('projects.useFolder', 'Use a folder'), icon: Lxicon.folders, enabled: !model.busy,
-			}, () => this.pickMaterials('folder', addFolders));
-			footer.append(h(document, 'p', { className: 'ash-projects-source-note' }, localize('projects.referenceHint', 'Files stay in their original location.')));
-			materials.append(footer);
-		}
 		return materials;
+	}
+
+	private renderFileCard(row: HTMLElement, material: ProjectMaterialPresentation, isCurrent: () => boolean,
+		content: DisposableStore, token: CancellationToken): void {
+		const document = row.ownerDocument;
+		const { name, readText, open, resolveFile, previewText, selectedFile } = material;
+		const sizeBytes = material.sizeBytes ?? selectedFile?.size;
+		const run = readText ? () => {
+			this.projectDialogs.showTextPreview(this.owner, name, readText, () => {
+				if (!isCurrent()) return;
+				const controls = this.owner.querySelectorAll<HTMLButtonElement>('[data-project-control]');
+				Array.from(controls).find(control => control.dataset.projectControl === material.id)?.focus();
+			});
+		} : open;
+		const card = run
+			? this.action(content, row, material.id, { label: '', ariaLabel: name, title: material.tooltip ?? name }, run).domNode
+			: row.appendChild(h(document, 'div', { properties: { title: name } }));
+		card.classList.add('ash-projects-material-card-open');
+		if (readText) card.setAttribute('aria-haspopup', 'dialog');
+		const mime = getMediaOrTextMime(name);
+		const isImage = mime?.startsWith('image/') === true;
+		const isText = readText !== undefined || mime?.startsWith('text/') === true || mime === 'application/json' || mime === 'application/xml';
+		const format = previewText === undefined ? undefined : localize('projects.textBadge', 'TEXT');
+		const facts = content.add(new FileCardContents(card, name, format));
+		facts.setSize(sizeBytes);
+		facts.preview.setAttribute('aria-hidden', 'true');
+		if (run) card.setAttribute('aria-describedby', facts.descriptionIds);
+		if (previewText) {
+			facts.preview.append(h(document, 'span', { className: 'ash-projects-material-card-excerpt' }, previewText));
+		}
+		if (!resolveFile || sizeBytes !== undefined && !isImage && !isText) return;
+		const load = selectedFile
+			? this.paintFileCardPreview(selectedFile, facts.preview, mime, isText, token, content)
+			: this.loadFileCardPreview(resolveFile, facts, sizeBytes, mime, isText, token, content);
+		void load.catch(() => {
+			// The title and format still identify a file when its preview is unavailable.
+		});
+	}
+
+	private async loadFileCardPreview(resolveFile: () => Promise<URI>, facts: FileCardContents, sizeBytes: number | undefined,
+		mime: string | undefined, isText: boolean, token: CancellationToken, content: DisposableStore): Promise<void> {
+		const resource = await resolveFile();
+		if (token.isCancellationRequested) return;
+		const stat = await this.fileService.stat(resource);
+		if (token.isCancellationRequested || stat.kind !== FileKind.File) return;
+		if (sizeBytes === undefined) facts.setSize(stat.sizeBytes);
+		const isImage = mime?.startsWith('image/') === true;
+		if ((!isImage && !isText) || stat.sizeBytes === 0 || stat.sizeBytes > thumbnailFileLimit) return;
+		const file = await this.fileService.readFileStream(resource, {
+			limits: { size: thumbnailFileLimit },
+			...(isText ? { length: textThumbnailLength } : {}),
+		}, token);
+		const bytes = new Uint8Array((await streamToBuffer(file.value)).buffer);
+		await this.paintFileCardPreview(new Blob([bytes]), facts.preview, mime, isText, token, content);
+	}
+
+	private async paintFileCardPreview(file: Blob, preview: HTMLElement, mime: string | undefined, isText: boolean,
+		token: CancellationToken, content: DisposableStore): Promise<void> {
+		if (token.isCancellationRequested || file.size === 0 || file.size > thumbnailFileLimit) return;
+		const document = preview.ownerDocument;
+		if (isText) {
+			const excerpt = (await file.slice(0, textThumbnailLength).text()).trim();
+			if (!token.isCancellationRequested && excerpt && !excerpt.includes('\0')) {
+				preview.replaceChildren(h(document, 'span', { className: 'ash-projects-material-card-excerpt' }, excerpt));
+			}
+		} else {
+			const { url, registration } = createObjectUrl(getWindow(document), file.slice(0, file.size, mime));
+			content.add(registration);
+			const image = h(document, 'img', { properties: { alt: '', src: url.href, decoding: 'async' } });
+			try {
+				await image.decode();
+				if (!token.isCancellationRequested) preview.replaceChildren(image);
+			} catch {
+				if (content.delete(registration)) registration.dispose();
+			}
+		}
+	}
+
+	private installDropTarget(target: HTMLElement, content: DisposableStore, add: (transfer: DataTransfer) => Promise<void>): void {
+		const document = target.ownerDocument;
+		const icons = h(document, 'div', { className: 'ash-projects-drop-icons' });
+		for (const icon of [Lxicon.image, Lxicon.file, Lxicon.table]) appendIcon(icon, icons);
+		const overlay = h(document, 'div', {
+			className: 'ash-projects-drop-overlay', properties: { hidden: true }, attributes: { 'aria-hidden': 'true' },
+		}, icons, h(document, 'span', {}, localize('projects.dropFiles', 'Drop files here to add to project context')));
+		target.append(overlay);
+		content.add(addDisposableListener(target, 'dragover', event => {
+			if (!event.dataTransfer || !containsDragType(event, DataTransfers.FILES)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			event.dataTransfer.dropEffect = 'copy';
+			overlay.hidden = false;
+		}));
+		content.add(addDisposableListener(target, 'dragleave', event => {
+			if (!target.contains(event.relatedTarget as Node | null)) overlay.hidden = true;
+		}));
+		content.add(addDisposableListener(document, 'dragend', () => { overlay.hidden = true; }, true));
+		content.add(addDisposableListener(target, 'drop', event => {
+			overlay.hidden = true;
+			const transfer = event.dataTransfer;
+			if (!transfer?.files.length) return;
+			event.preventDefault();
+			event.stopPropagation();
+			void add(transfer);
+		}));
+	}
+
+	private async runAdd(key: string, isCurrent: () => boolean, run: () => Promise<unknown>): Promise<void> {
+		try {
+			await this.performAdd(key, isCurrent, run);
+		} catch (error) {
+			if (!this.isDisposed && isCurrent() && !isCancellationError(error)) this.reportError(toErrorMessage(error));
+		}
+	}
+
+	private async performAdd(key: string, isCurrent: () => boolean, run: () => Promise<unknown>): Promise<boolean> {
+		if (this.isDisposed || !isCurrent() || this.pendingAdds.has(key)) return false;
+		this.pendingAdds.add(key);
+		try {
+			await run();
+			return true;
+		} finally {
+			this.pendingAdds.delete(key);
+		}
 	}
 
 	private action(content: DisposableStore, parent: HTMLElement, key: string, options: IButtonOptions, run: () => unknown): Button {
@@ -223,7 +506,7 @@ export class ProjectMaterials extends Disposable {
 		return button;
 	}
 
-	private async pickMaterials(kind: ProjectMaterial['kind'], add: (resources: readonly URI[]) => Promise<unknown>): Promise<void> {
+	private async pickMaterials(kind: 'file' | 'folder', add: (resources: readonly URI[]) => Promise<unknown>): Promise<void> {
 		let resources: readonly URI[] | undefined;
 		try {
 			resources = await this.files.showOpenDialog({
@@ -236,7 +519,7 @@ export class ProjectMaterials extends Disposable {
 		if (resources?.length && !this.isDisposed) await add(resources);
 	}
 
-	private async openMaterial(material: ProjectMaterial): Promise<void> {
+	private async openMaterial(material: Exclude<ProjectMaterial, { kind: 'text'; }>): Promise<void> {
 		try {
 			const resource =
 				material.kind === 'folder'

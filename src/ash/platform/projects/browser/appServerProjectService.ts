@@ -134,12 +134,16 @@ function fromDto(project: ProjectDto): Project {
 		description: project.description, sessionIds: project.sessionIds, externalConversationIds: project.externalConversationIds,
 		sessionCount: project.sessionIds.length + (project.externalConversationIds?.length ?? 0),
 		roots: project.roots.map(root => URI.parse(root.path)),
-		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),
+		materials: project.materials.map(material => material.kind === 'text'
+			? { kind: 'text', id: material.id, name: material.name, content: material.content }
+			: { name: material.name, kind: material.kind, resource: URI.parse(material.path) }),
 	};
 }
 
 function toMaterials(materials: readonly ProjectMaterial[]) {
-	return materials.map(material => ({ name: material.name, kind: material.kind, path: material.resource.toString() }));
+	return materials.map(material => material.kind === 'text'
+		? { kind: 'text' as const, id: material.id, name: material.name, content: material.content }
+		: { name: material.name, kind: material.kind, path: material.resource.toString() });
 }
 
 function projectError(error: unknown): Error {

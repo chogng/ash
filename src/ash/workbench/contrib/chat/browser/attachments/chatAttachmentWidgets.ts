@@ -4,6 +4,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import './chatAttachmentWidgets.css';
 import { h, addDisposableListener, getWindow } from '../../../../../base/browser/dom.js';
+import { createObjectUrl } from '../../../../../base/browser/fileAccess.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -702,10 +703,9 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 				if (typeof content === 'string') {
 					thumbnail.src = content;
 				} else {
-					const { URL } = getWindow(element);
-					const url = URL.createObjectURL(content);
-					objectUrl.value = toDisposable(() => URL.revokeObjectURL(url));
-					thumbnail.src = url;
+					const { url, registration } = createObjectUrl(getWindow(element), content);
+					objectUrl.value = registration;
+					thumbnail.src = url.href;
 				}
 			} catch {
 				unavailable();

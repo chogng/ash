@@ -108,15 +108,15 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
-		this.projectMaterials = this._register(
-			this.instantiationService.createInstance(ProjectMaterials, (message: string) => this.showError(message)),
-		);
 		// Projects restores its catalogue even when the previous window closed in a detail view.
 		this.domNode = h(document, 'section', {
 			className: 'ash-projects',
 			properties: { tabIndex: -1 },
 			attributes: { 'aria-label': localize('projects.title', 'Projects') },
 		});
+		this.projectMaterials = this._register(
+			this.instantiationService.createInstance(ProjectMaterials, this.domNode, (message: string) => this.showError(message)),
+		);
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.projectDialogs.close(this.domNode)));
@@ -276,6 +276,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 	public override layout(dimension: IDimension): void {
 		this.domNode.classList.toggle('narrow', dimension.width < 760);
+		this.domNode.classList.toggle('stack-project-details', dimension.width < 840);
 	}
 	public override focus(): void {
 		if (this.projects.state.get().selectedId || this.projects.state.get().conversationProjectId !== undefined) {
@@ -404,26 +405,27 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject);
 		layout.querySelector('.ash-projects-detail-card')?.remove();
 		if (localProject) {
-			const materials = this.projectMaterials.renderLocal(document, localProject, this.projects.state.get().busy, this.content);
-			detailContent.append(this.renderProjectDetailCard(materials, localProject.description,
-				() => this.showProjectDialog({ project: localProject, instructionsOnly: true })));
+			const isCurrent = () => this.shown.get() && this.projects.state.get().selectedId === id;
+			detailContent.append(this.renderProjectDetailCard(localProject.description,
+				() => this.showProjectDialog({ project: localProject, instructionsOnly: true }),
+				target => this.projectMaterials.renderLocal(target, localProject, this.projects.state.get().busy, isCurrent, this.content)));
 		} else if (details) {
 			const failed = detailsPhase === 'error' || detailsPhase === 'loaded' && !data?.materials;
 			const cachedNames = data?.materials === undefined
 				? this.projects.readCatalogMaterialNames(conversationProject.preferenceKey ?? details.key) : undefined;
 			const materialsSnapshot = data?.materials ?? cachedNames?.map(file => ({ ...file, kind: 'file' as const }));
-			const materials = this.projectMaterials.renderCatalog(document, {
-				rows: materialsSnapshot,
-				upload: data?.canEdit && data.materials ? details.upload : undefined,
-				isCurrent: () => this.shown.get() && this.projects.state.get().conversationProjectId === id
-					&& this.projectGroups.get().find(group => group.key === id)?.project?.details?.key === details.key,
-				status: !details.load ? undefined : failed ? {
-					text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
-				} : materialsSnapshot ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
-			}, this.content);
 			const editDetails = conversationProject?.editDetails;
-			const card = this.renderProjectDetailCard(materials, data?.description,
-				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails, true); } : undefined);
+			const card = this.renderProjectDetailCard(data?.description,
+				data?.canEdit && editDetails ? () => { void this.projectActions.editConversationProject(editDetails, true); } : undefined,
+				target => this.projectMaterials.renderCatalog(target, details.key, {
+					rows: materialsSnapshot,
+					upload: data?.canEdit && data.materials ? details.upload : undefined,
+					isCurrent: () => this.shown.get() && this.projects.state.get().conversationProjectId === id
+						&& this.projectGroups.get().find(group => group.key === id)?.project?.details?.key === details.key,
+					status: !details.load ? undefined : failed ? {
+						text: localize('projects.detailsLoadFailed', 'Could not load all project details.'), retry: () => this.loadCatalogDetails(details),
+					} : materialsSnapshot ? undefined : { text: localize('projects.loadingDetails', 'Loading project details…') },
+				}, this.content));
 			card.dataset.catalogProjectMaterials = '';
 			detailContent.append(card);
 		}
@@ -462,11 +464,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private renderProjectDetailCard(
-		materials: HTMLElement,
 		description: string | undefined,
 		edit: (() => void) | undefined,
+		renderMaterials: (target: HTMLElement) => HTMLElement,
 	): HTMLElement {
-		const document = materials.ownerDocument;
+		const document = this.domNode.ownerDocument;
 		const label = localize('projects.instructions', 'Instructions');
 		const heading = h(
 			document,
@@ -495,7 +497,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			guidance.append(h(document, 'p', { className: 'ash-projects-muted' },
 				localize('projects.noInstructions', 'Add instructions for this project.')));
 		}
-		return h(document, 'div', { className: 'ash-projects-detail-card' }, guidance, materials);
+		const sections = h(document, 'div', { className: 'ash-projects-detail-sections' }, guidance);
+		const card = h(document, 'div', { className: 'ash-projects-detail-card' }, sections);
+		sections.append(renderMaterials(card));
+		return card;
 	}
 
 	private renderDetailLoading(): void {

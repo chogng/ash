@@ -527,6 +527,7 @@
 		"--sessions-accent-strong",
 		"--sessions-fork-depth",
 		"--sessions-muted-surface",
+		"--sessions-rename-start",
 		"--sessions-row-background",
 		"--sessions-row-title-distance",
 		"--sessions-row-title-duration",

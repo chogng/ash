@@ -1,4 +1,4 @@
-.ash-count-badge {
+.ash-badge {
 	display: inline-flex;
 	box-sizing: border-box;
 	min-width: var(--ash-spacing-size200);
@@ -23,18 +23,18 @@
 	outline-offset: -1px;
 }
 
-.ash-count-badge.small {
+.ash-badge.small {
 	min-width: var(--ash-spacing-size160);
 	height: var(--ash-spacing-size160);
 	padding: 0 var(--ash-spacing-size40);
 	font-size: var(--ash-fontSize-label3);
 }
 
-.ash-count-badge.accent {
+.ash-badge.accent {
 	background: var(--ash-accent-background);
 }
 
-.ash-count-badge.outlined {
+.ash-badge.outlined {
 	min-width: 0;
 	height: auto;
 	padding: 0 var(--ash-spacing-size40);

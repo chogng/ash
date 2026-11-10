@@ -295,10 +295,9 @@ fn root() -> ProjectRoot {
 #[test]
 fn materials_are_versioned_references_and_invalid_updates_are_atomic() {
     let coordinator = coordinator();
-    let material = super::ProjectMaterial {
+    let material = super::ProjectMaterial::File {
         path: std::env::temp_dir().join("project-paper.pdf"),
         name: "paper.pdf".into(),
-        kind: super::ProjectMaterialKind::File,
     };
     let created = coordinator
         .apply(request(

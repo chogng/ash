@@ -27,6 +27,7 @@ const STORAGE_KEY_MEMORY = 'ash.chat.attachMenu.memory.enabled';
 export interface ChatInputAttachMenuOptions {
 	readonly anchor: HTMLElement;
 	readonly onUploadFiles: () => void;
+	readonly showUploadKeybinding?: false;
 	readonly onSearchAttachments?: () => void;
 	readonly onAttachSkill?: (skill: SkillReference) => void;
 	readonly getSkills?: () => readonly SkillSelectorDefinition[];
@@ -34,6 +35,7 @@ export interface ChatInputAttachMenuOptions {
 	readonly host?: {
 		readonly getWorkspaceAction?: () => IAction | undefined;
 		readonly getProjectActions?: () => readonly IAction[] | undefined;
+		readonly additionalActions?: readonly IAction[];
 	};
 	readonly onSelectProject?: (projectId: string) => void;
 	readonly focusInput?: () => void;
@@ -103,7 +105,7 @@ export class ChatInputAttachMenu extends Disposable {
 			buttonStyles: defaultButtonStyles,
 			iconPlacement: 'leading-with-trailing-check',
 			getCheckedActionsRepresentation: action => action.id.startsWith('project:') ? 'radio' : 'checkbox',
-			getKeyBinding: action => action.id === 'upload' ? uploadKeybinding : undefined,
+			getKeyBinding: action => action.id === 'upload' && this.options.showUploadKeybinding !== false ? uploadKeybinding : undefined,
 			openSubmenusImmediatelyOnHover: true,
 			tabLeavesSubmenu: true,
 		}, defaultMenuStyles));
@@ -216,6 +218,9 @@ export class ChatInputAttachMenu extends Disposable {
 			getSubmenuItems: () => this.getSkillsSubmenuItems(!host),
 		};
 		if (host) {
+			for (const action of host.additionalActions ?? []) {
+				if (action.enabled) attachments.push({ id: action.id, label: action.label, icon: action.icon, run: () => void action.run() });
+			}
 			const projects = host.getProjectActions?.();
 			if (projects) {
 				attachments.push({

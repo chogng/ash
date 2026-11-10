@@ -35,20 +35,23 @@ pub struct ProjectRootDto {
     pub purpose: String,
 }
 
-/// An organizational reference, without any authorization to read the source.
+/// Inline project text or an organizational reference without source access.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ProjectMaterialDto {
-    pub path: PathUri,
-    pub name: String,
-    pub kind: ProjectMaterialKindDto,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum ProjectMaterialKindDto {
-    File,
-    Folder,
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum ProjectMaterialDto {
+    File {
+        path: PathUri,
+        name: String,
+    },
+    Folder {
+        path: PathUri,
+        name: String,
+    },
+    Text {
+        id: String,
+        name: String,
+        content: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

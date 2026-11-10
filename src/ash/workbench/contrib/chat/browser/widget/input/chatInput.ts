@@ -31,6 +31,7 @@ export interface IChatInputDraft {
 	readonly files: readonly {
 		readonly id: string;
 		readonly name: string;
+		readonly size?: number;
 		readonly status: 'uploading' | 'ready' | 'failed';
 		readonly error?: string;
 	}[];

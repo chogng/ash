@@ -1255,7 +1255,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				json: { items: [{ gizmo: { id, display: { name: 'Research' } } }], cursor: null },
 			}));
 			let instructions = 'Saved instructions\nUse concise examples.';
-			let projectFiles = [{ file_id: 'file-existing', name: 'Existing.txt' }];
+			let projectFiles = [{ file_id: 'file-existing', name: 'Existing.txt', size: 17 }];
 			let canWrite = true;
 			let reads = 0;
 			let holdDetails: Promise<void> | undefined;
@@ -1272,21 +1272,22 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				instructions = body.instructions;
 				return route.fulfill({ status: 204 });
 			});
+			let upload = { id: 'file-new', name: 'notes.txt', type: 'text/plain', content: 'fixture notes' };
 			await page.route('**/service/backend-api/files', route => {
-				expect(route.request().postDataJSON()).toMatchObject({ file_name: 'notes.txt', gizmo_id: id, use_case: 'gizmo' });
-				return route.fulfill({ json: { file_id: 'file-new', upload_url: 'https://example.test/upload' } });
+				expect(route.request().postDataJSON()).toMatchObject({ file_name: upload.name, mime_type: upload.type, gizmo_id: id, use_case: 'gizmo' });
+				return route.fulfill({ json: { file_id: upload.id, upload_url: 'https://example.test/upload' } });
 			});
 			await page.route('**/service/.upload?*', route => {
-				expect(route.request().postData()).toBe('fixture notes');
+				expect(route.request().postData()).toBe(upload.content);
 				return route.fulfill({ status: 201 });
 			});
 			await page.route('**/service/backend-api/files/process_upload_stream', route => {
-				expect(route.request().postDataJSON()).toMatchObject({ gizmo_id: id, file_id: 'file-new', entry_surface: 'project_sources' });
-				return route.fulfill({ contentType: 'application/x-ndjson', body: '{"event":"file.processing.completed","file_id":"file-new","extra":{"metadata_object_id":"library-fixture"}}\n' });
+				expect(route.request().postDataJSON()).toMatchObject({ gizmo_id: id, file_id: upload.id, entry_surface: 'project_sources' });
+				return route.fulfill({ contentType: 'application/x-ndjson', body: JSON.stringify({ event: 'file.processing.completed', file_id: upload.id, extra: { metadata_object_id: 'library-fixture' } }) + '\n' });
 			});
 			await page.route(`**/service/backend-api/projects/${id}/files`, route => {
-				expect(route.request().postDataJSON()).toMatchObject({ files: [{ file_id: 'file-new', name: 'notes.txt', library_file_id: 'library-fixture' }] });
-				projectFiles = [...projectFiles, { file_id: 'file-new', name: 'notes.txt' }];
+				expect(route.request().postDataJSON()).toMatchObject({ files: [{ file_id: upload.id, name: upload.name, library_file_id: 'library-fixture' }] });
+				projectFiles = [...projectFiles, { file_id: upload.id, name: upload.name, size: Buffer.byteLength(upload.content) }];
 				return route.fulfill({ status: zh ? 503 : 204 });
 			});
 			await page.route(`**/service/backend-api/projects/${id}/files/file-existing`, route => {
@@ -1300,6 +1301,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				expect(url.searchParams.get('gizmo_id')).toBe(id);
 				const file = url.pathname.split('/').at(-1)!;
 				downloads.push(file);
+				if (file === 'file-markdown') return route.fulfill({ contentType: 'text/markdown', body: upload.content });
 				return route.fulfill({ contentType: 'text/plain', body: file === 'file-existing' ? 'Saved remote file' : 'New remote file' });
 			});
 			await page.goto(`/chatgptNavigation.html?projects&projectMaterials&locale=${locale}`);
@@ -1331,9 +1333,75 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.openedMaterial())).toBe('Saved remote file');
 			expect(downloads).toEqual(['file-existing']);
 			await page.evaluate(() => window.ashChatGPTIntegration.setOffline(false));
-			await materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true }).click();
-			await expect(materials.getByText('notes.txt', { exact: true })).toBeVisible();
+			const addMaterials = materials.getByRole('button', { name: zh ? '添加项目资料' : 'Add project materials', exact: true });
+			const detailCard = projects.locator('.ash-projects-detail-card');
+			const dropOverlay = detailCard.locator('.ash-projects-drop-overlay');
+			if (zh) {
+				const dataTransfer = await page.evaluateHandle(() => {
+					const transfer = new DataTransfer();
+					transfer.items.add(new File(['fixture notes'], 'notes.txt'));
+					return transfer;
+				});
+				await detailCard.dispatchEvent('dragover', { dataTransfer });
+				await expect(dropOverlay).toBeVisible();
+				await expect(dropOverlay).toHaveText('将文件拖到这里以添加到项目上下文');
+				await page.screenshot({ path: info.outputPath(`project-drop-${locale}.png`) });
+				await detailCard.dispatchEvent('dragleave', { dataTransfer });
+				await expect(dropOverlay).toBeHidden();
+				await detailCard.dispatchEvent('dragover', { dataTransfer });
+				await detailCard.dispatchEvent('drop', { dataTransfer });
+				await expect(dropOverlay).toBeHidden();
+				await dataTransfer.dispose();
+			} else {
+				await addMaterials.click();
+				await expect(page.getByRole('menuitem', { name: 'Use a folder', exact: true })).toHaveCount(0);
+				const chooser = page.waitForEvent('filechooser');
+				await page.getByRole('menuitem', { name: 'Upload or add files', exact: true }).click();
+				await (await chooser).setFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('fixture notes') });
+			}
+			const fileCard = materials.getByRole('button', { name: 'notes.txt', exact: true });
+			await expect(fileCard.locator('.ash-badge.outlined')).toHaveText('TXT');
+			await expect(fileCard.locator('.ash-file-card-size')).toHaveText('13B');
+			await expect(fileCard.locator('.ash-projects-material-card-excerpt')).toHaveText('New remote file');
 			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('notes.txt'))).toBe('New remote file');
+			upload = { id: 'file-markdown', name: 'Project notes.md', type: 'text/markdown', content: '# Notes\n\n- 第二行\n' };
+			await addMaterials.click();
+			await page.getByRole('menuitem', { name: zh ? '添加文本内容' : 'Add text content', exact: true }).click();
+			const textDialog = page.getByRole('dialog', { name: zh ? '添加文本内容' : 'Add text content', exact: true });
+			await textDialog.getByRole('textbox', { name: zh ? '标题' : 'Title', exact: true }).fill('Project notes');
+			const textEditor = new Editor(textDialog);
+			await textEditor.waitForEditorFocus();
+			await page.keyboard.insertText(upload.content);
+			await textDialog.getByRole('button', { name: zh ? '添加内容' : 'Add Content', exact: true }).click();
+			await expect(textDialog).toHaveCount(0);
+			await expect(addMaterials).toBeFocused();
+			const note = materials.getByRole('button', { name: upload.name, exact: true });
+			await expect(note.locator('.ash-badge.outlined')).toHaveText('MD');
+			await expect(note.locator('.ash-file-card-size')).toHaveText(`${Buffer.byteLength(upload.content)}B`);
+			const grid = materials.locator('.ash-projects-material-list');
+			const columnCounts = await grid.evaluate(element => {
+				const previous = element.style.inlineSize;
+				try {
+					return [240, 360, 420].map(width => {
+						element.style.inlineSize = `${width}px`;
+						const cards = [...element.querySelectorAll('.ash-projects-material-card')].map(card => card.getBoundingClientRect());
+						return cards.filter(card => Math.abs(card.top - cards[0].top) < 1).length;
+					});
+				} finally {
+					element.style.inlineSize = previous;
+				}
+			});
+			expect(columnCounts).toEqual([2, 2, 2]);
+			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Project notes.md'))).toBe(upload.content);
+			await page.evaluate(() => window.ashChatGPTIntegration.setOffline(true));
+			await note.press('Enter');
+			const preview = page.getByRole('dialog', { name: upload.name, exact: true });
+			await expect(preview.getByText('第二行')).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(preview).toHaveCount(0);
+			await expect(note).toBeFocused();
+			await page.evaluate(() => window.ashChatGPTIntegration.setOffline(false));
+			await existing.hover();
 			await materials.getByRole('button', { name: zh ? '从项目中移除 Existing.txt' : 'Remove Existing.txt from project', exact: true }).click();
 			const confirm = page.getByRole('dialog').filter({ hasText: zh ? '从此项目移除 Existing.txt？' : 'Remove Existing.txt from this project?' });
 			await confirm.getByRole('button', { name: zh ? '移除' : 'Remove', exact: true }).click();
@@ -1348,7 +1416,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			canWrite = false;
 			await page.clock.setFixedTime(new Date(Date.now() + 65_000));
 			await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-			await expect(materials.getByRole('button', { name: zh ? '添加文件' : 'Add files', exact: true })).toHaveCount(0);
+			await expect(addMaterials).toHaveCount(0);
+			await expect(dropOverlay).toHaveCount(0);
 			await expect(editInstructions).toHaveCount(0);
 			await expect(materials.getByRole('button', { name: 'notes.txt', exact: true })).toBeVisible();
 

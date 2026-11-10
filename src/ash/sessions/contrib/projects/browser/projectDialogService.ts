@@ -8,9 +8,12 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDis
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
+import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { IModelService } from '../../../../editor/common/services/model.js';
 import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService, type Project, type ProjectAppearance, type ProjectMaterial, type ProjectScope } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -18,6 +21,7 @@ import { createWorkbenchDialogOptions } from '../../../../workbench/browser/part
 import { IChatListCatalog } from '../../chat/browser/chatListModel.js';
 import type { CatalogProjectCreator, ConversationProjectEditor } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ProjectAppearancePicker } from './projectAppearancePicker.js';
+import { ProjectTextInput } from './projectTextInput.js';
 import { IProjectsService, type CatalogProjectAppearance } from './projectsService.js';
 import './media/projectForm.css';
 
@@ -26,7 +30,7 @@ function createProjectFormDialog(
 	title: string,
 	form: HTMLFormElement,
 	actions: HTMLElement,
-	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; instructionsOnly?: boolean; withSource?: boolean; },
+	options: { canClose: () => boolean; shouldConfirmDiscard: () => boolean; code?: boolean; appearanceOnly?: boolean; instructionsOnly?: boolean; withSource?: boolean; textContent?: boolean; },
 ): Dialog {
 	return new Dialog(container, title, [], createWorkbenchDialogOptions({
 		extraClasses: [
@@ -35,6 +39,7 @@ function createProjectFormDialog(
 			...(options.appearanceOnly ? ['ash-project-appearance-dialog'] : []),
 			...(options.instructionsOnly ? ['ash-project-instructions-dialog'] : []),
 			...(options.withSource ? ['ash-project-source-dialog'] : []),
+			...(options.textContent ? ['ash-project-text-dialog'] : []),
 		],
 		layout: 'form',
 		modal: false,
@@ -72,6 +77,8 @@ interface CodeProjectEdit {
 
 export interface IProjectDialogService {
 	showChatProjectDialog(owner: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit, creator?: CatalogProjectCreator): void;
+	showAddTextDialog(owner: HTMLElement, restoreFocus: () => void, save: (title: string, content: string) => Promise<void>): void;
+	showTextPreview(owner: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, restoreFocus: () => void): void;
 	showCodeProjectDialog(owner: HTMLElement, edit?: CodeProjectEdit): Promise<void>;
 	close(owner: HTMLElement): void;
 }
@@ -93,6 +100,9 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		@IFileDialogService private readonly files: IFileDialogService,
 		@IChatListCatalog private readonly catalog: IChatListCatalog,
 		@INotificationService private readonly notifications: INotificationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IModelService private readonly models: IModelService,
+		@ILanguageService private readonly languages: ILanguageService,
 	) {
 		super();
 	}
@@ -116,6 +126,143 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			project = await this.projects.read(project.id, scope);
 		}
 		return project;
+	}
+
+	showTextPreview(container: HTMLElement, title: string, read: (signal: AbortSignal) => Promise<string>, restoreFocus: () => void): void {
+		const active = this.begin(container);
+		if (!active) return;
+		const { store } = active;
+		const controller = new AbortController();
+		store.add(toDisposable(() => controller.abort()));
+		const host = h(container.ownerDocument, 'div', { className: 'ash-project-text-preview-editor', properties: { hidden: true } });
+		const message = h(container.ownerDocument, 'p', { attributes: { role: 'status' } }, localize('projects.loadingTextPreview', 'Loading content…'));
+		const dialog = store.add(new Dialog(container, title, [], createWorkbenchDialogOptions({
+			extraClasses: ['ash-project-text-preview'],
+			layout: 'form',
+			disableDefaultAction: true,
+			closeOnBackdropClick: true,
+			renderBody: body => body.append(message, host),
+		})));
+		void dialog.show().then(() => {
+			if (this.active.value === active) {
+				this.active.clear();
+				restoreFocus();
+			}
+		});
+		void read(controller.signal).then(text => {
+			if (store.isDisposed) return;
+			host.hidden = false;
+			const model = store.add(this.models.createModel(text, this.languages.createById('markdown'), undefined, true));
+			store.add(this.instantiation.createInstance(CodeEditorWidget, {
+				container: host,
+				model,
+				presentation: 'embedded',
+				ariaLabel: localize('projects.textPreviewLabel', 'Project content'),
+				readOnly: true,
+				domReadOnly: true,
+				automaticLayout: true,
+				tabFocusMode: true,
+				lineNumbers: 'on',
+				minimap: { enabled: false },
+				folding: false,
+				glyphMargin: false,
+				renderLineHighlight: 'none',
+				wordWrap: 'on',
+				scrollBeyondLastLine: false,
+				padding: { top: 4, bottom: 4 },
+				contributions: [],
+			}));
+			message.hidden = true;
+		}).catch(() => {
+			if (!store.isDisposed) {
+				host.hidden = true;
+				message.textContent = localize('projects.textPreviewFailed', 'Could not open this content.');
+			}
+		});
+	}
+
+	showAddTextDialog(container: HTMLElement, restoreFocus: () => void, save: (title: string, content: string) => Promise<void>): void {
+		const active = this.begin(container);
+		if (!active) return;
+		const { store } = active;
+		const document = container.ownerDocument;
+		const title = h(document, 'input', {
+			properties: { type: 'text', required: true, maxLength: 200, placeholder: localize('projects.textTitlePlaceholder', 'Name your content') },
+		});
+		const content = store.add(this.instantiation.createInstance(ProjectTextInput, container));
+		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
+		const form = h(document, 'form', { className: 'ash-projects-form' },
+			h(document, 'label', {}, localize('projects.textTitle', 'Title'), title),
+			content.element,
+			feedback);
+		form.id = generateUuid();
+		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
+		let saving = false;
+		const dialog = store.add(createProjectFormDialog(
+			container, localize('projects.addTextContent', 'Add text content'), form, actions, {
+			textContent: true,
+			canClose: () => !saving,
+			shouldConfirmDiscard: () => !!(title.value || content.value),
+		},
+		));
+		const cancel = store.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('projects.cancel', 'Cancel'),
+			presentation: 'secondary',
+			onClick: () => void dialog.requestClose(),
+		}));
+		const submit = store.add(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('projects.addContent', 'Add Content'),
+			presentation: 'primary',
+			type: 'submit',
+			enabled: false,
+		}));
+		submit.domNode.setAttribute('form', form.id);
+		let tooLong = false;
+		const updateSubmit = () => {
+			const text = content.value;
+			const nextTooLong = text.length > 20000;
+			if (tooLong !== nextTooLong) {
+				tooLong = nextTooLong;
+				feedback.textContent = tooLong ? localize('projects.textTooLong', 'Keep the content to 20,000 characters or fewer.') : '';
+			}
+			submit.enabled = !saving && !tooLong && !!title.value.trim() && !!text.trim();
+		};
+		store.add(addDisposableListener(form, 'input', updateSubmit));
+		store.add(content.onDidChange(updateSubmit));
+		store.add(addDisposableListener(form, 'submit', async event => {
+			event.preventDefault();
+			if (!submit.enabled) return;
+			saving = true;
+			title.readOnly = true;
+			content.setReadOnly(true);
+			cancel.enabled = false;
+			feedback.textContent = '';
+			form.setAttribute('aria-busy', 'true');
+			updateSubmit();
+			try {
+				await save(title.value.trim(), content.value);
+				if (!store.isDisposed) dialog.dispose();
+			} catch (error) {
+				if (store.isDisposed) return;
+				saving = false;
+				title.readOnly = false;
+				content.setReadOnly(false);
+				cancel.enabled = true;
+				form.removeAttribute('aria-busy');
+				feedback.textContent = toErrorMessage(error);
+				updateSubmit();
+				submit.focus();
+			}
+		}));
+		void dialog.show().then(() => {
+			if (this.active.value === active) {
+				this.active.clear();
+				restoreFocus();
+			}
+		});
+		title.focus();
 	}
 
 	showChatProjectDialog(container: HTMLElement, restoreFocus: () => void, edit?: ChatProjectEdit, creator?: CatalogProjectCreator): void {
@@ -176,7 +323,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		let needsMerge = false;
 		const unresolved = new Set<HTMLInputElement | HTMLTextAreaElement>();
 		const mergeControls = store.add(new DisposableStore());
-		let chosenFolder: ProjectMaterial | undefined;
+		let chosenFolder: Extract<ProjectMaterial, { kind: 'folder'; }> | undefined;
 		let pickingFolder = false;
 		const folderRow = h(document, 'div', { className: 'ash-projects-folder-choice' });
 		const feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
@@ -203,7 +350,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 								materials.splice(materials.indexOf(chosenFolder), 1);
 								chosenFolder = undefined;
 							}
-							if (!materials.some(item => item.resource.toString() === resource.toString())) {
+							if (!materials.some(item => item.kind !== 'text' && item.resource.toString() === resource.toString())) {
 								chosenFolder = { resource, name: basename(resource), kind: 'folder' };
 								materials.push(chosenFolder);
 							}
@@ -436,7 +583,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 				materials = [...latest.materials];
 				if (
 					chosenFolder &&
-					!materials.some(item => item.resource.toString() === chosenFolder!.resource.toString())
+					!materials.some(item => item.kind !== 'text' && item.resource.toString() === chosenFolder!.resource.toString())
 				) {
 					materials.push(chosenFolder);
 				} else {

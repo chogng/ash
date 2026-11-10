@@ -1,5 +1,5 @@
-.ash-projects-form input,
-.ash-projects-form textarea,
+.ash-projects-form input:not(.ash-input-box input),
+.ash-projects-form textarea:not(.stanza-editor-input),
 .ash-projects-form select {
 	width: 100%;
 	min-width: 0;
@@ -14,8 +14,8 @@
 	user-select: text;
 }
 
-.ash-projects-form input::placeholder,
-.ash-projects-form textarea::placeholder {
+.ash-projects-form input:not(.ash-input-box input)::placeholder,
+.ash-projects-form textarea:not(.stanza-editor-input)::placeholder {
 	color: var(--ash-input-placeholderForeground);
 }
 
@@ -24,7 +24,10 @@
 	height: 360px;
 }
 
-.ash-projects-dialog.ash-project-instructions-dialog.ash-dialog {
+.ash-projects-dialog:is(
+		.ash-project-instructions-dialog,
+		.ash-project-text-dialog
+	).ash-dialog {
 	width: 720px;
 	height: fit-content;
 }
@@ -40,6 +43,87 @@
 	line-height: 1.5;
 }
 
+.ash-project-text-source {
+	block-size: clamp(120px, 36dvh, 256px);
+	min-inline-size: 0;
+	overflow: clip;
+	box-sizing: border-box;
+	padding-inline: var(--ash-spacing-size120);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-background);
+}
+
+.ash-project-text-viewport {
+	block-size: 100%;
+}
+
+.ash-project-text-dialog .ash-projects-form > label > input:focus,
+.ash-project-text-source:focus-within {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-project-text-field-header {
+	margin-block-end: var(--ash-spacing-size80);
+}
+
+.ash-project-text-selection-toolbar {
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-xLarge);
+	padding: var(--ash-spacing-size40);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	box-shadow: var(--ash-sessions-soft-shadow);
+}
+
+.ash-project-text-selection-toolbar > .ash-toolbar[hidden] {
+	display: none;
+}
+
+.ash-project-text-selection-toolbar .ash-button.checked {
+	color: var(--ash-accent-foreground);
+}
+
+.ash-project-text-link-field:not([hidden]) {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: var(--ash-spacing-size40);
+	inline-size: min(256px, 60vw);
+}
+
+:is(.hc-black, .hc-light) .ash-project-text-selection-toolbar {
+	box-shadow: none;
+}
+
+.ash-project-text-preview.ash-dialog {
+	width: 100vw;
+	height: 78dvh;
+}
+
+.ash-project-text-preview[open] {
+	display: flex;
+	flex-direction: column;
+}
+
+.ash-project-text-preview > .ash-dialog-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.ash-project-text-preview-editor {
+	flex: 1;
+	min-height: 0;
+	overflow: clip;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+}
+
 .ash-projects-form {
 	display: flex;
 	flex-direction: column;
@@ -52,18 +136,18 @@
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-projects-form input,
-.ash-projects-form textarea {
+.ash-projects-form input:not(.ash-input-box input),
+.ash-projects-form textarea:not(.stanza-editor-input) {
 	border-radius: var(--ash-cornerRadius-large);
 }
 
-.ash-projects-form input {
+.ash-projects-form input:not(.ash-input-box input) {
 	min-height: var(--ash-spacing-size360);
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
 	line-height: 1.5;
 }
 
-.ash-projects-form textarea {
+.ash-projects-form textarea:not(.stanza-editor-input) {
 	min-height: 88px;
 	resize: vertical;
 }

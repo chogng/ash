@@ -328,8 +328,9 @@
 	align-items: start;
 }
 
-.ash-projects:not(.narrow) .ash-projects-detail.with-detail-card {
-	grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+.ash-projects:not(.stack-project-details)
+	.ash-projects-detail.with-detail-card {
+	grid-template-columns: minmax(0, 1.6fr) minmax(304px, 1fr);
 }
 
 .ash-projects.project-detail-open .ash-projects-main {
@@ -357,7 +358,7 @@
 	display: contents;
 }
 
-.ash-projects:not(.narrow)
+.ash-projects:not(.stack-project-details)
 	.ash-projects-detail-content
 	> .ash-projects-overview {
 	grid-column: 1;
@@ -365,7 +366,7 @@
 	overflow: auto;
 }
 
-.ash-projects:not(.narrow)
+.ash-projects:not(.stack-project-details)
 	.ash-projects-detail-content
 	> .ash-projects-detail-card {
 	grid-column: 2;
@@ -373,7 +374,6 @@
 	align-self: start;
 	box-sizing: border-box;
 	max-height: 100%;
-	overflow: auto;
 }
 
 .ash-projects-detail > .ash-projects-composer {
@@ -397,6 +397,13 @@
 
 .ash-projects-composer > .ash-chat > .ash-chat-input-part {
 	padding: 0;
+}
+
+.ash-projects-detail:has(.ash-projects-drop-overlay:not([hidden]))
+	.ash-projects-composer
+	.ash-chat-input-container {
+	outline: var(--ash-strokeThickness) dashed var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
 .ash-projects-conversations {
@@ -463,6 +470,9 @@
 }
 
 .ash-projects-detail-card {
+	position: relative;
+	display: grid;
+	grid-template-rows: minmax(0, 1fr);
 	min-width: 0;
 	border-radius: var(--ash-cornerRadius-xLarge);
 	border: var(--ash-strokeThickness) solid
@@ -472,13 +482,22 @@
 		);
 }
 
-.ash-projects-detail-card
+.ash-projects-detail-sections {
+	min-height: 0;
+	overflow: auto;
+}
+
+:is(.ash-projects-detail-card, .ash-projects-detail-sections)
 	> :is(.ash-projects-guidance, .ash-projects-materials) {
 	padding: var(--ash-spacing-size160) var(--ash-spacing-size200);
 }
 
-.ash-projects-detail-card > .ash-projects-materials {
-	border-block-start: inherit;
+.ash-projects-detail-sections > .ash-projects-materials {
+	border-block-start: var(--ash-strokeThickness) solid
+		var(
+			--ash-contrastBorder,
+			color-mix(in srgb, var(--ash-widget-border) 55%, transparent)
+		);
 }
 
 .ash-projects-section-heading {
@@ -594,7 +613,7 @@
 .ash-projects.narrow .ash-projects-detail {
 	gap: var(--ash-spacing-size200);
 }
-.ash-projects.narrow .ash-projects-detail-content {
+.ash-projects.stack-project-details .ash-projects-detail-content {
 	display: grid;
 	align-content: start;
 	gap: var(--ash-spacing-size200);

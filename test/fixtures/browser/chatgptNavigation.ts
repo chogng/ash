@@ -259,12 +259,11 @@ services.registerInstance(IAccessibilityService, resources.add(new Accessibility
 resources.add(services.createInstance(ChatCopyActionRendering));
 const attachmentFolder = URI.file('/fixture-folder');
 const attachmentFile = URI.joinPath(attachmentFolder, 'notes.txt');
-if (parameters.has('folderPicker') || parameters.has('projectMaterials')) {
+if (parameters.has('folderPicker')) {
 	await services.get(IFileService).writeFileBytes(attachmentFile, new TextEncoder().encode('fixture notes'));
 }
 services.registerInstance(IFileDialogService, {
 	async showOpenDialog(options) {
-		if (parameters.has('projectMaterials') && options.canSelectFiles) return [attachmentFile];
 		if (!parameters.has('folderPicker')) return undefined;
 		if (options.canSelectFolders) return [attachmentFolder];
 		if (options.defaultUri?.toString() === attachmentFolder.toString()) return [attachmentFile];
