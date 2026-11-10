@@ -452,6 +452,22 @@ test.describe('Unified Chat sidebar', () => {
 				await page.locator(`[data-item="${selector}"] .ash-sessions-list-item`).click();
 				const card = page.locator('.ash-chat-code-block-card:visible');
 				await expect(card.locator('.ash-chat-code-block-language')).toHaveText('TypeScript');
+				const reply = page.locator('.ash-chat-item-agentMessage:visible').filter({ has: card });
+				const toolbars = [
+					page.locator('.ash-chat-item-userMessage:visible').getByRole('toolbar', { name: '消息操作', exact: true }),
+					reply.getByRole('toolbar', { name: '回复操作', exact: true }),
+					card.locator('.ash-chat-code-block-toolbar').getByRole('toolbar'),
+				];
+				for (const toolbar of toolbars) {
+					const buttons = toolbar.getByRole('button');
+					await expect(buttons.first()).toBeVisible();
+					for (const button of await buttons.all()) {
+						await expect(button).toHaveCSS('width', '24px');
+						await expect(button).toHaveCSS('height', '24px');
+						await expect(button).toHaveCSS('border-radius', '6px');
+						await expect(button.locator('.ash-icon').first()).toHaveCSS('font-size', '18px');
+					}
+				}
 				const editorLines = card.locator('.stanza-editor-line-text');
 				await expect(editorLines).toHaveText(lines);
 				await expect.poll(() => editorLines.first().locator('.stanza-editor-token').evaluateAll(tokens => {
@@ -461,8 +477,7 @@ test.describe('Unified Chat sidebar', () => {
 				})).toBe(true);
 				await testInfo.attach(`${source}-code-card`, { body: await card.screenshot(), contentType: 'image/png' });
 				const copyCode = card.getByRole('button', { name: '复制', exact: true });
-				const copyMessage = page.locator('.ash-chat-item-agentMessage:visible').filter({ has: card })
-					.getByRole('button', { name: '复制消息', exact: true });
+				const copyMessage = reply.getByRole('button', { name: '复制消息', exact: true });
 				await expect(async () => {
 					await card.hover();
 					await copyMessage.hover();

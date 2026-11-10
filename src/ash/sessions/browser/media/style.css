@@ -314,6 +314,35 @@
 	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
 }
 
+.ash-sessions-window
+	:is(
+		.ash-chat-message-actions,
+		.ash-chat-code-block-card > .ash-chat-code-block-toolbar
+	) {
+	--ash-toolbar-actionSize: var(--ash-spacing-size240);
+	--ash-button-border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-sessions-window .ash-chat-message-actions > .ash-button.icon-only {
+	box-sizing: border-box;
+	inline-size: var(--ash-toolbar-actionSize);
+	min-inline-size: var(--ash-toolbar-actionSize);
+	block-size: var(--ash-toolbar-actionSize);
+	min-block-size: var(--ash-toolbar-actionSize);
+	padding: 0;
+}
+
+@media (pointer: coarse) {
+	.ash-sessions-window
+		:is(
+			.ash-chat-message-actions,
+			.ash-chat-code-block-card > .ash-chat-code-block-toolbar
+		) {
+		--ash-toolbar-actionSize: 44px;
+		--ash-button-border-radius: var(--ash-cornerRadius-large);
+	}
+}
+
 .ash-sessions-window .ash-button-primary {
 	border-color: var(--ash-contrastBorder, transparent);
 }
