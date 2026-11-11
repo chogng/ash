@@ -115,7 +115,7 @@ mod config_operations;
 pub(crate) mod config_runtime;
 #[path = "server/request_processors/connectors.rs"]
 mod connector_operations;
-mod connector_runtime;
+pub(crate) mod connector_runtime;
 #[cfg(test)]
 mod context_read_tests;
 #[path = "server/request_processors/debug.rs"]
@@ -2218,12 +2218,22 @@ impl AppServer {
 
     /// Installs the product-owned Connector credential service and change notifications.
     pub fn with_connector_service(
-        mut self,
+        self,
         connectors: Arc<connectors::ConnectorCredentialService>,
     ) -> Self {
-        self.connector_processor = self
-            .connector_processor
-            .with_service(connectors, Arc::clone(&self.updates));
+        let watcher = Arc::new(connector_runtime::ConnectorWatcher::start(
+            connectors.authority(),
+            Arc::clone(&self.updates),
+        ));
+        self.with_profile_connector_service(connectors, watcher)
+    }
+
+    pub(crate) fn with_profile_connector_service(
+        mut self,
+        connectors: Arc<connectors::ConnectorCredentialService>,
+        watcher: Arc<connector_runtime::ConnectorWatcher>,
+    ) -> Self {
+        self.connector_processor = self.connector_processor.with_service(connectors, watcher);
         self
     }
 

@@ -3,6 +3,9 @@ use super::*;
 #[path = "chatgpt_login_tests.rs"]
 mod chatgpt_login;
 
+#[path = "local_connector_tests.rs"]
+mod connector;
+
 #[path = "local_mcp_catalog_tests.rs"]
 mod mcp_catalog;
 

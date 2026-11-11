@@ -1145,6 +1145,11 @@ impl EnvToolPorts {
         self.reloadable.tools().definitions()
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_tool_service(&self) -> Arc<dyn ash_core::ToolService> {
+        self.reloadable.tools()
+    }
+
     fn new(
         updates: Arc<UpdateBroker>,
         host: ToolPort,
