@@ -166,9 +166,10 @@ test.describe('Code conversation navigation', () => {
 
 test('Sessions restores the Projects entry and its pane visibility through entry startup', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	const draft = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
-	await draft.waitForEditorFocus();
-	await page.keyboard.insertText('Keep the conversation when Projects is restored');
+	const chatEditor = () => new Editor(page.locator(':is(.chat-composer, .native-chat-composer):visible'));
+	const draft = 'Keep the conversation when Projects is restored';
+	await chatEditor().waitForEditorFocus();
+	await chatEditor().waitForTypeInEditor(draft);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-projects')).toBeVisible();
 	await expect(page.locator('[data-part="sidebar"]')).toBeVisible();
@@ -180,7 +181,7 @@ test('Sessions restores the Projects entry and its pane visibility through entry
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	await expect(page.locator('.ash-projects').getByRole('button', { name: 'New project', exact: true }).first()).toBeVisible();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === 'Keep the conversation when Projects is restored');
+	await chatEditor().waitForEditorContents(text => text === draft);
 });
 
 test('Artifacts creation cards open a new Chat draft with their matching type and color', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {

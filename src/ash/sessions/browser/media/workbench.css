@@ -24,6 +24,11 @@
 	inset: 0;
 }
 
+/* Keep the provisional Grid measurable while the first entry restores. */
+.ash-sessions-window.restoring-entry > .ash-sessions-workbench-layout {
+	visibility: hidden;
+}
+
 .ash-sessions-workbench-layout .ash-primary-sidebar-sash {
 	/* The sidebar paints its border inside the trailing edge. */
 	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / -2);

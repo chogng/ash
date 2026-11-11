@@ -253,9 +253,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				});
 				const focusSidebar = entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get();
 				// Keep the workspace sidebar attached while only the central page changes.
-				if (this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id !== sidebarContainerId || focusSidebar) {
-					await this.views.openViewContainer(sidebarContainerId, focusSidebar);
-				}
+				const sidebar = this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id !== sidebarContainerId || focusSidebar
+					? await this.views.openViewContainer(sidebarContainerId, false)
+					: null;
 				if (this.isDisposed) { return; }
 				this.setVisible('sidebar', sidebarVisible);
 				if (detailsContainerId) {
@@ -272,10 +272,13 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (this.isDisposed) { return; }
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				this.storage.store(activeEntryModeKey, sharedWorkspace ? entry.workspaceMode : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				// Reveal the first composition before handing focus to any of its Parts.
+				this.layout.mainContainer.classList.remove('restoring-entry');
 				if (this.customViews.activeCustomView.get()) { return; }
 				if ((options?.focus ?? entry.focus) === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
 				else if (!sidebarVisible) { this.layout.focus(); }
+				else if (focusSidebar) { sidebar?.focus(); }
 			} finally { this.isChangingContent = false; if (!this.isDisposed) { this.conversationChanged.fire(); } }
 		});
 	}

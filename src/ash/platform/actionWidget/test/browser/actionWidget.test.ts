@@ -570,17 +570,31 @@ suite('actionWidget browser component', () => {
 		await trigger.press('Enter');
 		const closing = await page.evaluate(() => {
 			const root = document.querySelector<HTMLElement>('.ash-action-widget')!;
+			const popup = root.closest<HTMLElement>('.ash-context-view')!;
+			const anchor = document.querySelector<HTMLElement>('[aria-label="Choose action"]')!;
+			const before = popup.getBoundingClientRect();
+			const anchorBefore = anchor.getBoundingClientRect().left;
 			root.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
 			const animation = root.getAnimations().find(animation => animation instanceof CSSAnimation && animation.animationName === 'ash-action-widget-dropdown-close')!;
 			animation.pause();
+			anchor.style.position = 'relative';
+			anchor.style.left = '64px';
+			window.dispatchEvent(new Event('resize'));
+			const after = popup.getBoundingClientRect();
 			const state = {
 				inert: root.inert, attached: root.isConnected, pointerEvents: getComputedStyle(root).pointerEvents,
-				expanded: document.querySelector('[aria-label="Choose action"]')!.getAttribute('aria-expanded'),
+				expanded: anchor.getAttribute('aria-expanded'),
+				anchorMoved: anchor.getBoundingClientRect().left !== anchorBefore,
+				popupDisplacement: after.left - before.left,
+				popupWidthChange: after.width - before.width,
 			};
 			window.ashActionWidgetIntegration.show(['Replacement']);
 			return state;
 		});
-		expect(closing).toEqual({ inert: true, attached: true, pointerEvents: 'none', expanded: 'false' });
+		expect(closing).toEqual({
+			inert: true, attached: true, pointerEvents: 'none', expanded: 'false',
+			anchorMoved: true, popupDisplacement: 0, popupWidthChange: 0,
+		});
 		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 		await expect(page.getByRole('menuitemradio', { name: 'Replacement' })).toBeFocused();
 		await page.keyboard.press('Escape');
