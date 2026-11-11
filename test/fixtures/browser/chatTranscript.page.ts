@@ -1360,6 +1360,7 @@ window.ashChatTranscriptIntegration = {
 	},
 	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {
 		window.ashChatTranscriptIntegration.showChatApp(false, false, false, virtualizeHistory);
+		const appRows = appItems;
 		const host = appChat!.domNode.parentElement!;
 		host.style.position = 'fixed';
 		host.style.inset = '20px auto auto 20px';
@@ -1369,7 +1370,6 @@ window.ashChatTranscriptIntegration = {
 			const toolCallId = `code-tool-${index}`;
 			const program = index % 2 ? 'fixture-command' : 'fixture-read';
 			const output = Array.from({ length: 18 }, (_, line) => `Tool evidence ${index}, line ${line}`).join('\n');
-		const appRows = appItems;
 			const code = Array.from({ length: 14 }, (_, line) => `const value${line} = ${index + line};`).join('\n');
 			const items: Extract<ThreadTranscriptEntry, { type: 'item' }>['item'][] = [
 				{ type: 'userMessage', itemId: `code-prompt-${index}`, turnId, text: `Code prompt ${index}` },
@@ -1382,15 +1382,6 @@ window.ashChatTranscriptIntegration = {
 			for (const item of items) entries.push({ type: 'item', entryId: item.itemId, turnId, transient: false, item });
 		}
 		appItems = chatTranscriptListItems(entries);
-		chatChanges.fire();
-	},
-	showHistoryPagination: (fail = false) => {
-		window.ashChatTranscriptIntegration.showChatApp();
-		olderHistoryLoads = 0;
-		failOlderHistory = fail;
-		olderHistoryState = { loading: false };
-		appItems = Array.from({ length: 30 }, (_, index) => ({ id: `recent-${index}`, type: 'agentMessage', text: `Recent answer ${index}\n\n${'Synthetic response. '.repeat(15)}`, transient: false }));
-		chatChanges.fire();
 		if (withTools) {
 			const media: ThreadTranscriptEntry[] = [
 				{ type: 'item', entryId: 'long-image-call', turnId: 'long-media', transient: false, item: { type: 'toolCall', itemId: 'long-image-call', turnId: 'long-media', toolCallId: 'long-image', name: 'imagegen', argumentsJson: '{}' } },
@@ -1400,6 +1391,15 @@ window.ashChatTranscriptIntegration = {
 			];
 			appItems = [...appItems, ...appRows, ...chatTranscriptListItems(media, undefined, [], { sessionId: 'app-session', threadId: 'app-thread' })];
 		}
+		chatChanges.fire();
+	},
+	showHistoryPagination: (fail = false) => {
+		window.ashChatTranscriptIntegration.showChatApp();
+		olderHistoryLoads = 0;
+		failOlderHistory = fail;
+		olderHistoryState = { loading: false };
+		appItems = Array.from({ length: 30 }, (_, index) => ({ id: `recent-${index}`, type: 'agentMessage', text: `Recent answer ${index}\n\n${'Synthetic response. '.repeat(15)}`, transient: false }));
+		chatChanges.fire();
 	},
 	finishHistoryPage: () => finishOlderHistory?.(),
 	historyPageLoads: () => olderHistoryLoads,
