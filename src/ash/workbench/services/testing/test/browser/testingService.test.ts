@@ -180,6 +180,32 @@ test('TestingService consumes completion before start responses and releases exa
 	assert.equal(service.isRunningTests, false);
 });
 
+test('TestingService coalesces a thousand results while publishing completion immediately', async () => {
+	using tasks = new FakeTaskService([]);
+	using backend = new TestExecutionService();
+	backend.items = Array.from({ length: 1_000 }, (_, index) => ({ ...backend.items[0]!, id: `test-${index}`, name: `test-${index}` }));
+	backend.holdRuns = true;
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, backend, workspace, copies, new NullLoggerService(), debug.service);
+	await service.refreshTests();
+	let notifications = 0;
+	let passed = 0;
+	using listener = service.onDidChangeTests(() => {
+		notifications++;
+		passed = service.testResults.filter(result => result.state === 'passed').length;
+	});
+	const run = service.runTests(service.tests.map(test => test.key));
+	await waitFor(() => backend.runs.length === 1);
+	assert.equal(service.testResults.length, 1_000);
+	await waitFor(() => notifications >= 2);
+	backend.finish(backend.runs[0]!.id);
+	assert.equal(passed, 1_000);
+	await run;
+	assert.ok(notifications < 10, `Expected a bounded number of refreshes, received ${notifications}`);
+});
+
 test('TestingService ignores old sequences, cancels a run, and keeps scripts independent', async () => {
 	using tasks = new FakeTaskService([task('script', 'Script', 'test')]);
 	using backend = new TestExecutionService();

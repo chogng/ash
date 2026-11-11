@@ -1,3 +1,4 @@
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -35,6 +36,7 @@ interface OwnedTestProfileProvider {
 /** Owns workspace test catalogs and runs; script profiles retain their task lifecycle. */
 export class TestingService extends Disposable implements ITestingService {
 	private readonly testsEmitter = this._register(new Emitter<void>());
+	private readonly resultRefresh = this._register(new RunOnceScheduler(() => this.testsEmitter.fire(), 16));
 	private currentTests: readonly ITestCase[] = [];
 	private readonly caseResults = new Map<string, ITestCaseResult>();
 	private readonly operations = new Map<string, TestOperation>();
@@ -66,7 +68,7 @@ export class TestingService extends Disposable implements ITestingService {
 
 	constructor(@ITaskService private readonly taskService: ITaskService, @ITestExecutionService private readonly execution: ITestExecutionService, @IWorkspaceContextService private readonly workspace: IWorkspaceContextService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILogService private readonly logService: ILogService, @IDebugService private readonly debug: IDebugService) {
 		super();
-		this._register(debug.onDidChangeSession(() => this.testsEmitter.fire()));
+		this._register(debug.onDidChangeSession(() => this.publishTestsChanged()));
 		this._register(execution.onDidUpdate(update => this.acceptUpdate(update)));
 		this._register(execution.onDidDisconnect(() => {
 			const error = new Error(localize('testing.disconnected', 'The test connection closed. Refresh tests to reconnect.'));
@@ -81,14 +83,14 @@ export class TestingService extends Disposable implements ITestingService {
 			for (const [key, result] of this.caseResults) {
 				if (result.state === 'running') { this.caseResults.set(key, { ...result, state: 'errored', output: error.message }); }
 			}
-			this.testsEmitter.fire();
+			this.publishTestsChanged();
 		}));
 		this._register(workspace.onDidChangeWorkspace(() => {
 			void this.releaseTestOperations().catch(error => this.reportError(error));
 			this.debugConfigurationId = undefined;
 			this.currentTests = [];
 			this.caseResults.clear();
-			this.testsEmitter.fire();
+			this.publishTestsChanged();
 		}));
 		this._register(toDisposable(() => {
 			void this.releaseTestOperations().catch(error => this.reportError(error));
@@ -128,10 +130,10 @@ export class TestingService extends Disposable implements ITestingService {
 		this.discoveryController = controller;
 		const discovery = this.discoverTests(controller.signal).finally(() => {
 			if (this.discovery === discovery) { this.discovery = undefined; this.discoveryController = undefined; }
-			if (!this.isDisposed) { this.testsEmitter.fire(); }
+			if (!this.isDisposed) { this.publishTestsChanged(); }
 		});
 		this.discovery = discovery;
-		this.testsEmitter.fire();
+		this.publishTestsChanged();
 		return discovery;
 	}
 
@@ -143,7 +145,7 @@ export class TestingService extends Disposable implements ITestingService {
 		if (selected.length !== new Set(keys).size) { throw staleSelection(); }
 		const controller = new AbortController();
 		this.runController = controller;
-		this.testsEmitter.fire();
+		this.publishTestsChanged();
 		try {
 			const directories = new Set(selected.map(test => test.dirId));
 			const roots = this.workspace.getWorkspace().folders.filter(folder => directories.has(folder.id)).map(folder => folder.uri);
@@ -172,7 +174,7 @@ export class TestingService extends Disposable implements ITestingService {
 			}));
 		} finally {
 			if (this.runController === controller) { this.runController = undefined; }
-			if (!this.isDisposed) { this.testsEmitter.fire(); }
+			if (!this.isDisposed) { this.publishTestsChanged(); }
 		}
 	}
 
@@ -187,7 +189,7 @@ export class TestingService extends Disposable implements ITestingService {
 		if (!selected) { throw staleSelection(); }
 		const controller = new AbortController();
 		this.runController = controller;
-		this.testsEmitter.fire();
+		this.publishTestsChanged();
 		try {
 			const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === selected.dirId)!;
 			for (const copy of this.workingCopies.getAll()) {
@@ -218,7 +220,7 @@ export class TestingService extends Disposable implements ITestingService {
 			} finally { await this.releaseOperation(operation); }
 		} finally {
 			if (this.runController === controller) { this.runController = undefined; }
-			if (!this.isDisposed) { this.testsEmitter.fire(); }
+			if (!this.isDisposed) { this.publishTestsChanged(); }
 		}
 	}
 
@@ -298,6 +300,17 @@ export class TestingService extends Disposable implements ITestingService {
 		if (update.status === 'completed' || update.status === 'cancelled' && operation.kind === 'run') { operation.resolve(); }
 		if (update.status === 'cancelled' && operation.kind !== 'run') { operation.reject(new Error(localize('testing.cancelled', 'Test operation cancelled.'))); }
 		if (update.status === 'failed') { operation.reject(new Error(update.error ?? localize('testing.operationFailed', 'Test operation failed.'))); }
+		// Apply every result in sequence. Bound only the rate of view notifications,
+		// and publish the latest results immediately at operation boundaries.
+		if (update.status === 'running' && update.result && !update.tests && !update.launch) {
+			if (!this.resultRefresh.isScheduled()) this.resultRefresh.schedule();
+			return;
+		}
+		this.publishTestsChanged();
+	}
+
+	private publishTestsChanged(): void {
+		this.resultRefresh.cancel();
 		this.testsEmitter.fire();
 	}
 
