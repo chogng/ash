@@ -1,6 +1,7 @@
 import './media/imageViewer.css';
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
+import { animateElement } from '../../../../base/browser/ui/animations/animations.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -27,6 +28,8 @@ export interface IImageViewerSourceOptions {
 	readonly alt: string;
 	readonly viewState?: IImageViewerViewState;
 	readonly data?: { readonly mimeType: string; read(): Promise<Uint8Array>; };
+	/** Side from which the decoded image enters during gallery navigation. */
+	readonly slideFrom?: 'left' | 'right';
 }
 
 const zoomLevels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20];
@@ -57,6 +60,7 @@ export class ImageViewer extends Disposable {
 	private readonly imageDomNode: HTMLImageElement;
 	private readonly media: HTMLElement;
 	private readonly pending = this._register(new MutableDisposable());
+	private readonly sourceTransition = this._register(new MutableDisposable());
 	private readonly pinchZoomFrame: AnimationFrameScheduler;
 	private readonly pinchZoomIdle = this._register(new RunOnceScheduler(() => this.finishPinchZoom(), 120));
 	private pinchZoom: { readonly baseScale: number; readonly x: PinchAxis; readonly y: PinchAxis; scale: number; } | undefined;
@@ -180,6 +184,14 @@ export class ImageViewer extends Disposable {
 			this.layout();
 			this.domNode.scrollLeft = options.viewState?.scrollLeft ?? 0;
 			this.domNode.scrollTop = options.viewState?.scrollTop ?? 0;
+			if (options.slideFrom) {
+				const offset = options.slideFrom === 'left' ? -10 : 10;
+				const animation = animateElement(this.imageDomNode, [
+					{ transform: `translateX(${offset}px)`, opacity: 0.88 },
+					{ transform: 'translateX(0)', opacity: 1 },
+				], { fill: 'none' });
+				if (animation) this.sourceTransition.value = toDisposable(() => animation.cancel());
+			}
 			this.scaleChanged.fire(this.scale);
 			return true;
 		} catch (error) {
@@ -190,7 +202,11 @@ export class ImageViewer extends Disposable {
 		}
 	}
 
-	public cancelPendingSource(): void { this.generation++; this.pending.clear(); }
+	public cancelPendingSource(): void {
+		this.generation++;
+		this.pending.clear();
+		this.sourceTransition.clear();
+	}
 
 	public clear(): void {
 		this.cancelPendingSource();

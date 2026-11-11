@@ -99,6 +99,10 @@
 	position: relative;
 }
 
+.ash-image-preview-gallery > .ash-image-preview-popup-viewport {
+	position: relative;
+}
+
 .ash-image-preview-gallery-controls {
 	position: absolute;
 	inset-inline: var(--ash-spacing-size120);
@@ -158,9 +162,15 @@
 	opacity: 0.65;
 }
 
-.ash-image-preview-gallery-pagination > .ash-button[aria-current]::before {
+.ash-image-preview-gallery-pagination > .ash-button.current::before {
 	inline-size: 14px;
 	opacity: 1;
+}
+
+.ash-enable-motion .ash-image-preview-gallery-pagination > .ash-button::before {
+	transition:
+		inline-size 180ms ease,
+		opacity 180ms ease;
 }
 
 @media (pointer: coarse) {
@@ -171,8 +181,21 @@
 }
 
 .ash-image-preview-gallery-message {
-	display: grid;
-	place-items: center;
-	block-size: 100%;
-	color: var(--ash-description-foreground);
+	position: absolute;
+	pointer-events: none;
+}
+
+.ash-image-preview-gallery-message:not(:empty) {
+	inset-block-start: 50%;
+	inset-inline: 0;
+	inline-size: fit-content;
+	max-inline-size: 60%;
+	margin-inline: auto;
+	transform: translateY(-50%);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-editor-widgetBackground);
+	color: var(--ash-foreground);
 }

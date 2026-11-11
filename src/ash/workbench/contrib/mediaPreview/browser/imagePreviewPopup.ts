@@ -8,9 +8,10 @@ import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegat
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { MenuActionViewItem, type MenuActionViewItemOptions } from '../../../../base/browser/ui/menu/menu.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
+import { disposableTimeout } from '../../../../base/common/async.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { Icon } from '../../../../base/common/icon.js';
-import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { extname } from '../../../../base/common/path.js';
 import { createUuid } from '../../../../base/common/uuid.js';
@@ -28,7 +29,7 @@ import { IWebWorkerService } from '../../../../platform/webWorker/browser/webWor
 import { IHostService } from '../../../services/host/browser/host.js';
 import { ImageAnnotation } from './imageAnnotation.js';
 import { encodeImageBlobAsPng } from './imageEncoder.js';
-import { ImageViewer, type ImageViewerScale } from './imageViewer.js';
+import { ImageViewer, type ImageViewerScale, type IImageViewerSourceOptions } from './imageViewer.js';
 import { mediaImageFileName, saveMediaImageAs } from './mediaPreviewSaveAs.js';
 
 export interface IImagePreviewAnnotationTarget {
@@ -72,6 +73,7 @@ class ImageApplicationMenuItem extends MenuActionViewItem {
 
 class ImageOpenActionViewItem extends DropdownWithPrimaryActionViewItem {
 	private iconSlot: HTMLElement | undefined;
+	private iconSource: string | null | undefined;
 
 	constructor(
 		private readonly getApplication: () => IImageOpeningApplication | null | undefined,
@@ -98,23 +100,25 @@ class ImageOpenActionViewItem extends DropdownWithPrimaryActionViewItem {
 		this.primaryButton.setAttribute('aria-label', application
 			? localize('media.image.openWithApp', 'Open with {0}', application.name)
 			: this.action.label);
-		slot.replaceChildren();
-		// Leave the slot empty while discovering the default application.
+		// Keep the displayed icon until discovery and decoding of its replacement finish.
 		if (application === undefined) return;
-		if (!application?.icon) {
+		const iconSource = application?.icon ?? null;
+		if (iconSource === this.iconSource) return;
+		this.iconSource = iconSource;
+		if (!iconSource) {
+			slot.replaceChildren();
 			appendIcon(Lxicon.openInProduct, slot);
 			return;
 		}
 		const icon = h(slot.ownerDocument, 'img', {
 			className: 'ash-image-preview-app-icon',
-			properties: { src: application.icon, alt: '', draggable: false, hidden: true },
+			properties: { src: iconSource, alt: '', draggable: false },
 		});
-		slot.append(icon);
 		void icon.decode().then(() => {
-			if (!this.isDisposed && icon.parentElement === slot) icon.hidden = false;
+			if (!this.isDisposed && this.iconSource === iconSource) slot.replaceChildren(icon);
 		}, () => {
-			if (this.isDisposed || icon.parentElement !== slot) return;
-			icon.remove();
+			if (this.isDisposed || this.iconSource !== iconSource) return;
+			slot.replaceChildren();
 			appendIcon(Lxicon.openInProduct, slot);
 		});
 	}
@@ -144,7 +148,6 @@ export class ImagePreviewPopup {
 		const gallery = source.gallery;
 		let selected = gallery?.index ?? 0;
 		let name = source.name;
-		let viewer: ImageViewer | undefined;
 		const frame = this.frame = h(document, 'div', {
 			className: 'ash-image-preview-popup',
 			attributes: { role: 'dialog', 'aria-label': localize('media.image.previewNamed', 'Preview {0}', name) },
@@ -170,9 +173,8 @@ export class ImagePreviewPopup {
 		};
 		const viewport = h(document, 'div', { className: 'ash-image-preview-popup-viewport' });
 		frame.append(header, viewport);
-		const slide = resources.add(new MutableDisposable<DisposableStore>());
-		const initial = slide.value = new DisposableStore();
-		viewer = this.renderImage(source, actions, viewport, initial, target, hide);
+		const { viewer, load, clear, reportError } = this.renderPreview(source, actions, viewport, resources, target, hide);
+		void load(source).catch(reportError);
 		if (gallery && gallery.labels.length > 1) {
 			const stage = h(document, 'div', { className: 'ash-image-preview-gallery' });
 			viewport.replaceWith(stage);
@@ -182,36 +184,52 @@ export class ImagePreviewPopup {
 				attributes: { role: 'group', 'aria-label': localize('media.image.galleryPagination', 'Choose an image') },
 			});
 			const position = h(document, 'span', { className: 'ash-aria-live', attributes: { role: 'status', 'aria-atomic': 'true' } });
+			const status = h(document, 'div', { className: 'ash-image-preview-gallery-message', attributes: { role: 'status' } });
+			viewport.append(status);
 			stage.append(viewport, controls, pagination, position);
-			const select = async (index: number) => {
-				if (index === selected) return;
-				dots[selected]!.domNode.removeAttribute('aria-current');
-				selected = index;
-				dots[index]!.domNode.setAttribute('aria-current', 'true');
-				name = gallery.labels[index]!;
+			const pending = resources.add(new MutableDisposable<DisposableStore>());
+			const displayedUrl = resources.add(new MutableDisposable<IDisposable>());
+			const updateDot = (index: number, current: boolean) => {
+				const dot = dots[index]!.domNode;
+				dot.classList.toggle('current', current);
+				if (current) dot.setAttribute('aria-current', 'true');
+				else dot.removeAttribute('aria-current');
+			};
+			const updateTitle = (index: number, label: string) => {
+				name = label;
 				title.textContent = name;
 				frame.setAttribute('aria-label', localize('media.image.previewNamed', 'Preview {0}', name));
 				position.textContent = localize('media.image.galleryPosition', 'Image {0} of {1}: {2}', index + 1, gallery.labels.length, name);
-				const current = slide.value = new DisposableStore();
-				viewer = undefined;
-				actions.replaceChildren();
-				const status = h(document, 'div', { className: 'ash-image-preview-gallery-message', attributes: { role: 'status' } }, localize('media.image.galleryLoading', 'Loading image…'));
-				viewport.replaceChildren(status);
-				const unavailable = () => {
-					if (current.isDisposed) return;
-					status.textContent = localize('media.image.galleryUnavailable', 'This image is unavailable.');
-					viewport.replaceChildren(status);
-					actions.replaceChildren();
-				};
+			};
+			const select = async (index: number, step = index - selected) => {
+				if (index === selected) return;
+				updateDot(selected, false);
+				selected = index;
+				updateDot(index, true);
+				const label = gallery.labels[index]!;
+				viewer.cancelPendingSource();
+				const current = pending.value = new DisposableStore();
+				status.textContent = '';
+				disposableTimeout(() => { status.textContent = localize('media.image.galleryLoading', 'Loading image…'); }, 200, current);
 				try {
 					const blob = index === gallery.index && source.blob ? source.blob : await gallery.readImage(index);
 					if (current.isDisposed) return;
 					const { url, registration } = createObjectUrl(getWindow(document), blob);
 					current.add(registration);
-					status.remove();
-					viewer = this.renderImage({ name, blob, url: url.href }, actions, viewport, current, undefined, hide, unavailable);
+					// The viewer keeps the current image until decoding the new source succeeds.
+					if (!await load({ name: label, blob, url: url.href }, step < 0 ? 'left' : 'right') || current.isDisposed) return;
+					current.delete(registration);
+					displayedUrl.value = registration;
+					pending.clear();
+					status.textContent = '';
+					updateTitle(index, label);
 				} catch {
-					unavailable();
+					if (current.isDisposed) return;
+					clear();
+					displayedUrl.clear();
+					pending.clear();
+					updateTitle(index, label);
+					status.textContent = localize('media.image.galleryUnavailable', 'This image is unavailable.');
 				}
 			};
 			const dots = gallery.labels.map((label, index) => {
@@ -221,7 +239,7 @@ export class ImagePreviewPopup {
 					onClick: () => { void select(index); },
 				}));
 			});
-			dots[selected]!.domNode.setAttribute('aria-current', 'true');
+			updateDot(selected, true);
 			const nextIndex = (step: number) => (selected + step + gallery.labels.length) % gallery.labels.length;
 			const previousLabel = localize('media.image.galleryPrevious', 'Previous image');
 			const nextLabel = localize('media.image.galleryNext', 'Next image');
@@ -229,8 +247,8 @@ export class ImagePreviewPopup {
 				ariaLabel: localize('media.image.galleryNavigation', 'Image navigation'), tabNavigation: 'each-action',
 			}));
 			navigation.setActions([
-				{ id: 'imagePreview.previousImage', label: previousLabel, tooltip: previousLabel, icon: Lxicon.chevronLeft, enabled: true, run: () => select(nextIndex(-1)) },
-				{ id: 'imagePreview.nextImage', label: nextLabel, tooltip: nextLabel, icon: Lxicon.chevronRight, enabled: true, run: () => select(nextIndex(1)) },
+				{ id: 'imagePreview.previousImage', label: previousLabel, tooltip: previousLabel, icon: Lxicon.chevronLeft, enabled: true, run: () => select(nextIndex(-1), -1) },
+				{ id: 'imagePreview.nextImage', label: nextLabel, tooltip: nextLabel, icon: Lxicon.chevronRight, enabled: true, run: () => select(nextIndex(1), 1) },
 			]);
 			resources.add(addDisposableListener(frame, 'keydown', event => {
 				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
@@ -240,10 +258,9 @@ export class ImagePreviewPopup {
 				if (focused && actions.contains(focused)) return;
 				event.preventDefault();
 				event.stopPropagation();
-				const left = event.key === 'ArrowLeft';
-				const index = nextIndex(left ? -1 : 1);
-				if (focused && viewport.contains(focused)) navigation.focus(left ? 0 : 1);
-				void select(index);
+				const step = event.key === 'ArrowLeft' ? -1 : 1;
+				const index = nextIndex(step);
+				void select(index, step);
 				if (focused && pagination.contains(focused)) dots[index]!.focus();
 			}, true));
 		}
@@ -255,7 +272,7 @@ export class ImagePreviewPopup {
 					const focused = focusTarget ?? getActiveElement(document);
 					if (!isHTMLElement(focused) || !frame.contains(focused)) return undefined;
 					return new AccessibleContentProvider(AccessibleViewProviderId.ImagePreview, { type }, () => {
-						const size = viewer?.naturalSize;
+						const size = viewer.naturalSize;
 						const summary = size
 							? localize('media.image.popupSummary', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', name, size.width, size.height)
 							: localize('media.image.empty', 'No image loaded.');
@@ -269,18 +286,16 @@ export class ImagePreviewPopup {
 		}
 	}
 
-	private renderImage(source: IImagePreviewSource, actions: HTMLElement, viewport: HTMLElement, resources: DisposableStore, target: IImagePreviewAnnotationTarget | undefined, hide: () => void, onUnavailable?: () => void): ImageViewer {
-		const { blob: image, url: src } = source;
+	private renderPreview(source: IImagePreviewSource, actions: HTMLElement, viewport: HTMLElement, resources: DisposableStore, target: IImagePreviewAnnotationTarget | undefined, hide: () => void) {
 		const document = viewport.ownerDocument;
 		const { menus, instantiation, notifications, host, workers } = this;
-		const annotation = target && resources.add(new ImageAnnotation(document, src));
+		const annotation = target && resources.add(new ImageAnnotation(document, source.url));
 		// The dialog and the viewer's context menu use the same popup host.
 		const viewer = resources.add(instantiation.createInstance(ImageViewer, viewport, { contextMenu: false, overlay: annotation?.overlay }));
 		const lifetime = new AbortController();
 		resources.add(toDisposable(() => lifetime.abort()));
 		if (target) resources.add(addDisposableListener(target.signal, 'abort', hide));
-		const read = image && (async () => new Uint8Array(await image.arrayBuffer()));
-		const name = image ? mediaImageFileName(source.name, image.type) : source.name;
+		let displayed: IImagePreviewSource | undefined = source;
 		const reportError = (error: unknown) => {
 			if (!lifetime.signal.aborted && !isCancellationError(error)) notifications.error(error instanceof Error ? error : String(error));
 		};
@@ -292,22 +307,47 @@ export class ImagePreviewPopup {
 		let zoomLabel = selectZoom;
 		let zoomItem: DropdownMenuActionViewItem | undefined;
 		const updateZoomLabel = () => zoomItem?.setLabel(zoomLabel, localize('media.image.zoomValue', 'Zoom: {0}', zoomLabel));
-		const openFormat = image && nativeImageFormats.get(image.type);
-		const openImage = image && host.openImage?.bind(host);
+		const openImage = (source.blob || source.gallery) && host.openImage?.bind(host);
 		const listApps = openImage && host.listImageOpeningApplications?.bind(host);
 		let openItem: ImageOpenActionViewItem | undefined;
 		let selectedApp: IImageOpeningApplication | undefined;
 		let defaultApp: IImageOpeningApplication | null | undefined;
-		const applications = listApps?.(openFormat ?? 'png').catch(() => []).then(apps => {
-			const systemDefault = apps.find(app => app.isDefault);
-			defaultApp = systemDefault ?? null;
-			if (!lifetime.signal.aborted) openItem?.refreshApplication();
-			return systemDefault ? [systemDefault, ...apps.filter(app => app.id !== systemDefault.id)] : apps;
-		});
+		const applicationsByFormat = new Map<ImageOpenExtension, Promise<readonly IImageOpeningApplication[]>>();
+		let applications: Promise<readonly IImageOpeningApplication[]> | undefined;
+		const updateApplications = (image: Blob | undefined) => {
+			if (!listApps) return;
+			const format = image && (nativeImageFormats.get(image.type) ?? 'png');
+			let request = format && applicationsByFormat.get(format);
+			if (format && !request) {
+				request = listApps(format).catch(() => []).then(apps => {
+					const systemDefault = apps.find(app => app.isDefault);
+					return systemDefault ? [systemDefault, ...apps.filter(app => app.id !== systemDefault.id)] : apps;
+				});
+				applicationsByFormat.set(format, request);
+			}
+			if (applications === request) return;
+			applications = request;
+			selectedApp = undefined;
+			defaultApp = undefined;
+			openItem?.refreshApplication();
+			void request?.then(apps => {
+				if (lifetime.signal.aborted || applications !== request) return;
+				defaultApp = apps.find(app => app.isDefault) ?? null;
+				openItem?.refreshApplication();
+			});
+		};
 		const open = async (applicationId?: string) => {
-			if (!openImage || !image || !read) return;
-			try { await openImage(await (openFormat ? read() : encodeImageBlobAsPng(image, document, workers)), applicationId); }
-			catch (error) { throw new Error(localize('media.image.openFailed', 'Could not open {0}: {1}', name, String(error)), { cause: error }); }
+			const image = displayed?.blob;
+			if (!openImage || !displayed || !image) return;
+			const name = mediaImageFileName(displayed.name, image.type);
+			try {
+				const bytes = nativeImageFormats.has(image.type)
+					? new Uint8Array(await image.arrayBuffer())
+					: await encodeImageBlobAsPng(image, document, workers);
+				await openImage(bytes, applicationId);
+			} catch (error) {
+				throw new Error(localize('media.image.openFailed', 'Could not open {0}: {1}', name, String(error)), { cause: error });
+			}
 		};
 		const selectApp = (application: IImageOpeningApplication | undefined) => {
 			selectedApp = application;
@@ -336,14 +376,23 @@ export class ImagePreviewPopup {
 						}),
 					}, options, () => ({ anchorAlignment: AnchorAlignment.Right }));
 				}
-				if (action.id === openId && applications) {
+				if (action.id === openId && listApps) {
 					// The provider supplies the actual menu actions once app discovery finishes.
 					return openItem = new ImageOpenActionViewItem(() => selectedApp ?? defaultApp, action, openDropdown, [openDropdown], {
 						showContextMenu: delegate => {
+							const request = applications;
+							if (!request) {
+								delegate.onHide?.(true);
+								return;
+							}
 							const pending = delegate.cancellationToken?.onCancellationRequested(() => delegate.onHide?.(true));
-							void applications.then(apps => {
+							void request.then(apps => {
 								pending?.dispose();
 								if (delegate.cancellationToken?.isCancellationRequested) return;
+								if (request !== applications || lifetime.signal.aborted) {
+									delegate.onHide?.(true);
+									return;
+								}
 								const icons = new Map<string, string>();
 								const selectedId = (selectedApp ?? defaultApp)?.id;
 								const appActions = apps.map((application): IAction => {
@@ -353,7 +402,9 @@ export class ImagePreviewPopup {
 										id, label: application.name, tooltip: '', enabled: true,
 										icon: application.icon ? undefined : Lxicon.openInProduct,
 										checked: selectedId === application.id,
-										run: () => selectApp(application.isDefault ? undefined : application),
+										run: () => {
+											if (request === applications) selectApp(application.isDefault ? undefined : application);
+										},
 									};
 								});
 								if (!appActions.length) {
@@ -394,13 +445,24 @@ export class ImagePreviewPopup {
 		}));
 		const action = (id: string, label: string, icon: Icon | undefined, run: () => void | Promise<void>): IAction =>
 			({ id, label, tooltip: label, icon, enabled: true, run });
-		const zoom: IAction[] = [{ id: zoomId, get label() { return zoomLabel; }, tooltip: '', enabled: true, run: () => { } }];
+		const zoom: IAction = { id: zoomId, get label() { return zoomLabel; }, tooltip: '', enabled: true, run: () => { } };
+		const loadingZoom = { ...zoom, enabled: false };
 		resources.add(viewer.onDidFailCopy(reportError));
-		const fileActions = image ? [action('imagePreview.save', localize('media.image.save', 'Save image'), Lxicon.download,
-			() => instantiation.invokeFunction(saveMediaImageAs, image, name, document))] : [];
-		if (openImage) fileActions.push(action(openId, localize('media.image.open', 'Open'), applications ? undefined : Lxicon.openInProduct, () => open(selectedApp?.id)));
-		const previewActions = [...zoom, ...fileActions];
-		const loadingActions = [...zoom.map(item => ({ ...item, enabled: false })), ...fileActions];
+		const save = action('imagePreview.save', localize('media.image.save', 'Save image'), Lxicon.download, () => {
+			if (!displayed?.blob) return;
+			const { blob, name } = displayed;
+			return instantiation.invokeFunction(saveMediaImageAs, blob, mediaImageFileName(name, blob.type), document);
+		});
+		const fileActions = [save];
+		if (openImage) fileActions.push(action(openId, localize('media.image.open', 'Open'), listApps ? undefined : Lxicon.openInProduct, () => open(selectedApp?.id)));
+		let draw: IAction | undefined;
+		let loadingDraw: IAction | undefined;
+		const previewActions = () => {
+			const actions = [viewer.hasImage ? zoom : loadingZoom, ...(displayed?.blob ? fileActions : [])];
+			const annotationAction = viewer.hasImage ? draw : loadingDraw;
+			if (annotationAction) actions.push(annotationAction);
+			return actions;
+		};
 		if (annotation && target) {
 			let editing = false;
 			let busy = false;
@@ -414,7 +476,7 @@ export class ImagePreviewPopup {
 				}));
 			const toggle = (active: boolean) => {
 				editing = active;
-				toolbar.setActions(active ? zoom : previewActions);
+				toolbar.setActions(active ? [zoom] : previewActions());
 				annotationActions.hidden = !active;
 				update();
 			};
@@ -423,7 +485,7 @@ export class ImagePreviewPopup {
 				done.enabled = undo.enabled;
 				cancel.enabled = !busy;
 			};
-			const draw = action('imagePreview.annotate', localize('media.image.annotate', 'Annotate image'), Lxicon.edit, () => {
+			draw = action('imagePreview.annotate', localize('media.image.annotate', 'Annotate image'), Lxicon.edit, () => {
 				if (!viewer.naturalSize) return;
 				annotation.start(viewer.naturalSize);
 				toggle(true);
@@ -433,7 +495,7 @@ export class ImagePreviewPopup {
 			const cancel = button(localize('media.image.cancelAnnotation', 'Cancel annotation'), () => {
 				annotation.clear();
 				toggle(false);
-				toolbar.focus(previewActions.indexOf(draw));
+				toolbar.focus(draw ? previewActions().indexOf(draw) : -1);
 			});
 			const done = button(localize('media.image.doneAnnotating', 'Done annotating'), async () => {
 				if (busy || !annotation.hasStrokes) return;
@@ -442,6 +504,7 @@ export class ImagePreviewPopup {
 				update();
 				try {
 					const blob = await annotation.renderPng(lifetime.signal);
+					const name = source.blob ? mediaImageFileName(source.name, source.blob.type) : source.name;
 					const fileName = `${name.slice(0, name.length - extname(name).length)}-annotated.png`;
 					await target.attach(new (getWindow(document).File)([blob], fileName, { type: 'image/png' }), lifetime.signal);
 					if (!lifetime.signal.aborted) hide();
@@ -454,19 +517,37 @@ export class ImagePreviewPopup {
 					}
 				}
 			}, 'primary');
-			previewActions.push(draw);
-			loadingActions.push({ ...draw, enabled: false });
+			loadingDraw = { ...draw, enabled: false };
 			update();
 			resources.add(annotation.onDidChange(update));
 		}
-		toolbar.setActions(loadingActions);
-		void viewer.setSource(src, { alt: source.name, data: image && read ? { mimeType: image.type, read } : undefined }).then(loaded => {
-			if (loaded && !lifetime.signal.aborted) {
-				toolbar.setActions(previewActions);
-				updateZoomLabel();
-			}
-		}).catch(onUnavailable ?? reportError);
-		return viewer;
+		// Retain the action views across gallery changes; actions read the image currently on screen.
+		const updateDisplayed = (next: IImagePreviewSource | undefined, wasReady: boolean) => {
+			const hadBlob = !!displayed?.blob;
+			displayed = next;
+			if (wasReady !== viewer.hasImage || hadBlob !== !!next?.blob) toolbar.setActions(previewActions());
+			updateZoomLabel();
+			updateApplications(next?.blob);
+		};
+		updateApplications(source.blob);
+		toolbar.setActions(previewActions());
+		return {
+			viewer, reportError,
+			load: async (next: IImagePreviewSource, slideFrom?: IImageViewerSourceOptions['slideFrom']) => {
+				const wasReady = viewer.hasImage;
+				const image = next.blob;
+				const data = image && { mimeType: image.type, read: async () => new Uint8Array(await image.arrayBuffer()) };
+				if (!await viewer.setSource(next.url, { alt: next.name, data, slideFrom }) || lifetime.signal.aborted) return false;
+				updateDisplayed(next, wasReady);
+				return true;
+			},
+			clear: () => {
+				const wasReady = viewer.hasImage;
+				viewer.clear();
+				zoomLabel = selectZoom;
+				updateDisplayed(undefined, wasReady);
+			},
+		};
 	}
 
 	show(): boolean {

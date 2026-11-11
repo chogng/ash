@@ -599,22 +599,70 @@ test.describe('Unified Chat sidebar', () => {
 		const firstDot = pagination.getByRole('button', { name: '显示第 1 张图片：Zed 截图', exact: true });
 		const secondDot = pagination.getByRole('button', { name: '显示第 2 张图片：Zed 第二张截图', exact: true });
 		const popupNext = popup.getByRole('button', { name: '下一张图片', exact: true });
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
 		await expect(firstDot).toHaveAttribute('aria-current', 'true');
-		await popupNext.click();
+		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
+		const appIcon = '.ash-image-preview-app-icon-slot > *';
+		if (process.platform === 'darwin' || process.platform === 'win32') await expect(popup.locator(appIcon)).toBeVisible();
+		const retained = await popup.evaluateHandle((frame, appIcon) => {
+			const viewport = frame.querySelector('.ash-image-viewer')!;
+			const icon = frame.querySelector(appIcon);
+			const animationStarted = new Promise<boolean>(resolve => {
+				const observer = new MutationObserver(() => {
+					observer.disconnect();
+					resolve(viewport.getAnimations({ subtree: true }).some(animation => {
+						const effect = animation.effect;
+						if (animation.playState !== 'running' || !(effect instanceof KeyframeEffect)) return false;
+						const offset = effect.getKeyframes()[0]?.transform;
+						return typeof offset === 'string' && new DOMMatrixReadOnly(offset).m41 > 0;
+					}));
+				});
+				observer.observe(frame, { attributeFilter: ['aria-label'] });
+			});
+			return { viewport, icon, animationStarted };
+		}, appIcon);
+		const decodeGate = await page.evaluateHandle(() => {
+			const prototype = HTMLImageElement.prototype;
+			const decode = prototype.decode;
+			let release!: () => void;
+			const gate = new Promise<void>(resolve => { release = resolve; });
+			prototype.decode = function () {
+				if (!this.src.startsWith('blob:')) return decode.call(this);
+				prototype.decode = decode;
+				return gate.then(() => decode.call(this));
+			};
+			return { release: () => { prototype.decode = decode; release(); } };
+		});
+		try {
+			await popupNext.click();
+			await expect(popup.locator('.ash-image-preview-gallery-message')).toBeVisible();
+			await expect(imagePreview.getByRole('img', { name: 'Zed 截图', exact: true })).toBeVisible();
+			expect(await retained.evaluate(({ viewport, icon }) => viewport.isConnected && (!icon || icon.isConnected))).toBe(true);
+		} finally {
+			await decodeGate.evaluate(gate => gate.release());
+			await decodeGate.dispose();
+		}
 		await expect(popup).toHaveAccessibleName('预览 Zed 第二张截图');
 		await expect(popup.getByRole('img', { name: 'Zed 第二张截图', exact: true })).toHaveJSProperty('naturalWidth', 2);
+		expect(await retained.evaluate(async ({ viewport, icon, animationStarted }) => viewport.isConnected && (!icon || icon.isConnected) && await animationStarted)).toBe(true);
+		await retained.dispose();
 		await expect(secondDot).toHaveAttribute('aria-current', 'true');
 		await firstDot.click();
 		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
 		await expect(firstDot).toHaveAttribute('aria-current', 'true');
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await expect.poll(() => secondDot.evaluate(dot => getComputedStyle(dot, '::before').transitionDuration)).toBe('0s');
 		await secondDot.press('Enter');
 		await expect(secondDot).toHaveAttribute('aria-current', 'true');
 		await secondDot.press('ArrowLeft');
 		await expect(firstDot).toBeFocused();
 		await expect(firstDot).toHaveAttribute('aria-current', 'true');
 		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
-		await popup.locator('.ash-image-viewer').press('ArrowLeft');
+		const popupViewport = popup.locator('.ash-image-viewer');
+		await popupViewport.press('ArrowLeft');
 		await expect(popup.getByRole('img', { name: 'Zed 第二张截图', exact: true })).toHaveJSProperty('naturalWidth', 2);
+		await expect(popupViewport).toBeFocused();
+		expect(await popupViewport.evaluate(viewport => viewport.getAnimations({ subtree: true }).length)).toBe(0);
 		await expect(secondDot).toHaveAttribute('aria-current', 'true');
 		await expect(pagination.locator('[aria-current]')).toHaveCount(1);
 		const markerWidths = await pagination.getByRole('button').evaluateAll(dots => dots.map(dot => parseFloat(getComputedStyle(dot, '::before').inlineSize)));
