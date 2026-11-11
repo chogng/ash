@@ -1374,7 +1374,7 @@ test('Web recovery retains its elapsed budget across attempts and excludes repor
 			initialDelayMs: 500,
 			maxDelayMs: 500,
 			maxAttempts: Number.POSITIVE_INFINITY,
-			maxElapsedTimeMs: 1_000,
+			maxElapsedTimeMs: 1_200,
 		});
 		await recovery.connect();
 		offline = true;
@@ -1383,16 +1383,61 @@ test('Web recovery retains its elapsed budget across attempts and excludes repor
 		await assert.rejects(recovery.whenConnected(), /Web offline/);
 		mock.timers.tick(500);
 		await assert.rejects(recovery.whenConnected(), /Web offline/);
-		assert.equal(recovery.status, 'failed');
 		assert.equal(opens, 3);
 		recovery.suspend();
 		mock.timers.tick(3_600_000);
 		recovery.resume();
 		await assert.rejects(recovery.whenConnected(), /Web offline/);
+		mock.timers.tick(199);
 		assert.equal(recovery.status, 'recovering');
+		mock.timers.tick(1);
+		assert.equal(recovery.status, 'failed');
+		assert.match(recovery.error!, /timed out after 1200 ms/);
+		assert.equal(opens, 4);
 		offline = false;
-		mock.timers.tick(500);
+		recovery.suspend();
+		recovery.resume();
 		await recovery.whenConnected();
+		assert.equal(recovery.status, 'idle');
+	} finally { mock.timers.reset(); }
+});
+
+test('the recovery deadline retires an in-flight handshake and ignores its late reply', async () => {
+	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			client.disconnect();
+			await client.connect();
+		}, () => { }, { autoRestore: true, initialDelayMs: 5, maxDelayMs: 5, maxAttempts: 3, maxElapsedTimeMs: 30 });
+		await recovery.connect();
+		transport.holdInitialize = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
+		mock.timers.tick(5);
+		await Promise.resolve();
+		await Promise.resolve();
+		const initialize = transport.frames.at(-1)!;
+		assert.equal(initialize.method, 'initialize');
+		assert.equal(client.state, 'initializing');
+		const timedOut = assert.rejects(recovery.whenConnected(), /timed out after 30 ms/);
+		mock.timers.tick(10);
+		recovery.suspend();
+		mock.timers.tick(500);
+		assert.equal(recovery.status, 'suspended');
+		assert.equal(client.state, 'initializing');
+		recovery.resume();
+		mock.timers.tick(14);
+		assert.equal(recovery.status, 'recovering');
+		mock.timers.tick(1);
+		await timedOut;
+		assert.equal(recovery.status, 'failed');
+		assert.equal(client.state, 'stopped');
+		transport.frame({ id: initialize.id, result: createTestInitializeResult() });
+		assert.equal(client.state, 'stopped');
+		transport.holdInitialize = false;
+		await recovery.reconnect();
 		assert.equal(recovery.status, 'idle');
 	} finally { mock.timers.reset(); }
 });

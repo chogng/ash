@@ -82,6 +82,7 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 					headers: { Authorization: `Bearer ${this.session.token}` }, body: '',
 					signal: AbortSignal.any([authentication.signal, AbortSignal.timeout(10_000)]),
 				});
+				if (authentication.signal.aborted) { return; }
 				if (response.status === 401 || response.status === 403) {
 					this.closed = true;
 					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: localize('appServer.webAuthorizationExpired', 'Web authorization expired or was revoked. Open a new authenticated link.') });
@@ -89,6 +90,7 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 				}
 				if (!response.ok) { throw new Error('Web App Server is unavailable'); }
 				const session = decodeWebSessionInfo(await response.json());
+				if (authentication.signal.aborted) { return; }
 				if (session.workspaceId !== this.session.workspaceId || session.workspaceRoot !== this.session.workspaceRoot) {
 					this.closed = true;
 					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: localize('appServer.webWorkspaceChanged', 'Web workspace changed. Open a new authenticated link.') });

@@ -17,6 +17,7 @@ import { OperatingSystem } from '../../../base/common/platform.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { AppServerFrameDecoder } from './appServerFrameDecoder.js';
 import type { AppServerDecodeContext, DecodedAppServerCall, DecodedAppServerFrame } from './appServerProtocolDecoding.js';
+import { localize } from '../../../nls.js';
 
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000;
@@ -648,10 +649,12 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 	private task: Promise<void> | undefined;
 	private latest: Promise<void> = Promise.resolve();
 	private timer: ReturnType<typeof setTimeout> | undefined;
+	private deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+	private attemptDeadline: DeferredPromise<never> | undefined;
 	private attempts = 0;
 	private isActive = false;
 	private suspended = false;
-	private startedAt = 0;
+	private startedAt: number | undefined;
 	private suspendedAt = 0;
 
 	constructor(
@@ -665,16 +668,18 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			if (error instanceof AppServerConnectionStoppedError) {
 				this.failure = error;
 				this.clearTimer();
+				this.endBudget();
 				this.publish('unavailable');
 			} else if (state === 'crashed') {
 				this.failure = error;
 				this.onFailure('Renderer connection failed', error);
 				if (isProtocolFailure(error)) {
 					this.clearTimer();
+					this.endBudget();
 					this.publish('failed');
 					return;
 				}
-				if (!this.startedAt) this.startedAt = Date.now();
+				this.startedAt ??= this.suspended ? this.suspendedAt : Date.now();
 				this.schedule();
 			}
 		}));
@@ -703,36 +708,48 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 		this.suspended = true;
 		this.suspendedAt = Date.now();
 		this.clearTimer();
+		this.clearDeadlineTimer();
 		if (this.isActive && this.status !== 'unavailable') this.publish('suspended');
 	}
 
 	public resume(): void {
 		if (this.isDisposed || !this.suspended) return;
 		this.suspended = false;
-		if (this.startedAt) this.startedAt += Date.now() - this.suspendedAt;
-		if (!this.isActive || this.status === 'unavailable') return;
+		if (this.startedAt !== undefined) this.startedAt += Date.now() - this.suspendedAt;
+		if (this.status === 'unavailable') return;
 		if (isProtocolFailure(this.failure)) { this.publish('failed'); return; }
-		if (this.client.state === 'ready' && !this.task) { this.publish('idle'); return; }
-		if (this.policy && !this.policy.autoRestore) {
-			if (!this.task) { this.publish('failed'); }
+		if (this.task) {
+			this.armDeadline();
+			this.publish('recovering');
 			return;
 		}
-		// Reset after a real wake, including a previously exhausted connection. An
-		// in-flight attempt retains ownership and schedules its successor on failure.
-		this.attempts = 0;
-		this.startedAt = Date.now();
-		if (!this.task) void this.run().catch(() => { });
+		if (!this.isActive) return;
+		if (this.client.state === 'ready') { this.publish('idle'); return; }
+		if (this.policy && !this.policy.autoRestore) {
+			this.publish('failed');
+			return;
+		}
+		// A wake can start a fresh recovery after exhaustion. An active recovery
+		// keeps its original deadline, excluding the time spent asleep.
+		if (this.startedAt === undefined) {
+			this.attempts = 0;
+			this.startedAt = Date.now();
+		}
+		void this.run().catch(() => { });
 	}
 
 	protected override disposeCore(): void {
 		this.clearTimer();
+		this.endBudget();
 		super.disposeCore();
 	}
 
 	private run(): Promise<void> {
 		this.clearTimer();
+		const deadline = this.policy?.maxElapsedTimeMs === undefined ? undefined : new DeferredPromise<never>();
+		this.attemptDeadline = deadline;
 		// Publish the task before notifying observers, which may request another retry.
-		const operation = Promise.resolve().then(() => {
+		const opening = Promise.resolve().then(() => {
 			this.assertNotDisposed();
 			if (this.suspended) throw canceled();
 			return this.open();
@@ -743,26 +760,39 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			// the handshake continuation observes it. Keep that cause over cancellation.
 			throw this.status === 'unavailable' && this.failure ? this.failure : error;
 		});
+		const operation = deadline ? Promise.race([opening, deadline.p]) : opening;
 		this.task = this.latest = operation;
 		this.publish('recovering');
+		this.armDeadline();
 		void operation.then(() => {
 			this.task = undefined;
+			this.attemptDeadline = undefined;
 			if (this.isDisposed) return;
 			this.isActive = true;
 			// A peer may close between the handshake resolving and this continuation.
 			if (this.client.state === 'crashed') { this.schedule(); return; }
 			this.attempts = 0;
-			this.startedAt = 0;
+			this.endBudget();
 			this.failure = undefined;
 			this.publish(this.suspended ? 'suspended' : 'idle');
 		}, error => {
 			this.task = undefined;
+			this.attemptDeadline = undefined;
 			if (this.isDisposed) return;
+			if (error instanceof AppServerRecoveryTimeoutError) return;
 			this.failure = toError(error);
-			if (error instanceof AppServerConnectionStoppedError) { this.publish('unavailable'); return; }
+			if (error instanceof AppServerConnectionStoppedError) {
+				this.endBudget();
+				this.publish('unavailable');
+				return;
+			}
 			this.onFailure('App Server connection recovery failed', error);
-			if (!this.isActive || isProtocolFailure(this.failure)) this.publish('failed');
-			else this.schedule();
+			if (!this.isActive || isProtocolFailure(this.failure)) {
+				this.endBudget();
+				this.publish('failed');
+			} else {
+				this.schedule();
+			}
 		});
 		return operation;
 	}
@@ -770,22 +800,54 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 	private schedule(): void {
 		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined || this.status === 'unavailable' || isProtocolFailure(this.failure)) return;
 		if (this.suspended) { this.publish('suspended'); return; }
-		if (this.policy && (!this.policy.autoRestore || hasExhaustedReconnectAttempts(this.policy, this.attempts)
-			|| this.policy.maxElapsedTimeMs !== undefined && Date.now() - this.startedAt >= this.policy.maxElapsedTimeMs)) {
+		if (this.policy && (!this.policy.autoRestore || hasExhaustedReconnectAttempts(this.policy, this.attempts))) {
+			this.endBudget();
 			this.publish('failed');
 			return;
 		}
 		const delay = this.policy ? computeReconnectDelay(this.policy, this.attempts + 1) : [100, 500, 2000][this.attempts];
 		if (delay === undefined) {
+			this.endBudget();
 			this.publish('failed');
 			return;
 		}
+		this.armDeadline();
 		this.timer = setTimeout(() => {
 			this.timer = undefined;
 			this.attempts++;
 			void this.run().catch(() => { });
 		}, delay);
 		this.publish('recovering');
+	}
+
+	private armDeadline(): void {
+		const budget = this.policy?.maxElapsedTimeMs;
+		if (budget === undefined || this.startedAt === undefined || this.deadlineTimer !== undefined || this.suspended) return;
+		this.deadlineTimer = setTimeout(() => {
+			const error = new AppServerRecoveryTimeoutError(budget);
+			this.endBudget();
+			this.clearTimer();
+			this.failure = error;
+			if (this.attemptDeadline) {
+				void this.attemptDeadline.error(error);
+				// Disconnect retires the transport, its credential fetch and handshake.
+				this.client.disconnect();
+			}
+			this.onFailure('App Server connection recovery failed', error);
+			this.publish('failed');
+		}, Math.max(0, this.startedAt + budget - Date.now()));
+	}
+
+	private endBudget(): void {
+		this.startedAt = undefined;
+		this.clearDeadlineTimer();
+	}
+
+	private clearDeadlineTimer(): void {
+		if (this.deadlineTimer !== undefined) {
+			clearTimeout(this.deadlineTimer);
+			this.deadlineTimer = undefined;
+		}
 	}
 
 	private publish(status: IAppServerConnectionRecovery['status']): void {
@@ -799,6 +861,12 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			clearTimeout(this.timer);
 			this.timer = undefined;
 		}
+	}
+}
+
+class AppServerRecoveryTimeoutError extends Error {
+	constructor(budget: number) {
+		super(localize('appServer.recoveryTimeout', 'Automatic reconnection timed out after {0} ms.', budget));
 	}
 }
 

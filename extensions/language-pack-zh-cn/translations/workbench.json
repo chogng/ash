@@ -381,6 +381,7 @@
     "appServer.recoveryFailed": "无法恢复 Agent Host 连接或工作区。请重试。",
     "appServer.recoveryUnavailable": "无法恢复 Agent Host 连接。{0}",
     "appServer.webAuthorizationExpired": "Web 授权已过期或被撤销。请打开新的授权链接。",
+    "appServer.recoveryTimeout": "自动重新连接在 {0} 毫秒后超时。",
     "appServer.webWorkspaceChanged": "Web 工作区已改变。请打开新的授权链接。",
     "breadcrumbs.icons.title": "面包屑图标",
     "breadcrumbs.icons.description": "在编辑器面包屑中显示文件和符号图标。",
