@@ -503,6 +503,20 @@ export class ChatListItemRenderer extends Disposable {
 		const toolbar = footer = this.createMessageToolbar(actions, MenuId.ChatMessageFooter, localize('chat.message.actions', 'Response actions'), context, lifetime);
 		toolbar.context = response;
 		actions.prepend(toolbar.element);
+		let citations: ChatResponseCitationsContentPart | undefined;
+		this.updateCitations = beforeLayout => {
+			const sources = this.item.citations;
+			if (!citations && sources?.length) {
+				const web = h(actions.ownerDocument, 'span', { className: 'ash-chat-response-sources', properties: { hidden: true } });
+				actions.insertBefore(web, this.messageTime ?? null);
+				citations = lifetime.add(this.instantiationService.createInstance(
+					ChatResponseCitationsContentPart, this.element, web,
+					(url: string) => { void this.opener.open(url, { openExternal: true, fromUserGesture: true }); },
+					() => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); },
+				));
+			}
+			return citations?.render(sources, beforeLayout) === true;
+		};
 		let trailing: readonly IAction[] = [];
 		const update = (beforeLayout?: () => void): boolean => {
 			if (this.isDisposed) return false;
@@ -1100,18 +1114,6 @@ export class ChatListItemRenderer extends Disposable {
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
 		if (item.type === 'agentMessage') {
-			let citations: ChatResponseCitationsContentPart | undefined;
-			this.updateCitations = beforeLayout => {
-				const sources = this.item.citations;
-				if (!citations && sources?.length) {
-					citations = disposables.add(this.instantiationService.createInstance(
-						ChatResponseCitationsContentPart, body, article,
-						(url: string) => { void this.opener.open(url, { openExternal: true, fromUserGesture: true }); },
-						() => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); },
-					));
-				}
-				return citations?.render(sources, beforeLayout) === true;
-			};
 			this.renderResponseFooter(disposables);
 		} else if (item.historyRedoTarget) {
 			this.renderMessageCommandActions(this.createMessageActions(), disposables, [{

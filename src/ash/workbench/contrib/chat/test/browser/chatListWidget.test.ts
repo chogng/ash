@@ -606,7 +606,7 @@ test('Skill diagnostics follow shared editor bindings and cancel validation afte
 	}
 });
 
-test('renders finalized code matches as literal, localized response citations', () => {
+test('renders finalized web sources with response actions and code matches in a separate disclosure', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
@@ -629,9 +629,11 @@ test('renders finalized code matches as literal, localized response citations', 
 		})]);
 		const matches = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-code-citations')!;
 		assert.equal(widget.element.querySelector('.ash-chat-markdown-part'), body);
-		const sources = widget.element.querySelector('.ash-chat-response-citations button');
+		const footer = widget.element.querySelector('.ash-chat-message-actions')!;
+		const sources = footer.querySelector('.ash-chat-response-sources button[aria-haspopup="dialog"]');
 		assert.equal(sources?.textContent, '来源（1）');
-		assert.equal(sources?.getAttribute('aria-haspopup'), 'dialog');
+		assert.equal(sources?.closest('.ash-chat-response-sources')?.nextElementSibling, footer.querySelector('time'));
+		assert.equal(matches.parentElement, footer.parentElement);
 		assert.equal(matches.querySelector('summary')?.textContent, '匹配代码（1）');
 		assert.equal(matches.querySelector('.ash-chat-code-citation-license')?.textContent, '许可证：MIT');
 		assert.equal(matches.querySelector('a')?.href, url);
@@ -649,6 +651,11 @@ test('renders finalized code matches as literal, localized response citations', 
 		assert.equal(matches.open, true);
 		assert.equal(document.activeElement, sourceLink);
 		assert.equal(widget.element.querySelector('.ash-chat-code-citations'), matches);
+		const updatedSources = footer.querySelector<HTMLButtonElement>('.ash-chat-response-sources button')!;
+		updatedSources.focus();
+		widget.render([chatListItem(reply)]);
+		assert.equal(footer.querySelector('.ash-chat-response-sources button'), null);
+		assert.equal(document.activeElement, footer.closest('article'));
 	} finally {
 		resetNlsResolver();
 	}

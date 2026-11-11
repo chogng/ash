@@ -54,16 +54,16 @@
 	margin-block-end: var(--ash-spacing-size40);
 }
 
-.ash-sessions-window .ash-chat-markdown-part a[href] {
+.ash-sessions-window .ash-chat-markdown-part a[href],
+.ash-sessions-window .ash-chat-file-download {
 	color: inherit;
 	text-decoration-style: dotted;
 	text-decoration-color: var(--ash-description-foreground);
 	text-underline-offset: 0.18em;
 }
 
-.ash-sessions-window
-	.ash-chat-markdown-part
-	a[href]:is(:hover, :focus-visible) {
+.ash-sessions-window .ash-chat-markdown-part a[href]:is(:hover, :focus-visible),
+.ash-sessions-window .ash-chat-file-download:is(:hover, :focus-visible) {
 	text-decoration-style: solid;
 	text-decoration-color: currentColor;
 }
