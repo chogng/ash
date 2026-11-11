@@ -1,7 +1,7 @@
 import { designPaints } from '../common/model/designPaint.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { designEffects, designEffectMaxBlur, designEffectPadding, supportsDesignShadowSpread, type DesignEffect } from '../common/model/designEffects.js';
-import type { DesignShape } from '../common/model/document.js';
+import type { DesignShape } from '../common/model/designDocument.js';
 import { renderDesignPlusDarker } from './designPaintRendering.js';
 
 interface Bounds { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }

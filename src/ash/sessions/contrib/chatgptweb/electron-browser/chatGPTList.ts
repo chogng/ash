@@ -55,7 +55,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		icon: Lxicon.sync,
 	};
 	private readonly workingStatus: ISessionStatusIcon = {
-		label: localize('sessions.chat.coworkRunning', 'Cowork is working…'),
+		label: localize('sessions.chat.linkedTaskRunning', 'Task in progress…'),
 		kind: 'inProgress',
 		icon: Lxicon.sync,
 	};
@@ -109,7 +109,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			preferencesChanged.read(reader);
 			const current = selectedChatConversationId(state);
 			const showSelection = chatSelected.read(reader);
-			const coworkRunning = state.coworkTasks.some(task => {
+			const hasRunningTask = state.linkedTasks.some(task => {
 				const status = task.thread?.turns.at(-1)?.status;
 				return status === 'created' || status === 'running' || status === 'cancelling';
 			});
@@ -144,7 +144,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					selected: selected && showSelection,
 					status: state.loading?.kind === 'conversation' && state.loading.id === id ? this.loadingStatus
 						: selected && state.sending ? this.replyingStatus
-							: selected && coworkRunning ? this.workingStatus : undefined,
+							: selected && hasRunningTask ? this.workingStatus : undefined,
 					// Returning from Ash to the streaming conversation keeps the same ChatGPT selection.
 					disabled: state.managing || state.sending && (showSelection || !selected),
 					actionsDisabled: state.busy || state.sending,

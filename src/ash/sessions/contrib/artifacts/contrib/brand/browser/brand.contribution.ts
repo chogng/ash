@@ -2,12 +2,12 @@ import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
-import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
-import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
-import type { DesignShape } from '../../../common/model/document.js';
+import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
+import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
+import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
+import type { DesignShape } from '../../../common/model/designDocument.js';
 
-class BrandWorkspace extends CreatorCanvasWorkspace {
+class BrandWorkspace extends CanvasWorkspace {
 	private createVariants(): void {
 		const frame = this.document.model.value.shapes.find(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id));
 		if (frame?.kind !== 'frame') { return; }
@@ -33,11 +33,11 @@ class BrandWorkspace extends CreatorCanvasWorkspace {
 	}
 }
 
-registerCreatorMode({
-	id: CreatorMode.Brand,
-	title: getCreatorModeTitle(CreatorMode.Brand),
+registerArtifactWorkspace({
+	id: ArtifactWorkspaceId.Brand,
+	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Brand),
 	description: localize('sessions.creator.brand.description', 'Create campaign artwork and generate size variants.'),
 	icon: Lxicon.symbolColor,
 	help: localize('sessions.creator.brand.help', 'Choose Square asset, Portrait asset or Landscape asset to start a marketing layout. Select a frame and choose Create size variants to create three editable copies with proportional content. Undo removes the whole batch. Import images through the canvas tools.'),
-	create: (instantiation, ownerDocument) => instantiation.createInstance(BrandWorkspace, ownerDocument, CreatorMode.Brand),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(BrandWorkspace, ownerDocument, ArtifactWorkspaceId.Brand),
 });

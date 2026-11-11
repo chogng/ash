@@ -6,18 +6,18 @@ import { localize } from '../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
-import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
-import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
-import { DesignMode } from '../../../common/config/editorConfiguration.js';
+import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
+import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
+import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
+import { DesignMode } from '../../../common/config/designEditorConfiguration.js';
 import { generateDesignCode } from '../../code/browser/designCodeGenerator.js';
 
-class MakeWorkspace extends CreatorCanvasWorkspace {
+class MakeWorkspace extends CanvasWorkspace {
 	public override readonly usesCanvasPanels = false;
 	private previewDomNode!: HTMLIFrameElement;
 	private promptDomNode!: HTMLTextAreaElement;
 	private visible = false;
-	constructor(ownerDocument: Document, mode: CreatorMode, @IInstantiationService instantiation: IInstantiationService, @IContextMenuService contextMenus: IContextMenuService, @ICommandService private readonly commandService: ICommandService) { super(ownerDocument, mode, instantiation, contextMenus); }
+	constructor(ownerDocument: Document, mode: ArtifactWorkspaceId, @IInstantiationService instantiation: IInstantiationService, @IContextMenuService contextMenus: IContextMenuService, @ICommandService private readonly commandService: ICommandService) { super(ownerDocument, mode, instantiation, contextMenus); }
 	protected override createModeContent(): void {
 		this.editor.setMode(DesignMode.Code);
 		this.domNode.classList.add('ash-creator-make');
@@ -44,11 +44,11 @@ class MakeWorkspace extends CreatorCanvasWorkspace {
 	}
 }
 
-registerCreatorMode({
-	id: CreatorMode.Make,
-	title: getCreatorModeTitle(CreatorMode.Make),
+registerArtifactWorkspace({
+	id: ArtifactWorkspaceId.Make,
+	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Make),
 	description: localize('sessions.creator.make.description', 'View generated code, run a preview and continue with an Agent.'),
 	icon: Lxicon.code,
 	help: localize('sessions.creator.make.help', 'View code shows generated HTML, CSS and scene JSON. Edit canvas returns to visual editing and updates the running preview. Describe what to build and choose Build with Agent to prepare a Code conversation with the current HTML attached; review and send the request there.'),
-	create: (instantiation, ownerDocument) => instantiation.createInstance(MakeWorkspace, ownerDocument, CreatorMode.Make),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(MakeWorkspace, ownerDocument, ArtifactWorkspaceId.Make),
 });

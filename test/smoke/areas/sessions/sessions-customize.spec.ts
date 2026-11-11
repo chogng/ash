@@ -2,7 +2,6 @@ import { readUserSettings, writeUserSettings } from '../../../automation/setting
 import { expect, test } from '../../../automation/test.js';
 import type { Locator, Page } from '@playwright/test';
 import { Editor } from '../../../automation/editor.js';
-import { EditorGroup } from '../../../automation/editors.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
 async function useCustomMenus(page: Page): Promise<void> {
@@ -22,50 +21,42 @@ async function openSettings(page: Page, label = 'Settings'): Promise<Locator> {
 	return settings;
 }
 
-test('Settings place Advisor in Agents and retain Customize controls across tabs', async ({ application, target, workbench }) => {
+const advisorModelLabel = /^Advisor model:/u;
+const solAdvisorOption = /^Sol 6\.1(?: |$)/u;
+
+async function selectSolAdvisor(page: Page, control: Locator): Promise<void> {
+	await control.click();
+	await page.getByRole('menuitem', { name: solAdvisorOption }).press('ArrowRight');
+	await page.getByRole('menuitemradio', { name: 'High', exact: true }).press('Enter');
+	await expect(control).toHaveAccessibleName('Advisor model: Sol 6.1 High');
+}
+
+test('Settings place Advisor in Agents and retain Customize controls across tabs', async ({ target, workbench }) => {
 	if (target.kind === 'electron' && process.platform === 'darwin') await useCustomMenus(workbench.page);
-	let page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+,');
-	const workbenchSettings = page.locator('.ash-settings-editor');
+	const workbenchPage = workbench.page;
+	await workbenchPage.keyboard.press('ControlOrMeta+,');
+	const workbenchSettings = workbenchPage.locator('.ash-settings-editor');
 	const chatGroup = workbenchSettings.locator('[data-settings-group-id="agents"]');
 	await expect(chatGroup).toHaveText('Chat');
 	await chatGroup.click();
 	const agentsCategory = workbenchSettings.locator('[data-settings-category-id="agents"]');
 	await expect(agentsCategory).toHaveText('Agents');
 	await agentsCategory.click();
-	await expect(workbenchSettings.getByRole('button', { name: 'Advisor model', exact: true })).toBeVisible();
-	const workbenchEnable = workbenchSettings.getByRole('switch', { name: 'Enable Advisor' });
-	await expect(workbenchEnable).toBeVisible();
-	const advisorCard = workbenchSettings.locator('.ash-advisor-settings.ash-settings-card');
-	await expect(advisorCard).toBeVisible();
-	await expect(advisorCard.getByRole('button', { name: 'Refresh', exact: true })).toHaveCount(0);
+	const workbenchAdvisor = workbenchSettings.getByRole('group', { name: 'Advisor', exact: true });
+	const workbenchModel = workbenchAdvisor.getByRole('button', { name: advisorModelLabel });
+	await expect(workbenchModel).toBeVisible();
 	if (target.appServerMode === 'required') {
-		const advisorModel = workbenchSettings.getByRole('button', { name: 'Advisor model', exact: true });
-		await expect(advisorModel).toBeEnabled();
-		await advisorModel.focus();
-		await advisorModel.press('Alt+F1');
-		const advisorHelp = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-		await expect(advisorHelp.getByRole('textbox')).toHaveValue(/Advisor settings[\s\S]*Changes are saved immediately/u);
+		await expect(workbenchModel).toBeEnabled();
+		await workbenchModel.focus();
+		await workbenchModel.press('Alt+F1');
+		const advisorHelp = workbenchPage.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+		await expect(advisorHelp.getByRole('textbox')).toHaveValue(/Advisor settings[\s\S]*Inherit from chat[\s\S]*Disable/u);
 		await advisorHelp.getByRole('textbox').press('Escape');
-		await expect(advisorModel).toBeFocused();
-		await advisorModel.click();
-		await expect(page.getByRole('menuitemradio', { name: 'Default', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('menuitemradio', { name: 'Inherit from the parent', exact: true })).toHaveCount(0);
-		await expect(page.getByRole('menuitemradio', { name: 'Sol 5.6', exact: true })).toHaveCount(0);
-		await page.getByRole('menuitemradio', { name: 'Sol 6.1', exact: true }).click();
-		await expect(workbenchSettings.locator('.ash-advisor-settings [role="status"]')).toHaveText('Advisor settings saved.');
-		if (!await workbenchEnable.isChecked()) { await workbenchEnable.press('Space'); }
-		await expect(workbenchEnable).toBeEnabled();
+		await expect(workbenchModel).toBeFocused();
+		await selectSolAdvisor(workbenchPage, workbenchModel);
 	}
-	await page.locator('.ash-modal-editor-close').click();
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	await workbenchPage.locator('.ash-modal-editor-close').click();
+	const page = await workbench.openAgentsWindow(target.kind);
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
 	const settings = await openSettings(page);
@@ -74,48 +65,45 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	await expect(navigation.getByRole('button', { name: 'Extensions', exact: true })).toHaveCount(0);
 	for (const name of ['General', 'Appearance', 'Models']) await expect(navigation.getByRole('button', { name, exact: true })).toBeVisible();
 	await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
-	const advisorModel = settings.getByRole('button', { name: 'Advisor model', exact: true });
-	const advisorEnable = settings.getByRole('switch', { name: 'Enable Advisor' });
+	const advisor = settings.getByRole('group', { name: 'Advisor', exact: true });
+	const advisorModel = advisor.getByRole('button', { name: advisorModelLabel });
 	await expect(advisorModel).toBeVisible();
-	await expect(advisorEnable).toBeVisible();
 	if (target.appServerMode === 'required') {
-		await expect(advisorModel).toHaveText('Sol 6.1');
-		await expect(advisorEnable).toBeChecked();
+		await expect(advisorModel).toHaveAccessibleName('Advisor model: Sol 6.1 High');
 		await navigation.getByRole('button', { name: 'Models', exact: true }).click();
 		const visibility = settings.getByRole('switch', { name: 'Show Sol 6.1 in model picker', exact: true });
+		const modelSearch = settings.getByRole('combobox', { name: 'Search models', exact: true });
 		await expect(visibility).toBeChecked();
 		await expect(settings.locator('.ash-models-settings-api-row').filter({ has: page.getByRole('heading', { name: 'Meta', exact: true }) })).toBeVisible();
 		await visibility.press('Space');
 		await expect(visibility).not.toBeChecked();
 		await expect(visibility).toBeEnabled();
 		await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
-		await expect(advisorModel).toHaveText('Sol 6.1');
+		await expect(advisorModel).toHaveAccessibleName('Advisor model: Sol 6.1 High');
 		await advisorModel.click();
-		await expect(page.getByRole('menuitemradio', { name: 'Sol 6.1', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('menuitem', { name: 'Sol 6.1 High', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await navigation.getByRole('button', { name: 'Models', exact: true }).click();
+		await modelSearch.fill('Sol 6.1');
+		await expect(visibility).not.toBeChecked();
 		await visibility.press('Space');
 		await expect(visibility).toBeChecked();
 		await expect(visibility).toBeEnabled();
 		await navigation.getByRole('button', { name: 'Agents', exact: true }).click();
-		await settings.locator('.ash-advisor-settings .ash-toggle').click();
-		await expect(settings.locator('.ash-advisor-settings [role="status"]')).toHaveText('Advisor settings saved.');
-		await page.keyboard.press('Escape');
-		await openSettings(page);
-		await settings.getByRole('button', { name: 'Agents', exact: true }).click();
-		await expect(advisorModel).toHaveText('Disable');
-		await expect(advisorEnable).not.toBeChecked();
-		await advisorEnable.press('Space');
-		await expect(advisorEnable).toBeEnabled();
-		await expect(advisorEnable).toBeChecked();
 		await advisorModel.click();
 		await page.getByRole('menuitemradio', { name: 'Disable', exact: true }).click();
+		await expect(advisorModel).toHaveAccessibleName('Advisor model: Disable');
+		await page.keyboard.press('Escape');
+		await expect(settings).toHaveCount(0);
+		await openSettings(page);
+		await settings.getByRole('button', { name: 'Agents', exact: true }).click();
 		await expect(advisorModel).toBeEnabled();
-		await expect(advisorModel).toHaveText('Disable');
-		await expect(advisorEnable).toBeEnabled();
-		await expect(advisorEnable).not.toBeChecked();
-		await advisorEnable.press('Space');
-		await expect(advisorModel).toHaveText('Sol 6.1');
+		await expect(advisorModel).toHaveAccessibleName('Advisor model: Disable');
+		await advisorModel.click();
+		await expect(page.getByRole('menuitemradio', { name: 'Disable', exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.getByRole('menuitemradio', { name: 'Inherit from chat', exact: true }).click();
+		await expect(advisorModel).toHaveAccessibleName('Advisor model: Inherit from chat');
+		await selectSolAdvisor(page, advisorModel);
 	}
 	await navigation.getByRole('button', { name: 'Customize', exact: true }).click();
 	const tabs = settings.getByRole('tablist', { name: 'Customize tabs' });
@@ -123,7 +111,7 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	const settingsTab = tabs.getByRole('tab', { name: 'Settings', exact: true });
 	await expect(settingsTab).toHaveAttribute('aria-selected', 'true');
 	await expect(settings.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await settingsTab.getAttribute('id') ?? '');
-	await expect(settings.locator('.ash-advisor-settings')).toHaveCount(0);
+	await expect(advisor).toHaveCount(0);
 	await settingsTab.focus();
 	await settingsTab.press('Alt+F1');
 	await expect(page.getByRole('dialog', { name: 'Accessibility Help', exact: true })).toBeVisible();
@@ -143,32 +131,34 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	await expect(hooks).toBeVisible();
 	await expect(hooks.getByRole('searchbox')).toBeFocused();
 	await expect(hooks.locator('.ash-hooks-event')).toHaveCount(33);
-	if (target.kind === 'electron' || target.appServerMode === 'required') {
+	const ask = hooks.locator('[data-hook-action="ask-scope"]');
+	if (target.appServerMode === 'required') {
 		const scope = hooks.getByRole('combobox', { name: 'Configuration scope' });
-		await scope.click();
-		await page.keyboard.press('End');
-		await page.keyboard.press('Enter');
-		if (target.appServerMode === 'required') {
-			const edit = hooks.locator('[data-hook-action="edit-scope"]');
-			await expect(edit).toBeEnabled();
-			await edit.click();
-			await expect(page.getByRole('tab', { name: 'config.toml', exact: true })).toBeVisible();
-			await expect(page.getByRole('textbox', { name: 'config.toml', exact: true })).toBeFocused();
-			await openSettings(page);
-			await settings.getByRole('button', { name: 'Customize', exact: true }).click();
-			await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
-			await settings.getByRole('button', { name: 'Manage Hooks', exact: true }).click();
+		const selectLastScope = async () => {
 			await scope.click();
 			await page.keyboard.press('End');
 			await page.keyboard.press('Enter');
-		}
-		const ask = hooks.locator('[data-hook-action="ask-scope"]');
+		};
+		await selectLastScope();
+		const edit = hooks.locator('[data-hook-action="edit-scope"]');
+		await expect(edit).toBeEnabled();
+		await edit.click();
+		await expect(page.getByRole('tab', { name: 'config.toml', exact: true })).toBeVisible();
+		await expect(page.getByRole('textbox', { name: 'config.toml', exact: true })).toBeFocused();
+		await openSettings(page);
+		await settings.getByRole('button', { name: 'Customize', exact: true }).click();
+		await tabs.getByRole('tab', { name: 'Hooks', exact: true }).click();
+		await settings.getByRole('button', { name: 'Manage Hooks', exact: true }).click();
+		await selectLastScope();
 		await expect(ask).toBeEnabled();
 		await ask.click();
-		const draft = new Editor(page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first());
+		const draft = new Editor(page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-native-chat):visible').first());
 		await expect(draft.input).toBeFocused();
 		await draft.waitForEditorContents(text => text.includes('Help me configure'));
-		await expect(page.locator(':is(.ash-chat-item-userMessage,.ash-cowork-item-userMessage)')).toHaveCount(0);
+		await expect(page.locator(':is(.ash-chat-item-userMessage,.ash-native-chat-item-userMessage)')).toHaveCount(0);
+	} else {
+		await expect(hooks.getByRole('status')).toContainText('Could not load Hooks:');
+		await expect(ask).toBeDisabled();
 	}
 	await new QuickAccess(page).runCommand('workbench.action.chat.configure.skills');
 	await expect(settings).toHaveCount(0);
@@ -179,7 +169,7 @@ test('Settings place Advisor in Agents and retain Customize controls across tabs
 	expect(failures).toEqual([]);
 });
 
-test('Sessions Customize uses Chinese labels and localized Skills controls', async ({ application, target, workbench, restartWorkbench }) => {
+test('Sessions Customize uses Chinese labels and localized Hooks controls', async ({ target, workbench, restartWorkbench }) => {
 	if (target.kind === 'electron' && process.platform === 'darwin') await useCustomMenus(workbench.page);
 	let originalPage = workbench.page;
 	await originalPage.keyboard.press('ControlOrMeta+,');
@@ -190,7 +180,7 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	await originalPage.keyboard.press('End');
 	await originalPage.keyboard.press('Enter');
 	await expect(language).toHaveText('简体中文');
-	({ workbench, application } = await restartWorkbench());
+	({ workbench } = await restartWorkbench());
 	originalPage = workbench.page;
 	await originalPage.keyboard.press('ControlOrMeta+,');
 	editor = originalPage.locator('.ash-settings-editor');
@@ -199,27 +189,14 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	await chatGroup.click();
 	await expect(editor.locator('[data-settings-category-id="agents"]')).toHaveText('智能体');
 	await editor.locator('[data-settings-category-id="agents"]').click();
-	await expect(editor.getByRole('button', { name: '顾问模型', exact: true })).toBeVisible();
-	await expect(editor.getByRole('switch', { name: '启用顾问' })).toBeVisible();
+	await expect(editor.getByRole('button', { name: /^顾问模型：/u })).toBeVisible();
 	await originalPage.locator('.ash-modal-editor-close').click();
-	let page = originalPage;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) throw new Error('Expected Electron windows');
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	await page.waitForFunction(() => document.querySelector('.ash-sessions-activity-content') || document.querySelector('#app > section > textarea[readonly]'));
-	if (await page.locator('#app > section > textarea[readonly]').count()) throw new Error(await page.locator('#app > section > textarea[readonly]').inputValue());
-
+	const page = await workbench.openAgentsWindow(target.kind);
 	const settings = await openSettings(page, '设置');
 	await settings.getByRole('button', { name: '智能体', exact: true }).click();
-	await expect(settings.getByRole('button', { name: '顾问模型', exact: true })).toBeVisible();
-	await expect(settings.getByRole('switch', { name: '启用顾问' })).toBeVisible();
+	await expect(settings.getByRole('button', { name: /^顾问模型：/u })).toBeVisible();
 	await settings.getByRole('button', { name: '快捷键', exact: true }).click();
-	await expect(settings.locator('.ash-sessions-settings-page')).toContainText('搜索命令和快捷键、查看默认绑定、录制按键');
+	await expect(settings.locator('.ash-sessions-settings-page')).toContainText('按分类浏览 Agent 窗口中可用的快捷键。');
 	await settings.getByRole('button', { name: '自定义', exact: true }).click();
 	await expect(settings.getByRole('button', { name: '打开工作台设置', exact: true })).toBeVisible();
 	const tabs = settings.getByRole('tablist', { name: '自定义标签页' });
@@ -250,20 +227,20 @@ test('Sessions Customize settings hands off to the same Workbench settings and J
 	await badges.press('Space');
 	await expect(badges).not.toBeChecked();
 	await expect(badges).toBeEnabled();
-	await page.getByRole('button', { name: 'Close Ash Settings', exact: true }).click();
+	await page.getByRole('toolbar', { name: 'Close Ash Settings', exact: true }).getByRole('button').click();
+	await expect(sharedSettings).toHaveCount(0);
 	settings = await openSettings(page);
-	await settings.locator('[data-settings-category-id="general"]').click();
-	const disabledAI = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch');
-	await expect(disabledAI).not.toBeChecked();
-	await disabledAI.press('Space');
-	await expect(disabledAI).toBeChecked();
-	await expect(disabledAI).toBeEnabled();
+	await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+	const followReplies = settings.locator('[data-settings-item-id="chat.autoFollowReplies"]').getByRole('switch');
+	await expect(followReplies).toBeChecked();
+	await followReplies.press('Space');
+	await expect(followReplies).not.toBeChecked();
+	await expect(followReplies).toBeEnabled();
 	await settings.locator('[data-settings-category-id="customize"]').click();
 	await settings.getByRole('button', { name: 'Preferences: Open User Settings (JSON)', exact: true }).click();
 	await expect(settings).toHaveCount(0);
-	const group = new EditorGroup(page.locator('.ash-editor-group:visible').filter({ has: page.getByRole('tab', { name: 'User Settings (JSON)', exact: true }) }));
-	await expect(group.tabs.getByText('User Settings (JSON)', { exact: true })).toBeVisible();
-	await group.editor.waitForEditorContents(source => source.includes('"workbench.activityBar.badges": false') && source.includes('"chat.disableAIFeatures": true'));
+	const settingsJson = page.getByRole('tabpanel', { name: 'User Settings (JSON)', exact: true });
+	await new Editor(settingsJson).waitForEditorContents(source => source.includes('"workbench.activityBar.badges": false') && source.includes('"chat.autoFollowReplies": false'));
 	expect(runningApplication.diagnostics.consoleErrors.filter(message => message.startsWith('Code editor contribution failed'))).toEqual([]);
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });

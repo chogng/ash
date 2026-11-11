@@ -5,7 +5,7 @@ import { IWorkingCopyService } from '../../../../workbench/services/workingCopy/
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { DesignDocumentController } from './designDocumentController.js';
 import type { DesignEditorWidget } from './widget/designEditorWidget.js';
-import { CreatorMode } from '../common/creator.js';
+import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 
 export const DESIGN_LAYERS_CONTAINER_ID = 'workbench.sessions.sidebar.designLayers';
 export const DESIGN_PROPERTIES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.designProperties';
@@ -14,15 +14,15 @@ export const DESIGN_PROPERTIES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.d
 export interface IDesignEditorService {
 	readonly document: DesignDocumentController;
 	readonly activeEditor: IObservable<DesignEditorWidget | undefined>;
-	getDocument(mode: CreatorMode): DesignDocumentController;
+	getDocument(mode: ArtifactWorkspaceId): DesignDocumentController;
 	setActiveEditor(editor: DesignEditorWidget | undefined): void;
 }
 
 export const IDesignEditorService = createServiceIdentifier<IDesignEditorService>('designEditorService');
 
 export class DesignEditorService extends Disposable implements IDesignEditorService {
-	private readonly documents = new Map<CreatorMode, DesignDocumentController>();
-	public get document(): DesignDocumentController { return this.getDocument(CreatorMode.Design); }
+	private readonly documents = new Map<ArtifactWorkspaceId, DesignDocumentController>();
+	public get document(): DesignDocumentController { return this.getDocument(ArtifactWorkspaceId.Design); }
 	private readonly active = observableValue<DesignEditorWidget | undefined>(this, undefined);
 	public readonly activeEditor: IObservable<DesignEditorWidget | undefined> = this.active;
 	constructor(@IInstantiationService private readonly instantiation: IInstantiationService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILifecycleService lifecycle: ILifecycleService) {
@@ -34,7 +34,7 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 			}
 		}, 'Creator automatic save', () => [...this.documents.values()].every(document => !document.automaticallySaves || (!document.isDirty && !document.needsSaveRetry && !document.isRestoring)))));
 	}
-	public getDocument(mode: CreatorMode): DesignDocumentController {
+	public getDocument(mode: ArtifactWorkspaceId): DesignDocumentController {
 		let document = this.documents.get(mode);
 		if (!document) {
 			document = this._register(this.instantiation.createInstance(DesignDocumentController, mode));

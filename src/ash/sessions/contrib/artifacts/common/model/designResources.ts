@@ -4,7 +4,7 @@ import { designTextStyleKeys, parseDesignTextStyle, updateDesignText, type Desig
 import { localize } from '../../../../../nls.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { isUuid } from '../../../../../base/common/uuid.js';
-import type { DesignDocument, DesignShape } from './document.js';
+import type { DesignDocument, DesignShape } from './designDocument.js';
 
 export type DesignVariableType = 'color' | 'number' | 'string' | 'boolean';
 export type DesignVariableValue = string | number | boolean | { readonly alias: string; };

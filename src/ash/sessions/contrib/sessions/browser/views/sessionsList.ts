@@ -502,11 +502,12 @@ export class SessionsList extends DomWidget {
 		(firstItem ?? this.domNode).focus();
 	}
 
-	public getViewState(): { readonly top: number; readonly focus: string | undefined; } {
+	public getViewState(): { readonly top: number; readonly focus: string | undefined; readonly query?: string; } {
 		const active = this.domNode.ownerDocument.activeElement;
 		const item = [...this.items].find(([, item]) => item.domNode.contains(active));
 		const section = [...this.sections].find(([, section]) => section.button === active);
-		return { top: this.tree.scrollTop, focus: section ? `section:${section[0]}` : item?.[0] };
+		const focus = this.search.focused ? 'search' : section ? `section:${section[0]}` : item?.[0];
+		return { top: this.tree.scrollTop, focus, query: this.search.query };
 	}
 
 	public closePopups(): void {
@@ -515,9 +516,10 @@ export class SessionsList extends DomWidget {
 	}
 
 	public restoreViewState(state: ReturnType<SessionsList['getViewState']>): void {
+		if (state.query !== undefined) this.search.restore(state.query, state.focus === 'search');
 		this.render();
 		this.tree.scrollTop = state.top;
-		if (state.focus) {
+		if (state.focus && state.focus !== 'search') {
 			const row = this.tree.model.getElement(state.focus);
 			if (row) this.tree.focusRow(row, true);
 		}

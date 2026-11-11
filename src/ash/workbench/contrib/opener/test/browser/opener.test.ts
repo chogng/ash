@@ -359,24 +359,22 @@ suite('link browser component', () => {
 	});
 
 
-	for (const cowork of [false, true]) {
-		test(`trusted command links execute object arguments in ${cowork ? 'Sessions' : 'Workbench'} and stop after failure`, async function () {
-			const { page } = browserTests;
+	test('trusted Chat command links execute object arguments and stop after failure', async function () {
+		const { page } = browserTests;
 
-			await page.goto('/link.html');
-			await page.evaluate(cowork => window.ashLinkIntegration.commandLink(true, false, cowork), cowork);
-			await page.getByRole('link', { name: 'Run linked commands', exact: true }).click();
-			await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.commandCalls)).toEqual([{ text: '%20 中文' }, 'first finished', 'second']);
-			await page.evaluate(cowork => window.ashLinkIntegration.commandLink(true, true, cowork), cowork);
-			const link = page.getByRole('link', { name: 'Run linked commands', exact: true });
-			await link.focus();
-			await link.press('Enter');
-			await expect(page.locator('#command-link').getByRole('alert')).toHaveText('Unknown command: test.link.missing');
-			expect(await page.evaluate(() => window.ashLinkIntegration.commandCalls)).toEqual([{ text: '%20 中文' }, 'first finished', 'second', { text: '%20 中文' }, 'first finished']);
-			expect(await page.evaluate(() => window.ashLinkIntegration.opened)).toEqual([]);
-			await expect(page).toHaveURL(/\/link.html$/u);
-		});
-	}
+		await page.goto('/link.html');
+		await page.evaluate(() => window.ashLinkIntegration.commandLink(true));
+		await page.getByRole('link', { name: 'Run linked commands', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashLinkIntegration.commandCalls)).toEqual([{ text: '%20 中文' }, 'first finished', 'second']);
+		await page.evaluate(() => window.ashLinkIntegration.commandLink(true, true));
+		const link = page.getByRole('link', { name: 'Run linked commands', exact: true });
+		await link.focus();
+		await link.press('Enter');
+		await expect(page.locator('#command-link').getByRole('alert')).toHaveText('Unknown command: test.link.missing');
+		expect(await page.evaluate(() => window.ashLinkIntegration.commandCalls)).toEqual([{ text: '%20 中文' }, 'first finished', 'second', { text: '%20 中文' }, 'first finished']);
+		expect(await page.evaluate(() => window.ashLinkIntegration.opened)).toEqual([]);
+		await expect(page).toHaveURL(/\/link.html$/u);
+	});
 
 	test('untrusted Markdown cannot execute a command batch', async function () {
 		const { page } = browserTests;

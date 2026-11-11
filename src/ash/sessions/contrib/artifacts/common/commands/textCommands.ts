@@ -1,4 +1,4 @@
-import { flattenDesignShapes, type DesignShape } from '../model/document.js';
+import { flattenDesignShapes, type DesignShape } from '../model/designDocument.js';
 import type { DesignModel } from '../model/designModel.js';
 import { designTextSegments, formatDesignText, replaceDesignText, type DesignTextRun, type DesignTextShape, type DesignTextStyle } from '../model/designText.js';
 

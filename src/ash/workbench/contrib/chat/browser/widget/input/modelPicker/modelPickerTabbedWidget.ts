@@ -393,9 +393,11 @@ export class TabbedModelPicker extends Disposable {
 					} : undefined,
 				} satisfies IModelCardOptions);
 				const attach = (card: ModelCard): void => {
+					const hadFocus = container.contains(container.ownerDocument.activeElement);
 					this.activeCard = card;
 					card.update(this.findModel(entry.model) ?? entry);
 					container.replaceChildren(card.element);
+					if (hadFocus) { card.focus(); }
 				};
 				attach(cards.get());
 				resources.add(cards.onDidChange(attach));

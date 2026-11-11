@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
 import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/designDocument.js';
 import { defaultPrototypeTransition, type PrototypeFrame, type PrototypeInteraction, type PrototypeStep } from '../../contrib/artifacts/common/model/prototype.js';
 import { PrototypePlayback, prototypeProgress, samplePrototypeTransition, smartAnimate } from '../../contrib/artifacts/common/model/prototypePlayback.js';
 

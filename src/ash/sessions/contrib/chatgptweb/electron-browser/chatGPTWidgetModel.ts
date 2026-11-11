@@ -10,6 +10,7 @@ import { findLast } from '../../../../base/common/arraysFind.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
+import type { ArtifactKind } from '../../../common/artifactKind.js';
 import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -21,7 +22,7 @@ import { mergeChatGPTResources } from '../browser/chatGPTClient.js';
 import type { ChatGPTMessage } from '../browser/chatGPTClient.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
-import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
+import { canQueueChatGPTCreation, linkedTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import type { ChatEntityDetailsSource } from '../../chat/browser/chatEntityDetails.js';
 
 export const ChatGPTResponseCanOpenOriginalContext = 'sessions.chatgpt.responseCanOpenOriginal';
@@ -34,7 +35,7 @@ const emptyDraftFiles = [] as const;
 export function canUseAshModels(state: ChatGPTState): boolean {
 	// Existing conversations and drafts with provider-owned attachments keep their reply route.
 	return !selectedChatConversationId(state) && !state.pendingCreation && !state.uncertain
-		&& state.loading?.kind !== 'conversation' && !state.messages.length && !state.coworkTasks.length && !state.attachments.length;
+		&& state.loading?.kind !== 'conversation' && !state.messages.length && !state.linkedTasks.length && !state.attachments.length;
 }
 
 export function chatGPTModelEntries(backend: IChatGPTService): IObservable<readonly ModelCatalogEntry[]> {
@@ -101,7 +102,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			}
 			const previous = this.transcriptState;
 			if (!previous || previous.messages !== state.messages || previous.voiceTranscript !== state.voiceTranscript
-				|| previous.coworkTasks !== state.coworkTasks || previous.sending !== state.sending
+				|| previous.linkedTasks !== state.linkedTasks || previous.sending !== state.sending
 				|| previous.conversationId !== state.conversationId || previous.localConversationId !== state.localConversationId) {
 				this.currentItems = this.projectTranscript(state);
 			}
@@ -126,10 +127,12 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	get items(): readonly IChatListItem[] { return this.currentItems; }
 
 	newChat(): void { this.backend.newChat(); }
+	get artifactDraftKind(): ArtifactKind | undefined { return this.backend.state.get().draftArtifactKind; }
+	setArtifactDraftKind(kind: ArtifactKind | undefined): boolean { return this.backend.setDraftArtifactKind(kind); }
 
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined {
 		const state = this.backend.state.read(reader);
-		if (state.conversationId || state.coworkTasks.length || state.messages.length || state.loading?.kind === 'conversation') return undefined;
+		if (state.conversationId || state.linkedTasks.length || state.messages.length || state.loading?.kind === 'conversation') return undefined;
 		return { id: state.localConversationId, revision: this.backend.newDraftRevision };
 	}
 
@@ -372,13 +375,13 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		const id = (kind: string, value: string): string => JSON.stringify([state.localConversationId, kind, value]);
 		const anchors = new Set(state.messages.map(message => message.id));
 		const appendTasks = (anchor: string | undefined, orphaned = false): void => {
-			for (const task of state.coworkTasks.filter(task => orphaned
+			for (const task of state.linkedTasks.filter(task => orphaned
 				? task.afterMessageId !== undefined && !anchors.has(task.afterMessageId) : task.afterMessageId === anchor)) {
 				const prefix = id('task', JSON.stringify([task.sessionId, task.threadId]));
 				result.push({
-					id: prefix, type: 'agentMessage', text: coworkTaskStatus(task), label: localize('sessions.chat.coworkTask', 'Cowork task'),
+					id: prefix, type: 'agentMessage', text: linkedTaskStatus(task), label: localize('sessions.chat.linkedTask', 'Linked task'),
 					detail: [task.prompt, task.thread?.turns.at(-1)?.error?.message ?? task.error ?? task.readError].filter(Boolean).join('\n'),
-					conversationLink: { label: localize('sessions.chat.openCoworkTask', 'Open Cowork task'), sessionId: task.sessionId, threadId: task.threadId },
+					conversationLink: { label: localize('sessions.chat.openLinkedTask', 'Open task'), sessionId: task.sessionId, threadId: task.threadId },
 					transient: false,
 				});
 				for (const turn of task.thread?.turns ?? []) {

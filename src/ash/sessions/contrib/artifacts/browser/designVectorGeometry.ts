@@ -4,7 +4,7 @@ import { designNetworkContours, designNetworkRegions, type DesignVectorNetwork }
 import type { DesignVectorIntersection } from '../common/model/designVectorTopology.js';
 import { localize } from '../../../../nls.js';
 import type paper from 'paper';
-import type { DesignShape } from '../common/model/document.js';
+import type { DesignShape } from '../common/model/designDocument.js';
 import { designPathData, designPathFillContours, designPathStrokeContours, designShapeContours, type DesignPathContour } from '../common/model/designVector.js';
 
 let engine: { scope: paper.PaperScope; offsetStroke: typeof import('paperjs-offset').offsetStroke; offset: typeof import('paperjs-offset').offset; } | undefined;

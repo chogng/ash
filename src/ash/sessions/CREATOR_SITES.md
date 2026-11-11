@@ -59,7 +59,7 @@ SidebarPart | EditorPart | AuxiliaryBarPart
 
 `IWorkingCopyService` 只登记工作副本，不自动合并同一 URI 的内容，也不提供共享撤销。内容领域需要按资源取得和释放模型引用；同一资源的多个编辑器使用同一模型及保存状态。现有文本模型引用服务绑定 TextModel，空间文档不能直接冒用该类型。
 
-当前 ArtifactsEditorPane 已在共享 EditorPart 的保留产品编辑组中承载 ArtifactsPage，各模式工作空间与其文档保持原有独立生命周期。图层与属性使用左右 ViewContainer；会话工作集恢复保留产品编辑组。按网站文件身份打开多个编辑器、共享同一网站文档模型和资源恢复仍属于 Sites 的目标能力。涉及的窗口契约见 [LAYOUT.md](LAYOUT.md) 和 [LAYOUT_CONTROLLER.md](LAYOUT_CONTROLLER.md)。
+当前 ArtifactsEditorPane 已在共享 EditorPart 的保留产品编辑组中承载 ArtifactsEditorView，各模式工作空间与其文档保持原有独立生命周期。图层与属性使用左右 ViewContainer；会话工作集恢复保留产品编辑组。按网站文件身份打开多个编辑器、共享同一网站文档模型和资源恢复仍属于 Sites 的目标能力。涉及的窗口契约见 [LAYOUT.md](LAYOUT.md) 和 [LAYOUT_CONTROLLER.md](LAYOUT_CONTROLLER.md)。
 
 ## 职责与数据归属
 
@@ -159,13 +159,13 @@ Sessions 窗口核心和共享服务不导入 contrib 实现。Creator 使用 Se
 
 | 能力             | 当前情况                                                                                                                                                                                            | 开工需要完成                                                                         |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Creator 模式标识 | [`CreatorMode`](contrib/artifacts/common/creator.ts) 已列出 Sites 等模式                                                                                                                            | 按资源打开对应编辑器，模式不作为单一文档的索引                                       |
-| 模式契约         | [`creatorWorkspace.ts`](contrib/artifacts/browser/creatorWorkspace.ts) 已定义工作区与模式注册契约                                                                                                   | 按真实网站消费者补齐工具与面板组合契约                                               |
+| Creator 模式标识 | [`ArtifactWorkspaceId`](contrib/artifacts/common/artifactWorkspace.ts) 已列出 Sites 等模式                                                                                                          | 按资源打开对应编辑器，模式不作为单一文档的索引                                       |
+| 模式契约         | [`artifactWorkspaceRegistry.ts`](contrib/artifacts/browser/artifactWorkspaceRegistry.ts) 已定义工作区与模式注册契约                                                                                 | 按真实网站消费者补齐工具与面板组合契约                                               |
 | 公共画布         | [`contrib/canvas`](contrib/canvas/README.md) 已拥有视口、网格、空间容器、选框和指针手势                                                                                                             | 网站布局结果由 Sites 提供；画布不拥有网站规则与文档历史                              |
-| 画布工作区       | [`creatorCanvasWorkspace.ts`](contrib/artifacts/browser/creatorCanvasWorkspace.ts) 组合已有 Design 编辑能力                                                                                         | 区分公共画布机制与自由布局操作，接入网站布局结果                                     |
+| 画布工作区       | [`canvasWorkspace.ts`](contrib/artifacts/browser/canvasWorkspace.ts) 组合已有 Design 编辑能力                                                                                                       | 区分公共画布机制与自由布局操作，接入网站布局结果                                     |
 | 文档、编辑和保存 | 已有 [模型](contrib/artifacts/common/model/designModel.ts)、[编辑命令](contrib/artifacts/common/commands/documentCommands.ts) 与[文件控制器](contrib/artifacts/browser/designDocumentController.ts) | 增加网站内容、断点与引用规则，保持提交和文件状态的唯一拥有者                         |
 | Sites 能力       | [SitesWorkspace](contrib/artifacts/contrib/sites/browser/sites.contribution.ts) 已提供画板页面、预览和 SVG 内容的 HTML 导出                                                                         | 网站元素布局、断点、独立路由、CMS 与发布仍待实现；已有导出不能证明网站排版能力已完成 |
-| 文档身份         | [DesignEditorService](contrib/artifacts/browser/designEditorService.ts) 按模式保留一份文档，ArtifactsPage 按模式保留工作区                                                                          | 改为按资源共享文档引用，支持同模式多文件与同文件多视图                               |
+| 文档身份         | [DesignEditorService](contrib/artifacts/browser/designEditorService.ts) 按模式保留一份文档，ArtifactsEditorView 按模式保留工作区                                                                    | 改为按资源共享文档引用，支持同模式多文件与同文件多视图                               |
 | 现有测试         | [模型测试](test/common/designModel.test.ts)与[编辑器测试](test/browser/designEditorWidget.test.ts)覆盖已有设计行为                                                                                  | 新增网站规则与完整用户流程覆盖；现有测试不能证明 Sites 可用                          |
 
 已有 [`contrib/artifacts/DESIGN.md`](contrib/artifacts/DESIGN.md) 讨论多种创作成果与媒体工作流。本文具体负责此次网站模式的拆分和启动；模型、文件与贡献职责实际变化时，在同一次实现中同步相关正文和调用点。

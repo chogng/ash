@@ -3,10 +3,10 @@ import { designPaintBackground } from '../../../browser/designPaintRendering.js'
 import { renderDesignTextFrame } from '../../../browser/designTextRendering.js';
 import { mainWindow } from '../../../../../../base/browser/window.js';
 import { localize } from '../../../../../../nls.js';
-import { flattenDesignShapes, serializeDesignDocument, type DesignDocument, type DesignGridTrack, type DesignShape } from '../../../common/model/document.js';
+import { flattenDesignShapes, serializeDesignDocument, type DesignDocument, type DesignGridTrack, type DesignShape } from '../../../common/model/designDocument.js';
 import { getDesignGridCells } from '../../../common/model/layout.js';
 import type { DesignImageSource } from '../../../browser/designMedia.js';
-import { getDesignRenderBounds, renderDesignShape } from '../../../browser/svgRenderer.js';
+import { getDesignRenderBounds, renderDesignShape } from '../../../browser/designSvgRenderer.js';
 
 /** Generates runnable source from committed data, retaining IDs and JSON for agent edits. */
 export function generateDesignCode(document: DesignDocument, images: ReadonlyMap<string, DesignImageSource> = new Map()): string {

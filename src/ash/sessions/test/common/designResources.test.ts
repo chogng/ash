@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/designDocument.js';
 import { getDesignResourceCatalog, resolveDesignVariable, type DesignLibrary } from '../../contrib/artifacts/common/model/designResources.js';
 import { hitTestDesignShapes } from '../../contrib/artifacts/common/model/hitTest.js';
 

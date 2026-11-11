@@ -33,6 +33,7 @@ import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browse
 import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { ArtifactDraftLabel } from '../../artifacts/browser/artifactDraft.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/newChatEnvironment.css';
@@ -193,6 +194,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				tipContainer.inert = overlaps;
 			}));
 		}
+		this._register(new ArtifactDraftLabel(this.input, model));
 		this.renderDraftNotice(parent);
 		parent.append(footer);
 		this.input.useResponsiveFooter(() => this.sessionControls?.responsivePickers ?? []);

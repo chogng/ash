@@ -6,10 +6,10 @@ import { Disposable, DisposableStore } from '../../../../../../base/common/lifec
 import { localize } from '../../../../../../nls.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { ComponentCommands } from '../../../common/commands/componentCommands.js';
-import { flattenDesignShapes, type DesignOverride, type DesignShape } from '../../../common/model/document.js';
+import { flattenDesignShapes, type DesignOverride, type DesignShape } from '../../../common/model/designDocument.js';
 import { designPropertyLabel } from './resourcePropertiesWidget.js';
 import { getDesignResourceCatalog, type DesignResources, type DesignBindableProperty } from '../../../common/model/designResources.js';
-import type { DesignSelection } from '../../../common/selection.js';
+import type { DesignSelection } from '../../../common/designSelection.js';
 
 /** Local component authoring shares the same properties surface and document command boundary. */
 export class ComponentPropertiesWidget extends Disposable {

@@ -13,7 +13,7 @@ export interface IChatTip {
 export interface IChatTipService {
 	readonly onDidChangeTips: Event<void | 'reset'>;
 	registerTipProvider(provider: IChatTipProvider): IDisposable;
-	getWelcomeTip(currentId?: string, offset?: -1 | 0 | 1): IChatTip | undefined;
+	getWelcomeTip(currentId?: string, offset?: -1 | 0 | 1, allowedIds?: readonly string[]): IChatTip | undefined;
 	dismissTip(id: string): void;
 	clearDismissedTips(): void;
 }
@@ -27,7 +27,7 @@ export interface IChatTipProvider {
 
 export const IChatTipService = createServiceIdentifier<IChatTipService>('chatTipService');
 const DismissedTipStoragePrefix = 'chat.dismissedCodeTip.';
-const DismissedTipMigrationKey = 'chat.codeTipDismissalsMigrated';
+const LegacyDismissedTipKey = 'chat.dismissedWelcomeTip';
 
 /** Owns welcome-tip eligibility and the user's profile-scoped dismissal. */
 export class ChatTipService extends Disposable implements IChatTipService {
@@ -36,12 +36,13 @@ export class ChatTipService extends Disposable implements IChatTipService {
 	private readonly providers = new Set<IChatTipProvider>();
 	constructor(@IStorageService private readonly storage: IStorageService) {
 		super();
-		if (!storage.getBoolean(DismissedTipMigrationKey, StorageScope.PROFILE, false)) {
-			// The old shared key could identify the attachment tip, but a catalog dismissal lost the tip ID.
-			if (storage.get('chat.dismissedWelcomeTip', StorageScope.PROFILE) === 'attach-files') {
+		const legacyDismissal = storage.get(LegacyDismissedTipKey, StorageScope.PROFILE);
+		if (legacyDismissal !== undefined) {
+			// Only the former attachment dismissal identifies a specific tip.
+			if (legacyDismissal === 'attach-files') {
 				storage.store(DismissedTipStoragePrefix + 'attach-files', true, StorageScope.PROFILE, StorageTarget.USER);
 			}
-			storage.store(DismissedTipMigrationKey, true, StorageScope.PROFILE, StorageTarget.USER);
+			storage.remove(LegacyDismissedTipKey, StorageScope.PROFILE);
 		}
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key.startsWith(DismissedTipStoragePrefix)) this.changed.fire();
@@ -60,14 +61,14 @@ export class ChatTipService extends Disposable implements IChatTipService {
 		return registration;
 	}
 
-	public getWelcomeTip(currentId?: string, offset: -1 | 0 | 1 = 0): IChatTip | undefined {
+	public getWelcomeTip(currentId?: string, offset: -1 | 0 | 1 = 0, allowedIds?: readonly string[]): IChatTip | undefined {
 		const tips: IChatTip[] = [];
 		for (const provider of this.providers) {
 			const tip = provider.provideTip();
-			if (tip) tips.push(tip);
+			if (tip && (!allowedIds || allowedIds.includes(tip.id))) tips.push(tip);
 		}
 		for (const tip of TIP_CATALOG) {
-			if (!this.storage.getBoolean(DismissedTipStoragePrefix + tip.id, StorageScope.PROFILE, false)) {
+			if ((!allowedIds || allowedIds.includes(tip.id)) && !this.storage.getBoolean(DismissedTipStoragePrefix + tip.id, StorageScope.PROFILE, false)) {
 				tips.push({ id: tip.id, content: new MarkdownString(tip.message()) });
 			}
 		}
@@ -85,6 +86,7 @@ export class ChatTipService extends Disposable implements IChatTipService {
 	}
 
 	public clearDismissedTips(): void {
+		this.storage.remove(LegacyDismissedTipKey, StorageScope.PROFILE);
 		for (const key of this.storage.keys(StorageScope.PROFILE, StorageTarget.USER)) {
 			if (key.startsWith(DismissedTipStoragePrefix)) this.storage.remove(key, StorageScope.PROFILE);
 		}

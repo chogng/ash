@@ -55,10 +55,12 @@ for (const [legacy, firstTip] of [['attach-files', 'plan'], ['code-tip-catalog',
 			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
 			using services = new InstantiationService();
 			services.registerInstance(IStorageService, storage);
+			storage.store('chat.codeTipDismissalsMigrated', true, StorageScope.PROFILE, StorageTarget.USER);
 			storage.store('chat.dismissedWelcomeTip', legacy, StorageScope.PROFILE, StorageTarget.USER);
 			using tips = services.createInstance(ChatTipService);
 			assert.equal(tips.getWelcomeTip()?.id, firstTip);
-			assert.equal(storage.get('chat.dismissedWelcomeTip', StorageScope.PROFILE), legacy);
+			assert.equal(storage.get('chat.dismissedWelcomeTip', StorageScope.PROFILE), undefined);
+			assert.equal(tips.getWelcomeTip(undefined, 0, ['attach-files'])?.id, legacy === 'attach-files' ? undefined : 'attach-files');
 		} finally {
 			dom.window.close();
 		}

@@ -181,7 +181,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, 'div');
 		this.element.id = panelId;
-		this.element.className = 'ash-chat';
+		this.element.className = viewOptions?.classPrefix ?? 'ash-chat';
 		this.element.setAttribute('role', 'tabpanel');
 		this.element.hidden = true;
 		container.append(this.element);
@@ -260,6 +260,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			await openChangesForTurn(source, AbortSignal.any([signal, controller.signal]));
 		});
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
+			classPrefix: viewOptions?.classPrefix,
 			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
 			canEditRequest: () => !this.isTranscriptProgressActive,
 			submitRequestEdit: model.submitRequestEdit?.bind(model),
@@ -305,7 +306,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestLink: (target: string) => {
 				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error('Could not open Markdown link', error));
 			},
-			memoryNamespace: model.memoryNamespace,
+			get memoryNamespace() { return model.memoryNamespace; },
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		});
@@ -464,6 +465,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	setVisible(visible: boolean): void {
 		const wasVisible = this.visible;
+		// Capture the transcript's reading position while its viewport can still be measured.
+		if (!visible) this.listWidget.setVisible(false);
 		this.element.hidden = !visible;
 		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
@@ -472,7 +475,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		if (!visible && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
 		this.syncRecapPresence(visible);
 		this.input.setVisible(visible);
-		this.listWidget.setVisible(visible);
+		if (visible) this.listWidget.setVisible(true);
 	}
 
 	public getViewState(): IChatWidgetViewState {

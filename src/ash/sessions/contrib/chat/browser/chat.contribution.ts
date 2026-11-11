@@ -27,10 +27,15 @@ import { ISessionsProvidersService } from '../../../services/sessions/browser/se
 import { IChatTipService } from '../../../../workbench/contrib/chat/browser/chatTipService.js';
 
 import { SessionsChatCopyActionRendering } from './chatCopyActionRendering.js';
+import { NativeChatModelPreferences } from '../common/nativeChatModelPreferences.js';
+import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
+import { NativeChatModelPreferencesService } from './nativeChatModelPreferencesService.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 
 registerWorkbenchContribution(SessionsChatCopyActionRendering.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(SessionsChatCopyActionRendering));
 
 registerSingleton(ISessionsChatViewStateService, SessionsChatViewStateService, InstantiationType.Delayed);
+registerSingleton(INativeChatModelPreferencesService, new SyncDescriptor(NativeChatModelPreferencesService, [NativeChatModelPreferences], true));
 
 registerAction2(NewChatInSessionsWindowAction);
 registerAction2(NewSessionFromNavigationAction);

@@ -28,9 +28,10 @@ import { IChatEntityDetails, type ChatEntityDetailsSource } from './chatEntityDe
 import type { IChatWidgetViewOptions } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ReplyChatInputFactory, type ReplyChatDraftPicker } from './replyChatInput.js';
+import { ArtifactDraftLabel, getArtifactDraftHelp, type ArtifactDraftModel } from '../../artifacts/browser/artifactDraft.js';
 import './media/chatView.css';
 
-export interface IReplyChatEditorModel extends IChatWidgetModel {
+export interface IReplyChatEditorModel extends IChatWidgetModel, ArtifactDraftModel {
 	getEntityDetailsSource?(item: IChatListItem): ChatEntityDetailsSource | undefined;
 	newChat(): void;
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined;
@@ -135,8 +136,9 @@ export class ReplyChatEditor extends EditorPane {
 						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
 						persistentDraftScope: this.options.persistentDraftScope,
 						createDraftPicker: createDraftPicker && (footer => createDraftPicker(instantiation, footer, this.shown, model)),
-						accessibilityHelp: getChatPromptStartersHelp,
+						accessibilityHelp: () => `${getChatPromptStartersHelp()}\n${getArtifactDraftHelp()}`,
 					});
+					this._register(new ArtifactDraftLabel(input, model));
 					input.element.classList.add('chat-composer');
 					const starters = this._register(new ChatPromptStarters(input.element, input));
 					const canShowStarters = observableFromEvent(this, model.onDidChange, () => {

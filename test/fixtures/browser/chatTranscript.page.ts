@@ -26,11 +26,11 @@ import { ITerminalConfigurationService } from '../../../src/ash/workbench/contri
 import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { readNewChatDraftState } from '../../../src/ash/sessions/contrib/chat/common/newChatDraftState.js';
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { CoworkWidget } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
-import { NewCoworkInputWidget } from '../../../src/ash/sessions/contrib/cowork/browser/newCoworkInput.js';
+import { NativeChatWidget } from '../../../src/ash/sessions/contrib/chat/browser/widget/nativeChatWidget.js';
+import { ReplyChatInputFactory } from '../../../src/ash/sessions/contrib/chat/browser/replyChatInput.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
-import { ChatTipService, IChatTipService } from '../../../src/ash/sessions/contrib/cowork/browser/chatTipService.js';
+import { ChatTipService, IChatTipService } from '../../../src/ash/workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { registerTestVoiceInputServices, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { LocalTranscriptionService } from '../../../src/ash/workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
@@ -468,7 +468,7 @@ let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let hasConversationChanges = false;
 let responseWorking = false;
-let appChat: ChatWidget | CoworkWidget | undefined;
+let appChat: ChatWidget | NativeChatWidget | undefined;
 let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
 let dictationStarts = 0;
@@ -1364,7 +1364,7 @@ window.ashChatTranscriptIntegration = {
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
-		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
 		appChat.setVisible(true);
 	},
 	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {

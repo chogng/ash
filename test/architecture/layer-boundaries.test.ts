@@ -295,12 +295,12 @@ test('Design editor stays within its Sessions contribution and keeps document co
 	const sharedBrowserFiles = [
 		...productionTypeScriptFiles(join(designRoot, 'browser/widget')),
 		...productionTypeScriptFiles(join(designRoot, 'browser/controller')),
-		join(designRoot, 'browser/view.ts'),
+		join(designRoot, 'browser/designCanvasView.ts'),
 		join(designRoot, 'browser/designEditorBrowser.ts'),
 	];
 	for (const file of sharedBrowserFiles) {
 		for (const target of localImports(file)) {
-			if (target.startsWith(join(designRoot, 'contrib')) || target === join(designRoot, 'design.main.ts')) {
+			if (target.startsWith(join(designRoot, 'contrib')) || target === join(designRoot, 'browser/designEditorContributions.ts')) {
 				violations.push(`${sourceName(file)} -> ${sourceName(target)}`);
 			}
 		}
@@ -330,7 +330,7 @@ test("Artifacts host consumes mode contracts and modes do not import each other'
 	const modes = ['design', 'whiteboard', 'slides', 'brand', 'sites', 'make', 'prototype'];
 	const roots = modes.map(mode => join(root, 'contrib', mode));
 	const violations: string[] = [];
-	for (const file of [join(root, 'browser/artifactsPage.ts'), join(root, 'browser/creatorWorkspace.ts')]) {
+	for (const file of [join(root, 'browser/artifactsEditor.ts'), join(root, 'browser/artifactWorkspaceRegistry.ts')]) {
 		for (const target of localImports(file)) {
 			if (roots.some(modeRoot => target.startsWith(modeRoot + sep))) violations.push(sourceName(file) + ' -> ' + sourceName(target));
 		}

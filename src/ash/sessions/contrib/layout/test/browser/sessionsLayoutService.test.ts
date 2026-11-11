@@ -85,6 +85,16 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.service.newSessionCommand, undefined);
 	});
 
+	test('a shared entry selects its explicit conversation presentation while retaining Code mode', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		await fixture.service.openEntry({
+			...chatEntry, id: 'collaboration', workspaceMode: 'current', conversationKind: 'chat',
+		});
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.deepEqual(fixture.conversationKinds, ['code', 'chat']);
+	});
+
 	for (const saved of [undefined, 'sessions.open.code']) {
 		test(`opens a fresh Desktop New when the saved entry is ${saved ?? 'absent'}`, async () => {
 			using fixture = new EntryFixture();
@@ -542,6 +552,7 @@ class TestCustomView extends AbstractCustomView {
 
 class EntryFixture extends Disposable {
 	public readonly conversationDraft = observableValue('conversation draft', false);
+	public readonly conversationKinds: Parameters<ISessionsConversationService['setConversationKind']>[0][] = [];
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
 	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
@@ -637,7 +648,8 @@ class EntryFixture extends Disposable {
 			newDraftVisible: this.conversationDraft,
 			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
 			focusDraftPicker: () => { throw new Error('Unexpected picker'); },
-			setConversationKind: async () => {
+			setConversationKind: async kind => {
+				this.conversationKinds.push(kind);
 				if (!this.conversationStarted.isSettled) { await this.conversationStarted.complete(); }
 				await this.conversationGate;
 			}

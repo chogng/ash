@@ -529,6 +529,31 @@ test('SplitView emits reset for a visible logical boundary', () => {
 	dom.window.close();
 });
 
+test('SplitView keeps one interactive handle across hidden non-snapping panes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const split = new SplitView(dom.window.document.body, { proportionalLayout: false, orientation: Orientation.HORIZONTAL });
+	split.addView(new TestView(dom.window.document, 100, 400, true), 200);
+	split.addView(new TestView(dom.window.document, 100, 400), { type: 'invisible', cachedVisibleSize: 200 });
+	split.addView(new TestView(dom.window.document, 100, 400), 200);
+	split.layout(400, 200);
+	const leading = split.getSash(0)!.element;
+	const trailing = split.getSash(1)!.element;
+	const resets: number[] = [];
+	split.onDidSashReset(index => resets.push(index));
+
+	assert.equal(leading.style.left, trailing.style.left);
+	assert.equal(leading.getAttribute('aria-disabled'), 'false');
+	assert.equal(trailing.getAttribute('aria-disabled'), 'true');
+	leading.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
+	assert.deepEqual(resets, [0]);
+
+	split.setViewVisible(1, true);
+	assert.notEqual(leading.style.left, trailing.style.left);
+	assert.equal(trailing.getAttribute('aria-disabled'), 'false');
+	split.dispose();
+	dom.window.close();
+});
+
 test('SplitView resize crosses adjacent constraints into farther panes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const split = new SplitView(dom.window.document.body, { proportionalLayout: false, orientation: Orientation.HORIZONTAL });

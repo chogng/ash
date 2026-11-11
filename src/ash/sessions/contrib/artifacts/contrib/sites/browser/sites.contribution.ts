@@ -1,17 +1,17 @@
 import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
-import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { CreatorFrameNavigator } from '../../../browser/creatorFrameNavigator.js';
-import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
-import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
-import { documentFromShapes } from '../../../common/model/document.js';
-import { exportDesignSvg } from '../../../browser/svgRenderer.js';
+import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
+import { CanvasFrameNavigator } from '../../../browser/canvasFrameNavigator.js';
+import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
+import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
+import { documentFromShapes } from '../../../common/model/designDocument.js';
+import { exportDesignSvg } from '../../../browser/designSvgRenderer.js';
 
-class SitesWorkspace extends CreatorCanvasWorkspace {
-	private pages!: CreatorFrameNavigator;
+class SitesWorkspace extends CanvasWorkspace {
+	private pages!: CanvasFrameNavigator;
 	protected override createModeContent(): void {
-		this.pages = this._register(new CreatorFrameNavigator(this.actionsDomNode, this.contentDomNode, this.document, id => this.editor.revealShape(id)));
+		this.pages = this._register(new CanvasFrameNavigator(this.actionsDomNode, this.contentDomNode, this.document, id => this.editor.revealShape(id)));
 	}
 	private async exportWebsite(): Promise<void> {
 		const frames = this.pages.frames;
@@ -30,11 +30,11 @@ class SitesWorkspace extends CreatorCanvasWorkspace {
 	public override setVisible(visible: boolean): void { super.setVisible(visible); this.pages.setVisible(visible); }
 }
 
-registerCreatorMode({
-	id: CreatorMode.Sites,
-	title: getCreatorModeTitle(CreatorMode.Sites),
+registerArtifactWorkspace({
+	id: ArtifactWorkspaceId.Sites,
+	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Sites),
 	description: localize('sessions.creator.sites.description', 'Design web pages, preview them and export a website.'),
 	icon: Lxicon.code,
 	help: localize('sessions.creator.sites.help', 'Add web page creates a website page. Pages selects the page to edit. Preview pages opens the page preview. Export website writes a standalone HTML file with page navigation and embedded artwork that scales to the browser width. Publishing and layout reflow are not available.'),
-	create: (instantiation, ownerDocument) => instantiation.createInstance(SitesWorkspace, ownerDocument, CreatorMode.Sites),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(SitesWorkspace, ownerDocument, ArtifactWorkspaceId.Sites),
 });

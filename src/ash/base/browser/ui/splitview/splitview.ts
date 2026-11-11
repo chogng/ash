@@ -703,11 +703,19 @@ export class SplitView extends Disposable {
 
 	private positionSashes(): void {
 		const resizeItems = this.getResizeItems();
+		let lastEnabledBoundary: number | undefined;
 		for (const { sash, boundaryIndex: previousIndex } of this.sashItems) {
 			sash.layout();
-			sash.state = getSashState(resizeItems, previousIndex, this.startSnappingEnabled, this.endSnappingEnabled);
 			const previous = this.items[previousIndex];
 			const next = this.items[previousIndex + 1];
+			// Hidden non-snapping views leave equivalent sashes at the same position.
+			// Keep the leading handle so it remains reachable by pointer and keyboard.
+			const overlapsEnabledBoundary = lastEnabledBoundary !== undefined && previous && !previous.visible
+				&& resizeItems.slice(lastEnabledBoundary + 1, previousIndex + 1).every(item => !item.visible && !item.snap);
+			sash.state = overlapsEnabledBoundary
+				? SashState.Disabled
+				: getSashState(resizeItems, previousIndex, this.startSnappingEnabled, this.endSnappingEnabled);
+			if (sash.state !== SashState.Disabled) lastEnabledBoundary = previousIndex;
 			if (previous && next && previous.visible && next.visible) {
 				sash.element.setAttribute(
 					'aria-valuemin',

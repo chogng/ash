@@ -5966,7 +5966,7 @@ test('Academy Save As transfers every view to one typed v2 resource and working 
 });
 
 test('general document commands preserve dirty source text, create a backed-up draft and save typed content', async () => {
-	await import('../../../../../contrib/documentEditor/browser/documentEditor.contribution.js');
+	await import('../../../../../../sessions/contrib/artifacts/contrib/docs/browser/docs.contribution.js');
 	const { DocumentEditorPane } = await import('../../../../../contrib/documentEditor/browser/documentEditorPane.js');
 	const { DocumentTypes } = await import('../../../../../services/documentEditor/common/documentTypes.js');
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });

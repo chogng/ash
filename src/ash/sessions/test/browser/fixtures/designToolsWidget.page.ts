@@ -19,7 +19,7 @@ import { CommandService } from '../../../../workbench/services/commands/common/c
 import { TestNotificationService } from '../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { bindTestColorTheme } from '../../../../../../test/fixtures/browser/themeFixture.js';
 import { DesignToolsWidget } from '../../../contrib/artifacts/browser/widget/designToolsWidget.js';
-import { DesignMode, DesignTool } from '../../../contrib/artifacts/common/config/editorConfiguration.js';
+import { DesignMode, DesignTool } from '../../../contrib/artifacts/common/config/designEditorConfiguration.js';
 
 declare global {
 	interface Window {

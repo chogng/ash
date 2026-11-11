@@ -2213,7 +2213,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 				await expect(viewport).toHaveJSProperty('scrollTop', 96);
 				if (entry.action === 'sessions.open.creator') {
-					await page.locator('.ash-creator-home').getByRole('button', { name: locale === 'en' ? 'Design' : '设计', exact: true }).click();
+					await commands.runCommand('sessions.creator.open.design');
 					await expect(page.locator('.ash-sessions-design-view')).toBeVisible();
 					await expect(history).toBeVisible();
 					expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(true);

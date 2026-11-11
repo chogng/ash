@@ -126,7 +126,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		this.dispatchEvent(new window.Event('close'));
 	};
 	await import('../../browser/activityBarAccessibility.js');
-	await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
+	await import('../../contrib/artifacts/browser/designEditor.contribution.js');
 	const [{ SessionsPreferences }, { testConfigurationService }, { ContextKeyService }] = await Promise.all([
 		import('../../contrib/preferences/browser/sessionsPreferences.js'),
 		import('../../../workbench/services/configuration/test/common/testServices.js'),

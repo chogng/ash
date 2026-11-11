@@ -430,13 +430,18 @@ suite('ChatGPT shared service', () => {
 			assert.equal(fresh.state.get().draft, '');
 			assert.equal(selectedChatConversationId(fresh.state.get()), undefined);
 			fresh.setDraft('New draft to restore');
+			assert.equal(fresh.setDraftArtifactKind('design'), true);
 		}
 		using restoredNew = fixture(respond, { values });
 		await restoredNew.reload();
 		assert.equal(selectedChatConversationId(restoredNew.state.get()), undefined);
 		assert.equal(restoredNew.state.get().draft, 'New draft to restore');
+		assert.equal(restoredNew.state.get().draftArtifactKind, 'design');
 		await restoredNew.select('one');
 		assert.equal(restoredNew.state.get().draft, 'Unsent follow-up');
+		assert.equal(restoredNew.state.get().draftArtifactKind, undefined);
+		restoredNew.newChat();
+		assert.equal(restoredNew.state.get().draftArtifactKind, undefined);
 	});
 	test('stages a draft attachment while the background upload retries each failed step', async () => {
 		const putStarted = new DeferredPromise<void>();
@@ -1889,10 +1894,10 @@ suite('ChatGPT shared service', () => {
 		using chat = fixture(respond, shared);
 		await chat.reload();
 		await chat.select(`local:${localId}`);
-		assert.equal(chat.state.get().coworkTasks[0]?.thread?.turns[0]?.status, 'running');
+		assert.equal(chat.state.get().linkedTasks[0]?.thread?.turns[0]?.status, 'running');
 		assert.match(chat.getAccessibleContent(), /Collect sources/u);
 		await chat.select('two');
-		assert.equal(chat.state.get().coworkTasks.length, 0);
+		assert.equal(chat.state.get().linkedTasks.length, 0);
 		thread = {
 			turns: [{
 				status: 'completed', items: [{
@@ -1909,7 +1914,7 @@ suite('ChatGPT shared service', () => {
 		revised = true;
 		await chat.reload();
 		assert.equal(chat.state.get().messages[0]?.text, 'Updated backend reply');
-		assert.equal(chat.state.get().coworkTasks.length, 1);
+		assert.equal(chat.state.get().linkedTasks.length, 1);
 		assert.match(chat.getAccessibleContent(), /file:\/\/\/report\.md/u);
 		await chat.select('two');
 		historyFails = true;
@@ -1922,7 +1927,7 @@ suite('ChatGPT shared service', () => {
 		await reopened.reload();
 		assert.equal(reopened.state.get().localConversationId, localId);
 		assert.equal(reopened.state.get().messages[0]?.text, 'Updated backend reply');
-		assert.equal(reopened.state.get().coworkTasks[0]?.thread?.turns[0]?.status, 'completed');
+		assert.equal(reopened.state.get().linkedTasks[0]?.thread?.turns[0]?.status, 'completed');
 		assert.match(reopened.getAccessibleContent(), /file:\/\/\/report\.md/u);
 	});
 

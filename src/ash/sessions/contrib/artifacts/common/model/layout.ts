@@ -1,5 +1,5 @@
 import type { DesignTextMeasurer } from './designText.js';
-import type { DesignAutoLayout, DesignConstraint, DesignGrid, DesignGridTrack, DesignShape } from './document.js';
+import type { DesignAutoLayout, DesignConstraint, DesignGrid, DesignGridTrack, DesignShape } from './designDocument.js';
 
 type Axis = 'width' | 'height';
 type Frame = Extract<DesignShape, { kind: 'frame'; }>;

@@ -1,4 +1,5 @@
 import './promptTimeline/promptTimeline.contribution.js';
+import './aiCustomization/aiCustomizationManagement.contribution.js';
 import { ISessionSummaryHoverService, SessionSummaryHoverService } from './agentSessions/sessionSummaryHoverService.js';
 import { BtwSlashCommandContribution } from './btwSlashCommand.js';
 import './contextContrib/chatContext.contribution.js';
@@ -27,7 +28,7 @@ import { registerChatCopyActions } from './actions/chatCopyActions.js';
 import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
-import { AgentTaskModelSettingsModel } from '../../preferences/browser/agentTaskModelSettingsModel.js';
+import { AgentTaskModelSettingsModel } from './agentTaskModelSettingsModel.js';
 import { bundledMonospaceFonts } from '../../codeEditor/common/editorConfiguration.js';
 import { registerChatTitleActions } from './actions/chatTitleActions.js';
 import { registerChatElicitationActions } from './actions/chatElicitationActions.js';

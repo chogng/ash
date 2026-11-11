@@ -5,7 +5,7 @@ import { mainWindow } from '../../../../base/browser/window.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { flattenDesignVector } from '../common/commands/vectorCommands.js';
-import type { DesignPathNode, DesignShape } from '../common/model/document.js';
+import type { DesignPathNode, DesignShape } from '../common/model/designDocument.js';
 import type { DesignPathContour } from '../common/model/designVector.js';
 import type { DesignTextShape, DesignTextStyle } from '../common/model/designText.js';
 import { renderDesignTextFrame } from './designTextRendering.js';

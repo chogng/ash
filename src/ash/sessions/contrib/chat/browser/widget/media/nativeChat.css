@@ -1,0 +1,339 @@
+.ash-native-chat {
+	min-height: 0;
+	height: 100%;
+}
+
+.ash-native-chat {
+	display: flex;
+	overflow: hidden;
+	min-width: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+}
+
+.ash-native-chat[hidden] {
+	display: none;
+}
+
+.ash-native-chat-list-widget {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.ash-native-chat.empty > .ash-native-chat-list-widget {
+	flex: 0 0 0;
+}
+
+.ash-native-chat > .ash-native-chat-input-part {
+	box-sizing: border-box;
+	min-height: 0;
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+}
+
+.ash-native-chat-input-part {
+	--ash-chat-input-focus-border: var(--ash-focusBorder);
+	display: flex;
+	flex-direction: column;
+}
+
+.ash-native-chat-status {
+	min-height: 18px;
+	flex: 0 0 auto;
+	padding: 0 12px 4px;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-native-chat-status:empty {
+	display: none;
+}
+
+.ash-native-chat-dictation-preview {
+	overflow: hidden;
+	padding: 0 12px 4px;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-native-chat-dictation-preview[hidden] {
+	display: none;
+}
+
+.ash-native-chat-interaction {
+	flex: 0 0 auto;
+	margin: 0 10px 8px;
+	padding: 8px;
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-medium);
+	color: var(--ash-foreground);
+	background: var(--ash-input-background);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-native-chat-interaction p {
+	margin: 0 0 8px;
+}
+
+.ash-native-chat-approval-capabilities {
+	margin: 0 0 var(--ash-spacing-size80);
+	padding-inline-start: var(--ash-spacing-size200);
+}
+
+.ash-native-chat-approval-capabilities li {
+	margin-block: var(--ash-spacing-size40);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.ash-native-chat-interaction-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
+.ash-native-chat-interaction-form {
+	display: flex;
+	gap: 8px;
+	flex-direction: column;
+}
+
+.ash-native-chat-interaction-form label {
+	display: flex;
+	gap: 4px;
+	flex-direction: column;
+}
+
+.ash-native-chat-interaction-form input,
+.ash-native-chat-interaction-form select {
+	padding: 6px;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	color: inherit;
+	background: var(--ash-editor-background);
+}
+
+.ash-native-chat-input-container {
+	display: flex;
+	box-sizing: border-box;
+	container-type: inline-size;
+	flex: 0 0 auto;
+	flex-direction: column;
+	min-height: var(--ash-chat-input-min-height, 140px);
+	padding: var(--ash-chat-input-padding, var(--ash-spacing-size60));
+	border: var(--ash-strokeThickness) solid
+		var(--ash-chat-input-border, var(--ash-input-border));
+	border-radius: var(--ash-chat-input-radius, var(--ash-cornerRadius-large));
+	background: var(--ash-input-background);
+}
+
+.ash-native-chat-input-container.focused {
+	border-color: var(--ash-chat-input-focus-border);
+}
+
+.ash-native-chat-input-part.floating-card > .ash-native-chat-input-container {
+	box-shadow:
+		0 2px 8px
+			color-mix(in srgb, var(--ash-chat-input-shadow) 20%, transparent),
+		0 8px 24px
+			color-mix(in srgb, var(--ash-chat-input-shadow) 12%, transparent);
+	transition:
+		border-color var(--ash-animation-durationNormal) ease,
+		box-shadow var(--ash-animation-durationNormal) ease;
+}
+
+.ash-native-chat-input-part.floating-card
+	> .ash-native-chat-input-container:is(:hover, .focused) {
+	border-color: var(--ash-widget-border);
+	box-shadow:
+		0 4px 12px
+			color-mix(in srgb, var(--ash-chat-input-shadow) 28%, transparent),
+		0 12px 32px
+			color-mix(in srgb, var(--ash-chat-input-shadow) 18%, transparent);
+}
+
+.ash-workbench:is(.hc-black, .hc-light)
+	.ash-native-chat-input-part.floating-card
+	> .ash-native-chat-input-container {
+	box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-native-chat-input-part.floating-card
+		> .ash-native-chat-input-container {
+		transition: none;
+	}
+}
+
+.ash-native-chat-input-editor-host {
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.ash-native-chat-input-attachments {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 6px 8px 0;
+}
+
+.ash-native-chat-input-attachments.empty {
+	display: none;
+}
+
+.ash-native-chat-input-attachment-item {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	max-width: 100%;
+	height: 24px;
+	padding-left: 8px;
+	color: var(--ash-foreground);
+	background: var(--ash-button-secondaryBackground);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.ash-native-chat-input-attachment-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-native-chat-input-attachment-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	color: inherit;
+	background: transparent;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-native-chat-input-attachment-remove:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-native-chat-textarea-input {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 106px;
+	resize: vertical;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	outline: none;
+	color: var(--ash-input-foreground);
+	background: transparent;
+	font: inherit;
+}
+
+.ash-native-chat-input-toolbars {
+	display: flex;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	align-items: center;
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	flex: 0 0 var(--ash-toolbar-actionSize);
+	gap: 12px;
+	margin-top: var(--ash-chat-input-toolbar-gap, var(--ash-spacing-size40));
+	padding: 0;
+}
+
+.ash-native-chat-input-action {
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+}
+
+.ash-native-chat-input-mic-action {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	padding: 4px;
+	color: var(--ash-description-foreground);
+	border-radius: 50%;
+}
+
+.ash-native-chat-input-mic-action.disabled {
+	opacity: 1;
+}
+
+.ash-native-chat-input-mic-action.checked {
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
+}
+
+.ash-native-chat-input-toolbars .ash-native-chat-input-mic {
+	margin-left: auto;
+}
+
+.ash-native-chat-input-toolbars .ash-native-chat-input-send,
+.ash-native-chat-input-toolbars .ash-native-chat-input-voice {
+	margin-left: auto;
+}
+
+.ash-native-chat-input-toolbars
+	.ash-native-chat-input-mic
+	+ .ash-native-chat-input-send,
+.ash-native-chat-input-toolbars
+	.ash-native-chat-input-mic
+	+ .ash-native-chat-input-voice {
+	margin-left: 0;
+}
+
+.ash-native-chat-input-toolbars .ash-native-chat-input-send-action,
+.ash-native-chat-input-toolbars .ash-native-chat-input-voice-action,
+.ash-native-chat-input-interrupt-action {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	padding: 4px;
+	border-radius: 50%;
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-button-primaryBackground);
+}
+
+.ash-native-chat-input-toolbars .ash-native-chat-input-send-action.disabled,
+.ash-native-chat-input-toolbars .ash-native-chat-input-voice-action.disabled {
+	color: var(--ash-button-foreground);
+	background: color-mix(
+		in srgb,
+		var(--ash-button-foreground) 12%,
+		transparent
+	);
+	opacity: 1;
+}
+
+.ash-native-chat-input-toolbars .ash-native-chat-input-send-action:hover,
+.ash-native-chat-input-toolbars .ash-native-chat-input-voice-action:hover,
+.ash-native-chat-input-interrupt-action:hover {
+	background: var(--ash-button-primaryHoverBackground);
+}
+
+.ash-native-chat-input-toolbars
+	.ash-native-chat-input-send-action.disabled:hover,
+.ash-native-chat-input-toolbars
+	.ash-native-chat-input-voice-action.disabled:hover {
+	background: color-mix(
+		in srgb,
+		var(--ash-button-foreground) 12%,
+		transparent
+	);
+}
+
+@container (max-width: 360px) {
+	.ash-native-chat-input-toolbars {
+		gap: 8px;
+		padding: 0;
+	}
+}
+
+.ash-native-chat-input-settings {
+	margin-top: var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size80);
+}

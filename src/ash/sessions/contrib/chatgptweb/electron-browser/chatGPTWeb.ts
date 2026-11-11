@@ -103,8 +103,9 @@ export class ChatGPTDraftModelSource implements ChatDraftModelSource {
 				throw new Error(localize('sessions.newChatModel.unavailable', 'The selected model is no longer available.'));
 			}
 			// Each source owns its draft. Use Ash's text only when the destination has no draft content.
-			if (capture && !destination.draft && !destination.attachments.length && !destination.draftTarget) {
-				this.chat.setDraft(capture.draft.text);
+			if (!destination.draft && !destination.attachments.length && !destination.draftTarget) {
+				if (capture) this.chat.setDraft(capture.draft.text);
+				if (source.artifactDraftKind) this.chat.setDraftArtifactKind(source.artifactDraftKind);
 			}
 			await this.commands.executeCommand(SHOW_CHATGPT_COMMAND);
 		} finally {

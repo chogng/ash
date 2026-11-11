@@ -1,8 +1,8 @@
 import { encodeHex, VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { ImageResource } from '../../../../base/browser/image.js';
-import type { DesignAssetVersion, DesignDocument } from '../common/model/document.js';
-import { flattenDesignShapes } from '../common/model/document.js';
+import type { DesignAssetVersion, DesignDocument } from '../common/model/designDocument.js';
+import { flattenDesignShapes } from '../common/model/designDocument.js';
 
 export interface DesignImageSource {
 	readonly url: string;

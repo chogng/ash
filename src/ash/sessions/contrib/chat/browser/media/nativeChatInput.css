@@ -1,0 +1,77 @@
+.ash-native-chat > .ash-chat-input-part {
+	box-sizing: border-box;
+	min-height: 0;
+	flex: 0 0 auto;
+}
+
+.ash-sessions-native-chat-input[hidden] {
+	display: none;
+}
+
+/* One composer is retained while navigation changes the surrounding Parts. */
+.ash-native-chat
+	> .ash-chat-input-part.ash-sessions-native-chat-input.native-chat-composer {
+	width: 100%;
+	max-width: 728px;
+	align-self: center;
+	margin-block: auto;
+	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size240);
+}
+
+.ash-native-chat
+	> .ash-chat-input-part.ash-sessions-native-chat-input.native-chat-composer.has-conversation {
+	margin-bottom: 0;
+}
+
+.native-chat-composer .ash-sessions-native-chat-welcome-heading {
+	flex: 0 0 auto;
+	margin: 0 0 var(--ash-spacing-size240);
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-heading1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	line-height: 1.4;
+	text-align: center;
+}
+
+.ash-sessions-native-chat-tip-slot {
+	padding-top: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	line-height: 1.5;
+}
+
+.ash-sessions-native-chat-tip-slot:empty {
+	display: none;
+}
+
+/* Shared operational elements: visibility, file-drop positioning, and keyboard focus. */
+.ash-sessions-native-chat-input
+	.ash-sessions-native-chat-welcome-heading[hidden] {
+	display: none;
+}
+
+.ash-sessions-native-chat-input .ash-chat-input-container {
+	position: relative;
+}
+
+.ash-sessions-native-chat-input > .ash-artifact-draft-label {
+	align-self: flex-start;
+	margin-block-start: var(--ash-spacing-size80);
+}
+
+.ash-sessions-native-chat-input .ash-native-chat-drop-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+	border: 2px dashed var(--ash-focusBorder);
+	border-radius: inherit;
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+}
+
+.ash-sessions-native-chat-input .ash-native-chat-drop-overlay[hidden] {
+	display: none;
+}

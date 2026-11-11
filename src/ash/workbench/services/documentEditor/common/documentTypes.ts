@@ -28,6 +28,16 @@ export interface DocumentType {
 class DocumentTypeRegistry {
 	private readonly types = new Map<string, DocumentType>();
 	private readonly reservations = new Set<readonly Pick<DocumentType, 'contentType' | 'extensions'>[]>();
+	private fileEditors = false;
+
+	public get fileEditorsEnabled(): boolean { return this.fileEditors; }
+
+	/** The product host opts into file authoring. MIME-only documents can still be opened by Workbench features. */
+	public enableFileEditors(): IDisposable {
+		if (this.fileEditors) throw new Error('Document file editors are already enabled.');
+		this.fileEditors = true;
+		return toDisposable(() => { this.fileEditors = false; });
+	}
 
 	/** Package declarations protect resources even when execution is disabled or unavailable. */
 	public reserveTypes(types: readonly Pick<DocumentType, 'contentType' | 'extensions'>[]): IDisposable {

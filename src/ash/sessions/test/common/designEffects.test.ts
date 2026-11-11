@@ -5,7 +5,7 @@ import { DocumentCommands } from '../../contrib/artifacts/common/commands/docume
 import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
 import { canAddDesignEffect, createDesignEffect, designEffectPadding, designEffects, parseDesignEffects, supportsDesignShadowSpread, type DesignEffect } from '../../contrib/artifacts/common/model/designEffects.js';
 import { createDesignPaint } from '../../contrib/artifacts/common/model/designPaint.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/designDocument.js';
 
 const rectangle = (): DesignShape => ({ id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 200, height: 100, rotation: 0, fill: '#3366ff' });
 const progressive = { startBlur: 32, start: { x: -.25, y: .1 }, end: { x: 1.25, y: .9 } };

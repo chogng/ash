@@ -38,7 +38,7 @@ test('Agents starts its connection before loading the page and reconnects on rel
 		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const input = agents.getByRole('textbox', { name: 'Chat message', exact: true });
 		await expect(input).toBeEditable();
-		const editor = new Editor(agents.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first());
+		const editor = new Editor(agents.locator(':is(.ash-sessions-chat-input,.ash-sessions-native-chat-input)').first());
 		await editor.waitForEditorFocus();
 		await agents.keyboard.insertText('Keep this draft after reload');
 		await editor.waitForEditorContents(value => value === 'Keep this draft after reload');

@@ -5,7 +5,7 @@ import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
-import type { DesignDocument } from '../../../common/model/document.js';
+import type { DesignDocument } from '../../../common/model/designDocument.js';
 import { generateDesignCode } from './designCodeGenerator.js';
 
 /** Shows source from the same document snapshot used by file export. */

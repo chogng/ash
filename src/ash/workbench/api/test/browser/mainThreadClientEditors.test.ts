@@ -1,11 +1,11 @@
 import type { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { generalProfile } from '../../../../../../extensions/academy/browser/generalProfile.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorPaneOptions } from '../../../contrib/documentEditor/browser/documentEditorPane.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { afterEach, beforeEach, test } from 'mocha';
 import { startAcademyExtension } from '../../../../../../test/fixtures/academyExtension.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IExtensionHostApi, type ExtensionHostRuntime, type JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
@@ -28,6 +28,24 @@ const runtime: ExtensionHostRuntime = {
 	activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [],
 	registrations: [{ kind: 'dataChannel', channelId: 'editor.client.v1', registrationId: 'editor.client.v1' }],
 };
+
+let fileEditors: IDisposable;
+beforeEach(() => { fileEditors = DocumentTypes.enableFileEditors(); });
+afterEach(() => fileEditors.dispose());
+
+test('a host without document file authoring keeps MIME-only documents available', async () => {
+	fileEditors.dispose();
+	const notes = {
+		editorId: 'ash.collaboration.notes', displayName: 'Channel notes', selectors: [],
+		documentType: 'ash.collaboration.notes', contentType: 'application/vnd.ash.channel-notes+json',
+	};
+	const api = { invoke: async () => ({ ...declaration, editors: [...declaration.editors as JsonValue[], notes] }) } as unknown as IExtensionHostApi;
+	const packages = { list: async () => ({ generation: 1, extensions: [owner], diagnostics: [] }) } as unknown as IExtensionApi;
+	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, api, packages, emptyEditorDeclarations);
+	await bridge.update({ generation: 1, extensions: [runtime] });
+	assert.equal(EditorPanes.getEditorPanesForInput({ resource: URI.file('/paper.ash-paper') }).length, 0);
+	assert.equal(EditorPanes.getEditorPane({ resource: URI.parse('untitled:/channel/notes'), contentType: notes.contentType })?.id, notes.editorId);
+});
 
 for (const [language, title] of [['en', 'Academy Document'], ['zh-CN', 'Academy 文档']]) {
 	test(`real Rust Academy registers its editor through the shared bridge (${language})`, async function () {

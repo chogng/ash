@@ -33,7 +33,7 @@ import type { ISession, IUntitledChatSession, ModelRef } from '../../../../servi
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../electron-browser/chatGPTWeb.js';
-import { IChatGPTNativeService, IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
+import { IChatGPTNativeService, IChatGPTService, linkedTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../../common/chatGPTNative.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
@@ -45,8 +45,9 @@ import { DefaultSettings } from '../../../../../workbench/services/preferences/c
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
+import type { ArtifactKind } from '../../../../common/artifactKind.js';
 
-const newChatState = { conversations: [], messages: [], coworkTasks: [] } satisfies Partial<ChatGPTState>;
+const newChatState = { conversations: [], messages: [], linkedTasks: [] } satisfies Partial<ChatGPTState>;
 
 const testStorage = { get: () => undefined, store() { } } as unknown as IStorageService;
 
@@ -66,6 +67,7 @@ function chatSelectionFixture(storage: IStorageService, sessions: readonly ISess
 		},
 		discardUntitledSession(id: string) { drafts = drafts.filter(draft => draft.untitledSessionId !== id); },
 		setUntitledSessionModel(id: string, model: ModelRef) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, model } : draft); },
+		setUntitledSessionArtifactKind(id: string, artifactKind: ArtifactKind | undefined) { drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, artifactKind } : draft); },
 	} as unknown as ISessionsManagementService;
 	const customViews = { activeCustomViewOpen: constObservable(undefined) } as unknown as ICustomViewService;
 	const view = new SessionsService(management, storage, customViews, {} as ICommandService);
@@ -81,7 +83,7 @@ suite('ChatGPT entry', () => {
 		try {
 			assert.equal(localize('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), 'ChatGPT：切换滚动优化');
 			assert.equal(localize('sessions.chatgpt.reloadShort', 'Reload'), '刷新');
-			assert.equal(coworkTaskStatus({ sessionId: 'session', threadId: 'thread', prompt: '任务' }), '正在准备 Cowork 任务…');
+			assert.equal(linkedTaskStatus({ sessionId: 'session', threadId: 'thread', prompt: '任务' }), '正在准备任务…');
 			const { createSettingsLayout, SettingsNavigation } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
 			const defaults = new DefaultSettings();
 			const browser = createSettingsLayout([defaults.get(chatGPTScrollOptimization)]).find(category => category.id === 'browser')!;
@@ -334,12 +336,13 @@ suite('ChatGPT entry', () => {
 	test('choosing an Ash model from ChatGPT creates a separate Ash draft with the chosen model and plain text', async () => {
 		const values = new Map<string, string>();
 		const storage = { get: (key: string) => values.get(key), getBoolean: () => false, onWillSaveState: Event.None, store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
-		using selection = chatSelectionFixture(storage).view;
+		const { management, view } = chatSelectionFixture(storage);
+		using selection = view;
 		let mode = 'code';
 		let experimental = false;
 		const state = observableValue<ChatGPTState>('draft', {
-			localConversationId: 'chatgpt-draft', draft: 'Unsent prompt', voice: 'idle',
-			conversations: [], messages: [], coworkTasks: [], attachments: [],
+			localConversationId: 'chatgpt-draft', draft: 'Unsent prompt', draftArtifactKind: 'slides', voice: 'idle',
+			conversations: [], messages: [], linkedTasks: [], attachments: [],
 		} as unknown as ChatGPTState);
 		const experimentalState = observableValue<ChatGPTState>('experimentalDraft', { ...state.get(), localConversationId: 'experimental-draft', draft: 'Experimental prompt' });
 		const model = { provider: 'fixture-provider', model: 'fixture-model' };
@@ -358,6 +361,7 @@ suite('ChatGPT entry', () => {
 			[IChatGPTNativeService, { native: true, state: experimentalState, newDraftRevision: 1 } as unknown as IChatGPTService],
 			[ICommandService, { executeCommand: async (id: string) => { calls.push([id]); } } as ICommandService],
 			[ISessionsService, selection],
+			[ISessionsManagementService, management],
 			[IStorageService, storage],
 		));
 		const command = CommandsRegistry.getCommand(OPEN_ASH_CHAT_WITH_MODEL_COMMAND)!;
@@ -386,6 +390,7 @@ suite('ChatGPT entry', () => {
 		const selected = selection.chatSelection.get();
 		assert.ok(selected?.kind === 'draft');
 		assert.deepEqual(selected.model, model);
+		assert.equal(management.untitledSessions.find(draft => draft.untitledSessionId === selected.id)?.artifactKind, 'slides');
 		assert.deepEqual(readNewChatDraftState(storage, `ash-chat:untitled:${selected.id}`, chatInputStatePersistence), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
 		assert.deepEqual(loadChatSelection(storage), selected);
 

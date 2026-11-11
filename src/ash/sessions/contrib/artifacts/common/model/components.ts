@@ -1,7 +1,7 @@
 import type { DesignTextMeasurer } from './designText.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, flattenDesignShapes, type DesignOverride, type DesignShape } from './document.js';
+import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, flattenDesignShapes, type DesignOverride, type DesignShape } from './designDocument.js';
 import { designStyleFields } from './designResources.js';
 import { resolveDesignLayout } from './layout.js';
 

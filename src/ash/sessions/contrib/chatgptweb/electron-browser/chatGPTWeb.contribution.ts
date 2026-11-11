@@ -124,7 +124,7 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 		const state = chat.state.get();
 		if (!canOpen() || state.localConversationId !== source || chat.newDraftRevision !== revision || !canUseAshModels(state)
 			|| state.sending || state.managing || state.voice !== 'idle') return undefined;
-		return state.draft;
+		return { text: state.draft, artifactKind: state.draftArtifactKind };
 	});
 });
 

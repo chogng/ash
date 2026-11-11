@@ -345,6 +345,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly skills = new SkillSelectorCatalog();
 	private state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	private toolbarState: ChatInputToolbarState = { voiceAvailable: false, voiceActive: false, voiceConnecting: false, voiceConnected: false, mode: 'agent', canSubmit: false, hasInput: false, canInterrupt: false, inputKind: 'message', models: [], isAutomaticModel: false, canSelectAgent: false };
+	private draftPlaceholder: string | undefined;
 	private placeholderPreview: string | undefined;
 	private serverSlashCommands: ChatInputState['slashCommands'] = [];
 	private skillSelectors: ChatInputState['skillSelectors'] = [];
@@ -1764,11 +1765,16 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.updatePlaceholder();
 	}
 
+	public setDraftPlaceholder(placeholder: string | undefined): void {
+		this.draftPlaceholder = placeholder;
+		this.updatePlaceholder();
+	}
+
 	private updatePlaceholder(): void {
 		const inlineVoice = this.inlineActionsToolbar && this.delegate.voiceConversation?.isConnecting !== undefined;
 		this.input.setPlaceholder(inlineVoice && this.toolbarState.voiceConnecting ? localize('chat.voice.connectingPlaceholder', 'Connecting…')
 			: inlineVoice && this.toolbarState.voiceConnected ? this.toolbarState.voiceConnectedPlaceholder ?? localize('chat.voice.listeningPlaceholder', 'Listening…')
-				: this.placeholderPreview);
+				: this.placeholderPreview ?? this.draftPlaceholder);
 	}
 
 	/** Reapply host-owned controls when the presentation changes without a model update. */

@@ -133,7 +133,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 		await page.mouse.up();
 	};
 	const snapshot = async (): Promise<{ identity: string | undefined; active: boolean; text: string; width: number; }[]> => panes.evaluateAll(elements => elements.map(element => {
-		const chat = element.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')!;
+		const chat = element.querySelector<HTMLElement>(':is(.ash-chat,.ash-native-chat)')!;
 		return {
 			identity: chat.dataset.untitledSessionId ?? chat.dataset.sessionId,
 			active: element.classList.contains('active'),
@@ -144,7 +144,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	}));
 	const draftReference = async (): Promise<{ kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }> => ({
 		kind: 'untitled',
-		session: { untitledSessionId: (await panes.locator(':is(.ash-chat,.ash-cowork)').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
+		session: { untitledSessionId: (await panes.locator(':is(.ash-chat,.ash-native-chat)').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
 	});
 	// Desktop Chat has its own ChatGPT composer; legacy Agent drafts restore in Code.
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -226,14 +226,14 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	const selected = (await snapshot()).find(slot => slot.active)!;
 	await page.locator('.ash-sessions-list-item[aria-current="page"]').click();
 	await expect(panes).toHaveCount(4);
-	await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', selected.identity!);
+	await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-native-chat)')).toHaveAttribute('data-untitled-session-id', selected.identity!);
 	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text.replace(/\n/g, '') === selected.text);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(4);
 	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text.replace(/\n/g, '') === selected.text);
 	await page.reload({ waitUntil: 'domcontentloaded' });
 	await expect(panes).toHaveCount(4);
-	await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', selected.identity!);
+	await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-native-chat)')).toHaveAttribute('data-untitled-session-id', selected.identity!);
 	expect(failures).toEqual([]);
 });
 
@@ -247,7 +247,7 @@ test('Sessions migrates nested editor geometry into its conversation grid and re
 		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.input.focus();
 		await editor.waitForTypeInEditor(`Retained draft ${index}`);
-		const chat = page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)');
+		const chat = page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-native-chat)');
 		references.push({ kind: 'untitled', session: { untitledSessionId: (await chat.getAttribute('data-untitled-session-id'))!, title: `Conversation ${index}`, workspace: { type: 'current' } } });
 	}
 	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
@@ -275,14 +275,14 @@ test('Sessions migrates nested editor geometry into its conversation grid and re
 		await expect(host.locator('.ash-editor-group, .ash-editor-title-control')).toHaveCount(0);
 		const expectedIds = references.map(reference => reference.session.untitledSessionId);
 		await expect.poll(() => host.locator('.ash-sessions-chat-slot').evaluateAll((slots, expected) => expected.map(id => {
-			const slot = slots.find(slot => slot.querySelector<HTMLElement>(':is(.ash-chat,.ash-cowork)')?.dataset.untitledSessionId === id)!;
+			const slot = slots.find(slot => slot.querySelector<HTMLElement>(':is(.ash-chat,.ash-native-chat)')?.dataset.untitledSessionId === id)!;
 			const bounds = slot.getBoundingClientRect();
 			return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
 		}), expectedIds).then(([left, top, bottom]) => ({
 			leftOf: left.x < top.x, stacked: top.y < bottom.y && Math.abs(top.x - bottom.x) < 1,
 			widthRatio: Math.round(top.width / left.width), heightRatio: Math.round(bottom.height / top.height),
 		}))).toEqual({ leftOf: true, stacked: true, widthRatio: 2, heightRatio: 2 });
-		await expect(host.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', expectedIds[2]!);
+		await expect(host.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-native-chat)')).toHaveAttribute('data-untitled-session-id', expectedIds[2]!);
 		for (let index = 0; index < references.length; index++) {
 			const slot = host.locator('.ash-sessions-chat-slot').filter({ has: page.locator(`[data-untitled-session-id="${expectedIds[index]}"]`) });
 			await new Editor(slot).waitForEditorContents(text => text === `Retained draft ${index}`);

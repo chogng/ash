@@ -4,10 +4,10 @@ import { FreehandStroke } from '../../../../../../base/common/freehandStroke.js'
 import { generateUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
 import type { DesignPoint } from '../../../common/core/geometry.js';
-import type { DesignPathNode, DesignShape } from '../../../common/model/document.js';
+import type { DesignPathNode, DesignShape } from '../../../common/model/designDocument.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import type { DesignDrawingParticipant } from '../../../browser/designEditorBrowser.js';
-import { DesignMode, DesignTool } from '../../../common/config/editorConfiguration.js';
+import { DesignMode, DesignTool } from '../../../common/config/designEditorConfiguration.js';
 
 interface DrawingHost {
 	getTool(): DesignTool;

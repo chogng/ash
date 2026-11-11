@@ -41,9 +41,9 @@ suite('sessionsCreator browser component', () => {
 			} else {
 				await navigation.getByRole('button', { name: /^New(?:\.|$)/u }).click();
 			}
-			const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
-			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toBeVisible();
-			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
+			const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-native-chat):visible').first();
+			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-native-chat-input)')).toBeVisible();
+			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-native-chat-input)')).toHaveAttribute('aria-busy', 'false');
 			if (session === 1) {
 				await expect(chat.getByText('Choose a project before sending.', { exact: true })).toBeHidden();
 				await expect(chat.getByRole('button', { name: 'Scroll to Latest', exact: true })).toBeHidden();
@@ -57,8 +57,8 @@ suite('sessionsCreator browser component', () => {
 				const finish = (): void => { finished = true; };
 				document.addEventListener('ash-integration-composer-sampling-complete', finish, { once: true });
 				const sample = (): void => {
-					const composer = document.querySelector('.ash-sessions-chat-slot.active :is(.ash-sessions-chat-input,.ash-sessions-cowork-input):not([hidden])')!;
-					const card = composer.querySelector(':is(.ash-chat-input-container,.ash-cowork-input-container)')!;
+					const composer = document.querySelector('.ash-sessions-chat-slot.active :is(.ash-sessions-chat-input,.ash-sessions-native-chat-input):not([hidden])')!;
+					const card = composer.querySelector(':is(.ash-chat-input-container,.ash-native-chat-input-container)')!;
 					const rect = composer.getBoundingClientRect();
 					samples.push([rect.x, rect.y, rect.width, rect.height, card.getBoundingClientRect().y, card.getBoundingClientRect().height]);
 				};
@@ -79,7 +79,7 @@ suite('sessionsCreator browser component', () => {
 			for (let click = 0; click < 6; click++) {
 				await page.locator('[data-action-id="sessions.newSession"] button').click();
 			}
-			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
+			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-native-chat-input)')).toHaveAttribute('aria-busy', 'false');
 			await page.evaluate(() => document.dispatchEvent(new Event('ash-integration-composer-sampling-complete')));
 			const samples = await sampling;
 			const changes = samples.slice(1).filter((sample, index) => sample.some((value, axis) => Math.abs(value - samples[index]![axis]!) > 1));

@@ -199,7 +199,7 @@ import { IModelService } from '../../editor/common/services/model.js';
 import { ModelService } from '../../editor/common/services/modelService.js';
 import { ITextResourcePropertiesService } from '../../editor/common/services/textResourceConfiguration.js';
 import { TextResourcePropertiesService } from '../../workbench/services/textresourceProperties/common/textResourcePropertiesService.js';
-import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
+import { NativeChatPaneFactory } from '../contrib/chat/browser/nativeChatPaneFactory.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
 import { IsNewSessionContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
@@ -931,7 +931,7 @@ export abstract class Workbench extends Disposable {
 			} catch { /* The composer owns reporting unreadable drafts. */ }
 			return false;
 		});
-		const cowork = this._register(services.createInstance(CoworkPaneFactory));
+		const nativeChat = this._register(services.createInstance(NativeChatPaneFactory));
 		sessionsPart = this.sessionsPart = this._register(
 			services.createInstance(SessionsPart, this.domNode, {
 				newDraftVisible,
@@ -939,8 +939,8 @@ export abstract class Workbench extends Disposable {
 				createSessionActivityBar: container => services.createInstance(
 					SessionActivityBar, container, conversationVisible, () => sessionsPart?.focus(),
 				),
-				createCoworkPane: (container, panelId, selection) =>
-					cowork.createPane(container, panelId, selection, () => {
+				createChatPane: (container, panelId, selection) =>
+					nativeChat.createPane(container, panelId, selection, () => {
 						view.openNewSession();
 					}),
 				activateSelection: selection => view.activateSelection(selection),
@@ -1043,7 +1043,7 @@ export abstract class Workbench extends Disposable {
 					sessionId = sessionIdentity(providerId, sessionId, provider.id);
 					threadId = sessionIdentity(providerId, threadId, provider.id);
 				}
-				// Visible Code and Cowork panes keep their current composition and draft owner.
+				// Visible Code and Chat panes keep their current composition and draft owner.
 				if (!layout.isPartVisible('sessions')) await this.showChat();
 				await view.openThread(sessionId, threadId);
 				focusConversation(sessionId, threadId);

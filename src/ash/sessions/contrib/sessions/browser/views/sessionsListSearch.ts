@@ -24,6 +24,8 @@ export class SessionsListSearch extends Disposable {
 	}
 
 	get hasQuery(): boolean { return this.words.length > 0; }
+	get query(): string | undefined { return this.input?.value; }
+	get focused(): boolean { return this.input !== undefined && this.input === getActiveElement(this.listRoot.ownerDocument); }
 
 	matches(...fields: readonly (string | undefined)[]): boolean {
 		if (!this.hasQuery) return true;
@@ -33,30 +35,46 @@ export class SessionsListSearch extends Disposable {
 
 	open(): void {
 		if (!this.input) {
-			const document = this.listRoot.ownerDocument;
-			const active = getActiveElement(document);
+			const active = getActiveElement(this.listRoot.ownerDocument);
 			this.previousFocus = isHTMLElement(active) && this.listRoot.contains(active) ? active : undefined;
-			const input = this.input = h(document, 'input', {
-				className: 'ash-sessions-list-search',
-				properties: { type: 'search' },
-				attributes: { 'aria-label': localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar') },
-			});
-			this.before.before(input);
-			const lifetime = this.inputLifetime.value = new DisposableStore();
-			lifetime.add(toDisposable(() => input.remove()));
-			lifetime.add(addDisposableListener(input, 'input', () => {
-				this.words = input.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-				this.update();
-			}));
-			lifetime.add(addDisposableListener(input, 'keydown', event => {
-				if (event.key === 'ArrowDown' || event.key === 'Enter') {
-					event.preventDefault();
-					this.focusResults();
-				}
-			}));
 		}
-		this.input.focus();
-		this.input.select();
+		const input = this.ensureInput();
+		input.focus();
+		input.select();
+	}
+
+	restore(query: string, focus: boolean): void {
+		const input = this.ensureInput();
+		if (input.value !== query) input.value = query;
+		this.setQuery(query);
+		if (focus) input.focus({ preventScroll: true });
+	}
+
+	private ensureInput(): HTMLInputElement {
+		if (this.input) return this.input;
+		const input = this.input = h(this.listRoot.ownerDocument, 'input', {
+			className: 'ash-sessions-list-search',
+			properties: { type: 'search' },
+			attributes: { 'aria-label': localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar') },
+		});
+		this.before.before(input);
+		const lifetime = this.inputLifetime.value = new DisposableStore();
+		lifetime.add(toDisposable(() => input.remove()));
+		lifetime.add(addDisposableListener(input, 'input', () => {
+			this.setQuery(input.value);
+			this.update();
+		}));
+		lifetime.add(addDisposableListener(input, 'keydown', event => {
+			if (event.key === 'ArrowDown' || event.key === 'Enter') {
+				event.preventDefault();
+				this.focusResults();
+			}
+		}));
+		return input;
+	}
+
+	private setQuery(query: string): void {
+		this.words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
 	}
 
 	private close(): void {

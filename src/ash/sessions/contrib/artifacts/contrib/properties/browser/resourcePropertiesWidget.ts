@@ -8,12 +8,12 @@ import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
-import { getDesignRenderBounds, renderDesignShape } from '../../../browser/svgRenderer.js';
+import { getDesignRenderBounds, renderDesignShape } from '../../../browser/designSvgRenderer.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignDocument, type DesignShape } from '../../../common/model/document.js';
+import { flattenDesignShapes, type DesignDocument, type DesignShape } from '../../../common/model/designDocument.js';
 import { designPropertyTypes, getDesignResourceCatalog, supportsDesignProperty, getDesignProperty, type DesignLibrary, type DesignBindableProperty, type DesignStyleKind, type DesignVariableType } from '../../../common/model/designResources.js';
-import type { DesignSelection } from '../../../common/selection.js';
+import type { DesignSelection } from '../../../common/designSelection.js';
 
 /** Only editor choices live here; all definitions, links and accepted versions belong to the document. */
 export class ResourcePropertiesWidget extends Disposable {

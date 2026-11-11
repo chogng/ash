@@ -1,5 +1,5 @@
 import { QuickAccess } from '../../automation/quickaccess.js';
-import { parseDesignDocument } from '../../../src/ash/sessions/contrib/artifacts/common/model/document.js';
+import { parseDesignDocument } from '../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
 import { expect, test as base, type Page, type Locator } from '@playwright/test';
 import { paintColor, paintPixel, clickCanvasMenu, inspectCanvasMenu, drawBezierPath, rightClickCanvasShape } from '../../automation/design.js';
 
@@ -115,7 +115,7 @@ test('Sessions Prototype connects screens by dragging and plays transitions, bra
 
 test('Sessions Prototype Change to previews interactive component variants without editing the instance', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	const properties = page.locator('[data-part="auxiliarybar"]'); const prototype = properties.locator('.ash-prototype-properties');
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
@@ -139,7 +139,7 @@ test('Sessions Prototype Change to previews interactive component variants witho
 
 test('Sessions Design resources bind variable modes and reuse styles with keyboard controls', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const resources = properties.locator('.ash-design-resources');
@@ -175,7 +175,7 @@ test('Sessions Design resources bind variable modes and reuse styles with keyboa
 
 test('Sessions Design components inherit overrides and switch variants with keyboard-accessible controls', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
@@ -212,7 +212,7 @@ test('Sessions Design components inherit overrides and switch variants with keyb
 test('Sessions Creator Slides presents reordered pages and Brand undoes an entire variant batch', async ({ page }) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	const creator = page.locator('.ash-creator');
-	await creator.getByRole('button', { name: 'Slides', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.slides');
 	const slides = creator.locator('[data-creator-mode="slides"].ash-creator-workspace');
 	await slides.getByRole('button', { name: 'Add slide', exact: true }).click();
 	await slides.getByRole('button', { name: 'Add slide', exact: true }).click();
@@ -279,7 +279,7 @@ test('Sessions Prototype scrolls with wheel, drag and keyboard, pins layers and 
 });
 
 test('Sessions Design composites fill order, opacity and plus darker against the backdrop', async ({ page }, testInfo) => {
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('r'); await field('X', '100'); await field('Y', '100'); await field('Width', '200'); await field('Height', '160'); await paintColor(page, '#808080');
@@ -304,7 +304,7 @@ test('Sessions Design composites fill order, opacity and plus darker against the
 });
 
 test('Sessions Design paints editable text gradients and exports matching blended glyphs', async ({ page }, testInfo) => {
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 100, y: 100 } }); await page.keyboard.press('Escape');
 	const content = properties.getByRole('textbox', { name: 'Text content', exact: true }); await content.fill('MMMMMM'); await content.press('Tab');
@@ -325,7 +325,7 @@ test('Sessions Design paints editable text gradients and exports matching blende
 
 test('Sessions Design pen closes paths, inserts exact curve nodes and outlines strokes', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	const viewport = canvas.locator('.ash-canvas-viewport');
 	await canvas.press('p'); await viewport.click({ position: { x: 120, y: 120 } }); await viewport.click({ position: { x: 280, y: 120 } }); await viewport.click({ position: { x: 200, y: 260 } }); await viewport.click({ position: { x: 120, y: 120 } });
@@ -354,7 +354,7 @@ test('Sessions Design pen closes paths, inserts exact curve nodes and outlines s
 
 test('Sessions Design outlines square caps and dashed strokes as editable contours', async ({ page }) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), viewport = canvas.locator('.ash-canvas-viewport');
 	await canvas.press('p'); await viewport.click({ position: { x: 100, y: 150 } }); await viewport.click({ position: { x: 220, y: 150 } }); await canvas.press('Enter'); await canvas.press('v');
 	const path = canvas.locator('.ash-sessions-design-shapes > path[data-shape-id]');
@@ -377,7 +377,7 @@ test('Sessions Design outlines square caps and dashed strokes as editable contou
 
 test('Sessions Design background blur clips to ellipses, ignores previous blurs and exports the same backdrop', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('r'); await field('X', '100'); await field('Y', '100'); await field('Width', '240'); await field('Height', '160'); await paintColor(page, '#ffffff');
@@ -407,7 +407,7 @@ test('Sessions Design background blur clips to ellipses, ignores previous blurs 
 
 test('Sessions Design shares color widgets and picker behavior for strokes and shadows', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	await canvas.press('p');
@@ -441,7 +441,7 @@ test('Sessions Design shares color widgets and picker behavior for strokes and s
 
 test('Sessions Design layout edits reflow the canvas and preserve layer identity through undo', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
@@ -505,7 +505,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 
 test('Sessions Design grid and wrap respect size limits in the canvas and responsive HTML', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
@@ -597,7 +597,7 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 
 test('Sessions Design edits rich text on canvas with one typing undo', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	await canvas.focus(); await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await canvas.press('Enter');
 	const editor = canvas.getByRole('textbox', { name: 'Edit text', exact: true });
@@ -640,7 +640,7 @@ test('Sessions Design edits rich text on canvas with one typing undo', async ({ 
 
 test('Sessions Design typography wraps, preserves rich ranges and exports responsive text', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const typography = properties.locator('.ash-design-text-properties').first();
@@ -700,7 +700,7 @@ test('Sessions Design typography wraps, preserves rich ranges and exports respon
 const design = test.extend({
 	page: async ({ page }, use) => {
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
-		await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+		await new QuickAccess(page).runCommand('sessions.creator.open.design');
 		await use(page);
 	},
 });

@@ -4,7 +4,7 @@ import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browse
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { MEMORY_SETTINGS_CATEGORY, memorySettingsTitle } from '../../../../workbench/contrib/memories/browser/memorySettings.js';
-import { MemorySettingsRenderer } from '../../../../workbench/contrib/memories/browser/memorySettingsRenderer.js';
+import { MemorySettingsRenderer } from '../../../../workbench/contrib/preferences/browser/memorySettingsRenderer.js';
 import { CodeConversationDefaultsEntry } from './codeConversationDefaultsEntry.js';
 import { ChatConfiguration, ChatEditorConfiguration, ChatInputConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import './media/sessionsPreferences.css';
@@ -65,7 +65,7 @@ import { SessionsStorageContent, storageSettingsTitle } from './sessionsStorageC
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { TeamRun } from '../../../services/teams/common/team.js';
 import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../../common/sessionCommands.js';
-import { DesignConfiguration } from '../../artifacts/common/config/editorConfiguration.js';
+import { DesignConfiguration } from '../../artifacts/common/config/designEditorConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,

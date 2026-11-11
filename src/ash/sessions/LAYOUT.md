@@ -77,11 +77,11 @@ Entry switching reuses the existing Parts, container instances and editor lifecy
 
 SessionsPart owns one conversation grid. Each Session has one ordinary slot, and
 explicit side opens can retain a second Thread of that Session in its own slot.
-The visible slots and active Thread persist with the workspace. Code uses the
-Chat widget; Chat, Collaboration and conversations beside
-product editors use Cowork. Entry navigation selects the renderer through
-`ISessionsConversationService` before revealing or focusing the Part. SessionView
-retains both renderers' DOM and attaches the active renderer inside the same slot.
+The visible slots and active Thread persist with the workspace. Code and native Chat
+use the shared Chat widget with separate input layouts. Entry navigation selects
+the presentation through `ISessionsConversationService` before revealing or
+focusing the Part. SessionView retains both panes' DOM and attaches the active
+pane inside the same slot.
 Entry changes transfer unsent text, mode and attachments, then clear the inactive
 composer. They preserve the grid, Session views, window selection and navigation
 history.

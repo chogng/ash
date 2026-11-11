@@ -71,7 +71,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.locator('[data-action-id="workbench.action.chat.showHistory"] button').click();
 				await page.getByRole('option').filter({ hasText: 'Execution queue conversation' }).click();
 			}
-			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-cowork'}` : '.ash-chat-view-pane .ash-chat:visible');
+			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
@@ -129,7 +129,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			const initialTurn = (await read()).turns.at(-1)!;
 			expect(initialTurn.mode).toBe(surface === 'Agents Cowork' ? 'agent' : 'ask');
 			expect(initialTurn.approvalMode).toBe('auto');
-			await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
+			await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
 			await window.quickaccess.runCommand('workbench.action.chat.nextCodeBlock');
 			const codeInputs = chat.locator('.ash-chat-code-block .stanza-editor-input');
 			await expect(codeInputs.nth(0)).toBeFocused();
@@ -143,7 +143,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			// Both public entries create an independent persisted branch while the source stream stays active.
 			for (const entry of ['menu', 'slash'] as const) {
 				await expect(chat).toHaveClass(/has-conversation/);
-				await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
+				await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
 				await draft.focus();
 				await page.keyboard.insertText(`${entry === 'slash' ? '/btw ' : ''}side-question-fixture ${entry}`);
 				if (entry === 'menu') {
@@ -172,7 +172,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.screenshot({ path: testInfo.outputPath(`side-chat-${entry}.png`) });
 				await chat.locator('.ash-chat-side-chat-origin').getByRole('button').click();
 				await expect(chat).toHaveAttribute('data-thread-id', threadId);
-				await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
+				await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
 				await expect(composer.locator('.view-lines')).not.toContainText('side-question-fixture');
 			}
 

@@ -18,8 +18,8 @@ import {
 	type DesignEffect
 } from '../../../common/model/designEffects.js';
 import { designBlendModes, type DesignBlendMode } from '../../../common/model/designPaint.js';
-import { flattenDesignShapes } from '../../../common/model/document.js';
-import type { DesignSelection } from '../../../common/selection.js';
+import { flattenDesignShapes } from '../../../common/model/designDocument.js';
+import type { DesignSelection } from '../../../common/designSelection.js';
 import { designBlendLabel } from '../../../browser/designPaintLabels.js';
 const types: readonly DesignEffect['type'][] = ['drop-shadow', 'inner-shadow', 'layer-blur', 'background-blur'];
 

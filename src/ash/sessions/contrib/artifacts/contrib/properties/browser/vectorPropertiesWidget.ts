@@ -16,9 +16,9 @@ import { localize } from '../../../../../../nls.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import { getDesignNetworkIntersections, getDesignVectorContours, loadDesignVectorGeometry } from '../../../browser/designVectorGeometry.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignShape } from '../../../common/model/document.js';
+import { flattenDesignShapes, type DesignShape } from '../../../common/model/designDocument.js';
 import { designPathContours, designPathEditingContours, designPathFillContours, isDesignVector, type DesignBooleanOperation, type DesignPath } from '../../../common/model/designVector.js';
-import type { DesignSelection } from '../../../common/selection.js';
+import type { DesignSelection } from '../../../common/designSelection.js';
 
 function operations(): readonly [DesignBooleanOperation, string][] {
 	return [

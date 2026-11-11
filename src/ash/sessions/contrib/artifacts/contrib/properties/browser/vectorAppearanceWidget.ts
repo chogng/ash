@@ -8,11 +8,11 @@ import type { DesignDocumentController } from '../../../browser/designDocumentCo
 import { loadDesignVectorGeometry, offsetDesignVector } from '../../../browser/designVectorGeometry.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import { flattenDesignVector } from '../../../common/commands/vectorCommands.js';
-import { flattenDesignShapes, type DesignWidthPoint, type DesignEndpoint } from '../../../common/model/document.js';
+import { flattenDesignShapes, type DesignWidthPoint, type DesignEndpoint } from '../../../common/model/designDocument.js';
 import { designPathEditingContours, designPathStrokeContours, fitDesignPathBounds, isDesignVector, withDesignPathContours, type DesignPath } from '../../../common/model/designVector.js';
 import { designWidthPointAt, supportsDesignVariableWidth } from '../../../common/model/designVariableWidth.js';
 import { withDesignVectorNetwork } from '../../../common/model/designVectorNetwork.js';
-import type { DesignSelection } from '../../../common/selection.js';
+import type { DesignSelection } from '../../../common/designSelection.js';
 
 /** Appearance values belong to the document. Offset previews belong to this view until confirmation. */
 export class VectorAppearanceWidget extends Disposable {

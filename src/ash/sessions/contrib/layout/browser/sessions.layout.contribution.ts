@@ -27,6 +27,7 @@ class SessionsLayoutContribution extends Disposable {
 		] as const) {
 			this._register(CommandsRegistry.register('sessions.open.' + id, (_accessor, source) => layout.openEntry({
 				id, workspaceMode: id === 'chat' ? 'chat' : 'current', sidebarContainerId: sidebar, content: 'conversation', focus,
+				conversationKind: 'chat',
 				newDraft: id === 'chat' ? 'conversation' : undefined,
 				activityContext: 'sessions.activity.' + id + 'Selected', restoreCommand: 'sessions.open.' + id,
 			}, undefined, source === 'restore' ? { source } : undefined)));

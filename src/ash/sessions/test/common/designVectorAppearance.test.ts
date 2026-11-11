@@ -4,7 +4,7 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
-import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/artifacts/common/model/document.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/artifacts/common/model/designDocument.js';
 import { designPathFillContours, designPathStrokeContours, designShapeContours, fitDesignPathBounds, type DesignPath } from '../../contrib/artifacts/common/model/designVector.js';
 import { connectDesignNetwork, toDesignVectorNetwork, withDesignVectorNetwork } from '../../contrib/artifacts/common/model/designVectorNetwork.js';
 import { designVariableStrokeContours, designWidthAt, designWidthPointAt, designWidthLocation, nearestDesignWidthLocation, supportsDesignVariableWidth } from '../../contrib/artifacts/common/model/designVariableWidth.js';

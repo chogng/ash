@@ -40,6 +40,7 @@ import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
 
 const ashChatEditor = {
@@ -76,10 +77,11 @@ class NativeReplyEditorModel extends AshChatModel implements IReplyChatEditorMod
 		@IStorageService storage: IStorageService,
 		@IContextKeyService contexts: IContextKeyService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@INativeChatModelPreferencesService modelPreferences: INativeChatModelPreferencesService,
 	) {
 		const initial = view.getChatSelection();
 		if (!initial) throw new Error('The compact Chat editor needs a restored Sessions selection');
-		super(initial, management, primary, configuration, storage, contexts);
+		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, contexts, modelPreferences);
 		this.draftModels = instantiation.createInstance(modelSource);
 		let previous: ReturnType<typeof view.chatSelection.get>;
 		this._register(autorun(reader => {

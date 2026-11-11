@@ -35,7 +35,7 @@ suite('ChatGPTProjectFolderPicker', () => {
 			],
 			conversations: [],
 			messages: [],
-			coworkTasks: [],
+			linkedTasks: [],
 			draft: '',
 			activeDraftConversationId: undefined,
 			localConversationId: 'local-1',

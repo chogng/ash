@@ -6,6 +6,7 @@ import { StorageScope, StorageTarget, type IStorageService } from '../../../../p
 import { isModelReasoningEffort, type ModelRef, type ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
 import type { IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
 import { visibilityKey, type SessionsViewReference } from './visibleSessions.js';
+import { isArtifactKind } from '../../../common/artifactKind.js';
 
 const storageKey = 'sessions.viewState';
 const chatSelectionKey = 'sessions.chat.ashSelection';
@@ -146,6 +147,7 @@ function nonEmptyString(value: unknown): value is string {
 export function isUntitledSession(value: unknown): value is IUntitledChatSession {
 	return isRecord(value) && nonEmptyString(value.untitledSessionId) && typeof value.title === 'string'
 		&& (value.kind === undefined || value.kind === 'chat' || value.kind === 'code')
+		&& (value.artifactKind === undefined || isArtifactKind(value.artifactKind))
 		&& (value.creationId === undefined || nonEmptyString(value.creationId))
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
 		&& (value.forkSource === undefined || isRecord(value.forkSource) && nonEmptyString(value.forkSource.sessionId) && nonEmptyString(value.forkSource.threadId))

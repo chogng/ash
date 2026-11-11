@@ -125,14 +125,11 @@ Entry points can import from all sessions layers: `sessions/~`, `services/*/~`, 
 
 ## Key Constraint
 
-Cowork owns Chat and Collaboration conversation rendering, model preferences,
-welcome layout and draft lifecycle under `contrib/cowork/`. Its composer consumes
-the Workbench Chat input contract, editor, attachment model, model picker and
-dictation services. Workbench owns these input operations and their internal DOM;
-Cowork selects the picker presentation through explicit construction options.
-Cowork does not import `sessions/contrib/chat/` or the Code conversation widget.
-The Sessions Part hosts the conversation implementations through pane factories
-supplied by window composition.
+The Chat contribution owns the native welcome layout and model preferences
+for Chat and Collaboration. It supplies these to the native Sessions Chat
+model and the Workbench Chat widget. Workbench owns transcript rendering, input
+operations and the draft storage lifecycle. The Sessions Part hosts the separate
+presentations through pane factories supplied by window composition.
 
 ```
 contrib/*  ──✕──▶  contrib/providers/*

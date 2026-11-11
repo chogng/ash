@@ -16,7 +16,7 @@ test('Chat input history is shared with Agents while composer drafts remain inde
 	await page.getByRole('combobox', { name: 'Search input history' }).press('Escape');
 	await page.keyboard.insertText('sidebar draft');
 	const agents = await workbench.openAgentsWindow(target.kind);
-	const cowork = agents.locator('.ash-sessions-cowork-input .stanza-editor');
+	const cowork = agents.locator('.ash-sessions-native-chat-input .stanza-editor');
 	if (target.kind === 'electron') {
 		// Opening Agents hands the existing draft over; establish a separate draft after that handoff.
 		await expect(editor.locator('.stanza-editor-line-text')).toHaveText('');

@@ -87,7 +87,8 @@ export class MainThreadClientEditors extends Disposable {
 			if (!['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle) || !runtime.activation?.events.includes('onDemand:dataChannel')) { continue; }
 			const owner = findRuntimePackage(enabledCatalog.extensions, runtime);
 			if (!owner?.rendererClient) continue;
-			const editors = declarations.find(entry => entry.description.id === owner.id)?.value;
+			const editors = declarations.find(entry => entry.description.id === owner.id)?.value.filter(editor =>
+				!editor.documentType || DocumentTypes.fileEditorsEnabled || !editor.selector.some(selector => selector.filenamePattern));
 			if (!editors?.length) continue;
 			dormant.add(runtime.id);
 			const identity = JSON.stringify([runtime.activationGeneration, owner.packageSha256, owner.manifestSha256, owner.rendererClient]);
@@ -266,7 +267,7 @@ export class MainThreadClientEditors extends Disposable {
 				return;
 			}
 			// Register only after the entire declaration is valid. No static factory supplies a fallback.
-			const descriptors = editors.map((editor): IEditorPaneDescriptor => {
+			const descriptors = editors.filter(editor => DocumentTypes.fileEditorsEnabled || editor.selectors.length === 0).map((editor): IEditorPaneDescriptor => {
 				const resolveDocumentProfile = async () => {
 					const component = await resolveComponent();
 					if (!('getEditorProfile' in component) || typeof component.getEditorProfile !== 'function') {

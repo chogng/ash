@@ -119,7 +119,7 @@ async function selectModel(page: Page, composer: ReturnType<Page['locator']>, na
 // opt-in: its installed Codex source is version-checked and never uses real credentials.
 for (const scenario of [
 	{
-		title: 'Persisted root and child models survive profile reopen while manual selection updates the profile default',
+		title: 'Persisted root and child models survive profile reopen without changing the backend default',
 		subscription: false,
 	},
 	{
@@ -159,17 +159,6 @@ for (const scenario of [
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
 		try {
-			if (target.kind === 'browser') {
-				// The isolated headless profile has no interactive system keyring. Use
-				// the supported storage choice before installing the synthetic API key.
-				await workbench.settingsEditor.openUserSettingsUI();
-				await workbench.settingsEditor.selectGroup('agents');
-				await workbench.settingsEditor.selectCategory('models');
-				await workbench.page.getByRole('button', { name: 'Use file storage', exact: true }).click();
-				await workbench.page.getByRole('button', { name: 'Use file storage', exact: true }).last().click();
-				await expect(workbench.page.getByRole('button', { name: 'Use encrypted storage', exact: true })).toBeVisible();
-				await workbench.page.keyboard.press('Escape');
-			}
 			connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 			const { client } = connection;
 			const address = server.address();
@@ -283,7 +272,8 @@ for (const scenario of [
 			await workbench.settingsEditor.selectCategory('models');
 			const settings = workbench.page.getByRole('dialog', { name: 'Ash Settings', exact: true });
 			for (const model of [rootModel, childModel, defaultModel]) {
-				const enabled = settings.getByRole('switch', { name: `Enable ${model.model}`, exact: true });
+				await settings.getByPlaceholder('Search model name or ID').fill(model.model);
+				const enabled = settings.getByRole('switch', { name: `Show ${model.model} in model picker`, exact: true });
 				if (!(await enabled.isChecked())) await enabled.press('Space');
 				await expect(enabled).toBeChecked();
 			}
@@ -308,7 +298,7 @@ for (const scenario of [
 				.filter({ hasText: 'Persisted model choices' })
 				.filter({ hasText: historyDescription(fork.value.threadId) })
 				.click();
-			const sourceChat = source.locator('.ash-chat-view-pane :is(.ash-chat,.ash-cowork):visible');
+			const sourceChat = source.locator('.ash-chat-view-pane :is(.ash-chat,.ash-native-chat):visible');
 			await expect(sourceChat).toHaveAttribute('data-thread-id', fork.value.threadId);
 			await expect(sourceChat.locator('.ash-chat-input-model-action')).toHaveText(childModel.model);
 			await new QuickAccess(source).runCommand('workbench.action.chat.showHistory');
@@ -332,7 +322,7 @@ for (const scenario of [
 			expect(page).not.toBe(source);
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Persisted model choices' }).click();
-			const active = (): ReturnType<Page['locator']> => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
+			const active = (): ReturnType<Page['locator']> => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-native-chat)');
 			await expect(active()).toHaveAttribute('data-thread-id', rootThreadId);
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'No persisted model' }).click();
@@ -362,18 +352,27 @@ for (const scenario of [
 			await page.keyboard.press('Escape');
 			await expect(sourceChat.locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session?.model).toEqual(rootModel);
-			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(childModel);
-			// Collab hosts the shared Cowork renderer; the Chat workspace opens ChatGPT.
-			await page.locator('[data-action-id="sessions.activity.more"] button').click();
-			await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
+			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(defaultModel);
+			const openCollab = async () => {
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+				await page.locator('[data-action-id="sessions.activity.more"] button').click();
+				await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
+				await expect(active()).toHaveClass(/\bash-native-chat\b/);
+			};
+			const selectCodeConversation = async (title: string) => {
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+				await page.locator('.ash-sessions-list-item').filter({ hasText: title }).click();
+			};
+			await openCollab();
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
-			await new QuickAccess(page).runCommand('workbench.action.chat.showHistory');
-			await page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'No persisted model' }).click();
+			await selectCodeConversation('No persisted model');
+			await openCollab();
+			await expect(active()).toHaveAttribute('data-thread-id', emptyThread.threadId);
 			await active().locator('.ash-chat-input-model-action').press('ArrowDown');
 			await expect(page.getByRole('dialog', { name: 'Choose a chat model', exact: true }).getByRole('switch', { name: 'Auto', exact: true })).not.toBeChecked();
 			await page.keyboard.press('Escape');
-			await new QuickAccess(page).runCommand('workbench.action.chat.showHistory');
-			await page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'Persisted model choices' }).filter({ hasText: historyDescription(rootThreadId) }).click();
+			await selectCodeConversation('Persisted model choices');
+			await openCollab();
 			page = await agentsWorkbench.reopenAgentsWindow(application, page);
 			await expect(active()).toHaveAttribute('data-thread-id', rootThreadId);
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);

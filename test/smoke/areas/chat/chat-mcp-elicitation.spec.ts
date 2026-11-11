@@ -90,7 +90,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 		await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
 		await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: bypass.label.english, exact: true }).click();
 		if (surface === 'Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
-		const chat = page.locator(`.ash-sessions-chat-slot.active:visible ${surface === 'Code' ? '.ash-chat' : '.ash-cowork'}`);
+		const chat = page.locator(`.ash-sessions-chat-slot.active:visible ${surface === 'Code' ? '.ash-chat' : '.ash-native-chat'}`);
 		const answers = async (): Promise<unknown[]> => {
 			try { return (await readFile(record, 'utf8')).trim().split('\n').map(line => JSON.parse(line)); }
 			catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }

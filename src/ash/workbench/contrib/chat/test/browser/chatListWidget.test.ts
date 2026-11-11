@@ -18,8 +18,6 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { IChatTipService } from '../../browser/chatTipService.js';
 import { ChatInputTipPresenter } from '../../browser/widget/input/chatInputTipPresenter.js';
 import { ChatInputNoticeHost } from '../../browser/widget/input/chatInputNoticeHost.js';
-import { IChatTipService as ICoworkTipService } from '../../../../../sessions/contrib/cowork/browser/chatTipService.js';
-import { ChatInputTipPresenter as CoworkTipPresenter } from '../../../../../sessions/contrib/cowork/browser/widget/input/chatInputTipPresenter.js';
 import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -36,6 +34,8 @@ import { BareFontInfo } from '../../../../../editor/common/config/fontInfo.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
+import { createDisconnectedAgentThreadService } from '../../../../../platform/agentHost/browser/appServerAgentService.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -204,13 +204,12 @@ test('Chat opens explicit and plain-text file references at the correct line in 
 	}
 });
 
-test('Workbench and Cowork tips use injected Markdown opening and preserve dismissal', () => {
+test('Chat tips use injected Markdown opening and share dismissal across composers', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	const dismissed = resources.add(new Emitter<void>());
 	let visible = true;
 	const tips = {
-		onDidDismissTip: dismissed.event,
 		onDidChangeTips: dismissed.event,
 		registerTipProvider: () => toDisposable(() => { }),
 		getWelcomeTip: () => visible ? { id: 'documentation', content: new MarkdownString('[Docs](https://example.com/tip)') } : undefined,
@@ -218,7 +217,6 @@ test('Workbench and Cowork tips use injected Markdown opening and preserve dismi
 		clearDismissedTips: () => { },
 	};
 	services.registerInstance(IChatTipService, tips);
-	services.registerInstance(ICoworkTipService, tips);
 	const opened: string[] = [];
 	services.get(IOpenerService).setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });
 	const container = document.createElement('main');
@@ -226,12 +224,13 @@ test('Workbench and Cowork tips use injected Markdown opening and preserve dismi
 	using noticeHost = new ChatInputNoticeHost(() => { focused.push('workbench'); });
 	using workbench = services.createInstance(ChatInputTipPresenter, { container, isEligible: () => true, focusInput: () => { focused.push('workbench'); } }, noticeHost);
 	using coworkNoticeHost = new ChatInputNoticeHost(() => { focused.push('cowork'); });
-	using cowork = services.createInstance(CoworkTipPresenter, { container, isEligible: () => true, focusInput: () => { focused.push('cowork'); } }, coworkNoticeHost);
+	const secondContainer = document.createElement('main');
+	using cowork = services.createInstance(ChatInputTipPresenter, { container: secondContainer, isEligible: () => true, focusInput: () => { focused.push('cowork'); } }, coworkNoticeHost);
 	workbench.current!.domNode.querySelector<HTMLAnchorElement>('a')!.click();
 	cowork.current!.domNode.querySelector<HTMLAnchorElement>('a')!.click();
 	assert.deepEqual(opened, ['https://example.com/tip', 'https://example.com/tip']);
 	workbench.current!.domNode.querySelector<HTMLButtonElement>('button')!.click();
-	assert.deepEqual({ children: container.childElementCount, focused }, { children: 0, focused: ['workbench'] });
+	assert.deepEqual({ children: container.childElementCount, secondChildren: secondContainer.childElementCount, focused }, { children: 0, secondChildren: 0, focused: ['workbench'] });
 });
 
 suite('Chat hidden response resources', () => {
@@ -382,6 +381,7 @@ test('accessible transcript reads current retained messages in display order aft
 test('streaming tool content preserves disclosure focus, failure state and restored expansion', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 	const container = document.createElement('main');
 	document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
@@ -437,6 +437,7 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 	try {
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		widget.render(chatTranscriptListItems([{ type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'read', name: 'read', argumentsJson: '{}' } }]));
 		assert.equal(widget.element.querySelector('summary')!.textContent, 'read · 等待结果');
@@ -618,7 +619,7 @@ test('Skill resource content provider shares readonly models and cancels a late 
 	assert.equal(services.get(IModelService).getModels().length, 0);
 });
 
-for (const classPrefix of ['ash-chat', 'ash-cowork']) {
+for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 	test(`${classPrefix} shows exact accepted context as inert text and preserves its disclosure and focus`, () => {
 		using resources = new DisposableStore();
 		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));

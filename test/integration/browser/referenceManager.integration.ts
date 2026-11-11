@@ -14,7 +14,7 @@ import { StandaloneCommandService } from '../../../src/ash/editor/standalone/bro
 import { IDialogService, IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
-import { IDocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
+import { DocumentTypes, IDocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorTextModelService.js';
 import type { DocumentEditorPane } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import type { TextModelWorkingCopyReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -66,6 +66,7 @@ const resources = new ExtensionResourceLoaderService(async request => {
 services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [] } as unknown as IExtensionService);
 services.registerInstance(IExtensionApi, { list: async () => normalizeExtensionCatalog(await (await fetch('/__references_catalog')).json()), resources } as IExtensionApi);
 services.registerInstance(IExtensionHostApi, { invoke: async (request, signal) => (await fetch(`/__references_invoke?id=${request.extensionId}`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request.payload) })).json() } as IExtensionHostApi);
+const fileEditors = DocumentTypes.enableFileEditors();
 const bridge = services.createInstance(MainThreadClientEditors, 30000, loadExtensionEditorModule);
 await memory.createDirectory(URI.file('/fixture'));
 await files.writeFile({ resource: URI.file('/fixture/source.ris'), content: 'TY  - JOUR\nTI  - A paper\nAU  - Smith, Jane\nPY  - 2024\nDO  - 10.1234/abc\nER  -\nTY  - BOOK\nTI  - A second book\nAU  - Wang, Ming\nPY  - 2023\nER  -\n' });
@@ -89,6 +90,6 @@ window.referenceManagerTest = {
 	async saveDocument() { await panes.get('document')!.workingCopy!.save(new AbortController().signal); },
 	async saveLibrary() { await panes.get('library')!.save!(); },
 	accessible: () => AccessibleViewRegistry.getImplementations().filter(item => item.name.startsWith('resource-editor-')).map(item => item.getProvider(services)?.provideContent() ?? '').join('\n'),
-	dispose() { for (const pane of panes.values()) pane.dispose(); bridge.dispose(); changed.dispose(); models.dispose(); textFiles.dispose(); opener.dispose(); codeEditors.dispose(); theme.dispose(); services.dispose(); parent.dispose(); files.dispose(); memory.dispose(); },
+	dispose() { for (const pane of panes.values()) pane.dispose(); bridge.dispose(); fileEditors.dispose(); changed.dispose(); models.dispose(); textFiles.dispose(); opener.dispose(); codeEditors.dispose(); theme.dispose(); services.dispose(); parent.dispose(); files.dispose(); memory.dispose(); },
 };
 declare global { interface Window { referenceManagerTest: { enable(name: string, enabled: boolean): Promise<void>; open(path?: string, readOnly?: boolean): Promise<void>; dialogs(paths: string[], values?: string[]): void; library(): any; document(): any; persisted(path?: string): Promise<string>; write(path: string, content: string): Promise<void>; dirty(): boolean; undo(): boolean; redo(): boolean; captureApi(): void; invokeSaved(payload: unknown): Promise<string>; saveDocument(): Promise<void>; saveLibrary(): Promise<void>; accessible(): string; dispose(): void; }; } }

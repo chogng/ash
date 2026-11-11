@@ -8,7 +8,7 @@ import { lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { menuHoverBackground } from '../../../platform/theme/common/colors/menuColors.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
-import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/common/creator.js';
+import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/contrib/docs/common/docs.js';
 
 suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
@@ -189,7 +189,9 @@ suite('sessions browser component', () => {
 		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
 
 		for (let count = 0; count < 2; count++) {
-			await createTiles.getByRole('button', { name: '文档', exact: true }).click();
+			const quick = new QuickAccess(page);
+			await quick.runCommand('sessions.creator.chooseDocsEditor');
+			await quick.select('新建空白文档');
 			await expect(creator).toBeHidden();
 			await home.click();
 		}

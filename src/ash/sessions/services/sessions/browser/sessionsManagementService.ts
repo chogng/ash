@@ -382,6 +382,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
+	setUntitledSessionArtifactKind(untitledSessionId: string, kind: IUntitledChatSession['artifactKind']): void {
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
+		if (!current || current.artifactKind === kind) return;
+		this._untitledSessions = this._untitledSessions.map(session => session === current ? { ...session, artifactKind: kind } : session);
+		this._onDidChange.fire();
+	}
+
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
@@ -543,7 +550,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (this.isDisposed) return;
 		this.materializations.delete(untitledSessionId);
 		this._untitledSessions = this._untitledSessions.map(draft => draft.untitledSessionId === untitledSessionId
-			? { ...draft, creationId: createUuid() } : draft);
+			? { ...draft, creationId: createUuid(), artifactKind: undefined } : draft);
 		// Catalog refresh may already contain a newer projection of the accepted request.
 		if (!this._sessions.some(session => session.sessionId === active.session.sessionId)) {
 			this._sessions = [active.session, ...this._sessions];

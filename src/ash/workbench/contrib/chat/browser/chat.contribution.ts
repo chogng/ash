@@ -9,7 +9,6 @@ import { registerChatContextActions } from './actions/chatContextActions.js';
 import { IImageEditorService } from '../../../services/imageEditor/common/imageEditorService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import './chat.shared.contribution.js';
-import './aiCustomization/aiCustomizationManagement.contribution.js';
 import { registerHookActions } from './promptSyntax/hookActions.js';
 import { registerChatEditingActions } from './chatEditing/chatEditingActions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';

@@ -1,15 +1,15 @@
 import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
-import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { CreatorFrameNavigator } from '../../../browser/creatorFrameNavigator.js';
-import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
-import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
+import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
+import { CanvasFrameNavigator } from '../../../browser/canvasFrameNavigator.js';
+import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
+import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
 
-class SlidesWorkspace extends CreatorCanvasWorkspace {
-	private pages!: CreatorFrameNavigator;
+class SlidesWorkspace extends CanvasWorkspace {
+	private pages!: CanvasFrameNavigator;
 	protected override createModeContent(): void {
-		this.pages = this._register(new CreatorFrameNavigator(this.actionsDomNode, this.contentDomNode, this.document, id => this.editor.revealShape(id)));
+		this.pages = this._register(new CanvasFrameNavigator(this.actionsDomNode, this.contentDomNode, this.document, id => this.editor.revealShape(id)));
 	}
 	private reorder(offset: number): void {
 		const shapes = [...this.document.model.value.shapes];
@@ -35,11 +35,11 @@ class SlidesWorkspace extends CreatorCanvasWorkspace {
 	public override setVisible(visible: boolean): void { super.setVisible(visible); this.pages.setVisible(visible); }
 }
 
-registerCreatorMode({
-	id: CreatorMode.Slides,
-	title: getCreatorModeTitle(CreatorMode.Slides),
+registerArtifactWorkspace({
+	id: ArtifactWorkspaceId.Slides,
+	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Slides),
 	description: localize('sessions.creator.slides.description', 'Build a slide deck, arrange pages and present your work.'),
 	icon: Lxicon.layout,
 	help: localize('sessions.creator.slides.help', 'Add slide creates a 16:9 slide. Pages selects a slide for editing. Move slide earlier and Move slide later change presentation order and support Undo. Present plays the deck; use Left and Right on the preview to change pages and Escape to return to editing.'),
-	create: (instantiation, ownerDocument) => instantiation.createInstance(SlidesWorkspace, ownerDocument, CreatorMode.Slides),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(SlidesWorkspace, ownerDocument, ArtifactWorkspaceId.Slides),
 });

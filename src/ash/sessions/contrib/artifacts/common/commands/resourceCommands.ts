@@ -1,6 +1,6 @@
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import { flattenDesignShapes, type DesignAsset, type DesignShape } from '../model/document.js';
+import { flattenDesignShapes, type DesignAsset, type DesignShape } from '../model/designDocument.js';
 import type { DesignModel } from '../model/designModel.js';
 import { designPropertyTypes, designStyleFields, emptyDesignResources, getDesignResourceCatalog, normalizeDesignProperty, resolveDesignVariable, supportsDesignProperty, validateDesignResources, type DesignBindableProperty, type DesignLibrary, type DesignResources, type DesignStyle, type DesignStyleKind, type DesignVariable, type DesignVariableType, type DesignVariableValue } from '../model/designResources.js';
 

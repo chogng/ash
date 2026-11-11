@@ -5,7 +5,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IAgentModelsService, ModelPurpose, type AgentModelDefaults } from '../../../../../platform/models/common/agentModels.js';
 import { ILanguageModelsService } from '../../../chat/common/languageModels.js';
-import { AgentTaskModelSettingsModel } from '../../browser/agentTaskModelSettingsModel.js';
+import { AgentTaskModelSettingsModel } from '../../../chat/browser/agentTaskModelSettingsModel.js';
 import type { SettingsSectionField } from '../../../../services/preferences/common/preferences.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';

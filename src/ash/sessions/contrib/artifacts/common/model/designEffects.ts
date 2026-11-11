@@ -2,7 +2,7 @@ import { isRecord } from '../../../../../base/common/types.js';
 import { generateUuid, isUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import { designBlendModes, designPaints, type DesignBlendMode } from './designPaint.js';
-import type { DesignShape } from './document.js';
+import type { DesignShape } from './designDocument.js';
 
 /** Positions use the unrotated layer's normalized coordinates and may lie outside its bounds. */
 export interface DesignProgressiveBlur {

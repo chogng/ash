@@ -37,7 +37,7 @@ test('Hook transcript retains all five domain states and their canonical run ide
 
 for (const host of [
 	{ name: 'Code', create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, {}) },
-	{ name: 'Cowork', create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, { classPrefix: 'ash-cowork' }) },
+	{ name: 'Cowork', create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, { classPrefix: 'ash-native-chat' }) },
 ]) {
 
 	test(`${host.name} Hook status updates retain the summary focus, disclosure and literal process reason`, () => {

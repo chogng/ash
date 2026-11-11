@@ -2,7 +2,7 @@ import { designEndpointContours, designStrokeLayers } from './designVectorStroke
 import { designVariableStrokeContours } from './designVariableWidth.js';
 import { designPathFillContours, type DesignPathContour } from './designVector.js';
 import { cubicBezierPoint, toDesignLocal, type DesignPoint } from '../core/geometry.js';
-import type { DesignShape } from './document.js';
+import type { DesignShape } from './designDocument.js';
 
 /** Inverse rotation makes hit testing agree with SVG rendering, including ellipse corners. */
 export function hitTestDesignShapes(shapes: readonly DesignShape[], point: DesignPoint, deep = false, vectorContours?: (shape: DesignShape) => readonly DesignPathContour[] | undefined): DesignShape | undefined {

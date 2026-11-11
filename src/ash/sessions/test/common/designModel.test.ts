@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAsset, type DesignAutoLayout, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAsset, type DesignAutoLayout, type DesignShape } from '../../contrib/artifacts/common/model/designDocument.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
 import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';

@@ -45,7 +45,7 @@ import type {
 
 export interface SessionsPartOptions {
 	readonly newDraftVisible: IObservable<boolean>;
-	readonly createCoworkPane: (
+	readonly createChatPane: (
 		container: HTMLElement,
 		panelId: string,
 		selection: SessionsViewSelection,
@@ -527,7 +527,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		selection: SessionsViewSelection,
 	): ISessionsConversationPane {
 		const options = this.options;
-		if (kind === 'cowork') return options.createCoworkPane(container, panelId, selection);
+		if (kind === 'chat') return options.createChatPane(container, panelId, selection);
 		return this.services.createInstance(NewChatView, container, {
 			panelId, selection, createNewSession: options.createNewSession, onDidChangeInfo: () => this.updateInfoContext(),
 		});

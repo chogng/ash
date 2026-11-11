@@ -2,7 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
-import { taskModelMenuRows } from '../../preferences/browser/taskModelMenu.js';
+import { taskModelMenuRows } from '../../chat/browser/taskModelMenu.js';
 import { updateAdvisorConfig } from '../../../services/chat/common/advisor.js';
 import { IChatService, type AdvisorConfig } from '../../../services/chat/common/chatService.js';
 import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';

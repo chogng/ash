@@ -16,7 +16,7 @@ test('Sessions sidebar hides blank drafts and restores parked content drafts', {
 		await expect.poll(() => page.evaluate(() => globalThis.ashWebWorkbenchHost?.api.appServer.getConnectionState())).toBe('ready');
 	}
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	const active = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork):visible');
+	const active = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-native-chat):visible');
 	const drafts = () => page.locator('.ash-sessions-list:visible [data-item^="untitled:"]');
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	await expect(drafts()).toHaveCount(0);

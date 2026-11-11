@@ -160,6 +160,8 @@ export interface IWorkspacePickerDelegate {
 
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
+	/** Styles the widget and its transcript using the host's presentation. */
+	readonly classPrefix?: string;
 	readonly showWelcome?: boolean;
 	/** Use the default title for undefined, or hide the welcome for null. */
 	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | null | undefined>;

@@ -71,7 +71,7 @@ suite('Chat message renderer lifecycle', () => {
 		assert.throws(() => incomplete.createInstance(ChatListWidget, document.createElement('main'), {}), /loggerService/);
 	});
 
-	for (const classPrefix of ['ash-chat', 'ash-cowork']) {
+	for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 		test(`${classPrefix} shares bounded diagnostics across streaming, replacement, removal and disposal`, () => {
 			using resources = new DisposableStore();
 			const entries: LogEntry[] = [];

@@ -174,8 +174,8 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 				await page.locator('.ash-chat-sessions-sidebar .ash-agent-session-row').filter({ hasText: 'Request actions source' }).click();
 			}
 			const chat = page.locator(ashChat ? '.ash-native-chat-widget .ash-chat'
-				: agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-cowork'}` : '.ash-chat-view-pane .ash-chat:visible');
-			const transcript = chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget');
+				: agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
+			const transcript = chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget');
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');
 			const checkReplyModelFeedback = async () => {

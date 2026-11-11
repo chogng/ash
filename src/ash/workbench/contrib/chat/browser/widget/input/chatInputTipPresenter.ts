@@ -13,6 +13,7 @@ export interface IChatInputTipPresenterOptions {
 	readonly getSessionId?: () => string | undefined;
 	readonly isEligible: () => boolean;
 	readonly focusInput: () => void;
+	readonly tipIds?: readonly string[];
 }
 
 /** Applies the composer's notice eligibility without owning another copy of tip state. */
@@ -59,7 +60,7 @@ export class ChatInputTipPresenter extends Disposable {
 			this.selectedTipId = undefined;
 		}
 		const eligible = this.options.isEligible();
-		const tip = eligible && !this.dismissedForSession ? this.tips.getWelcomeTip(this.selectedTipId) : undefined;
+		const tip = eligible && !this.dismissedForSession ? this.tips.getWelcomeTip(this.selectedTipId, 0, this.options.tipIds) : undefined;
 		if (!tip) {
 			if (eligible && this.currentPart?.domNode.contains(this.options.container.ownerDocument.activeElement)) this.options.focusInput();
 			this.selectedTipId = undefined;
@@ -67,7 +68,7 @@ export class ChatInputTipPresenter extends Disposable {
 			this.part.clear();
 			return;
 		}
-		const canNavigate = this.tips.getWelcomeTip(tip.id, 1)?.id !== tip.id;
+		const canNavigate = this.tips.getWelcomeTip(tip.id, 1, this.options.tipIds)?.id !== tip.id;
 		if (this.currentTip?.id === tip.id && this.canNavigate === canNavigate && equals({ ...this.currentTip.content }, { ...tip.content })) return;
 		if (!this.claim.value) {
 			this.claim.value = this.noticeHost.occupy(ChatInputNoticeLane.Tip, {
@@ -93,7 +94,7 @@ export class ChatInputTipPresenter extends Disposable {
 		this.currentTip = tip;
 		this.canNavigate = canNavigate;
 		const navigation = canNavigate ? (direction: -1 | 1) => {
-			const next = this.tips.getWelcomeTip(tip.id, direction);
+			const next = this.tips.getWelcomeTip(tip.id, direction, this.options.tipIds);
 			if (next) {
 				this.selectedTipId = next.id;
 				this.renderTip(next, canNavigate);
@@ -109,7 +110,9 @@ export class ChatInputTipPresenter extends Disposable {
 		}, navigation);
 		const render = (part: ChatTipContentPart): void => {
 			const previous = this.currentPart;
-			const replacingFocusedPart = previous?.domNode.contains(this.options.container.ownerDocument.activeElement);
+			const active = this.options.container.ownerDocument.activeElement;
+			const replacingFocusedPart = previous?.domNode.contains(active);
+			const actionId = replacingFocusedPart ? active?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 			if (previous?.domNode.parentNode === this.options.container) {
 				previous.domNode.replaceWith(part.domNode);
 			} else {
@@ -118,7 +121,8 @@ export class ChatInputTipPresenter extends Disposable {
 			this.currentPart = part;
 			part.domNode.tabIndex = -1;
 			if (replacingFocusedPart) {
-				part.domNode.querySelector('button')?.focus();
+				const button = actionId ? part.domNode.querySelector<HTMLButtonElement>(`[data-action-id="${CSS.escape(actionId)}"] button`) : undefined;
+				(button ?? part.domNode).focus({ preventScroll: true });
 			}
 		};
 		scope.add(parts.onDidChange(render));

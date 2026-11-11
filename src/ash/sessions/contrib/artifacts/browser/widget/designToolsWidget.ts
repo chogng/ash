@@ -11,7 +11,7 @@ import { DropdownWithPrimaryActionViewItem } from '../../../../../platform/actio
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 
-import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
+import { DesignMode, DesignTool } from '../../common/config/designEditorConfiguration.js';
 
 export const designToolActions = [
 	[DesignTool.Select, () => localize2('sessions.design.selectTool', 'Select (V)'), Lxicon.cursor2],

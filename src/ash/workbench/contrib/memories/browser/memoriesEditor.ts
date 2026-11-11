@@ -23,8 +23,6 @@ import { Button, type ButtonPresentation } from '../../../../base/browser/ui/but
 import { SelectBox, type SelectOption } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { defaultButtonStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IMemorySettingsNavigation, MEMORIES_FOCUS_CONTEXT, type MemorySettingsNavigation } from './memorySettings.js';
-import '../../preferences/browser/media/settingsCard.css';
-import '../../preferences/browser/media/settingsWidgets.css';
 import './memories.css';
 
 export class MemoriesEditor extends Disposable {

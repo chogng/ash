@@ -2,7 +2,7 @@ import { loadDesignVectorGeometry, isDesignVectorGeometryReady } from './designV
 import { mainWindow } from '../../../../base/browser/window.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { measureDesignText, clearDesignTextMeasurements } from './designTextMeasurement.js';
-import { CreatorMode, getCreatorModeTitle } from '../common/creator.js';
+import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../common/artifactWorkspace.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { decodeBase64 } from '../../../../base/common/buffer.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -16,14 +16,14 @@ import { localize } from '../../../../nls.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAssetVersion, type DesignDocument, type DesignShape } from '../common/model/document.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignAssetVersion, type DesignDocument, type DesignShape } from '../common/model/designDocument.js';
 import { DocumentCommands } from '../common/commands/documentCommands.js';
 import type { DesignPoint } from '../common/core/geometry.js';
 import { encodeDesignMedia, hashDesignMedia, type DesignImageSource } from './designMedia.js';
 import { IAssetService, type AssetVersion } from '../../../../platform/assets/common/assetService.js';
 import { DesignModel } from '../common/model/designModel.js';
 import { emptyDesignResources, getDesignResourceCatalog, getDesignLibraryShapes, type DesignLibrary } from '../common/model/designResources.js';
-import { exportDesignSvg } from './svgRenderer.js';
+import { exportDesignSvg } from './designSvgRenderer.js';
 import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
@@ -67,7 +67,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	private autoSaveError = false;
 	private readonly draftHome: URI;
 	public readonly ready: Promise<void>;
-	public get automaticallySaves(): boolean { return this.mode === CreatorMode.Design; }
+	public get automaticallySaves(): boolean { return this.mode === ArtifactWorkspaceId.Design; }
 	public get needsSaveRetry(): boolean { return this.autoSaveError || this.restoreFailed; }
 	public get isRestoring(): boolean { return this.restoring; }
 	private get activeDocumentKey(): string { return `creator.${this.mode}.activeDocument`; }
@@ -85,7 +85,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	constructor(
-		public readonly mode: CreatorMode,
+		public readonly mode: ArtifactWorkspaceId,
 		@IFileService private readonly files: IFileService,
 		@IAssetService private readonly assets: IAssetService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
@@ -111,7 +111,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 
 	public get name(): string {
 		if (this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome)) { return basename(this.file.resource); }
-		return this.mode === CreatorMode.Design ? localize('sessions.design.untitled', 'Untitled design') : localize('sessions.creator.untitled', 'Untitled {0}', getCreatorModeTitle(this.mode));
+		return this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.untitled', 'Untitled design') : localize('sessions.creator.untitled', 'Untitled {0}', getArtifactWorkspaceTitle(this.mode));
 	}
 	public get isBusy(): boolean { return this.restoring || this.restoreFailed || (this.isFileOperationRunning && !this.autoSaveRunning); }
 	public get isDirty(): boolean { return serializeDesignDocument(this.model.value) !== this.savedContent; }
@@ -123,7 +123,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		const value: unknown = JSON.parse(content);
 		if (!isRecord(value) || typeof value.manifest !== 'string' || !isRecord(value.media) || Object.keys(value).some(key => key !== 'manifest' && key !== 'media')) { throw new TypeError(localize('sessions.design.invalidBackup', 'Invalid design backup')); }
 		const document = parseDesignDocument(value.manifest);
-		if (document.mode !== this.mode) { throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getCreatorModeTitle(document.mode))); }
+		if (document.mode !== this.mode) { throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getArtifactWorkspaceTitle(document.mode))); }
 		const media = new Map<string, Uint8Array>();
 		for (const asset of document.assets) {
 			for (const version of asset.versions) {
@@ -266,7 +266,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
 		try {
-			const resources = await this.fileDialogs.showOpenDialog({ title: this.mode === CreatorMode.Design ? localize('sessions.design.open', 'Open design') : localize('sessions.creator.open', 'Open document'), defaultUri: this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome) ? dirname(this.file.resource) : undefined, canSelectFiles: true, canSelectFolders: true, filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design', 'json'] }] });
+			const resources = await this.fileDialogs.showOpenDialog({ title: this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.open', 'Open design') : localize('sessions.creator.open', 'Open document'), defaultUri: this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome) ? dirname(this.file.resource) : undefined, canSelectFiles: true, canSelectFolders: true, filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design', 'json'] }] });
 			if (!resources || this.isDisposed) { return; }
 			await this.readDocument(resources[0]);
 			await this.rememberDocument();
@@ -282,7 +282,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		const isPackage = (await this.files.stat(selected)).kind === FileKind.Directory;
 		const read = await this.files.readFile(isPackage ? selected.joinPathSegment('manifest.json') : selected);
 		const document = parseDesignDocument(read.content);
-		if (document.mode !== this.mode) { throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getCreatorModeTitle(document.mode))); }
+		if (document.mode !== this.mode) { throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getArtifactWorkspaceTitle(document.mode))); }
 		const root = isPackage ? selected : dirname(selected);
 		const media = new Map<string, Uint8Array>();
 		for (const asset of document.assets) {
@@ -329,7 +329,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
 		try {
-			const resource = target ?? this.file?.resource ?? await this.fileDialogs.showSaveDialog({ title: this.mode === CreatorMode.Design ? localize('sessions.design.save', 'Save design') : localize('sessions.creator.save', 'Save document'), defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment(`${this.mode}.ash-design`), filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design'] }] });
+			const resource = target ?? this.file?.resource ?? await this.fileDialogs.showSaveDialog({ title: this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.save', 'Save design') : localize('sessions.creator.save', 'Save document'), defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment(`${this.mode}.ash-design`), filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design'] }] });
 			if (!resource || this.isDisposed) { return false; }
 			if (copyOnly && this.file && extUri.isEqual(this.file.resource, resource)) {
 				throw new Error(localize('sessions.design.copySameLocation', 'Choose a different location for the copy.'));

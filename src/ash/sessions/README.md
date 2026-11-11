@@ -45,7 +45,7 @@ to this same entry without creating or sending a new conversation.
 
 The selected model source determines where a message is sent. ChatGPT Web
 sends through its reply backend. Older ChatGPT conversations may contain
-references to Cowork tasks. The adapter reads their existing status and can bind
+references to linked Ash tasks. The adapter reads their existing status and can bind
 a legacy local conversation to a ChatGPT history without losing those references.
 The profile keeps the last loaded sidebar index, last confirmed project
 instructions, and opened conversation snapshots under an opaque user and
@@ -58,7 +58,7 @@ of the catalog and verifies omitted conversations individually before removing
 their snapshots. An account-scoped outbox persists offline first text messages
 and deletions. Ash records a creation's stable message ID before submitting it
 and checks cloud history if the result is ambiguous. A deletion stays hidden
-locally while it retries and after acknowledgement. The Cowork Thread owns
+locally while it retries and after acknowledgement. The linked Ash Thread owns
 execution, approvals and artifact bytes.
 Chat reopens that Thread by reference and does not duplicate the task journal.
 
@@ -96,7 +96,7 @@ missing windows before joining it. Historical reads do not advance the live
 transcript revision or overwrite execution state. Interaction offers retain their
 connection owner independently of visible history. `ChatWidget` owns pagination,
 focus and reading-position presentation. Consumers that omit the history option,
-including Cowork, retain full-history behavior.
+including native Chat, retain full-history behavior.
 
 Workbench `ChatViewPane` owns the Chat frame, active-widget projection, opened-tab
 order and close behavior, session-list layout, composer entrypoints and editor
@@ -164,7 +164,7 @@ only projects failures into the service; replacing a conversation or disposing i
 composer retires those projections. The composer registers voice onboarding in its
 notice lane while the input is visible.
 Voice introductions retain the profile acknowledgement preference and share one
-service across Chat, Cowork and floating voice controls. Escape and hiding an input
+service across Chat, Code and floating voice controls. Escape and hiding an input
 release their presentation without acknowledging it; Got it records acknowledgement.
 
 Workbench `AgentSessionsWelcomePage` and Quick Chat borrow independent retained
@@ -339,9 +339,9 @@ See [Automation ownership and lifecycle](../../../crates/docs/automation.md).
 | Regular Workbench Chat                | `browser/workbenchChat.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts`                                                                                           | registers the Session-backed Chat view and navigation/history adapters; Workbench `contrib/chat/browser/actions/chatNewActions.ts` owns New Chat and calls the adapter to create its draft; both list hosts share item commands and profile pin/group state; one model owns draft materialization and Thread subscriptions for each shared `ChatWidget`                                                                                                                                                                            |
 | Main conversation                     | `browser/parts/sessionsPart.ts`, `sessionView.ts`, and `sessionGridLayout.ts`                                                                                                                  | one shared conversation grid with a retained SessionView per slot; Chat/Code switch only the renderer inside each view                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Code composer                         | `contrib/chat/browser/sharedChatInputComposer.ts` and `media/chatInput.css`                                                                                                                    | retain the existing Code welcome input, attachments and permission menu                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Cowork                                | `contrib/cowork/browser/cowork.contribution.ts`, `coworkWidgetModel.ts`, `newCoworkInput.ts`, and `widget/`                                                                                    | own Chat and Agent Teams conversation rendering, model preferences, welcome layout and draft lifecycle; reuse Workbench Chat input operations, editor, model picker and dictation                                                                                                                                                                                                                                                                                                                                                  |
+| Native Chat                           | `contrib/chat/browser/nativeChatPaneFactory.ts`, `ashChatModel.ts` and `replyChatInput.ts`                                                                                                     | compose Chat and Collaboration layouts and model preferences over the native Chat model, shared transcript renderer, input operations and draft binding                                                                                                                                                                                                                                                                                                                                                                            |
 | Composer persistence                  | `contrib/chat/common/newChatDraftState.ts`                                                                                                                                                     | owns workspace-scoped drafts keyed by untitled identity or Thread; migrates older Chat/Code keys without discarding conflicting drafts                                                                                                                                                                                                                                                                                                                                                                                             |
-| Welcome tips                          | `contrib/cowork/browser/chatTipService.ts` and `widget/input/chatInputTipPresenter.ts`; Code keeps its Chat implementations                                                                    | each contribution owns its presenter and service while preserving the existing profile dismissal preference                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Welcome tips                          | Workbench `chatTipService.ts` and `widget/input/chatInputTipPresenter.ts`                                                                                                                      | shared tip catalog, presenter and profile dismissal; Chat limits eligibility to attachment tips                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Turn review                           | `browser/turnMultiDiffSource.ts`, Workbench `contrib/chat/browser/chatEditing/chatEditingActions.ts`, and `contrib/changes/browser/changesMultiDiffSourceResolver.ts`                          | compose Turn changes and register their source resolver and commit action with `workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.ts`                                                                                                                                                                                                                                                                                                                                                                       |
 | Parts                                 | `browser/parts/`                                                                                                                                                                               | hosts the shared Part modules and their owned media; navigation components remain in `sidebar/`, and product-specific Activity Bar components remain in `activitybar/`                                                                                                                                                                                                                                                                                                                                                             |
 | Activity Bar                          | `browser/parts/activitybar/`                                                                                                                                                                   | renders menu commands, persists their order, and owns account entry, DOM, and presentation; uses shared controls, configuration, and menu services as a disposable navigation component, without registering a window Part or importing Workbench Activity Bar styles                                                                                                                                                                                                                                                              |
@@ -363,21 +363,20 @@ Parts and the existing window handoff acknowledgment before clearing an unsent d
 
 The [shared Parts contract](LAYOUT.md#shared-parts-and-mode-content) provides shared editor and optional sidebar/view-container hosts for desktop pages. [Activity Bar entry switching](LAYOUT.md#activity-bar-entry-switching) activates a sidebar ViewContainer and coordinates the central editor page and right-hand container through feature-owned entry commands. SessionsPart remains the conversation host; Projects and Creator use retained EditorPanes. The boundary between shared window assembly, concrete layout families and page compositions is defined in [Layout implementation boundary](LAYOUT.md#layout-implementation-boundary). The phone implementation remains planned.
 
-Code keeps the existing Workbench Chat and Sessions chat contributions. Chat and
-Agent Teams use the independent [Cowork contribution](contrib/cowork/browser/cowork.contribution.ts).
-Cowork owns its conversation widget, model preferences, welcome layout and draft
-lifecycle. Its input uses the Workbench Chat input component, editor, attachment
-model, model picker and dictation services, with explicit picker placement options.
+The shared Session pane uses the Workbench Chat renderer for Code and
+[native Chat](contrib/chat/browser/nativeChatPaneFactory.ts). The Chat contribution
+owns its model preferences, welcome layout and picker placement. The compact Ash Chat
+editor and Session pane read the same `sessions.chat.defaultModel` setting and
+remembered model. The native model and Workbench draft binding handle conversation
+state and persistence.
 The shared Workbench model picker owns both model and configuration triggers,
 menus, keyboard focus and disposal. Effort and context size use the same
 configuration menu; Sessions retains its composer styling.
-Conversation rendering remains separate from Code; both use the shared model catalog
-and platform controls.
 
 `ISessionsService` owns one active selection, visible arrangement and Back/Forward
 history. `SessionsPart` owns one `SessionGridLayout` and one retained `SessionView`
-per visible Session. Each view hosts the Code or Cowork renderer through pane
-factories, retaining its models, composer DOM and pending submissions. Switching
+per visible Session. Each view hosts the Code or native Chat presentation through pane
+factories, retaining its model instances, composer DOM and pending submissions. Switching
 entries transfers unsent text, mode and resolved attachments into the active
 renderer and clears the inactive composer; the grid and SessionView stay attached.
 Code reveals editor tools; Agent Teams
@@ -391,7 +390,7 @@ adding it. `ChatService` converts resolved images to image input items and omits
 empty text when sending attachments alone. Approval choice remains in the Chat
 model and is applied to a new Turn through the existing backend contract.
 Changing it does not change the approval mode of a running Turn. New Code and
-Cowork composers inherit the connected profile's execution approval default until
+Chat composers inherit the connected profile's execution approval default until
 a conversation choice overrides it. Settings → Execution and permissions keeps
 only unsaved drafts in Sessions. App Server owns `[agent.execution]` persistence
 and command sandbox reload; the existing trusted host directory permission API
@@ -410,16 +409,16 @@ joins pending attachment resolution before flushing storage.
 
 Agent Window has three product input components; IDE Chat is a fourth host. They
 all use `workbench/contrib/chat/browser/widget/input/chatInputEditor.ts`, backed by
-`editor/browser/widget/codeEditor/codeEditorWidget.ts`. IDE, Code and Cowork also
+`editor/browser/widget/codeEditor/codeEditorWidget.ts`. IDE, Code and native Chat also
 use `chatInputPart.ts` for input operations; ChatGPT owns its service-specific
 controls. Each product owns its composition, model policy and draft lifecycle.
 
-| Host                | Ash component and owner                                                                                   | VS Code relationship                                                                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent Window Code   | `SharedChatInputComposer` in `contrib/chat/browser/sharedChatInputComposer.ts`                            | Composes Sessions input policy for new and existing Code conversations around Workbench `ChatInputPart`.                                       |
-| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy.                                                                 |
-| Agent Window Chat   | Shared `ChatWidget` and `ChatInputPart`                                                                   | The desktop host's `ChatGPTWidgetModel` projects the ChatGPT service into Ash's transcript and composer and connects the host's model routing. |
-| IDE Chat            | `ChatInputPart` in `workbench/contrib/chat/browser/widget/input/chatInputPart.ts`, hosted by `ChatWidget` | Same upstream owner, path and public class name. Sessions layout and product policy stay in Sessions.                                          |
+| Host              | Ash component and owner                                                                                   | VS Code relationship                                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent Window Code | `SharedChatInputComposer` in `contrib/chat/browser/sharedChatInputComposer.ts`                            | Composes Sessions input policy for new and existing Code conversations around Workbench `ChatInputPart`.                                       |
+| Native Ash Chat   | `ReplyChatInputFactory` in `contrib/chat/browser/replyChatInput.ts`                                       | Composes the shared input and draft binding for the Session pane.                                                                              |
+| ChatGPT in Chat   | Shared `ChatWidget` and `ChatInputPart`                                                                   | The desktop host's `ChatGPTWidgetModel` projects the ChatGPT service into Ash's transcript and composer and connects the host's model routing. |
+| IDE Chat          | `ChatInputPart` in `workbench/contrib/chat/browser/widget/input/chatInputPart.ts`, hosted by `ChatWidget` | Same upstream owner, path and public class name. Sessions layout and product policy stay in Sessions.                                          |
 
 In VS Code, `sessions/contrib/chat/browser/newChatComposerInput.ts` defines the
 new-session host options and send contracts; it does not export an input widget.
@@ -477,7 +476,7 @@ or voice session can start.
    sidebar, sessions, editor, auxiliarybar, and panel Parts are registered; the sidebar and auxiliary Parts can be toggled,
    and Activity Bar placement follows `sessions.activityBar.location`.
    The Activity Bar runs Chat, Collaboration, Agent Teams, Projects, Code, and Design commands; Collaboration opens the shared persistent channel tree, space membership controls and Calls sidebar. Channel actions open the shared notes editor or join/start a channel call with inherited membership; notes reuse the Workbench document model and collaboration owners, and channel media requires Desktop. Agent Teams opens the existing Teams sidebar; Projects opens its retained EditorPane with search, sorting and project creation. Each project contains goals and file or folder references; the shared Project backend persists them. Materials open through the existing editor and file-picker services. The window composition owns navigation between these surfaces.
-   [Creator](contrib/artifacts/README.md) provides retained editing workspaces hosted by ArtifactsEditorPane. Its editors use the independent [Canvas contribution](contrib/canvas/README.md) for spatial surfaces, viewport state and pointer capture. In Design, SidebarPart hosts Layers, EditorPart hosts the retained page, and AuxiliaryBarPart hosts Shape properties; SessionsPart is hidden. ArtifactsPage provides a seven-mode home and retains each workspace, viewport and selection. The editor service owns one document per mode. Design automatically saves untitled drafts in the UI profile and writes opened packages back with revision checks; reopening restores the last document. Window shutdown drains Design saves without a save confirmation and checks dirty documents in the other modes. Home and Make keep the Creator navigation sidebar and hide canvas properties. The panel views borrow the active editor's document and selection through the window-scoped Design editor service. Creator and Canvas own no Session state. Document, command, widget and file lifecycle responsibilities, geometry and persistence contracts, supported tools and validation entry points are documented in their owning directories.
+   [Creator](contrib/artifacts/README.md) provides retained editing workspaces hosted by ArtifactsEditorPane. Its editors use the independent [Canvas contribution](contrib/canvas/README.md) for spatial surfaces, viewport state and pointer capture. In Design, SidebarPart hosts Layers, EditorPart hosts the retained page, and AuxiliaryBarPart hosts Shape properties; SessionsPart is hidden. ArtifactsEditorView provides a seven-mode home and retains each workspace, viewport and selection. The editor service owns one document per mode. Design automatically saves untitled drafts in the UI profile and writes opened packages back with revision checks; reopening restores the last document. Window shutdown drains Design saves without a save confirmation and checks dirty documents in the other modes. Home and Make keep the Creator navigation sidebar and hide canvas properties. The panel views borrow the active editor's document and selection through the window-scoped Design editor service. Creator and Canvas own no Session state. Document, command, widget and file lifecycle responsibilities, geometry and persistence contracts, supported tools and validation entry points are documented in their owning directories.
    Chat hides the auxiliary bar. Code exposes Files and Changes; opening a file or comparison reveals the retained Workbench editor inside the Files card beside the conversation. Changing the composition hides and restores that editor without closing its files. Session details has been removed.
    IDE and Sessions chat items open the same lightweight Agent auxiliary chrome through `IAuxiliaryWindowService`. Each opener moves its retained conversation view into that window, preserving the composer, attachments and draft. Workbench `ChatAuxiliaryWindow` owns the shared titlebar, content mount, return control and native pin control; closing it returns the view to its opener. Desktop supplies the Electron auxiliary service, which owns the authoritative native window state.
    Mobile devices remains unavailable. The Activity Bar context menu changes its position.

@@ -199,8 +199,8 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			const retainedMode = previousEntry
 				? previousEntry.workspaceMode ?? 'chat'
 				: options?.source === 'restore' ? this.storage.get(activeEntryModeKey, StorageScope.WORKSPACE) : undefined;
-			if ((!sharedWorkspace || !previousEntry) && (entry.content !== 'editor' || entry.conversation || entry.conversationKind)) {
-				await this.conversation.setConversationKind(entry.conversationKind ?? (entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'cowork'));
+			if (entry.conversationKind || (!sharedWorkspace || !previousEntry) && (entry.content !== 'editor' || entry.conversation)) {
+				await this.conversation.setConversationKind(entry.conversationKind ?? (entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'chat'));
 			}
 			if (this.isDisposed) { return; }
 			this.saveVisibility();

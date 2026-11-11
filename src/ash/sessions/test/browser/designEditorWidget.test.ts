@@ -1,5 +1,5 @@
 import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { flattenDesignShapes, type DesignShape } from '../../contrib/artifacts/common/model/designDocument.js';
 import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
 import { IAssetService } from '../../../platform/assets/common/assetService.js';
@@ -16,7 +16,7 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { DesignConfiguration } from '../../contrib/artifacts/common/config/editorConfiguration.js';
+import { DesignConfiguration } from '../../contrib/artifacts/common/config/designEditorConfiguration.js';
 import { Emitter, Event as AshEvent, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import { constObservable } from '../../../base/common/observable.js';
@@ -64,14 +64,14 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/artifacts/common/model/document.js');
+const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/artifacts/common/model/designDocument.js');
 const { DesignEditorWidget } = await import('../../contrib/artifacts/browser/widget/designEditorWidget.js');
 const { DesignDocumentController } = await import('../../contrib/artifacts/browser/designDocumentController.js');
-const { DesignEditorPage } = await import('../../contrib/artifacts/browser/designEditorPage.js');
+const { DesignEditorHost } = await import('../../contrib/artifacts/browser/designEditorHost.js');
 const { DesignEditorService, IDesignEditorService } = await import('../../contrib/artifacts/browser/designEditorService.js');
-const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/artifacts/browser/designViews.js');
-const { CreatorMode } = await import('../../contrib/artifacts/common/creator.js');
-const { ArtifactsPage } = await import('../../contrib/artifacts/browser/artifactsPage.js');
+const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/artifacts/browser/designPanelViews.js');
+const { ArtifactWorkspaceId } = await import('../../contrib/artifacts/common/artifactWorkspace.js');
+const { ArtifactsEditorView } = await import('../../contrib/artifacts/browser/artifactsEditor.js');
 const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
 await import('../../contrib/artifacts/browser/artifacts.contribution.js');
 await import('../../contrib/artifacts/contrib/design/browser/design.contribution.js');
@@ -82,8 +82,8 @@ await import('../../contrib/artifacts/contrib/sites/browser/sites.contribution.j
 await import('../../contrib/artifacts/contrib/make/browser/make.contribution.js');
 await import('../../contrib/artifacts/contrib/prototype/browser/prototype.contribution.js');
 const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
-await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
-const { createDesignEditorContributions } = await import('../../contrib/artifacts/design.main.js');
+await import('../../contrib/artifacts/browser/designEditor.contribution.js');
+const { createDesignEditorContributions } = await import('../../contrib/artifacts/browser/designEditorContributions.js');
 const services = new InstantiationService();
 const notifications = new TestNotificationService();
 services.registerInstance(INotificationService, notifications);
@@ -186,7 +186,7 @@ suiteTeardown(() => {
 interface ProjectedTransform { panX: number; panY: number; scale: number; }
 
 class DesignEditorFixture extends Disposable {
-	readonly pane: InstanceType<typeof DesignEditorPage>;
+	readonly pane: InstanceType<typeof DesignEditorHost>;
 	readonly designEditors: InstanceType<typeof DesignEditorService>;
 	readonly domNode: HTMLElement;
 	readonly propertiesDomNode: HTMLElement;
@@ -206,7 +206,7 @@ class DesignEditorFixture extends Disposable {
 		this.layersDomNode = ownerDocument.createElement('section');
 		this.layersDomNode.dataset.part = 'sidebar';
 		ownerDocument.body.append(editorHost, this.propertiesDomNode, this.layersDomNode);
-		this.pane = this._register(child.createInstance(DesignEditorPage, CreatorMode.Design));
+		this.pane = this._register(child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design));
 		this.pane.create(editorHost);
 		this.domNode = this.pane.domNode;
 		const properties = this._register(child.createInstance(DesignPropertiesView, this.propertiesDomNode, { id: 'design.properties', title: 'Shape properties' }));
@@ -762,7 +762,7 @@ test('Chinese Design actions and new property labels are localized', async () =>
 });
 
 test('Design editors share document edits and history while keeping selection, camera and lifetime separate', () => {
-	using document = services.createInstance(DesignDocumentController, CreatorMode.Design);
+	using document = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
 	using first = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
 	using second = services.createInstance(DesignEditorWidget, browser.window.document, document, (context: DesignEditorContributionContext) => createDesignEditorContributions(context, services));
 	for (const editor of [first, second]) {
@@ -972,7 +972,7 @@ test('Design shutdown automatically saves hidden documents without asking to sav
 	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
 	using designEditors = child.createInstance(DesignEditorService);
 	child.registerInstance(IDesignEditorService, designEditors);
-	using page = child.createInstance(DesignEditorPage, CreatorMode.Design);
+	using page = child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design);
 	const host = browser.window.document.createElement('section');
 	browser.window.document.body.append(host);
 	using hostCleanup = toDisposable(() => host.remove());
@@ -1028,8 +1028,8 @@ test('Design page instances share the window document and retain independent edi
 	using child = services.createChild();
 	using designEditors = child.createInstance(DesignEditorService);
 	child.registerInstance(IDesignEditorService, designEditors);
-	using firstPage = child.createInstance(DesignEditorPage, CreatorMode.Design);
-	using secondPage = child.createInstance(DesignEditorPage, CreatorMode.Design);
+	using firstPage = child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design);
+	using secondPage = child.createInstance(DesignEditorHost, ArtifactWorkspaceId.Design);
 	const host = browser.window.document.createElement('section');
 	browser.window.document.body.append(host);
 	using hostCleanup = toDisposable(() => host.remove());
@@ -1084,7 +1084,7 @@ test('Frame image properties, package media, backup recovery and SVG export keep
 	assert.deepEqual(parseDesignDocument(fileContent), beforeSave);
 	assert.equal(controller.isDirty, false);
 	const backup = controller.backup();
-	using recovered = services.createInstance(DesignDocumentController, CreatorMode.Design);
+	using recovered = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
 	recovered.restoreBackup(backup);
 	assert.deepEqual(recovered.readMedia(asset.versions[0]), bytes);
 	assert.deepEqual(recovered.model.value, beforeSave);
@@ -1124,7 +1124,7 @@ test('Frame rotation keeps keyboard movement in canvas directions and unclipped 
 	if (updated.kind !== 'frame') { throw new Error('Expected frame'); }
 	assert.equal(updated.children[0].x, 20);
 	assert.equal(updated.children[0].y, 29);
-	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/svgRenderer.js');
+	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/designSvgRenderer.js');
 	const overflowing = { ...frame, rotation: 0, children: [{ ...child, x: -50, y: -20 }] };
 	assert.match(exportDesignSvg(documentFromShapes([overflowing])), /viewBox="50 180 150 120"/u);
 	assert.match(exportDesignSvg(documentFromShapes([{ ...overflowing, clip: true }])), /viewBox="100 200 100 100"/u);
@@ -1149,7 +1149,7 @@ test('Saving captures a baseline while later edits and Save As retain dirty stat
 			entered!(); await pending; return files.writeFile(request);
 		},
 	}));
-	using controller = childServices.createInstance(DesignDocumentController, CreatorMode.Design);
+	using controller = childServices.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
 	const shape = { id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 50, height: 40, rotation: 0, fill: '#ffffff' };
 	controller.model.applyEdit([shape]);
 	const saving = controller.saveDocument();
@@ -1206,7 +1206,7 @@ test('Design import adopts backend version identities and metadata and packages 
 		getVersion: unexpected,
 		readVersion: async version => { assert.equal(version, backend); return committed; },
 	});
-	using controller = child.createInstance(DesignDocumentController, CreatorMode.Design);
+	using controller = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
 	const id = await controller.importImage({ x: 500, y: 400 });
 	assert.ok(id);
 	assert.equal(imports, 1);
@@ -1224,7 +1224,7 @@ test('Design reuses the exact Library version without importing again or duplica
 	const bytes = new Uint8Array([1, 2, 3]);
 	const version = { assetId: generateUuid(), versionId: generateUuid(), name: 'Library image', source: URI.file('/image.png'), sha256: createHash('sha256').update(bytes).digest('hex'), mediaType: 'image/png' as const, size: bytes.length, width: 100, height: 60 };
 	child.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: async selected => { assert.equal(selected, version); return bytes; } });
-	using controller = child.createInstance(DesignDocumentController, CreatorMode.Design);
+	using controller = child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
 	await controller.adoptAssetVersion(version, { x: 200, y: 200 });
 	await controller.adoptAssetVersion(version, { x: 400, y: 400 });
 	assert.equal(controller.model.value.assets.length, 1);
@@ -1236,7 +1236,7 @@ test('Design reuses the exact Library version without importing again or duplica
 });
 
 class CreatorFixture extends Disposable {
-	readonly page: InstanceType<typeof ArtifactsPage>;
+	readonly page: InstanceType<typeof ArtifactsEditorView>;
 	readonly editors: InstanceType<typeof DesignEditorService>;
 	constructor() {
 		super();
@@ -1248,7 +1248,7 @@ class CreatorFixture extends Disposable {
 		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
 		child.registerInstance(IStorageService, storage);
 		child.registerInstance(IEditorPart, { groups: [], onDidChangeEditors: AshEvent.None } as unknown as import('../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);
-		this.page = this._register(child.createInstance(ArtifactsPage, browser.window.document));
+		this.page = this._register(child.createInstance(ArtifactsEditorView, browser.window.document));
 		browser.window.document.body.append(this.page.domNode);
 		this.page.initialize();
 		this.page.layout({ width: 1000, height: 720 });
@@ -1263,9 +1263,9 @@ class CreatorFixture extends Disposable {
 
 test('Creator routes all seven contributions and retains separate documents, selection and camera', () => {
 	using fixture = new CreatorFixture();
-	assert.equal(fixture.page.domNode.querySelectorAll('.ash-artifacts-create').length, 3);
+	assert.equal(fixture.page.domNode.querySelectorAll('.ash-artifacts-create').length, 7);
 	assert.equal(fixture.page.usesCanvasPanels, false);
-	fixture.page.openMode(CreatorMode.Design);
+	fixture.page.openMode(ArtifactWorkspaceId.Design);
 	const design = fixture.editors.activeEditor.get()!;
 	pressCanvas(design, 'r');
 	pressCanvas(design, '+');
@@ -1274,20 +1274,22 @@ test('Creator routes all seven contributions and retains separate documents, sel
 	fixture.page.showHome();
 	assert.equal(fixture.editors.activeEditor.get(), undefined);
 	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creator-mode'), 'design');
-	fixture.page.openMode(CreatorMode.Whiteboard);
+	fixture.page.openMode(ArtifactWorkspaceId.Whiteboard);
 	fixture.click('Add note');
-	const whiteboard = fixture.editors.getDocument(CreatorMode.Whiteboard);
+	const whiteboard = fixture.editors.getDocument(ArtifactWorkspaceId.Whiteboard);
 	assert.equal(whiteboard.model.value.shapes[0].kind, 'group');
 	whiteboard.model.undo();
 	assert.equal(whiteboard.model.value.shapes.length, 0);
+	fixture.page.showHome();
+	assert.equal(fixture.page.domNode.ownerDocument.activeElement?.getAttribute('data-creator-mode'), 'whiteboard');
 	assert.equal(design.documentController.model.value.shapes.length, 1);
-	for (const mode of [CreatorMode.Slides, CreatorMode.Brand, CreatorMode.Sites, CreatorMode.Make, CreatorMode.Prototype]) {
+	for (const mode of [ArtifactWorkspaceId.Slides, ArtifactWorkspaceId.Brand, ArtifactWorkspaceId.Sites, ArtifactWorkspaceId.Make, ArtifactWorkspaceId.Prototype]) {
 		fixture.page.openMode(mode);
 		assert.equal(fixture.editors.activeEditor.get()!.documentController.model.value.mode, mode);
 		assert.equal(fixture.editors.getDocument(mode).model.value.shapes.length, 0);
-		assert.equal(fixture.page.usesCanvasPanels, mode !== CreatorMode.Make);
+		assert.equal(fixture.page.usesCanvasPanels, mode !== ArtifactWorkspaceId.Make);
 	}
-	fixture.page.openMode(CreatorMode.Design);
+	fixture.page.openMode(ArtifactWorkspaceId.Design);
 	assert.equal(fixture.editors.activeEditor.get(), design);
 	assert.deepEqual([...design.selection.ids], selected);
 	assert.deepEqual(projectedTransform(design), transform);
@@ -1299,33 +1301,33 @@ test('Creator routes all seven contributions and retains separate documents, sel
 
 test('Creator Slides order and Brand variants use their own complete undo history', () => {
 	using fixture = new CreatorFixture();
-	fixture.page.openMode(CreatorMode.Slides);
+	fixture.page.openMode(ArtifactWorkspaceId.Slides);
 	fixture.click('Add slide');
 	fixture.click('Add slide');
-	const slides = fixture.editors.getDocument(CreatorMode.Slides).model;
+	const slides = fixture.editors.getDocument(ArtifactWorkspaceId.Slides).model;
 	const order = slides.value.shapes.map(shape => shape.id);
 	assert.deepEqual(slides.value.shapes.map(shape => [shape.width, shape.height]), [[1280, 720], [1280, 720]]);
 	fixture.click('Move slide earlier');
 	assert.deepEqual(slides.value.shapes.map(shape => shape.id), [...order].reverse());
 	slides.undo();
 	assert.deepEqual(slides.value.shapes.map(shape => shape.id), order);
-	fixture.page.openMode(CreatorMode.Brand);
+	fixture.page.openMode(ArtifactWorkspaceId.Brand);
 	fixture.click('Square asset');
 	fixture.click('Create size variants');
-	const brand = fixture.editors.getDocument(CreatorMode.Brand).model;
+	const brand = fixture.editors.getDocument(ArtifactWorkspaceId.Brand).model;
 	assert.deepEqual(brand.value.shapes.map(shape => [shape.width, shape.height]), [[1080, 1080], [1080, 1080], [1080, 1920], [1200, 628]]);
-	assert.equal(parseDesignDocument(serializeDesignDocument(brand.value)).mode, CreatorMode.Brand);
+	assert.equal(parseDesignDocument(serializeDesignDocument(brand.value)).mode, ArtifactWorkspaceId.Brand);
 	brand.undo();
 	assert.equal(brand.value.shapes.length, 1);
 	assert.equal(slides.value.shapes.length, 2);
 });
 
 test('Creator saves workspace identity and refuses to replace another mode with its file or backup', async () => {
-	using controller = services.createInstance(DesignDocumentController, CreatorMode.Slides);
+	using controller = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Slides);
 	new (await import('../../contrib/artifacts/common/commands/documentCommands.js')).DocumentCommands(controller.model).addFrame({ x: 0, y: 0 });
 	assert.equal(await controller.saveDocument(), true);
-	assert.equal(parseDesignDocument(fileContent).mode, CreatorMode.Slides);
-	using other = services.createInstance(DesignDocumentController, CreatorMode.Design);
+	assert.equal(parseDesignDocument(fileContent).mode, ArtifactWorkspaceId.Slides);
+	using other = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
 	const before = other.model.value;
 	await other.openDocument();
 	assert.equal(other.model.value, before);
@@ -1339,8 +1341,8 @@ test('Creator shutdown checks dirty documents in hidden modes', async () => {
 	using shutdown = new Emitter<IBeforeShutdownEvent>();
 	child.registerInstance(ILifecycleService, { ...services.get(ILifecycleService), onBeforeShutdown: shutdown.event });
 	using editors = child.createInstance(DesignEditorService);
-	editors.getDocument(CreatorMode.Design);
-	const slides = editors.getDocument(CreatorMode.Slides);
+	editors.getDocument(ArtifactWorkspaceId.Design);
+	const slides = editors.getDocument(ArtifactWorkspaceId.Slides);
 	const { DocumentCommands } = await import('../../contrib/artifacts/common/commands/documentCommands.js');
 	new DocumentCommands(slides.model).addFrame({ x: 0, y: 0 });
 	try {
@@ -1581,7 +1583,7 @@ test('Design resource controls bind modes, reject invalid values, create styles 
 
 test('Design library files publish media and review updates before changing consumers, preserving overrides and undo', async () => {
 	fileContent = ''; errors = [];
-	using publisher = services.createInstance(DesignDocumentController, CreatorMode.Design);
+	using publisher = services.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design);
 	const { DocumentCommands } = await import('../../contrib/artifacts/common/commands/documentCommands.js');
 	const author = new DocumentCommands(publisher.model);
 	const label: DesignShape = { id: generateUuid(), kind: 'text', text: 'Initial', fontSize: 16, x: 0, y: 0, width: 100, height: 24, fill: '#123456', rotation: 0 };
@@ -1629,7 +1631,7 @@ test('Design text, effect and layout guide styles render safely and artwork expo
 	const label: DesignShape = { id: generateUuid(), kind: 'text', x: 0, y: 0, width: 100, height: 80, rotation: 0, fill: '#abcdef', text: 'First\nSecond', fontSize: 20, fontFamily: 'serif', fontWeight: 700, lineHeight: 30, letterSpacing: 2, effects: { x: 0, y: 4, blur: 8, color: '#00000080' } };
 	controller.model.applyEdit([{ id: generateUuid(), kind: 'frame', x: 0, y: 0, width: 200, height: 100, rotation: 0, fill: '#ffffff', clip: false, children: [label], layoutGuide: { size: 8, color: '#ff000040' } }]);
 	const text = view.domNode.querySelector<HTMLElement>('[data-design-text]')!; assert.equal(text.style.fontFamily, 'serif'); assert.equal(text.style.fontWeight, '700'); assert.equal((text.children[1] as HTMLElement).style.lineHeight, '30px'); assert.ok(view.domNode.querySelector('[data-layout-guide]'));
-	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/svgRenderer.js'); const svg = exportDesignSvg(controller.model.value); assert.ok(!svg.includes('data-layout-guide')); assert.match(svg, /drop-shadow/u); assert.match(svg, /letter-spacing: 2px/u);
+	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/designSvgRenderer.js'); const svg = exportDesignSvg(controller.model.value); assert.ok(!svg.includes('data-layout-guide')); assert.match(svg, /drop-shadow/u); assert.match(svg, /letter-spacing: 2px/u);
 	const { generateDesignCode } = await import('../../contrib/artifacts/contrib/code/browser/designCodeGenerator.js'); const code = generateDesignCode(controller.model.value); assert.match(code, /filter: drop-shadow\(0px 4px 4px #00000080\)/u);
 });
 
@@ -2208,7 +2210,7 @@ test('Shadow and blur containers preserve nested prototype keyboard hotspots wit
 
 test('Effect SVG export includes shadows cast by outside strokes and excludes duplicate layer IDs from backdrop images', async () => {
 	const { designShapeContours } = await import('../../contrib/artifacts/common/model/designVector.js');
-	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/svgRenderer.js');
+	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/designSvgRenderer.js');
 	const { createDesignEffect } = await import('../../contrib/artifacts/common/model/designEffects.js');
 	const base: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 100, height: 100, rotation: 0, fill: '#ffffff' };
 	const path: DesignShape = { ...base, kind: 'path', ...designShapeContours(base)[0], strokeWidth: 20, strokeAlignment: 'outside', effects: [{ id: generateUuid(), type: 'drop-shadow', x: -100, y: 0, blur: 0, color: '#ff0000' }] };
@@ -2321,7 +2323,7 @@ class AutoSaveFixture extends Disposable {
 			showOpenDialog: async () => [this.copyResource],
 		});
 	}
-	createDocument(): InstanceType<typeof DesignDocumentController> { return this._register(this.child.createInstance(DesignDocumentController, CreatorMode.Design)); }
+	createDocument(): InstanceType<typeof DesignDocumentController> { return this._register(this.child.createInstance(DesignDocumentController, ArtifactWorkspaceId.Design)); }
 	get activeResource(): URI { return URI.parse(this.storage.get('creator.design.activeDocument', StorageScope.WORKSPACE)!); }
 	async readActive(): Promise<ReturnType<typeof parseDesignDocument>> { return parseDesignDocument((await this.files.readFile(URI.joinPath(this.activeResource, 'manifest.json'))).content); }
 }

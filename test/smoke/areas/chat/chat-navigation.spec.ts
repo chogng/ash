@@ -71,7 +71,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.locator('[data-action-id="workbench.action.chat.showHistory"] button').click();
 				await page.getByRole('option').filter({ hasText: 'Navigation conversation' }).click();
 			}
-			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-cowork'}` : '.ash-chat-view-pane .ash-chat:visible');
+			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');

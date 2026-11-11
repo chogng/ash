@@ -103,7 +103,7 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Mock Agent Task Regression' }).click();
-			const active = page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
+			const active = page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-native-chat)');
 			await active.locator('.ash-chat-input-model-action').press('ArrowDown');
 			const picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
 			// Enable the fixture model through the window that owns picker preferences.
@@ -174,7 +174,7 @@ async function completedTurn(page: Page, read: () => Promise<Thread>, count: num
 		const button = page.getByRole('button', { name: 'Approve once', exact: true });
 		if (await button.isVisible()) {
 			expect(approve, 'Only starting the Task requires approval').not.toBe(false);
-			const interaction = page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible');
+			const interaction = page.locator(':is(.ash-chat-interaction,.ash-native-chat-interaction):visible');
 			await expect(interaction).toContainText(taskLabel);
 			await expect(interaction).toContainText('task-loop.cjs');
 			if (typeof approve === 'function') await approve();
@@ -311,7 +311,7 @@ for (const taskKind of ['process', 'shell'] as const) {
 				const { page, directory, readThread } = taskSession;
 				await submit(page, 'TASK_FIXTURE_RUN: Start the dependency chain and report its waiting root Run ID.');
 				const evidence = toolEvidence(await completedTurn(page, readThread, 1, async () => {
-					const approval = page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible');
+					const approval = page.locator(':is(.ash-chat-interaction,.ash-native-chat-interaction):visible');
 					await expect(approval).toContainText('task-middle.cjs');
 					await expect(approval).toContainText('task-leaf.cjs');
 				}));
@@ -436,7 +436,7 @@ for (const taskKind of ['process', 'shell'] as const) {
 				let dependencyPid: number | undefined;
 				await submit(page, 'TASK_FIXTURE_RUN: Discover and run the existing Task with its dependency.');
 				const evidence = toolEvidence(await completedTurn(page, readThread, 1, async () => {
-					await expect(page.locator(':is(.ash-chat-interaction,.ash-cowork-interaction):visible')).toContainText('task-prepare.cjs');
+					await expect(page.locator(':is(.ash-chat-interaction,.ash-native-chat-interaction):visible')).toContainText('task-prepare.cjs');
 				}, async turn => {
 					if (dependencyPid) return;
 					const waiting = toolEvidence(turn).find(item => item.name === 'tasks_status' && item.result.status === 'running' && !item.result.terminalId);

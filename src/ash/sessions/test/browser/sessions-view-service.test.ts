@@ -946,6 +946,7 @@ class FakeSessionService implements ISessionsManagementService {
 		this._onDidChange.fire();
 	}
 
+	setUntitledSessionArtifactKind(): never { throw new Error('Unexpected artifact draft edit'); }
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
 	setUntitledSessionReasoningEffort() { }

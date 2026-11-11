@@ -37,7 +37,7 @@ function isTask(value: unknown): value is ChatTimelineTask {
 		&& typeof value.prompt === 'string' && (value.error === undefined || typeof value.error === 'string') && (value.afterMessageId === undefined || typeof value.afterMessageId === 'string');
 }
 
-/** Stores Chat's backend snapshot and execution references separately from the Cowork transcript. */
+/** Stores Chat's backend snapshot and references to linked Ash threads. */
 export class ChatTimelineStorage {
 	constructor(private readonly storage: IStorageService, private readonly backend: string) { }
 

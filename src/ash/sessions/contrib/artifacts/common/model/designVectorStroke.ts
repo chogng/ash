@@ -1,5 +1,5 @@
 import { cubicBezierPoint, type DesignPoint } from '../core/geometry.js';
-import type { DesignEndpoint } from './document.js';
+import type { DesignEndpoint } from './designDocument.js';
 import { designPathContours, designPathStrokeContours, splitDesignPathSegment, type DesignPath, type DesignPathContour } from './designVector.js';
 
 /** Endpoint identity follows its anchor through reversal and network conversion, not the traversal order. */

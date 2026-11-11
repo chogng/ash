@@ -1,5 +1,5 @@
 import { toDesignLocal, type DesignPoint } from '../core/geometry.js';
-import { flattenDesignShapes, type DesignShape } from './document.js';
+import { flattenDesignShapes, type DesignShape } from './designDocument.js';
 import { prototypeScrollScope, type PrototypeFrame } from './prototype.js';
 
 export type PrototypeScrollPositions = Readonly<Record<string, DesignPoint>>;

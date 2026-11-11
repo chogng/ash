@@ -2,7 +2,7 @@ import { roundDesignVectorCorners } from './designVectorCorners.js';
 import { cubicBezierPoint } from '../core/geometry.js';
 import { designNetworkContours, designNetworkNodes, designNetworkFillContours, designNetworkStrokeContours } from './designVectorNetwork.js';
 import type { DesignPoint } from '../core/geometry.js';
-import type { DesignPathNode, DesignShape } from './document.js';
+import type { DesignPathNode, DesignShape } from './designDocument.js';
 
 export type DesignBooleanOperation = 'union' | 'subtract' | 'intersect' | 'exclude';
 export interface DesignPathContour {
