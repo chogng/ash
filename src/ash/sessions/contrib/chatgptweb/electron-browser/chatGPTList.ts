@@ -280,7 +280,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			upload: online ? {
 				limits: chatGPTAttachmentLimits,
 				limitMessage: chatGPTAttachmentLimitMessage(),
-				addFiles: files => this.chat.addProjectFiles(id, scope, files),
+				addFiles: (files, onFileAdded) => this.chat.addProjectFiles(id, scope, files, onFileAdded),
 			} : undefined,
 		};
 	}

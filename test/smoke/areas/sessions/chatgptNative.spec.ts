@@ -19,6 +19,7 @@ declare global {
 	var ashNativeFixture: {
 		advance(): void; readonly sends: number; readonly cancelledEntityDetails: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void;
 		seedProjectMemory(versions: readonly string[]): void;
+		releaseNextUpload(): void;
 		readonly projectMemoryBodies: readonly string[];
 	};
 }
@@ -76,6 +77,7 @@ async function installService(application: ElectronApplication, holdInitializati
 				uploadsHeld = value;
 				if (!value) for (const release of pendingUploads) release();
 			},
+			releaseNextUpload() { pendingUploads.values().next().value?.(); },
 			get heldUploads() { return heldUploads; },
 			get uploadedFiles() { return uploadedFiles; },
 			seedProjectMemory(versions) {
@@ -1565,6 +1567,75 @@ test.describe('Unified Chat sidebar', () => {
 
 test.describe('Ash project file copies', () => {
 	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('shows project material skeletons and an in-place Add spinner until each file is confirmed', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, '', false, true);
+		const page = await workbench.openAgentsWindow('electron');
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+		await page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		const materials = page.getByRole('region', { name: '上下文', exact: true });
+		const add = materials.getByRole('button', { name: '添加项目资料', exact: true });
+		const placeholders = materials.locator('.ash-projects-material-placeholder');
+		const spinner = add.locator('.ash-loading-spinner');
+		await expect(materials.getByRole('button', { name: 'project-fixture.txt', exact: true })).toBeVisible();
+		const initialAdd = (await add.boundingBox())!;
+		await application.evaluate(() => ashNativeFixture.holdUploads(true));
+		const select = async (names: readonly string[]) => {
+			await add.click();
+			const chooser = page.waitForEvent('filechooser');
+			await page.getByRole('menuitem', { name: '上传或添加文件', exact: true }).click();
+			await expect(spinner).toBeHidden();
+			await (await chooser).setFiles(names.map(name => ({ name, mimeType: 'text/plain', buffer: Buffer.from(name) })));
+		};
+		try {
+			await select(['first-upload.txt', 'second-upload.txt']);
+			await expect.poll(() => application.evaluate(() => ashNativeFixture.heldUploads)).toBe(1);
+			await expect(placeholders).toHaveCount(2);
+			await expect(placeholders.first()).toHaveAttribute('aria-hidden', 'true');
+			await expect(placeholders.first()).toHaveText('');
+			await expect(spinner).toHaveCSS('animation-name', 'ash-loading-spinner-spin');
+			await expect(add).toBeDisabled();
+			const pendingAdd = (await add.boundingBox())!;
+			expect(pendingAdd.width).toBeCloseTo(initialAdd.width);
+			expect(pendingAdd.height).toBeCloseTo(initialAdd.height);
+			expect(pendingAdd.x).toBeCloseTo(initialAdd.x);
+			expect(pendingAdd.y).toBeCloseTo(initialAdd.y);
+			const pendingCard = (await placeholders.first().boundingBox())!;
+			await testInfo.attach('project-material-upload', { body: await materials.screenshot(), contentType: 'image/png' });
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await expect(spinner).toHaveCSS('animation-name', 'none');
+			await expect(spinner).toBeVisible();
+			await application.evaluate(() => ashNativeFixture.releaseNextUpload());
+			await expect.poll(() => application.evaluate(() => ashNativeFixture.heldUploads)).toBe(2);
+			await expect(placeholders).toHaveCount(1);
+			const firstCard = materials.locator('.ash-projects-material-card').filter({ hasText: 'first-upload.txt' });
+			await expect(firstCard.getByRole('button', { name: 'first-upload.txt', exact: true })).toBeVisible();
+			const confirmed = (await firstCard.boundingBox())!;
+			expect(confirmed.width).toBeCloseTo(pendingCard.width);
+			expect(confirmed.height).toBeCloseTo(pendingCard.height);
+			await application.evaluate(() => ashNativeFixture.releaseNextUpload());
+			await expect(materials.getByRole('button', { name: 'second-upload.txt', exact: true })).toBeVisible();
+			await expect(placeholders).toHaveCount(0);
+			await expect(spinner).toBeHidden();
+			await expect(add).toBeEnabled();
+			await select(['failed-upload.txt']);
+			await expect.poll(() => application.evaluate(() => ashNativeFixture.heldUploads)).toBe(3);
+			await expect(placeholders).toHaveCount(1);
+			await application.evaluate(() => {
+				ashNativeFixture.setOffline(true);
+				ashNativeFixture.releaseNextUpload();
+			});
+			await expect(placeholders).toHaveCount(0);
+			await expect(spinner).toBeHidden();
+			await expect(add).toBeEnabled();
+			await expect(materials.getByRole('button', { name: 'failed-upload.txt', exact: true })).toHaveCount(0);
+			await expect(page.locator('.ash-projects-feedback > p')).toContainText('503');
+		} finally {
+			await application.evaluate(() => { ashNativeFixture.setOffline(false); ashNativeFixture.holdUploads(false); });
+		}
+	});
 
 	test('saves project files locally and changes their Ash folder while ChatGPT is unavailable', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
 		const application = browser as ElectronApplication;

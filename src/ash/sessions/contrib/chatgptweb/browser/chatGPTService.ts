@@ -265,7 +265,7 @@ export interface IChatGPTService {
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
 	editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit>;
 	loadProjectDetails(id: string, scope: string, signal: AbortSignal): Promise<void>;
-	addProjectFiles(id: string, scope: string, files: readonly File[]): Promise<void>;
+	addProjectFiles(id: string, scope: string, files: readonly File[], onFileAdded: () => void): Promise<void>;
 	editProjectMemory(id: string, scope: string, signal: AbortSignal): Promise<CatalogProjectMemoryEditor>;
 	removeProjectFile(id: string, scope: string, fileId: string): Promise<void>;
 	readProjectFile(id: string, scope: string, fileId: string, signal: AbortSignal): Promise<Blob>;
@@ -585,7 +585,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	public addProjectFiles(id: string, scope: string, files: readonly File[]): Promise<void> {
+	public addProjectFiles(id: string, scope: string, files: readonly File[], onFileAdded: () => void): Promise<void> {
 		return this.queueProjectRequest(id, async () => {
 			if (!canAttachChatGPTFiles(files) || files.some(file => file.size === 0)) throw new Error(chatGPTAttachmentLimitMessage());
 			for (const file of files) {
@@ -595,6 +595,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				request.throwIfAborted();
 				this.publishProjectDetails(id, scope, details);
 				if (!details.files?.some(file => file.id === fileId)) throw new Error(localize('sessions.chatgpt.projectFileNotAdded', 'ChatGPT did not confirm that the file was added to the project.'));
+				onFileAdded();
 			}
 		});
 	}

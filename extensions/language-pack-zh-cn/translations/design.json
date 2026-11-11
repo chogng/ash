@@ -791,6 +791,7 @@
     "projects.newChat": "在项目中新建聊天",
     "projects.noInstructions": "为此项目添加指令。",
     "projects.context": "上下文",
+    "projects.addingMaterials": "正在添加项目资料。",
     "projects.dropFiles": "将文件拖到这里以添加到项目上下文",
     "projects.dropLocalFilesOnly": "请拖入本地文件，或通过菜单添加文件夹。",
     "projects.contextEmpty": "添加 PDF、文档或其他文件，供此项目参考。",

@@ -171,7 +171,8 @@ export interface CatalogProjectDetails {
 	readonly upload?: {
 		readonly limits: { readonly count: number; readonly fileBytes: number; readonly totalBytes: number; };
 		readonly limitMessage: string;
-		readonly addFiles: (files: readonly File[]) => Promise<void>;
+		/** Calls onFileAdded after each new material appears in the confirmed catalog. */
+		readonly addFiles: (files: readonly File[], onFileAdded: () => void) => Promise<void>;
 	};
 }
 
