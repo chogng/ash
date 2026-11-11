@@ -913,6 +913,12 @@ test('ChatGPT reply cards show external actions and separators as part of the re
 
 test('ChatGPT retains text around structured media and names file attachments', async ({ page }) => {
 	await mockChatGPTRequests(page);
+	const workbookName = '二维磁性材料_合成气氛与温度.xlsx';
+	const workbookBytes = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff]);
+	await page.route('**/service/.resource?*', route => {
+		expect(new URL(route.request().url()).searchParams.get('url')).toBe('https://chatgpt.com/backend-api/files/file_workbook/download');
+		return route.fulfill({ contentType: 'application/octet-stream', body: workbookBytes });
+	});
 	await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
 		json: {
 			title: 'Synthetic conversation', current_node: 'mixed', mapping: {
@@ -921,7 +927,7 @@ test('ChatGPT retains text around structured media and names file attachments', 
 					parent: 'question', message: {
 						id: 'mixed', author: { role: 'assistant' },
 						content: { content_type: 'multimodal_text', parts: ['Before image', { content_type: 'image_asset_pointer', alt: 'Architecture drawing' }, 'After image'] },
-						metadata: { attachments: [{ name: 'report.pdf' }] },
+						metadata: { attachments: [{ name: 'report.pdf' }, { id: 'file_workbook', name: workbookName }] },
 					}
 				},
 			}
@@ -933,15 +939,26 @@ test('ChatGPT retains text around structured media and names file attachments', 
 	await expect(page.locator('.ash-chat-item-userMessage')).toContainText('<box>User literal</box>');
 	await expect(body).toHaveText(/Before image[\s\S]*Architecture drawing[\s\S]*在 ChatGPT 中查看此内容[\s\S]*After image[\s\S]*附件：report\.pdf/u);
 	await expect(body.getByRole('link', { name: '在 ChatGPT 中查看此内容', exact: true })).toHaveCount(2);
+	const attachment = page.locator('.ash-chat-item-agentMessage .ash-chat-media');
+	const downloadLink = attachment.getByRole('link', { name: `下载 ${workbookName}`, exact: true });
+	await expect(downloadLink).toHaveText(workbookName);
+	await expect(downloadLink.locator('[data-ash-icon-id="xls-green"][aria-hidden="true"]')).toBeVisible();
+	await expect(attachment.getByRole('button')).toHaveCount(0);
+	const downloaded = page.waitForEvent('download');
+	await downloadLink.press('Enter');
+	const download = await downloaded;
+	expect(download.suggestedFilename()).toBe(workbookName);
+	expect(readFileSync((await download.path())!)).toEqual(workbookBytes);
 });
 
 test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames locally without Workbench access', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	const repositoryTitle = 'GitHub - team/project: A long description from a search result';
 	const references = [
-		{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation - Docs.Python.org', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' },
+		{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation - Docs.Python.org', url: 'https://docs.python.org/3/library/csv.html?utm_source=chatgpt.com', snippet: 'Read and write tabular data.' },
 		{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 2 }, title: repositoryTitle, url: 'https://github.com/team/project', snippet: 'Source repository.' },
 	];
+	const citation = '\uE200genui\uE202{"citation":{"refs":["turn0search1","turn0search2"]}}\uE201';
 	const html = '<button onclick="document.querySelector(\'output\').textContent=\'1\'">Increment</button><output>0</output><canvas id="plot" width="16" height="16"></canvas><script>document.querySelector(\'canvas\').getContext(\'2d\').fillRect(0,0,16,16);try{top.document.body.dataset.escaped="true"}catch{document.body.dataset.isolated="true"}</script>';
 	const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 	await page.route('https://frame.example.invalid/**', route => route.fulfill({ contentType: 'text/html', body: html }));
@@ -952,7 +969,7 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 					parent: null, message: {
 						id: 'reply', author: { role: 'assistant' }, content: {
 							content_type: 'text', parts: [
-								`Source <Cite refs={[["turn0search1","turn0search2"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report)`
+								`Source ${citation} urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report?view=compact&utm_source=chatgpt.com#table)`
 							]
 						}, metadata: { search_result_groups: [{ entries: references }] },
 					}
@@ -963,7 +980,10 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' }));
 	await page.goto('/chatgptNavigation.html?locale=zh-CN');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-	const sources = page.getByRole('button', { name: '2 个来源', exact: true });
+	const footerSources = page.locator('.ash-chat-message-actions').getByRole('button', { name: '来源（2）', exact: true });
+	await expect(footerSources).toBeVisible();
+	const sources = page.locator('.ash-chat-markdown-part').getByRole('button', { name: '2 个来源', exact: true });
+	await expect(page.locator('.ash-chat-markdown-media')).toHaveCount(0);
 	const sourceCard = page.getByRole('dialog', { name: '2 个来源', exact: true });
 	const sourceLinks = sourceCard.getByRole('link');
 	const adjacentLink = page.getByRole('link', { name: 'Python docs', exact: true });
@@ -974,6 +994,7 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await expect(sourceCard).toBeVisible();
 	await expect(sources).toHaveAttribute('aria-expanded', 'true');
 	await expect(sourceLinks.first()).toHaveAccessibleName('docs.python.org CSV documentation');
+	await expect(sourceLinks.first()).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
 	await expect(sourceLinks.last()).toHaveAccessibleName('github.com team/project');
 	await expect(sourceLinks.last()).toHaveAttribute('href', references[1]!.url);
 	await expect(sourceLinks.last()).toHaveCSS('text-decoration-line', 'none');
@@ -1032,7 +1053,10 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await expect(fileLink).toHaveAttribute('href', /^chat-response-download:\d+$/u);
 	await expect(fileLink.locator('[data-ash-icon-id="csv-green"][aria-hidden="true"]')).toBeVisible();
 	await expect(fileLink.locator('..').locator('strong')).toHaveText('完整可筛选表格：');
-	await expect(page.getByRole('link', { name: '在线查看', exact: true })).toHaveAttribute('href', 'https://example.com/report');
+	const reportLink = page.getByRole('link', { name: '在线查看', exact: true });
+	await expect(reportLink).toHaveAttribute('href', 'https://example.com/report?view=compact#table');
+	await reportLink.press('Enter');
+	await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://example.com/report?view=compact#table');
 	const file = page.locator('.ash-chat-media').filter({ has: page.locator('figcaption', { hasText: '实验结果.csv' }) });
 	await expect(file.locator('pre')).toContainText('May,42');
 	for (const trigger of [fileLink, file.getByRole('button', { name: '下载', exact: true })]) {

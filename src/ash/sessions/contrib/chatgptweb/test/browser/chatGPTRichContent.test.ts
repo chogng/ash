@@ -233,6 +233,92 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(render(`Related projects ${marker.slice(0, -4)}`), /genui|entity_thumbnail_list/u);
 	});
 
+	test('renders GenUI citation markers as inline sources in saved replies', () => {
+		const references = [
+			{ id: 'turn2search1', title: 'First paper', url: 'https://example.test/first', snippet: 'First abstract' },
+			{ id: 'turn2search2', title: 'Second paper', url: 'https://example.test/second', snippet: 'Second abstract' },
+		];
+		const single = '\uE200genui\uE202{"citation":{"ref":"turn2search1"}}\uE201';
+		const multiple = '\uE200genui\uE202{"citation":{"refs":["turn2search2","turn2search1","turn2search2",42,"turn2search3"]}}\uE201';
+		const missing = '\uE200genui\uE202{"citation":{"ref":"turn2search3"}}\uE201';
+		const source = `**First claim.** ${single}\n\nSecond claim. ${multiple}\n\nMissing source. ${missing}`;
+		const root = document.createElement('div');
+		root.innerHTML = render(source, references);
+		const paragraphs = [...root.querySelectorAll('p')];
+		assert.deepEqual(paragraphs.map(paragraph => [...paragraph.querySelectorAll('a')].map(link => link.href)), [
+			[references[0]!.url], [references[1]!.url, references[0]!.url], [],
+		]);
+		assert.equal(paragraphs[0]?.querySelector('strong')?.textContent, 'First claim.');
+		assert.doesNotMatch(root.textContent ?? '', /Media content|View this content|genui/u);
+		assert.match(getChatGPTRichContentText(source, references), /Second claim\.[\s\S]*Second paper[\s\S]*Second abstract/u);
+		assert.deepEqual(decodeChatGPTReply(source, references).citations, references.map(({ url, title }) => ({ type: 'web', url, title })));
+	});
+
+	test('removes only ChatGPT attribution from rich source links', () => {
+		const url = 'https://example.test/paper?query=a%20b&utm_source=chatgpt.com&lang=en&utm_source=publisher&path=%2f#methods';
+		const clean = 'https://example.test/paper?query=a%20b&lang=en&utm_source=publisher&path=%2f#methods';
+		const references = [
+			{ id: 'turn2search1', title: 'Paper', url, snippet: '', cited: true as const },
+			{ id: 'turn2search2', title: 'Same paper', url: clean, snippet: '', cited: true as const },
+		];
+		const source = [
+			'Paper. \uE200genui\uE202{"citation":{"ref":"turn2search1"}}\uE201',
+			'\uE200url\uE202Paper link\uE202turn2search1\uE201',
+			'\uE200url\uE202Direct link\uE202https://example.test/abstract?utm_source=chatgpt.com#results\uE201',
+			'<Link url="https://example.test/other?utm_source=chatgpt.com&download=1" title="Other link"/>',
+		].join('\n\n');
+		const root = document.createElement('div');
+		root.innerHTML = render(source, references);
+		assert.deepEqual([...root.querySelectorAll('a')].map(link => link.getAttribute('href')), [
+			clean, clean, 'https://example.test/abstract#results', 'https://example.test/other?download=1',
+		]);
+		assert.deepEqual(decodeChatGPTReply(source, references).citations, [
+			{ type: 'web', url: clean, title: 'Paper' },
+			{ type: 'web', url: 'https://example.test/abstract#results', title: 'Direct link' },
+		]);
+	});
+
+	test('cleans ordinary Markdown links and preserves link labels, titles and code', () => {
+		const tracked = 'https://example.test/paper?q=a%20b&utm_source=chatgpt.com&utm_source=publisher#methods';
+		const clean = 'https://example.test/paper?q=a%20b&utm_source=publisher#methods';
+		const source = [
+			`[**Paper** \\[PDF\\]](${tracked} "Publication")`,
+			'[Reference *label*][paper]',
+			`<${tracked}>`,
+			`\`${tracked}\``,
+			'```text\n' + tracked + '\n```',
+			`[paper]: ${tracked} "Referenced publication"`,
+		].join('\n\n');
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const links = [...root.querySelectorAll('a')];
+		assert.deepEqual(links.map(link => [link.textContent, link.getAttribute('href'), link.getAttribute('title')]), [
+			['Paper [PDF]', clean, 'Publication'], ['Reference label', clean, 'Referenced publication'], [clean, clean, null],
+		]);
+		assert.equal(links[0]?.querySelector('strong')?.textContent, 'Paper');
+		assert.equal(links[1]?.querySelector('em')?.textContent, 'label');
+		assert.deepEqual([...root.querySelectorAll('code')].map(code => code.textContent?.trim()), [tracked, tracked]);
+	});
+
+	test('cleans bare URLs and formatted links inside Markdown tables and blockquotes', () => {
+		const root = document.createElement('div');
+		root.innerHTML = render('https://example.test/brief?utm_source=chatgpt.com#abstract.');
+		assert.equal(root.querySelector('a')?.getAttribute('href'), 'https://example.test/brief#abstract');
+		assert.equal(root.querySelector('p')?.textContent, 'https://example.test/brief#abstract.');
+		root.innerHTML = render([
+			'| Sources |', '| --- |',
+			'| [A \\| **B**](<https://example.test/paper?q=a\\|b&amp;utm_source=chatgpt.com&amp;page=2#fig> "A \\| B") |',
+			'',
+			'> [Multi-line', '> **label**](https://example.test/brief?utm_source=chatgpt.com#abstract)',
+		].join('\n'));
+		const cellLink = root.querySelector('td a');
+		assert.equal(cellLink?.textContent, 'A | B');
+		assert.equal(cellLink?.getAttribute('href'), 'https://example.test/paper?q=a%7Cb&page=2#fig');
+		assert.equal(cellLink?.getAttribute('title'), 'A | B');
+		assert.equal(root.querySelector('blockquote a')?.getAttribute('href'), 'https://example.test/brief#abstract');
+		assert.equal(root.querySelector('blockquote a strong')?.textContent, 'label');
+	});
+
 	test('leaves inline and fenced code examples literal', () => {
 		const source = '`<box>inline</box>`\n\n```html\n<box>fenced</box>\n```';
 		const html = render(source);

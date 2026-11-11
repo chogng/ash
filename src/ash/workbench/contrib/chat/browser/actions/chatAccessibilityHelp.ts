@@ -50,7 +50,7 @@ export function getChatRequestAccessibilityHelp(sessionsWindow = false): string 
 }
 
 export function getChatLinkPreviewAccessibilityHelp(): string {
-	return localize('chat.link.previewHelp', 'Press Enter or Space on a sources button to show its links. Use Tab to reach a link and Enter to open it. Escape returns to the sources button. On an external link, use {0} to show its preview.', '<keybinding:workbench.action.showHover>');
+	return localize('chat.link.previewHelp', 'Use Tab to reach Sources in the reply’s action row. Press Enter or Space on a sources button to show its links. Use Tab to reach a link and Enter to open it. Escape returns to the sources button. On an external link, use {0} to show its preview.', '<keybinding:workbench.action.showHover>');
 }
 
 export function getChatCodeBlockCardAccessibilityHelp(): string {

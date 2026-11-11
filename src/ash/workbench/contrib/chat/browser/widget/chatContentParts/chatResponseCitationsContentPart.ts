@@ -14,29 +14,23 @@ import { createChatLinkPreviewRow } from './chatRichLink.js';
 
 type CodeCitation = Extract<ResponseCitation, { type: 'code'; }>;
 
-/** Presents provider-attributed sources after the response body. */
+/** Renders web sources in the action row and code matches in a separate disclosure. */
 export class ChatResponseCitationsContentPart extends Disposable {
 	private readonly webContent = this._register(new DisposableStore());
 	private readonly codeContent = this._register(new MutableDisposable<DisposableStore>());
-	private readonly domNode: HTMLElement;
-	private readonly web: HTMLElement;
 	private citations: readonly ResponseCitation[] | undefined;
 	private webLinks: readonly (readonly [string, string])[] = [];
 	private codeMatches: ChatCodeCitationContentPart | undefined;
 
 	constructor(
-		private readonly body: HTMLElement,
 		private readonly row: HTMLElement,
+		private readonly web: HTMLElement,
 		private readonly openLink: (url: string) => void,
 		private readonly onDidChangeHeight: () => void,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this.domNode = h(body.ownerDocument, 'div', { className: 'ash-chat-response-citations' });
-		this.web = h(body.ownerDocument, 'div');
-		this.web.hidden = true;
-		this.domNode.append(this.web);
-		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(toDisposable(() => this.web.remove()));
 	}
 
 	render(citations: readonly ResponseCitation[] | undefined, beforeLayout?: () => void): boolean {
@@ -53,10 +47,10 @@ export class ChatResponseCitationsContentPart extends Disposable {
 				matches.push({ ...citation, url: url.href });
 			}
 		}
-		const document = this.domNode.ownerDocument;
+		if (!this.webLinks.length && !this.codeMatches && !links.size && !matches.length) return false;
+		const document = this.row.ownerDocument;
 		const active = document.activeElement;
-		const hadFocus = this.domNode.contains(active);
-		if (!this.domNode.parentElement && !links.size && !matches.length) return false;
+		const hadFocus = this.web.contains(active) || this.codeMatches?.domNode.contains(active);
 		beforeLayout?.();
 		this.renderWebSources([...links]);
 		if (matches.length) {
@@ -64,20 +58,16 @@ export class ChatResponseCitationsContentPart extends Disposable {
 				const lifetime = this.codeContent.value = new DisposableStore();
 				this.codeMatches = lifetime.add(new ChatCodeCitationContentPart(document, this.openLink));
 				lifetime.add(this.codeMatches.onDidChangeHeight(this.onDidChangeHeight));
-				this.domNode.append(this.codeMatches.domNode);
+				this.row.append(this.codeMatches.domNode);
 			}
 			this.codeMatches.render(matches);
 		} else {
 			this.codeMatches = undefined;
 			this.codeContent.clear();
 		}
-		if (links.size || matches.length) {
-			if (!this.domNode.parentElement) this.body.append(this.domNode);
-		} else {
-			this.domNode.remove();
-		}
 		if (hadFocus && document.activeElement === document.body) {
-			(this.domNode.querySelector<HTMLElement>('button, summary') ?? this.row).focus({ preventScroll: true });
+			const target = this.web.querySelector('button') ?? this.codeMatches?.domNode.querySelector('summary') ?? this.row;
+			target.focus({ preventScroll: true });
 		}
 		return true;
 	}

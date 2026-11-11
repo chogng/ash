@@ -157,7 +157,7 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		expect(messages[2]?.citations).toEqual([{ type: 'web', url: source.url, title: source.title }]);
 		await testInfo.attach('reading-after-media.png', { body: await page.screenshot(), contentType: 'image/png' });
 		await testInfo.attach('response-state.json', { body: JSON.stringify({ target, sessionId, threadId, selected, restoredSelection: await selection(), readingBefore: reading, readingAfter: await geometry(paragraph), stages, durable }, null, 2), contentType: 'application/json' });
-		const sources = chat.locator('.ash-chat-response-citations').getByRole('button', { name: 'Sources (1)', exact: true });
+		const sources = chat.locator('.ash-chat-message-actions').getByRole('button', { name: 'Sources (1)', exact: true });
 		await sources.press('Enter');
 		const sourceCard = page.getByRole('dialog', { name: 'Sources (1)', exact: true });
 		await expect(sourceCard.getByRole('link', { name: /Response source/u })).toHaveAttribute('href', source.url);

@@ -1,10 +1,10 @@
-import { Marked, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
+import { Lexer, Marked, type Token, type TokenizerThis, type Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { renderAsPlaintext } from '../../../../base/browser/markdownRenderer.js';
-import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
+import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
 import type { ChatReplyReference, ChatReplyResource } from '../../../common/chatReplyBackend.js';
 import { ChatMarkdownRichContentBuilder, type ChatMarkdownRichContent, type ChatMarkdownRichPart, type ChatMarkdownRichStyle } from '../../../../workbench/contrib/chat/common/model/chatMarkdownRichContent.js';
@@ -237,7 +237,8 @@ function referencesFor(ids: readonly string[], references: readonly ChatReplyRef
 		const exact = references.find(reference => reference.id === id);
 		const candidates = references.filter(reference => reference.id.replace(/^turn\d+/u, '') === id.replace(/^turn\d+/u, ''));
 		const reference = exact ?? (candidates.length === 1 ? candidates[0] : undefined);
-		return reference ? [{ ...reference, number: references.indexOf(reference) + 1 }] : [];
+		const url = parseWebLink(reference?.url);
+		return reference && url ? [{ ...reference, url, number: references.indexOf(reference) + 1 }] : [];
 	});
 }
 
@@ -293,9 +294,27 @@ function entityPart(label: string, category: unknown, disambiguation: unknown, b
 	return { kind: 'entity', entity: { label, category, disambiguation: typeof disambiguation === 'string' ? disambiguation.slice(0, 1024) : '' }, block };
 }
 
-function parseWebLink(value: string | undefined): string | undefined {
+function readWebUrl(value: string | undefined): URL | undefined {
 	const url = value ? URL.parse(value) : null;
-	return url && (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password ? url.href : undefined;
+	return url && (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password ? url : undefined;
+}
+
+function stripChatGPTAttribution(href: string): string | undefined {
+	const start = href.indexOf('?');
+	const fragment = href.indexOf('#');
+	if (start < 0 || (fragment >= 0 && fragment < start)) return undefined;
+	const end = fragment < 0 ? href.length : fragment;
+	// Keep the encoding and order of the site's other query fields.
+	const fields = href.slice(start + 1, end).split('&');
+	const kept = fields.filter(field => !new URLSearchParams('?' + field).has('utm_source', 'chatgpt.com'));
+	if (kept.length === fields.length) return undefined;
+	const query = kept.join('&');
+	return href.slice(0, start) + (query ? '?' + query : '') + href.slice(end);
+}
+
+function parseWebLink(value: string | undefined): string | undefined {
+	const url = readWebUrl(value);
+	return url && (stripChatGPTAttribution(url.href) ?? url.href);
 }
 
 /** Projects Web-specific syntax and resources into Ash's response model. */
@@ -310,8 +329,12 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 	const addCitation = ({ url, title }: Pick<ChatReplyReference, 'url' | 'title'>): void => {
 		if (!citations.has(url)) citations.set(url, { type: 'web', url, title });
 	};
-	for (const reference of references) if (reference.cited) addCitation(reference);
-	if (!/[<\[\uE200]|:::writing\{/u.test(normalized)) {
+	for (const reference of references) {
+		if (!reference.cited) continue;
+		const url = parseWebLink(reference.url);
+		if (url) addCitation({ url, title: reference.title });
+	}
+	if (!/[<\[\uE200]|:::writing\{/u.test(normalized) && !/(?:https?:\/\/|www\.)\S*\?/iu.test(normalized)) {
 		return { text: normalized, resources: [], ...(citations.size && { citations: [...citations.values()] }) };
 	}
 	const resources: ChatReplyResource[] = [];
@@ -427,6 +450,12 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			if (group) return { kind: 'imageGallery', images: group.images, block: true };
 			try {
 				const value: unknown = JSON.parse(payload);
+				if (isRecord(value) && 'citation' in value) {
+					if (!isRecord(value.citation)) return '';
+					const { ref, refs } = value.citation;
+					const ids = [ref, ...(Array.isArray(refs) ? refs : [])];
+					return citationPart(ids.filter((id): id is string => typeof id === 'string'), false);
+				}
 				const entities = isRecord(value) && isRecord(value.entity_thumbnail_list) ? value.entity_thumbnail_list.entities : undefined;
 				if (Array.isArray(entities)) {
 					const plain = (text: string) => escapeMarkdownSyntaxTokens(text.replace(/\s+/gu, ' ')).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -448,7 +477,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		const [label = '', ...targets] = parts;
 		const reference = references.find(reference => targets.includes(reference.id));
 		const direct = targets.find(target => /^https?:\/\//iu.test(target));
-		const href = reference?.url ?? parseWebLink(direct);
+		const href = parseWebLink(reference?.url) ?? parseWebLink(direct);
 		const snippet = reference?.snippet.trim();
 		const title = snippet && reference?.title && reference.title !== label ? `${reference.title}\n${snippet}` : snippet;
 		if (href) addCitation({ url: href, title: reference?.title || label });
@@ -481,6 +510,34 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		return undefined;
 	}
 
+	function rewriteBodyLink(token: Tokens.Link, raw: string, tableCell: boolean): string | undefined {
+		let href = token.href;
+		if (!token.autolink && href.includes('&')) {
+			let decoder: HTMLTextAreaElement | undefined;
+			href = href.replace(/&(?:#(?:\d+|x[\da-f]+)|[a-z][a-z\d]*);/giu, entity => {
+				decoder ??= getDocument().createElement('textarea');
+				decoder.innerHTML = entity;
+				return decoder.value;
+			});
+		}
+		const target = stripChatGPTAttribution(href);
+		if (!target || !readWebUrl(href)) return undefined;
+		const escapeCell = (value: string) => tableCell ? value.replaceAll('|', '\\|') : value;
+		const destination = escapeCell(htmlAttributeEncodeValue(target).replaceAll('\\', '\\\\'));
+		if (token.autolink) {
+			const visibleUrl = token.href === 'http://' + token.text ? target.slice('http://'.length) : target;
+			const label = escapeCell(escapeMarkdownSyntaxTokens(htmlAttributeEncodeValue(visibleUrl)));
+			return `[${label}](<${destination}>)`;
+		}
+		// Keep the original Markdown label, including escapes and inline formatting.
+		const rules = Lexer.rules.inline.gfm;
+		const link = rules.link.exec(raw);
+		const label = link?.[1] ?? rules.reflink.exec(raw)?.[1] ?? rules.nolink.exec(raw)?.[1];
+		if (label === undefined) return undefined;
+		const title = link ? link[3] : token.title && `"${escapeCell(token.title.replace(/[\\"]/gu, '\\$&'))}"`;
+		return `[${decode(label, token.tokens, true, tableCell)}](<${destination}>${title ? ' ' + title : ''})`;
+	}
+
 	function decode(source: string, tokens: readonly Token[], inline: boolean, tableCell = false): string {
 		let cursor = 0;
 		let result = '';
@@ -489,7 +546,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			let raw = token.raw;
 			const escapedPipe = tableCell && raw.includes('|');
 			let start = escapedPipe ? -1 : source.indexOf(raw, cursor);
-			const prefixedLines = raw.includes('\n') && raw.includes('\uE200');
+			const prefixedLines = raw.includes('\n') && (raw.includes('\uE200') || raw.includes('?'));
 			if (start < 0 && (escapedPipe || prefixedLines)) {
 				// Marked removes table escapes and strips prefixes from children of Markdown containers.
 				let patternSource = escapeRegExpCharacters(raw);
@@ -503,6 +560,7 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 			if (start < 0) continue;
 			result += source.slice(cursor, start);
 			const part = project(token, inline);
+			const link = part === undefined && token.type === 'link' ? rewriteBodyLink(token as Tokens.Link, raw, tableCell) : undefined;
 			if (part !== undefined) {
 				if (part && part.kind === 'citations' && previous?.type === 'paragraph' && !inline) {
 					// Web replies also send citations on their own line after the paragraph they support.
@@ -511,6 +569,8 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 					result += richContent.add(part);
 				}
 				if (!inline) result += '\n';
+			} else if (link !== undefined) {
+				result += link;
 			} else if (token.type === 'list') {
 				result += decode(raw, token.items, false);
 			} else if (token.type === 'table') {

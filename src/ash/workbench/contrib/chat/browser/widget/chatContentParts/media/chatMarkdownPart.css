@@ -19,6 +19,16 @@
 	margin: 0;
 }
 
+.ash-chat-file-download {
+	color: var(--ash-link-foreground);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-file-download:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+
 .ash-chat-media-attachments {
 	min-width: 0;
 }

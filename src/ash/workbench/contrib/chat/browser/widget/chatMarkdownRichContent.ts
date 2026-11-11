@@ -34,6 +34,10 @@ const fileIcons = new Map([
 	['.xlsx', Lxicon.xlsGreen],
 ]);
 
+export function getChatFileIcon(name: string) {
+	return fileIcons.get(extname(name).toLowerCase()) ?? Lxicon.file;
+}
+
 function colorClass(property: 'background' | 'border', value: string | undefined): string | undefined {
 	const match = value && /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
 	if (!match || match.slice(1, 4).some(channel => Number(channel) > 255)) return undefined;
@@ -124,7 +128,7 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 			if (inLink || !part.uri) return label;
 			const href = CHAT_RESPONSE_DOWNLOAD_SCHEME + ':' + index;
 			const title = part.title ? ` title="${escapeHTML(part.title)}"` : '';
-			const icon = fileIcons.get(extname(part.label).toLowerCase()) ?? Lxicon.file;
+			const icon = getChatFileIcon(part.label);
 			return `<a href="${href}"${title}><span class="ash-chat-file-link-icon">$(${icon.id})</span>${label}</a>`;
 		}
 		case 'box':
