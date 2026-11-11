@@ -96,7 +96,7 @@ registerEditorPane({
 	canOpen: input => input instanceof TerminalEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Terminal editor requires the window service container');
-		return options.instantiationService.createInstance(TerminalEditor);
+		return options.instantiationService.createInstance(TerminalEditor, options.actionServices?.contextKeyService);
 	},
 });
 

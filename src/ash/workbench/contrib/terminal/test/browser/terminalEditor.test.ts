@@ -1,4 +1,5 @@
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Direction, Orientation } from '../../../../../base/browser/ui/grid/grid.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -31,20 +32,54 @@ suite('Terminal editor resource boundary', () => {
 		assert.equal(restored.terminalInstance, undefined);
 	});
 
-	test('a split tab round-trips its pane identities and sizes after the first shell exits', () => {
+	test('nested terminal splits round-trip their pane identities and orientations', () => {
 		const serializer = new TerminalInputSerializer();
 		const first = getTerminalUri('first', 1);
 		const second = getTerminalUri('second', 2);
 		const third = getTerminalUri('third', 3);
 		const input = new TerminalEditorInput(first);
-		input.addPane(second, input.panes.get());
-		input.activeResource = second;
-		input.addPane(third, input.panes.get());
+		input.addPane(second, Direction.Right);
+		input.addPane(third, Direction.Down, second);
+		const mixed = serializer.deserialize(serializer.serialize(input));
+		assert.deepEqual(mixed.layout.get(), input.layout.get());
+		mixed.activeResource = third;
+		mixed.removePane(third);
+		assert.equal(mixed.activeResource?.path, second.path, 'focus stays in the affected branch when its last split closes');
 		input.removePane(first);
-		input.resizePanes(new Map([[second, 300], [third, 100]]));
 		const restored = serializer.deserialize(serializer.serialize(input));
 		assert.equal(restored.resource.path, first.path);
-		assert.deepEqual(restored.panes.get().map(({ resource, size }) => [resource.path, size]), [[second.path, .75], [third.path, .25]]);
+		assert.deepEqual(restored.layout.get(), {
+			orientation: Orientation.VERTICAL, size: 1, children: [
+				{ resource: second, size: 0.5 }, { resource: third, size: 0.5 },
+			]
+		});
+		const legacy = serializer.deserialize({
+			resource: first.toString(), panes: [
+				{ resource: second.toString(), size: 0.75 }, { resource: third.toString(), size: 0.25 },
+			]
+		});
+		assert.deepEqual(legacy.layout.get(), {
+			orientation: Orientation.VERTICAL, size: 1, children: [
+				{ resource: second, size: 0.75 }, { resource: third, size: 0.25 },
+			]
+		});
+	});
+
+	test('left and up splits insert before their source in the same row or column', () => {
+		const source = getTerminalUri('directions', 1);
+		const right = getTerminalUri('directions', 2);
+		const left = getTerminalUri('directions', 3);
+		const up = getTerminalUri('directions', 4);
+		const input = new TerminalEditorInput(source);
+		input.addPane(right, Direction.Right);
+		input.addPane(left, Direction.Left, source);
+		input.addPane(up, Direction.Up, right);
+		assert.deepEqual(input.layout.get(), {
+			orientation: Orientation.HORIZONTAL, size: 1, children: [
+				{ resource: left, size: 0.25 }, { resource: source, size: 0.25 },
+				{ orientation: Orientation.VERTICAL, size: 0.5, children: [{ resource: up, size: 0.5 }, { resource: right, size: 0.5 }] },
+			]
+		});
 	});
 
 	test('incarnations with a reused instance number cannot bind an old resource', () => {
@@ -132,12 +167,20 @@ test('splitting within a tab adds an unplaced shell and detaching one pane keeps
 	const f = splitFixture();
 	using lifetime = f.lifetime;
 	await f.service.splitPane(f.input, true);
-	assert.deepEqual(f.requests, [{ location: TerminalLocation.Editor, deferEditorOpen: true, skipContributedProfileCheck: true }]);
+	assert.deepEqual(f.requests, [{ location: { parentTerminal: f.source, viewColumn: 7 }, deferEditorOpen: true, skipContributedProfileCheck: true }]);
 	assert.deepEqual(f.input.panes.get().map(pane => pane.resource), [f.source.resource, f.created.resource]);
 	await f.service.detachInstance(f.source);
 	assert.deepEqual(f.input.panes.get().map(pane => pane.resource), [f.created.resource]);
 	assert.deepEqual(f.closed, []);
 	assert.deepEqual(f.removed, []);
+});
+
+test('an unavailable terminal tab cannot create a split process', async () => {
+	const f = splitFixture();
+	using lifetime = f.lifetime;
+	f.instances.length = 0;
+	await f.service.splitPane(f.input, false, Direction.Right);
+	assert.deepEqual(f.requests, []);
 });
 
 test('a shell created after its split tab closes is released', async () => {

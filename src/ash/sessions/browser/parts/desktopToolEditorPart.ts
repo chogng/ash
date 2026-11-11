@@ -20,7 +20,7 @@ export class DesktopToolEditorPart extends EditorPart {
 		@IStorageService storage: IStorageService,
 		@IUriIdentityService identities: IUriIdentityService,
 	) {
-		super(container, options, services, theme, storage, identities);
+		super(container, { ...options, supportsGroupSplitting: false }, services, theme, storage, identities);
 	}
 
 	public setGroupScope(contains: (id: number) => boolean): void { this.inWorkingSet = contains; }
@@ -38,11 +38,11 @@ export class DesktopToolEditorPart extends EditorPart {
 	public resolveDefaultGroup(input: IResourceEditorInput) {
 		const groups = this.groups.filter(group => this.inWorkingSet(group.id));
 		return groups.find(group => group.inputs.some(candidate => candidate.resource.toString() === input.resource.toString()))
-			?? groups.find(group => group === this.activeGroup) ?? groups[0] ?? this.addGroup(this.activeGroup.id, Direction.Right);
+			?? groups.find(group => group === this.activeGroup) ?? groups[0] ?? this.insertGroup(this.activeGroup, Direction.Right).group;
 	}
 
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
-		if (!target) {
+		if (!target || target === 'sideGroup') {
 			target = { groupId: this.resolveDefaultGroup(input).id };
 		}
 		if (typeof target === 'object' && !options.inactive) { this.setGroupVisible(target.groupId, true); }

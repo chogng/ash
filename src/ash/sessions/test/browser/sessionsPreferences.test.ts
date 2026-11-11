@@ -770,10 +770,30 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await openCategoryAction('browser', 'Open Browser settings');
 	await openCategoryAction('tab', 'Open Tab settings');
 	await openCategoryAction('code-intelligence', 'Language servers');
-	await openCategoryAction('environment', 'Open Environment settings');
+	const terminalSettings = preferences.open({ section: 'environment', query: '@id:sessions.terminal.*' });
+	assert.ok(window.document.querySelector('dialog[open] [data-settings-item-id="sessions.terminal.fontSize"]'));
+	assert.equal(window.document.querySelector('[data-settings-item-id="terminal.integrated.fontSize"]'), null);
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await terminalSettings;
+	const terminalProfilePicked = new DeferredPromise<void>();
+	using profileCommand = CommandsRegistry.register('workbench.action.terminal.selectDefaultProfile', () => {
+		assert.ok(window.document.querySelector('dialog[open]'), 'the profile picker opens from the active Settings dialog');
+		void terminalProfilePicked.complete();
+	});
+	const environmentSettings = preferences.open({ section: 'environment' });
+	const profile = [...window.document.querySelectorAll<HTMLButtonElement>('dialog[open] .ash-sessions-settings-page button')]
+		.find(button => button.textContent === 'Select Default Profile');
+	assert.ok(profile);
+	assert.equal(profile.disabled, true);
+	contextKeys.setContext('appServerAvailable', true);
+	assert.equal(profile.disabled, false);
+	profile.click();
+	await terminalProfilePicked.p;
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await environmentSettings;
 	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
 		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
-		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' }, { section: 'terminal', target: 'modalGroup' },
+		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' },
 	]);
 	assert.equal(editorReveals, 1);
 	let accountOpens = 0;

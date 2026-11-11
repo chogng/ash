@@ -25,11 +25,13 @@ export const Menus = {
 	CodeAddTab: new MenuId('SessionsAddTab'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
+	SessionsTerminalSplit: new MenuId('SessionsTerminalSplit'),
 	SessionsEditorTitle: new MenuId('SessionsEditorTitle'),
 	SessionsEditorTabsBarAddTabCanvas: new MenuId('SessionsEditorTabsBarAddTabCanvas'),
 } as const;
 
 export const SessionActivityBarVisibleContext = new RawContextKey<boolean>('sessions.sessionActivityBarVisible', false);
+export const SessionsFlatLayoutContext = new RawContextKey<boolean>('sessions.flatLayout', false);
 
 /** Both menu placements share the tool's command and its availability rules. */
 export function sessionToolMenuItems(item: IMenuItem): { id: MenuId; item: IMenuItem; }[] {

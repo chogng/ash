@@ -1,3 +1,4 @@
+import type { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import type { IAgentCommandTerminalTarget, ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { localize } from '../../../../nls.js';
@@ -307,7 +308,7 @@ export const enum TerminalDataTransfers {
 /** Editor operations for the same window-owned terminal instances. */
 export interface ITerminalEditorService {
 	openEditor(instance: ITerminalInstance, editorOptions?: TerminalEditorLocation): Promise<void>;
-	splitPane(input: TerminalEditorInput, preserveFocus: boolean): Promise<void>;
+	splitPane(input: TerminalEditorInput, preserveFocus: boolean, direction?: Direction): Promise<void>;
 	splitInstance(instanceToSplit: ITerminalInstance, shellLaunchConfig?: ICreateTerminalOptions['config']): Promise<ITerminalInstance>;
 	detachInstance(instance: ITerminalInstance): Promise<void>;
 	getInstanceFromResource(resource: URI): ITerminalInstance | undefined;

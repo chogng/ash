@@ -59,7 +59,7 @@ The controller suppresses editor auto-visibility while restoring a working set. 
 
 ## 3. Desktop tools
 
-DesktopWorkbenchLayout owns only outer Workbench Parts. EditorPart owns one group Grid for documents, Changes, Browser and Terminal. Moving a complete group preserves its live panes; moving a tab uses the shared editor transfer lifecycle. Tool visibility commands hide retained groups or select another tab in a mixed group. They do not terminate a terminal or recreate a browser page.
+DesktopWorkbenchLayout owns outer Workbench Parts. DesktopEditorArea arranges tool cards, and each EditorPart hosts its tool's tabs for the active working set. Tool visibility commands hide the retained tabs and panes while keeping their processes and pages alive. Restoring a legacy working set consolidates its tabs by tool.
 
 DesktopLayoutController retains live group identities for session working sets. The base controller remains the single owner of serialized working-set state and restoration sequencing. Switching to an already retained set restores its group geometry and visibility without closing its panes; loading a cold set preserves other live groups and the product-page group. Entry changes hide Code groups while remembering which were already hidden. Default opens target the current set rather than inactive session groups.
 

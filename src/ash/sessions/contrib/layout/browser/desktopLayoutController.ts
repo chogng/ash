@@ -208,7 +208,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 			this.codeLayout = this.editor.saveWorkingSet('code-entry');
 			for (const id of incoming) this.editor.setGroupVisible(id, false);
 		}
-		const active = incoming[saved === 'empty' ? 0 : saved.activeGroupIndex] ?? incoming[0];
+		const active = !reused && incoming.includes(this.editor.activeGroup.id)
+			? this.editor.activeGroup.id
+			: incoming[saved === 'empty' ? 0 : saved.activeGroupIndex] ?? incoming[0];
 		if (active !== undefined) {
 			if (!this.codeGroupsVisible) this.codeActiveGroup = active;
 			this.editor.activateGroup(active);

@@ -304,8 +304,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	assert.ok(!terminalGroup.inputs.includes(mixed));
 	assert.ok(otherGroups.every(group => editor.isGroupVisible(group.id)));
 
-	// The right tool must grow past the default width when visible group minimums
-	// no longer fit, including after changing the orientation of a tool workspace.
+	// The editor region respects the minimum width of the arranged tools.
 	const parts = createParts(browserEnvironment.window.document);
 	const oldEditor = parts.get('editor')!;
 	parts.set('editor', area);
@@ -313,10 +312,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 		using layout = createLayout(browserEnvironment.window.document.body, parts, { initialDimension: new Dimension(1_245, 890) });
 		layout.showPart('editor');
 		layout.resizePart('editor', new Dimension(300, 800));
-		const extraTerminalGroup = editor.addGroup(terminalGroup.id, Direction.Right);
-		editor.setGroupVisible(extraTerminalGroup.id, true);
 		area.moveTool('terminal', 'changes', Direction.Right);
-		assert.ok(area.minimumWidth > 300);
 		assert.ok(layout.getPartSize('editor').width >= area.minimumWidth);
 		const wide = new Dimension(1_600, 890);
 		layout.layout(wide);

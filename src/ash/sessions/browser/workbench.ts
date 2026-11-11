@@ -12,7 +12,7 @@ import { IAgentSessionActionsService, IAgentSessionsService } from '../../workbe
 import { SessionActionsService } from './sessionActionsService.js';
 import { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
 import { ChatHistoryModel } from './chatHistoryModel.js';
-import { Menus, sessionToolMenuItems } from './menus.js';
+import { Menus, SessionsFlatLayoutContext, sessionToolMenuItems } from './menus.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { StatusbarService } from '../../workbench/browser/parts/statusbar/statusbarPart.js';
 import { ILanguageServerStatusService } from '../../workbench/services/language/common/languageServerStatusService.js';
@@ -854,6 +854,10 @@ export abstract class Workbench extends Disposable {
 		let auxiliarybar: AuxiliaryBarPart | undefined;
 		options.registerTitleService(this.domNode, options.profile.label, services);
 		const titlebar = getSessionsTitlebarPart(services.get(ITitleService), this.domNode);
+		const flatLayout = observableFromEvent(this, configurationService.onDidChangeConfiguration,
+			() => configurationService.getValue(SessionsConfiguration.layoutStyle) === 'flat');
+		const flatLayoutContext = SessionsFlatLayoutContext.bindTo(contextKeys);
+		this._register(autorun(reader => flatLayoutContext.set(flatLayout.read(reader))));
 		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
@@ -1095,7 +1099,18 @@ export abstract class Workbench extends Disposable {
 		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
 		for (const tool of ['changes', 'browser', 'terminal', 'chat'] as const) {
 			const scope = createToolScope(tool);
-			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, { ...editorOptions, contextKeyService: scope.context, hideTabs: tool === 'changes' }));
+			const titleActions: IEditorPartOptions['titleActions'] = tool === 'terminal' ? {
+				menuService: menus,
+				contextMenuProvider: {
+					showContextMenu: delegate => contextMenus.showContextMenu(
+						flatLayout.get() ? { ...delegate, iconPlacement: 'trailing' } : delegate,
+					),
+				},
+			} : editorOptions.titleActions;
+			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, {
+				...editorOptions, contextKeyService: scope.context, hideTabs: tool === 'changes',
+				titleActions,
+			}));
 			scope.services.registerInstance(IEditorPart, part);
 			tools.set(tool, part);
 		}
@@ -1238,7 +1253,7 @@ export abstract class Workbench extends Disposable {
 		this._register(new SessionsModernUIContribution(this.domNode, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys, editor, workspace));
 		this._register(registerAddFileAsContextAction(this.sessionsPart));
-		this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
+		const terminalContribution = this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
@@ -1279,6 +1294,8 @@ export abstract class Workbench extends Disposable {
 					for (const instance of terminals.instances) {
 						if (instance.target === TerminalLocation.Panel) await services.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
 					}
+					await workspaceProjectionReady.p;
+					if (!this.isDisposed) await services.invokeFunction(terminalContribution.startRestoringTabs);
 				}
 				await entryLayout.checkpointEditorLayout();
 			} catch (error) { notificationService.error(getErrorMessage(error)); }

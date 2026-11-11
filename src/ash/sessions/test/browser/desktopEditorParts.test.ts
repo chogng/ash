@@ -88,45 +88,82 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '6px');
 	});
 
-	test('splitting Files creates a local group without changing other tool hosts', async () => {
+	test('Files side opens use the current tab group without changing other tool hosts', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		const files = hosts.editor.activeGroup;
 		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
 		const browser = hosts.editor.activeGroup;
 		const pane = browser.activePane;
-		const split = hosts.editor.addGroup(files.id, Direction.Down);
-		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: split.id });
+		assert.equal(hosts.editor.addGroup(files.id, Direction.Down), files);
+		await hosts.editor.splitEditors(files.id, files.inputs, Direction.Down);
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, 'sideGroup');
 		assert.equal(hosts.editor.parts.length, 5);
 		assert.equal(hosts.editor.getEditorState().groups.length, hosts.editor.groups.length);
-		assert.deepEqual(hosts.files.fileGroups.map(group => group.id), [files.id, split.id]);
+		assert.deepEqual(hosts.files.fileGroups.map(group => group.id), [files.id]);
+		assert.equal(files.inputs.length, 2);
 		assert.equal(hosts.tools.get('browser')!.groups.length, 1);
 		assert.equal(browser.activePane, pane);
-		hosts.editor.hideTool(split.id);
+		hosts.editor.hideTool(files.id);
 		assert.ok(hosts.files.fileGroups.every(group => !hosts.editor.isGroupVisible(group.id)));
 		assert.equal(hosts.editor.isGroupVisible(browser.id), true);
+	});
+
+	test('restores legacy terminal splits as tabs with the saved selection', async () => {
+		using hosts = fixture();
+		const { editor, area } = hosts;
+		const firstInput = new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/1'));
+		const secondInput = new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/2'));
+		await editor.openEditor(firstInput, { pinned: true });
+		const groupId = editor.activeGroup.id;
+		await editor.openEditor(secondInput, { pinned: true });
+		const saved = editor.saveWorkingSet('legacy-terminal');
+		const metadata = saved.toolParts!;
+		const original = saved.groups.find(group => group.id === groupId)!;
+		const extraId = Math.max(...saved.groups.map(group => group.id!)) + 1;
+		const [first, second] = original.editors;
+		const leaf = (id: number, visible: boolean) => ({ type: 'leaf', data: { groupId: id }, visible, size: 300, priority: 0 } as const);
+		const legacy = {
+			...saved,
+			groups: [...saved.groups.map(group => group === original ? { ...group, editors: [first!], activeEditorIndex: 0 } : group),
+			{ ...original, id: extraId, editors: [second!], activeEditorIndex: 0 }],
+			activeGroupIndex: saved.groups.length,
+			toolParts: {
+				...metadata, parts: {
+					...metadata.parts, terminal: {
+						groups: [groupId, extraId],
+						layout: { type: 'branch', orientation: Orientation.VERTICAL, priority: 0, size: 600, children: [leaf(groupId, true), leaf(extraId, false)] },
+					}
+				},
+			},
+		} as const;
+		await editor.applyWorkingSet(legacy);
+		const terminal = hosts.tools.get('terminal')!;
+		assert.equal(terminal.groups.length, 1);
+		assert.deepEqual(terminal.activeGroup.inputs.map(input => input.resource.toString()), [firstInput.resource.toString(), secondInput.resource.toString()]);
+		assert.equal(editor.activeGroup.activeInput?.resource.toString(), secondInput.resource.toString());
+		assert.equal(area.isToolVisible('terminal'), true);
 	});
 
 	test('round-trips Part and group geometry with globally unique restored identities', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		const file = hosts.editor.activeGroup;
-		const split = hosts.editor.addGroup(file.id, Direction.Down);
-		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: split.id });
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: file.id });
 		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
 		const browser = hosts.editor.activeGroup;
 		hosts.area.moveTool('browser', 'files', Direction.Right);
 		hosts.editor.setGroupVisible(browser.id, false);
 		const saved = hosts.editor.saveWorkingSet('session:a');
 		assert.equal(saved.groups.flatMap(group => group.editors).length, 3);
-		assert.ok(saved.toolParts!.parts.files.groups.length === 2);
+		assert.equal(saved.toolParts!.parts.files.groups.length, 1);
 		assert.ok(!('editors' in saved.toolParts!.parts.files));
 		await hosts.editor.applyWorkingSet(saved);
 		const ids = hosts.editor.groups.map(group => group.id);
 		assert.equal(new Set(ids).size, ids.length);
 		assert.ok(hosts.editor.groups.some(group => group.id === hosts.editor.pageGroupId));
 		assert.equal(hosts.files.isGroupVisible(hosts.editor.pageGroupId), false);
-		assert.equal(hosts.files.fileGroups.length, 2);
+		assert.equal(hosts.files.fileGroups.length, 1);
 		assert.equal(hosts.tools.get('browser')!.activeInput?.resource.toString(), 'ash-browser:/fixture');
 		assert.equal(hosts.tools.get('browser')!.isGroupVisible(hosts.tools.get('browser')!.activeGroup.id), false);
 		assert.deepEqual(hosts.area.saveLayout(), saved.toolParts!.layout);

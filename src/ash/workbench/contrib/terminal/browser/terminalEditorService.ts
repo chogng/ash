@@ -7,6 +7,11 @@ import { IEditorGroupsService, GroupDirection } from '../../../services/editor/c
 import { ITerminalService, type ITerminalEditorService, type ITerminalInstance, type ICreateTerminalOptions } from './terminal.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import { getInstanceFromResource } from './terminalUri.js';
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
+
+export function canSplitTerminalInstance(instance: ITerminalInstance | undefined): instance is ITerminalInstance {
+	return instance?.state === 'running' && !instance.isReadOnly && !instance.shellLaunchConfig?.customPtyImplementation;
+}
 
 /** Coordinates editor membership while leaving terminal state with its original owner. */
 export class TerminalEditorService extends Disposable implements ITerminalEditorService {
@@ -50,7 +55,7 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 			this.backgroundOpens.set(instance, (this.backgroundOpens.get(instance) ?? 0) + 1);
 		}
 		try {
-			returningPane?.addPane(resource, returningPane.panes.get());
+			returningPane?.addPane(resource, Direction.Down);
 			if (existing && !editorOptions?.preserveFocus) existing.activeResource = resource;
 			await this.editors.openEditor(existing ?? new TerminalEditorInput(resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus, ...(existing ? { revealIfOpened: true } : {}) }, editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
 			if (!editorOptions?.preserveFocus && this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
@@ -82,24 +87,33 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 		}
 	}
 
-	async splitPane(input: TerminalEditorInput, preserveFocus: boolean): Promise<void> {
+	async splitPane(input: TerminalEditorInput, preserveFocus: boolean, direction = Direction.Down): Promise<void> {
+		const group = this.editorGroups.groups.find(group => group.inputs.includes(input));
+		const active = input.activeResource && this.getInstanceFromResource(input.activeResource);
+		const parent = active ?? input.panes.get().map(pane => this.getInstanceFromResource(pane.resource)).find(Boolean);
+		if (!group || !canSplitTerminalInstance(parent) || !parent.resource) return;
+		const source = parent.resource;
+		using lifetime = new DisposableStore();
+		let retired = false;
+		lifetime.add(parent.onDidChangeState(() => retired = true));
+		if (parent.onDidChangeTarget) lifetime.add(parent.onDidChangeTarget(() => retired = true));
 		const instance = await this.terminals.createTerminal({
-			location: TerminalLocation.Editor,
+			location: { parentTerminal: parent, viewColumn: group.id },
 			deferEditorOpen: true,
 			skipContributedProfileCheck: true,
 		});
-		if (this.isDisposed || !instance.resource || !this.terminals.instances.includes(instance)
-			|| !this.editorGroups.groups.some(group => group.inputs.includes(input))) {
-			await this.terminals.closeTerminal(instance);
+		if (this.isDisposed || retired || !instance.resource || !this.terminals.instances.includes(instance)
+			|| !this.terminals.instances.includes(parent) || !input.contains(source)
+			|| !this.editorGroups.getGroup(group.id)?.inputs.includes(input)) {
+			if (this.terminals.instances.includes(instance)) await this.terminals.closeTerminal(instance);
 			throw canceled();
 		}
 		const resource = instance.resource;
-		const livePanes = input.panes.get().filter(pane => this.getInstanceFromResource(pane.resource));
-		input.addPane(resource, livePanes);
-		const active = this.editors.activeEditorPane;
-		if (!preserveFocus && this.editors.activeEditor === input && active) {
+		input.addPane(resource, direction, source, candidate => this.getInstanceFromResource(candidate) !== undefined);
+		const pane = this.editors.activeEditorPane;
+		if (!preserveFocus && this.editors.activeEditor === input && pane) {
 			input.activeResource = resource;
-			active.focus();
+			pane.focus();
 		}
 	}
 
@@ -119,11 +133,12 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 				config: shellLaunchConfig ?? instanceToSplit.shellLaunchConfig,
 				location: { parentTerminal: instanceToSplit, viewColumn: destination.id },
 			});
-			if (this.isDisposed || retired || !this.terminals.instances.includes(instanceToSplit) || !this.editorGroups.getGroup(source.id)?.inputs.some(input => input instanceof TerminalEditorInput && input.contains(resource))) throw canceled();
+			if (this.isDisposed || retired || !this.terminals.instances.includes(instanceToSplit) || !this.editorGroups.getGroup(destination.id)
+				|| !this.editorGroups.getGroup(source.id)?.inputs.some(input => input instanceof TerminalEditorInput && input.contains(resource))) throw canceled();
 			return created;
 		} catch (error) {
 			if (created && this.terminals.instances.includes(created)) await this.terminals.closeTerminal(created);
-			if (this.editorGroups.getGroup(destination.id)?.inputs.length === 0) await this.editorGroups.removeGroup(destination);
+			if (destination !== source && this.editorGroups.getGroup(destination.id)?.inputs.length === 0) await this.editorGroups.removeGroup(destination);
 			throw error;
 		}
 	}

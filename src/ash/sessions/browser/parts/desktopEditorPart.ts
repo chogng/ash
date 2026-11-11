@@ -43,7 +43,7 @@ export class DesktopMainEditorPart extends EditorPart {
 		@IStorageService private readonly storage: IStorageService,
 		@IUriIdentityService identities: IUriIdentityService,
 	) {
-		super(container, options, services, theme, storage, identities);
+		super(container, { ...options, supportsGroupSplitting: false }, services, theme, storage, identities);
 		this.domNode.classList.add('ash-code-editor-groups');
 		this.groups.find(group => group.id === this.pageGroupId)!.domNode.classList.add('ash-code-page-group');
 		const width = storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, 220);
@@ -163,7 +163,7 @@ export class DesktopMainEditorPart extends EditorPart {
 
 	public async openFiles(): Promise<void> {
 		const group = this.fileGroups.find(group => group === this.activeGroup) ?? this.fileGroups[0]
-			?? this.addGroup(this.activeGroup.id, Direction.Right);
+			?? this.insertGroup(this.activeGroup, Direction.Right).group;
 		this.setGroupVisible(group.id, true);
 		this.activateGroup(group.id);
 		this.showDetails();
@@ -230,11 +230,11 @@ export class DesktopMainEditorPart extends EditorPart {
 		const groups = this.fileGroups;
 		const existing = groups.find(group => group.inputs.some(candidate => candidate.resource.toString() === input.resource.toString()));
 		return existing ?? groups.find(group => group === this.activeGroup) ?? groups[0]
-			?? this.addGroup(this.activeGroup.id, Direction.Right);
+			?? this.insertGroup(this.activeGroup, Direction.Right).group;
 	}
 
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
-		if (target === undefined) {
+		if (target === undefined || target === 'sideGroup') {
 			target = { groupId: this.resolveDefaultGroup(input).id };
 		}
 		if (typeof target === 'object' && !options.inactive) this.setGroupVisible(target.groupId, true);

@@ -51,7 +51,11 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 
 	public updateHeaders(visible: boolean, host: HTMLElement | undefined): void {
 		const groups = new Set(visible ? this.editor.groups.filter(group => this.editor.isGroupVisible(group.id)) : []);
-		const docked = new Set(host ? [...groups].filter(group => !this.editor.findGroup({ direction: GroupDirection.UP }, group)) : []);
+		// A newly inserted group may appear to the left of older groups in the grid.
+		const docked = new Map(host ? [...groups]
+			.filter(group => !this.editor.findGroup({ direction: GroupDirection.UP }, group))
+			.map(group => [group, group.domNode.getBoundingClientRect()] as const)
+			.sort(([, first], [, second]) => first.left - second.left) : []);
 		for (const [group, label] of this.groupLabels) {
 			if (!docked.has(group) && group.headerElement.parentElement === this.headerHost) {
 				group.headerElement.style.removeProperty('flex-basis');
@@ -67,7 +71,6 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 			this.headerHost.style.width = `${this.element.getBoundingClientRect().width}px`;
 			if (this.headerHost.parentElement !== host) host.append(this.headerHost);
 		}
-		let cursor = this.headerHost.firstElementChild;
 		for (const group of groups) {
 			let label = this.groupLabels.get(group);
 			if (!label) {
@@ -78,8 +81,10 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 			}
 			const name = group.activeInput?.label ?? (this.partId === 'files' ? localize('sessions.files.title', 'Files') : '');
 			if (label.textContent !== name) label.textContent = name;
-			if (!docked.has(group)) continue;
-			group.headerElement.style.flexBasis = `${group.domNode.getBoundingClientRect().width}px`;
+		}
+		let cursor = this.headerHost.firstElementChild;
+		for (const [group, bounds] of docked) {
+			group.headerElement.style.flexBasis = `${bounds.width}px`;
 			if (group.headerElement.parentElement !== this.headerHost) group.setHeaderHost(this.headerHost);
 			if (cursor && group.headerElement !== cursor) this.headerHost.insertBefore(group.headerElement, cursor);
 			cursor = group.headerElement.nextElementSibling;

@@ -114,6 +114,10 @@ function restorePartLayout(part: EditorPart, layout: EditorWorkingSetLayout, gro
 	if (projected) { part.restoreLayout(projected, mapping); }
 }
 
+function hasVisibleGroup(layout: EditorWorkingSetLayout): boolean {
+	return layout.type === 'leaf' ? layout.visible : layout.children.some(hasVisibleGroup);
+}
+
 /** Coordinates tool Parts; the shared coordinator remains the owner of editor commands and activation. */
 export class DesktopEditorParts extends EditorParts {
 	private readonly revealed = this._register(new Emitter<void>());
@@ -390,6 +394,18 @@ export class DesktopEditorParts extends EditorParts {
 						});
 					layout = metadata ? metadata.parts[tool].layout : saved.layout && projectLayout(saved.layout, new Set(groups.map(group => group.id!)));
 				}
+				const originalGroups = groups;
+				// Agent Window shows a single tab group per tool in the active working
+				// set. Legacy splits keep their tabs, selection and tool visibility.
+				if (groups.length > 1) {
+					const selected = groups.find(group => group.id === activeGroup?.id)
+						?? groups.find(group => group.editors.length) ?? groups[0]!;
+					const editors = groups.flatMap(group => group.editors);
+					groups = [{ ...selected, editors, activeEditorIndex: editors.length ? Math.max(0, editors.indexOf(selected.editors[selected.activeEditorIndex]!)) : -1 }];
+					if (layout) {
+						layout = { type: 'leaf', data: { groupId: selected.id! }, size: layout.size, priority: layout.priority, visible: hasVisibleGroup(layout) };
+					}
+				}
 				const previous = new Set(part.groups.map(group => group.id));
 				// Saved IDs can overlap another live Part or session. New groups always use the window allocator.
 				const state: EditorWorkingSetTarget = groups.length ? {
@@ -403,7 +419,10 @@ export class DesktopEditorParts extends EditorParts {
 				const included = options.excludeEmptyGroups && groups.some(group => group.editors.length) ? groups.filter(group => group.editors.length) : groups;
 				const mapping = new Map(included.flatMap((group, index) => group.id === undefined || !created[index] ? [] : [[group.id, created[index]!.id] as const]));
 				if (layout) { restorePartLayout(part, layout, mapping); }
-				for (const [from, to] of mapping) {
+				const restoredGroups = originalGroups.length > 1 && created[0]
+					? originalGroups.map(group => [group.id!, created[0]!.id] as const)
+					: mapping;
+				for (const [from, to] of restoredGroups) {
 					// A legacy mixed group becomes several tool groups. Its selected tab chooses the active Part.
 					if (metadata || tool === activeTool || !restored.has(from)) { restored.set(from, to); }
 				}

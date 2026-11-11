@@ -5,6 +5,7 @@ export const TerminalHasActiveInstanceContext = new RawContextKey<boolean>('term
 export const TerminalActiveInstanceInTitleContext = new RawContextKey<boolean>('terminalActiveInstanceInTitle', false);
 export const TerminalActiveInstanceStateContext = new RawContextKey<string>('terminalActiveInstanceState', 'none');
 export const TerminalViewInlineActionsContext = new RawContextKey<boolean>('terminalViewInlineActions', false);
+export const TerminalEditorCanSplitContext = new RawContextKey<boolean>('terminalEditorCanSplit', false);
 
 export namespace TerminalContextKeys {
 	export const tabsFocus = new RawContextKey<boolean>('terminalTabsFocus', false);

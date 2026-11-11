@@ -11,7 +11,7 @@ import type { ExtensionFileTemplateDefinition } from '../../../services/extensio
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
-import { ActiveEditorFirstInGroupContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
+import { ActiveEditorFirstInGroupContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorsVisibleContext, IsSessionsWindowContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
 import { IEditorPartsService } from './editorParts.js';
 import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
 import { EditorEnablePreviewConfiguration } from './editorConfiguration.js';
@@ -24,11 +24,13 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 export const SPLIT_EDITOR = 'workbench.action.splitEditor';
+const editorGroupSplitting = ContextKeyExpr.not(IsSessionsWindowContext.key);
 
 registerAction2(class SplitEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: SPLIT_EDITOR, title: localize2('workbench.splitEditor', 'Split Editor'), f1: true,
+			precondition: editorGroupSplitting,
 			keybinding: { primary: Keybinding.single(logicalKey('\\', { primaryKey: true })) }
 		});
 	}
@@ -51,7 +53,9 @@ for (const down of [false, true]) {
 	};
 	MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 		command: primary, alt: alternate, group: 'navigation', order: 100000,
-		when: down ? ContextKeyExpr.equals('config.workbench.editor.openSideBySideDirection', 'down') : ContextKeyExpr.notEquals('config.workbench.editor.openSideBySideDirection', 'down')
+		when: ContextKeyExpr.and(editorGroupSplitting, down
+			? ContextKeyExpr.equals('config.workbench.editor.openSideBySideDirection', 'down')
+			: ContextKeyExpr.notEquals('config.workbench.editor.openSideBySideDirection', 'down'))
 	});
 }
 
@@ -64,6 +68,7 @@ registerAction2(class ToggleEditorGroupLockAction extends Action2 {
 			id: ToggleEditorGroupLockCommandId,
 			title: localize2({ bundle: 'ash', key: 'workbench.toggleEditorGroupLock' }, 'Toggle Editor Group Lock'),
 			f1: true,
+			precondition: editorGroupSplitting,
 		});
 	}
 
@@ -99,7 +104,7 @@ registerAction2(class ToggleMaximizeEditorGroupAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.toggleMaximizeEditorGroup', title: localize2('workbench.toggleMaximizeEditorGroup', 'Toggle Maximize Editor Group'), f1: true,
-			precondition: ContextKeyExpr.or(MultipleEditorGroupsContext.isEqualTo(true), EditorPartMultipleEditorGroupsContext.isEqualTo(true), EditorPartMaximizedEditorGroupContext.isEqualTo(true)),
+			precondition: ContextKeyExpr.and(editorGroupSplitting, ContextKeyExpr.or(MultipleEditorGroupsContext.isEqualTo(true), EditorPartMultipleEditorGroupsContext.isEqualTo(true), EditorPartMaximizedEditorGroupContext.isEqualTo(true))),
 			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('m', { primaryKey: true })) },
 		});
 	}
@@ -133,6 +138,7 @@ registerAction2(class SplitEditorHorizontalAction extends Action2 {
 			id: SplitEditorHorizontalCommandId,
 			title: localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
 			tooltip: localize2({ bundle: 'ash', key: 'workbench.splitEditorHorizontal' }, 'Split Editor Horizontal'),
+			precondition: editorGroupSplitting,
 			icon: Lxicon.splitHorizontal,
 			f1: true,
 		});
@@ -151,6 +157,7 @@ registerAction2(class SplitEditorVerticalAction extends Action2 {
 			id: SplitEditorVerticalCommandId,
 			title: localize2({ bundle: 'ash', key: 'workbench.splitEditorVertical' }, 'Split Editor Vertical'),
 			tooltip: localize2({ bundle: 'ash', key: 'workbench.splitEditorVertical' }, 'Split Editor Vertical'),
+			precondition: editorGroupSplitting,
 			f1: true,
 		});
 	}
@@ -172,8 +179,8 @@ for (const definition of [
 				id: definition.id,
 				title: localize2({ bundle: 'ash', key: definition.key }, definition.title),
 				f1: true,
-				precondition: EditorsVisibleContext.isEqualTo(true),
-				menu: { id: MenuId.EditorSplitMoveSubmenu, group: '1_split', order: definition.order },
+				precondition: ContextKeyExpr.and(EditorsVisibleContext.isEqualTo(true), editorGroupSplitting),
+				menu: { id: MenuId.EditorSplitMoveSubmenu, when: editorGroupSplitting, group: '1_split', order: definition.order },
 			});
 		}
 
@@ -528,6 +535,7 @@ for (const mode of ['move', 'copy'] as const) {
 				id: mode === 'move' ? 'workbench.action.moveEditorGroupToNewWindow' : 'workbench.action.copyEditorGroupToNewWindow',
 				title: mode === 'move' ? localize2('command.MoveEditorGroupToNewWindow', 'Move Editor Group into New Window') : localize2('command.CopyEditorGroupToNewWindow', 'Copy Editor Group into New Window'),
 				f1: true,
+				precondition: editorGroupSplitting,
 			});
 		}
 		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {

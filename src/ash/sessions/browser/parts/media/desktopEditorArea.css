@@ -57,6 +57,30 @@
 	--ash-actionBar-gap: var(--ash-spacing-size40);
 }
 
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-sessions-tool-editor
+	.ash-editor-group-header {
+	& .ash-tab-list-inset {
+		/* Match the editor group header's leading inset on both block edges. */
+		--ash-tab-height: calc(
+			var(--ash-pane-titleHeight) - 2 * var(--ash-spacing-size40)
+		);
+	}
+
+	&.ash-editor-group-header-hosted {
+		/* The native title bar can be taller than an inline editor header. */
+		& > .ash-editor-tabs-control,
+		& .ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control {
+			height: 100%;
+		}
+
+		& .ash-tab-list-inset {
+			--ash-tab-height: 100%;
+			height: calc(100% - 2 * var(--ash-spacing-size40));
+		}
+	}
+}
+
 .ash-sessions-tool-editor
 	.ash-editor-group-header
 	.ash-tab-list-inset
@@ -72,11 +96,35 @@
 	border-radius: var(--ash-cornerRadius-medium);
 }
 
+.ash-sessions-window[data-layout-style="flat"]
+	[data-editor-tool="terminal"]
+	.ash-editor-group-header
+	.ash-tab-list-inset {
+	--ash-tabList-activeBackground: var(--ash-toolbar-hoverBackground);
+	--ash-tabList-hoverBackground: color-mix(
+		in srgb,
+		var(--ash-tabList-activeBackground) 50%,
+		transparent
+	);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size80);
+
+	& .ash-tab {
+		border-radius: var(--ash-cornerRadius-large);
+	}
+
+	& .ash-tab-label .ash-icon-label-icon {
+		display: none;
+	}
+}
+
 .ash-sessions-tool-editor
 	.ash-editor-group-header
 	.ash-tab-list-inset
 	.ash-tab:not(.checked, .selected):hover {
-	background-color: var(--ash-editorGroupHeader-tabsBackground);
+	background-color: var(
+		--ash-tabList-hoverBackground,
+		var(--ash-editorGroupHeader-tabsBackground)
+	);
 }
 
 .ash-sessions-tool-editor

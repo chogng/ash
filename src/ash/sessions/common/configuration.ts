@@ -2,10 +2,28 @@ import { localize } from '../../nls.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
+import { TERMINAL_CONFIG_SECTION } from '../../workbench/contrib/terminal/common/terminal.js';
+import '../../workbench/contrib/terminal/common/terminalConfiguration.js';
 
 export type SessionsLayoutStyle = 'modern' | 'flat';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+export const SESSIONS_TERMINAL_CONFIG_SECTION = 'sessions.terminal';
+for (const configuration of configurationRegistry.getRegisteredConfigurations()) {
+	if (!configuration.key.startsWith(`${TERMINAL_CONFIG_SECTION}.`)) continue;
+	const setting = configuration.setting;
+	configurationRegistry.registerConfiguration({
+		key: SESSIONS_TERMINAL_CONFIG_SECTION + configuration.key.slice(TERMINAL_CONFIG_SECTION.length),
+		defaultValue: configuration.defaultValue,
+		scope: configuration.scope,
+		schema: configuration.schema,
+		parse: configuration.parse,
+		serialize: configuration.serialize,
+		// Preserve the localized metadata getters and list these rows only in Sessions Settings.
+		setting: setting && Object.create(setting, { included: { value: false } }),
+	});
+}
 
 function registerEditorPreference<const T extends string>(key: string, defaultValue: T, values: readonly T[], title: () => string, description: () => string, labels: Readonly<Record<T, () => string>>): string {
 	return configurationRegistry.registerConfiguration<string>({
