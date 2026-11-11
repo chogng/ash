@@ -26,6 +26,7 @@ import { ISessionEditorWorkingSetService } from '../common/sessionEditorWorkingS
 /** The entry owner supplies policy; the controller never owns another product selection. */
 export interface IDesktopLayoutContext {
 	readonly isSessionContent: boolean;
+	readonly canRestoreSessionEditors: boolean;
 	readonly isDocumentContent: boolean;
 	readonly documentContent: IObservable<boolean>;
 	readonly isChangingContent: boolean;
@@ -163,7 +164,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		else { this.layout.hidePart('editor'); }
 	}
 
-	protected override canRestoreSessionEditors(): boolean { return this.context.isSessionContent; }
+	protected override canRestoreSessionEditors(): boolean { return this.context.canRestoreSessionEditors; }
 	protected override shouldShowEditor(): boolean {
 		return !this.context.isSessionContent || (this.context.isDocumentContent && (
 			(this.layout.isPartRequested('editor') && (this.editor as DesktopEditorParts).filesDetailsOpen)

@@ -47,6 +47,20 @@ import { SessionChangesEditorInput } from '../../../changes/browser/sessionChang
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
 
 suite('SessionsEntryService lifecycle and focus', () => {
+	test('Chat uses the Sessions Part without restoring Code editors, and Code returns to the grid', async () => {
+		using fixture = new EntryFixture();
+		const chatSource = 'desktop-chat';
+		await fixture.service.openEntry({ ...chatEntry, chatSource });
+		assert.deepEqual(fixture.chatSource, [chatSource]);
+		assert.deepEqual(fixture.conversationKinds, []);
+		assert.equal(fixture.service.canRestoreSessionEditors, false);
+		assert.equal(fixture.focused, 'conversation');
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.chatSource, [chatSource, undefined]);
+		assert.deepEqual(fixture.conversationKinds, ['code']);
+		assert.equal(fixture.service.canRestoreSessionEditors, true);
+	});
+
 	test('New follows the active entry draft and clears while a custom view covers it', async () => {
 		using fixture = new EntryFixture();
 		const entryDraft = observableValue('entry draft', true);
@@ -554,6 +568,7 @@ class TestCustomView extends AbstractCustomView {
 class EntryFixture extends Disposable {
 	public readonly conversationDraft = observableValue('conversation draft', false);
 	public readonly conversationKinds: Parameters<ISessionsConversationService['setConversationKind']>[0][] = [];
+	public readonly chatSource: Parameters<ISessionsConversationService['setChatSource']>[0][] = [];
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
 	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
@@ -623,7 +638,7 @@ class EntryFixture extends Disposable {
 			get fileEditorsVisible() { return true; },
 			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
 			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
-			filesPart: { isEditorVisible: false, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
+			filesPart: { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
 			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
 			onDidChangeEditors: this.editorChanged.event,
 			onDidRevealActiveEditor: this.revealActiveEditor.event,
@@ -648,6 +663,9 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
 			newDraftVisible: this.conversationDraft,
+			hasDesktopChatSource: constObservable(false),
+			setChatSource: content => { this.chatSource.push(content); },
+			focus: () => { this.focused = 'conversation'; },
 			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
 			focusDraftPicker: () => { throw new Error('Unexpected picker'); },
 			setConversationKind: async kind => {

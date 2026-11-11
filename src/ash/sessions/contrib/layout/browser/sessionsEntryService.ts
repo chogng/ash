@@ -54,6 +54,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 	private navigationQueue = Promise.resolve();
 	public isChangingContent = false;
 	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }
+	public get canRestoreSessionEditors(): boolean { return this.isSessionContent && !this.activeEntry.get()?.chatSource; }
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
 	public get newSessionCommand(): string | undefined { return this.customViews.activeCustomView.get() ? undefined : this.activeEntry.get()?.newSessionCommand; }
 
@@ -194,7 +195,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 			const retainedMode = previousEntry
 				? previousEntry.workspaceMode ?? 'chat'
 				: options?.source === 'restore' ? this.storage.get(activeEntryModeKey, StorageScope.WORKSPACE) : undefined;
-			if (entry.content !== 'editor' && (entry.conversationKind || !sharedWorkspace || !previousEntry)) {
+			if (entry.content !== 'editor' && !entry.chatSource && (entry.conversationKind || !sharedWorkspace || !previousEntry)) {
 				await this.conversation.setConversationKind(entry.conversationKind ?? (entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'chat'));
 			}
 			if (this.isDisposed) { return; }
@@ -214,6 +215,7 @@ export class SessionsEntryService extends Disposable implements ISessionsEntrySe
 				if (entry.workspaceMode === 'current') {
 					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
 				}
+				this.conversation.setChatSource(entry.chatSource);
 				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
 				const defaultNavigation = this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id;
 				const sidebarContainerId = entry.sidebarContainerId

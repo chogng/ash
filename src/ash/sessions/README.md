@@ -21,7 +21,7 @@ drafts, model presets and streamed replies. It reports when a conversation
 identity is retired or replaced so the host can maintain its own preferences.
 
 The desktop host presents those records in Ash's [Sessions view](contrib/sessions/browser/views/sessionsView.ts), Projects,
-search and `ReplyChatEditor`. The desktop Chat list model combines catalog
+search and the shared `ChatView` in the session grid. The desktop Chat list model combines catalog
 records and supplies ordered sections and row operations. The view owns
 rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
 host's contracts. The [catalog project ownership contract](SESSIONS_LIST.md#catalog-project-ownership)
@@ -39,8 +39,7 @@ In an eligible new Chat draft, selecting an Ash model asks the
 adapter for the current unsent text after model validation. The host opens an
 independent Ash Chat draft without sending a message. Its first send creates a
 Chat-owned Thread through the shared App Server.
-The `ash-chatgpt` editor resource and conversation storage keys stay stable
-across entry restoration. Previous native-experiment restore commands resolve
+Conversation storage keys stay stable across entry restoration. Previous native-experiment restore commands resolve
 to this same entry without creating or sending a new conversation.
 
 The selected model source determines where a message is sent. ChatGPT Web

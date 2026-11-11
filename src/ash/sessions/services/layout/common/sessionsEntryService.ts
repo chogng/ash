@@ -13,6 +13,8 @@ export interface ISessionsEntry {
 	readonly content: 'conversation' | 'documents' | 'editor';
 	/** A conversation entry can select a renderer independently of its workspace mode. */
 	readonly conversationKind?: SessionsConversationKind;
+	/** Model source registered with the Chat view factory. */
+	readonly chatSource?: string;
 	/** Whether the shared conversation starts visible beside this editor. */
 	readonly conversation?: 'visible' | 'optional';
 	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */

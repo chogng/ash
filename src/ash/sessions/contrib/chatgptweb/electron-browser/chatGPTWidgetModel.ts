@@ -9,7 +9,7 @@ import { localize } from '../../../../nls.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
-import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
+import type { ICompactChatModel } from '../../chat/browser/chatViewFactory.js';
 import type { ArtifactKind } from '../../../common/artifactKind.js';
 import type { ChatRequestVersion } from '../../../../workbench/contrib/chat/browser/chat.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
@@ -48,7 +48,7 @@ export function chatGPTModelEntries(backend: IChatGPTService): IObservable<reado
 }
 
 /** Projects ChatGPT's data into the Ash composer and offers the host's Ash Chat draft handoff. */
-export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorModel {
+export class ChatGPTWidgetModel extends Disposable implements ICompactChatModel {
 	private readonly changed = this._register(new Emitter<void>());
 	private readonly composerChanged = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
@@ -144,7 +144,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		this.ashCatalog.set(entries);
 	}
 
-	readonly draft: NonNullable<IReplyChatEditorModel['draft']> = {
+	readonly draft: NonNullable<ICompactChatModel['draft']> = {
 		setText: text => this.backend.setDraft(text),
 		attachFiles: files => this.backend.attachFiles(files),
 		readImage: id => this.backend.readDraftImage(id),
@@ -152,7 +152,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		removeFile: id => this.backend.removeAttachment(id),
 	};
 
-	get voice(): NonNullable<IReplyChatEditorModel['voice']> {
+	get voice(): NonNullable<ICompactChatModel['voice']> {
 		const thisModel = this;
 		return {
 			get isAvailable() { return thisModel.voiceAvailable; },

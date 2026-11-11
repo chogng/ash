@@ -96,6 +96,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	let changesVisible = false;
 	const context: IDesktopLayoutContext = {
 		isSessionContent: true,
+		canRestoreSessionEditors: true,
 		get isDocumentContent() { return documentContent.get(); },
 		documentContent,
 		isChangingContent: false,

@@ -1,4 +1,4 @@
-import { constObservable } from '../../../base/common/observable.js';
+import { constObservable, observableValue } from '../../../base/common/observable.js';
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
 import { DesktopEditorParts } from '../../browser/parts/desktopEditorParts.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
@@ -93,7 +93,8 @@ test('Sessions layout commands update menu state from their owners and release w
 		async openPreviousSession() { historyIndex = 0; changed.fire(); },
 		async openNextSession() { historyIndex = 1; changed.fire(); },
 	};
-	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService));
+	const hasDesktopChatSource = observableValue('Chat view is active', false);
+	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService), hasDesktopChatSource);
 	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
@@ -112,6 +113,10 @@ test('Sessions layout commands update menu state from their owners and release w
 		};
 		changed.fire();
 		assert.deepEqual(layoutMenu.getActions().flatMap(([, actions]) => actions).map(action => action.id), ['ash.sessions.togglePanel']);
+		hasDesktopChatSource.set(true, undefined);
+		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), true);
+		hasDesktopChatSource.set(false, undefined);
+		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), false);
 		activeSelection = undefined;
 		changed.fire();
 		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), true);

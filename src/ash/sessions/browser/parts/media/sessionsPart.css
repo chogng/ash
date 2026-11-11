@@ -16,13 +16,6 @@
 	gap: 0;
 }
 
-.ash-workbench-sessions
-	> .ash-workbench-part-content
-	> .ash-sessions-chat-view {
-	min-height: 0;
-	flex: 1 1 auto;
-}
-
 .ash-sessions-chat-view {
 	display: flex;
 	min-width: 0;
@@ -107,4 +100,11 @@
 	resize: vertical;
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
+}
+
+.ash-workbench-sessions.desktop-chat-source .ash-session-comparison-controls,
+.ash-workbench-sessions.desktop-chat-source
+	.ash-sessions-chat-view
+	> .ash-menu-activity-bar {
+	display: none;
 }

@@ -335,6 +335,17 @@ test('Sessions navigates and maximizes a split without replacing its saved geome
 	await expect(active).toHaveAttribute('data-untitled-session-id', first);
 	const widths = () => panes.evaluateAll(slots => slots.map(slot => slot.getBoundingClientRect().width));
 	const splitWidths = await widths();
+	const grid = page.locator('[data-part="sessions"] .ash-sessions-chat-grid');
+	const gridHandle = await grid.elementHandle();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await expect(grid.locator('.ash-sessions-chat-slot .ash-chatgpt-widget')).toBeVisible();
+	await expect(panes).toHaveCount(1);
+	await code.click();
+	await expect(panes).toHaveCount(2);
+	await expect(active).toHaveAttribute('data-untitled-session-id', first);
+	await expect.poll(widths).toEqual(splitWidths);
+	expect(await grid.evaluate((element, original) => element === original, gridHandle)).toBe(true);
+	await gridHandle?.dispose();
 	await commands.runCommand('sessions.toggleMaximized');
 	await expect(panes).toHaveCount(1);
 	await expect.poll(async () => (await widths())[0]).toBeGreaterThan(splitWidths[0]!);

@@ -10,17 +10,12 @@ import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/n
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import type { ChatMode } from '../../../workbench/services/chat/common/chatService.js';
 import type { SessionId, IActiveSessionThread, IUntitledChatSession } from '../../services/sessions/common/session.js';
-import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import type { SessionsConversationKind } from '../../services/sessions/common/sessionsConversation.js';
 
-export interface ISessionsConversationPane extends IDisposable {
+export interface ISessionChatView extends IDisposable {
 	readonly element: HTMLElement;
 	readonly sessionId: SessionId | undefined;
-	readonly model: {
-		readonly inputState: { readonly mode: ChatMode; };
-		selectThread(active: IActiveSessionThread): Promise<void>;
-		selectUntitledSession(session: IUntitledChatSession): void;
-	};
+	readonly model: { readonly inputState: { readonly mode: ChatMode; }; };
 	focus(): void;
 	startVoiceConversation(): Promise<void>;
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]>;
@@ -31,37 +26,53 @@ export interface ISessionsConversationPane extends IDisposable {
 	setVisible(visible: boolean): void;
 }
 
-interface ISessionViewOptions {
-	readonly selection: SessionsViewSelection;
+export interface ISessionsConversationPane extends ISessionChatView {
+	readonly model: ISessionChatView['model'] & {
+		selectThread(active: IActiveSessionThread): Promise<void>;
+		selectUntitledSession(session: IUntitledChatSession): void;
+	};
+}
+
+interface ISessionViewOptions<TSelection, TChat extends ISessionChatView> {
+	readonly selection: TSelection;
 	readonly kind: SessionsConversationKind;
-	readonly createPane: (kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: SessionsViewSelection) => ISessionsConversationPane;
-	readonly activateSelection: (selection: SessionsViewSelection) => void;
-	readonly closeSelection: (selection: SessionsViewSelection) => void;
+	readonly createPane: (kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: TSelection) => TChat;
+	readonly bindPane?: (pane: TChat, selection: TSelection) => void;
+	readonly bindingKey?: (selection: TSelection) => string;
+	readonly shouldRecreatePane?: (previous: TSelection, next: TSelection) => boolean;
+	readonly activateSelection?: (selection: TSelection) => void;
+	readonly closeSelection?: (selection: TSelection) => void;
 }
 
 let nextChatPaneId = 0;
 
 /** One Session's retained chat surface, shared by the Chat and Code compositions. */
-export class SessionView extends Disposable implements IView {
+export class SessionView<TSelection, TChat extends ISessionChatView> extends Disposable implements IView {
 	readonly element: HTMLElement;
 	readonly minimumWidth = 300;
 	readonly maximumWidth = Number.POSITIVE_INFINITY;
 	readonly minimumHeight = 240;
 	readonly maximumHeight = Number.POSITIVE_INFINITY;
-	private readonly panes = this._register(new DisposableMap<SessionsConversationKind, ISessionsConversationPane>());
+	private readonly panes = this._register(new DisposableMap<SessionsConversationKind, TChat>());
 	private readonly closeAction: HTMLElement;
-	private selection: SessionsViewSelection;
+	private selection: TSelection;
 	private kind: SessionsConversationKind;
 	private visible = true;
 	private selectionRevision = 0;
 
-	constructor(container: HTMLElement, private readonly options: ISessionViewOptions) {
+	constructor(container: HTMLElement, private readonly options: ISessionViewOptions<TSelection, TChat>) {
 		super();
 		this.selection = options.selection;
 		this.kind = options.kind;
 		this.element = h(container.ownerDocument, 'article');
 		this.element.className = 'ash-sessions-chat-slot';
-		this.attachPane(this.getOrCreatePane(this.kind));
+		this._register(toDisposable(() => this.element.remove()));
+		try {
+			this.attachPane(this.getOrCreatePane(this.kind));
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
 		this.closeAction = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-slot-close' });
 		this.closeAction.hidden = true;
 		this.element.append(this.closeAction);
@@ -73,28 +84,25 @@ export class SessionView extends Disposable implements IView {
 			iconOnly: true,
 			label: closeLabel,
 			title: closeLabel,
-			onClick: () => options.closeSelection(this.selection),
+			onClick: () => options.closeSelection?.(this.selection),
 		}));
 		const activate = () => {
-			if (!this.element.classList.contains('active')) options.activateSelection(this.selection);
+			if (!this.element.classList.contains('active')) options.activateSelection?.(this.selection);
 		};
 		this._register(addDisposableListener(this.element, 'focusin', activate));
 		this._register(addDisposableListener(this.element, 'pointerdown', activate));
-		this._register(toDisposable(() => this.element.remove()));
 	}
 
-	get currentSelection(): SessionsViewSelection { return this.selection; }
+	get currentSelection(): TSelection { return this.selection; }
 
-	get activeChat(): ISessionsConversationPane { return this.panes.get(this.kind)!; }
+	get activeChat(): TChat { return this.panes.get(this.kind)!; }
 
-	openSession(selection: SessionsViewSelection): void {
-		const previousThread = this.selection.kind === 'session' ? this.selection.active.threadId : this.selection.session.untitledSessionId;
-		const nextThread = selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId;
-		if (previousThread !== nextThread) this.selectionRevision++;
+	openSession(selection: TSelection): void {
+		const { bindingKey, shouldRecreatePane } = this.options;
 		const previous = this.selection;
 		this.selection = selection;
-		if (previous.kind === 'untitled' && selection.kind === 'untitled'
-			&& previous.session.providerId !== selection.session.providerId) {
+		if (bindingKey && bindingKey(previous) !== bindingKey(selection)) this.selectionRevision++;
+		if (shouldRecreatePane?.(previous, selection)) {
 			this.selectionRevision++;
 			const focused = this.element.contains(this.element.ownerDocument.activeElement);
 			// The host owns the pane's services. Rebind them while retaining the draft identity.
@@ -104,7 +112,7 @@ export class SessionView extends Disposable implements IView {
 			if (focused && this.visible) pane.focus();
 			return;
 		}
-		for (const [, pane] of this.panes) this.updatePane(pane);
+		for (const [, pane] of this.panes) this.options.bindPane?.(pane, this.selection);
 	}
 
 	async setConversationKind(kind: SessionsConversationKind): Promise<void> {
@@ -140,7 +148,7 @@ export class SessionView extends Disposable implements IView {
 		this.activeChat.setVisible(visible);
 	}
 
-	private getOrCreatePane(kind: SessionsConversationKind): ISessionsConversationPane {
+	private getOrCreatePane(kind: SessionsConversationKind): TChat {
 		let pane = this.panes.get(kind);
 		if (!pane) {
 			pane = this.options.createPane(kind, this.element, `ash-sessions-conversation-pane-${++nextChatPaneId}`, this.selection);
@@ -148,24 +156,15 @@ export class SessionView extends Disposable implements IView {
 			pane.setVisible(false);
 			pane.element.remove();
 			this.panes.set(kind, pane);
-			this.updatePane(pane);
+			this.options.bindPane?.(pane, this.selection);
 		}
 		return pane;
 	}
 
-	private attachPane(pane: ISessionsConversationPane): void {
+	private attachPane(pane: TChat): void {
 		this.element.dataset.conversationKind = this.kind;
 		this.element.append(pane.element);
 		pane.setVisible(this.visible);
 	}
 
-	private updatePane(pane: ISessionsConversationPane): void {
-		if (this.selection.kind === 'session') {
-			void pane.model.selectThread(this.selection.active).catch(error => console.error('Failed to select Sessions Chat thread', error));
-		} else {
-			pane.model.selectUntitledSession(this.selection.session);
-		}
-		const session = this.selection.kind === 'session' ? this.selection.active.session : this.selection.session;
-		pane.element.setAttribute('aria-label', session.title.trim() || localize('sessions.conversation.editorName', 'Session'));
-	}
 }

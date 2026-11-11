@@ -124,6 +124,7 @@ import type { IPaneComposite } from '../../../workbench/common/panecomposite.js'
 import { IViewDescriptorService, ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
 import { IPaneCompositePartService } from '../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from '../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../services/sessions/browser/sessionGitActionsService.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
 import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
@@ -1716,6 +1717,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IContextViewService, contextViewService);
 		using chat = createChatService(fake.api);
 		editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
+		editorServices.registerSingleton(ISessionGitActionsService, () => editorServices.createInstance(SessionGitActionsService));
 		editorServices.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 		editorServices.registerInstance(IContextMenuService, { showContextMenu: () => undefined } as unknown as IContextMenuService);
 		editorServices.registerInstance(IDialogService, recordingDialogService([]));

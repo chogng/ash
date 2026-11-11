@@ -1,3 +1,4 @@
+import { ChatViewFactory, IChatViewFactory } from '../../contrib/chat/browser/chatViewFactory.js';
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { SharedChatInputComposerContribution } from '../../contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import { ISessionsChatViewStateService, SessionsChatViewStateService } from '../../contrib/chat/browser/chatViewStateService.js';
@@ -451,6 +452,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const cowork = resources.add(paneServices.createInstance(NativeChatPaneFactory));
 	paneServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
 	using composerContribution = paneServices.createInstance(SharedChatInputComposerContribution);
+	paneServices.registerSingleton(IChatViewFactory, () => paneServices.createInstance(ChatViewFactory));
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		newDraftVisible: observableValue('draft visibility', false),
 		createChatPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),

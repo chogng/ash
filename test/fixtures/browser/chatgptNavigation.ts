@@ -52,8 +52,10 @@ import { ChatListForks } from '../../../src/ash/sessions/contrib/chat/browser/ch
 import { SessionActionsService } from '../../../src/ash/sessions/browser/sessionActionsService.js';
 import { IAgentSessionActionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
-import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
-import { chatGPTReplyEditor, chatGPTScrollOptimization } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
+import type { ChatView } from '../../../src/ash/sessions/contrib/chat/browser/chatView.js';
+import { ChatViewFactory } from '../../../src/ash/sessions/contrib/chat/browser/chatViewFactory.js';
+import { ISessionsConversationService } from '../../../src/ash/sessions/services/sessions/common/sessionsConversation.js';
+import { chatGPTViewSource, chatGPTScrollOptimization } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
 import { registerChatGPTResponseActions } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTResponseActions.js';
 import { ChatCopyActionRendering } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -162,7 +164,7 @@ if (parameters.has('workRow')) {
 if (parameters.has('legacyCollapsed')) {
 	for (const key of ['recent', 'projects', 'g-p-unloaded']) { storage.store(`sessions.chatgpt.navigation.collapsed.${key}`, true, StorageScope.PROFILE, StorageTarget.MACHINE); }
 }
-let widget: ReplyChatEditor;
+let widget: ChatView;
 let transcript: ((text: string, final: boolean) => void) | undefined;
 let dictationStops = 0;
 const dictation: TestDictationCapture | undefined = parameters.has('dictation') ? {
@@ -230,8 +232,8 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 		if (options?.openExternal) document.body.dataset.openedExternal = url;
 		return true;
 	} } as unknown as IOpenerService],
+	[ISessionsConversationService, { focus: () => widget.focus() } as ISessionsConversationService],
 	[IEditorService, {
-		focusActiveEditor: () => widget.focus(),
 		openEditor: async ({ resource }: { resource: URI }) => {
 			openedMaterial = (await services.get(IFileService).readFile(resource)).content;
 		},
@@ -459,12 +461,13 @@ resources.add(new MenuWorkbenchToolBar(titlebarContent, menuService, services.ge
 	toolbarOptions: { primaryGroup: () => true },
 	actionViewItemProvider: (action, options) => presentations.lookUp(Menus.TitleBarPageContent, action.id)?.(action, options, services, 0),
 }));
-widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));
-widget.create(document.getElementById('editor')!);
+const chatViews = services.createInstance(ChatViewFactory);
+resources.add(chatViews.registerSource('chatgpt', chatGPTViewSource));
+widget = resources.add(chatViews.createChatView('chatgpt', document.getElementById('editor')!));
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;
-resources.add(registerChatWorkspaceNavigation(chatGPTReplyEditor.accessibility));
+resources.add(registerChatWorkspaceNavigation(chatGPTViewSource.accessibility));
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 const descriptor = descriptors.getViewContainerById(CHAT_WORKSPACE_NAVIGATION_ID)!;
 const view = resources.add(services.createInstance(PaneComposite, host, {
@@ -473,7 +476,7 @@ const view = resources.add(services.createInstance(PaneComposite, host, {
 	onDidFailCreateView: (error: unknown) => { throw error; },
 }));
 view.setVisible(true);
-let activePane: ProjectsEditorPane | ReplyChatEditor = widget;
+let activePane: ProjectsEditorPane | undefined;
 if (parameters.has('projects')) {
 	const projects = resources.add(services.createInstance(ProjectsEditorPane));
 	projects.create(document.getElementById('editor')!);

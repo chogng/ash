@@ -16,10 +16,9 @@ import { SESSIONS_GENERAL_SETTINGS_TAG } from '../../../common/configuration.js'
 import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
 import { registerChatGPTResponseActions } from './chatGPTResponseActions.js';
-import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ElectronChatGPTNativeTransport, ElectronChatGPTTransport } from './electronChatGPTTransport.js';
-import { ChatGPTDraftModelSource, ChatGPTExperimentalContribution, experimentalChatGPTEditor, ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SESSIONS_CHATGPT_DEFAULT_BACKEND, SHOW_CHATGPT_COMMAND, SHOW_PREFERRED_CHATGPT_COMMAND } from './chatGPTWeb.js';
+import { ChatGPTDraftModelSource, ChatGPTExperimentalContribution, experimentalChatGPTViewSource, ChatGPTWebContribution, chatGPTViewSource, chatGPTScrollOptimization, chatGPTSelectedContext, SESSIONS_CHATGPT_DEFAULT_BACKEND, SHOW_CHATGPT_COMMAND, SHOW_PREFERRED_CHATGPT_COMMAND } from './chatGPTWeb.js';
 import { ChatGPTNativeService, ChatGPTService, IChatGPTNativeService, IChatGPTService } from '../browser/chatGPTService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -37,7 +36,7 @@ export const chatGPTWorkspaceSource = {
 	catalog: new SyncDescriptor(ChatGPTList),
 	additionalCatalog: new SyncDescriptor(ChatGPTNativeList),
 	draftModels: new SyncDescriptor(ChatGPTDraftModelSource),
-	accessibility: chatGPTReplyEditor.accessibility,
+	accessibility: chatGPTViewSource.accessibility,
 	openCommand: SHOW_PREFERRED_CHATGPT_COMMAND,
 	createDraft: (commands: ICommandService, origin: unknown) => commands.executeCommand<void>(SHOW_PREFERRED_CHATGPT_COMMAND, origin, true),
 };
@@ -46,8 +45,6 @@ registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
 registerSingleton(IChatGPTNativeService, ChatGPTNativeService, InstantiationType.Delayed);
 registerSingleton(IChatGPTNativeTransport, ElectronChatGPTNativeTransport, InstantiationType.Delayed);
-registerReplyChatEditor(chatGPTReplyEditor);
-registerReplyChatEditor(experimentalChatGPTEditor);
 registerChatGPTResponseActions();
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatGPT, defaultValue: true,
@@ -61,8 +58,8 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
-registerChatGPTAccessibility(chatGPTReplyEditor.accessibility.focusContext, IChatGPTService);
-registerChatGPTAccessibility(experimentalChatGPTEditor.accessibility.focusContext, IChatGPTNativeService, true);
+registerChatGPTAccessibility(chatGPTViewSource.accessibility.focusContext, IChatGPTService);
+registerChatGPTAccessibility(experimentalChatGPTViewSource.accessibility.focusContext, IChatGPTNativeService, true);
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: chatGPTScrollOptimization, defaultValue: true, scope: ConfigurationScope.APPLICATION,

@@ -292,7 +292,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	const hosts = resources.add(createDesktopEditorTestServices(editorServices, {}, browser.window.document));
 	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
-	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService));
+	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService), constObservable(false));
 	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
 	const openMenus = (): number => browser.window.document.querySelectorAll('.ash-context-view [role="menu"]').length;

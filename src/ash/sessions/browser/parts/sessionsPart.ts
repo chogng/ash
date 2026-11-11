@@ -5,7 +5,7 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { Menus } from '../menus.js';
 import { localize2 } from '../../../nls.js';
-import { NewChatView } from '../../contrib/chat/browser/chatView.js';
+import { type ChatView, NewChatView } from '../../contrib/chat/browser/chatView.js';
 import { IStorageService, StorageScope } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
@@ -23,13 +23,14 @@ import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
 import { Direction, type IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
-import { Disposable, DisposableStore, type IDisposable, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
-import type { IObservable } from '../../../base/common/observable.js';
+import { Disposable, DisposableMap, DisposableStore, type IDisposable, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
+import { observableValue, type IObservable } from '../../../base/common/observable.js';
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import { IsNewSessionContext } from '../../common/contextkeys.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IChatViewFactory } from '../../contrib/chat/browser/chatViewFactory.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 import {
@@ -55,28 +56,38 @@ export interface SessionsPartOptions {
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
 	readonly createComparisonControls?: (container: HTMLElement) => IDisposable;
-	readonly createSessionActivityBar?: (container: HTMLElement) => IDisposable;
+	readonly createSessionActivityBar?: (container: HTMLElement, hasDesktopChatSource: IObservable<boolean>) => IDisposable;
 }
 
-/** Owns one conversation grid and one retained view per visible Session. */
+type AgentSessionView = SessionView<SessionsViewSelection, ISessionsConversationPane>;
+
+/** Hosts the shared session grid and its visible SessionViews. */
 export class SessionsPart extends Part implements ISessionsConversationService {
 	get newDraftVisible(): IObservable<boolean> { return this.options.newDraftVisible; }
 	private readonly content: HTMLElement;
+	private readonly chatViews = this._register(new DisposableMap<string, SessionView<string, ChatView>>());
+	private readonly chatSource = observableValue<string | undefined>(this, undefined);
+	readonly hasDesktopChatSource = this.chatSource.map(id => id !== undefined);
+	private get desktopChatView(): SessionView<string, ChatView> | undefined {
+		const source = this.chatSource.get();
+		return source === undefined ? undefined : this.chatViews.get(source);
+	}
 	private readonly grid: SessionGridLayout;
 	private readonly empty: SessionsChatEmptyView;
-	private readonly entries = new Map<string, SessionView>();
-	private activeView: SessionView | undefined;
+	private readonly entries = new Map<string, AgentSessionView>();
+	private activeAgentView: AgentSessionView | undefined;
 	private readonly splitActive: IContextKey<boolean>;
 	private readonly infoVisible: IContextKey<boolean>;
 	private mainKeys: readonly string[] = [];
 	private kind: SessionsConversationKind = 'code';
 	private visible = true;
+	private get agentViewsVisible(): boolean { return this.visible && !this.desktopChatView; }
 	private switching = Promise.resolve();
 	private readonly popouts = new Map<
-		SessionView,
+		AgentSessionView,
 		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: ChatAuxiliaryWindow; }
 	>();
-	private readonly openingPopouts = new Map<SessionView, Promise<void>>();
+	private readonly openingPopouts = new Map<AgentSessionView, Promise<void>>();
 
 	override get minimumWidth(): number {
 		return 400;
@@ -93,13 +104,14 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IChatViewFactory private readonly chatViewsFactory: IChatViewFactory,
 	) {
 		super(container, 'sessions', themeService, storageService);
 		this.infoVisible = new RawContextKey('sessions.infoVisible', false).bindTo(contextKeys);
 		this._register(toDisposable(() => this.infoVisible.reset()));
 		this._register(
 			CommandsRegistry.register('ash.sessions.toggleInfo', () => {
-				const pane = this.activeView?.activeChat;
+				const pane = this.activeAgentView?.activeChat;
 				if (pane instanceof NewChatView) pane.toggleInfo();
 			}),
 		);
@@ -159,7 +171,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			this._register(options.createComparisonControls(this.contentDomNode));
 		}
 		if (options.createSessionActivityBar) {
-			this._register(options.createSessionActivityBar(this.content));
+			this._register(options.createSessionActivityBar(this.content, this.hasDesktopChatSource));
 		}
 		if (options.createComparisonControls || options.createSessionActivityBar) {
 			this._register(observeResize(this.grid.element, () => {
@@ -184,6 +196,26 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.updateVisibleSessions([], undefined);
 	}
 
+	setChatSource(sourceId: string | undefined): void {
+		if (sourceId === this.chatSource.get()) return;
+		const previous = this.desktopChatView;
+		if (sourceId !== undefined && !this.chatViews.has(sourceId)) {
+			const view = new SessionView(this.content, {
+				selection: sourceId,
+				kind: 'chat',
+				createPane: (_kind, container, _panelId, source) => this.chatViewsFactory.createChatView(source, container),
+			});
+			view.element.classList.add('last-slot');
+			this.chatViews.set(sourceId, view);
+		}
+		previous?.setVisible(false);
+		this.chatSource.set(sourceId, undefined);
+		this.domNode.classList.toggle('desktop-chat-source', sourceId !== undefined);
+		this.reconcileGrid();
+		this.updateContentVisibility();
+		this.updateInfoContext();
+	}
+
 	setConversationKind(kind: SessionsConversationKind): Promise<void> {
 		const switchKind = async () => {
 			if (this.isDisposed) return;
@@ -200,15 +232,16 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	async didActiveCodeHistoryFail(): Promise<boolean> {
-		const pane = this.activeView?.activeChat;
+		const pane = this.activeAgentView?.activeChat;
 		if (!(pane instanceof NewChatView) || !pane.sessionId) return false;
 		await pane.model.pendingHistoryBinding;
-		return this.activeView?.activeChat === pane && !!pane.model.historyStatus && pane.model.items.length === 0;
+		return this.activeAgentView?.activeChat === pane && !!pane.model.historyStatus && pane.model.items.length === 0;
 	}
 
 	focus(): void {
-		if (this.activeView) this.popouts.get(this.activeView)?.window.window.focus();
-		this.activeView?.focus();
+		const active = this.desktopChatView ?? this.activeAgentView;
+		if (active === this.activeAgentView && active) this.popouts.get(active)?.window.window.focus();
+		if (active === this.activeAgentView || this.visible) active?.focus();
 	}
 
 	async openInNewWindow(selection: SessionsViewSelection): Promise<void> {
@@ -233,7 +266,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		}
 	}
 
-	private async detachView(view: SessionView, selection: SessionsViewSelection): Promise<void> {
+	private async detachView(view: AgentSessionView, selection: SessionsViewSelection): Promise<void> {
 		const title = selection.kind === 'session' ? selection.active.session.title : selection.session.title;
 		const window = await this.auxiliaryWindows.open({ title, width: 900, height: 760 });
 		if (this.isDisposed || ![...this.entries.values()].includes(view)) {
@@ -275,11 +308,11 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					if (!this.isDisposed && [...this.entries.values()].includes(view)) {
 						this.options.activateSelection(view.currentSelection);
 						this.reconcileGrid();
-						view.setVisible(this.visible);
+						view.setVisible(this.agentViewsVisible);
 						void view
 							.setConversationKind(this.kind)
 							.catch(error => this.notifications.error(String(error)));
-						if (this.visible && this.activeView === view) view.focus();
+						if (this.agentViewsVisible && this.activeAgentView === view) view.focus();
 					}
 					window.dispose();
 				}),
@@ -324,8 +357,8 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	private get activeGridId(): string | undefined {
-		const active = this.activeView;
-		return active && !this.popouts.has(active) ? this.mainKeys.find(id => this.entries.get(id) === active) : undefined;
+		const active = this.activeAgentView;
+		return !this.desktopChatView && active && !this.popouts.has(active) ? this.mainKeys.find(id => this.entries.get(id) === active) : undefined;
 	}
 
 	private focusNeighbor(direction: Direction): void {
@@ -338,68 +371,69 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		view.focus();
 	}
 	private reconcileGrid(): void {
-		const entries = this.mainKeys.flatMap(id => {
+		const desktopChat = this.desktopChatView;
+		const source = this.chatSource.get();
+		const entries = desktopChat && source !== undefined ? [{ id: source, view: desktopChat }] : this.mainKeys.flatMap(id => {
 			const view = this.entries.get(id);
 			return view ? [{ id, view: this.popouts.get(view)?.placeholder ?? view }] : [];
 		});
-		const docked = entries.filter(entry => entry.view instanceof SessionView);
-		for (const { view } of docked) {
-			if (view instanceof SessionView) view.setCloseVisible(docked.length > 1);
-		}
-		const active = [...this.entries].find(([, view]) => view === this.activeView)?.[0] ?? 'empty';
-		this.splitActive.set(this.visible && entries.length > 1 && this.activeGridId !== undefined);
-		this.grid.reconcile(entries.length ? entries : [{ id: 'empty', view: this.empty }], active);
+		const docked = entries.flatMap(({ view }) => view instanceof SessionView ? [view] : []);
+		for (const view of docked) view.setCloseVisible(docked.length > 1);
+		const active = source ?? [...this.entries].find(([, view]) => view === this.activeAgentView)?.[0] ?? 'empty';
+		this.splitActive.set(this.agentViewsVisible && entries.length > 1 && this.activeGridId !== undefined);
+		this.content.classList.toggle('single-chat', entries.length === 1);
+		this.grid.reconcile(entries.length ? entries : [{ id: 'empty', view: this.empty }], active, desktopChat === undefined);
 	}
 
 	focusDraftPicker(picker: 'workspace' | 'environment'): void {
-		const view = this.activeView;
-		if (!this.visible || !view || this.popouts.has(view) || view.currentSelection.kind !== 'untitled') return;
+		const view = this.activeAgentView;
+		if (!this.agentViewsVisible || !view || this.popouts.has(view) || view.currentSelection.kind !== 'untitled') return;
 		const pane = view.activeChat;
 		if (pane instanceof NewChatView) pane.focusDraftPicker(picker);
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		if (!this.activeView)
+		if (!this.activeAgentView)
 			throw new Error(
 				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
 			);
-		this.activeView.activeChat.addContext(attachment);
+		this.activeAgentView.activeChat.addContext(attachment);
 	}
 
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]> {
-		const view = this.activeView;
+		const view = this.activeAgentView;
 		if (!view || this.popouts.has(view)) return Promise.resolve([]);
 		return view.activeChat.acquireContext(prepare);
 	}
 
 	appendToDraft(text: string): void {
-		if (!this.activeView)
+		if (!this.activeAgentView)
 			throw new Error(
 				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
 			);
-		this.activeView.activeChat.appendToDraft(text);
+		this.activeAgentView.activeChat.appendToDraft(text);
 	}
 
 	startVoiceConversation(): Promise<void> {
-		if (!this.activeView)
-			return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
-		return this.activeView.activeChat.startVoiceConversation();
+		const view = this.desktopChatView ?? this.activeAgentView;
+		if (!view) return Promise.reject(new Error(localize('agentsVoice.noChat', 'Open a Chat before starting voice.')));
+		return view.activeChat.startVoiceConversation();
 	}
 
 	async captureActiveDraft(): Promise<
 		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined
 	> {
 		await this.switching;
-		return this.activeView?.activeChat.captureDraft();
+		return this.activeAgentView?.activeChat.captureDraft();
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
-		if (!this.activeView)
+		if (!this.activeAgentView)
 			throw new Error(
 				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
 			);
-		this.activeView.activeChat.restoreDraft(draft);
-		if (this.visible) this.activeView.focus();
+		this.activeAgentView.activeChat.restoreDraft(draft);
+		if (this.visible) this.activeAgentView.focus();
 	}
 
 	updateVisibleSessions(
@@ -420,11 +454,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			this.entries.delete(key);
 			this.entries.set(destination, view);
 		}
-		this.content.classList.toggle('single-chat', selections.length === 1);
 		this.empty.update(this.sessionService.state, this.sessionService.error);
 		this.mainKeys = selections.map(sessionViewSelectionKey);
 		const desired = new Set(this.mainKeys);
-		const removed: SessionView[] = [];
+		const removed: AgentSessionView[] = [];
 		for (const [key, view] of this.entries) {
 			if (desired.has(key)) continue;
 			if (this.popouts.has(view)) {
@@ -478,6 +511,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					kind: this.kind,
 					createPane: (kind, container, panelId, selected) =>
 						this.createPane(kind, container, panelId, selected),
+					bindPane: bindAgentSession,
+					bindingKey: selection => selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId,
+					shouldRecreatePane: (previous, next) => previous.kind === 'untitled' && next.kind === 'untitled'
+						&& previous.session.providerId !== next.session.providerId,
 					activateSelection: this.options.activateSelection,
 					closeSelection: this.options.closeSelection,
 				});
@@ -486,14 +523,14 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			}
 			view.openSession(selection);
 			const popup = this.popouts.get(view);
-			view.setVisible(this.visible || popup !== undefined);
+			view.setVisible(this.agentViewsVisible || popup !== undefined);
 			if (popup) {
 				const title = selection.kind === 'session' ? selection.active.session.title : selection.session.title;
 				popup.shell.setTitle(title);
 			}
 			view.element.classList.toggle('last-slot', selection === selections.at(-1));
 		}
-		this.activeView = active ? this.entries.get(sessionViewSelectionKey(active)) : undefined;
+		this.activeAgentView = active ? this.entries.get(sessionViewSelectionKey(active)) : undefined;
 		this.updateInfoContext();
 		this.reconcileGrid();
 		for (const view of removed) {
@@ -505,9 +542,14 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.visible = visible;
-		this.grid.setVisible(visible);
-		this.splitActive.set(visible && this.mainKeys.length > 1 && this.activeGridId !== undefined);
-		for (const view of this.entries.values()) view.setVisible(visible || this.popouts.has(view));
+		this.updateContentVisibility();
+	}
+
+	private updateContentVisibility(): void {
+		this.desktopChatView?.setVisible(this.visible);
+		this.grid.setVisible(this.visible);
+		this.splitActive.set(this.agentViewsVisible && this.mainKeys.length > 1 && this.activeGridId !== undefined);
+		for (const view of this.entries.values()) view.setVisible(this.agentViewsVisible || this.popouts.has(view));
 	}
 
 	override layout(dimension: Dimension): void {
@@ -516,8 +558,8 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	private updateInfoContext(): void {
-		const pane = this.activeView?.activeChat;
-		this.infoVisible.set(pane instanceof NewChatView && pane.infoVisible);
+		const pane = this.activeAgentView?.activeChat;
+		this.infoVisible.set(!this.desktopChatView && pane instanceof NewChatView && pane.infoVisible);
 	}
 
 	private createPane(
@@ -528,10 +570,20 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	): ISessionsConversationPane {
 		const options = this.options;
 		if (kind === 'chat') return options.createChatPane(container, panelId, selection);
-		return this.services.createInstance(NewChatView, container, {
+		return this.chatViewsFactory.createSessionChatView(container, {
 			panelId, selection, createNewSession: options.createNewSession, onDidChangeInfo: () => this.updateInfoContext(),
 		});
 	}
+}
+
+function bindAgentSession(pane: ISessionsConversationPane, selection: SessionsViewSelection): void {
+	if (selection.kind === 'session') {
+		void pane.model.selectThread(selection.active).catch(error => console.error('Failed to select Sessions Chat thread', error));
+	} else {
+		pane.model.selectUntitledSession(selection.session);
+	}
+	const session = selection.kind === 'session' ? selection.active.session : selection.session;
+	pane.element.setAttribute('aria-label', session.title.trim() || localize('sessions.conversation.editorName', 'Session'));
 }
 
 class SessionsChatEmptyView extends Disposable implements IView {

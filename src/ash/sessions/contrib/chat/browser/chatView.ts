@@ -5,18 +5,69 @@ import { h } from '../../../../base/browser/dom.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { LocalChatSessionUri } from '../../../../workbench/contrib/chat/common/model/chatUri.js';
 import { ISessionsChatViewStateService } from './chatViewStateService.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ChatWidgetModel, type ChatWidgetSelection } from '../../../browser/chatWidgetModel.js';
 import { SessionInfoRail } from '../../../browser/parts/sessionInfoRail.js';
-import type { ISessionsConversationPane } from '../../../browser/parts/sessionView.js';
+import type { ISessionChatView, ISessionsConversationPane } from '../../../browser/parts/sessionView.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionContext } from '../../../services/sessions/browser/sessionContext.js';
 import { NewChatInSessionWidget } from './newChatInSessionWidget.js';
 import { NewChatWidget } from './newChatWidget.js';
 import type { ChatMessagePresentation } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { SessionEnvironmentActions } from './sessionEnvironmentActions.js';
+import { observableValue, type IObservable } from '../../../../base/common/observable.js';
+import type { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
+import type { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+
+interface IChatViewOptions {
+	readonly className?: string;
+	readonly label?: string;
+}
+
+/** Hosts the shared transcript and composer for a SessionView. */
+export class ChatView<TWidget extends ChatWidget = ChatWidget> extends Disposable implements ISessionChatView {
+	readonly element: HTMLElement;
+	protected readonly widget: TWidget;
+	private readonly shown = observableValue(this, false);
+	protected get visible(): boolean { return this.shown.get(); }
+
+	constructor(
+		container: HTMLElement,
+		createWidget: (element: HTMLElement, owner: DisposableStore, visible: IObservable<boolean>) => TWidget,
+		options?: IChatViewOptions,
+	) {
+		super();
+		this.element = h(container.ownerDocument, 'section', {
+			className: options?.className ? `ash-sessions-chat-content ${options.className}` : 'ash-sessions-chat-content',
+			attributes: options?.label ? { 'aria-label': options.label } : {},
+		});
+		container.append(this.element);
+		this._register(toDisposable(() => this.element.remove()));
+		try {
+			this.widget = this._register(createWidget(this.element, this._store, this.shown));
+			this.widget.setVisible(false);
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+	}
+
+	get model(): TWidget['model'] { return this.widget.model; }
+	get sessionId(): ISessionChatView['sessionId'] { return this.widget.sessionId; }
+	focus(): void { this.widget.focus(); }
+	startVoiceConversation(): Promise<void> { return this.widget.startVoiceConversation(); }
+	addContext(...args: Parameters<ISessionChatView['addContext']>): void { this.widget.addContext(...args); }
+	acquireContext(...args: Parameters<ISessionChatView['acquireContext']>): ReturnType<ISessionChatView['acquireContext']> { return this.widget.acquireContext(...args); }
+	appendToDraft(...args: Parameters<ISessionChatView['appendToDraft']>): void { this.widget.appendToDraft(...args); }
+	captureDraft(): ReturnType<ISessionChatView['captureDraft']> { return this.widget.captureDraft(); }
+	restoreDraft(...args: Parameters<ISessionChatView['restoreDraft']>): void { this.widget.restoreDraft(...args); }
+	setVisible(visible: boolean): void {
+		this.widget.setVisible(visible);
+		this.shown.set(visible, undefined);
+	}
+}
 
 interface INewChatViewOptions {
 	readonly panelId: string;
@@ -27,11 +78,8 @@ interface INewChatViewOptions {
 }
 
 /** Retains one Code surface and its provider scope when a draft acquires a durable Session identity. */
-export class NewChatView extends Disposable implements ISessionsConversationPane {
-	readonly element: HTMLElement;
-	private readonly widget: NewChatWidget;
+export class NewChatView extends ChatView<NewChatWidget> implements ISessionsConversationPane {
 	private readonly info: SessionInfoRail;
-	private visible = false;
 	private viewStateResource: URI | undefined;
 
 	constructor(
@@ -42,14 +90,10 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 		@ISessionsManagementService sessions: ISessionsManagementService,
 		@ISessionsChatViewStateService private readonly viewStateService: ISessionsChatViewStateService,
 	) {
-		super();
-		this.element = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-content' });
-		container.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
-
 		const { selection, panelId, createNewSession, onDidChangeInfo } = options;
-		try {
-			const scope = this._register(providerScopes.createScope(
+		let scope!: InstantiationService;
+		super(container, (element, owner) => {
+			scope = owner.add(providerScopes.createScope(
 				selection.kind === 'session' ? selection.active.session.sessionId : undefined,
 				selection.kind === 'untitled' ? selection.session.providerId : undefined,
 			));
@@ -57,13 +101,16 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 			try {
 				scope.registerInstance(ISessionContext, model);
 				const log = scope.getOptional(ILogService);
-				if (log) this._register(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
-				this.widget = this._register(scope.createInstance(model.isNestedDraft ? NewChatInSessionWidget : NewChatWidget,
-					this.element, { panelId, model, createNewSession, messagePresentation: options.messagePresentation }));
+				if (log) owner.add(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
+				return scope.createInstance(model.isNestedDraft ? NewChatInSessionWidget : NewChatWidget,
+					element, { panelId, model, createNewSession, messagePresentation: options.messagePresentation });
 			} catch (error) {
 				model.dispose();
 				throw error;
 			}
+		});
+		const model = this.model;
+		try {
 			this.info = this._register(scope.createInstance(SessionInfoRail, this.element, model, () => this.widget.focus(),
 				(container: HTMLElement) => scope.createInstance(SessionEnvironmentActions, container, model)));
 			this._register(this.info.onDidChange(onDidChangeInfo));
@@ -84,26 +131,16 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 		}
 	}
 
-	public get model(): ChatWidgetModel { return this.widget.model; }
-	public get sessionId(): ISessionsConversationPane['sessionId'] { return this.widget.sessionId; }
 	public get infoVisible(): boolean { return this.info.visible; }
 	public toggleInfo(): void { this.info.toggle(); }
-	public focus(): void { this.widget.focus(); }
 	public saveState(): Promise<void> { return this.widget.saveState(); }
 	public focusDraftPicker(picker: 'workspace' | 'environment'): void {
 		if (picker === 'workspace') this.widget.focusWorkspacePicker();
 		else this.widget.focusEnvironmentPicker();
 	}
-	public startVoiceConversation(): Promise<void> { return this.widget.startVoiceConversation(); }
-	public addContext(...args: Parameters<ISessionsConversationPane['addContext']>): void { this.widget.addContext(...args); }
-	acquireContext(...args: Parameters<ISessionsConversationPane['acquireContext']>): ReturnType<ISessionsConversationPane['acquireContext']> { return this.widget.acquireContext(...args); }
-	public appendToDraft(...args: Parameters<ISessionsConversationPane['appendToDraft']>): void { this.widget.appendToDraft(...args); }
-	public captureDraft(): ReturnType<ISessionsConversationPane['captureDraft']> { return this.widget.captureDraft(); }
-	public restoreDraft(...args: Parameters<ISessionsConversationPane['restoreDraft']>): void { this.widget.restoreDraft(...args); }
-	public setVisible(visible: boolean): void {
+	override setVisible(visible: boolean): void {
 		if (!visible) this.saveConversationViewState();
-		this.visible = visible;
-		this.widget.setVisible(visible);
+		super.setVisible(visible);
 		this.info.setVisible(visible);
 		this.restoreConversationViewState();
 	}
@@ -114,7 +151,7 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 	}
 
 	private saveConversationViewState(): void {
-		if (this.visible && this.viewStateResource) {
+		if (this.viewStateResource && this.visible) {
 			this.viewStateService.set(this.viewStateResource, this.widget.getViewState());
 		}
 	}

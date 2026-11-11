@@ -73,22 +73,22 @@ test('Sessions discards an unavailable saved entry and completes restoration wit
 	expect(errors).toEqual([]);
 });
 
-test('Sessions New opens ChatGPT and shares its retained EditorPane', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+test('Sessions New opens ChatGPT in the retained Sessions Part', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chatgpt = navigation.getByRole('button', { name: 'New', exact: true });
 	await expect(navigation.getByRole('button', { name: 'ChatGPT', exact: true })).toHaveCount(0);
 	await chatgpt.click();
-	const editor = page.locator('[data-part="editor"] .ash-chatgpt-widget');
+	const chat = page.locator('[data-part="sessions"] .ash-sessions-chat-grid .ash-sessions-chat-slot .ash-chatgpt-widget');
 	const sidebar = page.locator('[data-part="sidebar"] [data-view-container-id="sessions.chatgpt.navigation"]');
-	await expect(editor).toBeVisible();
+	await expect(chat).toBeVisible();
 	await expect(sidebar).toBeVisible();
 	await expect(chatgpt).toHaveAttribute('aria-current', 'page');
-	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-editor-title-control:visible')).toHaveCount(0);
+	await expect(page.locator('[data-part="editor"] .ash-chatgpt-widget')).toHaveCount(0);
 	await expect(sidebar.getByRole('searchbox')).toHaveCount(0);
-	const retained = await editor.elementHandle();
+	const retained = await chat.elementHandle();
 	await expect(sidebar.locator('details')).toHaveCount(0);
-	const input = editor.getByRole('textbox', { name: 'Ask ChatGPT (Experimental)', exact: true });
+	const input = chat.getByRole('textbox', { name: 'Ask ChatGPT (Experimental)', exact: true });
 	await input.focus();
 	await input.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/ChatGPT \(Experimental\) uses your existing Codex login/);
@@ -97,18 +97,18 @@ test('Sessions New opens ChatGPT and shares its retained EditorPane', { tag: ['@
 	await testInfo.attach('chatgpt-parts', { body: await page.screenshot(), contentType: 'image/png' });
 	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 	await expect(sidebar).toBeHidden();
-	await expect(editor).toBeVisible();
+	await expect(chat).toBeVisible();
 	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show sidebar', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	const menus = new Menus(page);
 	await menus.select(application, () => chatgpt.click({ button: 'right' }), ['Reload']);
 	await expect(chatgpt).toHaveAttribute('aria-current', 'page');
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
-	await expect(editor).toBeHidden();
+	await expect(chat).toBeHidden();
 	await chatgpt.click();
-	await expect(editor).toBeVisible();
+	await expect(chat).toBeVisible();
 	await expect(sidebar).toBeVisible();
-	expect(await editor.evaluate((element, previous) => element === previous, retained)).toBe(true);
+	expect(await chat.evaluate((element, previous) => element === previous, retained)).toBe(true);
 	await input.focus();
 	await input.press('Alt+F2');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/ChatGPT/);

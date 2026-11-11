@@ -1338,8 +1338,10 @@ test.describe('Unified Chat sidebar', () => {
 			await input.press('Enter');
 			await expect(titlebar.getByRole('button', { name: `重命名会话（${title}）` })).toBeFocused();
 		};
-		const sidebar = page.locator('.ash-chat-navigation');
-		const editor = page.locator('.ash-chatgpt-widget');
+		const sidebar = page.locator('[data-part="sidebar"] .ash-chat-navigation');
+		const grid = page.locator('[data-part="sessions"] .ash-sessions-chat-grid');
+		const retainedGrid = await grid.elementHandle();
+		const editor = grid.locator('.ash-sessions-chat-slot .ash-chatgpt-widget');
 		const chatGPTComposer = new Editor(editor);
 		const modeControl = page.locator('.ash-window-mode-control');
 		const chatMode = modeControl.getByRole('button', { name: '聊天 / Agents', exact: true });
@@ -1375,7 +1377,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(picker.getByText('选择模型新建 Ash 对话…', { exact: true })).toHaveCount(0);
 		await picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true }).click();
 
-		const ash = page.locator('.ash-native-chat-widget .ash-chat');
+		const ash = grid.locator('.ash-sessions-chat-slot .ash-native-chat-widget .ash-chat');
 		const ashComposer = new Editor(ash);
 		await ashComposer.waitForEditorFocus();
 		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
@@ -1404,6 +1406,8 @@ test.describe('Unified Chat sidebar', () => {
 		const sentAfter = Date.now();
 		await page.keyboard.press('Enter');
 		await expect(ash).toContainText('Answer from Ash');
+		expect(await grid.evaluate((element, original) => element === original, retainedGrid)).toBe(true);
+		await retainedGrid?.dispose();
 		const ashRequestTime = ash.locator('.ash-chat-item-userMessage time');
 		const ashReplyTime = ash.locator('.ash-chat-item-agentMessage time').first();
 		await expect(ashRequestTime).toHaveCount(0);

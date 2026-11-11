@@ -354,8 +354,9 @@ exports.activate = context => {
 		const activity = agents.getByRole('button', { name: 'Canvas', exact: true });
 		await activity.click();
 		await commands.select('Fixture board');
-		const canvas = agents.locator('.ash-session-canvas:visible');
+		const canvas = agents.locator('[data-part="editor"] .ash-session-canvas:visible');
 		await expect(canvas).toBeVisible();
+		await expect(agents.locator('[data-part="sessions"] .ash-sessions-chat-slot.active')).toBeVisible();
 		await installMainChannelTestClient(agents);
 		const views = () => agents.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 		const native = (await views()).find(view => view.canvas?.canvasId === 'board')!;

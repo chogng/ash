@@ -15,7 +15,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../chat/common/constants.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
@@ -63,7 +63,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 	constructor(
 		@IChatGPTService private readonly chat: IChatGPTService,
 		@ICommandService private readonly commands: ICommandService,
-		@IEditorService private readonly editors: IEditorService,
+		@ISessionsConversationService private readonly conversation: ISessionsConversationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IClipboardService private readonly clipboard: IClipboardService,
@@ -362,7 +362,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		const opened = await this.commands.executeCommand(this.chat.native ? SHOW_EXPERIMENTAL_CHATGPT : 'sessions.show.chatgpt');
 		if (opened === false || signal.aborted) return;
 		await this.chat.select(id);
-		if (!signal.aborted) this.editors.focusActiveEditor();
+		if (!signal.aborted) this.conversation.focus();
 	}
 
 	private conversationCatalogId(id: string): string {

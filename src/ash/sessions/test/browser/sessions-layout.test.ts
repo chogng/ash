@@ -1112,7 +1112,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	services.registerInstance(ILayoutService, {} as import('../../browser/workbench.js').IAgentWorkbenchLayoutService);
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
-	using controller = services.createInstance(Controller, editor.pageGroupId, { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('Code', true), isChangingContent: false, runOperation: (operation: () => Promise<void>) => operation() });
+	using controller = services.createInstance(Controller, editor.pageGroupId, { isSessionContent: true, canRestoreSessionEditors: true, isDocumentContent: true, documentContent: observableValue('Code', true), isChangingContent: false, runOperation: (operation: () => Promise<void>) => operation() });
 	const file = { resource: URI.file('/fixture/a.txt') };
 	await editor.openEditor(file, { pinned: true });
 	const first = editor.activeGroup, firstPane = first.activePane;

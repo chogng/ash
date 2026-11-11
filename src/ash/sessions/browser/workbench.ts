@@ -944,8 +944,8 @@ export abstract class Workbench extends Disposable {
 			services.createInstance(SessionsPart, this.domNode, {
 				newDraftVisible,
 				createComparisonControls: container => services.createInstance(SessionComparisonControls, container),
-				createSessionActivityBar: container => services.createInstance(
-					SessionActivityBar, container, conversationVisible, () => sessionsPart?.focus(),
+				createSessionActivityBar: (container, hasDesktopChatSource) => services.createInstance(
+					SessionActivityBar, container, derived(reader => conversationVisible.read(reader) && !hasDesktopChatSource.read(reader)), () => sessionsPart?.focus(),
 				),
 				createChatPane: (container, panelId, selection) =>
 					nativeChat.createPane(container, panelId, selection, () => {
@@ -965,6 +965,7 @@ export abstract class Workbench extends Disposable {
 		);
 		services.registerInstance(ISessionsConversationService, sessionsPart);
 		const part = sessionsPart;
+		const isAgentSessionVisible = () => layout.isPartVisible('sessions') && !part.hasDesktopChatSource.get();
 		this._register(autorun(reader => {
 			const { visibleSelections, activeSelection } = view.getSelection(reader);
 			part.updateVisibleSessions(visibleSelections, activeSelection);
@@ -992,7 +993,7 @@ export abstract class Workbench extends Disposable {
 						await scope.services.chat.readThread(target.sessionId, target.threadId);
 						assertCurrent();
 						await view.openThread(scope.identity(target.sessionId), scope.identity(target.threadId), options);
-						if (!signal.aborted && !layout.isPartVisible('sessions')) await this.showChat();
+						if (!signal.aborted && !isAgentSessionVisible()) await this.showChat();
 					} else {
 						const store = services.get(ISessionsProvidersService).getProvider(scope.providerId)?.automations;
 						if (!store?.getAutomationByBackendId) throw new Error(localize('chat.tool.resultUnavailable', 'This result is unavailable on its originating host.'));
@@ -1022,11 +1023,11 @@ export abstract class Workbench extends Disposable {
 				const { sessionId, threadId } = await conversationLinks.open(address, view, options);
 				const selected = view.activeSelection;
 				if (selected?.kind !== 'session' || selected.active.session.sessionId !== sessionId || selected.active.threadId !== threadId) return;
-				if (!layout.isPartVisible('sessions')) await this.showChat();
+				if (!isAgentSessionVisible()) await this.showChat();
 				focusConversation(sessionId, threadId);
 			},
 			getActiveConversation: () => {
-				if (!layout.isPartVisible('sessions')) return undefined;
+				if (!isAgentSessionVisible()) return undefined;
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
 			},
@@ -1045,19 +1046,19 @@ export abstract class Workbench extends Disposable {
 					sessionsPart!.focus();
 				}).catch(error => notificationService.error(String(error)));
 			},
-			captureActiveDraft: () => layout.isPartVisible('sessions') ? sessionsPart!.captureActiveDraft() : Promise.resolve(undefined),
+			captureActiveDraft: () => isAgentSessionVisible() ? part.captureActiveDraft() : Promise.resolve(undefined),
 			openConversation: async (sessionId, threadId, providerId) => {
 				if (providerId !== undefined) {
 					sessionId = sessionIdentity(providerId, sessionId, provider.id);
 					threadId = sessionIdentity(providerId, threadId, provider.id);
 				}
 				// Visible Code and Chat panes keep their current composition and draft owner.
-				if (!layout.isPartVisible('sessions')) await this.showChat();
+				if (!isAgentSessionVisible()) await this.showChat();
 				await view.openThread(sessionId, threadId);
 				focusConversation(sessionId, threadId);
 			},
 			openSideConversation: async (sessionId, threadId) => {
-				if (!layout.isPartVisible('sessions')) await this.showChat();
+				if (!isAgentSessionVisible()) await this.showChat();
 				await view.openThread(sessionId, threadId, { sideBySide: true });
 				focusConversation(sessionId, threadId);
 			},
@@ -1261,7 +1262,7 @@ export abstract class Workbench extends Disposable {
 		// Browser integration resolves editor and view services; install it after the window graph is complete.
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, configurationService));
-		this._register(registerLayoutActions(layout, view, contextKeys, editor, workspace));
+		this._register(registerLayoutActions(layout, view, contextKeys, editor, workspace, part.hasDesktopChatSource));
 		this._register(registerAddFileAsContextAction(this.sessionsPart));
 		const terminalContribution = this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
