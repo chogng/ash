@@ -1,4 +1,3 @@
-import { renderAsPlaintext } from '../../../../../base/browser/markdownRenderer.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { canceled } from '../../../../../base/common/errors.js';
@@ -9,6 +8,7 @@ import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contex
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ISpeechService, HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
 import { ChatResponseActionContext, IChatWidgetService } from '../../browser/chat.js';
+import { renderChatMarkdownPlaintext } from '../../browser/widget/chatMarkdownRichContent.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 
 export class StartVoiceChatAction extends Action2 {
@@ -81,7 +81,7 @@ export class ReadChatResponseAloud extends Action2 {
 		});
 		try {
 			if (source.token.isCancellationRequested) throw canceled();
-			const text = renderAsPlaintext(markdown);
+			const text = renderChatMarkdownPlaintext(markdown);
 			if (!text) return;
 			const session = await speech.createTextToSpeechSession(source.token, 'chat');
 			for (let offset = 0; offset < text.length;) {

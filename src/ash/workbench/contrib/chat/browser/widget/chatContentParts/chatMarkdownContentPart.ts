@@ -539,7 +539,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			return undefined;
 		}
 		const document = element.ownerDocument;
-		const renderOptions = getChatMarkdownRenderOptions(options);
+		const renderOptions = getChatMarkdownRenderOptions(markdown.value, options);
 		const template = document.createElement('template');
 		const sanitizer = { ownerDocument: document, markdown, sanitizerConfig: renderOptions.sanitizerConfig };
 		const policy = JSON.stringify([markdown.isTrusted, markdown.baseUri?.toString(), renderOptions.markedOptions, renderOptions.sanitizerConfig, !!renderOptions.markedExtensions?.length]);

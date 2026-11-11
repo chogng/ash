@@ -6,9 +6,10 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IMarkdownRendererService, type IMarkdownRenderer } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { MarkedKatexSupport } from '../../../markdown/browser/markedKatexSupport.js';
+import { getChatMarkdownExtensions } from './chatCjkMarkdown.js';
 
 /** Shared rendering policy for agent-authored Markdown. */
-export function getChatMarkdownRenderOptions(options: MarkdownRenderOptions = {}): MarkdownRenderOptions {
+export function getChatMarkdownRenderOptions(source: string, options: MarkdownRenderOptions): MarkdownRenderOptions {
 	const sanitizer = {
 		replaceWithPlaintext: true,
 		...options.sanitizerConfig,
@@ -17,6 +18,7 @@ export function getChatMarkdownRenderOptions(options: MarkdownRenderOptions = {}
 	return {
 		...options,
 		markedOptions: { gfm: true, breaks: true, ...options.markedOptions },
+		markedExtensions: getChatMarkdownExtensions(source, options.markedExtensions),
 		sanitizerConfig: {
 			...sanitizer,
 			...MarkedKatexSupport.getSanitizerOptions({
@@ -42,9 +44,8 @@ export class ChatContentMarkdownRenderer extends Disposable implements IMarkdown
 		let hasResourceImages = false;
 		// Structured parts can carry nested Markdown even when their references contain no math syntax.
 		const mathSyntax = !!options.markedExtensions?.length || /[$\\]|`{3}|~{3}/u.test(markdown.value);
-		const renderOptions = getChatMarkdownRenderOptions({
+		const renderOptions = getChatMarkdownRenderOptions(markdown.value, {
 			...options,
-			markedExtensions: mathSyntax ? [MarkedKatexSupport.getExtension(), ...(options.markedExtensions ?? [])] : options.markedExtensions,
 			ownerDocument: outElement?.ownerDocument ?? options.ownerDocument,
 			imageResourceLoader: options.imageResourceLoader ? resource => {
 				hasResourceImages = true;
@@ -56,7 +57,10 @@ export class ChatContentMarkdownRenderer extends Disposable implements IMarkdown
 				options.asyncRenderCallback?.();
 			},
 		});
-		const result = this.markdownRenderer.render(markdown, renderOptions, outElement);
+		const result = this.markdownRenderer.render(markdown, mathSyntax ? {
+			...renderOptions,
+			markedExtensions: [MarkedKatexSupport.getExtension(), ...(renderOptions.markedExtensions ?? [])],
+		} : renderOptions, outElement);
 		// A resource image has no src while its loader is pending. Keep its node
 		// so the base render can install the result and own the object URL lifetime.
 		this.renderUnavailableMedia(result.element, hasResourceImages);

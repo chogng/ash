@@ -187,6 +187,28 @@ test('long history virtualizes around a live MCP App and retains visited image r
 	await expect(tool.getByRole('button', { name: 'Open interactive view', exact: true })).toBeFocused();
 });
 
+test('streamed CJK Markdown matches a full render after append, completion and correction', async ({ page }) => {
+	await page.goto('/chatTranscript.html?sessions&locale=zh-CN');
+	const prefix = 'Stable **bold** [link](https://example.org) text. '.repeat(36);
+	const opening = `${prefix}这是**「重点`;
+	const linked = `${opening}」**内容。详情见 https://example.com`;
+	const completed = `${linked}。下一句。`;
+	const corrected = completed.replace('「重点」', '「修正」').replace('https://example.com', 'https://example.net');
+	const body = page.locator('[data-item-id="stream"] .ash-chat-markdown-part');
+	for (const [value, complete, emphasized, url] of [
+		[opening, false, undefined, undefined],
+		[linked, false, '「重点」', 'https://example.com'],
+		[completed, true, '「重点」', 'https://example.com'],
+		[corrected, true, '「修正」', 'https://example.net'],
+	] as const) {
+		const { actual, expected } = await page.evaluate(({ value, complete }) => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, complete), { value, complete });
+		expect(actual).toBe(expected);
+		if (emphasized) await expect(body.locator('strong').last()).toHaveText(emphasized);
+		if (url) await expect(body.getByRole('link', { name: url, exact: true })).toHaveAttribute('href', url);
+	}
+	await expect(body).toContainText('https://example.net。下一句。');
+});
+
 test('streaming Markdown controlled rendering comparison', async ({ page }, testInfo) => {
 	test.setTimeout(180_000);
 	const errors: string[] = [];

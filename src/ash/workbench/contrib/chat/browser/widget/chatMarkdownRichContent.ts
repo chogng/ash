@@ -6,6 +6,7 @@ import { extname } from '../../../../../base/common/path.js';
 import { escapeRegExpCharacters, htmlAttributeEncodeValue as escapeHTML } from '../../../../../base/common/strings.js';
 import { localize } from '../../../../../nls.js';
 import type { ChatMarkdownRichContent, ChatMarkdownRichPart, ChatMarkdownRichStyle } from '../../common/model/chatMarkdownRichContent.js';
+import { getChatMarkdownExtensions } from './chatCjkMarkdown.js';
 
 export const CHAT_RESPONSE_DOWNLOAD_SCHEME = 'chat-response-download';
 export const CHAT_RESPONSE_ENTITY_SCHEME = 'chat-response-entity';
@@ -87,7 +88,6 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 			const fallback = part.fallback && link(part.fallback.href, part.fallback.label);
 			return `<${tag} class="${classes(part.kind, part.style)}">${body || fallback || ''}</${tag}>`;
 		}
-		case 'icon': {
 		case 'grid': {
 			const tag = part.block ? 'div' : 'span';
 			return textOnly ? `<${tag}>${body}</${tag}>` : `<${tag} class="${classes(part.kind, part.style)} columns-${part.columns}">${body}</${tag}>`;
@@ -96,6 +96,7 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 			const tag = part.block ? 'div' : 'span';
 			return textOnly ? `<${tag}>${body}</${tag}>` : `<${tag} class="ash-chat-rich-grid-item">${body}</${tag}>`;
 		}
+		case 'icon': {
 			const label = iconText.get(part.name) ?? (part.label || part.name);
 			const iconId = iconAliases.get(part.name) ?? part.name;
 			const content = !textOnly && getLxiconDefinition(iconId)
@@ -153,15 +154,19 @@ export function chatMarkdownRichContentExtension(content: ChatMarkdownRichConten
 }
 
 export function renderChatRichContentText(markdown: string, content: ChatMarkdownRichContent | undefined): string {
-	if (!content) return renderAsPlaintext(markdown, { useLinkFormatter: true });
-	const html = renderWorkbenchMarkdown({ value: markdown, supportHtml: true }, false, { markedExtensions: [chatMarkdownRichContentExtension(content, true)] });
+	if (!content) return renderChatMarkdownPlaintext(markdown, true);
+	const html = renderWorkbenchMarkdown({ value: markdown, supportHtml: true }, false, { markedExtensions: getChatMarkdownExtensions(markdown, [chatMarkdownRichContentExtension(content, true)]) });
 	return renderAsPlaintext(html, { useLinkFormatter: true });
+}
+
+export function renderChatMarkdownPlaintext(markdown: string, useLinkFormatter = false): string {
+	return renderAsPlaintext(markdown, { useLinkFormatter, markedExtensions: getChatMarkdownExtensions(markdown) });
 }
 
 /** Expands only the rich references so ordinary Markdown keeps its original formatting on copy. */
 export function expandChatRichContentForCopy(markdown: string, content: ChatMarkdownRichContent | undefined): string {
 	if (!content) return markdown;
-	const parser = new Marked(chatMarkdownRichContentExtension(content, true));
+	const parser = new Marked(...(getChatMarkdownExtensions(markdown, [chatMarkdownRichContentExtension(content, true)]) ?? []));
 	const markers = new RegExp(escapeRegExpCharacters(content.markerPrefix) + '\\d+:>', 'gu');
 	return markdown.replace(markers, marker => parser.parseInline(marker, { async: false }).replaceAll('\n', '&#10;').replaceAll('|', '&#124;'));
 }

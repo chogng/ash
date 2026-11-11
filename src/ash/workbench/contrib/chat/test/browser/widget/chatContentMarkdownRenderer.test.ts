@@ -113,6 +113,31 @@ suite('Shared chat Markdown rendering', () => {
 		assert.match(part.domNode.textContent!, /Corrected nested text/u);
 	});
 
+	test('renders CJK emphasis and bare links without changing literal or explicit Markdown', () => {
+		const literal = '这是**「原样」**内容。https://example.com。句子';
+		const value = [
+			'这是**「重点」**内容。𠮷**重点。**𠮷。これは*「重要」*です。',
+			'这是**「外层 *细节*」**内容。~~**重点。**文~~后。',
+			'详情见 https://example.com/a_(b)。下一句见 www.example.org，后文。',
+			'[显式](https://example.com/路径。保留) 和 <https://example.com/路径。保留>',
+			`\`${literal}\``,
+			String.raw`这是\*\*「转义」\*\*内容。a**"English"**b`,
+		].join('\n\n');
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		using result = renderer.render({ value });
+		assert.deepEqual([...result.element.querySelectorAll('strong, em')].map(node => node.textContent), ['「重点」', '重点。', '「重要」', '「外层 细节」', '细节', '重点。']);
+		assert.equal(result.element.querySelector('del')?.textContent, '重点。文');
+		assert.deepEqual([...result.element.querySelectorAll('a')].map(node => [node.textContent, decodeURI(node.getAttribute('href')!)]), [
+			['https://example.com/a_(b)', 'https://example.com/a_(b)'], ['www.example.org', 'http://www.example.org'],
+			['显式', 'https://example.com/路径。保留'], ['https://example.com/路径。保留', 'https://example.com/路径。保留'],
+		]);
+		assert.equal(result.element.querySelector('code')?.textContent, literal);
+		assert.match(result.element.textContent!, /这是\*\*「转义」\*\*内容。a\*\*"English"\*\*b/u);
+		assert.match(renderChatRichContentText(value, undefined), /这是「重点」内容。𠮷重点。𠮷。これは「重要」です。/u);
+		assert.ok(getChatFindTextParts({ id: 'reply', type: 'agentMessage', text: value, transient: false }).some(part => part.text.includes('这是「重点」内容。')));
+	});
+
 	test('renders response parts from the shared model and keeps internal references out of text consumers', () => {
 		const builder = new ChatMarkdownRichContentBuilder('');
 		const files = [

@@ -62,6 +62,7 @@ export interface IRenderedMarkdown extends IDisposable {
 export interface PlaintextMarkdownOptions {
 	readonly includeCodeBlocksFences?: boolean;
 	readonly useLinkFormatter?: boolean;
+	readonly markedExtensions?: readonly MarkedExtension[];
 }
 
 interface MarkdownParserInstance {
@@ -330,8 +331,8 @@ export function renderWorkbenchMarkdown(
 export function renderAsPlaintext(markdown: string | IMarkdownString, options: PlaintextMarkdownOptions = {}): string {
 	const value = typeof markdown === 'string' ? markdown : markdown.value;
 	validateMarkdown(value);
-	const parser = new Marked();
-	return plaintextBlocks(parser.lexer(value, { gfm: true }), options).trim();
+	const parser = new Marked(...(options.markedExtensions ?? [])).setOptions({ gfm: true });
+	return plaintextBlocks(parser.lexer(value), options).trim();
 }
 
 function plaintextBlocks(tokens: readonly Token[], options: PlaintextMarkdownOptions): string {
@@ -432,7 +433,9 @@ function renderMarkdownWithParser(
 		? markdownEscapeEscapedIcons(markdown.value)
 		: markdown.value;
 	const parser = parserInstance.parser;
-	const completion = fillIncompleteTokens ? completeIncompleteMarkdown(markdownValue, parser, parserOptions) : undefined;
+	// Marked initializes a tokenizer on the lexer options. Keep that standard
+	// tokenizer out of the render options so it cannot replace an extension's.
+	const completion = fillIncompleteTokens ? completeIncompleteMarkdown(markdownValue, parser, { ...parserOptions }) : undefined;
 	const tokens = completion?.tokens;
 	const defaults = parser.defaults;
 	let options: MarkedOptions = parserOptions;

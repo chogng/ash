@@ -1,4 +1,3 @@
-import { renderAsPlaintext } from '../../../../../base/browser/markdownRenderer.js';
 import type { Event } from '../../../../../base/common/event.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
@@ -9,7 +8,7 @@ import type { ChatContentPart } from '../../../../services/chat/common/chatServi
 import { formatChatMessageTime, formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
 import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
-import { renderChatRichContentText } from '../widget/chatMarkdownRichContent.js';
+import { renderChatMarkdownPlaintext, renderChatRichContentText } from '../widget/chatMarkdownRichContent.js';
 
 interface ChatResponseSource {
 	readonly getItems: () => readonly IChatListItem[];
@@ -102,7 +101,7 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 		} else {
 			const markdown = item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor';
 			const rich = item.markdown?.richContent;
-			sections.push(markdown ? rich ? renderChatRichContentText(item.text, rich) : renderAsPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
+			sections.push(markdown ? rich ? renderChatRichContentText(item.text, rich) : renderChatMarkdownPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
 			sections.push(...this.attachments(item.content ?? []));
 			if (item.loadedSkills?.length) {
 				sections.push(localize('chat.skills.loadedTitle', 'Skills loaded in this turn'));
