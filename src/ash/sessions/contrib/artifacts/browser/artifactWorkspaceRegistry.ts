@@ -8,11 +8,12 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import type { CanvasArtifactExample } from './artifactExamples.js';
+import type { DesignDocumentController } from './designDocumentController.js';
 
 export interface IArtifactWorkspace extends IDisposable {
 	readonly domNode: HTMLElement;
 	readonly usesCanvasPanels: boolean;
-	create(container: HTMLElement, example?: CanvasArtifactExample): void;
+	create(container: HTMLElement, example?: CanvasArtifactExample, document?: DesignDocumentController): void;
 	setVisible(visible: boolean): void;
 	layout(dimension: IDimension): void;
 	revealInitialContent?(): void;

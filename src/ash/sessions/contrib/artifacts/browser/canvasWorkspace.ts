@@ -22,11 +22,13 @@ import type { CanvasArtifactExample } from './artifactExamples.js';
 
 const ActiveCanvasWorkspace = new RawContextKey<ArtifactWorkspaceId | undefined>('sessions.artifacts.activeCanvasWorkspace', undefined);
 const CanvasWorkspaceCanEdit = new RawContextKey<boolean>('sessions.artifacts.canvasWorkspaceCanEdit', false);
+const CanvasWorkspaceIsSlidesArtifact = new RawContextKey<boolean>('sessions.artifacts.canvasWorkspaceIsSlidesArtifact', false);
 
 interface CanvasWorkspaceAction<T> {
 	readonly id: string;
 	readonly title: ILocalizedString;
 	readonly precondition?: ContextKeyExpression;
+	readonly when?: ContextKeyExpression;
 	run(workspace: T): unknown;
 }
 
@@ -39,7 +41,7 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 	private pageNavigationDomNode: HTMLElement | undefined;
 	private toolbarContext: IContextKeyService | undefined;
 	private activeWorkspace: IContextKey<ArtifactWorkspaceId | undefined> | undefined;
-	private exampleFrame: string | undefined;
+	private initialFrame: string | undefined;
 	protected get editor(): CanvasEditorWidget { return this.editorHost.editor; }
 	protected get document(): DesignDocumentController { return this.editorHost.workingCopy; }
 	protected get commands(): DocumentCommands { return new DocumentCommands(this.document.model); }
@@ -65,8 +67,9 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 			ContextKeyExpr.notEquals(ActiveCanvasWorkspace.key, ArtifactWorkspaceId.Design),
 		);
 		CanvasWorkspace.registerActions(CanvasWorkspace, 'sessions.creator.canvas', 'file', when, [
-			{ id: 'open', title: localize2('sessions.creator.open', 'Open document'), run: workspace => workspace.document.openDocument() },
-			{ id: 'save', title: localize2('sessions.creator.save', 'Save document'), run: workspace => workspace.editor.saveDocument() },
+			{ id: 'open', title: localize2('sessions.creator.open', 'Open document'), when: CanvasWorkspaceIsSlidesArtifact.isEqualTo(false), run: workspace => workspace.document.openDocument() },
+			{ id: 'save', title: localize2('sessions.creator.save', 'Save document'), when: CanvasWorkspaceIsSlidesArtifact.isEqualTo(false), run: workspace => workspace.editor.saveDocument() },
+			{ id: 'exportCopy', title: localize2('sessions.creator.slides.exportCopy', 'Export editable copy'), when: CanvasWorkspaceIsSlidesArtifact.isEqualTo(true), run: workspace => workspace.document.saveCopy() },
 			{ id: 'exportSvg', title: localize2('sessions.design.export', 'Export SVG'), run: workspace => workspace.document.exportDocument() },
 		]);
 	}
@@ -80,14 +83,15 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 	): void {
 		actions.forEach((action, order) => {
 			const precondition = ContextKeyExpr.and(CanvasWorkspaceCanEdit.isEqualTo(true), action.precondition);
-			const canRun = ContextKeyExpr.and(when, precondition);
+			const visible = ContextKeyExpr.and(when, action.when);
+			const canRun = ContextKeyExpr.and(visible, precondition);
 			registerAction2(class extends Action2 {
 				constructor() {
 					super({
 						id: `${idPrefix}.${action.id}`,
 						title: action.title,
 						precondition,
-						menu: { id: Menus.ArtifactCanvasToolbar, when, group, order },
+						menu: { id: Menus.ArtifactCanvasToolbar, when: visible, group, order },
 					});
 				}
 				override run(_accessor: ServicesAccessor, workspace: unknown): unknown {
@@ -100,7 +104,7 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 		});
 	}
 
-	public create(container: HTMLElement, example?: CanvasArtifactExample): void {
+	public create(container: HTMLElement, example?: CanvasArtifactExample, document?: DesignDocumentController): void {
 		this.domNode = h(this.ownerDocument, 'section', { className: 'ash-creator-workspace', attributes: { 'data-creator-mode': this.mode } });
 		this.contentDomNode = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-content' });
 		this.domNode.append(this.contentDomNode);
@@ -111,13 +115,12 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 		const canEdit = CanvasWorkspaceCanEdit.bindTo(scope);
 		const scopedInstantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		this.editorHost = this._register(scopedInstantiation.createInstance(DesignEditorHost, this.mode));
-		this.editorHost.create(this.contentDomNode, example);
+		this.editorHost.create(this.contentDomNode, example, document);
+		CanvasWorkspaceIsSlidesArtifact.bindTo(scope).set(this.document.isSlidesArtifact);
 		this.editor.setWorkspaceToolbarContext(this);
 		this.createModeContent();
-		if (example) {
-			this.exampleFrame = this.document.model.value.shapes[0]?.id;
-			if (example.editorMode) { this.editor.setMode(example.editorMode); }
-		}
+		if (example || document) { this.initialFrame = this.document.model.value.shapes[0]?.id; }
+		if (example?.editorMode) { this.editor.setMode(example.editorMode); }
 		const updateModeContext = this.bindToolbarContext?.(scope);
 		const updateContext = () => scope.bufferChangeEvents(() => {
 			canEdit.set(!this.document.isBusy);
@@ -159,10 +162,10 @@ export class CanvasWorkspace extends Disposable implements IArtifactWorkspace {
 	}
 	public revealInitialContent(): void {
 		const { clientWidth, clientHeight } = this.contentDomNode;
-		if (this.exampleFrame && clientWidth > 0 && clientHeight > 0) {
+		if (this.initialFrame && clientWidth > 0 && clientHeight > 0) {
 			this.editorHost.layout({ width: clientWidth, height: clientHeight });
-			this.editor.revealShape(this.exampleFrame);
-			this.exampleFrame = undefined;
+			this.editor.revealShape(this.initialFrame);
+			this.initialFrame = undefined;
 			const animatedShape = flattenDesignShapes(this.document.model.value.shapes).find(shape => shape.motion);
 			if (animatedShape) { this.editor.selectShape(animatedShape.id); }
 		}

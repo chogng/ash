@@ -7,6 +7,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/designDocument.js';
 
 test('Sessions mode and page-tab activation reuse Parts while retaining the conversation and dirty document', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -897,6 +898,47 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 	});
 }
 
+
+test('Sessions Slides example autosaves to Artifacts and exports an independent copy', { tag: ['@electron-app-server'] }, async ({ target, workbench, application, testWorkspace }) => {
+	if (!('windows' in application)) throw new Error('Expected Electron application');
+	const path = join(await realpath(testWorkspace.directory), 'slides.ash-design');
+	const original = await application.evaluateHandle(({ dialog }) => dialog.showSaveDialog);
+	try {
+		await application.evaluate(({ dialog }, path) => {
+			dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
+		}, path);
+		let page = await workbench.openAgentsWindow(target.kind);
+		const openArtifacts = (page: Page) => page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+		await openArtifacts(page);
+		await page.locator('[data-artifact-example="slides"]').press('Enter');
+		const workspace = page.locator('[data-creator-mode="slides"]:visible');
+		const pages = workspace.getByRole('combobox', { name: 'Pages', exact: true }).getByRole('option');
+		await expect(pages).toHaveCount(2);
+		await workspace.getByRole('button', { name: 'More Actions', exact: true }).click();
+		await expect(page.getByRole('menuitem', { name: 'Save document', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('menuitem', { name: 'Open document', exact: true })).toHaveCount(0);
+		await page.getByRole('menuitem', { name: 'Export editable copy', exact: true }).click();
+		await expect(workspace.locator('.ash-sessions-design-message')).toHaveText('Exported slides.ash-design');
+		const exported = () => readFile(join(path, 'manifest.json'), 'utf8').then(parseDesignDocument);
+		const snapshot = await exported();
+		expect(snapshot.shapes).toHaveLength(2);
+
+		await workspace.getByRole('button', { name: 'Add slide', exact: true }).click();
+		await expect(pages).toHaveCount(3);
+		page = await workbench.reopenAgentsWindow(application, page);
+		await openArtifacts(page);
+		await page.getByRole('tab', { name: 'Yours', exact: true }).click();
+		const card = page.locator('[data-slides-artifact]').filter({ hasText: 'Studio launch' });
+		await expect(card).toHaveCount(1);
+		expect(await card.getAttribute('data-slides-artifact')).not.toBe(snapshot.documentId);
+		await card.press('Enter');
+		await expect(page.locator('[data-creator-mode="slides"]:visible').getByRole('combobox', { name: 'Pages', exact: true }).getByRole('option')).toHaveCount(3);
+		expect(await exported()).toEqual(snapshot);
+	} finally {
+		await application.evaluate(({ dialog }, saved) => { dialog.showSaveDialog = saved; }, original);
+		await original.dispose();
+	}
+});
 
 test('Sessions Design automatically retains an untitled draft across window reopen without save confirmation', async ({ target, workbench, application }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);

@@ -444,9 +444,9 @@ export class CanvasEditorWidget extends Disposable {
 			this.action('addFrame', localize('sessions.design.addFrame', 'Add frame (F)'), () => this.addFrame(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
 			this.action('importImage', localize('sessions.design.importImage', 'Import image'), () => this.importImage(), !this.documentController.isBusy && this.mode !== DesignMode.Code && this.mode !== DesignMode.Motion),
 			this.action('export', localize('sessions.design.export', 'Export SVG'), () => this.runFileOperation(() => this.documentController.exportDocument()), !this.documentController.isBusy && shapes.length > 0),
-			this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy),
+			...(!this.documentController.isSlidesArtifact ? [this.action('open', localize('sessions.design.open', 'Open design'), () => this.runFileOperation(() => this.documentController.openDocument()), !this.documentController.isBusy)] : []),
 			...(this.documentController.needsSaveRetry ? [this.action('retrySave', localize('sessions.design.retrySave', 'Retry saving'), () => this.documentController.flushAutoSave(), !this.documentController.isRestoring)] : []),
-			...(this.documentController.automaticallySaves ? [this.action('saveCopy', localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)] : []),
+			...(this.documentController.automaticallySaves ? [this.action('saveCopy', this.documentController.isSlidesArtifact ? localize('sessions.creator.slides.exportCopy', 'Export editable copy') : localize('sessions.design.saveCopy', 'Save a copy'), () => this.runFileOperation(() => this.documentController.saveCopy()), !this.documentController.isBusy)] : []),
 		];
 	}
 

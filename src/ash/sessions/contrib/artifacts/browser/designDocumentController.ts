@@ -34,10 +34,22 @@ interface DesignDocumentExample {
 	readonly shapes: readonly DesignShape[];
 }
 
+interface SlidesArtifactInput {
+	readonly id: string;
+	readonly resource: URI;
+	readonly shapes?: readonly DesignShape[];
+}
+
+export function getDesignDraftHome(profileLocation: URI, workspaceId: string): URI {
+	return URI.joinPath(profileLocation, 'creator', encodeURIComponent(workspaceId));
+}
+
 /** Each workspace owns its file identity and saved revision independently of the active canvas. */
 export class DesignDocumentController extends Disposable implements IWorkingCopy {
 	public readonly mode: ArtifactWorkspaceId;
-	private readonly exampleTitle: string | undefined;
+	private readonly example: { readonly title: string; adopted: boolean; } | undefined;
+	private readonly slidesArtifact: SlidesArtifactInput | undefined;
+	public get isSlidesArtifact(): boolean { return this.slidesArtifact !== undefined; }
 	public readonly resource: URI;
 	public readonly backupKind = 'structuredDocument' as const;
 	public readonly backupContentType = 'application/vnd.ash.design+json';
@@ -75,7 +87,11 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	private autoSaveError = false;
 	private readonly draftHome: URI;
 	public readonly ready: Promise<void>;
-	public get automaticallySaves(): boolean { return this.exampleTitle === undefined && this.mode === ArtifactWorkspaceId.Design; }
+	public get isTemporaryExample(): boolean { return this.example?.adopted === false; }
+	public get automaticallySaves(): boolean {
+		// A file opened or saved from an example has its own write-back target.
+		return this.isSlidesArtifact || (this.example ? this.file !== undefined : this.mode === ArtifactWorkspaceId.Design);
+	}
 	public get needsSaveRetry(): boolean { return this.autoSaveError || this.restoreFailed; }
 	public get isRestoring(): boolean { return this.restoring; }
 	private get activeDocumentKey(): string { return `creator.${this.mode}.activeDocument`; }
@@ -93,7 +109,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	constructor(
-		input: ArtifactWorkspaceId | DesignDocumentExample,
+		input: ArtifactWorkspaceId | DesignDocumentExample | SlidesArtifactInput,
 		@IFileService private readonly files: IFileService,
 		@IAssetService private readonly assets: IAssetService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
@@ -103,31 +119,42 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		@IUserDataProfileService profiles: IUserDataProfileService,
 	) {
 		super();
-		this.mode = typeof input === 'string' ? input : input.mode;
+		this.slidesArtifact = typeof input !== 'string' && 'id' in input ? input : undefined;
+		this.mode = typeof input === 'string' ? input : 'mode' in input ? input.mode : ArtifactWorkspaceId.Slides;
 		this.model = this._register(new DesignModel(this.mode, measureDesignText));
-		if (typeof input !== 'string') {
-			this.exampleTitle = input.title;
+		if (typeof input !== 'string' && 'title' in input) {
+			this.example = { title: input.title, adopted: false };
 			this.model.replace(documentFromShapes(input.shapes, this.model.value));
+		}
+		if (this.slidesArtifact?.shapes) {
+			this.model.replace(documentFromShapes(this.slidesArtifact.shapes, { ...this.model.value, documentId: this.slidesArtifact.id }));
 		}
 		this.resource = URI.from({
 			scheme: 'ash-creator',
-			path: this.exampleTitle === undefined ? `/${this.mode}` : `/example/${this.model.value.documentId}`,
+			path: this.slidesArtifact ? `/slides/${this.slidesArtifact.id}` : this.example ? `/example/${this.model.value.documentId}` : `/${this.mode}`,
 		});
 		if (mainWindow.document.fonts) { this._register(addDisposableListener(mainWindow.document.fonts, 'loadingdone', () => { clearDesignTextMeasurements(); this.model.refreshTextLayout(); })); }
-		this.savedContent = serializeDesignDocument(this.model.value);
-		this.draftHome = URI.joinPath(profiles.currentProfile.location, 'creator', encodeURIComponent(workspace.getWorkspace().id));
+		this.savedContent = this.slidesArtifact?.shapes ? '' : serializeDesignDocument(this.model.value);
+		this.draftHome = getDesignDraftHome(profiles.currentProfile.location, workspace.getWorkspace().id);
 		this._register(this.model.onDidChange(kind => { if (kind === 'replace') { this.libraryUpdates.clear(); } if (!isDesignVectorGeometryReady() && flattenDesignShapes(this.model.value.shapes).some(shape => shape.kind === 'group' && shape.booleanOperation)) { void loadDesignVectorGeometry().then(() => { if (!this.isDisposed) { this.changeEmitter.fire({}); } }, error => { if (!this.isDisposed) { this.changeEmitter.fire({ message: String(error) }); } }); } this.contentChange.fire(); this.dirtyChange.fire(); }));
 		this._register(this.onDidChange(() => this.dirtyChange.fire()));
 		this._register(files.onDidChangeFiles(() => { void this.checkExternalChange(); }));
 		this._register(toDisposable(() => { this.media.clear(); this.isFileOperationRunning = false; }));
 		this._register(this.model.onDidChange(() => this.scheduleAutoSave()));
-		const active = this.automaticallySaves ? storage.get(this.activeDocumentKey, StorageScope.WORKSPACE) : undefined;
+		const active = this.slidesArtifact
+			? (this.slidesArtifact.shapes ? undefined : this.slidesArtifact.resource.toString())
+			: this.automaticallySaves ? storage.get(this.activeDocumentKey, StorageScope.WORKSPACE) : undefined;
 		this.ready = active ? this.restoreAutoSavedDocument(active) : Promise.resolve();
+		if (this.slidesArtifact?.shapes) { this.scheduleAutoSave(); }
 	}
 
 	public get name(): string {
+		if (this.slidesArtifact) {
+			const title = this.model.value.shapes.find(shape => shape.kind === 'frame' && shape.name?.trim())?.name;
+			if (title) { return title; }
+		}
 		if (this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome)) { return basename(this.file.resource); }
-		if (this.exampleTitle !== undefined) { return this.exampleTitle; }
+		if (this.example && !this.example.adopted) { return this.example.title; }
 		return this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.untitled', 'Untitled design') : localize('sessions.creator.untitled', 'Untitled {0}', getArtifactWorkspaceTitle(this.mode));
 	}
 	public get isBusy(): boolean { return this.restoring || this.restoreFailed || (this.isFileOperationRunning && !this.autoSaveRunning); }
@@ -279,11 +306,13 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	public async openDocument(): Promise<void> {
+		if (this.isSlidesArtifact) { return; }
 		if (await this.confirmDiscard()) { return; }
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
 		try {
-			const resources = await this.fileDialogs.showOpenDialog({ title: this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.open', 'Open design') : localize('sessions.creator.open', 'Open document'), defaultUri: this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome) ? dirname(this.file.resource) : undefined, canSelectFiles: true, canSelectFolders: true, filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design', 'json'] }] });
+			const slides = this.mode === ArtifactWorkspaceId.Slides;
+			const resources = await this.fileDialogs.showOpenDialog({ title: this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.open', 'Open design') : localize('sessions.creator.open', 'Open document'), defaultUri: this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome) ? dirname(this.file.resource) : undefined, canSelectFiles: !slides, canSelectFolders: true, filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: slides ? ['ash-design'] : ['ash-design', 'json'] }] });
 			if (!resources || this.isDisposed) { return; }
 			await this.readDocument(resources[0]);
 			await this.rememberDocument();
@@ -297,9 +326,15 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 
 	private async readDocument(selected: URI): Promise<void> {
 		const isPackage = (await this.files.stat(selected)).kind === FileKind.Directory;
+		if (this.mode === ArtifactWorkspaceId.Slides && !isPackage) {
+			throw new TypeError(localize('sessions.creator.slides.openPackage', 'Choose an Ash Slides file package (.ash-design).'));
+		}
 		const read = await this.files.readFile(isPackage ? selected.joinPathSegment('manifest.json') : selected);
 		const document = parseDesignDocument(read.content);
 		if (document.mode !== this.mode) { throw new TypeError(localize('sessions.creator.wrongMode', 'This document belongs to {0}. Open it in that Creator mode.', getArtifactWorkspaceTitle(document.mode))); }
+		if (this.slidesArtifact && document.documentId !== this.slidesArtifact.id) {
+			throw new TypeError(localize('sessions.design.invalidDocument', 'Invalid design document'));
+		}
 		const root = isPackage ? selected : dirname(selected);
 		const media = new Map<string, Uint8Array>();
 		for (const asset of document.assets) {
@@ -311,6 +346,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		}
 		if (this.isDisposed) { return; }
 		this.file = isPackage || basename(selected) === 'manifest.json' ? { resource: root, revision: read.revision } : undefined;
+		if (this.example) { this.example.adopted = true; }
 		this.media = media;
 		this.setExternalChange(false);
 		this.labelChange.fire();
@@ -320,10 +356,11 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	public async saveDocument(target?: URI): Promise<boolean> {
+		if (this.isSlidesArtifact && !target) { return this.flushAutoSave(); }
 		await this.ready;
 		await this.autoSavePromise;
 		if (this.restoreFailed) { return false; }
-		return this.persistDocument(target);
+		return this.persistDocument(target, false, this.isSlidesArtifact);
 	}
 
 	public async saveCopy(): Promise<void> {
@@ -331,8 +368,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		await this.autoSavePromise;
 		if (this.isBusy) { return; }
 		const resource = await this.fileDialogs.showSaveDialog({
-			title: localize('sessions.design.saveCopy', 'Save a copy'),
-			defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment('design.ash-design'),
+			title: this.isSlidesArtifact ? localize('sessions.creator.slides.exportCopy', 'Export editable copy') : localize('sessions.design.saveCopy', 'Save a copy'),
+			defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment(this.isSlidesArtifact ? 'slides.ash-design' : 'design.ash-design'),
 			filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design'] }],
 		});
 		if (resource && !this.isDisposed) {
@@ -348,7 +385,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		try {
 			const resource = target ?? this.file?.resource ?? await this.fileDialogs.showSaveDialog({ title: this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.save', 'Save design') : localize('sessions.creator.save', 'Save document'), defaultUri: this.workspace.getWorkspace().folders[0]?.uri.joinPathSegment(`${this.mode}.ash-design`), filters: [{ name: localize('sessions.design.fileType', 'Ash design'), extensions: ['ash-design'] }] });
 			if (!resource || this.isDisposed) { return false; }
-			if (copyOnly && this.file && extUri.isEqual(this.file.resource, resource)) {
+			const currentResource = this.slidesArtifact?.resource ?? this.file?.resource;
+			if (copyOnly && currentResource && extUri.isEqual(currentResource, resource)) {
 				throw new Error(localize('sessions.design.copySameLocation', 'Choose a different location for the copy.'));
 			}
 			const isCopy = copyOnly || !!this.file && !extUri.isEqual(this.file.resource, resource);
@@ -378,10 +416,15 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			const result = await this.files.writeFile({ resource: manifest, content, expectedRevision });
 			if (this.isDisposed) { return false; }
 			if (copyOnly) {
-				this.changeEmitter.fire({ message: localize('sessions.design.saved', 'Saved {0}', basename(resource)) });
+				const name = basename(resource);
+				const message = this.isSlidesArtifact
+					? localize('sessions.design.exported', 'Exported {0}', name)
+					: localize('sessions.design.saved', 'Saved {0}', name);
+				this.changeEmitter.fire({ message });
 				return true;
 			}
 			this.file = { resource, revision: result.revision };
+			if (this.example) { this.example.adopted = true; }
 			this.labelChange.fire();
 			this.setExternalChange(false);
 			if (isCopy) { this.model.changeIdentity(snapshot.documentId); }
@@ -389,6 +432,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 			this.savedContent = content;
 			this.autoSaveError = false;
 			this.changeEmitter.fire(automatic ? {} : { message: localize('sessions.design.saved', 'Saved {0}', basename(resource)) });
+			// The first save can attach the file after a later edit has already arrived.
+			if (this.isDirty) { this.scheduleAutoSave(); }
 			return !this.isDirty;
 		} catch (error) {
 			if (automatic) {
@@ -416,7 +461,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		await this.ready;
 		if (this.isDisposed) { return false; }
 		if (this.restoreFailed) {
-			const active = this.storage.get(this.activeDocumentKey, StorageScope.WORKSPACE);
+			const active = this.slidesArtifact?.resource.toString() ?? this.storage.get(this.activeDocumentKey, StorageScope.WORKSPACE);
 			if (active) { await this.restoreAutoSavedDocument(active); }
 			if (this.restoreFailed) { return false; }
 		}
@@ -424,14 +469,14 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		if (!this.automaticallySaves || this.isDisposed) { return !this.isDirty; }
 		const operation = async (): Promise<boolean> => {
 			while (this.fileOperation) { await this.fileOperation.p; }
-			while (!this.isDisposed && (this.isDirty || this.autoSaveError)) {
+			while (!this.isDisposed && this.automaticallySaves && (this.isDirty || this.autoSaveError)) {
 				this.autoSaveRunning = true;
-				const resource = this.file?.resource ?? URI.joinPath(this.draftHome, `${this.model.value.documentId}.ash-design`);
+				const resource = this.file?.resource ?? this.slidesArtifact?.resource ?? URI.joinPath(this.draftHome, `${this.model.value.documentId}.ash-design`);
 				await this.persistDocument(resource, true);
 				this.autoSaveRunning = false;
 				if (this.autoSaveError) { return false; }
 			}
-			return !this.isDisposed;
+			return !this.isDisposed && !this.isDirty;
 		};
 		this.autoSavePromise = operation().finally(() => {
 			this.autoSaveRunning = false;
@@ -442,7 +487,8 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	private async rememberDocument(): Promise<void> {
-		if (!this.automaticallySaves || !this.file) { return; }
+		// An example owns a separate document and must not replace Design's restore target.
+		if (this.example || this.isSlidesArtifact || !this.automaticallySaves || !this.file) { return; }
 		this.storage.store(this.activeDocumentKey, this.file.resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		await this.storage.flush();
 	}

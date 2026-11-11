@@ -10,6 +10,7 @@ import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Action } from '../../../../base/common/actions.js';
 import { IdGenerator } from '../../../../base/common/idGenerator.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { autorun } from '../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
@@ -21,6 +22,7 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { ArtifactWorkspaces, type IArtifactWorkspace } from './artifactWorkspaceRegistry.js';
 import { IDesignEditorService } from './designEditorService.js';
+import type { DesignDocumentController } from './designDocumentController.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../contrib/docs/common/docs.js';
 import { basename } from '../../../../base/common/resources.js';
@@ -32,16 +34,18 @@ import { ARTIFACT_EXAMPLE_SCHEME, getArtifactExamples, OPEN_ARTIFACT_EXAMPLE, ty
 import { ArtifactTableExample } from './artifactTableExample.js';
 
 export const OPEN_ARTIFACT_DRAFT = 'sessions.creator.openDraft';
+export const OPEN_SLIDES_ARTIFACT = 'sessions.creator.openSlidesArtifact';
 
 interface ArtifactCard {
 	readonly title: string;
 	readonly kind: ArtifactKind;
 	readonly detail: string;
+	readonly slidesArtifactId?: string;
 	readonly open: () => void;
 }
 
 type ArtifactFilter = 'all' | 'yours' | 'shared';
-type ArtifactWorkspaceKey = ArtifactWorkspaceId | `example:${ArtifactKind}`;
+type ArtifactWorkspaceKey = ArtifactWorkspaceId | `example:${ArtifactKind}` | `slides:${string}`;
 
 interface ActiveArtifactWorkspace {
 	readonly key: ArtifactWorkspaceKey;
@@ -230,7 +234,11 @@ export class ArtifactsEditorView extends Disposable {
 			this._register(document.onDidChangeLabel(() => this.renderArtifacts()));
 			void document.ready.then(() => { if (!this.isDisposed) { this.renderArtifacts(); } });
 		}
-		this.renderArtifacts();
+		this._register(autorun(reader => {
+			designs.slidesArtifacts.read(reader);
+			this.renderArtifacts();
+		}));
+		void designs.loadSlidesArtifacts();
 	}
 
 	private createTile(container: HTMLElement, kind: ArtifactKind): Button {
@@ -279,6 +287,15 @@ export class ArtifactsEditorView extends Disposable {
 				open: () => { void this.commands.executeCommand('sessions.creator.openMode', mode); },
 			});
 		}
+		for (const [id, document] of this.designs.slidesArtifacts.get()) {
+			cards.push({
+				title: document.name,
+				kind: ArtifactWorkspaceId.Slides,
+				detail: localize('sessions.creator.slides.title', 'Slides'),
+				slidesArtifactId: id,
+				open: () => { void this.commands.executeCommand(OPEN_SLIDES_ARTIFACT, id); },
+			});
+		}
 		return cards;
 	}
 
@@ -321,6 +338,7 @@ export class ArtifactsEditorView extends Disposable {
 	private renderCard(card: ArtifactCard, container: HTMLElement): HTMLElement {
 		const button = this.artifactCards.add(new Button(container, { ...defaultButtonStyles, label: card.title, title: card.title, onClick: card.open }));
 		button.domNode.classList.add('ash-artifacts-card', card.kind);
+		if (card.slidesArtifactId) { button.domNode.dataset.slidesArtifact = card.slidesArtifactId; }
 		button.domNode.prepend(this.createIllustration(card.kind));
 		button.domNode.append(h(this.domNode.ownerDocument, 'span', { className: 'ash-artifacts-card-detail' }, card.detail));
 		return button.domNode;
@@ -350,6 +368,10 @@ export class ArtifactsEditorView extends Disposable {
 	}
 
 	public openExample(example: CanvasArtifactExample | TableArtifactExample): void {
+		if (example.type === 'canvas' && example.mode === ArtifactWorkspaceId.Slides) {
+			this.openSlidesArtifact(this.designs.createSlidesArtifact(example.createShapes()));
+			return;
+		}
 		const key = `example:${example.kind}` as const;
 		let workspace = this.workspaces.get(key);
 		if (!workspace) {
@@ -366,10 +388,22 @@ export class ArtifactsEditorView extends Disposable {
 		this.activateWorkspace({ key, title: example.title, mode: example.type === 'canvas' ? example.mode : undefined }, workspace);
 	}
 
-	public revealExample(kind: ArtifactKind): void {
-		const key = `example:${kind}` as const;
-		if (this.activeWorkspace?.key === key && this.visible) {
-			this.workspaces.get(key)?.revealInitialContent?.();
+	public openSlidesArtifact(document: DesignDocumentController): void {
+		const mode = ArtifactWorkspaceId.Slides;
+		const key = `slides:${document.model.value.documentId}` as const;
+		let workspace = this.workspaces.get(key);
+		if (!workspace) {
+			workspace = ArtifactWorkspaces.get(mode)!.create(this.instantiation, this.domNode.ownerDocument);
+			this.workspaces.set(key, workspace);
+			workspace.create(this.workspacesDomNode, undefined, document);
+		}
+		this.storage.remove('sessions.creator.activeMode', StorageScope.WORKSPACE);
+		this.activateWorkspace({ key, title: document.name, mode }, workspace);
+	}
+
+	public revealInitialContent(): void {
+		if (this.activeWorkspace && this.visible) {
+			this.workspaces.get(this.activeWorkspace.key)?.revealInitialContent?.();
 		}
 	}
 
@@ -391,8 +425,11 @@ export class ArtifactsEditorView extends Disposable {
 			const example = previous.key.startsWith('example:')
 				? this.artifactsDomNode.querySelector<HTMLElement>(`[data-artifact-example="${previous.key.slice('example:'.length)}"]`)
 				: undefined;
+			const slides = previous.key.startsWith('slides:')
+				? this.artifactsDomNode.querySelector<HTMLElement>(`[data-slides-artifact="${previous.key.slice('slides:'.length)}"]`)
+				: undefined;
 			const button = isArtifactKind(previous.mode) ? this.creationButtons.get(previous.mode) : undefined;
-			(example ?? button ?? this.docsButton).focus();
+			(example ?? slides ?? button ?? this.docsButton).focus();
 		}
 	}
 	private updateVisibility(): void {
