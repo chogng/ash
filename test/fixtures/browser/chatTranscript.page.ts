@@ -756,7 +756,7 @@ declare global {
 			showAcceptedContext(text: string, cowork?: boolean): void;
 			updateAcceptedContext(text: string): void;
 			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean, virtualizeHistory?: boolean): void;
-			showLongCodeHistory(turns: number, virtualizeHistory: boolean): void;
+			showLongCodeHistory(turns: number, virtualizeHistory: boolean, withTools?: boolean): void;
 			voiceState(): readonly string[];
 			showVoiceIntroduction(): void;
 			toggleIntroductionFocus(): void;
@@ -1358,7 +1358,7 @@ window.ashChatTranscriptIntegration = {
 		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
 		appChat.setVisible(true);
 	},
-	showLongCodeHistory: (turns, virtualizeHistory) => {
+	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {
 		window.ashChatTranscriptIntegration.showChatApp(false, false, false, virtualizeHistory);
 		const host = appChat!.domNode.parentElement!;
 		host.style.position = 'fixed';
@@ -1369,6 +1369,7 @@ window.ashChatTranscriptIntegration = {
 			const toolCallId = `code-tool-${index}`;
 			const program = index % 2 ? 'fixture-command' : 'fixture-read';
 			const output = Array.from({ length: 18 }, (_, line) => `Tool evidence ${index}, line ${line}`).join('\n');
+		const appRows = appItems;
 			const code = Array.from({ length: 14 }, (_, line) => `const value${line} = ${index + line};`).join('\n');
 			const items: Extract<ThreadTranscriptEntry, { type: 'item' }>['item'][] = [
 				{ type: 'userMessage', itemId: `code-prompt-${index}`, turnId, text: `Code prompt ${index}` },
@@ -1390,6 +1391,15 @@ window.ashChatTranscriptIntegration = {
 		olderHistoryState = { loading: false };
 		appItems = Array.from({ length: 30 }, (_, index) => ({ id: `recent-${index}`, type: 'agentMessage', text: `Recent answer ${index}\n\n${'Synthetic response. '.repeat(15)}`, transient: false }));
 		chatChanges.fire();
+		if (withTools) {
+			const media: ThreadTranscriptEntry[] = [
+				{ type: 'item', entryId: 'long-image-call', turnId: 'long-media', transient: false, item: { type: 'toolCall', itemId: 'long-image-call', turnId: 'long-media', toolCallId: 'long-image', name: 'imagegen', argumentsJson: '{}' } },
+				{ type: 'item', entryId: 'long-image-result', turnId: 'long-media', transient: false, item: { type: 'toolResult', itemId: 'long-image-result', turnId: 'long-media', toolCallId: 'long-image', isError: false, text: '', content: [
+					{ type: 'imageAttachment', detail: 'auto', attachment: { contentDigest: 'sha256:long-image', mediaType: 'png', encodedBytes: imageBytes.length, width: 2, height: 1 } },
+				] } },
+			];
+			appItems = [...appItems, ...appRows, ...chatTranscriptListItems(media, undefined, [], { sessionId: 'app-session', threadId: 'app-thread' })];
+		}
 	},
 	finishHistoryPage: () => finishOlderHistory?.(),
 	historyPageLoads: () => olderHistoryLoads,

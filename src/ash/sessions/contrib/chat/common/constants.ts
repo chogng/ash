@@ -7,6 +7,8 @@ export const SHOW_ASH_CHAT_COMMAND = 'sessions.show.ashChat';
 export const SHOW_CHAT_WORKSPACE_COMMAND = 'sessions.show.chatWorkspace';
 export const ASH_CHAT_SELECTED_CONTEXT = 'sessions.activity.ashChatSelected';
 export const SESSIONS_COMPACT_INPUT_HEIGHT = Object.freeze({ minimum: 0, maximum: 240 });
+// A 20-turn history page can already contain 60 prompt, tool and reply rows.
+export const CODE_HISTORY_VIRTUALIZE_FROM = 48;
 // Keep the persisted container ID for existing desktop sidebar layouts.
 export const CHAT_WORKSPACE_NAVIGATION_ID = 'sessions.chatgpt.navigation';
 export const CHAT_NAVIGATION_FOCUS_CONTEXT = 'chatNavigationFocused';

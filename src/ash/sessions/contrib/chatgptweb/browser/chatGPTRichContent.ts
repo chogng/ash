@@ -35,9 +35,11 @@ interface RichContent {
 }
 
 /** Read the component syntax as data; JSX expressions are never evaluated. */
-function readTag(source: string): RichTag | undefined {
+function readTag(source: string, allowCaption: boolean): RichTag | undefined {
 	const name = /^<\/?([a-z][\w-]*(?::[a-z][\w-]*)?)(?=[\s/>]|$)/iu.exec(source);
-	if (!name || htmlTags.has(name[1].toLowerCase()) && name[1] !== 'Cite' && !mediaTags.has(name[1].toLowerCase())) { return undefined; }
+	if (!name) { return undefined; }
+	const normalizedName = name[1].toLowerCase();
+	if (htmlTags.has(normalizedName) && name[1] !== 'Cite' && !mediaTags.has(normalizedName) && !(allowCaption && normalizedName === 'caption')) { return undefined; }
 	let quote = '', braces = 0;
 	for (let index = name[0].length; index < Math.min(source.length, 8192); index++) {
 		const character = source[index];
@@ -49,13 +51,13 @@ function readTag(source: string): RichTag | undefined {
 		else if (character === '}') { braces--; }
 		else if (character === '>' && braces === 0) {
 			const raw = source.slice(0, index + 1);
-			return { name: name[1].toLowerCase(), raw, attributes: raw.slice(name[0].length, -1).replace(/\/$/u, ''), closing: raw.startsWith('</'), selfClosing: raw.endsWith('/>') };
+			return { name: normalizedName, raw, attributes: raw.slice(name[0].length, -1).replace(/\/$/u, ''), closing: raw.startsWith('</'), selfClosing: raw.endsWith('/>') };
 		}
 		if (braces < 0) { return undefined; }
 	}
 	// A streaming reply can end inside an opening tag. Consume the unfinished
 	// tag as a visible fallback instead of letting Marked drop the whole block.
-	return { name: name[1].toLowerCase(), raw: source.slice(0, 8192), attributes: '', closing: false, selfClosing: true };
+	return { name: normalizedName, raw: source.slice(0, 8192), attributes: '', closing: false, selfClosing: true };
 }
 
 function codeEnd(source: string, index: number): number | undefined {
@@ -90,8 +92,8 @@ function readWriting(source: string): { raw: string; body: string; } | undefined
 	return source.length < 8192 ? { raw: source, body: '' } : undefined;
 }
 
-function readContent(source: string): RichContent | undefined {
-	const tag = readTag(source);
+function readContent(source: string, allowCaption: boolean): RichContent | undefined {
+	const tag = readTag(source, allowCaption);
 	if (!tag) { return undefined; }
 	if (tag.closing) { return { tag, raw: tag.raw, body: '' }; }
 	if (tag.selfClosing) { return { tag, raw: tag.raw, body: '' }; }
@@ -100,7 +102,7 @@ function readContent(source: string): RichContent | undefined {
 		const end = codeEnd(source, index);
 		if (end !== undefined) { index = end; continue; }
 		if (source[index] === '<') {
-			const nested = readTag(source.slice(index));
+			const nested = readTag(source.slice(index), allowCaption);
 			if (nested) {
 				if (nested.name === tag.name && !nested.selfClosing) { depth += nested.closing ? -1 : 1; }
 				if (depth === 0) {
@@ -171,27 +173,45 @@ function style(values: ReadonlyMap<string, string>): ChatMarkdownRichStyle {
 	const border = values.get('border');
 	return {
 		radius: values.get('radius'), padding: values.get('padding'), gap: values.get('gap'),
-		align: values.get('align'), justify: values.get('justify'), background: values.get('background'),
+		align: values.get('textAlign') ?? values.get('align'), justify: values.get('justify'), background: values.get('background'),
 		color: values.get('color'), size: values.get('size'), border,
 		borderColor: /\bcolor\s*:\s*["']([^"']+)["']/u.exec(border ?? '')?.[1],
 	};
 }
 
+function gridColumns(value: string | undefined): 1 | 2 | 3 | 4 {
+	switch (value?.trim()) {
+		case '2': return 2;
+		case '3': return 3;
+		case '4': return 4;
+		default: return 1;
+	}
+}
+
 const lexerDepth = new WeakMap<TokenizerThis['lexer'], number>();
 function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline', previous: readonly Token[]): Tokens.Generic | undefined {
 	if (this.lexer.state.inRawBlock) { return undefined; }
+	const depth = lexerDepth.get(this.lexer) ?? 0;
+	const leading = /^ {0,3}(?=<)/u.exec(source)?.[0] ?? '';
+	const markup = source.slice(leading.length);
+	// A layout caption is distinct from the HTML caption that names a table.
+	const isLayoutCaption = depth > 0 && level === 'block' && /^<\/?caption(?=[\s/>]|$)/iu.test(markup);
 	// SVG's standard <text> element shares a spelling with the web component.
 	// Let the shared HTML renderer own it while an SVG namespace is open.
-	let svgDepth = 0;
+	let svgDepth = 0, tableDepth = 0;
 	for (const token of previous) {
 		if (token.type !== 'html') { continue; }
 		for (const match of token.raw.matchAll(/<\/?svg\b[^>]*>/giu)) {
 			svgDepth += match[0].startsWith('</') ? -1 : match[0].endsWith('/>') ? 0 : 1;
 		}
+		if (isLayoutCaption) {
+			for (const match of token.raw.matchAll(/<\/?table\b[^>]*>/giu)) {
+				tableDepth += match[0].startsWith('</') ? -1 : 1;
+			}
+		}
 	}
 	if (svgDepth > 0) { return undefined; }
-	const leading = /^ {0,3}(?=<)/u.exec(source)?.[0] ?? '';
-	const content = readContent(source.slice(leading.length));
+	const content = readContent(markup, isLayoutCaption && tableDepth === 0);
 	if (!content) { return undefined; }
 	const inline = inlineTags.has(content.tag.name) || level === 'inline';
 	const lines = content.body.split('\n');
@@ -201,7 +221,6 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 	}
 	// Remove the component's common indentation, preserving indentation inside code.
 	const body = inline ? content.body : lines.map(line => line.slice(Number.isFinite(indentation) ? indentation : 0)).join('\n').trim();
-	const depth = lexerDepth.get(this.lexer) ?? 0;
 	let tokens: Token[] = [];
 	const literal = depth >= 32 || content.tag.name === 'code';
 	if (!literal && !hiddenTags.has(content.tag.name)) {
@@ -353,6 +372,16 @@ export function decodeChatGPTReply(text: string, references: readonly ChatReplyR
 		const markdown = decode(token.body, token.tokens ?? [], !block);
 		if (tag.name === 'box' || tag.name === 'row' || tag.name === 'text') {
 			return { kind: tag.name, markdown, style: style(values), fallback, block };
+		}
+		if (tag.name === 'grid') {
+			return markdown ? { kind: 'grid', columns: gridColumns(values.get('columns')), markdown, style: style(values), block } : '';
+		}
+		if (tag.name === 'grid-item') {
+			return { kind: 'gridItem', markdown, block };
+		}
+		if (tag.name === 'caption') {
+			const presentation = style(values);
+			return markdown ? { kind: 'text', markdown, style: { ...presentation, color: presentation.color ?? 'secondary', size: presentation.size ?? 'sm' }, block } : '';
 		}
 		const data = componentData(tag);
 		if (tag.name === 'chart' && data) {

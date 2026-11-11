@@ -25,7 +25,7 @@ import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/w
 import { BackgroundSendAvailableContext, ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
-import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CODE_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
 import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
@@ -130,6 +130,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
 			messagePresentation,
+			virtualizeHistoryFrom: codePresentation.map(code => code ? CODE_HISTORY_VIRTUALIZE_FROM : undefined),
 			welcomeTitle,
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		this.composer = this._register(composer);

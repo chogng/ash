@@ -124,6 +124,39 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(getChatGPTRichContentText(source), /\*\*|<box>/u);
 	});
 
+	test('renders reply grids and captions without exposing their layout properties', () => {
+		const source = `<box>
+  **Architecture**
+  <caption>Application and window</caption>
+  <grid columns={2} gap={2}>
+    <grid-item><box>**Native UI**</box></grid-item>
+    <grid-item><box>**Web engine**</box></grid-item>
+  </grid>
+  <caption textAlign="center">Concept diagram</caption>
+</box>
+
+<table><caption>Table caption</caption><tr><td>Cell</td></tr></table>`;
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const grid = root.querySelector('.ash-chat-rich-grid.columns-2.gap-2');
+		assert.deepEqual([...grid?.children ?? []].map(cell => cell.textContent?.trim()), ['Native UI', 'Web engine']);
+		assert.deepEqual([...root.querySelectorAll('.ash-chat-rich-text.color-secondary')].map(caption => caption.textContent?.trim()), ['Application and window', 'Concept diagram']);
+		assert.equal(root.querySelector('.ash-chat-rich-text.align-center')?.textContent?.trim(), 'Concept diagram');
+		assert.equal(root.querySelector('table > caption')?.textContent, 'Table caption');
+		assert.equal(root.querySelector('details, pre'), null);
+		const accessibleText = getChatGPTRichContentText(source);
+		assert.match(accessibleText, /Architecture[\s\S]*Application and window[\s\S]*Native UI[\s\S]*Web engine[\s\S]*Concept diagram/u);
+		assert.doesNotMatch(accessibleText, /columns|gap|Content/u);
+	});
+
+	test('keeps grid content readable when the reply has invalid or unfinished layout data', () => {
+		const root = document.createElement('div');
+		root.innerHTML = render('<grid columns={globalThis.auditXss = true} gap={99}><grid-item>First</grid-item></grid>');
+		assert.equal(root.querySelector('.ash-chat-rich-grid.columns-1')?.textContent?.trim(), 'First');
+		assert.doesNotMatch(root.innerHTML, /auditXss|gap-99/u);
+		assert.match(render('<grid columns={2}>\n<grid-item>First card</grid-item>\n\nSecond card'), /First card[\s\S]*Second card/u);
+	});
+
 	test('hides image search metadata in complete and streaming replies while preserving literal code', () => {
 		const marker = '\uE200image_group\uE202{"layout":"carousel","query":["public project"]}\uE201';
 		assert.match(render(`${marker}\n\n**Project summary**`), /<strong>Project summary<\/strong>/u);

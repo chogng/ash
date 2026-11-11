@@ -33,7 +33,7 @@ function colorClass(property: 'background' | 'border', value: string | undefined
 	return `${property}-rgba-${match[1]}-${match[2]}-${match[3]}-${(match[4] ?? '1').replace('.', 'p')}`;
 }
 
-function classes(kind: 'box' | 'row' | 'text' | 'icon', style: ChatMarkdownRichStyle): string {
+function classes(kind: 'box' | 'row' | 'grid' | 'text' | 'icon', style: ChatMarkdownRichStyle): string {
 	const result = ['ash-chat-rich', `ash-chat-rich-${kind}`];
 	const variants: ReadonlyArray<readonly [keyof ChatMarkdownRichStyle, readonly string[]]> = [
 		['radius', ['sm', 'md', 'lg']], ['padding', ['0', '1', '2', '3', '4']], ['gap', ['0', '1', '2', '3', '4']],
@@ -88,6 +88,14 @@ function renderPart(part: ChatMarkdownRichPart, index: number, body: string, inL
 			return `<${tag} class="${classes(part.kind, part.style)}">${body || fallback || ''}</${tag}>`;
 		}
 		case 'icon': {
+		case 'grid': {
+			const tag = part.block ? 'div' : 'span';
+			return textOnly ? `<${tag}>${body}</${tag}>` : `<${tag} class="${classes(part.kind, part.style)} columns-${part.columns}">${body}</${tag}>`;
+		}
+		case 'gridItem': {
+			const tag = part.block ? 'div' : 'span';
+			return textOnly ? `<${tag}>${body}</${tag}>` : `<${tag} class="ash-chat-rich-grid-item">${body}</${tag}>`;
+		}
 			const label = iconText.get(part.name) ?? (part.label || part.name);
 			const iconId = iconAliases.get(part.name) ?? part.name;
 			const content = !textOnly && getLxiconDefinition(iconId)

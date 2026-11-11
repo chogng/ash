@@ -64,6 +64,7 @@ export function renderChatChartDocument(title: string, json: string): string | u
   const point = document.getElementById('point');
   let selected = 0;
   let page = 0;
+  let frame;
   const pageSize = 100;
   for (const key of series) {
     const box = document.createElement('input');
@@ -71,7 +72,7 @@ export function renderChatChartDocument(title: string, json: string): string | u
     box.checked = true;
     box.onchange = () => {
       box.checked ? enabled.add(key) : enabled.delete(key);
-      draw();
+      scheduleDraw();
     };
     const item = document.createElement('label');
     item.append(box, key);
@@ -81,12 +82,14 @@ export function renderChatChartDocument(title: string, json: string): string | u
     const row = data.rows[index];
     point.textContent = row ? data.keys.map(key => key + ': ' + String(row[key] ?? '')).join(' · ') : '';
   }
-  function draw() {
-    const rows = data.rows.slice(page * pageSize, (page + 1) * pageSize);
+  function pageRows() {
+    return data.rows.slice(page * pageSize, (page + 1) * pageSize);
+  }
+  function renderPage() {
     document.getElementById('previous').disabled = page === 0;
     document.getElementById('next').disabled = (page + 1) * pageSize >= data.rows.length;
     document.getElementById('page').textContent = (page + 1) + '/' + Math.max(1, Math.ceil(data.rows.length / pageSize));
-    document.getElementById('rows').replaceChildren(...rows.map(row => {
+    document.getElementById('rows').replaceChildren(...pageRows().map(row => {
       const tr = document.createElement('tr');
       for (const key of data.keys) {
         const td = document.createElement('td');
@@ -95,16 +98,27 @@ export function renderChatChartDocument(title: string, json: string): string | u
       }
       return tr;
     }));
-    canvas.width = Math.max(300, canvas.clientWidth) * devicePixelRatio;
-    canvas.height = 280 * devicePixelRatio;
-    context.scale(devicePixelRatio, devicePixelRatio);
-    const width = canvas.width / devicePixelRatio;
+    describe(selected);
+    scheduleDraw();
+  }
+  function scheduleDraw() {
+    if (frame !== undefined) return;
+    frame = requestAnimationFrame(() => { frame = undefined; draw(); });
+  }
+  function draw() {
+    const rows = pageRows();
+    const width = Math.max(1, canvas.clientWidth);
+    const pixelWidth = Math.round(width * devicePixelRatio);
+    const pixelHeight = Math.round(280 * devicePixelRatio);
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     const active = series.filter(key => enabled.has(key));
     const maximum = rows.reduce((max, row) => active.reduce((max, key) => Math.max(max, Math.abs(Number(row[key]) || 0)), max), 1);
     context.clearRect(0, 0, width, 280);
     context.fillStyle = getComputedStyle(document.body).color;
     context.font = '12px system-ui';
-    const slot = (width - 60) / Math.max(1, rows.length);
+    const slot = Math.max(1, width - 60) / Math.max(1, rows.length);
     active.forEach((key, seriesIndex) => {
       context.strokeStyle = context.fillStyle = 'hsl(' + ((seriesIndex * 137 + 210) % 360) + ' 65% 48%)';
       context.beginPath();
@@ -122,14 +136,14 @@ export function renderChatChartDocument(title: string, json: string): string | u
     });
     context.fillStyle = getComputedStyle(document.body).color;
     rows.forEach((row, index) => context.fillText(String(row[label] ?? index + page * pageSize + 1).slice(0, 16), 40 + index * slot, 260));
-    describe(selected);
   }
-  type.onchange = zoom.oninput = draw;
-  document.getElementById('previous').onclick = () => { page--; selected = page * pageSize; draw(); };
-  document.getElementById('next').onclick = () => { page++; selected = page * pageSize; draw(); };
+  type.onchange = zoom.oninput = scheduleDraw;
+  document.getElementById('previous').onclick = () => { page--; selected = page * pageSize; renderPage(); };
+  document.getElementById('next').onclick = () => { page++; selected = page * pageSize; renderPage(); };
   canvas.onpointermove = event => {
     const count = Math.min(pageSize, data.rows.length - page * pageSize);
-    selected = page * pageSize + Math.max(0, Math.min(count - 1, Math.floor((event.offsetX - 40) / ((canvas.clientWidth - 60) / Math.max(1, count)))));
+    const slot = Math.max(1, canvas.clientWidth - 60) / Math.max(1, count);
+    selected = page * pageSize + Math.max(0, Math.min(count - 1, Math.floor((event.offsetX - 40) / slot)));
     describe(selected);
   };
   canvas.onkeydown = event => {
@@ -139,8 +153,8 @@ export function renderChatChartDocument(title: string, json: string): string | u
       describe(selected);
     }
   };
-  new ResizeObserver(draw).observe(canvas);
-  draw();
+  new ResizeObserver(scheduleDraw).observe(canvas);
+  renderPage();
 })();
 </script></html>`;
 }

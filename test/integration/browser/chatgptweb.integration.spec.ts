@@ -821,6 +821,47 @@ test('ChatGPT rich diagrams retain their nested content without enabling HTML or
 	await testInfo.attach('chatgpt-rich-diagram', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
+test('Ash lays out reply cards side by side and stacks them when the chat narrows', async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 1200, height: 680 });
+	await chatPage(page, `<box border radius="lg" padding={3} gap={2}>
+  <box background="surface-secondary" radius="md" padding={3} align=center gap={1}>
+    **桌面应用**
+    <caption>业务逻辑、窗口与交互</caption>
+  </box>
+  <row justify=center><icon name="arrow-down"/></row>
+  <grid columns={2} gap={2}>
+    <grid-item><box border padding={3} align=center>**原生界面**</box></grid-item>
+    <grid-item><box border padding={3} align=center>**浏览器引擎**</box></grid-item>
+  </grid>
+  <caption textAlign="center">桌面架构示意</caption>
+</box>`);
+	const body = page.locator('.ash-chat-item-agentMessage .ash-chat-markdown-part');
+	const grid = body.locator('.ash-chat-rich-grid');
+	const cards = grid.locator(':scope > .ash-chat-rich-grid-item');
+	await expect(cards).toHaveText(['原生界面', '浏览器引擎']);
+	await expect(grid).toHaveCSS('display', 'grid');
+	await expect(grid).toHaveCSS('column-gap', '8px');
+	await expect(body.getByText('桌面架构示意')).toHaveCSS('text-align', 'center');
+	await expect(body.locator('.ash-chat-rich-text > p').filter({ hasText: '业务逻辑、窗口与交互' })).toHaveCSS('margin-block', '0px');
+	await expect(body.locator('details, pre, iframe, canvas')).toHaveCount(0);
+	const geometry = () => cards.evaluateAll(elements => elements.map(element => {
+		const { x, y, width } = element.getBoundingClientRect();
+		return { x, y, width };
+	}));
+	const [left, right] = await geometry();
+	expect(right!.y).toBeCloseTo(left!.y);
+	expect(right!.width).toBeCloseTo(left!.width);
+	expect(right!.x - left!.x - left!.width).toBeCloseTo(8);
+	await testInfo.attach('ash-reply-grid-wide', { body: await grid.screenshot(), contentType: 'image/png' });
+
+	await page.setViewportSize({ width: 620, height: 680 });
+	await expect.poll(async () => {
+		const [first, second] = await geometry();
+		return first!.x === second!.x && first!.y < second!.y;
+	}).toBe(true);
+	await testInfo.attach('ash-reply-grid-narrow', { body: await grid.screenshot(), contentType: 'image/png' });
+});
+
 test('ChatGPT replies omit internal citation tags while preserving literal code and links', async ({ page }) => {
 	const citation = '<Cite refs={[["turn744052search0","turn744052search6"]]}/>';
 	await chatPage(page, `Before ${citation} after.\n\n${citation}\n\n\`inline ${citation}\`\n\n\`\`\`html\n${citation}\n\`\`\`\n\n[Source](https://example.com/source)`);
@@ -894,6 +935,26 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await expect(external.locator('output')).toHaveText('1');
 	const chart = page.frameLocator('iframe[title="Dataset chart"]').frameLocator('iframe');
 	await expect(chart.getByRole('cell', { name: '64', exact: true })).toBeVisible();
+	await page.locator('iframe[title="Dataset chart"]').evaluate(frame => frame.scrollIntoView({ block: 'center' }));
+	await chart.locator('canvas').evaluate(canvas => canvas.scrollIntoView({ block: 'center' }));
+	const redraw = await chart.locator('canvas').evaluate(async canvas => {
+		const doc = canvas.ownerDocument;
+		const row = doc.querySelector('#rows tr');
+		const zoom = doc.querySelector<HTMLInputElement>('#zoom')!;
+		const context = (canvas as HTMLCanvasElement).getContext('2d')!;
+		const clear = context.clearRect;
+		let draws = 0;
+		context.clearRect = (...args) => { draws++; clear.apply(context, args); };
+		try {
+			for (let i = 0; i < 30; i++) {
+				zoom.value = i % 2 ? '2' : '1.5';
+				zoom.dispatchEvent(new Event('input'));
+			}
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			return { draws, retainedRow: doc.querySelector('#rows tr') === row };
+		} finally { context.clearRect = clear; }
+	});
+	expect(redraw).toEqual({ draws: 1, retainedRow: true });
 	await chart.locator('canvas').focus(); await chart.locator('canvas').press('ArrowRight');
 	await expect(chart.locator('#point')).toContainText('June');
 	expect(await page.locator('body').getAttribute('data-escaped')).toBeNull();

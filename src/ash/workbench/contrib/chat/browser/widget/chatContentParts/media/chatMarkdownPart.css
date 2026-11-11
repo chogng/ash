@@ -177,7 +177,43 @@
 .ash-chat-rich-row:has(> .ash-chat-image-gallery.compact) > .ash-chat-rich-box {
 	flex: 1 1 16rem;
 }
-.ash-chat-rich p {
+.ash-chat-rich-grid {
+	--ash-chat-rich-columns: 1;
+	display: grid;
+	min-width: 0;
+	/* Cap the column count while letting cards stack when the reply gets narrow. */
+	--ash-chat-rich-track-width: calc(
+		(100% - (var(--ash-chat-rich-columns) - 1) * var(--ash-chat-rich-gap)) /
+			var(--ash-chat-rich-columns)
+	);
+	grid-template-columns: repeat(
+		auto-fit,
+		minmax(min(100%, max(10rem, var(--ash-chat-rich-track-width))), 1fr)
+	);
+	overflow-wrap: anywhere;
+}
+.ash-chat-rich-grid.columns-2 {
+	--ash-chat-rich-columns: 2;
+}
+.ash-chat-rich-grid.columns-3 {
+	--ash-chat-rich-columns: 3;
+}
+.ash-chat-rich-grid.columns-4 {
+	--ash-chat-rich-columns: 4;
+}
+.ash-chat-rich-grid-item {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.ash-chat-rich-grid-item > .ash-chat-rich-box:only-child {
+	flex: 1;
+}
+.ash-chat-rich {
+	--ash-chat-rich-gap: 0px;
+	gap: var(--ash-chat-rich-gap);
+}
+.ash-markdown .ash-chat-rich p {
 	margin: 0;
 }
 .ash-markdown > .ash-chat-rich-box {
@@ -211,20 +247,17 @@
 .ash-chat-rich.padding-4 {
 	padding: 16px;
 }
-.ash-chat-rich.gap-0 {
-	gap: 0;
-}
 .ash-chat-rich.gap-1 {
-	gap: 4px;
+	--ash-chat-rich-gap: var(--ash-spacing-size40, 4px);
 }
 .ash-chat-rich.gap-2 {
-	gap: 8px;
+	--ash-chat-rich-gap: var(--ash-spacing-size80, 8px);
 }
 .ash-chat-rich.gap-3 {
-	gap: 12px;
+	--ash-chat-rich-gap: var(--ash-spacing-size120, 12px);
 }
 .ash-chat-rich.gap-4 {
-	gap: 16px;
+	--ash-chat-rich-gap: var(--ash-spacing-size160, 16px);
 }
 .ash-chat-rich.align-start {
 	text-align: start;

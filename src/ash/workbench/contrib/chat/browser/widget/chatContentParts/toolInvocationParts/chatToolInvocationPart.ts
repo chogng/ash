@@ -26,7 +26,7 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 	/** Live output and manually opened details retain their interaction state outside the viewport. */
 	public get keepMounted(): boolean {
 		const { result, stopped, waitingFor } = this.invocation;
-		return !!waitingFor || (!result && !stopped) || (this.details.open && this.progress.hasUserInteracted);
+		return !!waitingFor || (!result && !stopped) || this.app.value?.keepMounted === true || (this.details.open && this.progress.hasUserInteracted);
 	}
 	public readonly domNode: HTMLElement;
 	public readonly toolCallId: string;

@@ -157,6 +157,36 @@ test('removing an attachment cancels its read and rejects a late media result', 
 	await expect(page.locator('.ash-chat-media')).toHaveCount(0);
 });
 
+test('long history virtualizes around a live MCP App and retains visited image results', async ({ page }) => {
+	await page.goto('/chatTranscript.html?sessions');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(64, true, true));
+	const chat = page.locator('#app-chat');
+	await expect(chat.locator('.ash-chat-transcript-virtualized')).toHaveCount(1);
+	const rows = chat.locator('article[data-item-id]');
+	const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+	const bottom = () => viewport.evaluate(node => { node.scrollTop = node.scrollHeight; });
+	await bottom();
+	const gallery = chat.locator('.ash-chat-generated-image-result img');
+	await expect.poll(() => gallery.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(2);
+	const original = await gallery.elementHandle();
+	const tool = chat.locator('.ash-chat-tool-invocation').filter({ has: page.locator('.ash-chat-mcp-app') });
+	await tool.locator('summary').first().click();
+	await tool.getByRole('button', { name: 'Open interactive view', exact: true }).click();
+	const frame = page.frameLocator('iframe[title="Interactive MCP App"]').frameLocator('iframe');
+	await frame.getByRole('button', { name: 'Increment', exact: true }).click();
+	await expect(frame.locator('#count')).toHaveText('1');
+	await viewport.evaluate(node => { node.scrollTop = 0; });
+	await expect(gallery).toHaveCount(0);
+	await expect(frame.locator('#count')).toHaveText('1');
+	expect(await rows.count()).toBeLessThan(48);
+	await bottom();
+	await expect(gallery).toBeVisible();
+	expect(await gallery.evaluate((image, old) => image === old, original)).toBe(true);
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.filter(request => (request as { itemId?: string; }).itemId === 'long-image-result').length)).toBe(1);
+	await tool.getByRole('button', { name: 'Close interactive view', exact: true }).click();
+	await expect(tool.getByRole('button', { name: 'Open interactive view', exact: true })).toBeFocused();
+});
+
 test('streaming Markdown controlled rendering comparison', async ({ page }, testInfo) => {
 	test.setTimeout(180_000);
 	const errors: string[] = [];

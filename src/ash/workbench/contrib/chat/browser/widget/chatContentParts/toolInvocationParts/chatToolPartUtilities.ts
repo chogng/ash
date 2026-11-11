@@ -13,22 +13,22 @@ export function isImageGenerationToolInProgress(invocation: IChatToolInvocation)
 }
 
 /** A gallery cannot cross another message, a non-image tool, or a Turn boundary. */
-export function getImageGenerationBatch(content: readonly IChatListItem[], toolCallId: string, turnId: string): IChatListItem[] {
-	const owner = content.findIndex(item => item.toolInvocation?.call.toolCallId === toolCallId && item.toolInvocation.call.turnId === turnId);
-	const belongs = (index: number): boolean => {
-		const invocation = content[index]?.toolInvocation;
-		return !!invocation && invocation.call.turnId === turnId && isImageGenerationToolInvocation(invocation);
-	};
-	if (owner < 0 || !belongs(owner)) {
-		return [];
+export function getImageGenerationBatches(items: readonly IChatListItem[]): readonly (readonly IChatListItem[])[] {
+	const batches: IChatListItem[][] = [];
+	let batch: IChatListItem[] | undefined;
+	let turnId: string | undefined;
+	for (const item of items) {
+		const invocation = item.toolInvocation;
+		if (!invocation || !isImageGenerationToolInvocation(invocation)) {
+			batch = undefined;
+			continue;
+		}
+		if (!batch || turnId !== invocation.call.turnId) {
+			batch = [];
+			batches.push(batch);
+			turnId = invocation.call.turnId;
+		}
+		batch.push(item);
 	}
-	let start = owner;
-	let end = owner + 1;
-	while (belongs(start - 1)) {
-		start--;
-	}
-	while (belongs(end)) {
-		end++;
-	}
-	return content.slice(start, end);
+	return batches;
 }

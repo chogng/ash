@@ -3,7 +3,7 @@ import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichCont
 import type { ChatTurnChangesOpener } from '../chat.js';
 import { PromptTimelineModel, type PromptTurnChanges } from '../promptTimeline/promptTimelineModel.js';
 import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWidgetContrib.js';
-import { getImageGenerationBatch, isImageGenerationToolInvocation } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
+import { getImageGenerationBatches } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
 import { ChatImageGenerationBatchPart } from './chatContentParts/chatImageGenerationBatchPart.js';
 import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
 import { ChatListItemRenderer, type ChatResponseActions } from './chatListRenderer.js';
@@ -127,6 +127,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly layoutTrace: ChatLayoutTrace;
 	private readonly renderedItems = this._register(new DisposableMap<string, ChatListItemRenderer>());
 	private readonly imageBatches = this._register(new DisposableMap<string, RenderedImageBatch>());
+	private imageBatchItems: readonly (readonly IChatListItem[])[] = [];
 	private readonly classPrefix: string;
 	private readonly accessibilityProvider = new ChatAccessibilityProvider();
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
@@ -588,11 +589,8 @@ export class ChatListWidget extends DomWidget {
 			}
 		};
 		if (!viewportOnly) {
-			// Galleries share a renderer across rows. MCP Apps own a live view that
-			// cannot be recreated when its row leaves and re-enters the viewport.
-			const useVirtualRows = items.length >= (this.options.virtualizeHistoryFrom?.get() ?? Infinity) && !this.accessibilityService.isScreenReaderOptimized()
-				&& !items.some(item => item.toolInvocation && (isImageGenerationToolInvocation(item.toolInvocation)
-					|| item.toolInvocation.result?.content?.some(part => part.type === 'artifact' && part.artifact.source.type === 'mcpApp')));
+			const useVirtualRows = items.length >= (this.options.virtualizeHistoryFrom?.get() ?? Infinity) && !this.accessibilityService.isScreenReaderOptimized();
+			this.imageBatchItems = getImageGenerationBatches(items);
 			const changedVirtualMode = useVirtualRows !== (this.virtualRows !== undefined);
 			if (useVirtualRows || this.virtualRows) beforeLayout();
 			if (useVirtualRows) {
@@ -730,7 +728,7 @@ export class ChatListWidget extends DomWidget {
 			}
 			next = row.element.nextSibling;
 		}
-		if (!viewportOnly) changed = this.renderImageBatches(items, beforeLayout) || changed;
+		changed = this.renderImageBatches(viewportOnly, beforeLayout) || changed;
 		if (this.working !== (this.workingStatus?.element.hidden === false)) {
 			beforeLayout();
 			this.renderWorkingStatus();
@@ -985,15 +983,12 @@ export class ChatListWidget extends DomWidget {
 		}
 	}
 
-	private renderImageBatches(items: readonly IChatListItem[], beforeLayout: () => void): boolean {
+	private renderImageBatches(viewportOnly: boolean, beforeLayout: () => void): boolean {
 		const used = new Set<string>();
 		let changed = false;
-		for (let index = 0; index < items.length; index++) {
-			const call = items[index].toolInvocation;
-			if (!call || !isImageGenerationToolInvocation(call)) { continue; }
-			beforeLayout();
-			const batch = getImageGenerationBatch(items, call.call.toolCallId, call.call.turnId);
-			index += batch.length - 1;
+		for (const batch of this.imageBatchItems) {
+			const call = batch[0].toolInvocation!;
+			const host = this.renderedItems.get(batch.at(-1)!.id)?.toolPart?.domNode;
 			const members = new Set(batch.map(item => item.id));
 			// Match surviving members so extending history or removing a batch's first
 			// row does not create another media owner or read the same attachments again.
@@ -1002,21 +997,32 @@ export class ChatListWidget extends DomWidget {
 			const key = retained?.[0] ?? batch[0].id;
 			let entry = retained?.[1];
 			if (!entry) {
+				if (!host) continue;
+				beforeLayout();
 				const part = this.instantiationService.createInstance(ChatImageGenerationBatchPart, this.element.ownerDocument);
 				entry = this.imageBatches.set(key, Object.assign(new DisposableStore(), { part, turnId: call.call.turnId, members: [] as readonly string[] }));
 				entry.add(part);
 				entry.add(part.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
-				part.setVisible(this.visible);
 				changed = true;
 			}
 			used.add(key);
 			entry.members = [...members];
-			const host = this.renderedItems.get(batch.at(-1)!.id)?.toolPart?.domNode;
-			if (host && entry.part.domNode.parentElement !== host) {
+			const parent = entry.part.domNode.parentElement;
+			if (!host) {
+				// Keep the visited batch's loaded media, but release its detached row.
+				if (parent) {
+					entry.part.setVisible(false);
+					entry.part.domNode.remove();
+				}
+				continue;
+			}
+			if (parent !== host) {
+				beforeLayout();
 				host.append(entry.part.domNode);
+				entry.part.setVisible(this.visible);
 				changed = true;
 			}
-			entry.part.render(batch);
+			if (!viewportOnly || parent !== host) entry.part.render(batch);
 		}
 		for (const key of this.imageBatches.keys()) {
 			if (!used.has(key)) { beforeLayout(); this.imageBatches.deleteAndDispose(key); changed = true; }
@@ -1044,7 +1050,7 @@ export class ChatListWidget extends DomWidget {
 		this.visible = visible;
 		this.workingStatus?.logo.setVisible(visible && this.working);
 		this.updateStickyWorkingStatus();
-		for (const [, entry] of this.imageBatches) { entry.part.setVisible(visible); }
+		for (const [, entry] of this.imageBatches) { entry.part.setVisible(visible && this.transcript.contains(entry.part.domNode)); }
 		if (!visible) {
 			this.findWidget.value?.hide();
 			this.updateStickyPrompt();

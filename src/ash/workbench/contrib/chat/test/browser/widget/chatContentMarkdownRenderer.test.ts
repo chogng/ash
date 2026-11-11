@@ -78,6 +78,41 @@ suite('Shared chat Markdown rendering', () => {
 	suiteSetup(async function () { this.timeout(600000); math = await startMarkdownMathExtension(); });
 	suiteTeardown(async () => { await math?.dispose(); });
 
+	test('rich streaming reuses closed blocks and keeps canonical output on correction', async () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		const builder = new ChatMarkdownRichContentBuilder('');
+		const child = builder.add({ kind: 'box', style: {}, block: true, markdown: 'Nested card text' });
+		const card = builder.add({ kind: 'details', label: 'Stable card', markdown: child, block: true, data: '' });
+		const initial = `${card}\n\n${'A closed paragraph with ordinary text.\n\n'.repeat(48)}Growing tail`;
+		const initialContent = { ...builder.content!, parts: [...builder.content!.parts] };
+		let didRender: () => void = () => { };
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, asyncRenderCallback: () => didRender() });
+		const update = (value: string, richContent: typeof initialContent, incomplete: boolean) => new Promise<void>(resolve => {
+			didRender = resolve;
+			part.tryIncrementalUpdate({ value, supportHtml: true, richContent }, incomplete);
+		});
+		await update(initial, initialContent, true);
+		const stable = part.domNode.querySelector('details')!;
+		assert.ok(stable);
+		stable.open = false;
+		const additional = builder.add({ kind: 'textLiteral', label: 'New card', block: true });
+		const next = `${initial} continues.\n\n${additional}\n\nLast paragraph.`;
+		const lexer = mock.method(Lexer, 'lex');
+		try {
+			await update(next, { ...builder.content!, parts: [...builder.content!.parts] }, true);
+			assert.equal(part.domNode.querySelector('details'), stable);
+			assert.equal(stable.open, false);
+			assert.match(part.domNode.textContent!, /New card/u);
+			assert.ok(lexer.mock.calls.length && lexer.mock.calls.every(call => call.arguments[0].length < initial.length));
+		} finally { lexer.mock.restore(); }
+		const corrected = { ...builder.content!, parts: builder.content!.parts.map((value, index) => index === 0 ? { ...value, markdown: 'Corrected nested text' } : value) };
+		await update(next, corrected, false);
+		using canonical = renderer.render({ value: next, supportHtml: true }, { markedExtensions: [chatMarkdownRichContentExtension(corrected)] });
+		assert.equal(fragmentContents(part.domNode), canonical.element.innerHTML);
+		assert.match(part.domNode.textContent!, /Corrected nested text/u);
+	});
+
 	test('renders response parts from the shared model and keeps internal references out of text consumers', () => {
 		const builder = new ChatMarkdownRichContentBuilder('');
 		const files = [

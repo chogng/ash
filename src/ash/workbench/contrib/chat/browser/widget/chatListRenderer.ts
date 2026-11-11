@@ -4,7 +4,7 @@ import { isPortableLinkTarget } from '../../../../../base/common/htmlContent.js'
 import { equals } from '../../../../../base/common/objects.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { openLinkFromMarkdown } from '../../../../../platform/markdown/browser/markdownRenderer.js';
-import { CHAT_RESPONSE_DOWNLOAD_SCHEME, CHAT_RESPONSE_ENTITY_SCHEME, chatMarkdownRichContentExtension } from './chatMarkdownRichContent.js';
+import { CHAT_RESPONSE_DOWNLOAD_SCHEME, CHAT_RESPONSE_ENTITY_SCHEME } from './chatMarkdownRichContent.js';
 import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
@@ -212,9 +212,9 @@ export class ChatListItemRenderer extends Disposable {
 			this.thinkingPart.updateThinking(item);
 			this.item = item;
 			this.updateState();
-		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && equals(this.item.markdown, item.markdown) && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
-			&& (this.item.text === item.text && this.item.transient === item.transient
-				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
+		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && this.sameMarkdownPolicy(item) && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
+			&& (this.item.text === item.text && this.item.transient === item.transient && equals(this.item.markdown, item.markdown)
+				|| this.markdownPart.tryIncrementalUpdate(responseMarkdown(item), item.transient))) {
 			this.item = item;
 			this.updateState();
 		} else if (this.toolPart || !same) {
@@ -233,9 +233,25 @@ export class ChatListItemRenderer extends Disposable {
 			|| previous.content?.some(part => part.type !== 'text') || item.content?.some(part => part.type !== 'text')
 			|| this.options.onDidRequestMemoryReference && (this.memoryReferences.size || item.text.includes('memory:'))
 			|| previous.timestamp !== item.timestamp || !sameItemPresentation(previous, item)) return false;
-		if (!this.markdownPart.tryQueueIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient)) return false;
+		if (!this.markdownPart.tryQueueIncrementalUpdate(responseMarkdown(item), item.transient)) return false;
 		this.item = item;
 		return true;
+	}
+
+	private richActions(item: IChatListItem) {
+		const parts = item.markdown?.richContent?.parts;
+		return {
+			canDownload: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'resource' && part.uri),
+			canInspect: !!this.options.inspectResponseEntity && !!parts?.some(part => part.kind === 'entity'),
+			canReadGallery: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'imageGallery'),
+		};
+	}
+
+	private sameMarkdownPolicy(item: IChatListItem): boolean {
+		const previous = this.item.markdown;
+		const next = item.markdown;
+		return previous === next || previous?.supportHtml === next?.supportHtml && previous?.linkPolicy === next?.linkPolicy
+			&& equals(this.richActions(this.item), this.richActions(item));
 	}
 
 	private updateState(): void {
@@ -931,10 +947,8 @@ export class ChatListItemRenderer extends Disposable {
 		let markdownPart: ChatMarkdownContentPart | undefined;
 		let requestText: HTMLElement | undefined;
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
-			const { richContent, linkPolicy } = item.markdown ?? {};
-			const canDownload = !!this.options.readResponseResource && !!richContent?.parts.some(part => part.kind === 'resource' && part.uri);
-			const canInspect = !!this.options.inspectResponseEntity && !!richContent?.parts.some(part => part.kind === 'entity');
-			const canReadGallery = !!this.options.readResponseResource && !!richContent?.parts.some(part => part.kind === 'imageGallery');
+			const { canDownload, canInspect, canReadGallery } = this.richActions(item);
+			const linkPolicy = item.markdown?.linkPolicy;
 			const externalLinks = linkPolicy === 'external';
 			const linkLifetime = canDownload || canInspect || externalLinks ? new AbortController() : undefined;
 			if (linkLifetime) disposables.add(toDisposable(() => linkLifetime.abort()));
@@ -947,10 +961,9 @@ export class ChatListItemRenderer extends Disposable {
 				visible: this.options.isVisible() && (item.type !== 'reasoning' || this.options.thinkingExpansion.get(item.id) === true),
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
 				synchronousInitialRender: this.options.synchronousInitialRender,
-				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
+				markdown: responseMarkdown(item),
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
-				markedExtensions: richContent && [chatMarkdownRichContentExtension(richContent)],
 				fileReferenceDirectory: !externalLinks && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
 				actionHandler: linkLifetime
 					? (target: string) => {
@@ -1115,6 +1128,10 @@ export class ChatListItemRenderer extends Disposable {
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 	return left.text === right.text && sameContent(left.content, right.content) && sameItemPresentation(left, right);
+}
+
+function responseMarkdown(item: IChatListItem) {
+	return { value: item.text, supportHtml: item.markdown?.supportHtml, richContent: item.markdown?.richContent, supportThemeIcons: true, supportAlertSyntax: true };
 }
 
 function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolean {
