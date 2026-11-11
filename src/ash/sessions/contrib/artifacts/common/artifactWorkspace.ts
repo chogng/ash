@@ -1,4 +1,13 @@
 import { localize } from '../../../../nls.js';
+import type { ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
+
+export const artifactDetailEntry = {
+	workspaceMode: 'current',
+	activityContext: 'sessions.activity.creatorSelected',
+	content: 'editor',
+	conversation: 'visible',
+	focus: 'editor',
+} as const satisfies Partial<ISessionsEntry>;
 
 export enum ArtifactWorkspaceId {
 	Design = 'design',

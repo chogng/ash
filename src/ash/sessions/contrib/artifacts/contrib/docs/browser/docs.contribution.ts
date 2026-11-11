@@ -18,7 +18,8 @@ import { ActiveEditorContext } from '../../../../../../workbench/common/contextk
 import { DocumentEditorPane } from '../../../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import { DocumentTypes } from '../../../../../../workbench/services/documentEditor/common/documentTypes.js';
 import { IExtensionRecommendationsService } from '../../../../../../workbench/services/extensionRecommendations/common/extensionRecommendations.js';
-import { ISessionsLayoutService } from '../../../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../../../services/layout/common/sessionsEntryService.js';
+import { artifactDetailEntry } from '../../../common/artifactWorkspace.js';
 import { DOCS_EDITOR_SETTING, GENERAL_DOCUMENT_CONTENT_TYPE, type DocsEditorPreference } from '../common/docs.js';
 import { convertActiveTextToDocument, createGeneralDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact } from './documentActions.js';
 
@@ -27,7 +28,7 @@ DocumentTypes.enableFileEditors();
 function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, source?: 'restore') => Promise<void> {
 	const editors = accessor.get(IEditorPart);
 	const storage = accessor.get(IStorageService);
-	const layout = accessor.get(ISessionsLayoutService);
+	const layout = accessor.get(ISessionsEntryService);
 	return (resource, source) => {
 		const input = editors.groups.flatMap(group => group.editors.map(editor => editor.input)).find(input => input.resource.toString() === resource.toString())
 			?? {
@@ -37,8 +38,8 @@ function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, sourc
 		};
 		storage.store('sessions.creator.activeDocument', resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		return layout.openEntry({
-			id: 'creator.docs', workspaceMode: 'current', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
-			editorInput: input, restoreCommand: 'sessions.restore.creatorDocs', focus: 'editor',
+			...artifactDetailEntry,
+			id: 'creator.docs', editorInput: input, restoreCommand: 'sessions.restore.creatorDocs',
 		}, undefined, source ? { source } : undefined);
 	};
 }

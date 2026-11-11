@@ -37,7 +37,7 @@ import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, NativeChatCa
 import { registerNativeConversationSharing } from '../browser/nativeConversationShare.js';
 import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
 import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/sessionsCatalogList.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
@@ -189,7 +189,7 @@ export class ChatWorkspaceContribution extends Disposable {
 
 	constructor(
 		openContributedChatCommand: string,
-		@ISessionsLayoutService layout: ISessionsLayoutService,
+		@ISessionsEntryService layout: ISessionsEntryService,
 		@IStorageService storage: IStorageService,
 		@ISessionsService view: ISessionsService,
 		@ISessionsManagementService sessions: ISessionsManagementService,

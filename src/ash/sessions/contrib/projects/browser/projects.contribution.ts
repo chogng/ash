@@ -18,7 +18,7 @@ import { ICommandService, CommandsRegistry } from '../../../../platform/commands
 import { URI } from '../../../../base/common/uri.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
@@ -42,7 +42,7 @@ registerWorkbenchContribution(ProjectTitleBarContribution.ID, WorkbenchPhase.Blo
 
 CommandsRegistry.register('sessions.show.projects', (accessor, source) =>
 	accessor
-		.get(ISessionsLayoutService)
+		.get(ISessionsEntryService)
 		.openEntry(
 			{
 				id: 'projects',

@@ -2,6 +2,11 @@
 	background: var(--ash-sideBar-background);
 }
 
+.ash-code-editor-groups > .ash-editor-docked-auxiliarybar {
+	position: absolute;
+	box-sizing: border-box;
+}
+
 .ash-sessions-window
 	.ash-code-editor-groups
 	.ash-editor-group:not(.ash-code-page-group) {

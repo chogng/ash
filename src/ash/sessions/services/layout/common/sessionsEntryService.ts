@@ -1,16 +1,8 @@
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
-import type { URI } from '../../../../base/common/uri.js';
 import type { SessionsConversationKind } from '../../sessions/common/sessionsConversation.js';
-
-export interface ISessionEditorWorkingSetState {
-	readonly owner: { readonly sessionResource: URI; readonly chatResource: URI | undefined; } | undefined;
-	readonly restoring: boolean;
-	readonly applying: boolean;
-}
 
 /** Features describe their shared hosts; resource categories and workspace models stay with the feature. */
 export interface ISessionsEntry {
@@ -21,13 +13,14 @@ export interface ISessionsEntry {
 	readonly content: 'conversation' | 'documents' | 'editor';
 	/** A conversation entry can select a renderer independently of its workspace mode. */
 	readonly conversationKind?: SessionsConversationKind;
-	/** Starts hidden on entry; user actions may reveal the shared conversation without replacing the editor or side views. */
-	readonly conversation?: 'optional';
+	/** Whether the shared conversation starts visible beside this editor. */
+	readonly conversation?: 'visible' | 'optional';
 	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */
 	readonly sidebarContainerId?: string;
 	/** Whether this entry allows the title bar workspace mode control. Defaults to true. */
 	readonly showWorkspaceModeControl?: boolean;
 	readonly showEditorTabs?: boolean;
+	/** An editor entry docks this view container in its EditorPart. */
 	readonly detailsContainerId?: string;
 	readonly editorInput?: IResourceEditorInput;
 	readonly restoreCommand: string;
@@ -43,18 +36,14 @@ export interface ISessionsEntryOpenOptions {
 	readonly focus?: 'conversation';
 }
 
-export interface ISessionsLayoutService extends IDisposable {
-	readonly editorWorkingSetState: IObservable<ISessionEditorWorkingSetState>;
-	retainEditor(input: IResourceEditorInput): IDisposable;
-	suppressEditorAutoVisibility(): IDisposable;
+export interface ISessionsEntryService extends IDisposable {
+	/** Saves the restored editor layout after startup attaches retained tool editors. */
 	checkpointEditorLayout(): Promise<void>;
 	readonly newSessionCommand?: string;
-	readonly conversationVisible: boolean;
-	readonly onDidChangeConversationVisibility: Event<void>;
 	setConversationVisible(visible: boolean): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
 	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: ISessionsEntryOpenOptions): Promise<void>;
 	restore(): Promise<void>;
 }
 
-export const ISessionsLayoutService = createServiceIdentifier<ISessionsLayoutService>('sessionsLayoutService');
+export const ISessionsEntryService = createServiceIdentifier<ISessionsEntryService>('sessionsEntryService');

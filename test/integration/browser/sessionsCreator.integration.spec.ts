@@ -16,13 +16,81 @@ const test = base.extend({
 		expect(await page.evaluate(() => [...window.ashSessionsIntegration.errors])).toEqual([]);
 	},
 });
+test.use({ viewport: { width: 1600, height: 900 } });
+
+test('Artifact details share the conversation and dock their views in the editor', async ({ page }) => {
+	const home = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
+	const navigation = page.locator('[data-part="sidebar"]');
+	const conversation = page.locator('[data-part="sessions"]');
+	const editor = page.locator('[data-part="editor"]');
+	const properties = page.locator('[data-part="auxiliarybar"]');
+	const dock = editor.locator('[data-part="tool-editor"] > [data-part="auxiliarybar"]');
+	const commands = new QuickAccess(page);
+	await home.click();
+	await expect(conversation).toBeHidden();
+	await commands.runCommand('sessions.creator.open.design');
+	await expect(dock).toBeVisible();
+	await expect(conversation).toBeVisible();
+	const [navBox, chatBox, editorBox, detailsBox] = await Promise.all([navigation, conversation, editor, dock].map(part => part.boundingBox()));
+	expect(navBox!.x).toBeLessThan(chatBox!.x);
+	expect(chatBox!.x + chatBox!.width).toBeLessThanOrEqual(editorBox!.x);
+	expect(detailsBox!.x + detailsBox!.width).toBeCloseTo(editorBox!.x + editorBox!.width, 0);
+
+	const sash = editor.locator('[data-part="tool-editor"] > .ash-sash-vertical:not(.ash-sash-disabled)');
+	const sashBox = (await sash.boundingBox())!;
+	await page.mouse.move(sashBox.x + sashBox.width / 2, sashBox.y + sashBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(sashBox.x - 48, sashBox.y + sashBox.height / 2);
+	await page.mouse.up();
+	await expect.poll(async () => (await dock.boundingBox())!.width).toBeGreaterThan(detailsBox!.width + 30);
+	const width = (await dock.boundingBox())!.width;
+	await commands.runCommand('sessions.creator.toggleDetails');
+	await expect(properties).toBeHidden();
+	await expect(conversation).toBeVisible();
+	await commands.runCommand('sessions.creator.toggleDetails');
+	await expect(dock).toBeVisible();
+	await expect.poll(async () => (await dock.boundingBox())!.width).toBe(width);
+
+	await page.setViewportSize({ width: 1280, height: 900 });
+	await expect(dock).toBeVisible();
+	await expect(conversation).toBeVisible();
+	await page.setViewportSize({ width: 900, height: 900 });
+	await expect(properties).toBeHidden();
+	await expect(editor).toBeVisible();
+	await page.setViewportSize({ width: 600, height: 700 });
+	await expect(dock).toBeVisible();
+	await expect(navigation).toBeHidden();
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await expect(dock).toBeVisible();
+	await expect(navigation).toBeVisible();
+	await expect.poll(async () => (await dock.boundingBox())!.width).toBe(width);
+
+	for (const kind of ['docs', 'slides', 'design', 'sheet', 'whiteboard', 'data', 'motion']) {
+		await home.click();
+		await page.locator(`[data-artifact-example="${kind}"]`).click();
+		await expect(conversation).toBeVisible();
+		await expect(editor).toBeVisible();
+		if (kind === 'docs' || kind === 'sheet' || kind === 'data') await expect(properties).toBeHidden();
+		else await expect(dock).toBeVisible();
+	}
+	await commands.runCommand('sessions.creator.chooseDocsEditor');
+	await commands.select('New blank document');
+	await expect(editor.locator('.stanza-editor:visible')).toBeVisible();
+	await expect(conversation).toBeVisible();
+	await expect(properties).toBeHidden();
+});
+
+async function openDesignLayers(page: Page): Promise<Locator> {
+	await new QuickAccess(page).runCommand('workbench.sessions.sidebar.designLayers');
+	return page.getByRole('tree', { name: 'Layers', exact: true });
+}
 
 test('Sessions Prototype expressions, ordered conditional actions and custom springs run without changing variables', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
 	const prototype = properties.locator('.ash-prototype-properties'), resources = properties.locator('.ash-design-resources');
-	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), layers = await openDesignLayers(page);
 	for (const name of ['Home', 'Cart', 'Empty', 'Confirmation']) {
 		await workspace.getByRole('button', { name: 'Add screen', exact: true }).click();
 		const input = properties.getByRole('textbox', { name: 'Layer name', exact: true }); await input.fill(name); await input.press('Tab');
@@ -72,7 +140,7 @@ test('Sessions Prototype connects screens by dragging and plays transitions, bra
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	const properties = page.locator('[data-part="auxiliarybar"]');
 	const prototype = properties.locator('.ash-prototype-properties');
-	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const layers = await openDesignLayers(page);
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]');
 	for (const name of ['Home', 'Detail']) {
 		await workspace.getByRole('button', { name: 'Add screen', exact: true }).click();
@@ -118,7 +186,7 @@ test('Sessions Prototype Change to previews interactive component variants witho
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	const properties = page.locator('[data-part="auxiliarybar"]'); const prototype = properties.locator('.ash-prototype-properties');
-	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const layers = await openDesignLayers(page);
 	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await field('Text content', 'Off'); await canvas.press('ControlOrMeta+Alt+k'); await field('Layer name', 'Toggle');
 	await properties.getByRole('button', { name: 'Add variant', exact: true }).click();
@@ -178,7 +246,7 @@ test('Sessions Design components inherit overrides and switch variants with keyb
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
-	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const layers = await openDesignLayers(page);
 	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	await canvas.press('t'); await canvas.locator('.ash-canvas-viewport').click({ position: { x: 200, y: 100 } }); await page.keyboard.press('Escape'); await field('Text content', 'Default label');
 	await canvas.press('ControlOrMeta+Alt+k'); await field('Layer name', 'Button');
@@ -242,7 +310,7 @@ test('Sessions Creator Slides presents reordered pages and Brand undoes an entir
 test('Sessions Prototype scrolls with wheel, drag and keyboard, pins layers and animates Scroll to', async ({ page }, testInfo) => {
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.prototype');
-	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), layers = await openDesignLayers(page);
 	const workspace = page.locator('.ash-creator-workspace[data-creator-mode="prototype"]'), prototype = properties.locator('.ash-prototype-properties');
 	const text = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('textbox', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
 	const number = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
@@ -444,7 +512,7 @@ test('Sessions Design layout edits reflow the canvas and preserve layer identity
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
-	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const layers = await openDesignLayers(page);
 	await canvas.press('r'); await canvas.press('e');
 	await canvas.press('ControlOrMeta+a'); await canvas.press('Shift+A');
 	await properties.getByRole('textbox', { name: 'Layer name', exact: true }).fill('Navigation');
@@ -508,7 +576,7 @@ test('Sessions Design grid and wrap respect size limits in the canvas and respon
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	const properties = page.locator('[data-part="auxiliarybar"]');
-	const layers = page.getByRole('tree', { name: 'Layers', exact: true });
+	const layers = await openDesignLayers(page);
 	const number = async (name: string, value: string): Promise<void> => {
 		const field = properties.getByRole('spinbutton', { name, exact: true });
 		await field.fill(value); await field.press('Tab');
@@ -982,7 +1050,7 @@ design('Sessions Design property pane groups fields, collapses with the keyboard
 	await canvas.locator('.ash-canvas-viewport').click({ position: { x: 120, y: 80 } });
 	await page.keyboard.insertText('Text');
 	await canvas.press('Escape');
-	await page.getByRole('tree', { name: 'Layers', exact: true }).getByRole('treeitem', { name: 'Text', exact: true }).click();
+	await (await openDesignLayers(page)).getByRole('treeitem', { name: 'Text', exact: true }).click();
 	await expect(pane.getByRole('group', { name: 'Typography', exact: true })).toBeVisible();
 	await expect(stroke).toBeHidden();
 	const content = pane.getByRole('textbox', { name: 'Text content', exact: true });
@@ -990,16 +1058,16 @@ design('Sessions Design property pane groups fields, collapses with the keyboard
 	await content.press('Tab');
 	await expect(canvas.locator('[data-design-text]')).toContainText('A long text value');
 	// Resize the actual retained Part, so the field geometry follows its layout constraints.
-	const sash = pane.locator('xpath=../../..').locator(':scope > .ash-sash-vertical[aria-disabled="false"]').last();
+	const sash = pane.locator('..').locator(':scope > .ash-sash-vertical[aria-disabled="false"]');
 	await sash.hover();
 	const sashBounds = await sash.boundingBox();
 	expect(sashBounds).not.toBeNull();
 	const paneWidth = (await pane.boundingBox())!.width;
 	await page.mouse.down();
 	await expect(sash).toHaveClass(/ash-sash-active/u);
-	await page.mouse.move(sashBounds!.x + sashBounds!.width / 2 + paneWidth - 192, sashBounds!.y + sashBounds!.height / 2, { steps: 4 });
+	await page.mouse.move(sashBounds!.x + sashBounds!.width / 2 + paneWidth - 200, sashBounds!.y + sashBounds!.height / 2, { steps: 4 });
 	await page.mouse.up();
-	await expect.poll(async () => (await pane.boundingBox())!.width).toBeLessThanOrEqual(200);
+	await expect.poll(async () => (await pane.boundingBox())!.width).toBe(220);
 	const properties = pane.locator('.ash-sessions-design-properties');
 	const overflow = await properties.evaluate(root => ({ width: root.clientWidth, scrollWidth: root.scrollWidth, fieldsFit: [...root.querySelectorAll('input, textarea, select')].filter(field => (field as HTMLElement).offsetParent).every(field => field.getBoundingClientRect().right <= root.getBoundingClientRect().right) }));
 	expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.width);
@@ -1026,7 +1094,7 @@ design('Sessions Design frames keep child geometry, nested selection and whole-g
 	await expect(child).toHaveAttribute('x', '261');
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect(child).toHaveAttribute('x', '260');
-	const layers = page.locator('[data-part="sidebar"]');
+	const layers = await openDesignLayers(page);
 	await layers.getByRole('treeitem', { name: 'Frame', exact: true }).click();
 	const width = page.locator('[data-part="auxiliarybar"]').getByRole('spinbutton', { name: 'Width', exact: true });
 	await width.fill('800'); await width.press('Tab');

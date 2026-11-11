@@ -1,3 +1,4 @@
+import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../common/sessionEditorWorkingSet.js';
 import { IOutputService } from '../../../../../workbench/services/output/common/output.js';
 import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -41,11 +42,11 @@ import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../sessions/browser/view
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { NewSessionDraftVisibleContext } from '../../../../common/contextkeys.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
-import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
+import { SessionsEntryService, documentEntry } from '../../browser/sessionsEntryService.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
-import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
+import type { ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
 
-suite('SessionsLayoutService lifecycle and focus', () => {
+suite('SessionsEntryService lifecycle and focus', () => {
 	test('New follows the active entry draft and clears while a custom view covers it', async () => {
 		using fixture = new EntryFixture();
 		const entryDraft = observableValue('entry draft', true);
@@ -582,7 +583,7 @@ class EntryFixture extends Disposable {
 	public activeInput: IResourceEditorInput | undefined;
 	public readonly groupVisibility = new Map<string, boolean>();
 	public modalVisible = false;
-	public readonly service: SessionsLayoutService;
+	public readonly service: SessionsEntryService;
 	public readonly outputReveal = this._register(new Emitter<void>());
 	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
 	public get activeGroupId() { return this.services.get(IEditorPart).activeGroup.id; }
@@ -605,6 +606,7 @@ class EntryFixture extends Disposable {
 			},
 		};
 		const pageGroup = { id: 'pages', inputs: [], setTitleVisible: (visible: boolean) => { this.pageTitleVisible = visible; } };
+		this.services.registerInstance(ISessionEditorWorkingSetService, this.services.createInstance(SessionEditorWorkingSetService));
 		this.services.registerInstance(IStorageService, this.storage);
 		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
 		this.services.registerInstance(ICustomViewService, this.customViews);
@@ -675,15 +677,17 @@ class EntryFixture extends Disposable {
 		} as unknown as IPaneCompositePartService);
 		this.services.registerInstance(ILayoutService, {
 			mainContainer: this.container,
+			isEditorPartAutoVisibilitySuppressed: () => false,
 			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
 			isPartVisible: (id: string) => this.visible.get(id) ?? false,
 			isPartRequested: (id: string) => this.visible.get(id) ?? false,
 			showPart: (id: string) => { this.visible.set(id, true); this.partChanges.push('show:' + id); },
 			hidePart: (id: string) => { this.visible.set(id, false); this.partChanges.push('hide:' + id); },
 			setPrimaryPart: (id: string) => this.partChanges.push('primary:' + id),
+			setAuxiliaryBarDocked: () => { },
 			setPartAvailable: (id: string, available: boolean) => { this.visible.set(id, available); this.partChanges.push('available:' + id); },
 			updateParts: (update: () => void) => update(), focus: () => { this.focused = 'conversation'; },
 		} as unknown as ILayoutService);
-		this.service = this._register(this.services.createInstance(SessionsLayoutService));
+		this.service = this._register(this.services.createInstance(SessionsEntryService));
 	}
 }

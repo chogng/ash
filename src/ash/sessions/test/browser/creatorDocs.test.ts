@@ -8,7 +8,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IExtensionRecommendationsService } from '../../../workbench/services/extensionRecommendations/common/extensionRecommendations.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService, type ISessionsEntry } from '../../services/layout/common/sessionsEntryService.js';
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
@@ -36,7 +36,7 @@ for (const [preference, provider, extension, recommends] of [
 	services.registerInstance(IEditorPart, { groups: [] } as unknown as IEditorPart);
 	services.registerInstance(IViewsService, { getVisibleViewContainer: () => null } as unknown as IViewsService);
 	const entries: ISessionsEntry[] = [];
-	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as unknown as ISessionsLayoutService);
+	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as unknown as ISessionsEntryService);
 	let recommended = 0;
 	services.registerInstance(IExtensionRecommendationsService, { recommendForResource: resource => { assert.equal(resource.path, '/document.ash-doc'); ++recommended; } } as IExtensionRecommendationsService);
 	if (provider) {

@@ -16,7 +16,7 @@ Artifacts 是 Sessions 的创作主页，点击 Docs、Slides、Design、Sheet�
 | Make       | 生成代码与场景 JSON 查看、HTML 运行预览、附带代码的 Agent 对话草稿 |
 | Prototype  | 手机屏幕、热点连线、分支流程、浮层和过渡动画                       |
 
-Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Creator Sites](../../CREATOR_SITES.md)。Make 的 Agent 操作准备未发送的 Code 草稿，由用户在对话里检查并发送。
+Sites 尚未提供网站布局重排、路由文档和发布，完整领域约定见 [Creator Sites](../../CREATOR_SITES.md)。Make 的 Agent 操作在预览旁准备未发送的 Code 草稿，由用户在对话里检查并发送。
 
 这份文档说明目录归属、状态与生命周期约定。后续开发先阅读 [七项入口的官方定位](DESIGN.md#七项入口的官方定位)、[Agent 的作用](DESIGN.md#agent-在各项工作中的作用)、[Part 分工](DESIGN.md#七项工作区的-part-分工)和 [工作区与验收要求](DESIGN.md#ash-的工作区与验收要求)，按各项任务设计能力；这些是目标要求，不能将上表的当前操作视为完整产品能力。完整 Agent 对话由 `SessionsPart` 承载，创作内容由 `EditorPart` 承载；布局组合遵循 [Sessions 布局契约](../../LAYOUT.md#creator-conversation-and-editor-composition)。Sessions 的窗口装配见 [Sessions README](../../README.md)，窗口分层见 [LAYERS.md](../../LAYERS.md)。
 

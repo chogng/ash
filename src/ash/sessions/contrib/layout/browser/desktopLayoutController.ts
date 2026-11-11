@@ -20,10 +20,7 @@ import { DesktopDetailPanelCoordinator } from './desktop/desktopDetailPanelCoord
 import { DesktopExistingSessionStrategy } from './desktop/desktopExistingSessionStrategy.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import type { IEditorGroupView } from '../../../../workbench/browser/parts/editor/editor.js';
-import { readCodeCardLayout, readCodeCardLayoutState, migrateCodeCardLayout, type CodeCardLayoutSnapshot } from '../../../browser/codeCardLayout.js';
-import type { EditorWorkingSetLayout } from '../../../../workbench/services/editor/common/editorWorkingSet.js';
-import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
-import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
+import { ISessionEditorWorkingSetService } from '../common/sessionEditorWorkingSet.js';
 
 /** The entry owner supplies policy; the controller never owns another product selection. */
 export interface IDesktopLayoutContext {
@@ -45,9 +42,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private codeActiveGroup: number | undefined;
 	/** Temporary geometry while entries project the same retained groups as hidden. */
 	private codeLayout: EditorWorkingSet | undefined;
-	private readonly legacyLayouts = new Map<string, CodeCardLayoutSnapshot>();
-	private legacyFallback: CodeCardLayoutSnapshot | undefined;
-	private migrationReady = false;
+	private initialEditorLayoutRestored = false;
 	private readonly tabs: DesktopDockedTabsCoordinator;
 	private readonly detailPanel: DesktopDetailPanelCoordinator;
 	private readonly existingSession: DesktopExistingSessionStrategy;
@@ -65,8 +60,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@ILogService logService: ILogService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@ISessionEditorWorkingSetService editorWorkingSets: ISessionEditorWorkingSetService,
 	) {
-		super(sessions, management, editor, editors, workspace, layout, storage, notifications, logService, lifecycle, instantiation);
+		super(sessions, management, editor, editors, workspace, layout, storage, notifications, logService, lifecycle, instantiation, editorWorkingSets);
 		this._register((editor as DesktopEditorParts).setGroupScope(id => this.documentGroups.some(group => group.id === id)));
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
@@ -77,69 +73,19 @@ export class DesktopLayoutController extends BaseLayoutController {
 			if (!isRecord(profile) || typeof profile.editor !== 'boolean' || typeof profile.details !== 'boolean') { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
 			this.closedProfile = { documents: profile.editor, details: profile.details };
 		}
-		const legacy = readCodeCardLayoutState(storage.get('sessions.code.cardLayouts', StorageScope.WORKSPACE));
-		this.legacyFallback = legacy.fallback;
-		for (const [key, snapshot] of legacy.sessions) this.legacyLayouts.set(key, snapshot);
-		if (!this.legacyFallback && this.legacyLayouts.size === 0) {
-			const profile = storage.get('sessions.code.cardLayout', StorageScope.PROFILE);
-			const fixed = ['titlebar', 'sidebar', 'sessions', 'customview', 'panel', 'info'];
-			const tree = readCodeCardLayout(profile, [...fixed, 'files', 'changes', 'browser'])
-				?? readCodeCardLayout(profile, [...fixed, 'files', 'changes'])
-				?? readCodeCardLayout(profile, [...fixed, 'editor', 'auxiliarybar']);
-			if (tree) this.legacyFallback = { tree, placed: [] };
-		}
 	}
 
-	/** Commit unified working sets before the bootstrap removes legacy browser state. */
+	/** Save the restored editor working set before removing the old Browser snapshot. */
 	public async checkpointEditorLayout(): Promise<void> {
 		await this.whenSettled();
 		if (this.isDisposed) return;
-		this.migrationReady = true;
+		this.initialEditorLayoutRestored = true;
 		if (!this.context.isDocumentContent) return;
-		this.migrateLegacyLayout();
 		this.captureEditors(true);
 		this.saveState();
 		this.storage.remove('sessions.browser.editorState', StorageScope.WORKSPACE);
 	}
 
-	private migrateLegacyLayout(): void {
-		if (!this.migrationReady) return;
-		const selection = this.sessions.activeSelection;
-		const key = selection ? this.sessionKey(selection) : undefined;
-		const legacy = key ? this.legacyLayouts.get(key) ?? this.legacyFallback : this.legacyFallback;
-		if (!legacy) return;
-		const groups = this.documentGroups;
-		const mappings = new Map<string, EditorWorkingSetLayout>();
-		for (const [id, accepts] of [
-			['panel', (group: IEditorGroupView) => group.inputs.some(input => input instanceof TerminalEditorInput)],
-			['browser', (group: IEditorGroupView) => group.inputs.some(input => input.resource.scheme === BrowserViewUri.scheme)],
-			['changes', (group: IEditorGroupView) => group.inputs.some(input => input.resource.scheme === 'ash-session-changes')],
-			['files', (group: IEditorGroupView) => group.inputs.length === 0 || group.inputs.some(input => !(input instanceof TerminalEditorInput) && input.resource.scheme !== BrowserViewUri.scheme && input.resource.scheme !== 'ash-session-changes')],
-		] as const) {
-			const included = groups.filter(accepts);
-			if (included.length) mappings.set(id, this.editor.saveWorkingSet('legacy-tools', this.editor.groups.filter(group => !included.includes(group)).map(group => group.id)).layout!);
-		}
-		const files = mappings.get('files');
-		if (files) mappings.set('auxiliarybar', files);
-		const layout = migrateCodeCardLayout(legacy.tree, mappings);
-		if (layout) {
-			const identities = new Map<number, number>();
-			const collect = (node: EditorWorkingSetLayout): void => {
-				if (node.type === 'leaf') identities.set(node.data.groupId, node.data.groupId);
-				else node.children.forEach(collect);
-			};
-			collect(layout);
-			(this.editor as DesktopEditorParts).restoreLayout(layout, identities);
-			for (const group of this.editor.groups) if (!groups.includes(group)) this.editor.setGroupVisible(group.id, false);
-		}
-		if (key) this.legacyLayouts.delete(key);
-		this.legacyFallback = undefined;
-		this.captureEditors(true);
-		this.saveState();
-		if (this.legacyLayouts.size) this.storage.store('sessions.code.cardLayouts', JSON.stringify({ version: 1, sessions: [...this.legacyLayouts] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		else this.storage.remove('sessions.code.cardLayouts', StorageScope.WORKSPACE);
-		this.storage.remove('sessions.code.cardLayout', StorageScope.PROFILE);
-	}
 	public override start(): void {
 		super.start();
 		this._register(this.editor.onDidChangeEditors(event => {
@@ -159,7 +105,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private get documentsVisible(): boolean { return this.context.isDocumentContent && this.layout.isPartVisible('editor'); }
 	public get hasDocumentEditors(): boolean { return this.documentGroups.some(group => group.inputs.some(input => !this.tabs.isManaged(input))); }
 	public get supportsDetails(): boolean { return this.detailPanel.supportsActiveEditor; }
-	public get isRestoringEditors(): boolean { return this.restoring || this.autoVisibilitySuppressions > 0; }
+	public get isRestoringEditors(): boolean { return this.restoring || this.layout.isEditorPartAutoVisibilitySuppressed(); }
 
 	public setDocumentGroupsVisible(visible: boolean): void {
 		if (this.codeGroupsVisible === visible) return;
@@ -197,7 +143,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		revealDetails = revealDetails && (this.editor as DesktopEditorParts).fileEditorsVisible;
 		await this.detailPanel.update(revealDetails);
 		if (revealDetails && !this.isDisposed) this.layout.showPart('editor');
-		if (this.migrationReady) await this.checkpointEditorLayout();
+		if (this.initialEditorLayoutRestored) await this.checkpointEditorLayout();
 	}
 
 	public updateDetails(reveal: boolean): Promise<void> { return this.isDisposed ? Promise.resolve() : this.detailPanel.update(reveal); }
@@ -277,7 +223,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 		// Keep dirty documents and live tools accessible after their session is removed.
 		// Unbound groups become part of the current composition on its next capture.
 		this.liveGroups.delete(key);
-		this.legacyLayouts.delete(key);
 		if (this.currentWorkingSet === key) this.currentWorkingSet = undefined;
 	}
 	protected override async onSessionRestored(selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {
@@ -288,7 +233,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.tabs.reconcile(selection, false, this.documentGroups);
 		if (this.isDisposed) { return; }
 		await this.detailPanel.update(false);
-		this.migrateLegacyLayout();
 		const editor = this.editor as DesktopEditorParts;
 		if (editor.filesDetailsOpen && this.documentsVisible) {
 			if (editor.filesPart.fileGroups.some(group => editor.isGroupVisible(group.id))) editor.filesPart.showDetails();

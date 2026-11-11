@@ -33,7 +33,7 @@ import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/w
 import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
-import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../services/layout/common/sessionsEntryService.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { IProjectService, type Project } from '../../../platform/projects/common/projectService.js';
@@ -122,7 +122,7 @@ test('navigation New uses the active entry owner before the default ChatGPT entr
 	const calls: string[] = [];
 	let entryCommand: string | undefined = 'test.entry.newChat';
 	services.registerInstance(IContextKeyService, { getValue: () => 'chat' } as unknown as IContextKeyService);
-	services.registerInstance(ISessionsLayoutService, { get newSessionCommand() { return entryCommand; } } as ISessionsLayoutService);
+	services.registerInstance(ISessionsEntryService, { get newSessionCommand() { return entryCommand; } } as ISessionsEntryService);
 	using native = CommandsRegistry.register('test.entry.newChat', () => { calls.push('native'); });
 	using chatgpt = CommandsRegistry.register('sessions.open.new', () => { calls.push('chatgpt'); });
 	using commands = new CommandService(services);
@@ -149,7 +149,7 @@ test('Code navigation New creates a Session and opens its workspace without the 
 		}
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: contextChanged.event } as unknown as IContextKeyService);
-	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as ISessionsLayoutService);
+	services.registerInstance(ISessionsEntryService, { newSessionCommand: undefined } as ISessionsEntryService);
 	services.registerInstance(ISessionsService, {
 		get navigationRevision() { return revision; }, openNewSession: (_title: undefined, options: unknown) => {
 			assert.deepEqual(options, target);
@@ -199,7 +199,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
 	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: Event.None } as unknown as IContextKeyService);
-	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as unknown as ISessionsLayoutService);
+	services.registerInstance(ISessionsEntryService, { newSessionCommand: undefined } as unknown as ISessionsEntryService);
 	services.registerInstance(ILayoutService, { focus: () => focus.push('composer') } as unknown as ILayoutService);
 	using code = CommandsRegistry.register('sessions.open.code', () => { focus.push('code'); });
 	using commands = new CommandService(services);

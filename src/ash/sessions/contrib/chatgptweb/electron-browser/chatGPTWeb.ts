@@ -19,7 +19,7 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
 import type { ChatDraftModelSource } from '../../chat/browser/replyChatEditor.js';
 import type { IReplyChatEditorModel, ReplyChatEditorOptions } from '../../chat/browser/replyChatEditor.js';
@@ -117,7 +117,7 @@ export class ChatGPTDraftModelSource implements ChatDraftModelSource {
 export class ChatGPTWebContribution extends Disposable implements IWorkbenchContribution {
 	public static readonly ID = 'sessions.chatgpt.web';
 	constructor(
-		@ISessionsLayoutService layout: ISessionsLayoutService,
+		@ISessionsEntryService layout: ISessionsEntryService,
 		@IChatGPTService chat: IChatGPTService,
 		@ISessionsSearchService search: ISessionsSearchService,
 		@IEditorService editors: IEditorService,
@@ -179,7 +179,7 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 	static readonly ID = 'sessions.chatgpt.experimental';
 
 	constructor(
-		@ISessionsLayoutService layout: ISessionsLayoutService,
+		@ISessionsEntryService layout: ISessionsEntryService,
 		@IChatGPTNativeService chat: IChatGPTService,
 		@IChatGPTNativeTransport transport: IChatGPTTransport,
 		@IEditorService editors: IEditorService,

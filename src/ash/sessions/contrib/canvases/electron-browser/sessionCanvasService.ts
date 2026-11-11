@@ -1,6 +1,7 @@
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { CanvasesEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
@@ -11,7 +12,8 @@ import { ISessionsService } from '../../../services/sessions/browser/sessionsSer
 import { autorun, derived, observableSignalFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IAgentHostCanvasCollection } from '../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
+import { ISessionEditorWorkingSetService } from '../../layout/common/sessionEditorWorkingSet.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { Event } from '../../../../base/common/event.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING, type ChatLayoutMode } from '../../../common/chatLayout.js';
@@ -37,12 +39,17 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 		@IEditorPart private readonly editors: IEditorPart,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IAgentHostCanvasCollection private readonly collection: IAgentHostCanvasCollection,
-		@ISessionsLayoutService layout: ISessionsLayoutService,
+		@ILayoutService layout: IAgentWorkbenchLayoutService,
+		@ISessionEditorWorkingSetService editorWorkingSets: ISessionEditorWorkingSetService,
 		@ISessionsManagementService management: ISessionsManagementService,
 		@IPinnedCanvasService private readonly pins: IPinnedCanvasService,
 	) {
 		super();
-		this.workingSets = { state: layout.editorWorkingSetState, registerEditorToRetain: (input: CanvasInput) => layout.retainEditor(input), suppressEditorPartAutoVisibility: () => layout.suppressEditorAutoVisibility() };
+		this.workingSets = {
+			state: editorWorkingSets.restoreState,
+			registerEditorToRetain: (input: CanvasInput) => editorWorkingSets.registerEditorToRetain(input),
+			suppressEditorPartAutoVisibility: () => layout.suppressEditorPartAutoVisibility(),
+		};
 		const changes = observableSignalFromEvent(this, this.changed.event);
 		const visibleOwners = () => {
 			const result: ICanvasOwner[] = [];

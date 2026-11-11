@@ -117,7 +117,7 @@ import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/
 import { IAgentHostInputCompletionService, IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
-import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
+import { AppServerAvailableContext, AuxiliaryBarVisibleContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { EditorPanes } from '../../workbench/browser/editor.js';
 import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
 import { WorkbenchEditorContextKeysHandler } from '../../workbench/browser/contextkeys.js';
@@ -269,7 +269,7 @@ import { DesktopToolEditorPart } from './parts/desktopToolEditorPart.js';
 import type { DesktopEditorTool } from './parts/desktopEditorArea.js';
 import { type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
-import { SessionsLayoutService } from '../contrib/layout/browser/sessionsLayoutService.js';
+import { SessionsEntryService } from '../contrib/layout/browser/sessionsEntryService.js';
 import { URI } from '../../base/common/uri.js';
 import { SessionsEditorService } from './sessionsEditorService.js';
 import { isImageResource } from '../../workbench/contrib/mediaPreview/common/mediaPreview.js';
@@ -351,7 +351,7 @@ import { SessionsConfiguration, type SessionsActivityBarLocation } from '../comm
 import { SessionsManagementService } from '../services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
-import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../services/layout/common/sessionsEntryService.js';
 import { registerLayoutActions } from './layoutActions.js';
 import { registerSessionsTerminalContribution } from '../contrib/terminal/browser/sessionsTerminalContribution.js';
 import { ITerminalProcessService, TerminalLocation } from '../../platform/terminal/common/terminal.js';
@@ -441,7 +441,7 @@ export abstract class Workbench extends Disposable {
 		}
 		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			if (id !== ISessionsLayoutService && !serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
+			if (id !== ISessionsEntryService && !serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
@@ -864,15 +864,15 @@ export abstract class Workbench extends Disposable {
 		const recoveredDrafts = migrateNewChatDraftState(storage, chatInputStatePersistence, error => notificationService.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
 		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
 			const request = value as { readonly prompt: string; readonly content: string; };
+			await services.get(ISessionsEntryService).setConversationVisible(true);
 			view.openNewSession(localize('sessions.creator.make.session', 'Make development'));
-			await commandService.executeCommand('sessions.open.code');
 			sessionsPart!.addContext({ id: 'creator-source', name: 'creator.html', kind: 'file', resolve: async () => ({ name: 'creator.html', content: request.content }) });
 			sessionsPart!.appendToDraft(request.prompt || localize('sessions.creator.make.request', 'Build an application from the attached Creator document.'));
 			sessionsPart!.focus();
 		}));
 		this._register(CommandsRegistry.register('sessions.addContextToAgent', async (_accessor, value) => {
 			const context = value as { readonly id: string; readonly name: string; readonly content: string; };
-			await services.get(ISessionsLayoutService).setConversationVisible(true);
+			await services.get(ISessionsEntryService).setConversationVisible(true);
 			sessionsPart!.addContext({ id: context.id, name: context.name, kind: 'file', resolve: async () => ({ name: context.name, content: context.content }) });
 			sessionsPart!.focus();
 		}));
@@ -1105,8 +1105,8 @@ export abstract class Workbench extends Disposable {
 		const editors = this._register(services.createInstance(SessionsEditorService, editor));
 		documentServices.registerInstance(IEditorService, editors);
 		documentServices.registerInstance(IEditorGroupsService, editors);
-		if (!services.has(ISessionsLayoutService)) {
-			services.registerSingleton(ISessionsLayoutService, () => documentServices.createInstance(SessionsLayoutService));
+		if (!services.has(ISessionsEntryService)) {
+			services.registerSingleton(ISessionsEntryService, () => documentServices.createInstance(SessionsEntryService));
 		}
 		const editorParts = editor;
 		services.registerInstance(IEditorPartsService, editorParts);
@@ -1160,7 +1160,13 @@ export abstract class Workbench extends Disposable {
 			['auxiliarybar', auxiliarybar],
 			['customview', customViewPart],
 		]);
-		layout.createWorkbenchLayout(parts);
+		layout.createWorkbenchLayout(parts, filesEditor);
+		const auxiliaryBarVisible = AuxiliaryBarVisibleContext.bindTo(contextKeys);
+		auxiliaryBarVisible.set(layout.isPartVisible('auxiliarybar'));
+		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
+			if (partId === 'auxiliarybar') auxiliaryBarVisible.set(visible);
+		}));
+		this._register(toDisposable(() => auxiliaryBarVisible.reset()));
 		const layoutToolHeaders = () => {
 			// An empty editor area still owns its side of the split title bar.
 			const dock = contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && !editorArea.hasProductPage
@@ -1237,7 +1243,7 @@ export abstract class Workbench extends Disposable {
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		this.layoutService.layout();
-		const entryLayout = services.get(ISessionsLayoutService);
+		const entryLayout = services.get(ISessionsEntryService);
 		// Stop layout persistence before Parts are released; the service scope otherwise outlives their editor grids.
 		this._register(toDisposable(() => entryLayout.dispose()));
 		this.lifecycleService.phase = LifecyclePhase.Ready;
@@ -1259,7 +1265,7 @@ export abstract class Workbench extends Disposable {
 				void workspaceProjectionReady.complete();
 			});
 			if (this.isDisposed) return;
-			using suppression = entryLayout.suppressEditorAutoVisibility();
+			using suppression = layout.suppressEditorPartAutoVisibility();
 			const previousGroups = new Set(editor.groups.map(group => group.id));
 			const previousActive = editor.activeGroup;
 			const legacyBrowser = browsers && storage.get('sessions.browser.editorState', StorageScope.WORKSPACE);
@@ -1305,7 +1311,7 @@ export abstract class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>, publishWorkspaceReady: () => void): Promise<void> {
+	private async initialize(view: SessionsService, ownerWindow: Window, entryLayout: ISessionsEntryService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>, publishWorkspaceReady: () => void): Promise<void> {
 		if (this.isDisposed) return;
 		await view.initialize();
 		if (this.isDisposed) return;
@@ -1352,15 +1358,19 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	getSideBarPosition(): Position;
-	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void;
+	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>, mainEditor?: DesktopMainEditorPart): void;
 	layout(dimension?: IDimension): void;
 	readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;
 	/** Determines which center absorbs window resizing; supporting Parts retain their user widths. */
 	setPrimaryPart(partId: 'sessions' | 'editor'): void;
+	setAuxiliaryBarDocked(docked: boolean): void;
 	setCustomViewVisible(visible: boolean): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
 	isPartRequested(partId: 'sidebar' | 'editor' | 'auxiliarybar'): boolean;
+	/** Keep programmatic editor changes from changing the EditorPart's visibility. Calls can nest. */
+	suppressEditorPartAutoVisibility(): IDisposable;
+	isEditorPartAutoVisibilitySuppressed(): boolean;
 	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor', available: boolean): void;
 	updateParts(update: () => void): void;
 	showPart(partId: SessionsPartId): void;

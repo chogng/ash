@@ -6,7 +6,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
@@ -34,7 +34,7 @@ export class NewSessionFromNavigationAction extends Action2 {
 		const commands = accessor.get(ICommandService);
 		const contextKeys = accessor.get(IContextKeyService);
 		const mode = contextKeys.getValue(SessionsWorkspaceModeContext.key);
-		const entryCommand = accessor.get(ISessionsLayoutService).newSessionCommand;
+		const entryCommand = accessor.get(ISessionsEntryService).newSessionCommand;
 		if (entryCommand) {
 			await commands.executeCommand(entryCommand);
 			return;

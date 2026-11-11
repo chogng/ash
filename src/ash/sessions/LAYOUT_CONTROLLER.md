@@ -4,7 +4,7 @@
 
 This document specifies the intended controller boundaries and session-switch behavior.
 
-BaseLayoutController owns per-session document working sets and panel view selection. DesktopLayoutController coordinates session document restoration and the desktop Editor/Details states. Feature contributions own entry commands; the Sessions layout service applies their container IDs and central content without branching on product names. Creator aggregates contributed creation tools, while Projects presents the durable project catalog with materials inside each project. Chat, Code and Collaboration keep the same selection, conversation views and input drafts.
+BaseLayoutController owns per-session document working sets and panel view selection. DesktopLayoutController coordinates session document restoration and the desktop Editor/Details states. Feature contributions own entry commands; the Sessions entry service applies their container IDs and central content without branching on product names. Creator aggregates contributed creation tools, while Projects presents the durable project catalog with materials inside each project. Chat, Code and Collaboration keep the same selection, conversation views and input drafts.
 
 SessionsPart permanently owns Agent conversation content and its grid. Projects and Creator use retained EditorPanes in the Sessions EditorPart product-page group. Applying a session working set excludes and preserves that group, including its live panes, workspaces and documents. The Code document groups retain the normal editor split capabilities.
 
@@ -14,16 +14,17 @@ Code tools share the retained EditorPart and its Editor Group Grid. Files naviga
 
 Mobile presentation, separate desktop lifecycle strategy classes, and the controller-selection contribution below remain intended contracts. Current behavior tests live in `contrib/layout/test/browser/desktopLayoutController.test.ts`, `test/browser/sessions-layout.test.ts`, and `test/smoke/areas/sessions/sessions-code.spec.ts`.
 
-| File                                                                                                  | Responsibility                                                                  | Rules                                                                                                  |
-| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `contrib/layout/browser/baseSessionLayoutController.ts` (`BaseLayoutController`)                      | Shared panel, editor working-set, persistence, and multi-session mechanics      | [baseSessionLayoutController.md](contrib/layout/browser/baseSessionLayoutController.md), `B1`–`B6`     |
-| `contrib/layout/browser/desktopLayoutController.ts` (`DesktopLayoutController`)                       | Non-phone Editor/Details composition and lifecycle strategies                   | [DESKTOP.md](DESKTOP.md)                                                                               |
-| `services/layout/common/sessionsLayoutService.ts` / `contrib/layout/browser/sessionsLayoutService.ts` | Feature entry contract, shared host activation and entry visibility persistence | [LAYOUT.md](LAYOUT.md#activity-bar-entry-switching)                                                    |
-| `contrib/layout/browser/mobileSessionLayoutController.ts` (`MobileLayoutController`)                  | Phone adaptation without auxiliary-bar automation                               | [mobileSessionLayoutController.md](contrib/layout/browser/mobileSessionLayoutController.md), `M1`–`M2` |
+| File                                                                                                | Responsibility                                                                  | Rules                                                                                                  |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `contrib/layout/browser/baseSessionLayoutController.ts` (`BaseLayoutController`)                    | Shared panel, editor working-set, persistence, and multi-session mechanics      | [baseSessionLayoutController.md](contrib/layout/browser/baseSessionLayoutController.md), `B1`–`B6`     |
+| `contrib/layout/common/sessionEditorWorkingSet.ts`                                                  | Observable restoration state and retained editor registrations                  | Shared by the controller and features such as Canvas                                                   |
+| `contrib/layout/browser/desktopLayoutController.ts` (`DesktopLayoutController`)                     | Non-phone Editor/Details composition and lifecycle strategies                   | [DESKTOP.md](DESKTOP.md)                                                                               |
+| `services/layout/common/sessionsEntryService.ts` / `contrib/layout/browser/sessionsEntryService.ts` | Feature entry contract, shared host activation and entry visibility persistence | [LAYOUT.md](LAYOUT.md#activity-bar-entry-switching)                                                    |
+| `contrib/layout/browser/mobileSessionLayoutController.ts` (`MobileLayoutController`)                | Phone adaptation without auxiliary-bar automation                               | [mobileSessionLayoutController.md](contrib/layout/browser/mobileSessionLayoutController.md), `M1`–`M2` |
 
-Current non-phone Agents windows use `DesktopWorkbench`. The Sessions layout service creates the DesktopLayoutController; `sessions.layout.contribution.ts` registers the service and built-in Chat, Code and Collaboration commands. Workbench restores the saved entry through the owning command before declaring restoration complete. Phone presentation remains planned with MobileWorkbench and MobileLayoutController.
+Current non-phone Agents windows use `DesktopWorkbench`. The Sessions entry service creates the DesktopLayoutController; `sessions.layout.contribution.ts` registers the service and built-in Chat, Code and Collaboration commands. Workbench restores the saved entry through the owning command before declaring restoration complete. Phone presentation remains planned with MobileWorkbench and MobileLayoutController.
 
-`DesktopLayoutController` extends `BaseLayoutController` and preserves retained product editors while restoring session document groups. Shared tab and detail mechanics live in coordinators. Feature contributions pass their entry descriptors to the Sessions layout service; they do not move resource browsing or workspace selection into the desktop controller. Editor-part construction must not acquire `ISessionsService`, because the Sessions service graph already depends on editor parts.
+`DesktopLayoutController` extends `BaseLayoutController` and preserves retained product editors while restoring session document groups. Shared tab and detail mechanics live in coordinators. Feature contributions pass their entry descriptors to the Sessions entry service; they do not move resource browsing or workspace selection into the desktop controller. Editor-part construction must not acquire `ISessionsService`, because the Sessions service graph already depends on editor parts.
 
 It is the detailed companion to the [layout-controller boundary](LAYOUT.md#layout-controller-boundary).
 
@@ -54,7 +55,7 @@ Editor working-set application waits until the active workspace folders match th
 
 When more than one session is visible, per-session layout synchronization is suppressed because the shared workbench parts do not belong to one active session. Editor working sets remain persisted.
 
-On initial restoration, a saved working set is applied under editor-auto-visibility suppression. The restored workbench part visibility remains authoritative, so loading editors does not reveal a side pane the user had closed.
+The controller suppresses editor auto-visibility while restoring a working set. After entry restoration, Workbench also holds a suppression lease while attaching retained tool editors. `DesktopWorkbenchLayout` counts these leases, including those held by Canvas. The restored workbench part visibility remains authoritative, so loading editors does not reveal a side pane the user had closed.
 
 ## 3. Desktop tools
 
@@ -95,7 +96,7 @@ Persisted state is validated by its owner before use. Legacy page resources are 
 
 Window navigation geometry and part visibility are restored before the layout controller starts. Applying a Session's tool geometry preserves that navigation and the window's desired tool visibility.
 
-Legacy version-1 `sessions.code.cardLayouts` trees are validated and converted once into the corresponding editor working-set group layouts. Successful migrations write the owning working set before retiring the consumed legacy entry; unvisited Session entries remain pending migration. The retired browser working set is attached to the Browser EditorPart before its legacy key is removed. Existing panel terminal instances move into TerminalEditor without creating new processes. The current writer persists only editor working sets, Part membership, tool geometry and group geometry; the Card decoder is migration-only.
+The retired browser working set is attached to the Browser EditorPart before its legacy key is removed. Existing panel terminal instances move into TerminalEditor without creating new processes. The current writer persists editor working sets, Part membership, tool geometry and group geometry.
 
 ## 7. Key invariants
 

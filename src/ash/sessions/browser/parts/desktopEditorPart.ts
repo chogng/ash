@@ -6,7 +6,6 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { IViewDescriptorService, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
 import { ViewDescriptorService } from '../../../workbench/services/views/browser/viewDescriptorService.js';
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
-import { Sash, SashState, Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { computeScreenAwareSize, type IDimension } from '../../../base/browser/dom.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../workbench/common/editor.js';
@@ -14,12 +13,15 @@ import type { IEditorGroupView, IEditorGroupViewOptions } from '../../../workben
 import type { EditorGroupView } from '../../../workbench/browser/parts/editor/editorGroupView.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
+import type { Part } from '../../../workbench/browser/part.js';
+import { DockedAuxiliaryBarController } from '../dockedAuxiliaryBarController.js';
 import { Menus } from '../menus.js';
 import { EditorPart } from './editorPart.js';
 import { DesktopAuxiliaryBarPart } from './desktopAuxiliaryBarPart.js';
+import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/editorPart.css';
 
-/** Owns the Files editor grid and its contextual AuxiliaryBarPart as one desktop workspace. */
+/** Owns the main editor groups and the geometry of their docked details. */
 export class DesktopMainEditorPart extends EditorPart {
 	private readonly auxiliary = this._register(new MutableDisposable<DesktopAuxiliaryBarPart>());
 	private inWorkingSet: (groupId: number) => boolean = () => true;
@@ -28,9 +30,10 @@ export class DesktopMainEditorPart extends EditorPart {
 	private showEditors = true;
 	private hostVisible = true;
 	private preferredDetailsWidth: number;
-	private detailsWidth = 0;
-	private detailsSash: Sash | undefined;
-	private layingOutDetails = false;
+	private dockedAuxiliaryBar: DockedAuxiliaryBarController | undefined;
+	private readonly productDock = this._register(new MutableDisposable());
+	private productDetails: { readonly part: Part; readonly home: HTMLElement; readonly resize: (width: number) => void; } | undefined;
+	private productDetailsWidth: number | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -77,22 +80,49 @@ export class DesktopMainEditorPart extends EditorPart {
 			const part = scope.createInstance(DesktopAuxiliaryBarPart, container, registry);
 			this.auxiliary.value = part;
 			this._register(part.onDidRequestVisibility(visible => visible ? this.showDetails() : this.hideDetails()));
-			this.detailsSash = this._register(new Sash(this.domNode, {
-				getVerticalSashLeft: () => this.detailsDimension.width - this.detailsWidth,
-				getVerticalSashTop: () => this.getTabsHeight(),
-				getVerticalSashHeight: () => Math.max(0, this.detailsDimension.height - this.getTabsHeight()),
-			}, { orientation: Orientation.VERTICAL }));
-			let startWidth = 0;
-			this._register(this.detailsSash.onDidStart(() => { startWidth = this.detailsWidth; }));
-			this._register(this.detailsSash.onDidChange(event => {
-				this.preferredDetailsWidth = startWidth + event.startX - event.currentX;
-				this.layoutDetails();
-			}));
-			this._register(this.detailsSash.onDidEnd(() => this.storage.store('sessions.code.filesTreeWidth', this.detailsWidth, StorageScope.PROFILE, StorageTarget.MACHINE)));
-			this._register(this.detailsSash.onDidReset(() => { this.preferredDetailsWidth = 220; this.layoutDetails(); }));
 			this.layoutDetails();
 		}
 		return this.auxiliary.value;
+	}
+
+	public setDockedAuxiliaryBar(details: typeof this.productDetails): void {
+		if (this.productDetails?.part === details?.part) return;
+		this.productDock.clear();
+		this.productDetails = details;
+		this.productDetailsWidth = undefined;
+		if (details) this.productDock.value = this.getDockedAuxiliaryBar().dock(details.part, details.home);
+		this.layoutDetails();
+	}
+
+	public layoutDockedAuxiliaryBar(width: number | undefined): void {
+		this.productDetailsWidth = width;
+		this.layoutDetails();
+	}
+
+	public get dockedAuxiliaryBarSize(): IDimension {
+		return this.dockedAuxiliaryBar?.size ?? { width: 0, height: 0 };
+	}
+
+	private getDockedAuxiliaryBar(): DockedAuxiliaryBarController {
+		return this.dockedAuxiliaryBar ??= this._register(new DockedAuxiliaryBarController(this.domNode, {
+			getTabsHeight: () => this.getTabsHeight(),
+			setEditorContentRightInset: width => this.setContentRightInset(width),
+			setEditorContentVisible: visible => this.setEditorContentVisible(visible),
+			setWidth: width => this.resizeDetails(width),
+			commitWidth: width => {
+				if (!this.productDetails) this.storage.store('sessions.code.filesTreeWidth', width, StorageScope.PROFILE, StorageTarget.MACHINE);
+			},
+			resetWidth: () => this.resizeDetails(this.productDetails?.part.preferredWidth ?? 220),
+		}));
+	}
+
+	private resizeDetails(width: number): void {
+		if (this.productDetails) {
+			this.productDetails.resize(Math.max(DockedAuxiliaryBarController.MIN_WIDTH, width));
+		} else {
+			this.preferredDetailsWidth = width;
+			this.layoutDetails();
+		}
 	}
 
 	public get detailsOpen(): boolean { return this.detailsRequested; }
@@ -141,28 +171,29 @@ export class DesktopMainEditorPart extends EditorPart {
 	}
 
 	private layoutDetails(): void {
-		const part = this.auxiliary.value;
 		// Working-set restoration temporarily detaches the entire group grid.
-		if (!part || this.layingOutDetails || this.isDisposed || this.groups.length === 0) return;
-		this.layingOutDetails = true;
-		try {
-			const visible = this.detailsVisible;
-			const contentVisible = this.showEditors && this.fileGroups.some(group => !!group.activeInput);
-			this.detailsWidth = !visible ? 0 : contentVisible
-				? Math.min(Math.max(part.minimumWidth, this.preferredDetailsWidth), Math.max(0, this.detailsDimension.width - 160)) : this.detailsDimension.width;
-			const top = this.getTabsHeight();
-			const height = Math.max(0, this.detailsDimension.height - top);
-			Object.assign(part.domNode.style, {
-				top: top + 'px', right: '0px', width: this.detailsWidth + 'px', height: height + 'px',
+		if (this.isDisposed || this.groups.length === 0) return;
+		const product = this.productDetails;
+		const files = this.auxiliary.value;
+		if (product) {
+			files?.setVisible(false);
+			this.getDockedAuxiliaryBar().layout(this.detailsDimension, {
+				part: product.part,
+				requestedWidth: this.hostVisible && this.isGroupVisible(this.pageGroupId) ? this.productDetailsWidth : undefined,
+				minimumWidth: DockedAuxiliaryBarController.MIN_WIDTH,
+				minimumEditorWidth: EDITOR_PART_MINIMUM_WIDTH,
+				editorVisible: true,
+				hideWhenConstrained: true,
 			});
-			part.setVisible(visible);
-			part.layout({ width: this.detailsWidth, height });
-			this.setContentRightInset(this.detailsWidth);
-			this.setEditorContentVisible(!visible || contentVisible);
-			this.detailsSash!.state = visible && contentVisible ? SashState.Enabled : SashState.Disabled;
-			this.detailsSash!.layout();
-		} finally {
-			this.layingOutDetails = false;
+		} else if (files || this.dockedAuxiliaryBar) {
+			const minimumWidth = files?.minimumWidth ?? 0;
+			this.getDockedAuxiliaryBar().layout(this.detailsDimension, {
+				part: files,
+				requestedWidth: this.detailsVisible ? this.preferredDetailsWidth : undefined,
+				minimumWidth,
+				minimumEditorWidth: minimumWidth,
+				editorVisible: this.showEditors && this.fileGroups.some(group => !!group.activeInput),
+			});
 		}
 	}
 

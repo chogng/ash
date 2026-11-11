@@ -24,7 +24,7 @@ import { LanguageModelsService } from '../../../../../workbench/contrib/chat/com
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService, type ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { loadChatSelection } from '../../../../services/sessions/browser/sessionGridState.js';
@@ -106,7 +106,7 @@ suite('ChatGPT entry', () => {
 			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize: () => initialized++, setNetworkAvailable() { } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, {} as IEditorService],
-			[ISessionsLayoutService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsLayoutService],
+			[ISessionsEntryService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsEntryService],
 		)));
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, undefined);
@@ -137,7 +137,7 @@ suite('ChatGPT entry', () => {
 			[IChatGPTService, { state, initialize() { }, setNetworkAvailable() { }, newChat: () => { created++; state.set(newChatState); } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, { focusActiveEditor: () => { focused++; } } as unknown as IEditorService],
-			[ISessionsLayoutService, { openEntry: async value => { entry = value; } } as ISessionsLayoutService],
+			[ISessionsEntryService, { openEntry: async value => { entry = value; } } as ISessionsEntryService],
 		)));
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, undefined);
@@ -168,7 +168,7 @@ suite('ChatGPT entry', () => {
 			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize() { }, setNetworkAvailable() { }, newChat: () => { created++; } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, {} as IEditorService],
-			[ISessionsLayoutService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsLayoutService],
+			[ISessionsEntryService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsEntryService],
 		)));
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		resources.add(CommandsRegistry.register(SHOW_EXPERIMENTAL_CHATGPT, (_accessor, ...args) => { experimentalOpens.push(args); }));
@@ -206,7 +206,7 @@ suite('ChatGPT entry', () => {
 			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize() { } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, {} as IEditorService],
-			[ISessionsLayoutService, { openEntry: async entry => { entries.push(entry); } } as ISessionsLayoutService],
+			[ISessionsEntryService, { openEntry: async entry => { entries.push(entry); } } as ISessionsEntryService],
 		));
 		using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand);
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_ASH_CHAT_COMMAND)!, 'restore');
@@ -250,14 +250,14 @@ suite('ChatGPT entry', () => {
 				[ISessionsService, selection],
 				[ISessionsManagementService, management],
 				[IOpenerService, { registerOpener: (value: IOpener) => { linkOpener = value; return Disposable.None; } } as IOpenerService],
-				[ISessionsLayoutService, {
+				[ISessionsEntryService, {
 					openEntry: async (entry: ISessionsEntry) => {
 						assert.equal(entry.id, 'ashChat');
 						assert.deepEqual(selection.chatSelection.get(), target);
 						assert.equal(selection.getChatSelection()?.kind, 'session');
 						opened++;
 					},
-				} as ISessionsLayoutService],
+				} as ISessionsEntryService],
 			));
 			using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand);
 			assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('target', 'target-root', 'local')), true);
@@ -426,7 +426,7 @@ suite('ChatGPT entry', () => {
 				registerSource: value => { source = value; return toDisposable(() => { source = undefined; }); },
 			} as ISessionsSearchService],
 			[IEditorService, { focusActiveEditor: () => { opened.push('focus'); } } as unknown as IEditorService],
-			[ISessionsLayoutService, { openEntry: async () => { opened.push('open'); } } as unknown as ISessionsLayoutService],
+			[ISessionsEntryService, { openEntry: async () => { opened.push('open'); } } as unknown as ISessionsEntryService],
 		)));
 		const contribution = resources.add(services.createInstance(ChatGPTWebContribution));
 		assert.deepEqual(source!.get().map(({ id, category, title, description }) => ({ id, category, title, description })), [

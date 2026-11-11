@@ -189,33 +189,44 @@ test('Code Sessions starts with dialog dependencies and confirms closing a dirty
 
 test('Code sessions restore editor tabs through Back, Forward and reopening without focusing the editor', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
-	let navigation = page.locator('.ash-sessions-activity-content');
-	let editors = page.locator('[data-part="editor"]');
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	const code = () => page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+	const draft = () => page.locator('[data-part="sessions"] .ash-sessions-chat-slot.active[data-conversation-kind="code"] [data-untitled-session-id]');
+	// Files owns its tabs even when its header is mounted in the window title bar.
+	const files = () => page.locator('[data-editor-tool="files"]');
+	const firstTab = () => files().getByRole('tab', { name: 'Untitled-1', exact: true });
+	const secondTab = () => files().getByRole('tab', { name: 'Untitled-2', exact: true });
+	const editorFocus = () => page.locator('[data-editor-tool="files"]:focus-within');
+	await code().click();
+	await expect(code()).toHaveAttribute('aria-pressed', 'true');
+	await expect(draft().locator('.stanza-editor-input')).toBeFocused();
+	const firstDraft = (await draft().getAttribute('data-untitled-session-id'))!;
 	const commands = new QuickAccess(page);
 	await commands.runCommand('workbench.action.files.newUntitledFile');
-	await expect(editors.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+	await expect(firstTab()).toBeVisible();
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
-	await editors.getByRole('tab', { name: 'Untitled-1', exact: true }).press('Delete');
+	await expect(draft()).not.toHaveAttribute('data-untitled-session-id', firstDraft);
+	await expect(draft().locator('.stanza-editor-input')).toBeFocused();
+	const secondDraft = (await draft().getAttribute('data-untitled-session-id'))!;
+	await firstTab().press('Delete');
+	await expect(firstTab()).toHaveCount(0);
 	await commands.runCommand('workbench.action.files.newUntitledFile');
-	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
+	await expect(secondTab()).toBeVisible();
 	const back = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Back', exact: true });
-	await back.focus();
 	await back.press('Enter');
-	await expect(editors.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
-	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toHaveCount(0);
-	await expect(back).toBeFocused();
+	await expect(draft()).toHaveAttribute('data-untitled-session-id', firstDraft);
+	await expect(firstTab()).toBeVisible();
+	await expect(secondTab()).toHaveCount(0);
+	await expect(editorFocus()).toHaveCount(0);
 	const forward = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Forward', exact: true });
-	await forward.focus();
 	await forward.press('Enter');
-	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
-	await expect(editors.locator(':focus')).toHaveCount(0);
+	await expect(draft()).toHaveAttribute('data-untitled-session-id', secondDraft);
+	await expect(secondTab()).toBeVisible();
+	await expect(firstTab()).toHaveCount(0);
+	await expect(editorFocus()).toHaveCount(0);
 	page = await workbench.reopenAgentsWindow(application, page);
-	navigation = page.locator('.ash-sessions-activity-content');
-	editors = page.locator('[data-part="editor"]');
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(editors.getByRole('tab', { name: 'Untitled-2', exact: true })).toBeVisible();
+	await expect(code()).toHaveAttribute('aria-pressed', 'true');
+	await expect(draft()).toHaveAttribute('data-untitled-session-id', secondDraft);
+	await expect(secondTab()).toBeVisible();
 });
 
 test('Agent Window never reveals the legacy Output or Terminal Panel', async ({ application, target, workbench }) => {

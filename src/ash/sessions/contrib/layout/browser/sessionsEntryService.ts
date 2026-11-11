@@ -1,7 +1,6 @@
 import { IViewDescriptorService, ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { Emitter } from '../../../../base/common/event.js';
 import { autorun, derived, observableValue } from '../../../../base/common/observable.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -16,14 +15,13 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { ILifecycleService, StartupKind } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
-import { ISessionsLayoutService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsEntryService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
-import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsEntryDetailsContext, SessionsEntryShowsWorkspaceModeControlContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
@@ -43,14 +41,8 @@ const activeEntryKey = 'sessions.layout.activeEntry';
 const activeEntryModeKey = 'sessions.layout.activeEntryMode';
 
 /** Applies feature-supplied entries without owning their resource or workspace selection. */
-export class SessionsLayoutService extends Disposable implements ISessionsLayoutService, IDesktopLayoutContext {
-	public get editorWorkingSetState() { return this.controller.editorWorkingSetState; }
-	public retainEditor(input: IResourceEditorInput) { return this.controller.retainEditor(input); }
-	public suppressEditorAutoVisibility() { return this.controller.suppressEditorAutoVisibility(); }
+export class SessionsEntryService extends Disposable implements ISessionsEntryService, IDesktopLayoutContext {
 	public checkpointEditorLayout(): Promise<void> { return this.controller.checkpointEditorLayout(); }
-	private readonly conversationChanged = this._register(new Emitter<void>());
-	public readonly onDidChangeConversationVisibility = this.conversationChanged.event;
-	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
 	private readonly controller: DesktopLayoutController;
 	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
 	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode === 'code' ? 'code' : 'chat');
@@ -152,9 +144,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		}));
 		const newDraftVisible = NewSessionDraftVisibleContext.bindTo(this.contextKeys);
 		const entryShowsWorkspaceModeControl = SessionsEntryShowsWorkspaceModeControlContext.bindTo(this.contextKeys);
+		const entryDetails = SessionsEntryDetailsContext.bindTo(this.contextKeys);
 		this._register(toDisposable(() => {
 			newDraftVisible.reset();
 			entryShowsWorkspaceModeControl.reset();
+			entryDetails.reset();
 		}));
 		let activeActivity: IContextKey<boolean> | undefined;
 		this._register(autorun(reader => {
@@ -170,6 +164,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				key?.set(!covered);
 				newDraftVisible.set(showingDraft);
 				entryShowsWorkspaceModeControl.set(covered || entry?.showWorkspaceModeControl !== false);
+				entryDetails.set(covered ? undefined : entry?.detailsContainerId);
 			});
 		}));
 	}
@@ -199,7 +194,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			const retainedMode = previousEntry
 				? previousEntry.workspaceMode ?? 'chat'
 				: options?.source === 'restore' ? this.storage.get(activeEntryModeKey, StorageScope.WORKSPACE) : undefined;
-			if (entry.conversationKind || (!sharedWorkspace || !previousEntry) && (entry.content !== 'editor' || entry.conversation)) {
+			if (entry.content !== 'editor' && (entry.conversationKind || !sharedWorkspace || !previousEntry)) {
 				await this.conversation.setConversationKind(entry.conversationKind ?? (entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'chat'));
 			}
 			if (this.isDisposed) { return; }
@@ -211,6 +206,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				}
 				if (this.isDisposed) { return; }
 				entry = initialize ? initialize() : entry;
+				if (entry.content === 'editor' && (entry.conversationKind || entry.conversation)) {
+					await this.conversation.setConversationKind(entry.conversationKind ?? (retainedMode === 'code' ? 'code' : 'chat'));
+					if (this.isDisposed) { return; }
+				}
 				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
 				if (entry.workspaceMode === 'current') {
 					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
@@ -242,8 +241,8 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				this.layout.updateParts(() => {
 					// Hide an outgoing conversation before separating editor details so transient minimum widths cannot shrink navigation.
 					if (!productEditor) { this.layout.setPrimaryPart('sessions'); }
-					// Optional conversations require a new user action on each entry, including window restoration.
-					this.layout.setPartAvailable('sessions', !productEditor);
+					this.layout.setPartAvailable('sessions', !productEditor || entry.conversation === 'visible');
+					this.layout.setAuxiliaryBarDocked(productEditor && entry.detailsContainerId !== undefined);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
 					this.setVisible('editor', productEditor || (documents && state.documents));
 					// A saved visibility flag can outlive the view that once occupied the side bar.
@@ -279,15 +278,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
 				else if (!sidebarVisible) { this.layout.focus(); }
 				else if (focusSidebar) { sidebar?.focus(); }
-			} finally { this.isChangingContent = false; if (!this.isDisposed) { this.conversationChanged.fire(); } }
+			} finally { this.isChangingContent = false; }
 		});
 	}
 
 	public setConversationVisible(visible: boolean): Promise<void> {
 		return this.runOperation(async () => {
-			if (this.activeEntry.get()?.conversation !== 'optional') { throw new Error('The active entry does not support a conversation beside its editor.'); }
+			if (!this.activeEntry.get()?.conversation) { throw new Error('The active entry does not support a conversation beside its editor.'); }
 			this.layout.updateParts(() => this.layout.setPartAvailable('sessions', visible));
-			this.conversationChanged.fire();
 			if (visible) { this.layout.focus(); }
 			else { this.editors.focusActiveEditor(); }
 		});

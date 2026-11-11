@@ -3,14 +3,15 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { ISessionsLayoutService, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsEntryService.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
 import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
 import { COLLAB_CONTAINER_ID } from '../../../../workbench/contrib/collab/common/collab.js';
-import { SessionsLayoutService, documentEntry } from './sessionsLayoutService.js';
+import { SessionsEntryService, documentEntry } from './sessionsEntryService.js';
+import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../common/sessionEditorWorkingSet.js';
 
 class SessionsLayoutContribution extends Disposable {
-	constructor(@ISessionsLayoutService layout: ISessionsLayoutService) {
+	constructor(@ISessionsEntryService layout: ISessionsEntryService) {
 		super();
 		this._register(CommandsRegistry.register('sessions.open.code', (_accessor, source) => {
 			const options: ISessionsEntryOpenOptions | undefined = source === 'conversation' ? { focus: 'conversation' } : source === 'restore' ? { source } : undefined;
@@ -35,5 +36,6 @@ class SessionsLayoutContribution extends Disposable {
 	}
 }
 
-registerSingleton(ISessionsLayoutService, SessionsLayoutService, InstantiationType.Delayed);
+registerSingleton(ISessionsEntryService, SessionsEntryService, InstantiationType.Delayed);
+registerSingleton(ISessionEditorWorkingSetService, SessionEditorWorkingSetService, InstantiationType.Delayed);
 registerWorkbenchContribution('workbench.contrib.sessionsLayout', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SessionsLayoutContribution));

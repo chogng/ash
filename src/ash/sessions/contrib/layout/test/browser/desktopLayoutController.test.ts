@@ -1,3 +1,4 @@
+import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../common/sessionEditorWorkingSet.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
@@ -56,7 +57,7 @@ suite('DesktopLayoutController', () => {
 		await fixture.open('b'); await fixture.open('a');
 		const retained = { resource: URI.parse('session-canvas:/live') };
 		fixture.editor.groups = [{ inputs: [retained] }];
-		using lease = fixture.controller.retainEditor(retained);
+		using lease = fixture.services.get(ISessionEditorWorkingSetService).registerEditorToRetain(retained);
 		fixture.editor.set({ ...initial, groups: initial.groups.map((group, index) => ({ ...group, size: 0.5, editors: index ? group.editors : [...group.editors, workingSet('new', 'new.ts').groups[0]!.editors[0]!] })) });
 		fixture.editorVisible = false;
 		await fixture.open('b'); await fixture.open('a');
@@ -497,6 +498,7 @@ class LayoutFixture extends Disposable {
 		if (saved) {
 			this.storage.store(storageKey, JSON.stringify(saved), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}
+		this.services.registerInstance(ISessionEditorWorkingSetService, this.services.createInstance(SessionEditorWorkingSetService));
 		this.services.registerInstance(IStorageService, this.storage);
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ILifecycleService, this.lifecycle);
@@ -510,6 +512,7 @@ class LayoutFixture extends Disposable {
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);
 		this.services.registerInstance(ILayoutService, {
 			onDidChangePartVisibility: this.partsChanged.event,
+			isEditorPartAutoVisibilitySuppressed: () => false,
 			isPartRequested: (part: string) => part === 'auxiliarybar' ? this.auxiliaryVisible : this.editorVisible,
 			isPartVisible: (part: string) => part === 'sessions' ? this.sessionsVisible : part === 'panel' ? this.panelVisible : part === 'auxiliarybar' ? this.auxiliaryVisible : this.editorVisible,
 			showPart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = true; } else { this.editorVisible = true; } },

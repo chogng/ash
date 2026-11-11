@@ -462,7 +462,7 @@ export class DesktopEditorParts extends EditorParts {
 		return { ...saved, activeGroupIndex, toolParts: { ...previous, parts } };
 	}
 
-	public restoreLayout(layout: EditorWorkingSetLayout, groupIds: ReadonlyMap<number, number>): void {
+	private restoreLayout(layout: EditorWorkingSetLayout, groupIds: ReadonlyMap<number, number>): void {
 		for (const part of this.hosts.values()) { restorePartLayout(part, layout, groupIds); }
 		const originalIds = new Map([...groupIds].map(([saved, current]) => [current, saved]));
 		const groups = this.saveWorkingSet('legacy-tool-layout').groups.flatMap(group => {

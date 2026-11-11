@@ -106,6 +106,7 @@ export class ArtifactsEditorView extends Disposable {
 	private visible = false;
 	private dimension: IDimension = { width: 0, height: 0 };
 	public get usesCanvasPanels(): boolean { return this.activeWorkspace !== undefined && this.workspaces.get(this.activeWorkspace.key)!.usesCanvasPanels; }
+	public get isHome(): boolean { return this.activeWorkspace === undefined; }
 
 	constructor(
 		ownerDocument: Document,

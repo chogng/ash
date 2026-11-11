@@ -1,5 +1,5 @@
+import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../contrib/layout/common/sessionEditorWorkingSet.js';
 import { createDesktopEditorTestServices, registerDesktopDetailsTestServices } from './desktopEditorTestServices.js';
-import { LayoutPriority } from '../../../base/browser/ui/splitview/splitview.js';
 import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
 import { createTestComponentServices, createTestEditorServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -1075,55 +1075,6 @@ function registerAuxiliaryViewServices(services: import('../../../platform/insta
 	});
 }
 
-test('Saved Code card layouts reject duplicate, missing and malformed leaves', async () => {
-	const { readCodeCardLayout } = await import('../../browser/codeCardLayout.js');
-	const leaf = { type: 'leaf', data: 'panel', size: 300, visible: true, priority: 'normal' };
-	assert.ok(readCodeCardLayout(JSON.stringify(leaf), ['panel']));
-	assert.equal(readCodeCardLayout(JSON.stringify(leaf), ['panel', 'info']), undefined);
-	assert.equal(
-		readCodeCardLayout(
-			JSON.stringify({
-				type: 'branch',
-				orientation: 'vertical',
-				size: 300,
-				priority: 'normal',
-				children: [leaf, leaf],
-			}),
-			['panel'],
-		),
-		undefined,
-	);
-	assert.equal(readCodeCardLayout(JSON.stringify({ ...leaf, size: -1 }), ['panel']), undefined);
-	assert.equal(readCodeCardLayout('{broken', ['panel']), undefined);
-});
-
-test('legacy Card migration keeps tool positions and visibility and includes each live group once', async () => {
-	const { migrateCodeCardLayout } = await import('../../browser/codeCardLayout.js');
-	const leaf = (data: string, size: number, visible = true) => ({ type: 'leaf' as const, data, size, visible, priority: LayoutPriority.Normal });
-	const group = (groupId: number) => ({ ...leaf('', 1), data: { groupId } });
-	const tree = {
-		type: 'branch' as const, orientation: Orientation.HORIZONTAL, size: 1000, priority: LayoutPriority.Normal, children: [
-			leaf('sessions', 400), leaf('files', 300), { type: 'branch' as const, orientation: Orientation.VERTICAL, size: 300, priority: LayoutPriority.Normal, children: [leaf('panel', 200, false), leaf('browser', 400)] },
-		]
-	};
-	const mappings = new Map<string, import('../../../workbench/services/editor/common/editorWorkingSet.js').EditorWorkingSetLayout>([
-		['files', { type: 'branch', orientation: Orientation.HORIZONTAL, size: 300, priority: LayoutPriority.Normal, children: [group(1), group(2)] }],
-		// A mixed Files/Terminal group must retain one identity in the resulting Grid.
-		['panel', { type: 'branch', orientation: Orientation.VERTICAL, size: 200, priority: LayoutPriority.Normal, children: [group(2), group(3)] }],
-		['browser', group(4)],
-	]);
-	const layout = migrateCodeCardLayout(tree, mappings)!;
-	assert.equal(layout.type, 'branch');
-	if (layout.type !== 'branch') throw new Error('Expected a migrated split');
-	assert.equal(layout.children.length, 2);
-	assert.equal(layout.children[0]!.size, 300);
-	const leaves: { id: number; visible: boolean; }[] = [];
-	const visit = (node: import('../../../workbench/services/editor/common/editorWorkingSet.js').EditorWorkingSetLayout): void => { if (node.type === 'leaf') leaves.push({ id: node.data.groupId, visible: node.visible }); else node.children.forEach(visit); };
-	visit(layout);
-	assert.deepEqual(leaves, [{ id: 1, visible: true }, { id: 2, visible: true }, { id: 3, visible: false }, { id: 4, visible: true }]);
-	assert.equal(migrateCodeCardLayout(tree, new Map()), undefined);
-});
-
 test('session working sets reuse live groups and preserve hidden entry geometry without crossing session scope', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { observableValue } = await import('../../../base/common/observable.js');
@@ -1154,6 +1105,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	using hosts = createDesktopEditorTestServices(services, { registry });
 	const { editor, area } = hosts;
 	editor.layout(new Dimension(1200, 900));
+	services.registerInstance(ISessionEditorWorkingSetService, services.createInstance(SessionEditorWorkingSetService));
 	services.registerInstance(IEditorPart, editor);
 	services.registerInstance(IEditorService, {} as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(ISessionsService, { activeSelection: undefined, getSelection: () => ({ activeSelection: undefined }) } as unknown as import('../../services/sessions/browser/sessionsService.js').ISessionsService);

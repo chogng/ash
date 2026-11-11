@@ -6,8 +6,11 @@ import { ICommandService, CommandsRegistry } from '../../../../platform/commands
 import { URI } from '../../../../base/common/uri.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
-import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
+import { AuxiliaryBarVisibleContext } from '../../../../workbench/common/contextkeys.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
+import { ISessionsEntryService, type ISessionsEntry } from '../../../services/layout/common/sessionsEntryService.js';
+import { artifactDetailEntry, ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 import { DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -21,7 +24,8 @@ import { ArtifactsEditorView, ArtifactsEditorPane, OPEN_ARTIFACT_DRAFT } from '.
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { SessionsEntryDetailsContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { ChatInputArtifactPill } from './chatInputArtifactPill.js';
 import { isArtifactKind } from '../../../common/artifactKind.js';
 import { CanvasWorkspace } from './canvasWorkspace.js';
@@ -43,16 +47,21 @@ async function openArtifacts(accessor: ServicesAccessor, workspace?: ArtifactWor
 		},
 	};
 	let examplePage: ArtifactsEditorView | undefined;
-	await accessor.get(ISessionsLayoutService).openEntry(entry, () => {
+	await accessor.get(ISessionsEntryService).openEntry(entry, () => {
 		const page = (editor.activePane as ArtifactsEditorPane).page;
 		if (workspace === 'home') { page.showHome(); }
 		else if (typeof workspace === 'object') { page.openExample(workspace); examplePage = page; }
 		else if (workspace) { page.openMode(workspace); }
-		return page.usesCanvasPanels ? {
-			...entry, id: page.activeMode === ArtifactWorkspaceId.Design ? 'creator.design' : 'creator.canvas',
-			conversation: page.activeMode === ArtifactWorkspaceId.Design ? 'optional' : undefined, showEditorTabs: page.activeMode !== ArtifactWorkspaceId.Design,
-			detailsContainerId: DESIGN_PROPERTIES_CONTAINER_ID,
-		} : entry;
+		if (page.isHome) return entry;
+		const design = page.activeMode === ArtifactWorkspaceId.Design;
+		return {
+			...entry,
+			...artifactDetailEntry,
+			id: design ? 'creator.design' : page.usesCanvasPanels ? 'creator.canvas' : 'creator.detail',
+			showEditorTabs: page.usesCanvasPanels && !design,
+			detailsContainerId: page.usesCanvasPanels ? DESIGN_PROPERTIES_CONTAINER_ID : undefined,
+			conversationKind: page.activeMode === ArtifactWorkspaceId.Make ? 'code' : undefined,
+		};
 	}, source ? { source } : undefined);
 	if (typeof workspace === 'object') {
 		// The properties pane can resize the editor as the entry opens.
@@ -82,12 +91,9 @@ CommandsRegistry.register(OPEN_ARTIFACT_EXAMPLE, (accessor, kind) => {
 	}
 	const example = getArtifactExample(kind);
 	if (example.type !== 'docs') { return openArtifacts(accessor, example); }
-	return accessor.get(ISessionsLayoutService).openEntry({
+	return accessor.get(ISessionsEntryService).openEntry({
+		...artifactDetailEntry,
 		id: 'creator.example.docs',
-		workspaceMode: 'current',
-		activityContext: 'sessions.activity.creatorSelected',
-		content: 'editor',
-		focus: 'editor',
 		restoreCommand: 'sessions.show.creator',
 		editorInput: {
 			resource: URI.from({ scheme: ARTIFACT_EXAMPLE_SCHEME, path: '/studio-launch.md' }),
@@ -106,6 +112,30 @@ registerAction2(class OpenCreator extends Action2 {
 		super({ id: 'sessions.open.creator', title: localize2('sessions.creator.title', 'Artifacts'), icon: Lxicon.artifacts, toggled: ContextKeyExpr.has('sessions.activity.creatorSelected'), menu: { id: Menus.ActivityBar, group: 'navigation', order: 50, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') } });
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand('sessions.show.creator'); }
+});
+
+registerAction2(class ToggleArtifactDetails extends Action2 {
+	constructor() {
+		const when = SessionsEntryDetailsContext.isEqualTo(DESIGN_PROPERTIES_CONTAINER_ID);
+		const show = localize2({ bundle: 'ash.actions', key: 'showSecondarySidebar' }, 'Show Secondary Side Bar');
+		const hide = localize2({ bundle: 'ash.actions', key: 'hideSecondarySidebar' }, 'Hide Secondary Side Bar');
+		super({
+			id: 'sessions.creator.toggleDetails', title: show, tooltip: show, icon: Lxicon.layoutSidebarRightOff,
+			toggled: { condition: AuxiliaryBarVisibleContext.isEqualTo(true), title: hide, tooltip: hide, icon: Lxicon.layoutSidebarRight },
+			precondition: when, f1: true,
+			menu: { id: Menus.TitleBarRightLayout, when, group: 'navigation', order: 10 },
+		});
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const layout = accessor.get(IAgentWorkbenchLayoutService);
+		if (layout.isPartVisible('auxiliarybar')) {
+			const hadFocus = layout.mainContainer.querySelector('[data-part="auxiliarybar"]')?.contains(getActiveElement(layout.mainContainer.ownerDocument));
+			layout.hidePart('auxiliarybar');
+			if (hadFocus) accessor.get(IEditorService).focusActiveEditor();
+		} else {
+			await accessor.get(IViewsService).openViewContainer(DESIGN_PROPERTIES_CONTAINER_ID);
+		}
+	}
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({

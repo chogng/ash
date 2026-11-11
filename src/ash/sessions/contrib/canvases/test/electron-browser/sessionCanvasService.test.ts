@@ -1,7 +1,8 @@
+import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../../layout/common/sessionEditorWorkingSet.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -16,7 +17,7 @@ import type { IEditorGroup } from '../../../../../workbench/services/editor/comm
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { SessionCanvasContextService } from '../../electron-browser/sessionCanvasService.js';
 import { IAgentHostCanvasCollection } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
-import { ISessionsLayoutService } from '../../../../services/layout/common/sessionsLayoutService.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 
@@ -40,7 +41,8 @@ suite('Sessions Canvas ownership', () => {
 		services.registerInstance(IEditorPart, { groups: [backgroundGroup, documentGroup], activeGroup: backgroundGroup } as unknown as IEditorPart);
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IAgentHostCanvasCollection, { createContext: (owner: ICanvasOwner) => ({ owner, canvases: constObservable([]) }) } as unknown as IAgentHostCanvasCollection);
-		services.registerInstance(ISessionsLayoutService, { editorWorkingSetState: constObservable({ owner: undefined, restoring: false, applying: false }) } as unknown as ISessionsLayoutService);
+		services.registerInstance(ISessionEditorWorkingSetService, services.createInstance(SessionEditorWorkingSetService));
+		services.registerInstance(ILayoutService, { suppressEditorPartAutoVisibility: () => Disposable.None } as unknown as ILayoutService);
 		services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, state: 'loading', sessions: [] } as unknown as ISessionsManagementService);
 		services.registerInstance(IPinnedCanvasService, { entries: constObservable([]), selected: constObservable(undefined) } as unknown as IPinnedCanvasService);
 		const context = resources.add(services.createInstance(SessionCanvasContextService));
