@@ -6,7 +6,7 @@ import type { Thread } from '../../../../workbench/services/chat/common/chatServ
 import { formatChatMessageTime } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatReplyError, type ChatReplyRequest } from '../../../common/chatReplyBackend.js';
-import { canceled } from '../../../../base/common/errors.js';
+import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
 import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
 import { ChatGPTOutbox, type PendingChatGPTCreation } from './chatGPTOutbox.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -1314,7 +1314,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.update({ attachments: this.drafts.get(key)!.attachments, error: '' });
 		if (scope) { await this.trackAttachmentWrite(this.saveAttachmentFiles(key, scope, sources)); }
 		if (this.isDisposed || this.lifecycle.willShutdown) { return; }
-		await Promise.all(attachments.map(attachment => this.uploadAttachment(key, attachment.id)));
+		for (const attachment of attachments) {
+			void this.uploadAttachment(key, attachment.id).catch(onUnexpectedError);
+		}
 	}
 
 	private async saveAttachmentFiles(key: string, scope: string, sources: readonly { id: string; file: File; }[]): Promise<void> {

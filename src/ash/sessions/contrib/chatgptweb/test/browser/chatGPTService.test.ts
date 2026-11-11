@@ -438,6 +438,86 @@ suite('ChatGPT shared service', () => {
 		await restoredNew.select('one');
 		assert.equal(restoredNew.state.get().draft, 'Unsent follow-up');
 	});
+	test('stages a draft attachment while the background upload retries each failed step', async () => {
+		const putStarted = new DeferredPromise<void>();
+		const putCanFail = new DeferredPromise<void>();
+		const settled = new DeferredPromise<void>();
+		const paths: string[] = [];
+		let reservations = 0;
+		let transfers = 0;
+		let confirmations = 0;
+		using chat = fixture(async path => {
+			if (path === '/service/backend-api/files') {
+				paths.push(path);
+				return ++reservations === 1 ? new Response(null, { status: 502 })
+					: Response.json({ file_id: 'file-draft', upload_url: 'https://fixture.test/draft' });
+			}
+			if (path.startsWith('/service/.upload?')) {
+				paths.push(path);
+				if (++transfers === 1) {
+					void putStarted.complete();
+					await putCanFail.p;
+					throw new Error('net::ERR_CONNECTION_CLOSED');
+				}
+				return new Response(null, { status: 201 });
+			}
+			if (path === '/service/backend-api/files/file-draft/uploaded') {
+				paths.push(path);
+				return ++confirmations === 1 ? new Response(null, { status: 503 }) : Response.json({ status: 'success' });
+			}
+			assert.ok(!path.includes('/f/conversation'), 'A draft with a pending attachment must wait for confirmation');
+			return response(path);
+		}, { cacheScope: () => undefined });
+		await chat.reload();
+		using observeUpload = autorun(reader => {
+			if (chat.state.read(reader).attachments.some(attachment => attachment.status !== 'uploading')) { void settled.complete(); }
+		});
+		let attachedLocally = false;
+		const attachment = chat.attachFiles([new File(['draft'], 'draft.txt', { type: 'text/plain' })]).then(() => { attachedLocally = true; });
+		try {
+			await putStarted.p;
+			assert.equal(attachedLocally, true);
+			assert.equal(chat.state.get().attachments[0]?.status, 'uploading');
+			assert.equal(chat.state.get().attachments[0]?.error, undefined);
+			chat.setDraft('Still editing');
+			await chat.send();
+			assert.equal(chat.state.get().draft, 'Still editing');
+		} finally {
+			void putCanFail.complete();
+		}
+		await attachment;
+		await settled.p;
+		assert.equal(chat.state.get().attachments[0]?.status, 'ready');
+		assert.equal(chat.state.get().attachments[0]?.file?.id, 'file-draft');
+		assert.deepEqual(paths, [
+			'/service/backend-api/files', '/service/backend-api/files',
+			'/service/.upload?url=https%3A%2F%2Ffixture.test%2Fdraft', '/service/.upload?url=https%3A%2F%2Ffixture.test%2Fdraft',
+			'/service/backend-api/files/file-draft/uploaded', '/service/backend-api/files/file-draft/uploaded',
+		]);
+	});
+
+	for (const [status, expectedAttempts] of [[503, 3], [413, 1]]) {
+		test(`reports a ${status} upload failure after ${expectedAttempts} attempts`, async () => {
+			let attempts = 0;
+			const failed = new DeferredPromise<void>();
+			using chat = fixture(async path => {
+				if (path === '/service/backend-api/files') {
+					attempts++;
+					return new Response(null, { status });
+				}
+				return response(path);
+			}, { cacheScope: () => undefined });
+			await chat.reload();
+			using observeUpload = autorun(reader => {
+				if (chat.state.read(reader).attachments[0]?.status === 'failed') { void failed.complete(); }
+			});
+			await chat.attachFiles([new File(['draft'], 'draft.txt')]);
+			await failed.p;
+			assert.equal(attempts, expectedAttempts);
+			assert.match(chat.state.get().attachments[0]?.error ?? '', new RegExp(String(status), 'u'));
+		});
+	}
+
 	test('restores an attachment-only New draft for its account and marks interrupted uploads for retry', async () => {
 		const draftId = crypto.randomUUID();
 		const ready = { id: crypto.randomUUID(), name: 'ready.txt', size: 5 };

@@ -120,6 +120,8 @@ input survive draft materialization; the existing model remains the only owner
 of the Session identity and first-send operation. `SharedChatInputComposer` supplies
 editor and draft policy to the shared input. File selection, paste,
 drop, attachment preparation and cancellation belong to the shared Workbench input.
+The shared composer presents local staging and gates Send on attachment readiness.
+Backends that upload ahead of Send own transfer, retries and remote confirmation.
 Its permission slot binds the current model to Workbench `PermissionPickerActionItem`, which owns
 the shared permission menu, keyboard interaction and popup lifetime.
 

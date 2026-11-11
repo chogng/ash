@@ -172,7 +172,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		const voice = state.voice !== 'idle';
 		const loading = state.loading?.kind === 'conversation';
 		const canSend = !state.pendingCreation && (canQueueChatGPTCreation(state)
-			|| state.connected && state.networkAvailable && !state.uncertain && state.attachments.every(file => file.status === 'ready'));
+			|| state.connected && state.networkAvailable && !state.uncertain);
 		return {
 			draftIdentity: { id: state.localConversationId, generation: this.generation },
 			draft: {

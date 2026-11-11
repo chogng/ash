@@ -23,7 +23,7 @@ export interface ChatInputServerCommandInvocation {
 	readonly argumentsText: string;
 }
 
-/** A conversation-owned draft can include files already staged at its backing service. */
+/** A conversation-owned draft includes locally staged files and their readiness to send. */
 export interface IChatInputDraft {
 	readonly text: string;
 	readonly readOnly: boolean;
@@ -89,6 +89,7 @@ export interface ChatInputDelegate {
 	readonly responseProgressInTranscript?: boolean;
 	readonly draft?: {
 		setText(text: string): void;
+		/** Completes when the files are added to the draft. Any remote upload continues independently. */
 		attachFiles(files: readonly File[]): Promise<void>;
 		/** Reads the original staged image from the current draft for local display. */
 		readImage?(id: string): Promise<Blob | undefined>;

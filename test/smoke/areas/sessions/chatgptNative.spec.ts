@@ -1755,9 +1755,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(thumbnail.locator('img')).toBeVisible();
 			const pending = form.locator('.ash-chat-staged-file.image.pending');
 			await expect(pending).toHaveCount(1);
-			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '0.5');
-			await expect(pending.getByText(locale === 'en' ? 'Uploading…' : '正在上传…', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
-			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('ash-chat-staged-image-sweep');
+			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '1');
+			await expect(pending.getByText(locale === 'en' ? 'Added to draft. Uploading in background.' : '已添加到草稿，正在后台上传。', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
+			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
+			const send = form.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true });
+			await expect(send).toBeDisabled();
 			await history.hover();
 			await expect(remove).toHaveCSS('opacity', '0');
 			await expect(remove).toHaveCSS('pointer-events', 'none');
@@ -1776,6 +1778,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await application.evaluate(() => globalThis.ashNativeFixture.holdUploads(false));
 			await expect.poll(() => application.evaluate(() => Object.keys(globalThis.ashNativeFixture.uploadedFiles))).toContain(name);
 			await expect(pending).toHaveCount(0);
+			await expect(send).toBeEnabled();
 			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '1');
 			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
 			await thumbnail.click();

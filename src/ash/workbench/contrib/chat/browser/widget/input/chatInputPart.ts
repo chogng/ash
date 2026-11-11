@@ -1692,7 +1692,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private isSubmissionBlocked(localCommand: boolean): boolean {
-		return this.state.phase === 'submitting' || (!localCommand && (this.state.inputBlocked === true || this.state.phase === 'loading'));
+		return this.state.phase === 'submitting' || (!localCommand && (this.state.inputBlocked === true || this.state.phase === 'loading'
+			|| this.state.draft?.files.some(file => file.status !== 'ready') === true));
 	}
 
 	private renderToolbar(): void {
@@ -2631,14 +2632,14 @@ class StagedFileRow extends Disposable {
 	update(file: StagedFile, readOnly: boolean): void {
 		const failed = file.status === 'failed';
 		const status = file.status === 'preparing' ? localize('chat.input.filePreparing', 'Preparing…')
-			: file.status === 'uploading' ? localize('chat.input.fileUploading', 'Uploading…')
+			: file.status === 'uploading' ? localize('chat.input.fileUploading', 'Added to draft. Uploading in background.')
 				: failed ? localize('chat.input.fileUploadFailed', 'Upload failed') : localize('chat.input.fileReady', 'Ready');
 		if (this.stateLabel.textContent !== status) this.stateLabel.textContent = status;
 		if (this.error.textContent !== (file.error ?? '')) this.error.textContent = file.error ?? '';
 		this.domNode.classList.toggle('ready', file.status === 'ready');
 		const pending = file.status === 'preparing' || file.status === 'uploading';
 		this.domNode.classList.toggle('pending', pending);
-		this.image.setThumbnailState(pending, readOnly);
+		this.image.setThumbnailState(file.status === 'preparing', readOnly);
 		this.error.hidden = !file.error;
 		if (this.retry) {
 			this.retry.domNode.hidden = !failed;

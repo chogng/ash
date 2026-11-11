@@ -142,7 +142,8 @@ export class ChatGPTTransport extends Disposable {
 				credentials: 'omit', redirect: 'error', signal,
 			});
 			await response.body?.cancel();
-			return new Response(null, { status: response.status });
+			const retryAfter = response.ok ? null : response.headers.get('Retry-After');
+			return new Response(null, { status: response.status, headers: retryAfter === null ? undefined : { 'Retry-After': retryAfter } });
 		}
 		if (request.path.startsWith('/service/.resource?')) {
 			return this.fetchResource(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!, signal, context, authorization);
@@ -177,7 +178,7 @@ export class ChatGPTTransport extends Disposable {
 			const response = gate && authorization.cacheScope ? await gate.request(authorization.cacheScope, this.options.native === true, signal, send) : await send();
 			const contentType = response.headers.get('content-type') ?? '';
 			const headers = new Headers();
-			const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : null;
+			const retryAfter = response.status === 429 || response.status === 503 ? response.headers.get('Retry-After') : null;
 			if (retryAfter !== null) { headers.set('Retry-After', retryAfter); }
 			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
 			const audio = url.pathname === synthesisPath && /^audio\/(?:mpeg|mp3)(?:;|$)/iu.test(contentType);

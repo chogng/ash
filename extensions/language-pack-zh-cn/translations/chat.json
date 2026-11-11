@@ -21,7 +21,7 @@
     "chat.imageGallery.position": "{0} / {1}",
     "chat.imageGallery.previous": "上一张图片",
     "chat.imageGallery.source": "{0} 的图片来源",
-    "chat.input.fileUploading": "正在上传…",
+    "chat.input.fileUploading": "已添加到草稿，正在后台上传。",
     "chat.input.filePreparing": "正在准备…",
     "chat.input.fileUploadFailed": "上传失败",
     "chat.input.fileReady": "已就绪",

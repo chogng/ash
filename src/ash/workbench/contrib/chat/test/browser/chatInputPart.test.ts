@@ -1289,6 +1289,41 @@ test('Failed file preparation blocks the waiting send and notifies once while pr
 	assert.equal(messages.length, 1);
 });
 
+test('The Ash composer keeps staged attachments editable and waits for readiness before sending', async () => {
+	const sent: string[] = [];
+	let retries = 0;
+	using part = inputPart(sharedNotifications, undefined, 'ask', {
+		draft: { setText() { }, attachFiles: async () => { }, retryFile: async () => { retries++; }, removeFile() { } },
+		send: async text => { sent.push(text); },
+	});
+	const state: ChatInputState = { mode: 'ask', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const draft = { text: 'My draft', readOnly: false, canAttachFiles: true };
+	const attachment = { id: 'local-file', name: 'notes.txt' };
+	part.render({ ...state, draft: { ...draft, files: [{ ...attachment, status: 'uploading' }] } });
+	const row = part.element.querySelector('.ash-chat-staged-file')!;
+	const status = row.querySelector('.ash-chat-staged-file-status')!;
+	const retry = row.querySelector<HTMLElement>('.ash-chat-staged-file-retry')!;
+	assert.equal(status.textContent, 'Added to draft. Uploading in background.');
+	assert.equal(retry.hidden, true);
+	assert.equal(part.element.querySelector('textarea')!.readOnly, false);
+	await part.acceptInput();
+	assert.deepEqual(sent, []);
+
+	part.render({ ...state, draft: { ...draft, files: [{ ...attachment, status: 'failed', error: 'Connection closed' }] } });
+	assert.equal(status.textContent, 'Upload failed');
+	assert.equal(retry.hidden, false);
+	await part.acceptInput();
+	assert.deepEqual(sent, []);
+	retry.click();
+	assert.equal(retries, 1);
+
+	part.render({ ...state, draft: { ...draft, files: [{ ...attachment, status: 'ready' }] } });
+	assert.equal(status.textContent, 'Ready');
+	assert.equal(retry.hidden, true);
+	await part.acceptInput();
+	assert.deepEqual(sent, ['My draft']);
+});
+
 test('Hiding an input cancels pending file preparation without sending or notifying', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	using notifications = new TestNotificationService();

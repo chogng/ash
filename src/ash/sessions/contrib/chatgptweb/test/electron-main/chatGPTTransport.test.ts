@@ -525,7 +525,8 @@ suite('ChatGPT transport', () => {
 			authentication: auth, readVerificationScript: async () => '', createRuntime: () => runtime((async (url, init) => {
 				assert.equal(new URL(String(url)).origin, 'https://files.oaiusercontent.com');
 				calls.push(init!);
-				return new Response(null, { status: 201, headers: { 'Set-Cookie': 'private' } });
+				return calls.length === 1 ? new Response(null, { status: 201, headers: { 'Set-Cookie': 'private' } })
+					: new Response(null, { status: 503, headers: { 'Retry-After': '2', 'Set-Cookie': 'private' } });
 			}) as typeof fetch)
 		}, new NullLoggerService());
 		const path = '/service/.upload?' + new URLSearchParams({ url: 'https://files.oaiusercontent.com/test?signature=fixture' });
@@ -540,6 +541,9 @@ suite('ChatGPT transport', () => {
 		assert.equal(calls[0]!.credentials, 'omit');
 		assert.equal(calls[0]!.redirect, 'error');
 		assert.equal(await transport.read(id), null);
+		const limited = randomUUID();
+		assert.deepEqual(await channel.call('', 'request', [limited, { path, method: 'PUT', headers: {}, body }]), { status: 503, headers: { 'retry-after': '2' } });
+		assert.equal(await transport.read(limited), null);
 		for (const change of [
 			{ method: 'POST' }, { body: 'not bytes' }, { body: VSBuffer.alloc(20 * 1024 * 1024 + 1) },
 			{ headers: { Authorization: 'private' } }, { headers: { 'x-conduit-token': 'proof' } },
@@ -547,7 +551,7 @@ suite('ChatGPT transport', () => {
 		]) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path, method: 'PUT', headers: {}, body, ...change }]), TypeError);
 		}
-		assert.equal(calls.length, 1);
+		assert.equal(calls.length, 2);
 	}));
 	test('reads web resource bytes without forwarding credentials to signed storage or following an unapproved redirect', async () => fixture(async auth => {
 		auth.headers.set('X-OpenAI-Fedramp', 'true');
