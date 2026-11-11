@@ -108,7 +108,7 @@ test('Review model saves only independent review settings with the current confi
 
 for (const kind of ['codeReviewModel', 'commitMessageModel', 'threadTitleModel', 'threadRecapModel'] as const) {
 	test(`${kind} is saved and cleared independently of the chat model`, async () => {
-		const model = { provider: 'anthropic', model: 'task-model' };
+		const model = { provider: 'anthropic', model: 'task-model', ...(kind === 'commitMessageModel' ? {} : { reasoningEffort: 'high' as const }) };
 		const writes: ConfigUpdateParams[] = [];
 		const api = createAppServerAgentModelsService({
 			async request(definition: { method: string; }, params: ConfigUpdateParams): Promise<unknown> {

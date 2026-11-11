@@ -4,6 +4,7 @@ import { IWorkbenchHostService } from '../../../../services/host/common/workbenc
 import { IChatWidgetService } from '../../../chat/browser/chat.js';
 import { ChatWidgetService } from '../../../chat/browser/widget/chatWidgetService.js';
 import '../../../advisor/browser/advisor.contribution.js';
+import '../../../chat/browser/chat.shared.contribution.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { ScreenshotGlobalShortcutSetting } from '../../../chat/common/constants.js';
@@ -78,7 +79,7 @@ import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { JSDOM } from 'jsdom';
 import { formatNlsMessage, localize, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
-import { Separator, type IAction } from '../../../../../base/common/actions.js';
+import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
@@ -425,6 +426,7 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } });
 	services.registerInstance(RemoteAgentServiceId, {
 		onDidChangeConnectionState: Event.None,
 		onDidChangeConnection: Event.None,
@@ -3006,6 +3008,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 				model: otherAdvisorModel,
 				displayName: 'Muse Spark 1.3',
 				recommendedFor: [ModelPurpose.Advisor],
+				defaultReasoningEffort: 'high',
 				supportedReasoningEfforts: [{ effort: 'high' }],
 			},
 		],
@@ -3739,17 +3742,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');
 	assert.ok(root.querySelector('.ash-settings-content-tree [data-settings-item-id="agents.definitions"] .ash-agent-roles-actions'));
+	assert.equal(root.querySelector('[data-settings-item-id="chat.codeReview"] button[aria-haspopup="menu"]')?.textContent, 'Follow Current Model');
 	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
-	const selectAdvisor = (label: string): void => {
-		root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')!.click();
-		const option = [...root.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === label);
+	const selectAdvisor = (label: string, effort?: string): void => {
+		root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] button[aria-haspopup="menu"]')!.click();
+		const item = menuActions.find(action => action.label === label);
+		const option = effort && item instanceof SubmenuAction ? item.actions.find(action => action.label === effort) : item;
 		assert.ok(option);
-		option.click();
+		hideMenu?.(false);
+		void option.run();
 	};
 	selectAdvisor('Disable');
 	await nextTurn();
 	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
-	selectAdvisor('Muse Spark 1.3 · High');
+	selectAdvisor('Muse Spark 1.3', 'High');
 	await nextTurn();
 	assert.deepEqual(advisorWrites[1], {
 		model: otherAdvisorModel,
@@ -3761,7 +3767,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	rejectAdvisorSave = true;
 	selectAdvisor('Disable');
 	await nextTurn();
-	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3 · High');
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] button[aria-haspopup="menu"]')?.getAttribute('aria-label'), 'Advisor model: Muse Spark 1.3 High');
 	assert.match(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="status"]')?.textContent ?? '', /Preference write failed/u);
 	rejectAdvisorSave = false;
 	selectAdvisor('Disable');
@@ -3773,18 +3779,22 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		maxOutputTokens: 4096,
 		reasoningEffort: 'high',
 	});
-	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Disable');
-	selectAdvisor('Muse Spark 1.3 · High');
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] button[aria-haspopup="menu"]')?.textContent, 'Disable');
+	selectAdvisor('Muse Spark 1.3', 'High');
 	await nextTurn();
 	hiddenAdvisors.add(otherAdvisorModel.model);
 	modelsChanged.fire();
 	await nextTurn();
-	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3 · High');
-	root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.click();
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] button[aria-haspopup="menu"]')?.getAttribute('aria-label'), 'Advisor model: Muse Spark 1.3 High');
+	root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] button[aria-haspopup="menu"]')?.click();
 	assert.deepEqual(
-		[...root.querySelectorAll('[role="option"]')].map(option => option.textContent),
-		['Inherit from chat', 'Disable', 'GPT-6.1 Sol · Default', 'Muse Spark 1.3 · Default', 'Muse Spark 1.3 · High'],
+		menuActions.filter(action => !(action instanceof Separator)).map(action => action.label),
+		['Inherit from chat', 'Disable', 'GPT-6.1 Sol', 'Muse Spark 1.3'],
 	);
+	const hiddenModel = menuActions.find(action => action.label === 'Muse Spark 1.3');
+	assert.ok(hiddenModel instanceof SubmenuAction);
+	assert.equal(hiddenModel.actions.find(action => action.checked)?.label, 'High');
+	hideMenu?.(true);
 	assert.equal(advisorWrites.length, 4, 'Hiding a model must not change the saved preference');
 	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] > .ash-settings-card-title')?.textContent, 'Advisor');
 	assert.ok(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] > .ash-settings-card'));

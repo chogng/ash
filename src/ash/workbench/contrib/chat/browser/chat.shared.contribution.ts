@@ -151,6 +151,11 @@ registerSettingsSection({
 	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatModelConfiguration,
 });
 registerSettingsSection({
+	id: 'chat.codeReview', categoryId: 'agents', model: new SyncDescriptor(AgentTaskModelSettingsModel, ['codeReviewModel']),
+	accessibleViewProviderId: AccessibleViewProviderId.ChatModelConfiguration,
+	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatModelConfiguration,
+});
+registerSettingsSection({
 	id: 'chat.subscriptionUsage', categoryId: 'chat-usage', model: new SyncDescriptor(SubscriptionUsageSettingsModel),
 	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
 	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatUsage,

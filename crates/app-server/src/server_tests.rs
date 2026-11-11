@@ -4398,7 +4398,16 @@ fn model_request_contains_text(request: &ModelRequest, expected: &str) -> bool {
 #[test]
 fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
     let model = Arc::new(RecordingModel::default());
-    let server = server_with_model(model.clone());
+    let profile = tempfile::tempdir().unwrap();
+    let config_path = profile.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        "[agent.codeReviewModel]\nprovider = 'openai'\nmodel = 'review-fixture'\nreasoningEffort = 'high'\n",
+    )
+    .unwrap();
+    let config =
+        ConfigStore::open_with_paths(profile.path().join("config.sqlite3"), &config_path).unwrap();
+    let server = server_with_model(model.clone()).with_config_store(Arc::new(config));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let session = create_session(&server, &mut connection, 2, "review-session");
@@ -4423,8 +4432,25 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
 
     assert!(started["result"]["value"]["turnId"].is_string());
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let snapshot = server
+        .threads()
+        .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    let turn = &snapshot.turns[0];
+    assert_eq!(turn.model.as_ref(), Some(&model_ref("review-fixture")));
+    assert_eq!(
+        turn.reasoning_effort,
+        Some(ash_protocol::ReasoningEffort::High)
+    );
     let requests = model.requests();
-    assert_eq!(requests.len(), 1);
+    assert_eq!(requests.len(), 1, "Review Turn: {turn:?}");
+    assert_eq!(
+        requests[0]
+            .reasoning
+            .as_ref()
+            .map(|reasoning| reasoning.effort),
+        Some(ash_protocol::ReasoningEffort::High)
+    );
     let shared_instructions = ash_prompts::AGENT_INSTRUCTIONS.freeze().as_text();
     assert_eq!(
         requests[0]
@@ -4445,12 +4471,8 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
         &requests[0],
         "Review the changes against base branch `main`. Determine the merge base with HEAD, then inspect the diff from that merge base."
     ));
-    let snapshot = server
-        .threads()
-        .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
-        .unwrap();
-    let instructions = snapshot.turns[0].instructions.as_ref().unwrap();
-    assert_eq!(snapshot.turns[0].kind, ash_protocol::TurnKind::Review);
+    let instructions = turn.instructions.as_ref().unwrap();
+    assert_eq!(turn.kind, ash_protocol::TurnKind::Review);
     assert_eq!(instructions.owner(), "agent-roles");
     assert_eq!(instructions.id(), "reviewer");
     let roles = agent_roles::built_in_roles();

@@ -1515,7 +1515,10 @@ fn code_review_model_persists_independently_and_clears_to_current() {
     );
     let configured = configure_provider(&store, 0, "openai");
     let chat_model = model_ref("openai", "gpt-6-astra");
-    let review_model = model_ref("openai", "gpt-6.1-sol");
+    let review_model = crate::TaskModelSelection {
+        model: model_ref("openai", "gpt-6.1-sol"),
+        reasoning_effort: Some(ash_protocol::ReasoningEffort::High),
+    };
     let selected = store
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("code-review-model").unwrap(),

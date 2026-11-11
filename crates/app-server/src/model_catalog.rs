@@ -5,8 +5,32 @@ use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelRef;
+use ash_protocol::ReasoningEffort;
 use core_api::CoreError;
 use std::sync::Arc;
+
+/// Titles and recaps favor the least expensive advertised effort unless the user chose one.
+pub(crate) fn short_text_reasoning_effort(
+    entry: Option<&ModelCatalogEntry>,
+    requested: Option<ReasoningEffort>,
+) -> Option<ReasoningEffort> {
+    let Some(entry) = entry.filter(|entry| !entry.supported_reasoning_efforts.is_empty()) else {
+        return requested;
+    };
+    requested
+        .into_iter()
+        .chain([
+            ReasoningEffort::None,
+            ReasoningEffort::Minimal,
+            ReasoningEffort::Low,
+        ])
+        .find(|effort| {
+            entry
+                .supported_reasoning_efforts
+                .iter()
+                .any(|option| option.effort == *effort)
+        })
+}
 
 pub(crate) struct ModelPreferencesCommand {
     pub command_id: ash_protocol::CommandId,

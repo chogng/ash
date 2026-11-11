@@ -3,8 +3,9 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAgentModelsService, type AgentModelDefaults, type AgentModelDefaultsUpdate } from '../../../../platform/models/common/agentModels.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
-import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
-import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
+import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry, type ModelReasoningEffort } from '../../../services/chat/common/modelCatalog.js';
+import type { SettingsMenuOption, SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
+import { taskModelMenuRows } from './taskModelMenu.js';
 
 /** Edits a backend task default without changing the conversation model. */
 export class AgentTaskModelSettingsModel extends Disposable implements SettingsSectionModel {
@@ -31,7 +32,7 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 		if (this.kind === 'commitMessageModel') {
 			return localize('commitMessage.settings.title', 'Commit');
 		}
-		return localize('codeReview.settings.title', 'Review');
+		return localize('codeReview.settings.title', 'Code review');
 	}
 	public get description(): string {
 		if (this.kind === 'threadRecapModel') {
@@ -43,19 +44,19 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 		if (this.kind === 'commitMessageModel') {
 			return localize('commitMessage.settings.description', 'Changing the model requires authorizing directories again.');
 		}
-		return '';
+		return localize('codeReview.settings.description', 'Choose the model that reviews code changes and reports issues.');
 	}
 	public get help(): string {
 		if (this.kind === 'threadRecapModel') {
-			return localize('threadRecap.settings.help', 'Conversation recap settings\nUse Tab to reach Generate recaps automatically and Space to toggle it. Automatic recaps require at least three completed turns and 30 minutes with the conversation idle and unfocused. Use Tab to reach Model, Enter or Space to open it, and the arrow keys and Enter to save. Use /recap in an idle conversation to request a recap at any time. Escape closes this help and returns focus.');
+			return localize('threadRecap.settings.help', 'Conversation recap settings\nUse Tab to reach Generate recaps automatically and Space to toggle it. Automatic recaps require at least three completed turns and 30 minutes with the conversation idle and unfocused. Use Tab to reach Model, Enter or Space to open it, and Up or Down Arrow to browse. Press Right Arrow on a model to see its reasoning levels, then Enter to save. Use /recap in an idle conversation to request a recap at any time. Escape closes this help and returns focus.');
 		}
 		if (this.kind === 'threadTitleModel') {
-			return localize('threadTitle.settings.help', 'Conversation title settings\nUse Tab to reach Model. Press Enter or Space to open the selector, use the arrow keys to select a model, and press Enter to save. Automatic uses a recommended low-cost model from the conversation provider when available. Escape closes this help and returns focus.');
+			return localize('threadTitle.settings.help', 'Conversation title settings\nUse Tab to reach Model. Press Enter or Space to open the menu and Up or Down Arrow to browse. Press Right Arrow on a model to see its reasoning levels, then Enter to save. Automatic uses a recommended low-cost model from the conversation provider when available. Escape closes this help and returns focus.');
 		}
 		if (this.kind === 'commitMessageModel') {
 			return localize('commitMessage.settings.help', 'Commit message settings\nUse Tab to reach Automatically generate commit messages and Space to toggle it. Turning it off keeps the selected model. Use Tab to reach Model. Press Enter or Space to open it, use the arrow keys to select a model, and press Enter to save immediately. Inherit conversation model uses the model from the conversation turn that produced the changes, even if you later change the conversation model. If that model is unavailable, choose a dedicated model. Changing the selection clears directory authorizations; authorize the resolved model before its source changes can be sent. Models and connections are managed in Models. Escape closes this help and returns focus.');
 		}
-		return localize('codeReview.settings.help', 'Review model settings\nUse Tab to reach the model selector. Press Enter or Space to open it, use the arrow keys to select a model, and press Enter to save immediately. Follow Current Model clears the code-review override. The selection applies to future code reviews, including current, staged, branch and custom reviews from Find Issues. Models and connections are managed in Models. An unavailable saved model remains visible; choose an available model before reviewing. Escape closes this help and returns focus.');
+		return localize('codeReview.settings.help', 'Review model settings\nUse Tab to reach the model selector. Press Enter or Space to open it and Up or Down Arrow to browse. Press Right Arrow on a model to see its reasoning levels, then Enter to save. Follow Current Model clears the code-review override. The selection applies to future code reviews, including current, staged, branch and custom reviews from Find Issues. Models and connections are managed in Models. An unavailable saved model remains visible; choose an available model before reviewing. Escape closes this help and returns focus.');
 	}
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
@@ -95,28 +96,32 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 				&& (entry.inputModalities == null || entry.inputModalities.includes('text'))
 				&& entry.discovered !== false && !entry.retirement)]
 			: recommended;
-		const options = [
-			{ value: '', label: defaultLabel },
-			...candidates.filter(entry => this.languageModels.isModelVisible(entry.model)).map(entry => ({ value: modelRefIdentity(entry.model), label: entry.displayName })),
-		];
-		const value = selected ? modelRefIdentity(selected) : '';
-		if (selected && !options.some(option => option.value === value)) {
-			const saved = this.models.find(entry => modelRefIdentity(entry.model) === value);
-			options.push({ value, label: saved?.displayName ?? localize('codeReview.settings.unavailable', '{0} (unavailable)', `${selected.provider}/${selected.model}`) });
+		const entries = candidates.filter(entry => this.languageModels.isModelVisible(entry.model));
+		const selectedId = selected ? modelRefIdentity(selected) : '';
+		if (selected && !entries.some(entry => modelRefIdentity(entry.model) === selectedId)) {
+			entries.push(this.models.find(entry => modelRefIdentity(entry.model) === selectedId) ?? {
+				model: selected, longContext: null,
+				displayName: localize('codeReview.settings.unavailable', '{0} (unavailable)', `${selected.provider}/${selected.model}`),
+			});
 		}
-		const fields: SettingsSectionField[] = [
-			{
-				id: fieldId,
-				kind: 'select',
-				label: localize('codeReview.settings.selector', 'Model'),
-				description: this.description,
-				value, options, enabled: !!this.snapshot && !this.busy,
-				setValue: value => {
-					const model = this.models.find(entry => modelRefIdentity(entry.model) === value)?.model;
-					if (value && !model) { return; }
-					void this.save({ [this.kind]: model ?? null });
-				}
+		const common = {
+			id: fieldId,
+			label: localize('codeReview.settings.selector', 'Model'),
+			description: this.description,
+			enabled: !!this.snapshot && !this.busy,
+		};
+		const automatic = { value: '', label: defaultLabel };
+		const selector: SettingsSectionField = this.kind === 'commitMessageModel' ? {
+			...common, kind: 'select', value: selectedId,
+			options: [automatic, ...entries.map(entry => ({ value: modelRefIdentity(entry.model), label: entry.displayName }))],
+			setValue: value => {
+				const model = this.models.find(entry => modelRefIdentity(entry.model) === value)?.model;
+				if (value && !model) return;
+				void this.save({ commitMessageModel: model ?? null });
 			},
+		} : this.modelMenu(common, automatic, entries);
+		const fields: SettingsSectionField[] = [
+			selector,
 			{ id: fieldId.replace(/-model$/, '-status'), kind: 'status', text: this.message },
 		];
 		if (this.kind === 'threadRecapModel') {
@@ -136,6 +141,35 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 			});
 		}
 		return fields;
+	}
+
+	private modelMenu(common: { id: string; label: string; description: string; enabled: boolean; }, automatic: { value: string; label: string; }, entries: readonly ModelCatalogEntry[]): SettingsSectionField {
+		const kind = this.kind;
+		const saved = this.snapshot?.[kind];
+		const savedId = saved && modelRefIdentity(saved);
+		const rows = taskModelMenuRows(entries, saved, kind === 'codeReviewModel'
+			? entry => entry.effectiveReasoningEffort ?? entry.defaultReasoningEffort
+			: shortTextDefaultEffort);
+		const summary = rows.find(row => row.id === savedId)?.summary;
+		const options: SettingsMenuOption[] = [automatic];
+		if (rows.length) options.push({ separator: true }, ...rows.map(row => row.option));
+		return {
+			...common, kind: 'menu', options, value: summary?.value ?? automatic.value,
+			valueLabel: summary?.label ?? automatic.label, valueDescription: summary?.labelDescription,
+			setValue: value => {
+				if (value === automatic.value) {
+					void this.save({ [kind]: null });
+					return;
+				}
+				for (const row of rows) {
+					const choice = row.choices.find(choice => choice.value === value);
+					if (choice && this.models.some(entry => modelRefIdentity(entry.model) === row.id)) {
+						void this.save({ [kind]: { ...row.model, ...(choice.effort === undefined ? {} : { reasoningEffort: choice.effort }) } });
+						return;
+					}
+				}
+			},
+		};
 	}
 
 	public setVisible(visible: boolean): void {
@@ -227,4 +261,10 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 			void this.load();
 		}
 	}
+}
+
+/** The App Server uses these low-cost levels for titles and recaps without an explicit effort. */
+function shortTextDefaultEffort(entry: ModelCatalogEntry): ModelReasoningEffort | undefined {
+	const order: readonly ModelReasoningEffort[] = ['none', 'minimal', 'low'];
+	return order.find(effort => entry.supportedReasoningEfforts?.some(option => option.effort === effort)) ?? entry.defaultReasoningEffort;
 }

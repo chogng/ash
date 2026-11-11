@@ -7,6 +7,7 @@ import { isLinux, isWindows } from './platform.js';
 export interface IAction {
 	readonly id: string;
 	readonly label: string;
+	readonly labelDescription?: string;
 	readonly tooltip: string;
 	readonly icon?: Icon;
 	/** CSS foreground for the action glyph, independent of its label and checkmark. */

@@ -32,6 +32,37 @@
 	gap: var(--ash-spacing-size80);
 }
 
+.ash-settings-menu-field {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.ash-configuration-setting > .ash-settings-menu-field {
+	justify-self: end;
+}
+
+.ash-settings-field-row > .ash-settings-menu-field {
+	margin-inline-start: auto;
+}
+
+.ash-settings-menu-field > .ash-button {
+	min-width: 0;
+	max-width: 100%;
+	justify-content: space-between;
+	padding: 0 var(--ash-spacing-size80);
+	border-color: var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-settings-menu-field > .ash-button:not(:disabled):is(:hover, .active) {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-settings-menu-field .ash-dropdown-menu-indicator > .ash-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+}
+
 .ash-settings-section > h5 {
 	margin: 0;
 	font-size: var(--ash-fontSize-body1);

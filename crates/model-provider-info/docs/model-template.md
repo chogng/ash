@@ -20,7 +20,7 @@
 | 接入声明       | `model-provider-info` 的接入定义；约束按模型＋接入协议绑定                                            | 地址、协议版本、生成/计数/流式操作、必需请求头、接入限制                                   |
 | 请求编码       | `ash-api` 定义协议类型和编解码，`model-provider` 选择并调用                                           | `reasoning.effort` 与 `output_config.effort` 的不同结构                                    |
 | 目录与有效能力 | `models-manager` 合并有来源的规格；调用方结合已选接入进行校验                                         | 模型会看图，但所选接入没有图像输入协议                                                     |
-| 任务模型偏好   | `config` 的 `[agent.codeReviewModel]` 等配置；App Server 在对应 Turn 启动时选择，未配置时沿用当前模型 | 各 provider 复用现有 `ModelRef` 与有效接入，不新增厂商请求参数；代码审查与权限审批模型独立 |
+| 任务模型偏好   | `config` 的 `[agent.codeReviewModel]` 等配置；App Server 为对应任务读取模型和可选的 `reasoningEffort` | 各 provider 复用现有 `ModelRef` 和有效接入，沿用原推理参数；代码审查与权限审批模型分别配置 |
 | Ash 执行策略   | 模型条目的独立 `host_policy` 部分；Core 和宿主执行                                                    | 执行上下文预算、压缩阈值、工具结果截断预算                                                 |
 | 基础提示词     | 模型条目的 `model_messages.system_instructions`，完整正文                                             | 工作原则、工具使用和结果报告                                                               |
 | 运行时事实     | 账户、凭据、会话与调用记录的各自负责方                                                                | 账户权限、实际服务等级、缓存命中、token 用量                                               |

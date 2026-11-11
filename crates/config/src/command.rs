@@ -1,5 +1,6 @@
 use crate::CodebaseAutomaticContext;
 use crate::CodebaseModelSelection;
+use crate::TaskModelSelection;
 use crate::ToolSearchConfig;
 use crate::{
     ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, GrepBackend, HookConfig,
@@ -43,13 +44,13 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub thread_title_model: Patch<ModelRef>,
+    pub thread_title_model: Patch<TaskModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub thread_recap_model: Patch<ModelRef>,
+    pub thread_recap_model: Patch<TaskModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub thread_recap_enabled: Patch<bool>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub code_review_model: Patch<ModelRef>,
+    pub code_review_model: Patch<TaskModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub commit_message_model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]

@@ -28,11 +28,18 @@ export interface SettingsSectionModel {
 	setVisible(visible: boolean): void;
 }
 
+export type SettingsMenuOption =
+	| ({ readonly label: string; readonly labelDescription?: string; } & (
+		| { readonly value: string; }
+		| { readonly id: string; readonly options: readonly SettingsMenuOption[]; /** A local selection independent of the parent menu. */ readonly selectedValue?: string; }))
+	| { readonly separator: true; };
+
 export type SettingsSectionField = { readonly description?: string; } & (
 	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
 	| { readonly id: string; readonly kind: 'boolean'; readonly label: string; readonly value: boolean; readonly enabled: boolean; readonly setValue: (value: boolean) => void; }
 	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; readonly separatorBefore?: boolean; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'menu'; readonly label: string; readonly value: string; readonly valueLabel: string; readonly valueDescription?: string; readonly options: readonly SettingsMenuOption[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; });
 
 export type SettingValueType = 'boolean' | 'number' | 'numberWithOptions' | 'select' | 'text' | 'stringMap' | 'complex';

@@ -1084,7 +1084,7 @@
     "sessions.agents.verbosityInvalid": "智能体无障碍提示详细程度必须为布尔值。",
     "sessions.agents.verbosityTitle": "智能体无障碍帮助",
     "sessions.agents.verbosityDescription": "在智能体角色和团队区域获得焦点时，播报如何打开无障碍帮助。",
-    "sessions.agents.help": "智能体\n按 Tab 在 Agent 定义和团队控件之间移动。展开角色可查看指令与能力、编辑自定义定义，或复制允许自定义的内置角色。“团队”管理固定成员、成员角色、负责人、任务和讨论。“查看角色”会打开成员使用的准确角色定义。角色修改适用于新运行；已有任务保留其成员和定义快照。按 Escape 关闭帮助并返回原来的焦点。",
+    "sessions.agents.help": "智能体\n按 Tab 在自定义 Agent 和团队控件之间移动。团队用于管理固定成员、成员角色、负责人、任务和讨论。“查看角色”会打开成员使用的自定义定义。角色变更适用于新的运行，现有任务保留原有成员和定义快照。按 Escape 关闭帮助并返回原焦点。",
     "sessions.teams.viewRole": "查看角色",
     "sessions.teams.active": "活跃",
     "sessions.teams.add": "添加成员",

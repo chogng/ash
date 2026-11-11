@@ -770,6 +770,8 @@ use crate::protocol::config::SkillSourceRemoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::SkillSourceSetEnablementParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::TaskModelSelectionDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::TimeContextConfigDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::ToolSearchConfigDto;
@@ -6945,6 +6947,7 @@ typescript_bindings! {
     DocumentCollaborationSubmitParams,
     DocumentCollaborationSubmitResult,
     ModelRefDto,
+    TaskModelSelectionDto,
     CodebaseModelsDto,
     CodebaseAutomaticContextDto,
     CodebaseConfigDto,

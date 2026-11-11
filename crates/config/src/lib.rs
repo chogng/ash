@@ -61,7 +61,7 @@ pub use document::TraceConfig;
 pub use document::{
     AgentConfig, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, GrepBackend,
     GrepConfig, HttpCompatibilityMode, NetworkConfig, ResolvedConfig, ResolvedConfigSnapshot,
-    UserConfigDocument,
+    TaskModelSelection, UserConfigDocument,
 };
 pub use exec_policy::{DirExecPolicyConfig, UserExecPolicyConfig, compose_exec_policy};
 pub use git::{GitAutoFetchMode, GitConfig};

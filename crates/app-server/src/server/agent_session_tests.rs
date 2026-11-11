@@ -2040,7 +2040,7 @@ fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
     let config_path = directory.path().join("config.toml");
     std::fs::write(
         &config_path,
-        "[agent.threadTitleModel]\nprovider = 'openai'\nmodel = 'gpt-6-luna'\n",
+        "[agent.threadTitleModel]\nprovider = 'openai'\nmodel = 'gpt-6-luna'\nreasoningEffort = 'high'\n",
     )
     .unwrap();
     let config = Arc::new(
@@ -2094,8 +2094,13 @@ fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
     assert!(started.get("result").is_some(), "{started}");
     let (model, request) = invoked.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(model.model.as_str(), "gpt-6-luna");
+    assert_eq!(
+        request.reasoning.as_ref().map(|reasoning| reasoning.effort),
+        Some(ash_protocol::ReasoningEffort::High)
+    );
     assert!(request.tools.is_empty());
     assert_eq!(request.tool_choice, ash_protocol::ToolChoice::None);
+    assert_eq!(request.max_output_tokens, None);
     assert_eq!(
         call(
             &server,

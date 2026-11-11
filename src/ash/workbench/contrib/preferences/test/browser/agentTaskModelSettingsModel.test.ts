@@ -7,9 +7,14 @@ import { IAgentModelsService, ModelPurpose, type AgentModelDefaults } from '../.
 import { ILanguageModelsService } from '../../../chat/common/languageModels.js';
 import { AgentTaskModelSettingsModel } from '../../browser/agentTaskModelSettingsModel.js';
 import type { SettingsSectionField } from '../../../../services/preferences/common/preferences.js';
-import { modelRefIdentity } from '../../../../services/chat/common/modelCatalog.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
+
+function modelSelector(model: AgentTaskModelSettingsModel): Extract<SettingsSectionField, { kind: 'select' | 'menu'; }> {
+	const field = model.fields.find(field => field.kind === 'select' || field.kind === 'menu');
+	assert.ok(field?.kind === 'select' || field?.kind === 'menu');
+	return field;
+}
 
 for (const [kind, purpose, otherPurpose] of [
 	['codeReviewModel', ModelPurpose.Review, ModelPurpose.Commit],
@@ -34,17 +39,19 @@ for (const [kind, purpose, otherPurpose] of [
 					{ model: other, displayName: 'Other', recommendedFor: [otherPurpose] },
 				],
 			} as unknown as ILanguageModelsService));
-		const selector = () => model.fields.find(field => field.kind === 'select') as Extract<SettingsSectionField, { kind: 'select'; }>;
+		const selector = () => modelSelector(model);
 		const ready = () => new Promise<void>(resolve => {
 			const listener = resources.add(model.onDidChange(() => { if (selector().enabled) { listener.dispose(); resolve(); } }));
 		});
 		let loaded = ready(); model.setVisible(true); await loaded;
-		assert.deepEqual(selector().options.map(option => option.label), [kind === 'threadTitleModel' ? 'Automatic' : kind === 'codeReviewModel' ? 'Follow Current Model' : 'Inherit conversation model', 'Recommended', 'Saved']);
-		assert.equal(selector().value, modelRefIdentity(saved));
+		assert.deepEqual(selector().options.flatMap(option => 'label' in option ? [option.label] : []), [kind === 'threadTitleModel' ? 'Automatic' : kind === 'codeReviewModel' ? 'Follow Current Model' : 'Inherit conversation model', 'Recommended', 'Saved']);
+		const current = selector().options.find(option => 'label' in option && option.label === 'Saved');
+		assert.ok(current && 'value' in current);
+		assert.equal(selector().value, current.value);
 		uses = [];
 		loaded = ready(); changes.fire(); await loaded;
-		assert.equal(selector().options.some(option => option.value === modelRefIdentity(recommended)), false);
-		assert.equal(selector().value, modelRefIdentity(saved));
+		assert.equal(selector().options.some(option => 'label' in option && option.label === 'Recommended'), false);
+		assert.equal(selector().value, current.value);
 	});
 }
 
@@ -69,10 +76,13 @@ for (const kind of ['codeReviewModel', 'commitMessageModel', 'threadTitleModel',
 		} as IAgentModelsService);
 		services.registerInstance(ILanguageModelsService, {
 			onDidChangeModels: changes.event, isModelVisible: () => true,
-			listModelCatalog: async () => [{ model: review, displayName: 'Review fixture', recommendedFor: [ModelPurpose.Review, ModelPurpose.Commit, ModelPurpose.ThreadTitle] }],
+			listModelCatalog: async () => [{
+				model: review, displayName: 'Review fixture', recommendedFor: [ModelPurpose.Review, ModelPurpose.Commit, ModelPurpose.ThreadTitle],
+				defaultReasoningEffort: 'high', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }],
+			}],
 		} as unknown as ILanguageModelsService);
 		const model = resources.add(services.createInstance(AgentTaskModelSettingsModel, kind));
-		const selector = () => model.fields.find(field => field.kind === 'select') as Extract<SettingsSectionField, { kind: 'select'; }>;
+		const selector = () => modelSelector(model);
 		const settled = () => new Promise<void>(resolve => {
 			const listener = resources.add(model.onDidChange(() => {
 				if (selector().enabled) { listener.dispose(); resolve(); }
@@ -82,28 +92,47 @@ for (const kind of ['codeReviewModel', 'commitMessageModel', 'threadTitleModel',
 		model.setVisible(true);
 		await pending;
 		assert.equal(selector().value, '');
+		const modelOption = selector().options.find(option => 'label' in option && option.label === 'Review fixture');
+		assert.ok(modelOption);
+		const high = 'options' in modelOption ? modelOption.options.find(option => 'label' in option && option.label === 'High') : modelOption;
+		assert.ok(high && 'value' in high);
+		const expected = kind === 'commitMessageModel' ? review : { ...review, reasoningEffort: 'high' };
+		if (kind !== 'commitMessageModel') {
+			assert.ok('options' in modelOption);
+			assert.equal(modelOption.labelDescription, kind === 'codeReviewModel' ? 'High' : 'Low');
+			const defaultOption = modelOption.options.find(option => 'label' in option && option.label === modelOption.labelDescription);
+			assert.ok(defaultOption && 'value' in defaultOption);
+			assert.equal(modelOption.selectedValue, defaultOption.value);
+		}
 		// A different settings section has saved since this selector loaded.
 		snapshot = { ...snapshot, revision: snapshot.revision + 1 };
 		pending = settled();
-		selector().setValue(modelRefIdentity(review));
+		selector().setValue(high.value);
 		await pending;
-		assert.equal(selector().value, modelRefIdentity(review));
-		assert.deepEqual(writes, [{ [kind]: review }]);
+		assert.equal(selector().value, high.value);
+		assert.deepEqual(writes, [{ [kind]: expected }]);
 		assert.deepEqual(snapshot.model, chat);
 		assert.equal(snapshot[kind === 'codeReviewModel' ? 'commitMessageModel' : 'codeReviewModel'], null);
 		model.setVisible(false);
 		pending = settled(); model.setVisible(true); await pending;
-		assert.equal(selector().value, modelRefIdentity(review));
+		assert.equal(selector().value, high.value);
+		const restored = selector();
+		if (restored.kind === 'menu') {
+			assert.equal(restored.valueDescription, 'High');
+			const submenu = restored.options.find(option => 'options' in option);
+			assert.ok(submenu && 'options' in submenu);
+			assert.equal(submenu.selectedValue, high.value);
+		}
 		reject = true;
 		pending = settled(); selector().setValue(''); await pending;
-		assert.equal(selector().value, modelRefIdentity(review));
+		assert.equal(selector().value, high.value);
 		assert.ok(model.fields.some(field => field.kind === 'status' && field.text.includes('controlled rejection')));
 		reject = false;
 		pending = settled(); selector().setValue(''); await pending;
 		assert.equal(selector().value, '');
 		assert.deepEqual(snapshot.model, chat);
 		assert.equal(snapshot[kind === 'codeReviewModel' ? 'commitMessageModel' : 'codeReviewModel'], null);
-		assert.deepEqual(writes, [{ [kind]: review }, { [kind]: null }]);
+		assert.deepEqual(writes, [{ [kind]: expected }, { [kind]: null }]);
 		if (kind === 'threadRecapModel') {
 			const toggle = () => model.fields.find(field => field.kind === 'boolean') as Extract<SettingsSectionField, { kind: 'boolean'; }>;
 			assert.equal(toggle().value, false);
@@ -113,12 +142,12 @@ for (const kind of ['codeReviewModel', 'commitMessageModel', 'threadTitleModel',
 		}
 		if (kind === 'commitMessageModel') {
 			const toggle = () => model.fields.find(field => field.kind === 'boolean') as Extract<SettingsSectionField, { kind: 'boolean'; }>;
-			pending = settled(); selector().setValue(modelRefIdentity(review)); await pending;
+			pending = settled(); selector().setValue(high.value); await pending;
 			pending = settled(); toggle().setValue(true); await pending;
 			assert.equal(toggle().value, true);
 			pending = settled(); toggle().setValue(false); await pending;
 			assert.equal(toggle().value, false);
-			assert.equal(selector().value, modelRefIdentity(review));
+			assert.equal(selector().value, high.value);
 			assert.deepEqual(writes.slice(-2), [{ commitMessageEnabled: true }, { commitMessageEnabled: false }]);
 		}
 	});
@@ -129,9 +158,10 @@ test('Task model labels and help use Chinese localization', () => {
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		using model = new AgentTaskModelSettingsModel('codeReviewModel', {} as IAgentModelsService, { onDidChangeModels: Event.None } as ILanguageModelsService);
-		assert.equal(model.title, '审查');
-		const selector = model.fields[0] as Extract<SettingsSectionField, { kind: 'select'; }>;
-		assert.equal(selector.options[0].label, '跟随当前模型');
+		assert.equal(model.title, '代码审查');
+		const selector = modelSelector(model);
+		assert.equal(selector.kind, 'menu');
+		assert.equal(selector.valueLabel, '跟随当前模型');
 		using commit = new AgentTaskModelSettingsModel('commitMessageModel', {} as IAgentModelsService, { onDidChangeModels: Event.None } as ILanguageModelsService);
 		assert.equal(commit.title, '提交');
 		assert.ok(commit.description.includes('授权'));
@@ -142,13 +172,15 @@ test('Task model labels and help use Chinese localization', () => {
 		using titles = new AgentTaskModelSettingsModel('threadTitleModel', {} as IAgentModelsService, { onDidChangeModels: Event.None } as ILanguageModelsService);
 		assert.equal(titles.title, '对话标题');
 		assert.ok(titles.help.startsWith('对话标题设置'));
-		const titleSelector = titles.fields[0] as Extract<SettingsSectionField, { kind: 'select'; }>;
-		assert.equal(titleSelector.options[0].label, '自动');
+		const titleSelector = modelSelector(titles);
+		assert.equal(titleSelector.kind, 'menu');
+		assert.equal(titleSelector.valueLabel, '自动');
 		using recap = new AgentTaskModelSettingsModel('threadRecapModel', {} as IAgentModelsService, { onDidChangeModels: Event.None } as ILanguageModelsService);
 		assert.equal(recap.title, '对话回顾');
 		assert.ok(recap.help.startsWith('对话回顾设置'));
 		assert.ok(recap.fields.some(field => field.kind === 'boolean' && field.label === '自动生成回顾'));
-		const recapSelector = recap.fields.find(field => field.kind === 'select') as Extract<SettingsSectionField, { kind: 'select'; }>;
-		assert.equal(recapSelector.options[0].label, '自动');
+		const recapSelector = modelSelector(recap);
+		assert.equal(recapSelector.kind, 'menu');
+		assert.equal(recapSelector.valueLabel, '自动');
 	} finally { resetNlsResolver(); }
 });

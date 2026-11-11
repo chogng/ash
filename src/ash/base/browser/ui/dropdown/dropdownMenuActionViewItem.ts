@@ -65,8 +65,15 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		container.classList.add('ash-dropdown-menu-action-view-item');
 		button.domNode.setAttribute('aria-haspopup', 'menu');
 		button.domNode.setAttribute('aria-expanded', 'false');
+		if (this.action.onDidChange) {
+			this._register(this.action.onDidChange(() => {
+				button.enabled = this.action.enabled;
+				if (!button.enabled) this.hide();
+			}));
+		}
 		const indicator = h(container.ownerDocument, 'span');
 		indicator.className = 'ash-dropdown-menu-indicator';
+		indicator.setAttribute('aria-hidden', 'true');
 		appendIcon(Lxicon.chevronDown, indicator);
 		button.domNode.append(indicator);
 		this._register(addDisposableListener(button.domNode, 'keydown', (event) => {
@@ -80,9 +87,9 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		this.button?.focus();
 	}
 
-	setLabel(label: string, ariaLabel = label): void {
+	setLabel(label: string, ariaLabel = label, description?: string): void {
 		if (!this.button) return;
-		this.button.label = label;
+		this.button.setLabel(label, description);
 		this.button.domNode.setAttribute('aria-label', ariaLabel);
 	}
 
@@ -126,7 +133,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		}
 	}
 
-	protected hide(): void {
+	hide(): void {
 		this.menuCancellation.value?.cancel();
 	}
 

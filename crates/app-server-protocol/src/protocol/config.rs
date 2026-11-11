@@ -129,6 +129,19 @@ pub struct ModelRefDto {
     pub model: String,
 }
 
+/// A dedicated model and optional reasoning effort for one Agent task.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskModelSelectionDto {
+    #[schemars(length(min = 1))]
+    pub provider: String,
+    #[schemars(length(min = 1))]
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub reasoning_effort: Option<ReasoningEffort>,
+}
+
 /// Model pair used by Ash's local semantic codebase orchestration.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -751,16 +764,16 @@ pub struct ConfigReadResult {
     pub approval_review_model: ApprovalReviewModelSelectionDto,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    pub thread_title_model: Option<ModelRefDto>,
+    pub thread_title_model: Option<TaskModelSelectionDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    pub thread_recap_model: Option<ModelRefDto>,
+    pub thread_recap_model: Option<TaskModelSelectionDto>,
     #[serde(default)]
     #[ts(as = "Option<bool>", optional)]
     pub thread_recap_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    pub code_review_model: Option<ModelRefDto>,
+    pub code_review_model: Option<TaskModelSelectionDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     /// No override inherits the model of the Turn that produced the changes.
@@ -932,21 +945,21 @@ pub struct ConfigUpdateParams {
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<ModelRefDto>")]
-    #[ts(as = "Option<ModelRefDto>", optional = nullable)]
-    pub thread_title_model: Patch<ModelRefDto>,
+    #[schemars(with = "Option<TaskModelSelectionDto>")]
+    #[ts(as = "Option<TaskModelSelectionDto>", optional = nullable)]
+    pub thread_title_model: Patch<TaskModelSelectionDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<ModelRefDto>")]
-    #[ts(as = "Option<ModelRefDto>", optional = nullable)]
-    pub thread_recap_model: Patch<ModelRefDto>,
+    #[schemars(with = "Option<TaskModelSelectionDto>")]
+    #[ts(as = "Option<TaskModelSelectionDto>", optional = nullable)]
+    pub thread_recap_model: Patch<TaskModelSelectionDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<bool>")]
     #[ts(as = "Option<bool>", optional = nullable)]
     pub thread_recap_enabled: Patch<bool>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<ModelRefDto>")]
-    #[ts(as = "Option<ModelRefDto>", optional = nullable)]
-    pub code_review_model: Patch<ModelRefDto>,
+    #[schemars(with = "Option<TaskModelSelectionDto>")]
+    #[ts(as = "Option<TaskModelSelectionDto>", optional = nullable)]
+    pub code_review_model: Patch<TaskModelSelectionDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ModelRefDto>")]
     #[ts(as = "Option<ModelRefDto>", optional = nullable)]

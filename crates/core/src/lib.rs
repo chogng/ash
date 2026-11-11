@@ -20,6 +20,7 @@ mod test_image;
 mod thread_controller;
 mod thread_recap;
 mod thread_reducer;
+mod thread_short_text;
 mod thread_title;
 mod thread_view;
 mod thread_worktree;
