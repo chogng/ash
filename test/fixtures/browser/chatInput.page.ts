@@ -519,6 +519,10 @@ if (unavailableProvider) {
 }
 let hiddenModels: readonly ModelCatalogEntry[] | undefined;
 let selectedModel: ModelRef = models.find(entry => entry.model.provider === new URLSearchParams(location.search).get('initialProvider'))?.model ?? models[0].model;
+const hiddenSelectedModel = new URLSearchParams(location.search).has('hideSelectedModel') ? models.find(entry => entry.model === selectedModel) : undefined;
+if (hiddenSelectedModel) {
+	models = models.filter(entry => entry !== hiddenSelectedModel);
+}
 let automatic = false;
 services.registerInstance(ILanguageModelsService, {
 	readApprovalReviewModel: async () => ({ type: 'automatic' }),
@@ -1121,7 +1125,8 @@ if (new URLSearchParams(location.search).has('permissions')) {
 	};
 }
 function renderModels(): void {
-	state = { ...state, models, selectedModel, isAutomaticModel: automatic, selectedReasoningEffort };
+	const selectedModelEntry = hiddenSelectedModel?.model === selectedModel ? hiddenSelectedModel : undefined;
+	state = { ...state, models, selectedModel, selectedModelEntry, isAutomaticModel: automatic, selectedReasoningEffort };
 	part.render({ ...state, interaction: undefined });
 }
 part.render(state);

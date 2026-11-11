@@ -15,6 +15,7 @@ import {
 	IAccessibleViewService,
 } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ActionListItemKind } from '../../../../../../../platform/actionWidget/browser/actionList.js';
 import { TabbedActionListWidget } from '../../../../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
 import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
@@ -28,6 +29,8 @@ import { renderModelPickerHover } from './modelPickerHover.js';
 import { buildModelPickerItems, createManageModelsAction } from './modelPickerItems.js';
 import { buildModelPickerDestinations, type IModelPickerDestination } from './modelPickerTabs.js';
 import { modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { getModelPickerLabel } from './modelPickerPresentation.js';
+import { getModelProviderIcon } from './modelProviderIcons.js';
 import { getFastModelVariant, modelPickerAccelerationOptions, renderModelSpeedMenu } from './modelPickerVariants.js';
 import { applyModelReasoningEffort } from '../chatModelConfigurationLogic.js';
 import { ModelPickerWelcome } from './modelPickerWelcome.js';
@@ -159,6 +162,23 @@ export class TabbedModelPicker extends Disposable {
 			createActionList: () => {
 				const models = this.delegate.getModels();
 				const current = this.delegate.isAutomaticModel() ? undefined : this.delegate.getSelectedModel();
+				const items = [...buildModelPickerItems(models, current, configureInMenu)];
+				if (configureInMenu && useWorkbenchModelManagement && current && !findModelForChatInput(models, current)) {
+					// Code can retain a model that is no longer offered as a new choice.
+					const entry = this.delegate.getSelectedModelEntry();
+					const icon = entry && getModelProviderIcon(entry);
+					const currentLabel = localize('chat.modelPicker.current', 'Current');
+					items.unshift({
+						id: `${current.provider}/${current.model}`,
+						kind: ActionListItemKind.Action,
+						label: getModelPickerLabel(false, entry, current),
+						detail: currentLabel,
+						tooltip: currentLabel,
+						checked: true,
+						disabled: true,
+						group: icon && { title: '', icon },
+					});
+				}
 				empty.hidden = models.length > 0;
 				if (!models.length) {
 					const destinations = this.destinations;
@@ -174,7 +194,7 @@ export class TabbedModelPicker extends Disposable {
 					}
 				}
 				return {
-					items: buildModelPickerItems(models, current, configureInMenu),
+					items,
 					listOptions: {
 						className: 'ash-chat-model-picker ash-action-widget-accent-checks', presentation: 'details',
 						menuIconPlacement: configureInMenu ? 'leading-with-trailing-check' : undefined,
@@ -182,7 +202,7 @@ export class TabbedModelPicker extends Disposable {
 						showFilter: true, filterVisible: models.length > 0 && !this.delegate.isAutomaticModel(),
 						filterPlaceholder: localize('chat.modelPicker.search', 'Search models'),
 						focusFilterOnOpen: true, filterAsCombobox: true,
-						itemsVisible: models.length > 0 && !this.delegate.isAutomaticModel(), header,
+						itemsVisible: items.length > 0 && !this.delegate.isAutomaticModel(), header,
 						busy: this.selection.isSelecting,
 						accessibilityHelp: () => this.accessibleViewService.show(AccessibleViewType.Help),
 					},
@@ -434,7 +454,7 @@ export class TabbedModelPicker extends Disposable {
 							? this.delegate.useWorkbenchModelManagement === false
 								? localize('chat.modelPicker.hostCatalogHelp', 'Type to filter this chat’s models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow to open model details. Tab to the action for starting a separate chat when available. Escape closes the picker.')
 								: configureInMenu
-									? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. Tab to the Effort submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it, or use Right Arrow on Speed when several levels are available. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
+									? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. If the current model is outside the available choices, it appears checked and disabled. Tab to the Effort submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it, or use Right Arrow on Speed when several levels are available. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
 									: localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
 							: root.innerText,
 						() => { if (active.isConnected) { active.focus(); } }, AccessibilityVerbositySettingId.ChatModelConfiguration);
