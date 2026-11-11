@@ -337,6 +337,47 @@ suite('ChatGPT transport', () => {
 		assert.deepEqual(await prepareRequestHeaders(cdn, 'GET', incoming), { Accept: incoming.Accept });
 	}));
 
+	test('retries a connection closed during a ChatGPT read once', async () => fixture(async auth => {
+		let requests = 0;
+		let available = true;
+		using transport = new ChatGPTTransport({
+			authentication: auth, readVerificationScript: async () => '', createRuntime: () => runtime(async () => {
+				if (++requests === 1 || !available) { throw new Error('net::ERR_CONNECTION_CLOSED'); }
+				return Response.json({ models: [] });
+			}),
+		}, new NullLoggerService());
+		const fetcher = createChatGPTFetch(adapt(transport, auth));
+		const response = await fetcher('/service/backend-api/models');
+		assert.equal(response.status, 200);
+		assert.deepEqual(await response.json(), { models: [] });
+		assert.equal(requests, 2);
+
+		available = false;
+		assert.equal((await fetcher('/service/backend-api/models')).status, 502);
+		assert.equal(requests, 4);
+		assert.equal((await fetcher('/service/backend-api/stop_conversation', { method: 'POST', body: '{}' })).status, 502);
+		assert.equal(requests, 5);
+	}));
+
+	test('cancels a pending connection retry when the ChatGPT account changes', async () => fixture(async auth => {
+		const attempted = new DeferredPromise<void>();
+		let requests = 0;
+		using transport = new ChatGPTTransport({
+			authentication: auth, readVerificationScript: async () => '', createRuntime: () => runtime(async () => {
+				requests++;
+				void attempted.complete();
+				throw new Error('net::ERR_CONNECTION_CLOSED');
+			}),
+		}, new NullLoggerService());
+		const request = transport.request(randomUUID(), { path: '/service/backend-api/models', method: 'GET', headers: {} }, auth.context);
+		const rejected = assert.rejects(request, { name: 'AbortError' });
+		await attempted.p;
+		await new Promise<void>(resolve => setImmediate(resolve));
+		auth.changeAccount();
+		await rejected;
+		assert.equal(requests, 1);
+	}));
+
 	for (const finalStatus of [200, 401]) {
 		test(`401 recovery uses the owner once and returns the final ${finalStatus} without another retry`, async () => fixture(async auth => {
 			auth.headers.set('X-OpenAI-Fedramp', 'true');
