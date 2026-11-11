@@ -57,5 +57,5 @@ test('Artifacts recommends the optional Docs editor and switches real rich and M
 	await expect(rich).toHaveValue('Rich Docs round trip');
 	await page.screenshot({ path: testInfo.outputPath('docs-rich-round-trip.png') });
 	await artifacts.click();
-	await expect(page.locator('.ash-artifacts-card.docs')).toHaveCount(4);
+	await expect(page.locator('.ash-artifacts-card.docs:not([data-artifact-example])')).toHaveCount(4);
 });

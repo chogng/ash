@@ -7,13 +7,15 @@ import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import type { CanvasArtifactExample } from './artifactExamples.js';
 
 export interface IArtifactWorkspace extends IDisposable {
 	readonly domNode: HTMLElement;
 	readonly usesCanvasPanels: boolean;
-	create(container: HTMLElement): void;
+	create(container: HTMLElement, example?: CanvasArtifactExample): void;
 	setVisible(visible: boolean): void;
 	layout(dimension: IDimension): void;
+	revealInitialContent?(): void;
 	focus(): void;
 	getAccessibleContent(): string;
 }

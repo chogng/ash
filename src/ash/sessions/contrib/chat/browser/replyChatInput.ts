@@ -18,7 +18,7 @@ import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browse
 import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
-import { ArtifactDraftLabel, getArtifactDraftHelp, type ArtifactDraftModel } from '../../artifacts/browser/artifactDraft.js';
+import { ChatInputArtifactPill, getArtifactDraftHelp, type ArtifactDraftModel } from '../../artifacts/browser/chatInputArtifactPill.js';
 import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import { getNativeChatAccessibilityHelp } from './nativeChatAccessibilityHelp.js';
@@ -105,7 +105,7 @@ export class ReplyChatInputFactory {
 		const parent = input.element;
 		parent.classList.add('ash-sessions-native-chat-input', 'native-chat-composer');
 		input.composerForm.classList.add('ash-sessions-chat-input-card', 'floating-card', 'stacked');
-		owner.add(new ArtifactDraftLabel(input, model));
+		owner.add(new ChatInputArtifactPill(input, model));
 		const heading = h(parent.ownerDocument, 'h2', { className: 'ash-sessions-native-chat-welcome-heading' });
 		heading.textContent = localize('sessions.chat.welcome', 'What can we work on?');
 		parent.prepend(heading);

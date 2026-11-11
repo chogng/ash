@@ -1,6 +1,6 @@
-import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
-import { localize } from '../../../../../../nls.js';
+import { localize, localize2 } from '../../../../../../nls.js';
+import { RawContextKey, type IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
 import { CanvasFrameNavigator } from '../../../browser/canvasFrameNavigator.js';
 import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
@@ -8,10 +8,19 @@ import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/
 import { documentFromShapes } from '../../../common/model/designDocument.js';
 import { exportDesignSvg } from '../../../browser/designSvgRenderer.js';
 
+const HasSitePages = new RawContextKey<boolean>('sessions.artifacts.sites.hasPages', false);
+
 class SitesWorkspace extends CanvasWorkspace {
 	private pages!: CanvasFrameNavigator;
+	public static registerToolbarActions(): void {
+		this.registerWorkspaceActions(ArtifactWorkspaceId.Sites, [
+			{ id: 'page', title: localize2('sessions.creator.sites.addPage', 'Add web page'), run: workspace => workspace.pages.select(workspace.addFrame(1440, 900)) },
+			{ id: 'preview', title: localize2('sessions.creator.sites.preview', 'Preview pages'), precondition: HasSitePages.isEqualTo(true), run: workspace => workspace.pages.showPreview(true) },
+			{ id: 'export', title: localize2('sessions.creator.sites.export', 'Export website'), precondition: HasSitePages.isEqualTo(true), run: workspace => workspace.exportWebsite() },
+		]);
+	}
 	protected override createModeContent(): void {
-		this.pages = this._register(new CanvasFrameNavigator(this.actionsDomNode, this.contentDomNode, this.document, id => this.editor.revealShape(id)));
+		this.pages = this._register(new CanvasFrameNavigator(this.createPageNavigation(), this.contentDomNode, this.document, id => this.editor.revealShape(id)));
 	}
 	private async exportWebsite(): Promise<void> {
 		const frames = this.pages.frames;
@@ -19,17 +28,15 @@ class SitesWorkspace extends CanvasWorkspace {
 		const sections = frames.map((frame, index) => `<section id="page-${index}">${exportDesignSvg(documentFromShapes([frame], this.document.model.value, this.document.model.value.assets), this.document.getEmbeddedImageSources())}</section>`).join('\n');
 		await this.document.exportDocument({ title: localize('sessions.creator.sites.export', 'Export website'), filename: 'site.html', extension: 'html', content: `<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Creator</title><style>body{margin:0;font:16px system-ui}nav{display:flex;flex-wrap:wrap;gap:16px;padding:16px}section{max-width:1440px;margin:0 auto 32px}section>svg{display:block;width:100%;height:auto}</style></head><body><nav>${navigation}</nav><main>${sections}</main></body></html>\n` });
 	}
-	protected override getModeActions(): readonly IAction[] {
-		return [
-			this.action('page', localize('sessions.creator.sites.addPage', 'Add web page'), () => this.pages.select(this.addFrame(1440, 900))),
-			this.action('preview', localize('sessions.creator.sites.preview', 'Preview pages'), () => this.pages.showPreview(true), this.pages.frames.length > 0),
-			this.action('export', localize('sessions.creator.sites.export', 'Export website'), () => this.exportWebsite(), this.pages.frames.length > 0),
-		];
+	protected override bindToolbarContext(contextKeys: IContextKeyService): () => void {
+		const hasPages = HasSitePages.bindTo(contextKeys);
+		return () => hasPages.set(this.pages.frames.length > 0);
 	}
 	public override focus(): void { if (this.pages.isPresenting) { this.pages.focus(); } else { super.focus(); } }
 	public override setVisible(visible: boolean): void { super.setVisible(visible); this.pages.setVisible(visible); }
 }
 
+SitesWorkspace.registerToolbarActions();
 registerArtifactWorkspace({
 	id: ArtifactWorkspaceId.Sites,
 	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Sites),

@@ -23,7 +23,7 @@ import type { DesignSelection } from '../../../common/designSelection.js';
 import { ResourcePropertiesWidget } from './resourcePropertiesWidget.js';
 import { ComponentPropertiesWidget } from './componentPropertiesWidget.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
+import { createCanvasColorPicker } from '../../../browser/widget/canvasColorPicker.js';
 import { ColorPicker } from '../../../../../../base/browser/ui/colorPicker/colorPicker.js';
 
 type GeometryField = 'x' | 'y' | 'width' | 'height' | 'rotation';
@@ -89,7 +89,7 @@ export class DesignPropertiesWidget extends Disposable {
 		this.domNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-properties', attributes: { role: 'group', 'aria-label': localize('sessions.design.properties', 'Shape properties') } });
 		this.headingDomNode = h(ownerDocument, 'h2', { className: 'ash-design-properties-heading', attributes: { tabindex: '-1' } });
 		this.domNode.append(this.headingDomNode);
-		this.pageColor = this._register(createDesignColorPicker(instantiation, ownerDocument, { color: localize('sessions.design.pageBackground', 'Page background'), value: localize('sessions.design.pageBackgroundColor', 'Page background color'), opacity: localize('sessions.design.pageBackgroundOpacity', 'Page background opacity (%)') }));
+		this.pageColor = this._register(createCanvasColorPicker(instantiation, ownerDocument, { color: localize('sessions.design.pageBackground', 'Page background'), value: localize('sessions.design.pageBackgroundColor', 'Page background color'), opacity: localize('sessions.design.pageBackgroundOpacity', 'Page background opacity (%)') }));
 		this._register(this.pageColor.onDidChangeColor(color => { this.pageColorPreview = Color.Format.CSS.formatHexA(color, true); this.refresh(); }));
 		this._register(this.pageColor.onDidClose(() => { this.pageColorPreview = undefined; this.refresh(); }));
 		this._register(this.pageColor.onDidCommitColor(color => this.commitColor(color, this.pageColor)));
@@ -161,7 +161,7 @@ export class DesignPropertiesWidget extends Disposable {
 		const fill = h(ownerDocument, 'div', { className: 'ash-design-property-wide ash-design-fill' }, h(ownerDocument, 'span', {}, localize('sessions.design.fill', 'Fill')));
 		this.appearanceProperties.append(fill);
 		this.fillDomNode = fill;
-		this.fillColor = this._register(createDesignColorPicker(instantiation, ownerDocument, { color: localize('sessions.design.fill', 'Fill'), value: localize('sessions.design.fillColor', 'Fill color'), opacity: localize('sessions.design.fillOpacity', 'Fill opacity (%)'), getDocumentColors: () => [...new Set(flattenDesignShapes(this.documentController.model.value.shapes).filter(shape => (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image').flatMap(shape => designPaints(shape).flatMap(paint => paint.type === 'solid' ? [paint.color.toLowerCase()] : paint.stops.map(stop => stop.color.toLowerCase()))))].map(fill => Color.Format.CSS.parseHex(fill)!) }));
+		this.fillColor = this._register(createCanvasColorPicker(instantiation, ownerDocument, { color: localize('sessions.design.fill', 'Fill'), value: localize('sessions.design.fillColor', 'Fill color'), opacity: localize('sessions.design.fillOpacity', 'Fill opacity (%)'), getDocumentColors: () => [...new Set(flattenDesignShapes(this.documentController.model.value.shapes).filter(shape => (shape.kind !== 'group' || !!shape.booleanOperation) && shape.kind !== 'image').flatMap(shape => designPaints(shape).flatMap(paint => paint.type === 'solid' ? [paint.color.toLowerCase()] : paint.stops.map(stop => stop.color.toLowerCase()))))].map(fill => Color.Format.CSS.parseHex(fill)!) }));
 		fill.append(this.fillColor.domNode);
 		this._register(this.fillColor.onDidChangeColor(color => {
 			const shape = this.selectedShape; if (!shape) { return; }

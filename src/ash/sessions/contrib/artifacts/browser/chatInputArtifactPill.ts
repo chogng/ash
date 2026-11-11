@@ -1,28 +1,15 @@
 import { h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputPart, IChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ArtifactKind } from '../../../common/artifactKind.js';
-import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../common/artifactWorkspace.js';
-import './artifactDraft.css';
-
-export const OPEN_ARTIFACT_DRAFT = 'sessions.creator.openDraft';
-
-export function getArtifactTitle(kind: ArtifactKind): string {
-	switch (kind) {
-		case 'docs': return localize('sessions.artifacts.docs', 'Docs');
-		case 'slides': return getArtifactWorkspaceTitle(ArtifactWorkspaceId.Slides);
-		case 'design': return getArtifactWorkspaceTitle(ArtifactWorkspaceId.Design);
-		case 'sheet': return localize('sessions.artifacts.sheet', 'Sheet');
-		case 'whiteboard': return getArtifactWorkspaceTitle(ArtifactWorkspaceId.Whiteboard);
-		case 'data': return localize('sessions.artifacts.data', 'Data');
-		case 'motion': return localize('sessions.design.motionMode', 'Motion');
-	}
-}
+import { appendArtifactIcon, getArtifactTitle } from './artifactKindPresentation.js';
+import './chatInputArtifactPill.css';
 
 export interface ArtifactDraftModel {
 	readonly artifactDraftKind: ArtifactKind | undefined;
@@ -34,37 +21,39 @@ export function getArtifactDraftHelp(): string {
 }
 
 /** Renders the artifact type owned by the current draft. */
-export class ArtifactDraftLabel extends Disposable {
-	private static readonly labels = new WeakMap<IChatInputPart, ArtifactDraftLabel>();
+export class ChatInputArtifactPill extends Disposable {
+	private static readonly pills = new WeakMap<IChatInputPart, ChatInputArtifactPill>();
 
 	static show(input: IChatInputPart, kind: ArtifactKind): void {
-		this.labels.get(input)?.show(kind);
+		this.pills.get(input)?.show(kind);
 	}
 
 	private readonly element: HTMLElement;
 	private readonly text: HTMLElement;
 	private readonly remove: Button;
+	private kindIcon: Element | undefined;
 
 	constructor(private readonly input: ChatInputPart, private readonly model: Pick<IChatWidgetModel, 'onDidChange'> & Partial<ArtifactDraftModel>) {
 		super();
 		const document = input.element.ownerDocument;
 		this.element = h(document, 'span', {
-			className: 'ash-artifact-type ash-artifact-draft-label',
+			className: 'ash-chat-input-artifact-pill ash-artifact-type',
 			properties: { hidden: true },
 		});
-		this.text = h(document, 'span');
-		this.element.append(this.text);
 		this.remove = this._register(new Button(this.element, {
-			label: '', icon: Lxicon.close, iconOnly: true, size: 'small',
+			label: '', iconOnly: true, size: 'small',
 			onClick: () => this.removeKind(),
 		}));
-		this.remove.domNode.classList.add('ash-artifact-draft-remove');
+		this.remove.domNode.classList.add('ash-chat-input-artifact-pill-remove');
+		appendIcon(Lxicon.close, this.remove.domNode);
+		this.text = h(document, 'span', { className: 'ash-chat-input-artifact-pill-label' });
+		this.element.append(this.text);
 		const footer = input.composerFooter;
 		if (footer) footer.insertBefore(this.element, footer.querySelector('.ash-chat-input-toolbars'));
 		else input.composerForm.after(this.element);
-		ArtifactDraftLabel.labels.set(input, this);
+		ChatInputArtifactPill.pills.set(input, this);
 		this._register(toDisposable(() => {
-			ArtifactDraftLabel.labels.delete(input);
+			ChatInputArtifactPill.pills.delete(input);
 			this.element.remove();
 		}));
 		this._register(model.onDidChange(() => this.render()));
@@ -88,7 +77,9 @@ export class ArtifactDraftLabel extends Disposable {
 		const kind = this.model.artifactDraftKind;
 		if (this.element.dataset.artifactKind === kind) return;
 		this.element.hidden = kind === undefined;
+		this.kindIcon?.remove();
 		if (kind === undefined) {
+			this.kindIcon = undefined;
 			delete this.element.dataset.artifactKind;
 			this.text.textContent = '';
 			this.remove.setTitle(undefined);
@@ -98,6 +89,7 @@ export class ArtifactDraftLabel extends Disposable {
 		const title = artifactDraftTitle(kind);
 		const removeLabel = localize('sessions.artifacts.removeDraftType', 'Remove {0}', title);
 		this.element.dataset.artifactKind = kind;
+		this.kindIcon = appendArtifactIcon(kind, this.remove.domNode);
 		this.text.textContent = title;
 		this.remove.domNode.setAttribute('aria-label', removeLabel);
 		this.remove.setTitle(removeLabel);

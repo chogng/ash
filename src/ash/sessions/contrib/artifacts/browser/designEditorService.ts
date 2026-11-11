@@ -4,7 +4,7 @@ import { createServiceIdentifier, IInstantiationService } from '../../../../plat
 import { IWorkingCopyService } from '../../../../workbench/services/workingCopy/common/workingCopyService.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { DesignDocumentController } from './designDocumentController.js';
-import type { DesignEditorWidget } from './widget/designEditorWidget.js';
+import type { CanvasEditorWidget } from './widget/canvasEditorWidget.js';
 import { ArtifactWorkspaceId } from '../common/artifactWorkspace.js';
 
 export const DESIGN_LAYERS_CONTAINER_ID = 'workbench.sessions.sidebar.designLayers';
@@ -13,9 +13,9 @@ export const DESIGN_PROPERTIES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.d
 /** Each mode retains its document; panels borrow the active canvas's selection and components. */
 export interface IDesignEditorService {
 	readonly document: DesignDocumentController;
-	readonly activeEditor: IObservable<DesignEditorWidget | undefined>;
+	readonly activeEditor: IObservable<CanvasEditorWidget | undefined>;
 	getDocument(mode: ArtifactWorkspaceId): DesignDocumentController;
-	setActiveEditor(editor: DesignEditorWidget | undefined): void;
+	setActiveEditor(editor: CanvasEditorWidget | undefined): void;
 }
 
 export const IDesignEditorService = createServiceIdentifier<IDesignEditorService>('designEditorService');
@@ -23,8 +23,8 @@ export const IDesignEditorService = createServiceIdentifier<IDesignEditorService
 export class DesignEditorService extends Disposable implements IDesignEditorService {
 	private readonly documents = new Map<ArtifactWorkspaceId, DesignDocumentController>();
 	public get document(): DesignDocumentController { return this.getDocument(ArtifactWorkspaceId.Design); }
-	private readonly active = observableValue<DesignEditorWidget | undefined>(this, undefined);
-	public readonly activeEditor: IObservable<DesignEditorWidget | undefined> = this.active;
+	private readonly active = observableValue<CanvasEditorWidget | undefined>(this, undefined);
+	public readonly activeEditor: IObservable<CanvasEditorWidget | undefined> = this.active;
 	constructor(@IInstantiationService private readonly instantiation: IInstantiationService, @IWorkingCopyService private readonly workingCopies: IWorkingCopyService, @ILifecycleService lifecycle: ILifecycleService) {
 		super();
 		this._register(lifecycle.onBeforeShutdown(event => event.veto(this.confirmDiscard(), 'unsavedCreator')));
@@ -49,6 +49,6 @@ export class DesignEditorService extends Disposable implements IDesignEditorServ
 		}
 		return false;
 	}
-	public setActiveEditor(editor: DesignEditorWidget | undefined): void { this.active.set(editor); }
+	public setActiveEditor(editor: CanvasEditorWidget | undefined): void { this.active.set(editor); }
 	protected override disposeCore(): void { this.active.set(undefined); super.disposeCore(); }
 }

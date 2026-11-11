@@ -5,7 +5,7 @@ import { designPaints } from '../../common/model/designPaint.js';
 import { designNetworkRegions } from '../../common/model/designVectorNetwork.js';
 import { designPathEditingContours, moveDesignPathNode } from '../../common/model/designVector.js';
 import type { AssetVersion } from '../../../../../platform/assets/common/assetService.js';
-import './designEditorWidget.css';
+import './canvasEditorWidget.css';
 import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -28,14 +28,15 @@ import { DesignMediaPreview } from '../designMedia.js';
 import { DesignCanvasView } from '../designCanvasView.js';
 import { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
 import { DesignInputController } from '../controller/designInputController.js';
-import { DesignToolsWidget } from './designToolsWidget.js';
+import { CanvasEditorToolbar } from './canvasEditorToolbar.js';
+import { CanvasEditorActions } from '../canvasEditorActions.js';
 import type { DesignEditorContributionFactory, IDesignDrawingContribution, IDesignMotionContribution, IDesignPropertiesContribution, IDesignCodeContribution, IDesignPrototypeContribution } from '../designEditorBrowser.js';
 
 const KEYBOARD_ZOOM_FACTOR = 1.2;
 const KEYBOARD_PAN_DISTANCE = 60;
-const focusedViews = new WeakMap<Element, DesignEditorWidget>();
+const focusedViews = new WeakMap<Element, CanvasEditorWidget>();
 /** Design document editor; document coordinates never depend on its viewport. */
-export class DesignEditorWidget extends Disposable {
+export class CanvasEditorWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly commands: DocumentCommands;
 	public readonly selection = new DesignSelection();
@@ -49,7 +50,8 @@ export class DesignEditorWidget extends Disposable {
 	private readonly messageDomNode: HTMLElement;
 	private contextMenuVisible = false;
 	private vectorSelectionStatus: string | undefined;
-	private readonly toolsWidget: DesignToolsWidget;
+	private readonly toolbar: CanvasEditorToolbar;
+	private readonly editorActions: CanvasEditorActions;
 	private readonly text: import('../designEditorBrowser.js').IDesignTextContribution;
 	private readonly drawing: IDesignDrawingContribution;
 	private readonly motion: IDesignMotionContribution;
@@ -82,7 +84,12 @@ export class DesignEditorWidget extends Disposable {
 		this.canvas = this._register(instantiationService.createInstance(DesignCanvasView, ownerDocument));
 		this.canvas.setTool(this.tool);
 		const stage = h(ownerDocument, 'div', { className: 'ash-sessions-design-stage' });
-		this.toolsWidget = this._register(instantiationService.createInstance(DesignToolsWidget, ownerDocument, (tool: DesignTool) => commandService.executeCommand(`sessions.design.tool.${tool}`, this), (mode: DesignMode) => commandService.executeCommand(`sessions.design.mode.${mode}`, this), (action: string) => commandService.executeCommand(`sessions.design.${action}`, this)));
+		this.toolbar = this._register(instantiationService.createInstance(CanvasEditorToolbar, ownerDocument));
+		this.editorActions = new CanvasEditorActions(
+			tool => commandService.executeCommand(`sessions.design.tool.${tool}`, this),
+			mode => commandService.executeCommand(`sessions.design.mode.${mode}`, this),
+			action => commandService.executeCommand(`sessions.design.${action}`, this),
+		);
 		const contributions = this._register(createContributions({
 			ownerDocument,
 			canvasDomNode: this.canvas.domNode,
@@ -104,7 +111,7 @@ export class DesignEditorWidget extends Disposable {
 		this.motion = contributions.motion;
 		this.code = contributions.code;
 		this.prototype = contributions.prototype;
-		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.toolsWidget.domNode, this.prototype.previewDomNode);
+		stage.append(this.canvas.domNode, this.code.domNode, this.motion.domNode, this.toolbar.domNode, this.prototype.previewDomNode);
 
 		this.contentDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-content', attributes: { 'aria-hidden': 'true' } });
 		this.messageDomNode = h(ownerDocument, 'div', { className: 'ash-sessions-design-message', attributes: { role: 'status', 'aria-live': 'polite' } });
@@ -173,7 +180,9 @@ export class DesignEditorWidget extends Disposable {
 		const entry = getDesignShapeEntries(this.documentController.model.value.shapes).find(entry => entry.shape.id === id);
 		if (!entry) { return; }
 		this.selectShapes([id]);
-		const height = this.canvas.domNode.clientHeight;
+		const height = this.mode === DesignMode.Motion && this.motion.domNode.offsetTop > 0
+			? this.motion.domNode.offsetTop
+			: this.canvas.domNode.clientHeight;
 		this.camera.scale = Math.max(0.2, Math.min(1, (this.dimension.width - 48) / entry.world.width, (height - 100) / entry.world.height));
 		this.camera.panX = this.dimension.width / 2 - (entry.world.x + entry.world.width / 2) * this.camera.scale;
 		this.camera.panY = height / 2 - (entry.world.y + entry.world.height / 2) * this.camera.scale;
@@ -183,6 +192,7 @@ export class DesignEditorWidget extends Disposable {
 		if (!visible) { this.text.finish(); }
 		this.prototype.setVisible(visible);
 		if (!visible) {
+			this.toolbar.hideMenu();
 			this.cancelGesture();
 			this.properties.cancel();
 			if (this.contextMenuVisible) this.contextMenus.hideContextMenu();
@@ -190,7 +200,11 @@ export class DesignEditorWidget extends Disposable {
 		this.motion.setActive(visible && this.mode === DesignMode.Motion);
 	}
 
-	public static getFocused(element: HTMLElement): DesignEditorWidget | undefined {
+	public setWorkspaceToolbarContext(context: unknown): void {
+		this.toolbar.setWorkspaceContext(context);
+	}
+
+	public static getFocused(element: HTMLElement): CanvasEditorWidget | undefined {
 		const root = element.closest('.ash-sessions-design-view');
 		return root ? focusedViews.get(root) : undefined;
 	}
@@ -402,7 +416,7 @@ export class DesignEditorWidget extends Disposable {
 		this.contextMenus.showContextMenu({
 			getAnchor: () => anchor,
 			getActions: () => this.getContextMenuActions(),
-			getMenuClassName: () => 'ash-design-menu',
+			getMenuClassName: () => 'ash-canvas-editor-menu',
 			onHide: () => { this.contextMenuVisible = false; restoreFocus(); },
 		});
 		this.contextMenuVisible = true;
@@ -440,7 +454,8 @@ export class DesignEditorWidget extends Disposable {
 		this.renderShapes();
 		const shapes = this.documentController.model.value.shapes;
 		const selected = this.selectedShape;
-		this.toolsWidget.update(this.tool, this.mode, this.documentController.isBusy);
+		const editorActions = this.editorActions.update(this.tool, this.mode, this.documentController.isBusy);
+		if (editorActions) this.toolbar.setEditorActions(editorActions.tools, editorActions.modes);
 		this.motion.update(selected, this.documentController.isBusy);
 		this.code.update(this.documentController.model.value, this.mode === DesignMode.Code, this.documentController.isBusy);
 

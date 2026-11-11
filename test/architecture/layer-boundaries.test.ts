@@ -286,7 +286,7 @@ test('Design editor stays within its Sessions contribution and keeps document co
 			}
 		}
 	}
-	const widget = join(designRoot, 'browser/widget/designEditorWidget.ts');
+	const widget = join(designRoot, 'browser/widget/canvasEditorWidget.ts');
 	for (const target of localImports(widget)) {
 		if (target.startsWith(join(sourceRoot, 'sessions')) && !target.startsWith(`${designRoot}${sep}`) && !target.startsWith(`${canvasRoot}${sep}`)) {
 			violations.push(`${sourceName(widget)} -> ${sourceName(target)}`);

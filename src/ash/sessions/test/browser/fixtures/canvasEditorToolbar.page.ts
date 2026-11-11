@@ -18,12 +18,13 @@ import { TestThemeService } from '../../../../platform/theme/test/common/testThe
 import { CommandService } from '../../../../workbench/services/commands/common/commandService.js';
 import { TestNotificationService } from '../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { bindTestColorTheme } from '../../../../../../test/fixtures/browser/themeFixture.js';
-import { DesignToolsWidget } from '../../../contrib/artifacts/browser/widget/designToolsWidget.js';
+import { CanvasEditorToolbar } from '../../../contrib/artifacts/browser/widget/canvasEditorToolbar.js';
+import { CanvasEditorActions } from '../../../contrib/artifacts/browser/canvasEditorActions.js';
 import { DesignMode, DesignTool } from '../../../contrib/artifacts/common/config/designEditorConfiguration.js';
 
 declare global {
 	interface Window {
-		ashDesignToolsFixture: {
+		ashCanvasEditorToolbarFixture: {
 			setBusy(busy: boolean): void;
 			setCodeMode(enabled: boolean): void;
 			dispose(): void;
@@ -56,17 +57,19 @@ let tool = DesignTool.Select;
 let mode = DesignMode.Design;
 let busy = false;
 const update = (): void => {
-	widget.update(tool, mode, busy);
+	const actions = editorActions.update(tool, mode, busy);
+	if (actions) widget.setEditorActions(actions.tools, actions.modes);
 	document.querySelector('output')!.textContent = `${tool}/${mode}`;
 };
-const widget = resources.add(services.createInstance(DesignToolsWidget, document,
+const editorActions = new CanvasEditorActions(
 	(selected: DesignTool) => { tool = selected; update(); },
 	(selected: DesignMode) => { mode = selected; update(); },
 	() => { },
-));
+);
+const widget = resources.add(services.createInstance(CanvasEditorToolbar, document));
 document.querySelector('main')!.append(widget.domNode);
 update();
-window.ashDesignToolsFixture = {
+window.ashCanvasEditorToolbarFixture = {
 	setBusy(value) { busy = value; update(); },
 	setCodeMode(value) { mode = value ? DesignMode.Code : DesignMode.Design; update(); },
 	dispose() { resources.dispose(); },

@@ -3,14 +3,14 @@ import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 
-suite('Design tools reuse shared action views', () => {
+suite('Canvas editor toolbar reuses shared action views', () => {
 	const browser = useBrowserTests();
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 		test(`preserves grouped choices, geometry and keyboard focus in ${theme}`, async () => {
 			const { page } = browser;
-			await page.goto(`/designToolsWidget.html?theme=${theme}`);
+			await page.goto(`/canvasEditorToolbar.html?theme=${theme}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			const tools = page.getByRole('toolbar', { name: 'Design tools', exact: true });
+			const tools = page.getByRole('toolbar', { name: 'Canvas tools', exact: true });
 			const select = tools.getByRole('button', { name: 'Select (V)', exact: true });
 			const dropdown = tools.getByRole('button', { name: 'Selection tools', exact: true });
 			const geometry = await select.evaluate(main => {
@@ -20,7 +20,7 @@ suite('Design tools reuse shared action views', () => {
 				return { width: primary.width, height: primary.height, arrowWidth: secondary.width, arrowHeight: secondary.height, gap: secondary.left - primary.right, labelDisplay: getComputedStyle(main.querySelector('.ash-icon-label-container')!).display };
 			});
 			assert.deepEqual(geometry, { width: 32, height: 32, arrowWidth: 20, arrowHeight: 32, gap: 0, labelDisplay: 'none' });
-			await expect(page.locator('.ash-design-tools-widget .ash-icon-label-container:visible')).toHaveCount(0);
+			await expect(page.locator('.ash-canvas-editor-toolbar .ash-icon-label-container:visible')).toHaveCount(0);
 			await expect(select).toHaveAttribute('aria-pressed', 'true');
 			await select.focus();
 			await select.press('ArrowRight');
@@ -43,24 +43,24 @@ suite('Design tools reuse shared action views', () => {
 			await expect(hand).toHaveAttribute('aria-pressed', 'false');
 			await hand.click();
 			await expect(page.locator('output')).toHaveText('hand/design');
-			await page.evaluate(() => window.ashDesignToolsFixture.setBusy(true));
+			await page.evaluate(() => window.ashCanvasEditorToolbarFixture.setBusy(true));
 			await expect(hand).toBeDisabled();
 			await expect(dropdown).toBeDisabled();
-			await page.evaluate(() => { window.ashDesignToolsFixture.setBusy(false); window.ashDesignToolsFixture.setCodeMode(true); });
+			await page.evaluate(() => { window.ashCanvasEditorToolbarFixture.setBusy(false); window.ashCanvasEditorToolbarFixture.setCodeMode(true); });
 			await expect(hand).toBeDisabled();
-			await page.evaluate(() => window.ashDesignToolsFixture.setCodeMode(false));
+			await page.evaluate(() => window.ashCanvasEditorToolbarFixture.setCodeMode(false));
 			await expect(hand).toBeEnabled();
 			await dropdown.click();
-			await page.evaluate(() => window.ashDesignToolsFixture.dispose());
+			await page.evaluate(() => window.ashCanvasEditorToolbarFixture.dispose());
 			await expect(page.getByRole('menu')).toHaveCount(0);
-			await expect(page.locator('.ash-design-tools-widget button')).toHaveCount(0);
+			await expect(page.locator('.ash-canvas-editor-toolbar button')).toHaveCount(0);
 		});
 	}
 
 	test('keeps translated names on icon-only primary actions', async () => {
 		const { page } = browser;
-		await page.goto('/designToolsWidget.html?locale=zh-CN');
-		const tools = page.getByRole('toolbar', { name: '设计工具', exact: true });
+		await page.goto('/canvasEditorToolbar.html?locale=zh-CN');
+		const tools = page.getByRole('toolbar', { name: '画布工具', exact: true });
 		await expect(tools.getByRole('button', { name: '选区（V）', exact: true })).toBeVisible();
 		await tools.getByRole('button', { name: '选择工具', exact: true }).click();
 		await expect(page.getByRole('menuitemradio', { name: '移动画布（H）', exact: true })).toBeVisible();

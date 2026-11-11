@@ -13,11 +13,11 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ViewContainerLocation, type IView } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
-import { DesignEditorWidget } from './widget/designEditorWidget.js';
+import { CanvasEditorWidget } from './widget/canvasEditorWidget.js';
 import { IDesignEditorService, DESIGN_LAYERS_CONTAINER_ID, DESIGN_PROPERTIES_CONTAINER_ID } from './designEditorService.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { DesignLayersView, DesignPropertiesView } from './designPanelViews.js';
-import { designToolActions, designModeActions } from './widget/designToolsWidget.js';
+import { canvasDocumentActions, canvasModeActions, canvasToolActions } from './canvasEditorActions.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 import { ArtifactsEditorView } from './artifactsEditor.js';
 
@@ -31,27 +31,27 @@ function designLayoutHelp(): string {
 	return localize('sessions.design.layoutHelp', 'Layer name renames the selected layer. Arrange duplicates and reorders layers, aligns sibling objects or one object inside its frame, and distributes spacing for three or more siblings. Ctrl or Command+D duplicates; Ctrl or Command+brackets changes stacking order, with Shift to move to the front or back. Shift+A adds auto layout to a frame or wraps sibling selections in a frame. Auto layout arranges children horizontally or vertically with gap, padding and alignment. Frames can hug contents or keep a fixed size; children can fill available space. Choosing Fill container makes that parent dimension fixed; choosing Hug contents makes child sizing fixed on that axis. Width or height edits switch that dimension to fixed. Constraints control child position and size when a free-layout frame resizes. Groups retain proportional sizing and support positional constraints. Use the layer tree to select nested frame children and its keyboard context menu to edit layers. All layout and layer edits can be undone.') + '\n\n' + localize('sessions.design.responsiveLayoutHelp', 'Wrap moves horizontal items into new rows, or vertical items into new columns, when the available space runs out. Line gap controls the space between those lines. Grid uses columns and rows with fixed, hug or fractional fill tracks; clear Rows for automatic rows. Column pixels / fraction and Row pixels / fraction set pixels for fixed tracks or relative shares for fill tracks. Automatic positioning follows layer order; manual positioning preserves empty cells. Grid children can span cells and align inside them. Size limits apply alongside fixed, hug and fill sizing; clear a limit to remove it. Minimum must not exceed maximum. All these controls are keyboard accessible and edits share the same undo history.') + '\n\n' + localize('sessions.design.componentsHelp', 'Components reuse a main component through linked instances. Click to select the component or instance; Ctrl-click or Command-click selects an inner layer. <keybinding:sessions.design.createComponent> creates a component; duplicating a main creates an instance. Components in Shape properties can insert local instances, combine main components as variants, add variants and edit named variant properties. Instance property menus switch variants or swap components while preserving overrides on matching layers. Main edits update instances; instances can override content, appearance and size but cannot add, delete or reorder inherited layers. Reset all overrides or Reset property restores inherited values. Push overrides to main updates the local main and other instances. Go to main component selects the source. Restore main component recovers a deleted source from its instance. <keybinding:sessions.design.detachInstance> detaches the selected instance into a regular frame while preserving nested instance links. Component operations, overrides and variant changes are saved in the design document and can be undone.') + '\n\n' + localize('sessions.design.resourcesHelp', 'Design resources contains Bindings and modes, Variables, Styles and Libraries. Use Tab to reach each section and Enter or Space to expand it. Variables support color, number, string and boolean values, collections, named modes and same-type aliases. Bind property links a selected layer property; Literal value detaches it. Auto inherits the parent mode or the collection default; with no selection, mode changes apply to the page. Create styles from the selection, apply them to layers, or update their definition from a selection. Direct property edits detach the affected binding or style. Layout guides are editing aids and are excluded from artwork exports. Publish library writes a portable library file containing components, styles, variables and image data. Add library enables its published resources. Check updates shows added, changed and removed definitions; expand each change to read its previous and new values. Accept update applies that version while preserving instance overrides. Disabling a library hides it from pickers and keeps existing references. Local resource edits and accepting library updates can be undone.');
 }
 
-for (const [tool, title, icon] of designToolActions) {
+for (const [tool, title, icon] of canvasToolActions) {
 	registerAction2(class SelectDesignTool extends Action2 {
 		constructor() { super({ id: `sessions.design.tool.${tool}`, title: title(), icon }); }
-		public override run(_accessor: ServicesAccessor, editor: DesignEditorWidget): void { editor.setTool(tool); }
+		public override run(_accessor: ServicesAccessor, editor: CanvasEditorWidget): void { editor.setTool(tool); }
 	});
 }
 
-for (const [id, key, title] of [['addFrame', 'sessions.design.addFrame', 'Add frame (F)'], ['importImage', 'sessions.design.importImage', 'Import image']] as const) {
+for (const [id, title] of canvasDocumentActions) {
 	registerAction2(class EditDesignMedia extends Action2 {
-		constructor() { super({ id: `sessions.design.${id}`, title: localize2({ bundle: 'ash', key: key }, title) }); }
-		public override async run(_accessor: ServicesAccessor, editor: DesignEditorWidget): Promise<void> {
+		constructor() { super({ id: `sessions.design.${id}`, title: title() }); }
+		public override async run(_accessor: ServicesAccessor, editor: CanvasEditorWidget): Promise<void> {
 			if (id === 'addFrame') { editor.addFrame(); }
 			else { await editor.importImage(); }
 		}
 	});
 }
 
-for (const [mode, title, icon] of designModeActions) {
+for (const [mode, title, icon] of canvasModeActions) {
 	registerAction2(class SwitchDesignMode extends Action2 {
 		constructor() { super({ id: `sessions.design.mode.${mode}`, title: title(), icon }); }
-		public override run(_accessor: ServicesAccessor, editor: DesignEditorWidget): void { editor.setMode(mode); }
+		public override run(_accessor: ServicesAccessor, editor: CanvasEditorWidget): void { editor.setMode(mode); }
 	});
 }
 
@@ -121,7 +121,7 @@ AccessibleViewRegistry.register({
 	when: ContextKeyExpr.or(ContextKeyExpr.has('sessionsDesignCanvasFocused'), ContextKeyExpr.has('sessionsDesignLayersFocused')),
 	getProvider: accessor => {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		const editor = DesignEditorWidget.getFocused(focused) ?? (focused.closest('.ash-design-layers') ? accessor.get(IDesignEditorService).activeEditor.get() : undefined);
+		const editor = CanvasEditorWidget.getFocused(focused) ?? (focused.closest('.ash-design-layers') ? accessor.get(IDesignEditorService).activeEditor.get() : undefined);
 		const content = editor?.getAccessibleContent();
 		if (content === undefined) { return undefined; }
 		return new AccessibleContentProvider(
@@ -170,7 +170,7 @@ registerAction2(class UndoDesign extends Action2 {
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		DesignEditorWidget.getFocused(focused)?.undo();
+		CanvasEditorWidget.getFocused(focused)?.undo();
 	}
 });
 
@@ -180,7 +180,7 @@ registerAction2(class RedoDesign extends Action2 {
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		DesignEditorWidget.getFocused(focused)?.redo();
+		CanvasEditorWidget.getFocused(focused)?.redo();
 	}
 });
 
@@ -191,7 +191,7 @@ registerAction2(class SelectAllDesign extends Action2 {
 	}
 	public override run(accessor: ServicesAccessor): void {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		DesignEditorWidget.getFocused(focused)?.selectAll();
+		CanvasEditorWidget.getFocused(focused)?.selectAll();
 	}
 });
 
@@ -201,7 +201,7 @@ registerAction2(class SaveDesign extends Action2 {
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-		const editor = DesignEditorWidget.getFocused(focused);
+		const editor = CanvasEditorWidget.getFocused(focused);
 		if (editor?.documentController.automaticallySaves) { await editor.documentController.flushAutoSave(); }
 		else { await editor?.saveDocument(); }
 	}
@@ -209,14 +209,14 @@ registerAction2(class SaveDesign extends Action2 {
 
 // These chords also exist in text editors; resolve them in the owning design context first.
 for (const [id, key, title, chord, run] of [
-	['duplicate', 'sessions.design.duplicate', 'Duplicate', logicalKey('d', { primaryKey: true }), (editor: DesignEditorWidget) => editor.duplicateSelected()],
-	['bringForward', 'sessions.design.bringForward', 'Bring forward', physicalKey('BracketRight', { primaryKey: true }), (editor: DesignEditorWidget) => editor.reorderSelected('forward')],
-	['sendBackward', 'sessions.design.sendBackward', 'Send backward', physicalKey('BracketLeft', { primaryKey: true }), (editor: DesignEditorWidget) => editor.reorderSelected('backward')],
-	['bringToFront', 'sessions.design.bringToFront', 'Bring to front', physicalKey('BracketRight', { primaryKey: true, shiftKey: true }), (editor: DesignEditorWidget) => editor.reorderSelected('front')],
-	['sendToBack', 'sessions.design.sendToBack', 'Send to back', physicalKey('BracketLeft', { primaryKey: true, shiftKey: true }), (editor: DesignEditorWidget) => editor.reorderSelected('back')],
-	['addAutoLayout', 'sessions.design.addAutoLayout', 'Add auto layout', logicalKey('a', { shiftKey: true }), (editor: DesignEditorWidget) => editor.addAutoLayout()],
-	['createComponent', 'sessions.design.createComponent', 'Create component', physicalKey('KeyK', { primaryKey: true, altKey: true }), (editor: DesignEditorWidget) => editor.createComponent()],
-	['detachInstance', 'sessions.design.detachInstance', 'Detach instance', physicalKey('KeyB', { primaryKey: true, altKey: true }), (editor: DesignEditorWidget) => editor.detachInstance()],
+	['duplicate', 'sessions.design.duplicate', 'Duplicate', logicalKey('d', { primaryKey: true }), (editor: CanvasEditorWidget) => editor.duplicateSelected()],
+	['bringForward', 'sessions.design.bringForward', 'Bring forward', physicalKey('BracketRight', { primaryKey: true }), (editor: CanvasEditorWidget) => editor.reorderSelected('forward')],
+	['sendBackward', 'sessions.design.sendBackward', 'Send backward', physicalKey('BracketLeft', { primaryKey: true }), (editor: CanvasEditorWidget) => editor.reorderSelected('backward')],
+	['bringToFront', 'sessions.design.bringToFront', 'Bring to front', physicalKey('BracketRight', { primaryKey: true, shiftKey: true }), (editor: CanvasEditorWidget) => editor.reorderSelected('front')],
+	['sendToBack', 'sessions.design.sendToBack', 'Send to back', physicalKey('BracketLeft', { primaryKey: true, shiftKey: true }), (editor: CanvasEditorWidget) => editor.reorderSelected('back')],
+	['addAutoLayout', 'sessions.design.addAutoLayout', 'Add auto layout', logicalKey('a', { shiftKey: true }), (editor: CanvasEditorWidget) => editor.addAutoLayout()],
+	['createComponent', 'sessions.design.createComponent', 'Create component', physicalKey('KeyK', { primaryKey: true, altKey: true }), (editor: CanvasEditorWidget) => editor.createComponent()],
+	['detachInstance', 'sessions.design.detachInstance', 'Detach instance', physicalKey('KeyB', { primaryKey: true, altKey: true }), (editor: CanvasEditorWidget) => editor.detachInstance()],
 ] as const) {
 	registerAction2(class EditDesignLayout extends Action2 {
 		constructor() {
@@ -224,7 +224,7 @@ for (const [id, key, title, chord, run] of [
 		}
 		public override run(accessor: ServicesAccessor): void {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-			const editor = DesignEditorWidget.getFocused(focused) ?? (focused.closest('.ash-design-layers') ? accessor.get(IDesignEditorService).activeEditor.get() : undefined);
+			const editor = CanvasEditorWidget.getFocused(focused) ?? (focused.closest('.ash-design-layers') ? accessor.get(IDesignEditorService).activeEditor.get() : undefined);
 			if (editor) { run(editor); }
 		}
 	});
@@ -243,7 +243,7 @@ for (const [format, key, title] of [
 		constructor() { super({ id: `sessions.design.text.${format}`, title, keybinding: { primary: Keybinding.single(logicalKey(key, { primaryKey: true })), when: ContextKeyExpr.has('sessionsDesignTextEditing'), priority: 1000 } }); }
 		public override run(accessor: ServicesAccessor): void {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-			DesignEditorWidget.getFocused(focused)?.formatText(format);
+			CanvasEditorWidget.getFocused(focused)?.formatText(format);
 		}
 	});
 }

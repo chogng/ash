@@ -283,7 +283,7 @@
 .ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
 	.ash-sessions-window
 	.ash-context-view
-	.ash-menu:not(.ash-design-menu) {
+	.ash-menu:not(.ash-canvas-editor-menu) {
 	--ash-menu-selectionBackground: var(--ash-menu-hoverBackground);
 }
 

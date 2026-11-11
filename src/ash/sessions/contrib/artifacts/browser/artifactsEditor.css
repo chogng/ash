@@ -115,12 +115,45 @@
 	}
 }
 .ash-artifacts-results {
-	display: grid;
+	display: flex;
+	flex-direction: column;
 	flex: 1 0 auto;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 360px));
-	align-content: start;
 	gap: var(--ash-spacing-size200);
 	margin-top: var(--ash-spacing-size400);
+}
+.ash-artifacts-work-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 360px));
+	gap: var(--ash-spacing-size200);
+}
+.ash-artifacts-examples-heading {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-artifacts-examples-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+	gap: var(--ash-spacing-size160);
+}
+.ash-artifacts-examples-grid .ash-artifacts-card > .ash-artifacts-illustration {
+	height: 76px;
+}
+.ash-artifacts-examples-grid .ash-artifacts-illustration > .ash-icon {
+	--ash-lxiconFontSize: 32px;
+}
+.ash-artifacts-examples-grid .ash-artifacts-illustration > svg {
+	width: 32px;
+	height: 32px;
+}
+.list-view :is(.ash-artifacts-examples-grid, .ash-artifacts-work-grid) {
+	grid-template-columns: minmax(0, 1fr);
+}
+.list-view
+	.ash-artifacts-examples-grid
+	.ash-artifacts-card
+	> .ash-artifacts-illustration {
+	height: 56px;
 }
 .ash-creator .ash-artifacts-card {
 	display: flex;
@@ -151,9 +184,6 @@
 	white-space: normal;
 	line-height: 1.5;
 }
-.ash-artifacts-results.list-view {
-	grid-template-columns: minmax(0, 1fr);
-}
 .ash-creator .list-view .ash-artifacts-card {
 	flex-direction: row;
 	align-items: center;
@@ -174,7 +204,6 @@
 	min-width: 0;
 }
 .ash-artifacts-empty {
-	grid-column: 1 / -1;
 	margin: 0;
 	color: var(--ash-description-foreground);
 	line-height: 1.5;

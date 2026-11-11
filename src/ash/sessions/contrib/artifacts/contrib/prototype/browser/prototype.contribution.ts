@@ -1,21 +1,29 @@
-import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
-import { localize } from '../../../../../../nls.js';
+import { localize, localize2 } from '../../../../../../nls.js';
+import { RawContextKey, type IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
 import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
 import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
 import { DesignMode } from '../../../common/config/designEditorConfiguration.js';
 
+const HasPrototypeScreens = new RawContextKey<boolean>('sessions.artifacts.prototype.hasScreens', false);
+
 class PrototypeWorkspace extends CanvasWorkspace {
-	protected override getModeActions(): readonly IAction[] {
-		return [
-			this.action('screen', localize('sessions.creator.prototype.addScreen', 'Add screen'), () => this.addFrame(390, 844)),
-			this.action('preview', localize('sessions.creator.prototype.preview', 'Preview flow'), () => this.editor.previewPrototype(), this.document.model.value.shapes.some(shape => shape.kind === 'frame' && !shape.component)),
-			this.action('motion', localize('sessions.creator.prototype.motion', 'Edit animation'), () => this.editor.setMode(DesignMode.Motion)),
-		];
+	public static registerToolbarActions(): void {
+		this.registerWorkspaceActions(ArtifactWorkspaceId.Prototype, [
+			{ id: 'screen', title: localize2('sessions.creator.prototype.addScreen', 'Add screen'), run: workspace => workspace.addFrame(390, 844) },
+			{ id: 'preview', title: localize2('sessions.creator.prototype.preview', 'Preview flow'), precondition: HasPrototypeScreens.isEqualTo(true), run: workspace => workspace.editor.previewPrototype() },
+			{ id: 'motion', title: localize2('sessions.creator.prototype.motion', 'Edit animation'), run: workspace => workspace.editor.setMode(DesignMode.Motion) },
+		]);
+	}
+
+	protected override bindToolbarContext(contextKeys: IContextKeyService): () => void {
+		const hasScreens = HasPrototypeScreens.bindTo(contextKeys);
+		return () => hasScreens.set(this.document.model.value.shapes.some(shape => shape.kind === 'frame' && !shape.component));
 	}
 }
 
+PrototypeWorkspace.registerToolbarActions();
 registerArtifactWorkspace({
 	id: ArtifactWorkspaceId.Prototype,
 	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Prototype),

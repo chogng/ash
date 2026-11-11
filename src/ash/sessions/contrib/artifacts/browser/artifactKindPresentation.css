@@ -46,35 +46,3 @@
 :is(.hc-black, .hc-light) .ash-artifact-type[data-artifact-kind="motion"] {
 	color: var(--ash-foreground);
 }
-
-.ash-artifact-draft-label {
-	flex: 0 0 auto;
-	align-items: center;
-	align-self: center;
-	gap: var(--ash-spacing-size20);
-	margin-inline-start: var(--ash-spacing-size40);
-	padding-inline-start: var(--ash-spacing-size60);
-	border-radius: var(--ash-cornerRadius-medium);
-	font-size: var(--ash-fontSize-label2);
-	white-space: nowrap;
-	outline: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
-}
-
-.ash-artifact-draft-label:not([hidden]) {
-	display: inline-flex;
-}
-
-.ash-artifact-draft-label > span {
-	color: var(--ash-foreground);
-}
-
-.ash-artifact-draft-label > .ash-artifact-draft-remove {
-	--ash-lxiconFontSize: var(--ash-lxiconFontSize-compact);
-
-	min-width: 24px;
-	min-height: 24px;
-	padding: 0;
-	color: var(--ash-foreground);
-}

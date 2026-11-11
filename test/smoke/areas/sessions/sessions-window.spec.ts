@@ -511,7 +511,7 @@ test(
 			.click();
 		await new QuickAccess(page).runCommand('sessions.creator.open.design');
 		const canvas = page.getByRole('region', { name: 'Design canvas' });
-		const tools = canvas.locator('.ash-design-tools-widget');
+		const tools = canvas.locator('.ash-canvas-editor-toolbar');
 		await tools.getByRole('button', { name: 'Select (V)', exact: true }).focus();
 		await page.keyboard.press('ArrowRight');
 		const selectionTools = tools.getByRole('button', { name: 'Selection tools', exact: true });
@@ -628,7 +628,7 @@ test(
 		await canvas.focus();
 		await page.keyboard.press('f');
 		await canvas
-			.locator('.ash-design-tools-widget')
+			.locator('.ash-canvas-editor-toolbar')
 			.getByRole('button', { name: 'Import image', exact: true })
 			.click();
 		if (target.kind === 'browser') {
@@ -693,11 +693,11 @@ test(
 				bytes: Array.from(originalBytes),
 			});
 		}
-		await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
+		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(canvas.getByRole('textbox', { name: 'Generated code', exact: true })).toHaveValue(
 			/href="data:image\/png;base64,/u,
 		);
-		await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
+		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 		await rename(join(directory, 'design.ash-design'), join(directory, 'moved.ash-design'));
 		if (target.kind === 'electron') {
 			if (!('windows' in application)) {
@@ -1012,7 +1012,7 @@ test(
 		}, svg);
 		expect(parsed).toMatchObject({ text: '中文 <script>', selection: false, script: false, error: false });
 		expect(parsed.path).toContain(' C ');
-		await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Code', exact: true }).click();
+		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Code', exact: true }).click();
 		const source = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
 		if (target.kind === 'electron' && 'windows' in application) {
 			await application.evaluate(({ dialog }, folder) => {
@@ -1028,7 +1028,7 @@ test(
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Exported design.html');
 		expect(await read('design.html')).toBe(source);
 		await expect(canvas).toHaveClass(/\bdirty\b/u);
-		await canvas.locator('.ash-design-tools-widget').getByRole('button', { name: 'Design', exact: true }).click();
+		await canvas.locator('.ash-canvas-editor-toolbar').getByRole('button', { name: 'Design', exact: true }).click();
 		await canvas.focus();
 		await page.keyboard.press('ControlOrMeta+z');
 		await clickCanvasMenu(canvas, 'Open design', application);

@@ -1,4 +1,4 @@
-.ash-design-tools-widget {
+.ash-canvas-editor-toolbar {
 	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
 	--ash-actionBar-toggledBackground: color-mix(
 		in srgb,
@@ -27,19 +27,21 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-design-tools-widget .ash-button.ash-button-standard {
+.ash-canvas-editor-toolbar-group .ash-button.ash-button-standard {
 	width: 32px;
 	height: 32px;
 	padding: 0;
 }
 
-.ash-design-tools-widget .ash-dropdown-with-primary-dropdown > .ash-button {
+.ash-canvas-editor-toolbar-group
+	.ash-dropdown-with-primary-dropdown
+	> .ash-button {
 	width: 20px;
 	min-width: 0;
 }
 
 /* Menus live in the context-view host, outside the canvas DOM. */
-.ash-context-view-menu:has(> .ash-design-menu) {
+.ash-context-view-menu:has(> .ash-canvas-editor-menu) {
 	--ash-menu-background: var(--ash-sessions-design-chromeBackground);
 	--ash-menu-foreground: var(--ash-sessions-design-chromeForeground);
 	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
@@ -58,8 +60,9 @@
 	border-radius: var(--ash-cornerRadius-xLarge);
 }
 
-/* Design menus stay dark even when the window uses the light theme. */
-[data-color-scheme="light"] .ash-context-view-menu:has(> .ash-design-menu) {
+/* Canvas editor menus stay dark even when the window uses the light theme. */
+[data-color-scheme="light"]
+	.ash-context-view-menu:has(> .ash-canvas-editor-menu) {
 	--ash-menu-check-foreground: color-mix(
 		in srgb,
 		var(--ash-accent-foreground) 60%,
@@ -67,21 +70,28 @@
 	);
 }
 
-[data-color-scheme="hcDark"] .ash-context-view-menu:has(> .ash-design-menu),
-[data-color-scheme="hcLight"] .ash-context-view-menu:has(> .ash-design-menu) {
+[data-color-scheme="hcDark"]
+	.ash-context-view-menu:has(> .ash-canvas-editor-menu),
+[data-color-scheme="hcLight"]
+	.ash-context-view-menu:has(> .ash-canvas-editor-menu) {
 	--ash-border: var(--ash-contrastBorder);
 	box-shadow: none;
 }
 
-.ash-design-tools-group {
+.ash-canvas-editor-toolbar-group {
 	display: flex;
 	align-items: center;
 	flex: 0 0 auto;
 	gap: var(--ash-spacing-size40);
 }
 
-[data-color-scheme="hcDark"] .ash-design-tools-widget,
-[data-color-scheme="hcLight"] .ash-design-tools-widget {
+.ash-canvas-editor-toolbar-workspace {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+[data-color-scheme="hcDark"] .ash-canvas-editor-toolbar,
+[data-color-scheme="hcLight"] .ash-canvas-editor-toolbar {
 	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }

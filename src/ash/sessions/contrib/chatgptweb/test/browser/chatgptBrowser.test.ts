@@ -280,7 +280,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			return route.fulfill({ json: {} });
 		});
 		await page.goto('/chatgptNavigation.html?locale=zh-CN&folderPicker&theme=light');
-		const chip = page.locator('.ash-chatgpt-widget .ash-chatgpt-draft-target');
+		const chip = page.locator('.ash-chatgpt-widget .ash-chat-input-project-pill');
 		const picker = chip.locator('.ash-chat-input-workspace-picker');
 		const remove = chip.getByRole('button', { name: '清除项目', exact: true });
 		const filled = remove.locator('[data-ash-icon-id="projects-filled"]');
@@ -454,7 +454,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		const result = page.getByRole('menuitemradio', { name: 'Local Ash project', exact: true });
 		await expect(result.locator('[data-ash-icon-id="chat"]')).toHaveCSS('color', iconColor);
 		await result.press('Enter');
-		const chip = page.locator('.ash-chatgpt-widget .ash-chatgpt-draft-target');
+		const chip = page.locator('.ash-chatgpt-widget .ash-chat-input-project-pill');
 		await expect(chip.locator('.ash-chat-input-workspace-picker')).toHaveText('Local Ash project');
 		await expect(chip.locator('[data-ash-icon-id="chat"]')).toHaveCSS('color', iconColor);
 		expect(await page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe('Keep this ChatGPT draft');

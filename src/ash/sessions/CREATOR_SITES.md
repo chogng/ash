@@ -166,7 +166,7 @@ Sessions 窗口核心和共享服务不导入 contrib 实现。Creator 使用 Se
 | 文档、编辑和保存 | 已有 [模型](contrib/artifacts/common/model/designModel.ts)、[编辑命令](contrib/artifacts/common/commands/documentCommands.ts) 与[文件控制器](contrib/artifacts/browser/designDocumentController.ts) | 增加网站内容、断点与引用规则，保持提交和文件状态的唯一拥有者                         |
 | Sites 能力       | [SitesWorkspace](contrib/artifacts/contrib/sites/browser/sites.contribution.ts) 已提供画板页面、预览和 SVG 内容的 HTML 导出                                                                         | 网站元素布局、断点、独立路由、CMS 与发布仍待实现；已有导出不能证明网站排版能力已完成 |
 | 文档身份         | [DesignEditorService](contrib/artifacts/browser/designEditorService.ts) 按模式保留一份文档，ArtifactsEditorView 按模式保留工作区                                                                    | 改为按资源共享文档引用，支持同模式多文件与同文件多视图                               |
-| 现有测试         | [模型测试](test/common/designModel.test.ts)与[编辑器测试](test/browser/designEditorWidget.test.ts)覆盖已有设计行为                                                                                  | 新增网站规则与完整用户流程覆盖；现有测试不能证明 Sites 可用                          |
+| 现有测试         | [模型测试](test/common/designModel.test.ts)与[编辑器测试](test/browser/canvasEditorWidget.test.ts)覆盖已有设计行为                                                                                  | 新增网站规则与完整用户流程覆盖；现有测试不能证明 Sites 可用                          |
 
 已有 [`contrib/artifacts/DESIGN.md`](contrib/artifacts/DESIGN.md) 讨论多种创作成果与媒体工作流。本文具体负责此次网站模式的拆分和启动；模型、文件与贡献职责实际变化时，在同一次实现中同步相关正文和调用点。
 

@@ -2,7 +2,7 @@ import { defaultButtonStyles } from '../../../../../../platform/theme/browser/de
 import { designPathEndpoints } from '../../../common/model/designVectorStroke.js';
 import { Color } from '../../../../../../base/common/color.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
+import { createCanvasColorPicker } from '../../../browser/widget/canvasColorPicker.js';
 import { VectorAppearanceWidget } from './vectorAppearanceWidget.js';
 import { importDesignOutlineFont, outlineDesignText } from '../../../browser/designTextOutlines.js';
 import { clearDesignTextMeasurements } from '../../../browser/designTextMeasurement.js';
@@ -91,7 +91,7 @@ export class VectorPropertiesWidget extends Disposable {
 		select(localize('sessions.design.vectorFillRule', 'Fill rule'), [['nonzero', localize('sessions.design.vectorNonzero', 'Nonzero')], ['evenodd', localize('sessions.design.vectorEvenOdd', 'Even odd')]], () => this.path?.fillRule ?? 'nonzero', value => { if (this.path) { this.commands.updateShape({ ...this.path, fillRule: value as 'nonzero' | 'evenodd' }); } });
 		select(localize('sessions.design.vectorCap', 'Stroke cap'), [['butt', localize('sessions.design.vectorButt', 'Butt')], ['round', localize('sessions.design.vectorRound', 'Round')], ['square', localize('sessions.design.vectorSquare', 'Square')]], () => this.path?.strokeCap ?? 'butt', value => { if (this.path) { this.commands.vector.setEndpoints({ ...this.path, strokeCap: value as 'butt' | 'round' | 'square' }, designPathEndpoints(this.path), undefined); } });
 		select(localize('sessions.design.vectorJoin', 'Stroke join'), [['miter', localize('sessions.design.vectorMiter', 'Miter')], ['round', localize('sessions.design.vectorRound', 'Round')], ['bevel', localize('sessions.design.vectorBevel', 'Bevel')]], () => this.path?.strokeJoin ?? 'miter', value => { if (this.path) { this.commands.updateShape({ ...this.path, strokeJoin: value as 'miter' | 'round' | 'bevel' }); } });
-		const stroke = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.vectorStroke', 'Stroke color'), value: localize('sessions.design.vectorStroke', 'Stroke color'), opacity: localize('sessions.design.strokeOpacity', 'Stroke opacity (%)') }));
+		const stroke = this._register(createCanvasColorPicker(instantiation, document, { color: localize('sessions.design.vectorStroke', 'Stroke color'), value: localize('sessions.design.vectorStroke', 'Stroke color'), opacity: localize('sessions.design.strokeOpacity', 'Stroke opacity (%)') }));
 		stroke.domNode.classList.add('ash-design-property-wide'); this.fields.append(stroke.domNode);
 		this._register(stroke.onDidCommitColor(color => { if (this.path && this.editable) { this.commands.updateShape({ ...this.path, stroke: Color.Format.CSS.formatHexA(color, true) }); } }));
 		const resetStroke = this._register(new Button(this.fields, {
@@ -148,7 +148,7 @@ export class VectorPropertiesWidget extends Disposable {
 		const paint = h(document, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': paintLabel } });
 		networkFields.append(h(document, 'label', {}, paintLabel, paint));
 		this._register(addDisposableListener(paint, 'change', () => { this.selection.paintingVector = paint.checked; this.selection.editingVector = true; this.focusCanvas(); this.refresh(); }));
-		const regionColor = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.networkRegionColor', 'Region color'), value: localize('sessions.design.networkRegionColor', 'Region color'), opacity: localize('sessions.design.regionOpacity', 'Region opacity (%)') }));
+		const regionColor = this._register(createCanvasColorPicker(instantiation, document, { color: localize('sessions.design.networkRegionColor', 'Region color'), value: localize('sessions.design.networkRegionColor', 'Region color'), opacity: localize('sessions.design.regionOpacity', 'Region opacity (%)') }));
 		regionColor.domNode.classList.add('ash-design-property-wide'); networkFields.append(regionColor.domNode);
 		this._register(regionColor.onDidCommitColor(color => {
 			const path = this.path, network = path?.network; if (!path || !network || !this.editable) { return; }

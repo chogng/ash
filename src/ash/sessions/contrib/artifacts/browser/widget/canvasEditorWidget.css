@@ -26,7 +26,7 @@
 	outline: none;
 }
 
-.ash-sessions-design-stage > .ash-design-tools-widget {
+.ash-sessions-design-stage > .ash-canvas-editor-toolbar {
 	position: absolute;
 	z-index: 2;
 	bottom: var(--ash-spacing-size160);

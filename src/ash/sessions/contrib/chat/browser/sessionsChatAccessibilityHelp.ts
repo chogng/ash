@@ -1,6 +1,6 @@
 import { localize } from '../../../../nls.js';
 import { getSessionsListAttentionHelp, getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
-import { getArtifactDraftHelp } from '../../artifacts/browser/artifactDraft.js';
+import { getArtifactDraftHelp } from '../../artifacts/browser/chatInputArtifactPill.js';
 
 /** Product-specific help appended by the shared input's accessibility provider. */
 export function getSessionsChatAccessibilityHelp(): string {

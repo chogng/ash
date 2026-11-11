@@ -1,15 +1,30 @@
-import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
-import { localize } from '../../../../../../nls.js';
+import { localize, localize2 } from '../../../../../../nls.js';
+import { RawContextKey, type IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
 import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
 import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
 import type { DesignShape } from '../../../common/model/designDocument.js';
 
+const HasSelectedBrandFrame = new RawContextKey<boolean>('sessions.artifacts.brand.hasSelectedFrame', false);
+
 class BrandWorkspace extends CanvasWorkspace {
+	public static registerToolbarActions(): void {
+		this.registerWorkspaceActions(ArtifactWorkspaceId.Brand, [
+			{ id: 'square', title: localize2('sessions.creator.brand.square', 'Square asset'), run: workspace => workspace.addFrame(1080, 1080) },
+			{ id: 'portrait', title: localize2('sessions.creator.brand.portrait', 'Portrait asset'), run: workspace => workspace.addFrame(1080, 1920) },
+			{ id: 'landscape', title: localize2('sessions.creator.brand.landscape', 'Landscape asset'), run: workspace => workspace.addFrame(1200, 628) },
+			{ id: 'variants', title: localize2('sessions.creator.brand.variants', 'Create size variants'), precondition: HasSelectedBrandFrame.isEqualTo(true), run: workspace => workspace.createVariants() },
+		]);
+	}
+
+	private get selectedFrame(): DesignShape | undefined {
+		return this.document.model.value.shapes.find(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id));
+	}
+
 	private createVariants(): void {
-		const frame = this.document.model.value.shapes.find(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id));
+		const frame = this.selectedFrame;
 		if (frame?.kind !== 'frame') { return; }
 		const clone = (shape: DesignShape): DesignShape => {
 			const copy = { ...shape, id: generateUuid() };
@@ -23,16 +38,13 @@ class BrandWorkspace extends CanvasWorkspace {
 		this.document.model.applyEdit([...this.document.model.value.shapes, ...variants]);
 		this.editor.revealShape(variants[0].id);
 	}
-	protected override getModeActions(): readonly IAction[] {
-		return [
-			this.action('square', localize('sessions.creator.brand.square', 'Square asset'), () => this.addFrame(1080, 1080)),
-			this.action('portrait', localize('sessions.creator.brand.portrait', 'Portrait asset'), () => this.addFrame(1080, 1920)),
-			this.action('landscape', localize('sessions.creator.brand.landscape', 'Landscape asset'), () => this.addFrame(1200, 628)),
-			this.action('variants', localize('sessions.creator.brand.variants', 'Create size variants'), () => this.createVariants(), this.document.model.value.shapes.some(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id))),
-		];
+	protected override bindToolbarContext(contextKeys: IContextKeyService): () => void {
+		const hasSelectedFrame = HasSelectedBrandFrame.bindTo(contextKeys);
+		return () => hasSelectedFrame.set(this.selectedFrame !== undefined);
 	}
 }
 
+BrandWorkspace.registerToolbarActions();
 registerArtifactWorkspace({
 	id: ArtifactWorkspaceId.Brand,
 	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Brand),

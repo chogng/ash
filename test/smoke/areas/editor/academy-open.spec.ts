@@ -25,6 +25,6 @@ test('Connected Code edits text and Artifacts owns document authoring', { tag: [
 	await document.waitForEditorFocus();
 	await document.waitForTypeInEditor('# Artifacts draft');
 	await artifacts.click();
-	await page.locator('.ash-artifacts-card.docs').click();
+	await page.locator('.ash-artifacts-card.docs:not([data-artifact-example])').click();
 	await document.waitForEditorContents(contents => contents === '# Artifacts draft');
 });

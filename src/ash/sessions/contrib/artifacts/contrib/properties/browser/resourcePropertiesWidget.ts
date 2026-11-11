@@ -1,7 +1,7 @@
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Color } from '../../../../../../base/common/color.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
+import { createCanvasColorPicker } from '../../../browser/widget/canvasColorPicker.js';
 import { describeDesignEffect } from '../../../browser/designEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
@@ -186,7 +186,7 @@ export class ResourcePropertiesWidget extends Disposable {
 		parent.append(h(this.domNode.ownerDocument, 'label', {}, label, input)); this.controls.add(addDisposableListener(input, 'change', () => this.run(() => change(input.value))));
 	}
 	private color(parent: HTMLElement, key: string, label: string, value: string, change: (value: string) => unknown): void {
-		const widget = this.controls.add(createDesignColorPicker(this.instantiation, this.domNode.ownerDocument, { color: label, value: label, opacity: localize('sessions.design.colorOpacity', '{0}: opacity (%)', label) }));
+		const widget = this.controls.add(createCanvasColorPicker(this.instantiation, this.domNode.ownerDocument, { color: label, value: label, opacity: localize('sessions.design.colorOpacity', '{0}: opacity (%)', label) }));
 		widget.setColor(Color.Format.CSS.parseHex(value)!); widget.enabled = !this.controller.isBusy;
 		parent.append(h(this.domNode.ownerDocument, 'div', {}, h(this.domNode.ownerDocument, 'span', {}, label), widget.domNode));
 		for (const [index, element] of [...widget.domNode.querySelectorAll('button, input')].entries()) { element.setAttribute('data-resource-control', index === 1 ? key : `${key}:${index === 0 ? 'swatch' : 'opacity'}`); }

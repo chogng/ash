@@ -184,12 +184,12 @@ test('Sessions restores the Projects entry and its pane visibility through entry
 	await chatEditor().waitForEditorContents(text => text === draft);
 });
 
-test('Artifacts creation cards open a new Chat draft with their matching type and color', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Artifacts creation cards open a new Chat draft with their matching type, color and icon', { tag: ['@browser-ui', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const newChat = navigation.getByRole('button', { name: 'New', exact: true });
 	const composer = page.locator(':is(.chat-composer, .native-chat-composer):visible');
-	const label = composer.locator('.ash-artifact-draft-label');
+	const label = composer.locator('.ash-chat-input-artifact-pill');
 	const editor = new Editor(composer);
 	const placeholders = [
 		['Docs', 'What should this document be about?'],
@@ -203,12 +203,22 @@ test('Artifacts creation cards open a new Chat draft with their matching type an
 	for (const [title, prompt] of placeholders) {
 		await navigation.getByRole('button', { name: 'Artifacts', exact: true }).click();
 		const tile = page.locator('.ash-creator-modes').getByRole('button', { name: title, exact: true });
-		const background = await tile.locator('.ash-artifacts-illustration').evaluate(element => getComputedStyle(element).backgroundColor);
+		const illustration = tile.locator('.ash-artifacts-illustration');
+		const background = await illustration.evaluate(element => getComputedStyle(element).backgroundColor);
+		const artwork = await illustration.locator('.ash-artifact-kind-icon').evaluate(element => ({
+			markup: element.outerHTML,
+			color: getComputedStyle(element).color,
+		}));
 		await tile.press('Enter');
 		await expect(newChat).toHaveAttribute('aria-current', 'page');
 		await expect(label).toBeVisible();
 		await expect(label).toHaveText(`Ash ${title}`);
 		await expect(label).toHaveCSS('background-color', background);
+		const icon = label.locator('.ash-artifact-kind-icon');
+		await expect(icon).toBeVisible();
+		await expect(icon).toHaveCSS('width', '18px');
+		await expect(icon).toHaveCSS('color', artwork.color);
+		await expect(icon).toHaveJSProperty('outerHTML', artwork.markup);
 		await expect(editor.input).toBeFocused();
 		await expect(editor.element.locator('.stanza-editor-placeholder-text')).toHaveText(prompt);
 	}
@@ -228,7 +238,7 @@ test('Artifacts restores the selected type with its unsent Chat draft', { tag: [
 	const background = await tile.locator('.ash-artifacts-illustration').evaluate(element => getComputedStyle(element).backgroundColor);
 	await tile.press('Enter');
 	const composer = () => page.locator(':is(.chat-composer, .native-chat-composer):visible');
-	const label = () => composer().locator('.ash-artifact-draft-label');
+	const label = () => composer().locator('.ash-chat-input-artifact-pill');
 	await expect(label()).toHaveText('Ash Motion');
 	const draft = 'Keep this motion draft';
 	await new Editor(composer()).waitForTypeInEditor(draft);
@@ -260,6 +270,7 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	expect(await sidebar.locator('[data-view-container-id]:visible').evaluate((element, retained) => element === retained, originalList)).toBe(true);
 	const tiles = home.locator('.ash-artifacts-create');
 	await expect(tiles).toHaveText(['Docs', 'Slides', 'Design', 'Sheet', 'Whiteboard', 'Data', 'Motion']);
+	await expect(home.locator('[data-artifact-example]')).toHaveCount(7);
 	await expect.poll(() => tiles.evaluateAll(elements => new Set(elements.map(element => element.getBoundingClientRect().top)).size)).toBe(1);
 	await expect(home.locator('.ash-artifacts-create > .ash-artifacts-illustration').first()).toHaveCSS('height', '88px');
 	const docs = home.getByRole('button', { name: 'Docs', exact: true });
@@ -291,6 +302,7 @@ test('Artifacts home keeps the conversation sidebar and offers seven creation ty
 	await page.keyboard.press('Escape');
 	await expect(design).toBeFocused();
 	await page.screenshot({ path: testInfo.outputPath('artifacts-home.png') });
+	await home.getByRole('tab', { name: 'Yours', exact: true }).click();
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	await canvas.press('r');

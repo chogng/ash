@@ -39,7 +39,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await chooseEditor();
 		await expect(quick.items.first().locator('.ash-quick-pick-row-content')).toHaveClass(/picked/);
 		await quick.input.press('Escape');
-		await page.locator('.ash-artifacts-card.docs').click();
+		await page.locator('.ash-artifacts-card.docs:not([data-artifact-example])').click();
 		await markdown.waitForEditorContents(text => text === '# Retained Docs draft');
 		await page.screenshot({ path: testInfo.outputPath(`docs-markdown-${locale}.png`) });
 		if (locale === 'zh-CN') {
@@ -47,10 +47,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const cards = page.locator('.ash-creator-modes');
 			await expect(cards.locator('.ash-artifacts-create')).toHaveText(['文档', '幻灯片', '设计', '电子表格', '白板', '数据', '动效']);
 			await cards.getByRole('button', { name: '动效', exact: true }).press('Enter');
-			await expect(page.locator('.ash-artifact-draft-label:visible')).toHaveText('Ash 动效');
+			await expect(page.locator('.ash-chat-input-artifact-pill:visible')).toHaveText('Ash 动效');
 			await expect(page.locator('.stanza-editor-placeholder-text:visible')).toHaveText('你想让什么动起来？');
 			await page.getByRole('button', { name: '移除 Ash 动效', exact: true }).press('Enter');
-			await expect(page.locator('.ash-artifact-draft-label:visible')).toHaveCount(0);
+			await expect(page.locator('.ash-chat-input-artifact-pill:visible')).toHaveCount(0);
 		}
 	});
 }

@@ -2,6 +2,7 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import './canvasFrameNavigator.css';
 import { addDisposableListener, h, svg } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { renderDesignShape } from './designSvgRenderer.js';
@@ -18,6 +19,8 @@ export class CanvasFrameNavigator extends Disposable {
 	private readonly next: Button;
 	private readonly counterDomNode: HTMLElement;
 	private readonly editorDomNode: HTMLElement;
+	private readonly selectionChange = this._register(new Emitter<void>());
+	public readonly onDidChangeSelection = this.selectionChange.event;
 	private frameId: string | undefined;
 	private presenting = false;
 	private renderedFrames: readonly DesignShape[] = [];
@@ -53,7 +56,7 @@ export class CanvasFrameNavigator extends Disposable {
 		this.sceneDomNode = svg(ownerDocument, 'svg', { className: 'ash-creator-preview-scene' });
 		this.previewDomNode.append(controls, this.sceneDomNode);
 		content.append(this.previewDomNode);
-		this._register(addDisposableListener(this.selectDomNode, 'change', () => { this.frameId = this.selectDomNode.value; this.reveal(this.frameId); this.renderPreview(); }));
+		this._register(addDisposableListener(this.selectDomNode, 'change', () => this.select(this.selectDomNode.value)));
 		this._register(addDisposableListener(this.previewDomNode, 'keydown', event => {
 			if (event.key === 'Escape') { event.preventDefault(); this.showPreview(false); }
 			else if (event.target === this.previewDomNode && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) { event.preventDefault(); this.move(event.key === 'ArrowLeft' ? -1 : 1); }
@@ -65,7 +68,7 @@ export class CanvasFrameNavigator extends Disposable {
 	public get selectedId(): string | undefined { return this.frameId; }
 	public get isPresenting(): boolean { return this.presenting; }
 	public focus(): void { this.previewDomNode.focus(); }
-	public select(id: string): void { this.frameId = id; this.update(); this.reveal(id); }
+	public select(id: string): void { this.setSelectedId(id); this.update(); this.reveal(id); }
 	public showPreview(visible: boolean): void {
 		this.presenting = visible;
 		this.editorDomNode.inert = visible;
@@ -74,15 +77,20 @@ export class CanvasFrameNavigator extends Disposable {
 		else { this.selectDomNode.focus(); }
 	}
 	public setVisible(visible: boolean): void { this.previewDomNode.hidden = !visible || !this.presenting; }
+	private setSelectedId(id: string | undefined): void {
+		if (this.frameId === id) return;
+		this.frameId = id;
+		this.selectionChange.fire();
+	}
 	private move(offset: number): void {
 		const frames = this.frames;
 		const index = frames.findIndex(frame => frame.id === this.frameId);
 		const frame = frames[index + offset];
-		if (frame) { this.frameId = frame.id; this.selectDomNode.value = frame.id; this.renderPreview(); }
+		if (frame) { this.setSelectedId(frame.id); this.selectDomNode.value = frame.id; this.renderPreview(); }
 	}
 	private update(): void {
 		const frames = this.frames;
-		if (!frames.some(frame => frame.id === this.frameId)) { this.frameId = frames[0]?.id; }
+		if (!frames.some(frame => frame.id === this.frameId)) { this.setSelectedId(frames[0]?.id); }
 		if (frames.length !== this.renderedFrames.length || frames.some((frame, index) => frame !== this.renderedFrames[index])) {
 			this.renderedFrames = frames;
 			this.selectDomNode.replaceChildren(...frames.map((frame, index) => h(this.domNode.ownerDocument, 'option', { properties: { value: frame.id } }, localize('sessions.creator.pageNumber', 'Page {0}', index + 1))));

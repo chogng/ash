@@ -6,7 +6,7 @@
 	min-width: 0;
 	min-height: 0;
 }
-.ash-creator-workspace-actions {
+.ash-creator-workspace-navigation {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;

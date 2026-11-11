@@ -54,7 +54,7 @@
 	position: relative;
 }
 
-.ash-sessions-native-chat-input > .ash-artifact-draft-label {
+.ash-sessions-native-chat-input > .ash-chat-input-artifact-pill {
 	align-self: flex-start;
 	margin-block-start: var(--ash-spacing-size80);
 }

@@ -5,7 +5,7 @@ import { observeIntersection } from '../../../../base/browser/observer.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ContextViewHideReason } from '../../../../base/browser/ui/contextview/contextview.js';
-import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { IntervalTimer } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { formatTimeAgo } from '../../../../base/common/date.js';
@@ -24,12 +24,12 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService, type ProjectSummary } from '../../../../platform/projects/common/projectService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { getChatListEntryActions, getChatListEntryProject, type ChatListEntry, type ChatListGroup } from '../../chat/browser/chatListModel.js';
 import { SessionActionFeedback } from '../../sessions/browser/sessionActionFeedback.js';
 import type { CatalogProjectCreator } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { catalogConversationActions, conversationMenuActions, sessionListProjectActions, startConversationRename } from '../../sessions/browser/views/sessionsListActions.js';
 import type { ProjectsActions } from './projectsActions.js';
+import { resolveProjectAppearance } from './projectAppearance.js';
 import { IProjectsService, type ProjectsState } from './projectsService.js';
 
 /** A pinned project shows its removal action in the same slot on hover or focus. */
@@ -111,8 +111,9 @@ export class ProjectsList extends Disposable {
 				className: 'ash-projects-card-mark',
 				attributes: { 'aria-hidden': 'true' },
 			});
-			appendIcon((project.icon && getRegisteredIcon(project.icon, document)) || Lxicon.projects, mark);
-			if (project.color) mark.style.color = `var(${colorCssVariable(project.color)})`;
+			const appearance = resolveProjectAppearance(document, project);
+			appendIcon(appearance.icon ?? Lxicon.projects, mark);
+			if (appearance.color) mark.style.color = appearance.color;
 			card.append(mark, this.renderCardContent(card, project.name, project.updatedAtMs, disposables, project.createdAtMs));
 			const actionsHost = this.renderCardActions(row, project.id, project.name, this.actions.getProjectActions(project), disposables);
 			disposables.add(this.hover.setupDelayedHover(card, { content: project.name }));
@@ -134,9 +135,9 @@ export class ProjectsList extends Disposable {
 			card.dataset.conversationProject = '';
 			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
 			const key = project.project?.preferenceKey;
-			const appearance = key ? this.projects.getCatalogProjectAppearance(key) : undefined;
-			appendIcon((appearance?.icon && getRegisteredIcon(appearance.icon, document)) || Lxicon.projects, mark);
-			if (appearance?.color) mark.style.color = `var(${colorCssVariable(appearance.color)})`;
+			const appearance = resolveProjectAppearance(document, key ? this.projects.getCatalogProjectAppearance(key) : undefined);
+			appendIcon(appearance.icon ?? Lxicon.projects, mark);
+			if (appearance.color) mark.style.color = appearance.color;
 			card.append(mark, this.renderCardContent(card, project.title, project.project?.updatedAt, disposables, project.project?.createdAt));
 			disposables.add(addDisposableListener(card, 'click', () => {
 				this.projects.openConversationProject(project.key);

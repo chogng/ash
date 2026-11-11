@@ -288,12 +288,12 @@ IDE 与 Agent Window 共用图标注册、主题解析和 WOFF2 渲染机制。I
 | 子菜单箭头       | 16px，在尾部图标槽内居中。共用尾部图标布局时，图标槽按菜单项尾部内边距对齐。                                            |
 | 宽度             | 按内容与场景设置；共享最小宽度可覆盖，不统一固定值                                                                      |
 
-- Design 菜单在普通浅色与深色主题下保留黑色表面，高对比度保持可读性与明确轮廓。
-- 画布与工具菜单使用 `ash-design-menu`，其他菜单不得复制该标识或颜色。
+- 画布编辑器菜单在普通浅色与深色主题下保留黑色表面，高对比度保持可读性与明确轮廓。
+- 画布与工具菜单使用 `ash-canvas-editor-menu`，其他菜单不得复制该标识或颜色。
 - 颜色使用 `sessions.design.chromeBackground`、`sessions.design.chromeForeground`，普通主题背景为 `#181818`。
 - 菜单浮层位于共享容器，selector 使用页面标识，不依赖画布后代关系。
 
-实现入口：[designEditorWidget.ts](contrib/artifacts/browser/widget/designEditorWidget.ts)、[designToolsWidget.ts](contrib/artifacts/browser/widget/designToolsWidget.ts)、[designToolsWidget.css](contrib/artifacts/browser/widget/designToolsWidget.css)。
+实现入口：[canvasEditorWidget.ts](contrib/artifacts/browser/widget/canvasEditorWidget.ts)、[canvasEditorToolbar.ts](contrib/artifacts/browser/widget/canvasEditorToolbar.ts)、[canvasEditorToolbar.css](contrib/artifacts/browser/widget/canvasEditorToolbar.css)。
 
 ## 文案与可访问性
 

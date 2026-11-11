@@ -195,7 +195,7 @@ test('Sessions Creator uses Chinese mode names, actions and keyboard help', asyn
 	await creator.getByRole('button', { name: 'Artifacts 首页', exact: true }).click();
 	await creator.getByRole('button', { name: '设计', exact: true }).click();
 	await expect(creator.locator('.ash-creator-header')).toBeHidden();
-	await expect(creator.locator('[data-creator-mode="design"] .ash-creator-workspace-actions')).toHaveCount(0);
+	await expect(creator.locator('[data-creator-mode="design"] .ash-creator-workspace-navigation')).toHaveCount(0);
 	const canvas = page.getByRole('region', { name: '设计画布', exact: true });
 	await canvas.press('r');
 	await canvas.press('Shift+F10');
@@ -903,7 +903,7 @@ test('Sessions Design automatically retains an untitled draft across window reop
 	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	await expect(page.locator('.ash-creator-header')).toBeHidden();
-	await expect(page.locator('[data-creator-mode="design"] .ash-creator-workspace-actions')).toHaveCount(0);
+	await expect(page.locator('[data-creator-mode="design"] .ash-creator-workspace-navigation')).toHaveCount(0);
 	// Removed tabs, controls and the footer reserve no space around the canvas.
 	await expect.poll(async () => {
 		const editor = await page.locator('[data-part="editor"]').boundingBox();

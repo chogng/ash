@@ -28,8 +28,16 @@ import type { IWorkingCopy } from '../../../../workbench/services/workingCopy/co
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IUserDataProfileService } from '../../../../workbench/services/userDataProfile/common/userDataProfile.js';
 
+interface DesignDocumentExample {
+	readonly mode: ArtifactWorkspaceId;
+	readonly title: string;
+	readonly shapes: readonly DesignShape[];
+}
+
 /** Each workspace owns its file identity and saved revision independently of the active canvas. */
 export class DesignDocumentController extends Disposable implements IWorkingCopy {
+	public readonly mode: ArtifactWorkspaceId;
+	private readonly exampleTitle: string | undefined;
 	public readonly resource: URI;
 	public readonly backupKind = 'structuredDocument' as const;
 	public readonly backupContentType = 'application/vnd.ash.design+json';
@@ -67,7 +75,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	private autoSaveError = false;
 	private readonly draftHome: URI;
 	public readonly ready: Promise<void>;
-	public get automaticallySaves(): boolean { return this.mode === ArtifactWorkspaceId.Design; }
+	public get automaticallySaves(): boolean { return this.exampleTitle === undefined && this.mode === ArtifactWorkspaceId.Design; }
 	public get needsSaveRetry(): boolean { return this.autoSaveError || this.restoreFailed; }
 	public get isRestoring(): boolean { return this.restoring; }
 	private get activeDocumentKey(): string { return `creator.${this.mode}.activeDocument`; }
@@ -85,7 +93,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 	}
 
 	constructor(
-		public readonly mode: ArtifactWorkspaceId,
+		input: ArtifactWorkspaceId | DesignDocumentExample,
 		@IFileService private readonly files: IFileService,
 		@IAssetService private readonly assets: IAssetService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
@@ -95,8 +103,16 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		@IUserDataProfileService profiles: IUserDataProfileService,
 	) {
 		super();
-		this.resource = URI.from({ scheme: 'ash-creator', path: `/${mode}` });
-		this.model = this._register(new DesignModel(mode, measureDesignText));
+		this.mode = typeof input === 'string' ? input : input.mode;
+		this.model = this._register(new DesignModel(this.mode, measureDesignText));
+		if (typeof input !== 'string') {
+			this.exampleTitle = input.title;
+			this.model.replace(documentFromShapes(input.shapes, this.model.value));
+		}
+		this.resource = URI.from({
+			scheme: 'ash-creator',
+			path: this.exampleTitle === undefined ? `/${this.mode}` : `/example/${this.model.value.documentId}`,
+		});
 		if (mainWindow.document.fonts) { this._register(addDisposableListener(mainWindow.document.fonts, 'loadingdone', () => { clearDesignTextMeasurements(); this.model.refreshTextLayout(); })); }
 		this.savedContent = serializeDesignDocument(this.model.value);
 		this.draftHome = URI.joinPath(profiles.currentProfile.location, 'creator', encodeURIComponent(workspace.getWorkspace().id));
@@ -111,6 +127,7 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 
 	public get name(): string {
 		if (this.file && !extUri.isEqualOrParent(this.file.resource, this.draftHome)) { return basename(this.file.resource); }
+		if (this.exampleTitle !== undefined) { return this.exampleTitle; }
 		return this.mode === ArtifactWorkspaceId.Design ? localize('sessions.design.untitled', 'Untitled design') : localize('sessions.creator.untitled', 'Untitled {0}', getArtifactWorkspaceTitle(this.mode));
 	}
 	public get isBusy(): boolean { return this.restoring || this.restoreFailed || (this.isFileOperationRunning && !this.autoSaveRunning); }

@@ -1,0 +1,50 @@
+.ash-chat-input-project-pill.has-project {
+	--ash-button-hoverBackground: transparent;
+	--ash-button-activeBackground: transparent;
+	--ash-popup-trigger-background: transparent;
+
+	align-items: center;
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-sessions-selectionBackground);
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-chat-input-project-pill.has-project > .ash-chat-input-workspace-picker {
+	padding-inline-start: 0;
+}
+
+.ash-chat-input-project-pill.has-project > .ash-chat-input-project-pill-remove {
+	box-sizing: border-box;
+	flex: none;
+	inline-size: var(--ash-toolbar-actionSize);
+	block-size: var(--ash-toolbar-actionSize);
+	margin-inline-start: var(--ash-spacing-size40);
+	padding: 0;
+}
+
+.ash-chat-input-project-pill-remove[hidden],
+.ash-chat-input-project-pill-remove > .ash-chat-input-project-pill-icon {
+	display: none;
+}
+
+.ash-chat-input-project-pill-remove > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+@media (hover: hover) {
+	.ash-chat-input-project-pill:not(:hover)
+		.ash-chat-input-project-pill-remove:not(:focus-visible)
+		> .ash-chat-input-project-pill-icon,
+	.ash-chat-input-project-pill-remove:disabled
+		> .ash-chat-input-project-pill-icon {
+		display: inline-flex;
+	}
+
+	.ash-chat-input-project-pill:not(:hover)
+		.ash-chat-input-project-pill-remove:not(:focus-visible)
+		> .ash-icon-close,
+	.ash-chat-input-project-pill-remove:disabled > .ash-icon-close {
+		display: none;
+	}
+}

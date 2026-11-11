@@ -3,7 +3,7 @@ import { designEffectTypeLabel } from '../../../browser/designEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
+import { createCanvasColorPicker } from '../../../browser/widget/canvasColorPicker.js';
 import { Color } from '../../../../../../base/common/color.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
@@ -218,7 +218,7 @@ export class EffectPropertiesWidget extends Disposable {
 			}),
 			() => !!this.shadow
 		);
-		const color = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.effectChooseColor', 'Choose shadow color'), value: localize('sessions.design.shadowColor', 'Shadow color'), opacity: localize('sessions.design.shadowOpacity', 'Shadow opacity (%)') }));
+		const color = this._register(createCanvasColorPicker(instantiation, document, { color: localize('sessions.design.effectChooseColor', 'Choose shadow color'), value: localize('sessions.design.shadowColor', 'Shadow color'), opacity: localize('sessions.design.shadowOpacity', 'Shadow opacity (%)') }));
 		color.domNode.classList.add('ash-design-property-wide');
 		this.domNode.append(color.domNode);
 		this._register(color.onDidCommitColor(value => { if (this.editable && this.shadow) { this.edit({ ...this.shadow, color: Color.Format.CSS.formatHexA(value, true) }); } }));

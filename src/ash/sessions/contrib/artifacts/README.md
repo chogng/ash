@@ -22,7 +22,9 @@ Sites 尚未提供网站布局重排、路由文档和发布，完整领域约�
 
 ### Design 画布布局
 
-Design 隐藏编辑器标签栏和 Creator 标题行，不创建工作空间顶部操作栏，画布直接占用中央内容区。底部绘图工具、图层和属性面板保留。添加画板、导入图片、打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。其他工作空间保留各自的标题和操作栏。
+Design 隐藏编辑器标签栏和 Creator 标题行，画布直接占用中央内容区。添加画板和导入图片可使用底部工具栏、快捷键或右键菜单。打开设计、保存副本与导出 SVG 使用画布快捷键或右键菜单；自动保存失败时，右键菜单提供重试保存。点击左侧 Artifacts 导航返回创作主页。
+
+画布工作区共用底部工具栏。编辑器提供当前工具与编辑模式的动作。各工作区在各自的 `.contribution.ts` 中向 `ArtifactCanvasToolbar` 注册命令，菜单通过工作区实例的上下文键确定显示和启用状态。Slides 和 Sites 的页码导航由各自的页面导航组件挂载在画布上方。
 
 ## 目录与命名
 
@@ -30,7 +32,7 @@ Artifacts 的窗口入口由 `artifacts.contribution.ts` 注册，`artifactsEdit
 
 职责划分参考 [Editor browser](../../../editor/browser/README.md)：主 Widget 拥有编辑器实例与组件组合，View 拥有内容显示，Controller 拥有输入。`designDocument.ts` 表达文档，`designModel.ts` 对应文本编辑器的 `textModel.ts`，`documentCommands.ts` 承接编辑操作。Design 的对象几何、选区和历史由本目录实现；视口及空间输入由平级的 [Canvas contrib](../canvas/README.md) 拥有。
 
-`browser/widget` 放主编辑器和共享工具栏，`browser/designCanvasView.ts` 放对象和路径控制点显示，`browser/controller` 放对象选择与编辑输入。公共画布容器、网格、视口和指针捕获位于平级 `canvas`。绘制、属性、Motion 和 Code 的具体能力及能力专属 widget 位于 `contrib`；这与 Editor 的 Find、Suggest widget 跟随各自贡献的归属相同。归属取决于组件拥有的职责、状态和生命周期。
+`browser/widget` 放主编辑器、共享工具栏和颜色选择器，`browser/designCanvasView.ts` 放对象和路径控制点显示，`browser/controller` 放对象选择与编辑输入。公共画布容器、网格、视口和指针捕获位于平级 `canvas`。绘制、属性、Motion 和 Code 的具体能力及能力专属 widget 位于 `contrib`；这与 Editor 的 Find、Suggest widget 跟随各自贡献的归属相同。归属取决于组件拥有的职责、状态和生命周期。
 
 核心 Widget、View 和输入控制器通过 [designEditorBrowser.ts](browser/designEditorBrowser.ts) 消费贡献契约。[designEditorContributions.ts](browser/designEditorContributions.ts) 创建各个能力，由 [DesignEditorHost](browser/designEditorHost.ts) 传给 Widget。贡献更新文档或提供显示数据，画布统一呈现这些数据。文档与历史由公共模型持有。
 
@@ -43,8 +45,8 @@ Artifacts 的窗口入口由 `artifacts.contribution.ts` 注册，`artifactsEdit
 | [common/commands/documentCommands.ts](common/commands/documentCommands.ts)                                                                                  | `DocumentCommands`，创建、修改、删除、分组和解组操作                                                                             |
 | [common/config/designEditorConfiguration.ts](common/config/designEditorConfiguration.ts)                                                                    | Design 的配置键、默认值、作用域和校验                                                                                            |
 | [common/designSelection.ts](common/designSelection.ts)                                                                                                      | 每个编辑器实例的对象选区和路径节点选择                                                                                           |
-| [browser/widget/designEditorWidget.ts](browser/widget/designEditorWidget.ts)                                                                                | `DesignEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期                                                 |
-| [browser/widget/designToolsWidget.ts](browser/widget/designToolsWidget.ts)                                                                                  | 底部单行悬浮工具栏、工具与模式选择、键盘导航                                                                                     |
+| [browser/widget/canvasEditorWidget.ts](browser/widget/canvasEditorWidget.ts)                                                                                | `CanvasEditorWidget`，编辑器根 DOM、组件组合、实例状态、公共快捷键和贡献生命周期                                                 |
+| [browser/widget/canvasEditorToolbar.ts](browser/widget/canvasEditorToolbar.ts)                                                                              | 底部单行悬浮工具栏、工具与模式选择、键盘导航                                                                                     |
 | [browser/designCanvasView.ts](browser/designCanvasView.ts)、[designCanvasView.css](browser/designCanvasView.css)                                            | `DesignCanvasView`，挂载公共 Canvas，显示对象、绘制预览和路径控制点；只显示输入数据，不提交文档编辑                              |
 | [browser/controller/designInputController.ts](browser/controller/designInputController.ts)                                                                  | 参与公共画布输入，拥有对象选择、移动和路径控制点编辑；通过输入契约调用绘制贡献                                                   |
 | [browser/designEditorBrowser.ts](browser/designEditorBrowser.ts)、[browser/designEditorContributions.ts](browser/designEditorContributions.ts)              | 前者定义核心与贡献之间的契约，后者装配产品所需的能力实例                                                                         |
@@ -179,7 +181,7 @@ Code 模式从同一已提交快照生成 HTML/CSS/SVG：矩形、椭圆和画�
 ```sh
 pnpm run typecheck:renderer
 pnpm run build:renderer
-pnpm run test:unit --run src/ash/sessions/test/common/designText.test.ts --run src/ash/sessions/test/common/designModel.test.ts --run src/ash/sessions/test/common/designComponents.test.ts --run src/ash/sessions/test/common/designResources.test.ts --run src/ash/sessions/test/browser/designEditorWidget.test.ts --run test/architecture/layer-boundaries.test.ts --run test/architecture/ui-styling-ownership.test.ts
+pnpm run test:unit --run src/ash/sessions/test/common/designText.test.ts --run src/ash/sessions/test/common/designModel.test.ts --run src/ash/sessions/test/common/designComponents.test.ts --run src/ash/sessions/test/common/designResources.test.ts --run src/ash/sessions/test/browser/canvasEditorWidget.test.ts --run test/architecture/layer-boundaries.test.ts --run test/architecture/ui-styling-ownership.test.ts
 pnpm run test:smoke:browser --grep 'Sessions Design'
 pnpm run test:smoke:ui --grep 'Sessions Design'
 pnpm run test:smoke:desktop --grep 'Sessions Design'
