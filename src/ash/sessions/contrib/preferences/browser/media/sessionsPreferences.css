@@ -373,31 +373,6 @@
 	display: none;
 }
 
-.ash-sessions-settings-page .ash-configuration-setting.ash-setting-item {
-	padding-inline-end: calc(
-		var(--ash-spacing-size280) + var(--ash-spacing-size80)
-	);
-}
-
-.ash-sessions-settings-page
-	.ash-configuration-setting
-	> .ash-setting-item-actions {
-	--ash-toolbar-actionSize: var(--ash-spacing-size280);
-	inset-block-start: 50%;
-	inset-inline: auto 0;
-	inline-size: var(--ash-toolbar-actionSize);
-}
-
-.ash-sessions-settings-page .ash-setting-item-actions-trigger .ash-icon {
-	font-size: var(--ash-lxiconFontSize-large);
-}
-
-.ash-sessions-settings-page
-	.ash-setting-item-actions-trigger:not(:focus-visible) {
-	opacity: 0;
-	pointer-events: none;
-}
-
 .ash-sessions-settings-page .ash-configuration-setting-copy {
 	overflow-wrap: anywhere;
 }
