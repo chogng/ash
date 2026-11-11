@@ -4,14 +4,12 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, type IDimension } from '../../../../base/browser/dom.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
-import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import type { Project } from '../../../../platform/projects/common/projectService.js';
@@ -31,17 +29,14 @@ import { ProjectsList } from './projectsList.js';
 import { ProjectsView } from './projectsView.js';
 import './projects.css';
 
-type ProjectSection = 'overview' | 'chats' | 'files';
-
 interface ProjectDetail extends IDisposable {
 	readonly element: HTMLElement;
-	readonly panels: Record<ProjectSection, HTMLElement>;
+	readonly content: HTMLElement;
 	readonly chats: HTMLElement;
 	readonly card: HTMLElement;
 	readonly instructions: HTMLElement;
 	readonly memory: HTMLElement;
 	readonly files: HTMLElement;
-	section: ProjectSection;
 }
 
 /** Hosts the Projects overview and opened project details. */
@@ -276,7 +271,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		this.activeProjectInput?.setVisible(visible && this.projectDetail.value?.section !== 'files');
+		this.activeProjectInput?.setVisible(visible);
 		if (!visible && this.activeProjectInput?.submitted) this.activeProjectInput = undefined;
 		this.shown.set(visible, undefined);
 		if (visible) {
@@ -297,7 +292,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 	public override focus(): void {
 		if (this.projects.state.get().selectedId || this.projects.state.get().conversationProjectId !== undefined) {
-			if (this.activeProjectInput && this.projectDetail.value?.section !== 'files') this.activeProjectInput.focus();
+			if (this.activeProjectInput) this.activeProjectInput.focus();
 			else this.focusPage();
 		} else {
 			this.projectsView.focusCreate();
@@ -347,9 +342,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			this.projectMaterials.clearSelection();
 			this.projectDetail.clear();
 		}
-		const scroller = sameProject
-			? detail.section !== 'files' && detail.chats.scrollTop ? detail.chats : detail.panels[detail.section]
-			: undefined;
+		const scroller = sameProject ? (detail.chats.scrollTop ? detail.chats : detail.content) : undefined;
 		const scrollTop = scroller?.scrollTop ?? 0;
 		const cardScrollTop = sameProject ? detail.card.scrollTop : 0;
 		const viewportTop = scroller?.getBoundingClientRect().top ?? 0;
@@ -424,7 +417,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		memory.replaceChildren();
 		memory.hidden = true;
 		card.hidden = !localProject && !conversationProject;
-		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject, detail.section !== 'files');
+		this.renderProjectComposer(layout, id, localProject ? undefined : conversationProject?.composer, !!localProject);
 		const isCurrent = (reader?: IReader) => {
 			if (!this.shown.read(reader)) return false;
 			const state = this.projects.state.read(reader);
@@ -482,66 +475,20 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const document = this.domNode.ownerDocument;
 		const element = h(document, 'div', { className: 'ash-projects-detail' });
 		element.dataset.projectDetail = id;
-		const navigation = h(document, 'div', { className: 'ash-projects-detail-tabs' });
-		const content = h(document, 'div', { className: 'ash-projects-detail-content' });
-		const prefix = generateUuid();
-		const sections = [
-			{ id: 'overview', label: localize('projects.overviewTab', 'Overview') },
-			{ id: 'chats', label: localize('projects.chatsTab', 'Chats') },
-			{ id: 'files', label: localize('projects.filesTab', 'Files') },
-		] as const;
-		const tabs = sections.map(tab => ({ ...tab, value: tab.id, tabId: `${prefix}-tab-${tab.id}`, panelId: `${prefix}-panel-${tab.id}` }));
-		const panels = {
-			overview: h(document, 'div', { className: 'ash-projects-overview' }),
-			chats: h(document, 'div', { className: 'ash-projects-chats' }),
-			files: h(document, 'div', { className: 'ash-projects-files' }),
-		};
 		const chats = h(document, 'div', { className: 'ash-projects-chat-content' });
 		const instructions = h(document, 'div', { className: 'ash-projects-instructions-content' });
 		const memory = h(document, 'section', { className: 'ash-projects-memory-content', properties: { hidden: true } });
 		const files = h(document, 'div', { className: 'ash-projects-file-content' });
 		const card = h(document, 'div', { className: 'ash-projects-detail-card' }, instructions, memory, files);
-		panels.overview.append(chats, card);
-		const tabList = new TabList<ProjectSection>(navigation, {
-			ariaLabel: localize('projects.sections', 'Project sections'),
-			presentation: 'navigation',
-			onActivate: section => {
-				detail.section = section;
-				tabList.setTabs(tabs, section);
-				// The overview and dedicated tabs share the same controls, selection and preview lifetime.
-				const chatHost = section === 'chats' ? panels.chats : panels.overview;
-				const fileHost = section === 'files' ? panels.files : card;
-				if (chats.parentElement !== chatHost) chatHost.prepend(chats);
-				if (files.parentElement !== fileHost) fileHost.append(files);
-				for (const tab of tabs) panels[tab.value].hidden = tab.value !== section;
-				const composer = this.activeProjectInput;
-				if (composer) {
-					composer.element.hidden = section === 'files';
-					composer.setVisible(this.isVisible() && !composer.element.hidden);
-				}
-			},
-		});
-		tabList.setTabs(tabs, 'overview');
-		for (const tab of tabs) {
-			const panel = panels[tab.value];
-			panel.id = tab.panelId;
-			panel.setAttribute('role', 'tabpanel');
-			panel.setAttribute('aria-labelledby', tab.tabId);
-			panel.tabIndex = 0;
-			panel.hidden = tab.value !== 'overview';
-			content.append(panel);
-		}
-		element.append(navigation, content);
+		const content = h(document, 'div', { className: 'ash-projects-detail-content' }, chats, card);
+		element.append(content);
 		this.body.append(element);
-		const detail: ProjectDetail = Object.assign(toDisposable(() => {
-			tabList.dispose();
-			element.remove();
-		}), { element, panels, chats, card, instructions, memory, files, section: 'overview' as const });
+		const detail: ProjectDetail = Object.assign(toDisposable(() => element.remove()), { element, content, chats, card, instructions, memory, files });
 		this.projectDetail.value = detail;
 		return detail;
 	}
 
-	private renderProjectComposer(layout: HTMLElement, id: string, composer: NonNullable<ChatListGroup['project']>['composer'], isLocal: boolean, visible: boolean): void {
+	private renderProjectComposer(layout: HTMLElement, id: string, composer: NonNullable<ChatListGroup['project']>['composer'], isLocal: boolean): void {
 		if (!isLocal && !composer) {
 			this.activeProjectInput?.setVisible(false);
 			this.activeProjectInput = undefined;
@@ -569,8 +516,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			layout.querySelector('.ash-projects-composer')?.remove();
 			layout.append(input.element);
 		}
-		input.element.hidden = !visible;
-		input.setVisible(this.isVisible() && visible);
+		input.setVisible(this.isVisible());
 	}
 
 	private renderProjectInstructions(
@@ -617,11 +563,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			className: 'ash-projects-skeleton ash-projects-detail',
 			attributes: { 'aria-hidden': 'true' },
 		});
-		const overview = h(
+		const content = h(
 			document,
 			'div',
-			{ className: 'ash-projects-overview' },
-			placeholder('ash-projects-skeleton-section-title'),
+			{ className: 'ash-projects-detail-content' },
 			h(
 				document,
 				'div',
@@ -631,7 +576,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				placeholder('ash-projects-skeleton-short'),
 			),
 		);
-		skeleton.append(overview);
+		skeleton.append(content);
 		this.body.append(skeleton);
 	}
 

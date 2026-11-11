@@ -316,9 +316,7 @@ export class ProjectMaterials extends Disposable {
 		const headingId = generateUuid();
 		const materials = h(document, 'section', { className: 'ash-projects-materials', attributes: { 'aria-labelledby': headingId } });
 		const heading = h(document, 'div', { className: 'ash-projects-section-heading' },
-			h(document, 'h2', { properties: { id: headingId } },
-				h(document, 'span', { className: 'ash-projects-material-context-title' }, localize('projects.context', 'Context')),
-				h(document, 'span', { className: 'ash-projects-material-files-title' }, localize('projects.projectFiles', 'Project files'))));
+			h(document, 'h2', { properties: { id: headingId } }, localize('projects.context', 'Context')));
 		const actions = h(document, 'div', { className: 'ash-projects-material-actions' });
 		heading.append(actions);
 		materials.append(heading);

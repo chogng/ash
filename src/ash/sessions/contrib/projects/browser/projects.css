@@ -274,7 +274,6 @@
 
 .ash-projects-card-name {
 	width: 100%;
-	font-weight: var(--ash-fontWeight-semiBold);
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
@@ -342,50 +341,36 @@
 	min-block-size: 0;
 }
 
-.ash-projects-detail-tabs {
-	flex: 0 0 auto;
-}
-
 .ash-projects-detail-content {
 	flex: 1 1 auto;
 	min-block-size: 0;
-}
-
-.ash-projects-detail-content > [role="tabpanel"] {
-	box-sizing: border-box;
-	block-size: 100%;
 	overflow: auto;
 	padding: var(--ash-spacing-size20);
-}
-
-.ash-projects-detail-content > .ash-projects-overview:not([hidden]) {
 	display: grid;
 	align-content: start;
 	gap: var(--ash-spacing-size400);
 	grid-template-columns: minmax(0, 1fr);
 }
 
-.ash-projects:not(.stack-project-details)
-	.ash-projects-detail-content
-	> .ash-projects-overview:not([hidden]) {
+.ash-projects:not(.stack-project-details) .ash-projects-detail-content {
 	grid-template-rows: minmax(0, 1fr);
 }
 
 .ash-projects:not(.stack-project-details)
-	.ash-projects-overview:has(> .ash-projects-detail-card:not([hidden])) {
+	.ash-projects-detail-content:has(
+		> .ash-projects-detail-card:not([hidden])
+	) {
 	grid-template-columns: minmax(0, 1.6fr) minmax(304px, 1fr);
 }
 
-.ash-projects:not(.stack-project-details)
-	.ash-projects-overview
-	> .ash-projects-chat-content,
-.ash-projects-chats > .ash-projects-chat-content {
+.ash-projects:not(.stack-project-details) .ash-projects-chat-content {
 	block-size: 100%;
 	min-block-size: 0;
 	overflow: auto;
 }
 
 .ash-projects-detail-card {
+	--ash-projects-description-foreground: var(--ash-description-foreground);
 	box-sizing: border-box;
 	align-self: start;
 	min-inline-size: 0;
@@ -395,6 +380,15 @@
 			color-mix(in srgb, var(--ash-widget-border) 55%, transparent)
 		);
 	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-workbench[data-color-scheme="light"] .ash-projects-detail-card {
+	/* Blending in the description foreground keeps the Context hint above 4.5:1 on its default light surface. */
+	--ash-projects-description-foreground: color-mix(
+		in srgb,
+		var(--ash-description-foreground) 25%,
+		var(--ash-muted-foreground)
+	);
 }
 
 .ash-projects:not(.stack-project-details) .ash-projects-detail-card {
@@ -424,9 +418,7 @@
 	min-block-size: var(--ash-spacing-size280);
 }
 
-.ash-projects.stack-project-details
-	.ash-projects-detail-content
-	> .ash-projects-overview:not([hidden]) {
+.ash-projects.stack-project-details .ash-projects-detail-content {
 	gap: var(--ash-spacing-size200);
 }
 
@@ -435,10 +427,6 @@
 	margin-inline: var(--ash-chat-content-inset);
 	--ash-chat-content-padding: var(--ash-spacing-size240);
 	--ash-chat-content-min-padding: 0px;
-}
-
-.ash-projects-detail > .ash-projects-composer[hidden] {
-	display: none;
 }
 
 .ash-projects-composer > .ash-chat {
@@ -529,10 +517,12 @@
 
 .ash-projects-section-heading h2 {
 	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-regular);
 }
 
 :is(.ash-projects-guidance, .ash-projects-memory-content) > p {
 	margin-block: var(--ash-spacing-size40) 0;
+	color: var(--ash-projects-description-foreground);
 	overflow-wrap: anywhere;
 }
 
@@ -585,19 +575,10 @@
 	height: var(--ash-spacing-size160);
 }
 
-.ash-projects-skeleton-section-title {
-	width: 40%;
-	height: var(--ash-spacing-size200);
-}
-
 .ash-projects-skeleton-lines {
 	display: flex;
 	flex-direction: column;
 	gap: var(--ash-spacing-size120);
-}
-
-.ash-projects-overview > .ash-projects-skeleton-lines {
-	margin-top: var(--ash-spacing-size200);
 }
 
 .ash-projects-skeleton-short {

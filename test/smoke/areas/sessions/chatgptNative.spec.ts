@@ -1587,8 +1587,7 @@ test.describe('Ash project file copies', () => {
 		await expect(project).toBeVisible();
 		expect(await saved(originalRoot, 'project-fixture.txt')).toBeUndefined();
 		await project.click();
-		await page.locator('.ash-projects').getByRole('tab', { name: '文件', exact: true }).click();
-		const materials = page.getByRole('region', { name: '项目文件', exact: true });
+		const materials = page.getByRole('region', { name: '上下文', exact: true });
 		const file = materials.getByRole('button', { name: 'project-fixture.txt', exact: true });
 		await expect(file).toBeVisible();
 		await expect.poll(() => saved(originalRoot, 'project-fixture.txt')).toBe('Saved project material fixture');
@@ -1630,8 +1629,7 @@ test.describe('Ash project file copies', () => {
 		if (await showSidebar.isVisible()) await showSidebar.click();
 		await restored.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click({ timeout: 5000 });
 		await restored.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
-		await restored.locator('.ash-projects').getByRole('tab', { name: '文件', exact: true }).click();
-		await restored.getByRole('region', { name: '项目文件', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
+		await restored.getByRole('region', { name: '上下文', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
 		const restoredEditor = restored.getByRole('tabpanel', { name: 'project-fixture.txt', exact: true });
 		await new Editor(restoredEditor).waitForEditorContents(text => text === 'Saved project material fixture');
 	});

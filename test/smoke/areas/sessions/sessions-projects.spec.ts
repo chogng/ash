@@ -365,7 +365,6 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			await expect(card).toBeVisible();
 			await card.click();
 			await expect(projectTitle).toBeVisible();
-			await projects.getByRole('tab', { name: 'Chats', exact: true }).click();
 		};
 		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).getByRole('button');
 		const sidebar = () => page.locator('.ash-chat-navigation-list');
@@ -568,7 +567,6 @@ test.describe('Projects sorting persistence', () => {
 			await dialog.getByRole('textbox', { name: '你正在做什么？', exact: true }).fill(name);
 			await dialog.getByRole('button', { name: '创建', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
-			await expect(page.getByRole('heading', { name: '项目对话', exact: true })).toBeVisible();
 			await expect(page.getByText('此项目中没有聊天', { exact: true })).toBeVisible();
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
 			for (const caption of await page.locator('.ash-projects-card-caption').all()) { await expect(caption).toHaveText('刚刚'); }
@@ -752,7 +750,7 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name');
 	await expect(projectTitle).toHaveText('Research workspace');
 	await expect(projectTitle).toHaveAttribute('aria-current', 'page');
-	await expect(projects.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(projects.getByRole('tablist')).toHaveCount(0);
 	await page.screenshot({ path: testInfo.outputPath('projects-detail.png') });
 	await expect(projects.getByText('Collect images, papers and working documents.', { exact: true })).toBeVisible();
 	await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Projects', exact: true }).click();
@@ -792,9 +790,8 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	}
 	await expect(projects).toHaveClass(/narrow/);
 	await expect.poll(() => projects.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-	await projects.getByRole('tab', { name: 'Files', exact: true }).click();
-	await expect(projects.getByRole('region', { name: 'Project files', exact: true })).toBeVisible();
-	await expect(projects.locator('.ash-projects-composer')).toBeHidden();
+	await expect(projects.getByRole('region', { name: 'Context', exact: true })).toBeVisible();
+	await expect(projects.locator('.ash-projects-composer')).toBeInViewport();
 	await page.screenshot({ path: testInfo.outputPath('projects-narrow.png') });
 });
 
@@ -899,14 +896,13 @@ test('Sessions Projects persists imported file sizes across window reopen', { ta
 		];
 		await Promise.all(files.map(file => writeFile(join(directory, file.name), file.content)));
 		let page = await workbench.openAgentsWindow(target.kind);
-		const openFiles = async () => {
+		const openContext = async () => {
 			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const projects = page.locator('.ash-projects');
 			await projects.getByRole('button', { name: project.name, exact: true }).click();
-			await projects.getByRole('tab', { name: 'Files', exact: true }).click();
-			return projects.getByRole('region', { name: 'Project files', exact: true });
+			return projects.getByRole('region', { name: 'Context', exact: true });
 		};
-		let materials = await openFiles();
+		let materials = await openContext();
 		await materials.getByRole('button', { name: 'Add project materials', exact: true }).click();
 		const chooser = page.waitForEvent('filechooser');
 		await page.getByRole('menuitem', { name: 'Upload or add files', exact: true }).click();
@@ -919,7 +915,7 @@ test('Sessions Projects persists imported file sizes across window reopen', { ta
 			name: file.name, kind: 'file', path: pathToFileURL(join(directory, file.name)).toString(), sizeBytes: Buffer.byteLength(file.content),
 		}))));
 		page = await workbench.reopenAgentsWindow(application, page);
-		materials = await openFiles();
+		materials = await openContext();
 		for (const file of files) {
 			await expect(materials.getByRole('button', { name: file.name, exact: true })).toHaveAccessibleDescription(new RegExp(file.display));
 		}

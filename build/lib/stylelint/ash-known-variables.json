@@ -459,6 +459,7 @@
 		"--ash-pane-header-height",
 		"--ash-popup-trigger-background",
 		"--ash-projects-card-background",
+		"--ash-projects-description-foreground",
 		"--ash-review-font-family",
 		"--ash-review-font-size",
 		"--ash-review-line-height",

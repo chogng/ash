@@ -246,10 +246,8 @@ export class ProjectsList extends Disposable {
 		const document = container.ownerDocument;
 		const section = h(document, 'section', { className: 'ash-projects-conversations' });
 		const label = localize('projects.conversations', 'Project conversations');
-		const heading = h(document, 'h2', { properties: { id: generateUuid() } }, label);
-		section.append(h(document, 'div', { className: 'ash-projects-section-heading' }, heading));
 		container.append(section);
-		const list = h(document, 'ul', { className: 'ash-projects-conversation-list', attributes: { 'aria-labelledby': heading.id } });
+		const list = h(document, 'ul', { className: 'ash-projects-conversation-list', attributes: { 'aria-label': label } });
 		const history = project?.history;
 		const loading = history?.state === 'loading' || history?.state === 'idle';
 		for (const entry of entries) {
@@ -279,7 +277,7 @@ export class ProjectsList extends Disposable {
 			}));
 			more.domNode.dataset.projectControl = 'project-history:more';
 		} else if (history?.state === 'more') {
-			const anchor = list.lastElementChild ?? heading;
+			const anchor = list.lastElementChild ?? section;
 			let requested = false;
 			const load = () => {
 				if (requested || !anchor.isConnected || !this.options.isVisible()) return;
