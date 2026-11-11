@@ -6,7 +6,7 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import type { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
-import { DesktopEditorArea, type DesktopEditorTool } from '../../browser/parts/desktopEditorArea.js';
+import { DesktopEditorArea, desktopEditorTools, type DesktopEditorTool } from '../../browser/parts/desktopEditorArea.js';
 import { DesktopEditorParts } from '../../browser/parts/desktopEditorParts.js';
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
 import { DesktopToolEditorPart } from '../../browser/parts/desktopToolEditorPart.js';
@@ -57,7 +57,8 @@ export function createDesktopEditorTestServices(services: InstantiationService, 
 	const filesScope = scope();
 	const files = resources.add(filesScope.child.createInstance(DesktopMainEditorPart, filesScope.container, filesScope.options));
 	const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
-	for (const tool of ['changes', 'browser', 'terminal', 'chat'] as const) {
+	for (const tool of desktopEditorTools) {
+		if (tool === 'files') continue;
 		const host = scope();
 		tools.set(tool, resources.add(host.child.createInstance(DesktopToolEditorPart, host.container, host.options)));
 	}

@@ -20,6 +20,28 @@
 	min-width: 0;
 }
 
+.ash-editor-title-with-group-header
+	.ash-editor-breadcrumbs
+	> .ash-breadcrumbs-widget {
+	container-type: inline-size;
+}
+
+.ash-editor-title-with-group-header
+	.ash-editor-breadcrumbs
+	.ash-breadcrumb-item {
+	max-inline-size: 80cqi;
+}
+
+.ash-editor-title-with-group-header .ash-editor-breadcrumbs .ash-icon-label {
+	max-inline-size: 100%;
+}
+
+.ash-editor-title-with-group-header
+	.ash-editor-breadcrumbs
+	.ash-icon-label-text {
+	flex-shrink: 1;
+}
+
 .ash-breadcrumbs-editor-type {
 	display: flex;
 	flex: none;

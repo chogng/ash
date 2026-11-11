@@ -3,7 +3,6 @@ import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectT
 import { localize } from '../../../../nls.js';
 import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
 import type { TurnChangeFile } from '../../../../workbench/services/chat/common/chatService.js';
-import { getChangesEditorFileStats } from './changesEditorLabels.js';
 
 interface IChangesTurnFileItem extends ISessionFileChange {
 	readonly type: 'file';
@@ -82,8 +81,7 @@ export class ChangesTreeRenderer {
 		label.textContent = treeMode && !row.file.previousPath ? row.file.path.split('/').at(-1)! : path;
 		label.title = path;
 		const counts = h(this.document, 'span');
-		const statistics = getChangesEditorFileStats(row.uri, [row])!;
-		counts.textContent = `+${statistics.insertions} −${statistics.deletions}`;
+		counts.textContent = `+${row.insertions} −${row.deletions}`;
 		const state = h(this.document, 'span', { className: 'ash-sessions-change-state' });
 		state.textContent = [
 			'summary' in row ? localize('sessions.changes.turn', 'Turn {0}', row.turnNumber) : row.repositoryLabel, fileState(row),

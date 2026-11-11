@@ -7,7 +7,6 @@
 	min-width: 0;
 }
 
-.ash-sessions-changes-actions > select,
 .ash-sessions-changes-view-actions > select {
 	min-width: 0;
 	max-width: 100%;
@@ -20,7 +19,6 @@
 	padding: var(--ash-spacing-size40);
 }
 
-.ash-sessions-changes-actions > select:focus-visible,
 .ash-sessions-changes-view-actions > select:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size20);

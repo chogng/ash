@@ -16,6 +16,7 @@ import { ISessionContext } from '../../../services/sessions/browser/sessionConte
 import { NewChatInSessionWidget } from './newChatInSessionWidget.js';
 import { NewChatWidget } from './newChatWidget.js';
 import type { ChatMessagePresentation } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { SessionEnvironmentActions } from './sessionEnvironmentActions.js';
 
 interface INewChatViewOptions {
 	readonly panelId: string;
@@ -63,7 +64,8 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 				model.dispose();
 				throw error;
 			}
-			this.info = this._register(scope.createInstance(SessionInfoRail, this.element, model, () => this.widget.focus()));
+			this.info = this._register(scope.createInstance(SessionInfoRail, this.element, model, () => this.widget.focus(),
+				(container: HTMLElement) => scope.createInstance(SessionEnvironmentActions, container, model)));
 			this._register(this.info.onDidChange(onDidChangeInfo));
 			const updateLoading = () => {
 				this.widget.element.querySelector(':scope > .ash-chat-list-widget')?.setAttribute('aria-busy', String(model.state === 'loading'));

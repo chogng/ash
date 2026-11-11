@@ -11,6 +11,7 @@ import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { EditorPaneRegistry } from '../../../workbench/browser/editor.js';
 import { EditorPane } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
+import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
@@ -19,7 +20,7 @@ function fixture() {
 	const resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, undefined, browserEnvironment.window.document));
 	const registry = resources.add(new EditorPaneRegistry());
-	for (const id of ['test.tool', TerminalEditorInput.ID]) {
+	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID]) {
 		resources.add(registry.registerEditorPane({
 			id, name: 'Tool fixture', canOpen: () => 1,
 			create: () => new class extends EditorPane {
@@ -98,7 +99,7 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.editor.addGroup(files.id, Direction.Down), files);
 		await hosts.editor.splitEditors(files.id, files.inputs, Direction.Down);
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, 'sideGroup');
-		assert.equal(hosts.editor.parts.length, 5);
+		assert.equal(hosts.editor.parts.length, hosts.tools.size + 1);
 		assert.equal(hosts.editor.getEditorState().groups.length, hosts.editor.groups.length);
 		assert.deepEqual(hosts.files.fileGroups.map(group => group.id), [files.id]);
 		assert.equal(files.inputs.length, 2);
@@ -173,13 +174,13 @@ suite('Desktop tool EditorParts', () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		const saved = hosts.editor.saveWorkingSet('before-side-chat');
-		const { chat, ...parts } = saved.toolParts!.parts;
+		const { chat, search, ...parts } = saved.toolParts!.parts;
 		const layout = saved.toolParts!.layout;
 		assert.ok(layout.type === 'branch');
-		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'chat');
-		assert.equal(children.length, layout.children.length - 1);
+		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'chat' && node.data !== 'search');
+		assert.equal(children.length, layout.children.length - 2);
 		const legacy = {
-			...saved, groups: saved.groups.filter(group => !chat.groups.includes(group.id!)), toolParts: {
+			...saved, groups: saved.groups.filter(group => !chat.groups.includes(group.id!) && !search.groups.includes(group.id!)), toolParts: {
 				version: 1, parts, layout: children.length === 1 ? children[0] : { ...layout, children },
 			}
 		};
@@ -187,6 +188,46 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.editor.activeGroup.activeInput?.resource.toString(), 'file:///fixture/a.txt');
 		assert.ok(hosts.tools.get('chat')!.groups.every(group => !hosts.editor.isGroupVisible(group.id)));
 		assert.deepEqual(hosts.area.saveLayout(), layout);
+	});
+
+	test('routes Search to a separate Part even when opened from a Files group', async () => {
+		using hosts = fixture();
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		const filesGroup = hosts.editor.activeGroup;
+		hosts.editor.toggleMaximizeTool(filesGroup.id);
+		const input = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID };
+		await hosts.editor.openEditor(input, { pinned: true }, { groupId: filesGroup.id });
+		const searchPart = hosts.tools.get('search')!;
+		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.deepEqual(filesGroup.inputs.map(entry => entry.resource.path), ['/fixture/a.txt']);
+		assert.equal(searchPart.activeInput, input);
+		assert.equal(hosts.area.isToolVisible('search'), true);
+		assert.equal(hosts.area.isToolVisible('files'), true);
+	});
+
+	test('moves a saved Search tab out of Files while restoring the original active tab', async () => {
+		using hosts = fixture();
+		const file = URI.file('/fixture/a.txt');
+		const search = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID, initialText: 'saved search query' };
+		await hosts.editor.openEditor({ resource: file }, { pinned: true });
+		const fileGroup = hosts.editor.activeGroup;
+		await hosts.files.openEditor(search, { pinned: true }, { groupId: fileGroup.id });
+		const saved = hosts.editor.saveWorkingSet('before-search-tool');
+		const { search: emptySearch, ...parts } = saved.toolParts!.parts;
+		const layout = saved.toolParts!.layout;
+		assert.ok(layout.type === 'branch');
+		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'search');
+		const legacy = {
+			...saved, groups: saved.groups.filter(group => !emptySearch.groups.includes(group.id!)),
+			toolParts: { ...saved.toolParts, parts, layout: { ...layout, children } },
+		};
+		await hosts.editor.applyWorkingSet(legacy);
+		const searchPart = hosts.tools.get('search')!;
+		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.equal(searchPart.activeInput?.resource.toString(), search.resource.toString());
+		assert.equal(searchPart.activeInput?.initialText, search.initialText);
+		assert.equal(hosts.files.fileGroups.flatMap(group => group.inputs).some(input => input.resource.toString() === file.toString()), true);
+		assert.equal(hosts.files.fileGroups.flatMap(group => group.inputs).some(input => input.resource.toString() === search.resource.toString()), false);
 	});
 
 	test('restacks an older Files and Changes pair and preserves a recorded manual split', async () => {

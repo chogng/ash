@@ -15,6 +15,8 @@ import type { IResourceEditorInput, IEditorPane } from '../../../workbench/commo
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
 import { parseEditorWorkingSet, parseEditorWorkingSetLayout, type ApplyEditorWorkingSetOptions, type EditorWorkingSet, type EditorWorkingSetLayout, type EditorWorkingSetTarget, type EditorGroupWorkingSet } from '../../../workbench/services/editor/common/editorWorkingSet.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
+import { isSearchEditorInput, SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
+import { URI } from '../../../base/common/uri.js';
 import { BrowserViewUri } from '../../../platform/browserView/common/browserViewUri.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -46,6 +48,7 @@ function editorTool(input: IResourceEditorInput): DesktopEditorTool {
 	if (input instanceof TerminalEditorInput) { return 'terminal'; }
 	if (input.resource.scheme === BrowserViewUri.scheme) { return 'browser'; }
 	if (input.resource.scheme === 'ash-session-changes') { return 'changes'; }
+	if (isSearchEditorInput(input)) { return 'search'; }
 	return 'files';
 }
 
@@ -54,12 +57,22 @@ function serializedTool(entry: EditorGroupWorkingSet['editors'][number]): Deskto
 	if (entry.input.typeId === TerminalEditorInput.ID) { return 'terminal'; }
 	if (entry.input.typeId === 'workbench.editorInput.browser') { return 'browser'; }
 	if (entry.input.typeId === 'sessions.editorInput.changes') { return 'changes'; }
+	if (entry.paneId === SearchEditorID) { return 'search'; }
+	const resourceInput = entry.input.value;
+	if (entry.input.typeId === 'workbench.editorInput.resource' && isRecord(resourceInput) && typeof resourceInput.resource === 'string'
+		&& isSearchEditorInput({ resource: URI.parse(resourceInput.resource), editorId: typeof resourceInput.editorId === 'string' ? resourceInput.editorId : undefined })) {
+		return 'search';
+	}
 	return 'files';
 }
 
-function projectLayout(layout: EditorWorkingSetLayout, ids: ReadonlySet<number>): EditorWorkingSetLayout | undefined {
-	if (layout.type === 'leaf') { return ids.has(layout.data.groupId) ? layout : undefined; }
-	const children = layout.children.map(child => projectLayout(child, ids))
+function projectLayout(layout: EditorWorkingSetLayout, ids: ReadonlySet<number>, groupIds?: ReadonlyMap<number, number>): EditorWorkingSetLayout | undefined {
+	if (layout.type === 'leaf') {
+		if (!ids.has(layout.data.groupId)) return undefined;
+		const groupId = groupIds?.get(layout.data.groupId);
+		return groupId === undefined ? layout : { ...layout, data: { groupId } };
+	}
+	const children = layout.children.map(child => projectLayout(child, ids, groupIds))
 		.filter((child): child is EditorWorkingSetLayout => !!child)
 		.flatMap(child => child.type === 'branch' && child.orientation === layout.orientation ? child.children : [child]);
 	if (!children.length) { return undefined; }
@@ -218,7 +231,11 @@ export class DesktopEditorParts extends EditorParts {
 		}
 		const pane = await super.openEditor(input, options, target);
 		this.syncArea();
-		if (!options.inactive && !options.preserveFocus) { this.revealed.fire(); }
+		if (!options.inactive && !options.preserveFocus) {
+			const restored = editorTool(input) === 'search' && this.area.revealTool('search');
+			this.revealed.fire();
+			if (restored) pane.focus();
+		}
 		return pane;
 	}
 
@@ -332,8 +349,8 @@ export class DesktopEditorParts extends EditorParts {
 		const metadata = (saved as DesktopEditorWorkingSet).toolParts;
 		if (metadata === undefined) { return undefined; }
 		if (!isRecord(metadata) || metadata.version !== 1 || !isRecord(metadata.parts)) { throw new TypeError('Invalid tool editor working set'); }
-		const legacyWithoutChat = metadata.parts.chat === undefined;
-		const layout = legacyWithoutChat ? this.area.addChatToLayout(metadata.layout) : metadata.layout;
+		const missing: readonly DesktopEditorTool[] = (['chat', 'search'] as const).filter(tool => metadata.parts[tool] === undefined);
+		const layout = missing.length ? this.area.addMissingToolsToLayout(metadata.layout, missing) : metadata.layout;
 		this.area.validateLayout(layout);
 		if (metadata.positioned !== undefined && (!Array.isArray(metadata.positioned) ||
 			metadata.positioned.some(tool => !desktopEditorTools.includes(tool)) ||
@@ -353,7 +370,7 @@ export class DesktopEditorParts extends EditorParts {
 		}
 		const unassigned = new Set(saved.groups.map(group => group.id));
 		for (const tool of desktopEditorTools) {
-			const state = tool === 'chat' && legacyWithoutChat ? { groups: [] } : metadata.parts[tool];
+			const state = missing.includes(tool) ? { groups: [] } : metadata.parts[tool];
 			if (!isRecord(state) || !Array.isArray(state.groups)) { throw new TypeError(`Invalid tool editor membership for '${tool}'`); }
 			for (const id of state.groups) {
 				if (!Number.isSafeInteger(id) || !unassigned.delete(id)) { throw new TypeError(`Invalid tool editor group identity for '${tool}'`); }
@@ -367,11 +384,53 @@ export class DesktopEditorParts extends EditorParts {
 			}
 		}
 		if (unassigned.size) { throw new TypeError('Unassigned tool editor group'); }
-		return legacyWithoutChat ? { ...metadata, layout, parts: { ...metadata.parts, chat: { groups: [] } } } : metadata;
+		return missing.length ? {
+			...metadata, layout, parts: {
+				...metadata.parts,
+				...Object.fromEntries(missing.map(tool => [tool, { groups: [] }])),
+			}
+		} : metadata;
+	}
+
+	/** Move Search tabs from older Files groups into the Search tool while retaining file group identities. */
+	public migrateWorkingSet(saved: EditorWorkingSet): DesktopEditorWorkingSet {
+		const oldParts = (saved as DesktopEditorWorkingSet).toolParts;
+		if (!oldParts || oldParts.parts?.search !== undefined) return saved;
+		const toolParts = this.readParts(saved)!;
+		const files = toolParts.parts.files;
+		const searchGroupIds = new Map<number, number>();
+		const searchGroups: EditorGroupWorkingSet[] = [];
+		let nextId = Math.max(0, ...saved.groups.map(group => group.id ?? 0));
+		let activeGroupIndex = saved.activeGroupIndex;
+		const groups = saved.groups.map((group, index) => {
+			if (group.id === undefined || !files.groups.includes(group.id)) return group;
+			const searchEditors = group.editors.filter(entry => serializedTool(entry) === 'search');
+			if (!searchEditors.length) return group;
+			const editors = group.editors.filter(entry => !searchEditors.includes(entry));
+			const active = group.editors[group.activeEditorIndex];
+			const activeSearch = active ? searchEditors.indexOf(active) : -1;
+			const searchId = ++nextId;
+			if (!Number.isSafeInteger(searchId)) throw new TypeError('Invalid migrated Search group ID');
+			searchGroupIds.set(group.id, searchId);
+			if (index === activeGroupIndex && activeSearch >= 0) activeGroupIndex = saved.groups.length + searchGroups.length;
+			searchGroups.push({ ...group, id: searchId, editors: searchEditors, activeEditorIndex: Math.max(0, activeSearch) });
+			return { ...group, editors, activeEditorIndex: editors.length ? Math.max(0, active ? editors.indexOf(active) : -1) : -1 };
+		});
+		const search = {
+			groups: [...searchGroupIds.values()],
+			layout: files.layout && projectLayout(files.layout, new Set(searchGroupIds.keys()), searchGroupIds),
+		};
+		return {
+			...saved,
+			layout: undefined,
+			groups: [...groups, ...searchGroups],
+			activeGroupIndex,
+			toolParts: { ...toolParts, parts: { ...toolParts.parts, search } },
+		};
 	}
 
 	public override async applyWorkingSet(saved: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
-		if (saved !== 'empty') saved = parseEditorWorkingSet(saved, Math.max(...this.groups.map(group => group.id)));
+		if (saved !== 'empty') saved = this.migrateWorkingSet(parseEditorWorkingSet(saved, Math.max(...this.groups.map(group => group.id))));
 		const metadata = saved === 'empty' ? undefined : this.readParts(saved);
 		const restored = new Map<number, number>();
 		const activeGroup = saved === 'empty' ? undefined : saved.groups[saved.activeGroupIndex];

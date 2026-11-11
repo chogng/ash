@@ -14,6 +14,8 @@ import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/e
 import { GroupDirection } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { SessionsConfiguration, type SessionsLayoutStyle } from '../../common/configuration.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { EditorToolMaximizedContext } from '../menus.js';
 import './media/desktopEditorArea.css';
 
 const toolFrameInset = 6;
@@ -24,8 +26,8 @@ const toolGridOptions = {
 	styles: { separatorBorder: 'var(--ash-sessions-tool-separator, var(--ash-contrastBorder, var(--ash-editorGroup-border)))' },
 };
 
-export type DesktopEditorTool = 'files' | 'changes' | 'browser' | 'terminal' | 'chat';
-export const desktopEditorTools: readonly DesktopEditorTool[] = ['files', 'changes', 'browser', 'terminal', 'chat'];
+export const desktopEditorTools = ['files', 'changes', 'browser', 'terminal', 'chat', 'search'] as const;
+export type DesktopEditorTool = typeof desktopEditorTools[number];
 
 export interface ToolSlot {
 	readonly anchors: readonly DesktopEditorTool[];
@@ -140,6 +142,7 @@ export class DesktopEditorArea extends Part {
 	private dimension: IDimension = new Dimension(0, 0);
 	private desired = new Set<DesktopEditorTool>();
 	private maximized: { readonly tool: DesktopEditorTool; readonly layout: SerializedGridDescriptor; } | undefined;
+	private readonly maximizedContext;
 	private dragging: DesktopEditorTool | undefined;
 	private active: DesktopEditorTool | undefined;
 	private compactLayout: SerializedGridDescriptor | undefined;
@@ -159,8 +162,11 @@ export class DesktopEditorArea extends Part {
 		@IThemeService theme: IThemeService,
 		@IStorageService private readonly toolStorage: IStorageService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, 'editor', theme, toolStorage);
+		this.maximizedContext = EditorToolMaximizedContext.bindTo(contextKeys);
+		this._register(toDisposable(() => this.maximizedContext.reset()));
 		this.titleDomNode.hidden = true;
 		this.domNode.classList.add('ash-desktop-editor-area');
 		this.updateHeaders = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => this.layoutHeaders()));
@@ -210,8 +216,8 @@ export class DesktopEditorArea extends Part {
 		this._register(part.onDidLayout(() => this.updateHeaders.schedule()));
 		if (!this.grid.value) {
 			this.setGrid(new SerializableGrid(this.contentDomNode, { type: 'leaf', view, size: 600 }, toolGridOptions));
-		} else if (tool === 'chat') {
-			this.replaceGrid(this.addChatToLayout(this.grid.value.serialize()));
+		} else if (tool === 'chat' || tool === 'search') {
+			this.replaceGrid(this.addMissingToolsToLayout(this.grid.value.serialize(), [tool]));
 		} else {
 			this.grid.value.addView(view, Sizing.Invisible(300), [...this.views.values()][this.views.size - 2]!, Direction.Down);
 		}
@@ -658,6 +664,7 @@ export class DesktopEditorArea extends Part {
 		} else {
 			this.maximized = { tool, layout: this.saveLayout() };
 		}
+		this.maximizedContext.set(!!this.maximized);
 		this.applyVisibility();
 		this.layout(this.dimension);
 		this.notifyConstraintsChanged();
@@ -665,18 +672,25 @@ export class DesktopEditorArea extends Part {
 
 	public saveLayout(): SerializedGridDescriptor { return this.maximized?.layout ?? (this.compactLayout ? this.withDesiredVisibility(this.compactLayout) : this.grid.value!.serialize()); }
 
-	public validateLayout(layout: unknown, allowMissingChat = false): void {
-		const seen = new Set<string>();
+	public revealTool(tool: DesktopEditorTool): boolean {
+		if (!this.maximized || this.maximized.tool === tool) return false;
+		this.toggleMaximize(this.maximized.tool);
+		return true;
+	}
+
+	public validateLayout(layout: unknown, missing: readonly DesktopEditorTool[] = []): void {
+		const seen = new Set<DesktopEditorTool>();
 		const validate = (node: unknown, depth: number, parentOrientation?: number): void => {
 			if (!isRecord(node) || depth > 32 || typeof node.size !== 'number'
 				|| !Number.isFinite(node.size) || node.size < 0 || ![0, 1, 2].includes(node.priority as number)) {
 				throw new TypeError('Invalid tool workspace layout');
 			}
 			if (node.type === 'leaf') {
-				if (typeof node.visible !== 'boolean' || !desktopEditorTools.includes(node.data as DesktopEditorTool) || seen.has(node.data as string)) {
+				const tool = node.data as DesktopEditorTool;
+				if (typeof node.visible !== 'boolean' || !this.views.has(tool) || seen.has(tool)) {
 					throw new TypeError('Invalid tool workspace identity');
 				}
-				seen.add(node.data as string);
+				seen.add(tool);
 			} else if (node.type === 'branch' && [0, 1].includes(node.orientation as number)
 				&& node.orientation !== parentOrientation && Array.isArray(node.children) && node.children.length) {
 				node.children.forEach(child => validate(child, depth + 1, node.orientation as number));
@@ -685,16 +699,17 @@ export class DesktopEditorArea extends Part {
 			}
 		};
 		validate(layout, 0);
-		if (allowMissingChat ? seen.has('chat') || seen.size !== this.views.size - 1 : seen.size !== this.views.size) { throw new TypeError('Tool workspace layout is incomplete'); }
+		const expected = [...this.views.keys()].filter(tool => !missing.includes(tool));
+		if (seen.size !== expected.length || expected.some(tool => !seen.has(tool))) { throw new TypeError('Tool workspace layout is incomplete'); }
 	}
 
-	/** Older tool layouts predate the rightmost Chat workspace. */
-	public addChatToLayout(layout: SerializedGridDescriptor): SerializedGridDescriptor {
-		this.validateLayout(layout, true);
-		const chat = { type: 'leaf', data: 'chat', size: 300, priority: 0, visible: false } as const;
+	/** Append newly registered tools while retaining the saved splits of existing tools. */
+	public addMissingToolsToLayout(layout: SerializedGridDescriptor, missing: readonly DesktopEditorTool[]): SerializedGridDescriptor {
+		this.validateLayout(layout, missing);
+		const leaves = missing.map(tool => ({ type: 'leaf', data: tool, size: 300, priority: 0, visible: false } as const));
 		return layout.type === 'branch' && layout.orientation === 1
-			? { ...layout, children: [...layout.children, chat] }
-			: { type: 'branch', orientation: 1, size: layout.size, priority: 0, children: [layout, chat] };
+			? { ...layout, children: [...layout.children, ...leaves] }
+			: { type: 'branch', orientation: 1, size: layout.size, priority: 0, children: [layout, ...leaves] };
 	}
 
 	public get positionedTools(): readonly DesktopEditorTool[] { return [...this.positioned]; }
@@ -712,6 +727,7 @@ export class DesktopEditorArea extends Part {
 		this.restoringPlacement = manuallyArranged === undefined ? 'legacy' : 'saved';
 		this.toolWidthWeight = widthWeight;
 		this.maximized = undefined;
+		this.maximizedContext.reset();
 		this.compactLayout = this.compact ? layout : undefined;
 		this.replaceGrid(layout);
 		if (!this.compact) this.layout(this.dimension);

@@ -1,0 +1,149 @@
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { getErrorMessage } from '../../../../base/common/errors.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { localize } from '../../../../nls.js';
+import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { readLocalRepositories, type LocalRepository } from '../../../../workbench/contrib/github/common/localRepository.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { chatExecutionWorkspace } from '../../../services/sessions/common/session.js';
+
+export interface ISessionGitActionsService {
+	readonly onDidChange: Event<void>;
+	readonly repositoryRoot: URI | undefined;
+	readonly canSync: boolean;
+	readonly canPublish: boolean;
+	readonly canReviewWorkingTree: boolean;
+	readonly busy: boolean;
+	readonly hasOpenPicker: boolean;
+	readRepositories(root: URI): Promise<readonly LocalRepository[]>;
+	run(command: 'sync' | 'git.publish' | 'git.openChangesSource', signal?: AbortSignal): Promise<void>;
+}
+
+export const ISessionGitActionsService = createServiceIdentifier<ISessionGitActionsService>('sessionGitActionsService');
+
+/** Owns repository selection and Git operations shared by the rail and Changes. */
+export class SessionGitActionsService extends Disposable implements ISessionGitActionsService {
+	private readonly changed = this._register(new Emitter<void>());
+	readonly onDidChange = Event.any(this.changed.event, CommandsRegistry.onDidChangeCommands);
+	private readonly picker = this._register(new DisposableStore());
+	private generation = 0;
+	private owner: string | undefined;
+	private running = false;
+
+	constructor(
+		@ISessionsService private readonly sessions: ISessionsService,
+		@ICommandService private readonly commands: ICommandService,
+		@IQuickInputService private readonly input: IQuickInputService,
+		@INotificationService private readonly notifications: INotificationService,
+	) {
+		super();
+		this.owner = this.selectionKey();
+		this._register(sessions.onDidChange(() => {
+			const owner = this.selectionKey();
+			if (owner === this.owner) { return; }
+			this.owner = owner;
+			this.generation++;
+			this.picker.clear();
+			this.changed.fire();
+		}));
+	}
+
+	get repositoryRoot(): URI | undefined {
+		if (!CommandsRegistry.hasCommand('git.getRepositoryContexts')) { return undefined; }
+		const workspace = this.target?.workspace;
+		return workspace ? sessionWorkspaceUri(workspace) : undefined;
+	}
+
+	get canSync(): boolean { return !!this.repositoryRoot && CommandsRegistry.hasCommand('git.pull') && CommandsRegistry.hasCommand('git.push'); }
+	get canPublish(): boolean { return !!this.repositoryRoot && CommandsRegistry.hasCommand('git.publish'); }
+	get canReviewWorkingTree(): boolean { return !!this.repositoryRoot && CommandsRegistry.hasCommand('git.openChangesSource'); }
+	get busy(): boolean { return this.running; }
+	get hasOpenPicker(): boolean { return this.running && this.input.currentQuickInput !== undefined; }
+
+	private get target() {
+		const selected = this.sessions.activeSelection;
+		if (selected?.kind !== 'session') { return undefined; }
+		const { session, threadId } = selected.active;
+		const workspace = chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId));
+		return { sessionId: session.sessionId, threadId, workspace };
+	}
+
+	private selectionKey(): string | undefined { return JSON.stringify(this.target); }
+
+	async readRepositories(root: URI): Promise<readonly LocalRepository[]> {
+		return (await readLocalRepositories(this.commands)).filter(repository =>
+			extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root)
+			|| extUriBiasedIgnorePathCase.isEqualOrParent(root, repository.root));
+	}
+
+	private async choose(repositories: readonly LocalRepository[]): Promise<LocalRepository | undefined> {
+		if (repositories.length === 1) { return repositories[0]; }
+		if (!repositories.length) { throw new Error(localize('sessions.changes.noRepository', 'No Git repository is available in this session directory.')); }
+		const picker = this.input.createQuickPick<{ label: string; description: string; repository: LocalRepository; }>();
+		this.picker.add(picker);
+		picker.items = repositories.map(repository => ({ label: repository.label, description: repository.path, repository }));
+		picker.ariaLabel = picker.placeholder = localize('sessions.changes.chooseRepository', 'Choose a session repository');
+		return new Promise(resolve => {
+			let result: LocalRepository | undefined;
+			this.picker.add(toDisposable(() => resolve(result)));
+			this.picker.add(picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				result = item.repository; picker.hide();
+			}));
+			this.picker.add(picker.onDidHide(() => this.picker.clear()));
+			picker.show();
+		});
+	}
+
+	public async run(command: 'sync' | 'git.publish' | 'git.openChangesSource', signal?: AbortSignal): Promise<void> {
+		const root = this.repositoryRoot;
+		if (!root || this.running || signal?.aborted || (command === 'sync' ? !this.canSync : command === 'git.publish' ? !this.canPublish : !this.canReviewWorkingTree)) { return; }
+		const generation = this.generation;
+		const current = (): boolean => !this.isDisposed && generation === this.generation && !signal?.aborted;
+		const cancellation = signal && addDisposableListener(signal, 'abort', () => this.picker.clear(), { once: true });
+		this.running = true;
+		this.changed.fire();
+		try {
+			const repositories = await this.readRepositories(root);
+			if (!current()) { return; }
+			const repository = await this.choose(repositories);
+			if (!repository || !current()) { return; }
+			const verify = async (): Promise<boolean> => {
+				const fresh = (await readLocalRepositories(this.commands)).find(candidate => candidate.id === repository.id);
+				if (!current()) { return false; }
+				if (!fresh
+					|| !extUriBiasedIgnorePathCase.isEqual(fresh.root, repository.root)
+					|| fresh.head.type !== repository.head.type
+					|| fresh.head.name !== repository.head.name
+					|| JSON.stringify(fresh.remotes) !== JSON.stringify(repository.remotes)) {
+					throw new Error(localize('sessions.changes.repositoryChanged', 'The repository or branch changed. Start the operation again.'));
+				}
+				return true;
+			};
+			if (!await verify()) { return; }
+			if (command === 'sync') {
+				await this.commands.executeCommand('git.pull', repository.id);
+				if (!await verify()) { return; }
+				await this.commands.executeCommand('git.push', repository.id);
+				if (current()) { this.notifications.info(localize('sessions.changes.synced', 'Synchronized {0}.', repository.label)); }
+			} else {
+				await this.commands.executeCommand(command, repository.id, ...(command === 'git.openChangesSource' ? ['uncommitted'] : []));
+			}
+		} catch (error) {
+			if (current()) { this.notifications.error(getErrorMessage(error)); }
+		} finally {
+			cancellation?.dispose();
+			this.picker.clear();
+			this.running = false;
+			if (!this.isDisposed) { this.changed.fire(); }
+		}
+	}
+}

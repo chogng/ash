@@ -183,6 +183,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		return (this.editor as DesktopEditorParts).withWorkingSetLayout(saved, this.codeLayout, this.codeActiveGroup);
 	}
 	protected override async applyWorkingSet(saved: EditorWorkingSet | 'empty', key = saved === 'empty' ? 'empty' : saved.id): Promise<void> {
+		if (saved !== 'empty') saved = (this.editor as DesktopEditorParts).migrateWorkingSet(saved);
 		const previous = this.editor.groups.map(group => group.id);
 		let incoming = this.liveGroups.get(key)?.filter(id => previous.includes(id));
 		const reused = !!incoming?.length;

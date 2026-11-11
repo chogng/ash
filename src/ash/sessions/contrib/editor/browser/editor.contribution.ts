@@ -4,7 +4,8 @@ import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
-import { AppServerAvailableContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../workbench/common/contextkeys.js';
+import { ActiveEditorContext, AppServerAvailableContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../workbench/common/contextkeys.js';
+import { CODE_EDITOR_ID } from '../../../../workbench/browser/parts/editor/textResourceEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { ITerminalEditorService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
@@ -24,14 +25,14 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { Menus, SessionsFlatLayoutContext, sessionToolMenuItems } from '../../../browser/menus.js';
+import { EditorToolMaximizedContext, Menus, SessionsFlatLayoutContext, sessionToolMenuItems } from '../../../browser/menus.js';
 import { SessionsCategories } from '../../../common/categories.js';
-import { SESSIONS_TERMINAL_CONFIG_SECTION } from '../../../common/configuration.js';
+import { SESSIONS_EDITOR_WORD_WRAP, SESSIONS_TERMINAL_CONFIG_SECTION } from '../../../common/configuration.js';
 import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
-import { SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
+import { ChangesFileListAvailableContext, ChangesFileListVisibleContext, SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
 import { isRecord } from '../../../../base/common/types.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
@@ -40,10 +41,30 @@ const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', 
 const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
 const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
+const filesTool = ContextKeyExpr.equals('sessions.editorTool', 'files');
 const terminalTool = ContextKeyExpr.equals('sessions.editorTool', 'terminal');
-const nonTerminalTool = ContextKeyExpr.notEquals('sessions.editorTool', 'terminal');
 const terminalCursorBlinkingSetting = `${SESSIONS_TERMINAL_CONFIG_SECTION}.cursorBlinking`;
 const terminalCursorBlinkingContext = new RawContextKey<boolean>('sessions.terminalCursorBlinking', false);
+
+registerAction2(class ToggleSessionsEditorWordWrapAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.agentSessions.toggleEditorWordWrap',
+			title: localize2('sessions.editor.toggleWordWrap', 'Word Wrap'),
+			toggled: ContextKeyExpr.or(...['on', 'bounded', 'wordWrapColumn'].map(value => ContextKeyExpr.equals('config.editor.wordWrap', value))),
+			menu: {
+				id: Menus.SessionsEditorTitle,
+				group: '1_view',
+				when: ContextKeyExpr.and(codeContext.isEqualTo(true), filesTool, ActiveEditorContext.isEqualTo(CODE_EDITOR_ID)),
+			},
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		const configuration = accessor.get(IConfigurationService);
+		return configuration.updateValue(SESSIONS_EDITOR_WORD_WRAP, configuration.getValue('editor.wordWrap') === 'off' ? 'on' : 'off');
+	}
+});
 
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
 export class EditorTitleMenuBridgeContribution extends Disposable {
@@ -99,6 +120,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		);
 		this._register(layout.onDidLayoutMainContainer(updateContext));
 		this._register(editor.onDidChangeEditors(updateContext));
+		this._register((editor as DesktopEditorParts).filesPart.onDidChangeDetailsVisibility(updateContext));
 		this._register(
 			autorun(reader => {
 				context.documentContent.read(reader);
@@ -237,11 +259,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			}
 			override run(): Promise<void> { return (editor as DesktopEditorParts).openActiveEditorInModal(); }
 		}));
-		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderPrimary, {
-			command: { id: 'workbench.action.quickOpen', title: localize2('workbench.editor.goToFile', 'Go to File'), icon: Lxicon.search },
-			when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'files'), EditorGroupEditorsCountContext.isEqualTo(0)),
-			group: 'navigation',
-		}));
 		const editorShown = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(true));
 		const editorHidden = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(false));
 		const toggleSidePane = {
@@ -269,9 +286,9 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
 						command: { ...toggleDetails, icon: Lxicon.listUnordered },
-						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'files')),
+						when: ContextKeyExpr.and(codeWhen, filesTool),
 						group: 'navigation',
-						order: -1,
+						order: 2,
 					},
 				},
 				{
@@ -281,16 +298,26 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							id: 'ash.sessions.toggleChangesFileList',
 							title: localize2({ bundle: 'ash', key: 'sessions.changes.toggleFileList' }, 'Toggle changed files list'),
 							icon: Lxicon.listUnordered,
+							toggled: ChangesFileListVisibleContext.isEqualTo(true),
 						},
-						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'changes')),
+						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'changes'), ChangesFileListAvailableContext.isEqualTo(true)),
 						group: 'navigation',
-						order: -1,
+						order: 2,
 					},
 				},
 				{
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
-						command: { id: 'ash.sessions.maximizeTool', title: localize2('sessions.layout.maximizeTool', 'Toggle tool size'), icon: Lxicon.screenFull },
+						command: {
+							id: 'ash.sessions.maximizeTool',
+							title: localize2('sessions.layout.maximizeTool', 'Maximize Tool'),
+							icon: Lxicon.screenFull,
+							toggled: {
+								condition: EditorToolMaximizedContext.isEqualTo(true),
+								title: localize2('sessions.layout.restoreTool', 'Restore Tool Size'),
+								icon: Lxicon.screenNormal,
+							},
+						},
 						when: codeWhen, group: 'navigation', order: 1,
 					},
 				},
@@ -298,7 +325,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
 						command: { id: hideToolId, title: localize2('sessions.layout.hideTool', 'Hide tool'), icon: Lxicon.close },
-						when: codeWhen, group: 'navigation', order: 2,
+						when: codeWhen, group: 'navigation', order: 3,
 					},
 				},
 				{
@@ -343,7 +370,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: MenuId.EditorTitle,
 					item: {
 						command: { ...toggleDetails, icon: Lxicon.listUnordered },
-						when: ContextKeyExpr.and(codeWhen, nonTerminalTool),
+						when: ContextKeyExpr.and(codeWhen, filesTool),
 						group: 'navigation',
 						order: 90,
 					},
@@ -352,7 +379,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: MenuId.EditorTitle,
 					item: {
 						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOffSession },
-						when: ContextKeyExpr.and(editorShown, nonTerminalTool),
+						when: ContextKeyExpr.and(editorShown, filesTool),
 						group: 'navigation',
 						order: 91,
 					},
@@ -361,7 +388,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: MenuId.EditorTitle,
 					item: {
 						command: { ...showEditor, icon: Lxicon.layoutSidebarRightSession },
-						when: ContextKeyExpr.and(editorHidden, nonTerminalTool),
+						when: ContextKeyExpr.and(editorHidden, filesTool),
 						group: 'navigation',
 						order: 91,
 					},

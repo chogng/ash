@@ -20,6 +20,9 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentHostInputCompletionService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../contrib/changes/browser/sessionGitActionsService.js';
 
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
@@ -266,6 +269,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async queueTurn() { },
 		async readQueue() { return []; },
 		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
+		movePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		editPendingRequest: async () => { throw new Error('Unexpected queue operation'); },
@@ -316,6 +320,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IHostService, new TestHostService());
 	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -375,6 +380,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(ICommandService, commandService);
 	using viewService = services.createInstance(SessionsService);
 	services.registerInstance(ISessionsService, viewService);
+	services.registerSingleton(ISessionGitActionsService, () => services.createInstance(SessionGitActionsService));
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	services.registerSingleton(INativeChatModelPreferencesService, () => services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences));

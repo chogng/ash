@@ -154,9 +154,13 @@ export class MainThreadExtensionBackend extends Disposable {
 		let cancellation: Promise<unknown> | undefined;
 		const cancel = (): void => {
 			if (!cancellable || cancellation) return;
-			// Cancellation retains the original operation until its terminal response. Only
-			// this admitted operation ID is sent; retirement cannot launch another mutation.
-			cancellation = this.backend.request(route.cancellationRoute, { operationId }, AbortSignal.timeout(5000));
+			// Keep the original operation pending and route cancellation to its owner.
+			const cancellationParams: Record<string, JsonValue> = { operationId };
+			const repositoryId = (params as Record<string, JsonValue>).repositoryId;
+			if (typeof repositoryId === 'string' && (route.cancellationRoute === 'git/transport/cancel' || route.cancellationRoute === 'git/checkIgnore/cancel')) {
+				cancellationParams.repositoryId = repositoryId;
+			}
+			cancellation = this.backend.request(route.cancellationRoute, cancellationParams, AbortSignal.timeout(5000));
 			void cancellation.catch(() => undefined);
 		};
 		const execute = async (): Promise<JsonValue> => {

@@ -26,7 +26,7 @@ import { MainThreadExtensionBackend } from '../../browser/mainThreadExtensionBac
 import type { EditorPartChangeEvent } from '../../../services/editor/common/editorState.js';
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
-const manifest = { ashFrontend: { capabilities: { 'git.repository': { methods: { read: { route: 'config/read', fields: [], resultFields: ['revision', 'git', 'gitConfigured'] }, write: { route: 'config/update', fields: ['commandId', 'expectedRevision', 'git'] }, transport: { route: 'git/transport', cancellationRoute: 'git/transport/cancel', fields: ['operationId'] } }, notifications: ['config/changed'] } } } };
+const manifest = { ashFrontend: { capabilities: { 'git.repository': { methods: { read: { route: 'config/read', fields: [], resultFields: ['revision', 'git', 'gitConfigured'] }, write: { route: 'config/update', fields: ['commandId', 'expectedRevision', 'git'] }, transport: { route: 'git/transport', cancellationRoute: 'git/transport/cancel', fields: ['operationId', 'repositoryId'] } }, notifications: ['config/changed'] } } } };
 function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService, editor?: ICodeEditor, editorPart?: IEditorPart, recovery?: IAppServerConnectionRecovery) {
 	const calls: { method: string; params: unknown; }[] = [];
 	const extensions = { list: async () => ({ extensions: [{ id: 'ash.git', sourceKind, manifestJson: JSON.stringify(manifest) }] }) } as unknown as IExtensionApi;
@@ -167,6 +167,8 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 	const operation = new DeferredPromise<JsonValue>();
 	const cancellation = new DeferredPromise<void>();
 	const controller = new AbortController();
+	const request: Record<string, JsonValue> = { operationId: 'window-owned-operation' };
+	if (!retire) request.repositoryId = 'gateway-git:7:session_repo_fixture';
 	let settled = false;
 	setNlsMessages('zh-CN', { ash: { 'progress.region': '进度', 'progress.cancel': '取消' } });
 	try {
@@ -177,12 +179,12 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 		const value = fixture('builtIn', async (method, params) => {
 			if (method === 'git/transport') return operation.p;
 			assert.equal(method, 'git/transport/cancel');
-			assert.deepEqual(params, { operationId: 'window-owned-operation' });
+			assert.deepEqual(params, request);
 			await cancellation.complete();
 			return { status: 'requested' };
 		}, progress);
 		using cleanup = value.bridge;
-		const result = value.bridge.handle(source, 'git.repository', 'transport', { operationId: 'window-owned-operation' }, 0, controller.signal, { title: 'Git', cancellable: true });
+		const result = value.bridge.handle(source, 'git.repository', 'transport', request, 0, controller.signal, { title: 'Git', cancellable: true });
 		void result.then(() => { settled = true; }, () => { settled = true; });
 		// Admission reads the product catalog before creating the existing progress surface.
 		await Promise.resolve(); await Promise.resolve();

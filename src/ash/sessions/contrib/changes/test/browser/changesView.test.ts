@@ -465,12 +465,14 @@ suite('changes browser component', () => {
 		expect(errors).toEqual([]);
 	});
 
-	test('Changes sends the prepared PR request to the initiating Thread and restores allowed form preferences', async function () {
+	test('Session information sends the prepared PR request to the initiating Thread and restores allowed form preferences', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/changes.html');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		const create = page.getByRole('button', { name: 'Create pull request', exact: true });
+		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
+		const rail = page.getByRole('complementary', { name: 'Session information' });
+		const create = rail.getByRole('button', { name: 'Create pull request', exact: true });
 		await create.click();
 		const form = page.getByRole('dialog', { name: 'Create pull request' });
 		await expect(form.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('feature');
@@ -514,7 +516,6 @@ suite('changes browser component', () => {
 		const file = page.getByRole('treeitem');
 		await expect(file).toHaveCount(1);
 		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 file +3 −2');
-		await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText('origin/feature: 1 incoming · 2 outgoing · 3 uncommitted files');
 		await expect(page.locator('.ash-sessions-changes-summary')).toHaveCSS('font-size', '11px');
 		await tree.focus();
 		await tree.press('ArrowDown');
@@ -542,6 +543,12 @@ suite('changes browser component', () => {
 		const path = page.locator('.ash-sessions-change-path');
 		await expect(path).toHaveCSS('text-overflow', 'ellipsis');
 		await expect(path).toHaveAttribute('title', 'src/a-long-directory-name/main.ts');
+		await expect(page.locator('#changes').getByRole('combobox', { name: 'Git branch actions' })).toHaveCount(0);
+		await expect(page.locator('#changes').getByRole('button', { name: 'Checks', exact: true })).toHaveCount(0);
+		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
+		const rail = page.getByRole('complementary', { name: 'Session information' });
+		await expect(rail.locator('.ash-session-environment-repository-status')).toContainText('origin/feature: 1 incoming · 2 outgoing · 3 uncommitted files');
+		await expect(rail.getByRole('button', { name: 'Create pull request', exact: true })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Build · Successful · team/repo #7' })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Tests · Failed · team/repo #7' })).toBeVisible();
 		const build = page.getByRole('link', { name: 'Build · Successful · team/repo #7' });
@@ -555,17 +562,20 @@ suite('changes browser component', () => {
 		await expect(page.getByRole('link', { name: 'Tests · Failed · team/repo #7' })).toBeHidden();
 		await checks.press('Space');
 		await checks.press('Enter');
-		await page.evaluate(() => window.ashChangesIntegration.visible(false));
-		await page.evaluate(() => window.ashChangesIntegration.visible(true));
-		await expect(page.getByRole('button', { name: 'Checks', exact: true })).toHaveAttribute('aria-expanded', 'false');
+		await page.evaluate(() => window.ashChangesIntegration.closeSessionRail());
+		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
+		await expect(checks).toHaveAttribute('aria-expanded', 'false');
 		await page.getByRole('button', { name: 'Checks', exact: true }).press('Enter');
 		await expect(checks).toHaveAttribute('aria-expanded', 'true');
-		await page.getByRole('combobox', { name: 'Git branch actions' }).selectOption('sync');
+		const branchActions = rail.getByRole('combobox', { name: 'Git branch actions' });
+		await branchActions.selectOption('sync');
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls())).toEqual(['git.pull:repository', 'git.push:repository']);
+		await branchActions.selectOption('publish');
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls())).toContain('git.publish:repository');
+		await page.evaluate(() => window.ashChangesIntegration.closeSessionRail());
 		await page.evaluate(() => window.ashChangesIntegration.setLocale());
 		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 个文件 +3 −2');
 		await page.evaluate(() => window.ashChangesIntegration.rebuild());
-		await page.getByRole('combobox', { name: 'Git 分支操作' }).selectOption({ label: '发布分支' });
 		const scope = page.getByRole('combobox', { name: '选择回合更改' });
 		await scope.selectOption('change');
 		await scope.selectOption({ label: '查看工作区更改' });
@@ -575,14 +585,17 @@ suite('changes browser component', () => {
 		]);
 	});
 
-	test('Changes creates and attaches the edited PR, and cancellation restores keyboard focus', async function () {
+	test('Session information creates and attaches the edited PR, and cancellation restores keyboard focus', async function () {
 		const { page } = browserTests;
 
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/changes.html');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		const create = page.getByRole('button', { name: 'Create pull request', exact: true });
+		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
+		const rail = page.getByRole('complementary', { name: 'Session information' });
+		const create = rail.getByRole('button', { name: 'Create pull request', exact: true });
+		await expect(page.locator('#changes').getByRole('button', { name: 'Create pull request', exact: true })).toHaveCount(0);
 		await create.focus();
 		await create.press('Enter');
 		const form = page.getByRole('dialog', { name: 'Create pull request' });
@@ -593,6 +606,7 @@ suite('changes browser component', () => {
 		await expect(form.getByRole('button', { name: 'Pull request action' })).toBeFocused();
 		await page.keyboard.press('Escape');
 		await expect(form).toBeHidden();
+		await expect(rail).toBeVisible();
 		await expect(create).toBeFocused();
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.created())).toEqual([]);
 		await create.press('Enter');
@@ -616,12 +630,14 @@ suite('changes browser component', () => {
 		expect(errors).toEqual([]);
 	});
 
-	test('Changes rejects a PR after a branch change and closes the form on account changes', async function () {
+	test('Session information rejects a PR after a branch change and closes the form on account changes', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/changes.html');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		const create = page.getByRole('button', { name: 'Create pull request', exact: true });
+		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
+		const rail = page.getByRole('complementary', { name: 'Session information' });
+		const create = rail.getByRole('button', { name: 'Create pull request', exact: true });
 		await create.click();
 		const form = page.getByRole('dialog', { name: 'Create pull request' });
 		await expect(form.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('feature');
@@ -634,16 +650,19 @@ suite('changes browser component', () => {
 		await expect(create).toBeFocused();
 	});
 
-	test('Changes PR form and CI results use the selected Chinese locale', async function () {
+	test('Session information uses the selected Chinese locale for Git actions, checks and the PR form', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/changes.html?locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		await expect(page.getByRole('link', { name: 'Tests · 失败 · team/repo #7' })).toBeVisible();
-		await expect(page.locator('.ash-sessions-changes-repository-status')).toContainText('origin/feature：1 个传入 · 2 个传出 · 3 个未提交文件');
 		await page.getByRole('combobox', { name: '更改视图模式' }).selectOption('tree');
 		await expect(page.getByRole('treeitem')).toHaveCount(4);
-		await page.getByRole('button', { name: '创建拉取请求', exact: true }).click();
+		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
+		const rail = page.getByRole('complementary', { name: '会话信息' });
+		await expect(rail.getByRole('link', { name: 'Tests · 失败 · team/repo #7' })).toBeVisible();
+		await expect(rail.locator('.ash-session-environment-repository-status')).toContainText('origin/feature：1 个传入 · 2 个传出 · 3 个未提交文件');
+		await expect(rail.getByRole('combobox', { name: 'Git 分支操作' }).locator('option')).toHaveText(['Git 分支操作', '同步更改', '发布分支']);
+		await rail.getByRole('button', { name: '创建拉取请求', exact: true }).click();
 		const form = page.getByRole('dialog', { name: '创建拉取请求' });
 		await expect(form.getByRole('textbox', { name: '标题', exact: true })).toHaveValue('feature');
 		await expect(form.getByRole('textbox', { name: '目标分支' })).toHaveValue('main');
@@ -654,12 +673,14 @@ suite('changes browser component', () => {
 		await expect(form).toBeHidden();
 	});
 
-	test('Changes enables the selected auto-merge method only for the captured local head', async function () {
+	test('Session information enables the selected auto-merge method only for the captured local head', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/changes.html');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		const create = page.getByRole('button', { name: 'Create pull request', exact: true });
+		await page.evaluate(() => window.ashChangesIntegration.openSessionRail());
+		const rail = page.getByRole('complementary', { name: 'Session information' });
+		const create = rail.getByRole('button', { name: 'Create pull request', exact: true });
 		const form = page.getByRole('dialog', { name: 'Create pull request' });
 		await create.click();
 		await form.getByRole('combobox', { name: 'Merge mode' }).selectOption('SQUASH');

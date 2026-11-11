@@ -1,4 +1,7 @@
 import { URI } from '../../../../base/common/uri.js';
+import { isRecord } from '../../../../base/common/types.js';
+import { IWorkspaceContextService, workspaceRelativePath } from '../../../../platform/workspace/common/workspace.js';
+import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { localize } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -9,14 +12,14 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { InSearchEditor, OpenNewEditorCommandId, SearchEditorID } from './constants.js';
+import { InSearchEditor, isSearchEditorInput, OpenNewEditorCommandId, SearchEditorID } from './constants.js';
 import { SearchEditor } from './searchEditor.js';
 import { serializeSearchResultForEditor } from './searchEditorSerialization.js';
 
 registerEditorPane({
 	id: SearchEditorID,
 	name: localize('searchEditor.title', 'Search Editor'),
-	canOpen: input => input.editorId === SearchEditorID || input.resource.path.endsWith('.code-search') ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input => isSearchEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) { throw new Error('Search editor requires the Workbench instantiation service'); }
 		const descriptor = EditorPanes.getEditorPane({ resource: URI.from({ scheme: 'untitled', path: '/search.txt' }) }, { preferredEditorId: CODE_EDITOR_ID })!;
@@ -27,14 +30,34 @@ registerEditorPane({
 
 registerAction2(class extends Action2 {
 	constructor() { super({ id: OpenNewEditorCommandId, title: localize('searchEditor.new', 'Search: New Search Editor'), f1: true }); }
-	run(accessor: ServicesAccessor): Promise<void> {
-		return accessor.get(IEditorService).openEditor({
+	async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		const editors = accessor.get(IEditorService);
+		const groupId = isRecord(argument) && typeof argument.groupId === 'number' && Number.isSafeInteger(argument.groupId)
+			? argument.groupId : undefined;
+		let workspaceRoot: string | undefined;
+		let includePatterns: string[] = [];
+		if (isRecord(argument) && 'folder' in argument) {
+			const resource = argument.folder;
+			if (!(resource instanceof URI)) throw new TypeError('Search in folder requires a folder URI');
+			const folder = accessor.get(IWorkspaceContextService).getWorkspaceFolder(resource);
+			if (!folder || (await accessor.get(IFileService).stat(resource)).kind !== FileKind.Directory) return;
+			workspaceRoot = folder.uri.toString();
+			const path = workspaceRelativePath(folder.uri, resource);
+			if (path !== '.') {
+				// Character classes keep glob syntax and commas in directory names literal.
+				const literal = path.replace(/[[*?{}, ]/g, character => `[${character}]`).replace(/^!/, '{!}');
+				includePatterns = [`${literal}/**`];
+			}
+		}
+		await editors.openEditor({
 			resource: URI.from({ scheme: 'untitled', path: `/Search-${crypto.randomUUID()}.code-search` }),
 			editorId: SearchEditorID,
 			label: localize('searchEditor.title', 'Search Editor'),
 			showBreadcrumbs: false,
-			initialText: serializeSearchResultForEditor({ text: '', patternKind: 'literal', caseSensitivity: 'insensitive', includePatterns: [], excludePatterns: [] }),
-		}, { pinned: true });
+			initialText: serializeSearchResultForEditor({
+				text: '', patternKind: 'literal', caseSensitivity: 'insensitive', includePatterns, excludePatterns: [], workspaceRoot,
+			}),
+		}, { pinned: true }, groupId === undefined ? undefined : { groupId });
 	}
 });
 

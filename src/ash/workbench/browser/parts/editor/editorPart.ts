@@ -132,9 +132,11 @@ export const IEditorPart =
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
 	readonly hideTabs?: boolean;
-	/** Hosts modal editors outside an editor region that can be hidden independently. */
+	/** Restricts which tabs can be transferred into an independently routed editor part. */
+	readonly canDropEditor?: (input: IResourceEditorInput) => boolean;
 	/** Whether interactive operations can split the editor into additional groups. */
 	readonly supportsGroupSplitting?: boolean;
+	/** Hosts modal editors outside an editor region that can be hidden independently. */
 	readonly modalContainer?: HTMLElement;
 	/** Waits for resource-owned save recovery before reading dirty state or releasing a pane. */
 	readonly beforeCloseEditor?: (resource: URI) => Promise<boolean>;
@@ -204,6 +206,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly dialogService: IDialogService | undefined;
 	private readonly fileDialogService: IFileDialogService | undefined;
 	private readonly beforeCloseEditor: IEditorPartOptions['beforeCloseEditor'];
+	private readonly canDropEditor: IEditorPartOptions['canDropEditor'];
 	private readonly editorsObserver: EditorsObserver;
 	private readonly openingIdentities = new Map<string | EditorGroupId, AbortController>();
 	private readonly dragOverlays = this._register(new DisposableStore());
@@ -228,6 +231,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.openingIdentities.clear();
 		}));
 		this.beforeCloseEditor = options.beforeCloseEditor;
+		this.canDropEditor = options.canDropEditor;
 		this.titleDomNode.remove();
 		this.supportsGroupSplitting = options.supportsGroupSplitting ?? true;
 		this.domNode.setAttribute('aria-label', localize({ bundle: 'ash.regions', key: 'editor' }, 'Editor'));
@@ -283,9 +287,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.contentDomNode,
 			(target: Node) => this._groups.find(host => host.group.domNode.contains(target))?.group,
 			this.tabDragAndDrop,
+			this.supportsGroupSplitting,
 		));
 		this.modalEditor = this._register(instantiationService.createInstance(ModalEditorPart, {
-			this.supportsGroupSplitting,
 			container: options.modalContainer ?? container,
 			registry: this.groupOptions.registry,
 			resolveOpenError: this.groupOptions.resolveOpenError,
@@ -1187,10 +1191,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			}
 			return;
 		}
-		// Independent editor hosts can have different pane registries. Reject a transfer
-		// the receiving host cannot render before moving or closing its source input.
+		// Reject transfers the receiving host does not own or cannot render before moving the source input.
 		const inputs = source && event.wholeGroup ? [...source.inputs] : event.inputs ?? [event.input];
-		if (!inputs.every(input => this.groupOptions.registry.getEditorPanesForInput(input).length)) return;
+		if (!inputs.every(input => this.canDropEditor?.(input) !== false && this.groupOptions.registry.getEditorPanesForInput(input).length)) return;
 		if (this.groupOptions.editorLimit === 1 && inputs.length > 1) return;
 		if (source && event.splitDirection !== undefined) {
 			if (!event.copy && this.groupOptions.editorLimit === 1 && this.groupHosts.get(source.id)?.group === source) {

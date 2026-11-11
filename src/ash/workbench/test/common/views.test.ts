@@ -1,4 +1,5 @@
 import { Emitter, Event } from '../../../base/common/event.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { ViewsService } from '../../services/views/browser/viewsService.js';
 import { IPaneCompositePartService } from '../../services/panecomposite/browser/panecomposite.js';
 import { ViewDescriptorService } from '../../services/views/browser/viewDescriptorService.js';
@@ -554,4 +555,30 @@ test('editor-hosted Views retain ownership and release focus and listeners in ei
 		assert.equal(views.getViewWithId(view.id), null);
 	}
 	assert.deepEqual([opens, closes, focuses], [2, 2, 2]);
+});
+
+test('opening an editor-hosted view invokes its host before the view exists', async () => {
+	using contexts = new ContextKeyService();
+	using registry = new WorkbenchViewRegistry();
+	using descriptors = new TestViewDescriptorService({ registry }, contexts);
+	const panes = { onDidPaneCompositeOpen: Event.None, onDidPaneCompositeClose: Event.None } as unknown as IPaneCompositePartService;
+	using views = new ViewsService(descriptors, panes, contexts);
+	using mounted = new DisposableStore();
+	let openCount = 0;
+	const descriptor = testView('test.lazy.editor.files', 'Files');
+	const view = {
+		id: descriptor.id, paneTitle: 'Files', onDidFocus: Event.None, onDidBlur: Event.None,
+		onDidChangeBodyVisibility: Event.None, isBodyVisible: () => true, focus() { },
+	} as unknown as Parameters<ViewsService['registerView']>[0];
+	const open = async () => {
+		if (++openCount === 1) mounted.add(views.registerView(view, descriptor, open, () => { }));
+	};
+	using opener = views.registerViewOpener(view.id, open);
+	assert.equal(views.getViewWithId(view.id), null);
+	assert.equal(await views.openView(view.id), view);
+	assert.equal(await views.openView(view.id), view);
+	assert.equal(openCount, 2);
+	mounted.clear();
+	opener.dispose();
+	assert.equal(await views.openView(view.id), null);
 });

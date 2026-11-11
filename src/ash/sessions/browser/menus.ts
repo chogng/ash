@@ -32,6 +32,7 @@ export const Menus = {
 
 export const SessionActivityBarVisibleContext = new RawContextKey<boolean>('sessions.sessionActivityBarVisible', false);
 export const SessionsFlatLayoutContext = new RawContextKey<boolean>('sessions.flatLayout', false);
+export const EditorToolMaximizedContext = new RawContextKey<boolean>('sessions.editorToolMaximized', false);
 
 /** Both menu placements share the tool's command and its availability rules. */
 export function sessionToolMenuItems(item: IMenuItem): { id: MenuId; item: IMenuItem; }[] {

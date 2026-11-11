@@ -180,6 +180,7 @@ import { LanguageService } from '../../editor/common/services/languageService.js
 import { localize, localize2 } from '../../nls.js';
 import { BrowserViewUri } from '../../platform/browserView/common/browserViewUri.js';
 import { IBrowserViewWorkbenchService } from '../../workbench/contrib/browserView/common/browserView.js';
+import { isSearchEditorInput } from '../../workbench/contrib/searchEditor/browser/constants.js';
 import type { EditorWorkingSet } from '../../workbench/services/editor/common/editorWorkingSet.js';
 import { MenusRegistry, MenuId } from '../../platform/actions/common/actions.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
@@ -263,10 +264,9 @@ import { DiffService } from '../../workbench/services/diff/browser/diffService.j
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
-import { DesktopEditorArea } from './parts/desktopEditorArea.js';
+import { DesktopEditorArea, desktopEditorTools, type DesktopEditorTool } from './parts/desktopEditorArea.js';
 import { DesktopEditorParts } from './parts/desktopEditorParts.js';
 import { DesktopToolEditorPart } from './parts/desktopToolEditorPart.js';
-import type { DesktopEditorTool } from './parts/desktopEditorArea.js';
 import { type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
 import { SessionsEntryService } from '../contrib/layout/browser/sessionsEntryService.js';
@@ -1094,12 +1094,14 @@ export abstract class Workbench extends Disposable {
 		const filesScope = createToolScope('files');
 		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, {
 			...editorOptions,
+			canDropEditor: input => !isSearchEditorInput(input),
 			contextKeyService: filesScope.context,
 			modalContainer: this.domNode,
-		}));
+		} satisfies IEditorPartOptions));
 		filesScope.services.registerInstance(IEditorPart, filesEditor);
 		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
-		for (const tool of ['changes', 'browser', 'terminal', 'chat'] as const) {
+		for (const tool of desktopEditorTools) {
+			if (tool === 'files') continue;
 			const scope = createToolScope(tool);
 			const titleActions: IEditorPartOptions['titleActions'] = tool === 'terminal' ? {
 				menuService: menus,
@@ -1110,9 +1112,12 @@ export abstract class Workbench extends Disposable {
 				},
 			} : editorOptions.titleActions;
 			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, {
-				...editorOptions, contextKeyService: scope.context, hideTabs: tool === 'changes',
+				...editorOptions,
+				canDropEditor: input => (tool === 'search') === isSearchEditorInput(input),
+				contextKeyService: scope.context,
+				hideTabs: tool === 'changes',
 				titleActions,
-			}));
+			} satisfies IEditorPartOptions));
 			scope.services.registerInstance(IEditorPart, part);
 			tools.set(tool, part);
 		}

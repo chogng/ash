@@ -111,6 +111,9 @@ pub struct GitCheckIgnoreResult {
 pub struct GitCheckIgnoreCancelParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub client: Option<GitClientOptionsDto>,
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,

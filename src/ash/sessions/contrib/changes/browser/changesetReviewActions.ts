@@ -43,7 +43,7 @@ export class ChangesetReviewAction extends Action2 {
 		if (!change || editors.activePane !== pane || changedResources.has(change.uri.toString())) { return; }
 		const reviewed = !reviewedAtStart.has(change.uri.toString());
 		state.setChangesetFilesReviewState([change.uri], reviewed);
-		if (reviewed) { pane.collapse(resource); } else { pane.expand(resource); }
+		pane.setFileCollapsed(resource, reviewed);
 	}
 }
 

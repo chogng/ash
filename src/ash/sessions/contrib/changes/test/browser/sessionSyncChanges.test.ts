@@ -10,7 +10,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
-import { SessionSyncChangesActionViewItem } from '../../browser/sessionSyncChanges.js';
+import { SessionGitActionsService } from '../../browser/sessionGitActionsService.js';
 
 suite('Session Git actions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -28,7 +28,7 @@ suite('Session Git actions', () => {
 			const started = new DeferredPromise<void>();
 			const calls: unknown[] = [];
 			const errors: string[] = [];
-			services.registerInstance(ISessionsService, { onDidChange: changed.event, get activeSelection() { return { kind: 'session', active: { session: { sessionId, workspace: { authorityId: 'local', root: '/session-worktree' } }, threadId: 'thread' } }; } } as unknown as ISessionsService);
+			services.registerInstance(ISessionsService, { onDidChange: changed.event, get activeSelection() { return { kind: 'session', active: { session: { sessionId, workspace: { authorityId: 'local', root: '/unrelated' }, chats: [{ threadId: 'thread', workspace: { authorityId: 'local', root: '/session-worktree' } }] }, threadId: 'thread' } }; } } as unknown as ISessionsService);
 			services.registerInstance(ICommandService, {
 				executeCommand: async (command: string, ...args: unknown[]) => {
 					if (command === 'git.getRepositoryContexts') {
@@ -40,14 +40,13 @@ suite('Session Git actions', () => {
 			} as unknown as ICommandService);
 			services.registerInstance(IQuickInputService, { createQuickPick: () => { throw new Error('One matching repository needs no picker'); } } as unknown as IQuickInputService);
 			services.registerInstance(INotificationService, { info: () => undefined, error: (message: string) => errors.push(message) } as unknown as INotificationService);
-			const container = document.createElement('div');
-			using actions = services.createInstance(SessionSyncChangesActionViewItem, container);
-			container.querySelector<HTMLButtonElement>('button')!.click();
+			using actions = services.createInstance(SessionGitActionsService);
+			const operation = actions.run('sync');
 			await started.p;
 			if (interrupt === 'selection') { sessionId = 'other'; changed.fire(); }
 			if (interrupt === 'branch') { branch = 'other'; }
 			await pending.complete();
-			await new Promise<void>(resolve => setImmediate(resolve));
+			await operation;
 			assert.deepEqual(calls, interrupt === 'none' ? [['git.pull', 'session-worktree'], ['git.push', 'session-worktree']] : [['git.pull', 'session-worktree']]);
 			assert.deepEqual(errors, interrupt === 'failure' ? ['Pull conflict'] : interrupt === 'branch' ? ['The repository or branch changed. Start the operation again.'] : []);
 		});

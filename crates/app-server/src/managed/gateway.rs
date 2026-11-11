@@ -619,7 +619,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                             raw,
                             move |response| {
                                 output
-                                    .send(tag_resource_response(response, 0).into())
+                                    .send(tag_route_response(response, 0).into())
                                     .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
                             },
                         )?;
@@ -825,7 +825,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     raw,
                     move |response| {
                         output
-                            .send(tag_resource_response(response, 0).into())
+                            .send(tag_route_response(response, 0).into())
                             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
                     },
                 )?;
@@ -900,13 +900,17 @@ fn tag_resource_handles(message: &mut Value, route_id: usize) {
     }
 }
 
-fn tag_resource_response(response: String, route_id: usize) -> String {
-    if !response.contains("\"resourceId\"") {
+fn tag_route_response(response: String, route_id: usize) -> String {
+    let may_tag_git = route_id != 0
+        && (response.contains(crate::server::SESSION_GIT_REPOSITORY_PREFIX)
+            || response.contains(GatewayHandleKind::GitRepository.prefix()));
+    if !may_tag_git && !response.contains("\"resourceId\"") {
         return response;
     }
     let Ok(mut message) = serde_json::from_str::<Value>(&response) else {
         return response;
     };
+    let tagged_git = may_tag_git && tag_session_git_handles(&mut message, route_id);
     // Call/dictation results also use resourceId, but do not expose byte metadata.
     if message.pointer("/result/sha256").is_some()
         || message.pointer("/result/dataBase64").is_some()
@@ -922,6 +926,8 @@ fn tag_resource_response(response: String, route_id: usize) -> String {
     {
         tag_resource_handles(&mut message, route_id);
         message.to_string()
+    } else if tagged_git {
+        message.to_string()
     } else {
         response
     }
@@ -933,6 +939,7 @@ fn tag_resource_response(response: String, route_id: usize) -> String {
 enum GatewayHandleKind {
     Resource,
     DocumentRead,
+    GitRepository,
 }
 
 impl GatewayHandleKind {
@@ -940,6 +947,7 @@ impl GatewayHandleKind {
         match self {
             Self::Resource => "gateway-resource:",
             Self::DocumentRead => "gateway-document:",
+            Self::GitRepository => "gateway-git:",
         }
     }
 
@@ -947,6 +955,7 @@ impl GatewayHandleKind {
         match self {
             Self::Resource => "/params/resourceId",
             Self::DocumentRead => "/params/readAccess",
+            Self::GitRepository => "/params/repositoryId",
         }
     }
 
@@ -956,10 +965,17 @@ impl GatewayHandleKind {
 
     fn decode(self, value: &str) -> Option<(usize, &str)> {
         let (route, inner) = value.strip_prefix(self.prefix())?.split_once(':')?;
-        if inner.is_empty() {
+        if inner.is_empty()
+            || matches!(self, Self::GitRepository) && !self.is_session_git_handle(inner)
+        {
             return None;
         }
         Some((route.parse().ok()?, inner))
+    }
+
+    fn is_session_git_handle(self, value: &str) -> bool {
+        value.starts_with(crate::server::SESSION_GIT_REPOSITORY_PREFIX)
+            || value.starts_with(Self::GitRepository.prefix())
     }
 
     fn for_request(request: &Value) -> Option<Self> {
@@ -968,6 +984,15 @@ impl GatewayHandleKind {
                 Some(Self::DocumentRead)
             }
             "resource/metadata" | "resource/read" | "resource/release" => Some(Self::Resource),
+            method
+                if method.starts_with("git/")
+                    && request
+                        .pointer(Self::GitRepository.field())?
+                        .as_str()?
+                        .starts_with(Self::GitRepository.prefix()) =>
+            {
+                Some(Self::GitRepository)
+            }
             _ => None,
         }
     }
@@ -976,6 +1001,7 @@ impl GatewayHandleKind {
         let (code, name) = match self {
             Self::Resource => (-32000, AppServerErrorName::ResourceNotOwner),
             Self::DocumentRead => (-32041, AppServerErrorName::FileSystemOperationFailed),
+            Self::GitRepository => (-32602, AppServerErrorName::GitRepositoryNotFound),
         };
         serde_json::to_string(&JsonRpcFailure::new(
             serde_json::from_value(id).expect("gateway validated request ID"),
@@ -983,6 +1009,43 @@ impl GatewayHandleKind {
         ))
         .expect("valid handle owner error")
     }
+}
+
+// Git repositories discovered in a Session's directory runtime are connection-owned.
+fn tag_session_git_handles(message: &mut Value, route_id: usize) -> bool {
+    let kind = GatewayHandleKind::GitRepository;
+    let mut changed = false;
+    let mut tag = |id: &mut Value| {
+        if let Some(value) = id.as_str()
+            && kind.is_session_git_handle(value)
+        {
+            *id = Value::String(kind.encode(route_id, value));
+            changed = true;
+        }
+    };
+    for pointer in [
+        "/result/repositoryId",
+        "/result/status/repositoryId",
+        "/params/status/repositoryId",
+        "/params/repositoryId",
+    ] {
+        if let Some(id) = message.pointer_mut(pointer) {
+            tag(id);
+        }
+    }
+    for (pointer, field) in [
+        ("/result/repositories", "id"),
+        ("/result/statuses", "repositoryId"),
+    ] {
+        if let Some(entries) = message.pointer_mut(pointer).and_then(Value::as_array_mut) {
+            for entry in entries {
+                if let Some(id) = entry.get_mut(field) {
+                    tag(id);
+                }
+            }
+        }
+    }
+    changed
 }
 
 fn remote_key(profile: &RemoteProfile) -> RemoteKey {
@@ -1043,7 +1106,7 @@ fn read_remote_messages(
         let output = if message.get("method").is_some() {
             tag_host_request(message.to_string(), route_id)
         } else {
-            tag_resource_response(message.to_string(), route_id)
+            tag_route_response(message.to_string(), route_id)
         };
         if outbound.send(output.into()).is_err() {
             break;
@@ -1245,6 +1308,15 @@ fn tag_host_request(raw: String, route_id: usize) -> String {
     let Ok(mut message) = serde_json::from_str::<Value>(&raw) else {
         return raw;
     };
+    if route_id != 0
+        && matches!(
+            message["method"].as_str(),
+            Some("git/statusChanged" | "git/ignoreChanged")
+        )
+        && tag_session_git_handles(&mut message, route_id)
+    {
+        return message.to_string();
+    }
     if message.get("method").is_some() {
         if let Some(id) = message.get("id").and_then(Value::as_str) {
             let tagged = format!("browser-host:gateway:{route_id}:{id}");
@@ -1316,20 +1388,16 @@ fn selected_execution_target(
         // Malformed requests still reach the typed filesystem boundary for InvalidParams.
         return Ok(None);
     }
-    let terminal_directory = if method
-        .is_some_and(|method| method.starts_with("terminal/") || method.starts_with("fs/"))
-    {
-        AppServer::terminal_session_directory(
-            request
-                .get("params")
-                .and_then(|params| params.get("dirId"))
-                .and_then(Value::as_str),
-        )?
-    } else {
-        None
+    let folder_id = match method {
+        Some("git/repositories") => request.pointer("/params/folders/0/dirId"),
+        Some(method) if method.starts_with("terminal/") || method.starts_with("fs/") => {
+            request.pointer("/params/dirId")
+        }
+        _ => None,
     };
-    let terminal_session =
-        terminal_directory.map(|(session, _)| Value::String(session.to_string()));
+    let folder_session =
+        AppServer::session_directory_from_workspace_id(folder_id.and_then(Value::as_str))?
+            .map(|(session, _)| Value::String(session.to_string()));
     let params = request.get("params");
     if method.is_some_and(|method| method.starts_with("browser/tcp/")) {
         return serde_json::from_value(
@@ -1405,7 +1473,7 @@ fn selected_execution_target(
                         .and_then(|directory| directory.get("sessionId"))
                 })
             })
-            .or(terminal_session.as_ref()),
+            .or(folder_session.as_ref()),
     };
     if let Some(session_id) = session_selector.and_then(Value::as_str) {
         let local_id = SessionId::new(session_id.to_owned()).map_err(|error| error.to_string())?;

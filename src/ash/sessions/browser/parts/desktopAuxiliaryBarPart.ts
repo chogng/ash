@@ -16,8 +16,8 @@ import './media/desktopAuxiliaryBarPart.css';
 /** A retained, title-free Auxiliary Bar docked and sized by its EditorPart. */
 export class DesktopAuxiliaryBarPart extends AuxiliaryBarPart {
 	private readonly factories = new Map<string, () => void>();
-	private readonly requestVisibility = this._register(new Emitter<boolean>());
-	public readonly onDidRequestVisibility = this.requestVisibility.event;
+	private readonly requestClose = this._register(new Emitter<void>());
+	public readonly onDidRequestClose = this.requestClose.event;
 
 	constructor(
 		container: HTMLElement,
@@ -36,14 +36,15 @@ export class DesktopAuxiliaryBarPart extends AuxiliaryBarPart {
 		this.domNode.classList.add('ash-desktop-auxiliarybar');
 	}
 
-	public override get minimumWidth(): number { return 160; }
+	public override get minimumWidth(): number { return 220; }
 
 	/** Contributions supply ordinary views; this Part owns their composites and window-command registration. */
-	public registerViewContainer(container: IViewContainerDescriptor, descriptors: readonly IViewDescriptor[]): IDisposable {
+	public registerViewContainer(container: IViewContainerDescriptor, descriptors: readonly IViewDescriptor[], open: () => Promise<void>): IDisposable {
 		const registration = new DisposableStore();
 		try {
 			registration.add(this.registry.registerViewContainer(container));
 			registration.add(this.registry.registerViews(container.id, descriptors));
+			for (const descriptor of descriptors) registration.add(this.views.registerViewOpener(descriptor.id, open));
 			this.factories.set(container.id, () => {
 				const composite = this.services.createInstance(PaneComposite, this.domNode, {
 					viewContainer: container, model: this.descriptors.getViewContainerModel(container.id),
@@ -52,11 +53,7 @@ export class DesktopAuxiliaryBarPart extends AuxiliaryBarPart {
 				this.addComposite(composite);
 				for (const pane of composite.panes) {
 					const descriptor = descriptors.find(view => view.id === pane.id)!;
-					registration.add(this.views.registerView(pane, descriptor, async () => {
-						this.showComposite(container.id);
-						this.requestVisibility.fire(true);
-						pane.focus();
-					}, () => this.requestVisibility.fire(false)));
+					registration.add(this.views.registerView(pane, descriptor, open, () => this.requestClose.fire()));
 				}
 			});
 			registration.add(toDisposable(() => {

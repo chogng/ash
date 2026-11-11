@@ -5,7 +5,6 @@ import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import { extUri } from '../../../../base/common/resources.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { IDecorationsService } from '../../../../workbench/services/decorations/common/decorations.js';
@@ -13,7 +12,7 @@ import { IEditorService, type EditorOpenTarget } from '../../../../workbench/ser
 import { IEditorGroupsService, type IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import {
-	createSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus,
+	createSessionFileChange, matchesSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus,
 	type ISessionChangeset,
 } from '../../../services/sessions/common/session.js';
 import { createTurnCommitPreviewInput } from '../../../browser/turnMultiDiffSource.js';
@@ -94,7 +93,7 @@ export class SessionChangesService extends Disposable implements ISessionChanges
 				scopes: [SessionChangesetOperationScope.Changeset, SessionChangesetOperationScope.Resource], status,
 			}]),
 			invokeOperation: async (operationId, target) => {
-				const files = remaining.filter(change => !target || [change.uri, change.originalUri, change.modifiedUri].some(resource => extUri.isEqual(resource, target.resource)));
+				const files = target ? remaining.filter(change => matchesSessionFileChange(change, target.resource)) : remaining;
 				if (this.isDisposed || operationId !== 'preview' || status === SessionChangesetOperationStatus.Disabled || status === SessionChangesetOperationStatus.Running || !files.length) {
 					throw new Error(localize('sessions.changes.noSelection', 'Select sealed file changes that have not been committed.'));
 				}

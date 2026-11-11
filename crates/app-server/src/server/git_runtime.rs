@@ -82,6 +82,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
 
+pub(crate) const SESSION_GIT_REPOSITORY_PREFIX: &str = "session_repo_";
+
 const GIT_WATCH_INTERVAL: Duration = Duration::from_millis(100);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -93,6 +95,44 @@ pub(crate) struct GitRuntime {
     discovery_interests: Mutex<HashMap<u64, Vec<GitDiscoveryOptions>>>,
     registry: RwLock<GitRepositoryRegistry>,
     registry_changed: tokio::sync::watch::Sender<()>,
+}
+
+pub(super) struct SessionGitScope {
+    pub(super) folder_id: String,
+    pub(super) authorization: Authorization,
+    pub(super) watch_authorization: Option<Authorization>,
+    pub(super) runtime: Arc<GitRuntime>,
+    pub(super) _watcher: GitWatcher,
+}
+
+impl std::fmt::Debug for SessionGitScope {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SessionGitScope")
+            .finish_non_exhaustive()
+    }
+}
+
+impl SessionGitScope {
+    pub(super) fn matches(
+        &self,
+        folder_id: &str,
+        authorization: &Authorization,
+        watch_authorization: Option<&Authorization>,
+    ) -> bool {
+        self.folder_id == folder_id
+            && self.authorization.dir() == authorization.dir()
+            && self.authorization.subject() == authorization.subject()
+            && self.authorization.permission() == authorization.permission()
+            && self.authorization.is_active()
+            && match (&self.watch_authorization, watch_authorization) {
+                (None, None) => true,
+                (Some(previous), Some(current)) => {
+                    previous.dir() == current.dir() && previous.is_active()
+                }
+                _ => false,
+            }
+    }
 }
 
 /// Ephemeral query preferences; the frontend configuration service owns persisted values.
@@ -3529,8 +3569,15 @@ fn repository_descriptor(
     } else {
         path.as_bytes()
     });
-    let digest = Sha256::digest(identity);
-    let id = format!("repo_{:x}", digest);
+    let prefix = if let Some(folder_id) = dir_id.as_deref().filter(|id| id.starts_with("session:"))
+    {
+        identity.push(0);
+        identity.extend_from_slice(folder_id.as_bytes());
+        SESSION_GIT_REPOSITORY_PREFIX
+    } else {
+        "repo_"
+    };
+    let id = format!("{prefix}{:x}", Sha256::digest(identity));
     Ok(GitRepositoryDto {
         parent_path: None,
         id,

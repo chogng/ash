@@ -78,6 +78,13 @@ import { createDisconnectedRendererApi } from '../../../../../../workbench/brows
 import type { IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { CustomViewService, ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
+import { SessionInfoRail } from '../../../../../browser/parts/sessionInfoRail.js';
+import type { ChatWidgetModel } from '../../../../../browser/chatWidgetModel.js';
+import { SessionEnvironmentActions } from '../../../../chat/browser/sessionEnvironmentActions.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../../browser/sessionGitActionsService.js';
+import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../../../workbench/services/configuration/test/common/testServices.js';
+import { ISCMService } from '../../../../../../workbench/contrib/scm/common/scm.js';
 
 const chineseMessages = { ash: { ...chinese.ash, ...chineseWorkbench.ash } };
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseMessages); }
@@ -92,6 +99,7 @@ services.registerSingleton(IDecorationsService, () => services.createInstance(De
 services.registerSingleton(IChangesViewService, () => resources.add(services.createInstance(ChangesViewService)));
 services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
 services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
+services.registerSingleton(ISessionGitActionsService, () => services.createInstance(SessionGitActionsService));
 services.registerInstance(ISessionsManagementService, {
 	get onDidChange() { return changed.event; },
 	get active() {
@@ -322,9 +330,32 @@ const counterHost = document.createElement('div');
 counterHost.id = 'counter';
 document.body.append(counterHost);
 
+let rail: SessionInfoRail | undefined;
+function openSessionRail(): void {
+	if (!rail) {
+		const railServices = resources.add(services.createChild());
+		railServices.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'rail', folders: [] })));
+		railServices.registerInstance(ISCMService, { repositories: [], onDidAddRepository: Event.None, onDidRemoveRepository: Event.None } as unknown as ISCMService);
+		const model = {
+			onDidChange: changed.event, inputState: {},
+			get selectedSession() { return services.get(ISessionsService).activeSelection; },
+		} as unknown as ChatWidgetModel;
+		const host = document.createElement('div');
+		host.style.cssText = 'position:fixed; inset:0 0 0 auto; width:min(100vw, 500px); pointer-events:none;';
+		document.body.append(host);
+		rail = resources.add(railServices.createInstance(SessionInfoRail, host, model, () => { },
+			(container: HTMLElement) => railServices.createInstance(SessionEnvironmentActions, container, model)));
+		rail.element.style.pointerEvents = 'auto';
+		rail.setVisible(true);
+	}
+	if (!rail.visible) rail.toggle();
+}
+
 declare global {
 	interface Window {
 		ashChangesIntegration: {
+			openSessionRail(): void;
+			closeSessionRail(): void;
 			counter(value: number | undefined, direction?: IAnimatedCounterWidgetOptions['direction'], duration?: number): void;
 			updateCounter(value: number | undefined): void;
 			disposeCounter(): void;
@@ -371,6 +402,8 @@ declare global {
 	}
 }
 window.ashChangesIntegration = {
+	openSessionRail,
+	closeSessionRail: () => { if (rail?.visible) rail.toggle(); },
 	counter: (value, direction, duration) => {
 		counterOwner.clear();
 		counterValue.set(value);
@@ -402,7 +435,7 @@ window.ashChangesIntegration = {
 		reviewServices.registerSingleton(IDiffService, () => reviewServices!.createInstance(DiffService));
 		reviewServices.registerInstance(IDialogService, { error: async (message: string) => { throw new Error(message); } } as unknown as IDialogService);
 		reviewServices.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: reviewServices })));
-		const changes = resources.add(reviewServices.createInstance(SessionChangesEditor, { instantiationService: reviewServices }));
+		const changes = resources.add(reviewServices.createInstance(SessionChangesEditor, {}));
 		changes.create(changesHost);
 		changes.setVisible(true);
 		changes.layout({ width: 390, height: 550 });

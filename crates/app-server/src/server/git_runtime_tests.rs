@@ -3374,30 +3374,22 @@ fn sync_tag_conflicts_are_structured_and_replacement_is_explicit() {
     .with_ephemeral_env_state()
     .with_git_root(mutation_authorization(target.root()))
     .unwrap();
+    let connection = crate::ConnectionState::default();
+    let git = server.git_processor(&connection, None, None);
     let cancellation = ash_async_utils::CancellationSource::new();
-    let head = server
-        .git_processor()
-        .git_status(&serde_json::json!({}))
-        .unwrap()["head"]
-        .clone();
+    let head = git.git_status(&serde_json::json!({})).unwrap()["head"].clone();
     let mut request = serde_json::json!({"operationId":"tag-conflict","repositoryId":null,
         "transport":ash_app_server_protocol::protocol::git::GitTransportOptionsDto::default(),
         "operation":{"kind":"pull","mode":"configured","expectedHead":head}});
     request["transport"]["pullTags"] = serde_json::json!(true);
-    let conflict = server
-        .git_processor()
-        .git_transport(&request, &cancellation.token())
-        .unwrap();
+    let conflict = git.git_transport(&request, &cancellation.token()).unwrap();
     assert_eq!(
         conflict["outcome"],
         serde_json::json!({"kind":"tagConflict","tags":["release"]})
     );
     assert_eq!(conflict["status"]["head"]["objectId"], before);
     request["transport"]["replaceTags"] = serde_json::json!(true);
-    let completed = server
-        .git_processor()
-        .git_transport(&request, &cancellation.token())
-        .unwrap();
+    let completed = git.git_transport(&request, &cancellation.token()).unwrap();
     assert_eq!(
         completed["outcome"],
         serde_json::json!({"kind":"completed"})
@@ -3414,10 +3406,7 @@ fn sync_tag_conflicts_are_structured_and_replacement_is_explicit() {
     request["operation"]["expectedHead"] = completed["status"]["head"].clone();
     request["transport"]["pullTags"] = serde_json::json!(false);
     request["transport"]["replaceTags"] = serde_json::json!(false);
-    server
-        .git_processor()
-        .git_transport(&request, &cancellation.token())
-        .unwrap();
+    git.git_transport(&request, &cancellation.token()).unwrap();
     assert_eq!(
         target.git_output(&["rev-parse", "implicit"]),
         source.git_output(&["rev-parse", "implicit"])
@@ -3452,20 +3441,19 @@ fn git_version_reports_an_unsupported_installation_and_operations_require_an_upg
     .with_ephemeral_env_state()
     .with_git_root(mutation_authorization(repository.root()))
     .unwrap();
-    let version = crate::git_service::with_client(client.clone(), || {
-        server.git_processor().git_version(&serde_json::json!({}))
-    })
-    .unwrap();
+    let connection = crate::ConnectionState::default();
+    let git = server.git_processor(&connection, None, None);
+    let version =
+        crate::git_service::with_client(client.clone(), || git.git_version(&serde_json::json!({})))
+            .unwrap();
     assert_eq!(
         version["installation"],
         serde_json::json!({
             "kind":"unsupported", "version":"git version 2.39.9", "minimumVersion":"2.40.0"
         })
     );
-    let error = crate::git_service::with_client(client, || {
-        server.git_processor().git_status(&serde_json::json!({}))
-    })
-    .unwrap_err();
+    let error = crate::git_service::with_client(client, || git.git_status(&serde_json::json!({})))
+        .unwrap_err();
     assert!(
         error.to_string().contains("requires Git 2.40.0 or newer"),
         "{error}"
@@ -3492,11 +3480,9 @@ fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking()
     .with_ephemeral_env_state()
     .with_git_root(mutation_authorization(target.root()))
     .unwrap();
-    let head = server
-        .git_processor()
-        .git_status(&serde_json::json!({}))
-        .unwrap()["head"]
-        .clone();
+    let connection = crate::ConnectionState::default();
+    let git = server.git_processor(&connection, None, None);
+    let head = git.git_status(&serde_json::json!({})).unwrap()["head"].clone();
     let before = target.git_output(&["rev-parse", "HEAD"]);
     source.write("remote.txt", "upstream update\n");
     source.git(&["add", "."]);
@@ -3508,18 +3494,10 @@ fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking()
         "operation":{"kind":"pull","mode":"configured","expectedHead":head}
     });
     target.git(&["config", "branch.main.merge", "refs/heads/other"]);
-    assert!(
-        server
-            .git_processor()
-            .git_transport(&request, &cancellation.token())
-            .is_err()
-    );
+    assert!(git.git_transport(&request, &cancellation.token()).is_err());
     assert_eq!(target.git_output(&["rev-parse", "HEAD"]), before);
     target.git(&["config", "branch.main.merge", "refs/heads/main"]);
-    let pulled = server
-        .git_processor()
-        .git_transport(&request, &cancellation.token())
-        .unwrap();
+    let pulled = git.git_transport(&request, &cancellation.token()).unwrap();
     assert_eq!(
         pulled["status"]["head"]["objectId"],
         source.git_output(&["rev-parse", "HEAD"])
@@ -3531,12 +3509,7 @@ fn reviewed_sync_pull_reaches_the_explicit_target_and_rejects_changed_tracking()
 
     let mut invalid = request;
     invalid["operation"]["expectedHead"] = serde_json::json!({"type":"detached","objectId":before});
-    assert!(
-        server
-            .git_processor()
-            .git_transport(&invalid, &cancellation.token())
-            .is_err()
-    );
+    assert!(git.git_transport(&invalid, &cancellation.token()).is_err());
 }
 
 #[test]
@@ -3558,6 +3531,8 @@ fn pull_sync_reads_the_current_shared_preference_without_changing_plain_pull() {
     .with_config_store(config)
     .with_git_root(mutation_authorization(target.root()))
     .unwrap();
+    let connection = crate::ConnectionState::default();
+    let git = server.git_processor(&connection, None, None);
     let cancellation = ash_async_utils::CancellationSource::new();
     for (index, (mode, rebase_when_sync, merge)) in [
         ("sync", false, true),
@@ -3587,8 +3562,7 @@ fn pull_sync_reads_the_current_shared_preference_without_changing_plain_pull() {
         target.git(&["add", "."]);
         target.git(&["commit", "-m", "local divergence"]);
         let old_head = target.git_output(&["rev-parse", "HEAD"]);
-        let response = server
-            .git_processor()
+        let response = git
             .git_pull(&serde_json::json!({"mode":mode}), &cancellation.token())
             .unwrap();
         assert_eq!(response["status"]["head"]["type"], "branch");

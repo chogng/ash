@@ -19,11 +19,13 @@ interface DockedAuxiliaryBarLayout {
 	readonly minimumEditorWidth: number;
 	readonly editorVisible: boolean;
 	readonly hideWhenConstrained?: boolean;
+	readonly collapse?: () => void;
 }
 
 /** Positions a retained AuxiliaryBarPart below the editor tabs and owns its resize sash. */
 export class DockedAuxiliaryBarController extends Disposable {
 	static readonly MIN_WIDTH = 220;
+	private static readonly COLLAPSE_WIDTH = 4;
 
 	private readonly sash: Sash;
 	private width = 0;
@@ -31,6 +33,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 	private top = 0;
 	private height = 0;
 	private layingOut = false;
+	private collapse: (() => void) | undefined;
 
 	constructor(private readonly editor: HTMLElement, private readonly host: IDockedAuxiliaryBarHost) {
 		super();
@@ -41,9 +44,24 @@ export class DockedAuxiliaryBarController extends Disposable {
 		}, { orientation: Orientation.VERTICAL }));
 		this.sash.state = SashState.Disabled;
 		let startWidth = 0;
-		this._register(this.sash.onDidStart(() => { startWidth = this.width; }));
-		this._register(this.sash.onDidChange(event => this.host.setWidth(startWidth + event.startX - event.currentX)));
-		this._register(this.sash.onDidEnd(() => this.host.commitWidth(this.width)));
+		let collapsed = false;
+		this._register(this.sash.onDidStart(() => {
+			startWidth = this.width;
+			collapsed = false;
+		}));
+		this._register(this.sash.onDidChange(event => {
+			if (collapsed) return;
+			const requestedWidth = startWidth + event.startX - event.currentX;
+			if (this.collapse && requestedWidth < DockedAuxiliaryBarController.COLLAPSE_WIDTH) {
+				collapsed = true;
+				this.collapse();
+			} else {
+				this.host.setWidth(requestedWidth);
+			}
+		}));
+		this._register(this.sash.onDidEnd(() => {
+			if (!collapsed && this.width > 0) this.host.commitWidth(this.width);
+		}));
 		this._register(this.sash.onDidReset(() => this.host.resetWidth()));
 	}
 
@@ -66,6 +84,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 		this.layingOut = true;
 		try {
 			const { part, requestedWidth, editorVisible, minimumWidth, minimumEditorWidth, hideWhenConstrained } = options;
+			this.collapse = options.collapse;
 			this.editorWidth = dimension.width;
 			this.top = this.host.getTabsHeight();
 			this.height = Math.max(0, dimension.height - this.top);

@@ -15,16 +15,18 @@ import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesService } from './sessionChangesService.js';
 import { IChecksOperationService } from '../common/checksOperationService.js';
 import { ChecksOperationService } from './checksOperationService.js';
+import { ISessionGitActionsService, SessionGitActionsService } from './sessionGitActionsService.js';
 
 registerSingleton(IChangesViewService, ChangesViewService, InstantiationType.Delayed);
 registerSingleton(ISessionChangesService, SessionChangesService, InstantiationType.Delayed);
 registerSingleton(IChecksOperationService, ChecksOperationService, InstantiationType.Delayed);
+registerSingleton(ISessionGitActionsService, SessionGitActionsService, InstantiationType.Delayed);
 
 registerEditorPane({
 	id: SessionChangesEditor.ID,
 	name: 'Changes',
 	canOpen: input => input.resource.scheme === 'ash-session-changes' ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => options.instantiationService!.createInstance(SessionChangesEditor, { ...options, showChangesView: true }),
+	create: options => options.instantiationService!.createInstance(SessionChangesEditor, { showChangesView: true }),
 });
 
 for (const provider of getSessionsChangesAccessibilityProviders()) {

@@ -1323,6 +1323,16 @@ suite('sessions browser component', () => {
 		await expect(filesHeader).toBeVisible();
 		await expect(toolHeaders.locator('[data-editor-tool="changes"]')).toHaveCount(0);
 		const filesPane = editor.locator('[data-editor-tool="files"] > .ash-workbench-part-frame > [data-part="tool-editor"]');
+		const filesDetails = filesHeader.locator('[data-action-id="ash.sessions.toggleDetails"] button');
+		const changesFiles = changesHeader.locator('[data-action-id="ash.sessions.toggleChangesFileList"] button');
+		await expect(filesDetails).toHaveAttribute('aria-pressed', 'true');
+		await expect(changesFiles).toHaveAttribute('aria-pressed', 'true');
+		await changesFiles.click();
+		await expect(changesFiles).toHaveAttribute('aria-pressed', 'false');
+		await expect(filesPane).toBeVisible();
+		await expect(filesDetails).toHaveAttribute('aria-pressed', 'true');
+		await changesFiles.click();
+		await expect(changesFiles).toHaveAttribute('aria-pressed', 'true');
 		const filesBounds = (await filesPane.boundingBox())!;
 		const changesBounds = (await changesPane.boundingBox())!;
 		expect(changesBounds.x).toBeCloseTo(filesBounds.x, 0);

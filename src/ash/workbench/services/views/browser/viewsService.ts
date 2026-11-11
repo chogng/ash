@@ -12,8 +12,15 @@ import type { IProgressIndicator } from '../../../../platform/progress/common/pr
 
 /** Descriptors own view identity, Parts own instances, and this service observes their runtime visibility and focus. */
 export class ViewsService extends Disposable implements IViewsService {
+	private readonly viewOpeners = new Map<string, () => Promise<void>>();
 	private readonly editorViews = new Map<string, { readonly view: IView; readonly descriptor: IViewDescriptor; readonly open: () => Promise<void>; readonly close: () => void; }>();
 	private readonly editorViewListeners = this._register(new DisposableMap<string, DisposableStore>());
+
+	public registerViewOpener(id: string, open: () => Promise<void>): IDisposable {
+		if (this.viewOpeners.has(id)) throw new Error(`View opener is already registered: ${id}`);
+		this.viewOpeners.set(id, open);
+		return toDisposable(() => this.viewOpeners.delete(id));
+	}
 
 	public registerView(view: IView & { readonly onDidFocus: Event<void>; readonly onDidBlur: Event<void>; readonly onDidChangeBodyVisibility: Event<boolean>; }, descriptor: IViewDescriptor, open: () => Promise<void>, close: () => void): IDisposable {
 		if (this.editorViews.has(view.id)) throw new Error(`View is already hosted: ${view.id}`);
@@ -50,6 +57,7 @@ export class ViewsService extends Disposable implements IViewsService {
 			this.focusedViewContext.reset();
 			this.containers.clear();
 			this.editorViews.clear();
+			this.viewOpeners.clear();
 			this.visibleViews.clear();
 		}));
 		this._register(this.panes.onDidPaneCompositeOpen(({ composite, viewContainerLocation }) => {
@@ -123,6 +131,13 @@ export class ViewsService extends Disposable implements IViewsService {
 	}
 
 	public async openView<T extends IView>(id: string, focus = false): Promise<T | null> {
+		const open = this.viewOpeners.get(id);
+		if (open) {
+			await open();
+			const view = this.getViewWithId<T>(id);
+			if (focus) view?.focus();
+			return view;
+		}
 		const embedded = this.editorViews.get(id);
 		if (embedded) { await embedded.open(); if (focus) embedded.view.focus(); return embedded.view as T; }
 		const container = this.descriptors.getViewContainerForView(id);

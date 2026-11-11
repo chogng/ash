@@ -8,7 +8,7 @@ import {
 import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { addDisposableListener, h } from '../../../base/browser/dom.js';
 import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { autorun } from '../../../base/common/observable.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
@@ -25,6 +25,13 @@ import './media/sessionInfoRail.css';
 
 const pinnedKey = 'sessions.code.infoPinned';
 
+interface ISessionInfoRailActions extends IDisposable {
+	readonly hasOpenPopup: boolean;
+	setVisible(visible: boolean): void;
+	getAccessibleContent(): string;
+	getAccessibleHelp(): string;
+}
+
 /** Reads the retained chat model. Only presentation preferences belong to this rail. */
 export class SessionInfoRail extends Disposable {
 	readonly element: HTMLElement;
@@ -33,12 +40,14 @@ export class SessionInfoRail extends Disposable {
 	private readonly repositories = this._register(new DisposableStore());
 	private readonly interaction = this._register(new DisposableStore());
 	private readonly environment: HTMLElement;
+	private readonly environmentActions: ISessionInfoRailActions;
 	private readonly context: HTMLElement;
 	private readonly summary: HTMLElement;
 	private readonly contextValue: HTMLElement;
 	private readonly usage: HTMLProgressElement;
 	private fits = false;
 	private popup = false;
+	private conversationVisible = false;
 	private returnFocus: HTMLElement | undefined;
 	private returnActionId: string | undefined;
 	private readonly closeButton: HTMLButtonElement;
@@ -47,6 +56,7 @@ export class SessionInfoRail extends Disposable {
 		private readonly host: HTMLElement,
 		private readonly model: ChatWidgetModel,
 		private readonly focusChat: () => void,
+		createEnvironmentActions: (container: HTMLElement) => ISessionInfoRailActions,
 		@IStorageService private readonly storage: IStorageService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ISCMService private readonly scm: ISCMService,
@@ -63,7 +73,12 @@ export class SessionInfoRail extends Disposable {
 		this.closeButton.setAttribute('aria-label', this.closeButton.title);
 		appendIcon(Lxicon.close, this.closeButton);
 		this.element.append(this.closeButton);
-		this.environment = this.section('environment', localize('sessions.info.environment', 'Environment'));
+		const environment = this.section('environment', localize('sessions.info.environment', 'Environment'));
+		this.environment = h(document, 'div');
+		environment.append(this.environment);
+		const actions = h(document, 'div', { className: 'ash-session-info-environment-actions' });
+		environment.append(actions);
+		this.environmentActions = this._register(createEnvironmentActions(actions));
 		this.context = this.section('context', localize('sessions.info.context', 'Context'));
 		this.contextValue = h(document, 'span');
 		this.contextValue.className = 'ash-session-info-value';
@@ -126,9 +141,9 @@ export class SessionInfoRail extends Disposable {
 								type === AccessibleViewType.Help
 									? localize(
 										'sessions.info.help',
-										"The Code toolbar toggles Terminal, Files and session information. Tool editors share one editor group layout. Drag a tab or group title to arrange tools; separators resize groups. With a header action focused, Alt+Shift+Arrow moves the group. Hiding a terminal retains its process. Enter or Space expands Environment and Context. Escape closes floating information and returns focus. Context shows estimated input against the automatic compaction budget; the unsent draft is excluded.",
-									)
-									: this.environment.textContent + '\n' + this.summary.textContent,
+										"The Code toolbar toggles Terminal, Files and session information. Tool editors share one editor group layout. Drag a tab or group title to arrange tools; separators resize groups. With a header action focused, Alt+Shift+Arrow moves the group. Hiding a terminal retains its process. Enter or Space expands Environment and Context. In Environment, Git branch actions includes Sync changes and Publish branch. Create pull request opens the form for this conversation. Escape closes floating information and returns focus. Context shows estimated input against the automatic compaction budget; the unsent draft is excluded.",
+									) + '\n' + this.environmentActions.getAccessibleHelp()
+									: [this.environment.textContent, this.environmentActions.getAccessibleContent(), this.summary.textContent].filter(Boolean).join('\n'),
 							() => (focused.isConnected ? focused.focus() : this.focusChat()),
 							AccessibilityVerbositySettingId.Chat,
 						);
@@ -142,10 +157,11 @@ export class SessionInfoRail extends Disposable {
 	}
 
 	setVisible(visible: boolean): void {
+		this.conversationVisible = visible;
 		if (!visible && this.popup) {
 			this.popup = false;
 			this.renderVisibility();
-		}
+		} else { this.environmentActions.setVisible(visible && this.visible); }
 	}
 
 	toggle(): void {
@@ -183,6 +199,7 @@ export class SessionInfoRail extends Disposable {
 				event => {
 					if (
 						this.popup &&
+						!this.environmentActions.hasOpenPopup &&
 						event.target instanceof document.defaultView!.Node &&
 						!this.element.contains(event.target) &&
 						!this.focusTarget()?.contains(event.target)
@@ -197,7 +214,7 @@ export class SessionInfoRail extends Disposable {
 				document,
 				'keydown',
 				event => {
-					if (event.key === 'Escape' && this.popup) {
+					if (event.key === 'Escape' && this.popup && !this.environmentActions.hasOpenPopup) {
 						event.preventDefault();
 						event.stopPropagation();
 						this.close(true);
@@ -222,6 +239,7 @@ export class SessionInfoRail extends Disposable {
 	private renderVisibility(restoreFocus = true): void {
 		const hadFocus = this.element.contains(this.host.ownerDocument.activeElement);
 		this.element.hidden = !this.visible;
+		this.environmentActions.setVisible(this.visible && this.conversationVisible);
 		if (!this.visible) this.interaction.clear();
 		this.element.classList.toggle('floating', !this.fits);
 		this.host.classList.toggle('info-docked', this.visible && this.fits);

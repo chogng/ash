@@ -264,6 +264,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			const configuration = this.configurationService;
 			const settings = [
 				EditorEnablePreviewConfiguration,
+				'editor.wordWrap',
 				'diffEditor.hideUnchangedRegions.enabled',
 				'diffEditor.renderSideBySide',
 				'diffEditor.useInlineViewWhenSpaceIsLimited',
@@ -272,7 +273,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			// The menu state follows configuration, including Settings and restored values.
 			const update = (): void => context.bufferChangeEvents(() => {
 				for (const setting of settings) {
-					context.setContext(`config.${setting}`, configuration.getValue<boolean>(setting));
+					context.setContext(`config.${setting}`, configuration.getValue(setting));
 				}
 				if (configuration.getValue<boolean>(EditorEnablePreviewConfiguration) === false) {
 					for (const input of this.inputs) this.pinEditor(input);

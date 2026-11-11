@@ -25,9 +25,7 @@ import { observableValue } from '../../../../base/common/observable.js';
 import { ChangesSummaryWidget } from './changesSummaryWidget.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ChecksWidget } from './checksWidget.js';
-import { SessionSyncChangesActionViewItem } from './sessionSyncChanges.js';
-import { CreatePullRequestContextView } from './createPullRequestContextView.js';
+import { ISessionGitActionsService } from './sessionGitActionsService.js';
 import { IChangesViewService } from '../common/changesViewService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ChangesViewMode } from '../common/changes.js';
@@ -37,9 +35,8 @@ import {
 } from './changesViewRenderer.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
-import { findChangesEditorFileChange, getChangesEditorFileResource } from './changesEditorLabels.js';
 import { SessionChangesStatsCache } from '../../../services/sessions/common/sessionChangesStatsCache.js';
-import { createSessionFileChange, type IActiveSessionThread } from '../../../services/sessions/common/session.js';
+import { createSessionFileChange, matchesSessionFileChange, type IActiveSessionThread } from '../../../services/sessions/common/session.js';
 import { IWorkspaceFolderLabelService } from '../../../services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 
@@ -56,6 +53,7 @@ export class ChangesViewPane extends ViewPane {
 	private threadRows: readonly IChangesThreadFileItem[] = [];
 	private threadSummary: ThreadChangesSummary | undefined;
 	private readonly changesetPicker: HTMLSelectElement;
+	private readonly workingTree: HTMLOptionElement;
 	private readonly modePicker: HTMLSelectElement;
 	private readonly markReviewed: Button;
 	private readonly markUnread: Button;
@@ -66,10 +64,7 @@ export class ChangesViewPane extends ViewPane {
 	private loading = false;
 	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly worktreeLabelRequest = this._register(new MutableDisposable());
-	private readonly checks = this._register(new MutableDisposable<ChecksWidget>());
-	private readonly gitActions = this._register(new MutableDisposable<SessionSyncChangesActionViewItem>());
-	private readonly pullRequest = this._register(new MutableDisposable<CreatePullRequestContextView>());
-	private readonly createPullRequest: Button;
+	private readonly worktreeReview = this._register(new MutableDisposable());
 	// Returning to the same conversation must not revive work started before hiding or switching.
 	private ownerEpoch = 0;
 
@@ -84,11 +79,12 @@ export class ChangesViewPane extends ViewPane {
 		@INotificationService private readonly notifications: INotificationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IInstantiationService instantiation: IInstantiationService,
 		@IChangesViewService private readonly viewState: IChangesViewService,
 		@ISessionChangesService private readonly changesService: ISessionChangesService,
 		@IStorageService storage: IStorageService,
 		@IWorkspaceFolderLabelService private readonly folderLabels: IWorkspaceFolderLabelService,
+		@ISessionGitActionsService private readonly git: ISessionGitActionsService,
 	) {
 		super(container, options);
 		this.statsCache = new SessionChangesStatsCache(storage);
@@ -125,27 +121,19 @@ export class ChangesViewPane extends ViewPane {
 			onClick: () => { void this.refresh(); },
 		}));
 		this.retry.hidden = true;
-		this.createPullRequest = this._register(new Button(actions, {
-			...defaultButtonStyles,
-			size: 'small',
-			label: localize('sessions.changes.createPR', 'Create pull request'),
-			onClick: () => {
-				const view = this.instantiation.createInstance(CreatePullRequestContextView);
-				this.pullRequest.value = view;
-				void view.show(this.createPullRequest.domNode).catch(error => { if (!view.isDisposed) { this.notifications.error(getErrorMessage(error)); view.dispose(); } });
-			},
-		}));
-		const updatePullRequest = (): void => {
-			const selected = this.sessions.activeSelection;
-			this.createPullRequest.hidden = selected?.kind !== 'session' || !selected.active.session.workspace;
-		};
-		this._register(sessions.onDidChange(updatePullRequest));
-		updatePullRequest();
 		this._register(instantiation.createInstance(ChangesSummaryWidget, this.statistics)).render(this.contentElement);
 		const controls = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-view-actions' });
 		this.contentElement.append(controls);
 		this.changesetPicker = h(container.ownerDocument, 'select');
 		this.changesetPicker.setAttribute('aria-label', localize('sessions.changes.chooseTurn', 'Changes from Turn'));
+		this.workingTree = h(container.ownerDocument, 'option');
+		this.workingTree.textContent = localize('sessions.changes.workingTree', 'Review working tree');
+		const updateWorkingTree = () => {
+			this.workingTree.hidden = !git.canReviewWorkingTree;
+			this.workingTree.disabled = this.workingTree.hidden || git.busy;
+		};
+		this._register(git.onDidChange(updateWorkingTree));
+		updateWorkingTree();
 		this.modePicker = h(container.ownerDocument, 'select');
 		this.modePicker.setAttribute('aria-label', localize('sessions.changes.viewMode', 'Changes view mode'));
 		for (const [value, text] of [
@@ -171,11 +159,15 @@ export class ChangesViewPane extends ViewPane {
 			onClick: () => this.setReviewState(false),
 		}));
 		this._register(addDisposableListener(this.changesetPicker, 'change', () => {
-			const gitActions = this.gitActions.value;
-			if (gitActions && this.changesetPicker.selectedOptions[0] === gitActions.workingTree) {
+			if (this.changesetPicker.selectedOptions[0] === this.workingTree) {
 				// The working-tree diff opens separately and does not change the conversation filter.
 				this.changesetPicker.value = this.changesetId ?? '';
-				gitActions.openWorkingTree();
+				if (this.workingTree.disabled) { return; }
+				const controller = new AbortController();
+				const review = this.worktreeReview.value = toDisposable(() => controller.abort());
+				void this.git.run('git.openChangesSource', controller.signal).finally(() => {
+					if (this.worktreeReview.value === review) { this.worktreeReview.clear(); }
+				});
 				return;
 			}
 			this.saveTreeState();
@@ -198,7 +190,7 @@ export class ChangesViewPane extends ViewPane {
 			modelOptions: { identityProvider: { getId: row => row.id }, defaultCollapseState: 'expanded' },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => isChangesFileItem(row) ? row.file.path : row.name },
 			renderElement: row => renderer.renderElement(row,
-				isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()),
+				isChangesFileItem(row) && this.viewState.reviewedFilesObs.get().has(row.uri.toString()),
 				this.viewMode === ChangesViewMode.Tree),
 		}));
 		this._register(autorun(reader => {
@@ -240,9 +232,9 @@ export class ChangesViewPane extends ViewPane {
 			const epoch = this.ownerEpoch;
 			const request = this.request;
 			if (isChangesFileItem(event.element)) {
-				const resource = getChangesEditorFileResource(event.element);
+				const resource = event.element.uri;
 				void this.openFile(event.element, event.editorOptions, event.sideBySide).catch(error => {
-					if (request === this.request && findChangesEditorFileChange(resource, this.visibleRows())) { this.reportOperationError(error, epoch); }
+					if (request === this.request && this.visibleRows().some(row => matchesSessionFileChange(row, resource))) { this.reportOperationError(error, epoch); }
 				});
 			}
 		}));
@@ -265,16 +257,12 @@ export class ChangesViewPane extends ViewPane {
 		if (visible === this.isVisible()) { return; }
 		super.setVisible(visible);
 		if (visible) {
-			this.gitActions.value = this.instantiation.createInstance(SessionSyncChangesActionViewItem, this.contentElement);
-			this.checks.value = this.instantiation.createInstance(ChecksWidget, this.contentElement);
 			void this.refresh();
 		} else {
 			this.saveTreeState();
-			this.pullRequest.clear();
-			this.gitActions.clear();
-			this.checks.clear();
 			this.loadingProgress.clear();
 			this.worktreeLabelRequest.clear();
+			this.worktreeReview.clear();
 			this.request++;
 			this.ownerEpoch++;
 		}
@@ -300,7 +288,7 @@ export class ChangesViewPane extends ViewPane {
 			`${row.file.path}: +${row.file.additions} −${row.file.deletions}`,
 			'summary' in row ? localize('sessions.changes.turn', 'Turn {0}', row.turnNumber) : row.repositoryLabel,
 			fileState(row),
-			this.viewState.reviewedFilesObs.get().has(getChangesEditorFileResource(row).toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
+			this.viewState.reviewedFilesObs.get().has(row.uri.toString()) ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
 			selected.has(row) ? localize('sessions.changes.fileSelected', 'Selected') : undefined,
 			...('summary' in row ? [row.summary.failureMessage, ...row.summary.warnings] : row.warnings),
 		].filter(Boolean).join('; '));
@@ -308,9 +296,7 @@ export class ChangesViewPane extends ViewPane {
 			localize('sessions.changes.title', 'Changes'),
 			this.statusDomNode.textContent,
 			this.contentElement.querySelector('.ash-sessions-changes-summary')?.textContent,
-			this.contentElement.querySelector('.ash-sessions-changes-repository-status')?.textContent,
 			...files,
-			this.checks.value?.getAccessibleContent(),
 		].join('\n');
 	}
 
@@ -337,7 +323,7 @@ export class ChangesViewPane extends ViewPane {
 
 	private setReviewState(reviewed: boolean): void {
 		if (!this.isVisible() || this.loading) { return; }
-		this.viewState.setChangesetFilesReviewState(this.tree.selection.filter(isChangesFileItem).map(getChangesEditorFileResource), reviewed);
+		this.viewState.setChangesetFilesReviewState(this.tree.selection.filter(isChangesFileItem).map(row => row.uri), reviewed);
 	}
 
 	private saveTreeState(): void {
@@ -463,8 +449,7 @@ export class ChangesViewPane extends ViewPane {
 				option.textContent = localize('sessions.changes.turn', 'Turn {0}', index + 1);
 				this.changesetPicker.append(option);
 			}
-			const workingTree = this.gitActions.value?.workingTree;
-			if (workingTree) { this.changesetPicker.append(workingTree); }
+			this.changesetPicker.append(this.workingTree);
 			// Only an authoritative successful catalogue can clear a missing preference.
 			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
 			this.changesetPicker.value = this.changesetId ?? '';
@@ -544,17 +529,17 @@ export class ChangesViewPane extends ViewPane {
 	private async openFile(row: IChangesFileItem, options: IEditorOptions, sideBySide: boolean): Promise<void> {
 		if (!this.isVisible() || this.loading) { return; }
 		const ownerEpoch = this.ownerEpoch;
-		const resource = getChangesEditorFileResource(row);
+		const resource = row.uri;
 		const contents = 'summary' in row
 			? await this.chat.readTurnChangeFile(row.summary.sessionId, row.summary.threadId, row.summary.changeSetId, row.file.path)
 			: await this.chat.readThreadChangeFile(row.sessionId, row.threadId, row.revision, row.repositoryId, row.file.path);
 		// A refresh can replace a capture without changing the selected conversation.
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.visibleRows())) { return; }
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !this.visibleRows().some(row => matchesSessionFileChange(row, resource))) { return; }
 		if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 		const current = 'summary' in row
 			? await this.chat.readTurnChange(row.summary.sessionId, row.summary.threadId, row.summary.changeSetId)
 			: await this.chat.readThreadChanges(row.sessionId, row.threadId);
-		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !findChangesEditorFileChange(resource, this.visibleRows())) { return; }
+		if (this.isDisposed || ownerEpoch !== this.ownerEpoch || this.loading || !this.visibleRows().some(row => matchesSessionFileChange(row, resource))) { return; }
 		if ('summary' in row ? !('summary' in current) || current.summary.revision !== row.summary.revision || current.summary.captureState === 'discarded' : !('revision' in current) || current.revision !== row.revision) {
 			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
 		}

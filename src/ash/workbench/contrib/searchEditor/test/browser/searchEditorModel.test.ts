@@ -1,9 +1,49 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
+import { match } from '../../../../../base/common/glob.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IFileService, FileKind } from '../../../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { IEditorService, type EditorOpenTarget } from '../../../../services/editor/common/editorService.js';
+import type { IResourceEditorInput } from '../../../../common/editor.js';
+import { splitGlobPatterns } from '../../../../services/search/common/queryBuilder.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { SearchResultImpl } from '../../../search/browser/searchTreeModel/searchResult.js';
 import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor } from '../../browser/searchEditorSerialization.js';
+import { OpenNewEditorCommandId, SearchEditorID } from '../../browser/constants.js';
+import '../../browser/searchEditor.contribution.js';
+
+test('the Search Editor command scopes folder search to its workspace root and literal path', async () => {
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const root = URI.file('/workspace/one');
+	const folder = URI.joinPath(root, 'src,[fixture]');
+	services.registerInstance(IWorkspaceContextService, {
+		getWorkspaceFolder: () => ({ uri: root, id: 'one', index: 0, name: 'one' }),
+	} as unknown as IWorkspaceContextService);
+	services.registerInstance(IFileService, {
+		stat: async () => ({ kind: FileKind.Directory }),
+	} as unknown as IFileService);
+	let opened: IResourceEditorInput | undefined;
+	let destination: EditorOpenTarget | undefined;
+	services.registerInstance(IEditorService, {
+		openEditor: async (input: IResourceEditorInput, _options: unknown, target?: EditorOpenTarget) => {
+			opened = input;
+			destination = target;
+		},
+	} as IEditorService);
+	await commands.executeCommand(OpenNewEditorCommandId, { folder, groupId: 42 });
+	assert.equal(opened?.editorId, SearchEditorID);
+	assert.deepEqual(destination, { groupId: 42 });
+	const query = parseSearchEditor(opened!.initialText!);
+	assert.equal(query.workspaceRoot, root.toString());
+	const [pattern] = query.includePatterns;
+	assert.ok(match(pattern!, 'src,[fixture]/match.txt'));
+	assert.ok(!match(pattern!, 'src,fixture/match.txt'));
+	assert.deepEqual(splitGlobPatterns(query.includePatterns.join(', ')), query.includePatterns);
+});
 
 test('saved search documents restore multiline queries, filters and exact source ranges across roots', () => {
 	const query = { text: 'first\nsecond', patternKind: 'literal' as const, caseSensitivity: 'smart' as const, wholeWord: true, includePatterns: ['src/**'], excludePatterns: ['**/*.test.ts'], maxResults: 100, freshness: 'current' as const };

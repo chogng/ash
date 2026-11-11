@@ -301,8 +301,7 @@ fn debug_log_collection_tags_every_nested_binary_resource_without_touching_other
             {"resource":{"resourceId":"not-a-binary-handle"}}
         ], "resourceId":"unrelated", "omittedFiles":0
     }});
-    let tagged: Value =
-        serde_json::from_str(&tag_resource_response(response.to_string(), 7)).unwrap();
+    let tagged: Value = serde_json::from_str(&tag_route_response(response.to_string(), 7)).unwrap();
     assert_eq!(
         tagged["result"]["files"][0]["resource"]["resourceId"],
         "gateway-resource:7:first"
@@ -317,6 +316,34 @@ fn debug_log_collection_tags_every_nested_binary_resource_without_touching_other
     );
     // The top-level field is not itself a binary resource contract.
     assert_eq!(tagged["result"]["resourceId"], "unrelated");
+}
+
+#[test]
+fn session_git_repository_handles_route_requests_and_notifications() {
+    let repository_id = "session_repo_fixture";
+    let response = serde_json::json!({"jsonrpc":"2.0","id":2,"result":{
+        "repositories":[{"id":repository_id}],
+        "statuses":[{"repositoryId":repository_id}]
+    }});
+    let response: Value =
+        serde_json::from_str(&tag_route_response(response.to_string(), 7)).unwrap();
+    let tagged = &response["result"]["repositories"][0]["id"];
+    assert_eq!(tagged, "gateway-git:7:session_repo_fixture");
+    assert_eq!(response["result"]["statuses"][0]["repositoryId"], *tagged);
+    let notice = serde_json::json!({"jsonrpc":"2.0","method":"git/statusChanged","params":{
+        "status":{"repositoryId":repository_id}
+    }});
+    let notice: Value = serde_json::from_str(&tag_host_request(notice.to_string(), 7)).unwrap();
+    assert_eq!(notice["params"]["status"]["repositoryId"], *tagged);
+    let cancel = serde_json::json!({"jsonrpc":"2.0","id":3,"method":"git/transport/cancel","params":{
+        "operationId":"fixture","repositoryId":tagged
+    }});
+    let kind = GatewayHandleKind::for_request(&cancel).unwrap();
+    assert_eq!(
+        kind.decode(tagged.as_str().unwrap()),
+        Some((7, repository_id))
+    );
+    assert_eq!(kind.decode("gateway-git:7:repo_workspace"), None);
 }
 
 #[test]

@@ -249,12 +249,13 @@ keeps the containing editor's menu identity and applies file reveal options thro
 its existing collapse and scroll state. Capture operations bind file paths and
 expected revision before preparing a commit preview.
 Its summary reflects the visible file changes; failed loads clear stale selections
-and offer Retry. Optional Git actions resolve the selected Session directory,
-choose a repository when necessary, and pass its identity explicitly to the Git
-extension. Sync checks the branch and remote again between pull and push.
-The visible Checks widget owns cancellable, paginated CI detail reads through the
-GitHub API; account and Session changes invalidate old data, and hiding Changes
-releases its model. Ordinary refreshes preserve check-link focus.
+and offer Retry. Review working tree opens the optional Git provider’s live diff.
+Session information hosts repository status, branch actions and PR Checks under
+Environment. The Git action service resolves the selected conversation’s
+directory and passes the repository identity to the Git extension. Sync checks
+the branch and remote again between pull and push. Checks owns cancellable,
+paginated CI reads through the GitHub API. Account and Session changes invalidate
+old data, and hiding the rail releases its model.
 
 ChangesViewService owns presentation state. The profile's UI state stores List or
 Tree mode; window-local snapshots retain selection, focus, expanded folders and
@@ -274,8 +275,8 @@ a tool hides its presentation without closing its documents, terminal or pages.
 See [Code tool composition](LAYOUT.md#editor-presentation) for host boundaries and
 [layout state](LAYOUT_CONTROLLER.md#6-persistence) for persistence.
 
-Create pull request prepares an editable form without publishing or creating
-anything. Submission checks the captured repository, local commit, remote and
+In Session information, Environment offers Create pull request for the current
+Code conversation. It opens an editable form. Submission checks the captured repository, local commit, remote and
 account again. Once sent, completion belongs to the initiating Session even when
 the form closes; the resulting reference is attached through the existing GitHub
 API. An uncertain response prevents repeating submission in the same form.

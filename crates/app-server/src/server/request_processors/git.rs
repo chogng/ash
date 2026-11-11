@@ -4,7 +4,12 @@ use super::core_error;
 use super::decode;
 use super::directory_grants_protocol::DirectoryPathRequirement;
 use super::directory_grants_protocol::validate_path;
+use super::environment_runtime::session_directory_from_workspace_id;
+use super::git_runtime::GitDiscoveryOptions;
+use super::git_runtime::GitRuntime;
+use super::git_runtime::SessionGitScope;
 use super::result;
+use super::update_broker::UpdateBroker;
 use crate::git_service::GitServiceError;
 use crate::server::git_runtime::GitRuntimeError;
 use crate::server::git_runtime::integration_dto;
@@ -90,6 +95,7 @@ use serde_json::Value;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use worktree::WorktreeAvailability;
 use worktree::WorktreeOwner;
 use worktree::WorktreeSelector;
@@ -126,6 +132,10 @@ pub(super) trait GitRequestProcessorContext: Send + Sync {
 
 pub(super) struct GitRequestProcessor<'ctx, C: GitRequestProcessorContext + ?Sized> {
     context: &'ctx C,
+    connection: &'ctx ConnectionState,
+    admitted_git_runtime: Option<&'ctx Arc<GitRuntime>>,
+    repository_id: Option<&'ctx str>,
+    updates: &'ctx UpdateBroker,
     env_runtime: &'ctx std::sync::Arc<std::sync::RwLock<super::environment_runtime::EnvRuntime>>,
     env_runtime_gate: &'ctx std::sync::Arc<std::sync::Mutex<()>>,
     config: &'ctx Option<super::Arc<super::ConfigStore>>,
@@ -141,6 +151,10 @@ pub(super) struct GitRequestProcessor<'ctx, C: GitRequestProcessorContext + ?Siz
 impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> {
     pub(super) fn new(
         context: &'ctx C,
+        connection: &'ctx ConnectionState,
+        admitted_git_runtime: Option<&'ctx Arc<GitRuntime>>,
+        repository_id: Option<&'ctx str>,
+        updates: &'ctx UpdateBroker,
         env_runtime: &'ctx std::sync::Arc<
             std::sync::RwLock<super::environment_runtime::EnvRuntime>,
         >,
@@ -158,6 +172,10 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     ) -> Self {
         Self {
             context,
+            connection,
+            admitted_git_runtime,
+            repository_id,
+            updates,
             env_runtime,
             env_runtime_gate,
             config,
@@ -166,6 +184,16 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             git_turn_changes,
             request_cancellations,
             request_scheduler,
+        }
+    }
+
+    fn git_runtime_service(&self) -> Result<Arc<GitRuntime>, RpcError> {
+        if let Some(runtime) = self.admitted_git_runtime {
+            return Ok(Arc::clone(runtime));
+        }
+        match self.connection.session_git_runtime(self.repository_id)? {
+            Some(runtime) => Ok(runtime),
+            None => self.context.git_runtime_service(),
         }
     }
 }
@@ -198,7 +226,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             }
         };
         let (root, present) = self
-            .context
             .git_runtime_service()?
             .ai_contribution_for(
                 params.repository_id.as_deref(),
@@ -227,7 +254,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         use ash_app_server_protocol::protocol::git::GitRemovalReviewResult;
         let params: GitPathsParams = decode(value)?;
         let review = self
-            .context
             .git_runtime_service()?
             .review_removal_for(params.repository_id.as_deref(), paths(params.paths)?)
             .map_err(git_error)?;
@@ -288,7 +314,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             GitRemovalModeDto::Permanent => ash_file_system::FileRemovalMode::Permanent,
         };
         let status = self
-            .context
             .git_runtime_service()?
             .remove_files_for(params.repository_id.as_deref(), entries, mode, &head)
             .map_err(git_error)?;
@@ -356,7 +381,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                 GitRemoteMutation::PushReviewed(target.as_ref().expect("validated push target"))
             }
         };
-        let runtime = self.context.git_runtime_service()?;
+        let runtime = self.git_runtime_service()?;
         let outcome = runtime.transport_for(
             params.repository_id.as_deref(),
             operation,
@@ -433,7 +458,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitRepositoryParams = decode(value)?;
         result(&GitPullPreflightResult {
             upstream_rewritten: self
-                .context
                 .git_runtime_service()?
                 .pull_upstream_was_rewritten_for(params.repository_id.as_deref())
                 .map_err(git_error)?,
@@ -445,7 +469,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitBlameParams = decode(value)?;
         let path = paths(vec![params.path])?.remove(0);
         let line = self
-            .context
             .git_runtime_service()?
             .blame_for(
                 params.repository_id.as_deref(),
@@ -485,7 +508,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .transpose()
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let page = self
-            .context
             .git_runtime_service()?
             .file_history_for(
                 params.repository_id.as_deref(),
@@ -520,7 +542,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     pub(super) fn git_catalog(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
         let catalog = self
-            .context
             .git_runtime_service()?
             .catalog_for(params.repository_id.as_deref())
             .map_err(git_error)?;
@@ -550,7 +571,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitCommandParams = decode(value)?;
         let command = command(params.command);
         let (status, outcome) = self
-            .context
             .git_runtime_service()?
             .command_for(params.repository_id.as_deref(), &command, cancellation)
             .map_err(git_error)?;
@@ -568,7 +588,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitChangeFileParams = decode(value)?;
         let path = paths(vec![params.path])?.pop().expect("validated path");
         let diff = self
-            .context
             .git_runtime_service()?
             .index_diff_for(
                 params.repository_id.as_deref(),
@@ -620,7 +639,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             },
         };
         let status = self
-            .context
             .git_runtime_service()?
             .index_edit_for(params.repository_id.as_deref(), &request)
             .map_err(git_error)?;
@@ -738,12 +756,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                 &params.session_directory.path,
                 Permission::InspectRepository,
             )
-            .map_err(|error| match error.message {
-                AppServerErrorName::TerminalOperationFailed => {
-                    RpcError::new(-32043, AppServerErrorName::PermissionRequired)
-                }
-                _ => error,
-            })?;
+            .map_err(session_git_error)?;
         let repositories = super::git_runtime::repository_contexts(&authorization, cancellation)
             .map_err(git_error)?;
         // Do not publish a context whose Session grant retired during the Git I/O.
@@ -752,11 +765,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
         result(&GitRepositoryContextsResult { repositories })
     }
-    pub(super) fn git_repositories(
-        &self,
-        connection: &ConnectionState,
-        value: &Value,
-    ) -> Result<Value, RpcError> {
+    pub(super) fn git_repositories(&self, value: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::git::GitDiscoveryParams = decode(value)?;
         let folders = params
             .folders
@@ -780,7 +789,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                         {
                             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                         }
-                        Ok(super::git_runtime::GitDiscoveryOptions {
+                        Ok(GitDiscoveryOptions {
                             dir_id: folder.dir_id,
                             max_depth: folder.max_depth,
                             ignored_folders: folder.ignored_folders,
@@ -794,7 +803,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                     .collect::<Result<Vec<_>, RpcError>>()
             })
             .transpose()?;
-        let runtime = match self.context.git_runtime_service() {
+        let runtime = match self.git_discovery_runtime(folders.as_deref()) {
             Ok(runtime) => runtime,
             Err(error)
                 if error.message == AppServerErrorName::GitWorkspaceUnavailable
@@ -809,7 +818,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             Err(error) => return Err(error),
         };
         let mut discovered = runtime
-            .discover_for(connection.connection_id, folders)
+            .discover_for(self.connection.connection_id, folders)
             .map_err(git_error)?;
         // Watched state uses the canonical Git policy. Alternate executables and
         // rename thresholds still require their existing authoritative query.
@@ -830,9 +839,80 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         result(&discovered)
     }
 
+    fn git_discovery_runtime(
+        &self,
+        folders: Option<&[GitDiscoveryOptions]>,
+    ) -> Result<Arc<GitRuntime>, RpcError> {
+        use ash_file_access::Permission;
+        let Some(folders) = folders else {
+            return self.context.git_runtime_service();
+        };
+        let Some(folder_id) = folders.iter().find_map(|folder| {
+            folder
+                .dir_id
+                .as_deref()
+                .filter(|id| id.starts_with("session:"))
+        }) else {
+            self.connection.replace_session_git_scope(None);
+            return self.context.git_runtime_service();
+        };
+        let scoped = (|| {
+            let (session_id, path) = session_directory_from_workspace_id(Some(folder_id))
+                .ok()
+                .flatten()
+                .filter(|(_, path)| path.is_absolute() && folders.len() == 1)
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            let authorization = self
+                .context
+                .session_dir_authorization(&session_id, &path, Permission::MutateRepository)
+                .or_else(|_| {
+                    self.context.session_dir_authorization(
+                        &session_id,
+                        &path,
+                        Permission::InspectRepository,
+                    )
+                })
+                .map_err(session_git_error)?;
+            let watch_authorization = self
+                .context
+                .session_dir_authorization(&session_id, &path, Permission::WatchFiles)
+                .ok();
+            Ok((authorization, watch_authorization))
+        })();
+        let (authorization, watch_authorization) = scoped.inspect_err(|_| {
+            self.connection.replace_session_git_scope(None);
+        })?;
+        if let Some(scope) = self.connection.session_git_scope()
+            && scope.matches(folder_id, &authorization, watch_authorization.as_ref())
+        {
+            return Ok(Arc::clone(&scope.runtime));
+        }
+
+        let runtime = GitRuntime::new_for_dirs(
+            vec![(folder_id.to_owned(), authorization.clone())],
+            Arc::new(
+                self.updates
+                    .for_git_connection(self.connection.connection_id),
+            ),
+        );
+        let watcher = runtime.start_watching(
+            self.config.clone(),
+            watch_authorization.iter().cloned().collect(),
+        );
+        self.connection
+            .replace_session_git_scope(Some(Arc::new(SessionGitScope {
+                folder_id: folder_id.to_owned(),
+                authorization,
+                watch_authorization,
+                runtime: Arc::clone(&runtime),
+                _watcher: watcher,
+            })));
+        Ok(runtime)
+    }
+
     pub(super) fn git_status(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
-        let runtime = self.context.git_runtime_service()?;
+        let runtime = self.git_runtime_service()?;
         let view = params
             .client
             .as_ref()
@@ -852,7 +932,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitRepositoryParams = decode(value)?;
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .changes_summary_for(params.repository_id.as_deref())
                 .map_err(git_error)?,
@@ -863,7 +942,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitRepositoryParams = decode(value)?;
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .staged_commit_preview_for(params.repository_id.as_deref())
                 .map_err(git_error)?,
@@ -872,7 +950,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
 
     pub(super) fn git_text_diff(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitTextDiffParams = decode(value)?;
-        let runtime = self.context.git_runtime_service()?;
+        let runtime = self.git_runtime_service()?;
         result(
             &match params.projection {
                 Some(GitTextDiffProjectionDto::Statistics) => {
@@ -894,7 +972,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitCheckIgnoreParams = decode(value)?;
         let paths = paths(params.paths)?;
         let ignored = self
-            .context
             .git_runtime_service()?
             .check_ignore_for(params.repository_id.as_deref(), &paths, cancellation)
             .map_err(git_error)?;
@@ -932,7 +1009,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     pub(super) fn git_branch_list(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
         let branches = self
-            .context
             .git_runtime_service()?
             .local_branches_for(params.repository_id.as_deref())
             .map_err(git_error)?;
@@ -942,7 +1018,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     pub(super) fn git_history(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
         let commits = self
-            .context
             .git_runtime_service()?
             .recent_commits_for(params.repository_id.as_deref())
             .map_err(git_error)?;
@@ -953,7 +1028,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitRepositoryParams = decode(value)?;
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .history_refs_for(params.repository_id.as_deref())
                 .map_err(git_error)?,
@@ -976,7 +1050,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let limit = NonZeroUsize::new(params.limit).expect("validated graph page size");
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .graph_for(
                     params.repository_id.as_deref(),
@@ -994,7 +1067,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         validate_object_id(&params.object_id)?;
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .commit_changes_for(params.repository_id.as_deref(), &params.object_id)
                 .map_err(git_error)?,
@@ -1016,7 +1088,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         };
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .compare_changes_for(
                     params.repository_id.as_deref(),
@@ -1032,7 +1103,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitCommitChangesParams = decode(value)?;
         validate_object_id(&params.object_id)?;
         let message = self
-            .context
             .git_runtime_service()?
             .commit_message_for(params.repository_id.as_deref(), &params.object_id)
             .map_err(git_error)?;
@@ -1043,7 +1113,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let params: GitCommitChangesParams = decode(value)?;
         validate_object_id(&params.object_id)?;
         let details = self
-            .context
             .git_runtime_service()?
             .commit_details_for(params.repository_id.as_deref(), &params.object_id)
             .map_err(git_error)?;
@@ -1071,7 +1140,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .expect("validated commit file path");
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .commit_file_for(
                     params.repository_id.as_deref(),
@@ -1090,7 +1158,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .expect("validated change file path");
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .change_file_for(params.repository_id.as_deref(), &path, params.comparison)
                 .map_err(git_error)?,
@@ -1104,7 +1171,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         }
         let paths = paths(params.paths)?;
         let files = self
-            .context
             .git_runtime_service()?
             .change_files_for(params.repository_id.as_deref(), &paths, params.comparison)
             .map_err(git_error)?;
@@ -1118,7 +1184,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .expect("validated conflict file path");
         result(
             &self
-                .context
                 .git_runtime_service()?
                 .conflict_file_for(params.repository_id.as_deref(), &path)
                 .map_err(git_error)?,
@@ -1137,7 +1202,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .pop()
             .expect("validated conflict path");
         let status = self
-            .context
             .git_runtime_service()?
             .complete_conflict_for(
                 params.repository_id.as_deref(),
@@ -1156,7 +1220,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let status = self
-            .context
             .git_runtime_service()?
             .switch_branch_for(
                 params.repository_id.as_deref(),
@@ -1177,7 +1240,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let branches = self
-            .context
             .git_runtime_service()?
             .create_branch_for(params.repository_id.as_deref(), &params.name)
             .map_err(git_error)?;
@@ -1190,7 +1252,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let branches = self
-            .context
             .git_runtime_service()?
             .delete_branch_for(params.repository_id.as_deref(), &params.name)
             .map_err(git_error)?;
@@ -1210,7 +1271,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             return Err(core_error(core_api::CoreError::Policy(reason)));
         }
         let source = self
-            .context
             .git_runtime_service()?
             .mutable_source_for(params.repository_id.as_deref())
             .map_err(git_error)?;
@@ -1293,7 +1353,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             return Err(core_error(core_api::CoreError::Policy(reason)));
         }
         let source = self
-            .context
             .git_runtime_service()?
             .mutable_source_for(params.repository_id.as_deref())
             .map_err(git_error)?;
@@ -1346,7 +1405,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         repository_id: Option<&str>,
     ) -> Result<GitWorktreeListResult, RpcError> {
         let source = self
-            .context
             .git_runtime_service()?
             .readable_source_for(repository_id)
             .map_err(git_error)?;
@@ -1422,7 +1480,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
         let source = self
-            .context
             .git_runtime_service()?
             .readable_source_for(params.repository_id.as_deref())
             .map_err(git_error)?;
@@ -1456,7 +1513,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     pub(super) fn git_stage(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitPathsParams = decode(params)?;
         let status = self
-            .context
             .git_runtime_service()?
             .stage_for(params.repository_id.as_deref(), paths(params.paths)?)
             .map_err(git_error)?;
@@ -1466,7 +1522,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     pub(super) fn git_unstage(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitPathsParams = decode(params)?;
         let status = self
-            .context
             .git_runtime_service()?
             .unstage_for(params.repository_id.as_deref(), paths(params.paths)?)
             .map_err(git_error)?;
@@ -1476,7 +1531,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     pub(super) fn git_discard_worktree(&self, params: &Value) -> Result<Value, RpcError> {
         let params: GitPathsParams = decode(params)?;
         let status = self
-            .context
             .git_runtime_service()?
             .discard_worktree_for(params.repository_id.as_deref(), paths(params.paths)?)
             .map_err(git_error)?;
@@ -1548,7 +1602,6 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             None => request,
         };
         let committed = self
-            .context
             .git_runtime_service()?
             .commit_for(params.repository_id.as_deref(), request)
             .map_err(git_error)?;
@@ -1564,7 +1617,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: GitFetchParams = decode(value)?;
-        let runtime = self.context.git_runtime_service()?;
+        let runtime = self.git_runtime_service()?;
         let mode = params.mode.unwrap_or(GitFetchModeDto::All);
         let status = if let Some(options) = params.transport {
             use crate::git_service::GitRemoteMutation;
@@ -1593,7 +1646,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
     ) -> Result<Value, RpcError> {
         let params: GitPullParams = decode(value)?;
         let mode = self.resolve_pull_mode(params.mode.unwrap_or_default())?;
-        let runtime = self.context.git_runtime_service()?;
+        let runtime = self.git_runtime_service()?;
         let status = if let Some(options) = params.transport {
             runtime.transport_for(
                 params.repository_id.as_deref(),
@@ -1614,7 +1667,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: GitRepositoryParams = decode(value)?;
-        let runtime = self.context.git_runtime_service()?;
+        let runtime = self.git_runtime_service()?;
         let status = if let Some(options) = params.transport {
             runtime.transport_for(
                 params.repository_id.as_deref(),
@@ -1661,6 +1714,14 @@ fn validate_object_id(object_id: &str) -> Result<(), RpcError> {
         return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
     }
     Ok(())
+}
+
+fn session_git_error(error: RpcError) -> RpcError {
+    if error.message == AppServerErrorName::TerminalOperationFailed {
+        RpcError::new(-32043, AppServerErrorName::PermissionRequired)
+    } else {
+        error
+    }
 }
 
 pub(super) fn git_error(error: GitRuntimeError) -> RpcError {

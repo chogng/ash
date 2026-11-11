@@ -46,6 +46,7 @@ import { IEditorService, type EditorOpenOptions } from '../../../workbench/servi
 import { isDiffEditorInput } from '../../../workbench/common/editor/diffEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import { ChangesViewPane } from '../../contrib/changes/browser/changesView.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../contrib/changes/browser/sessionGitActionsService.js';
 import { setNlsMessages, resetNlsResolver } from '../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
@@ -304,6 +305,7 @@ function registerChecksServices(services: InstantiationService, document: Docume
 	}));
 	services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
+	services.registerSingleton(ISessionGitActionsService, () => services.createInstance(SessionGitActionsService));
 	services.registerInstance(ISessionsManagementService, {
 		get sessions() {
 			const selection = services.get(ISessionsService).activeSelection;

@@ -116,7 +116,7 @@ test('opening Files retains one owned AuxiliaryBarPart without creating an edito
 		(await import('../../../platform/storage/common/storage.js')).StorageTarget.MACHINE);
 	using registration = auxiliary.registerViewContainer({ id: 'test.details', title: 'Details', location: ViewContainerLocation.AuxiliaryBar }, [
 		{ id: 'test.details.view', title: 'Details', ctorDescriptor: new SyncDescriptor(TestDetailsView) },
-	]);
+	], () => editor.openFiles());
 	assert.equal(created, 0);
 	const group = editor.activeGroup;
 	await editor.openFiles();

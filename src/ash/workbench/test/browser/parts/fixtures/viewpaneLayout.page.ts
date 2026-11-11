@@ -46,6 +46,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ChangesViewPane } from '../../../../../sessions/contrib/changes/browser/changesView.js';
+import { SessionGitActionsService } from '../../../../../sessions/contrib/changes/browser/sessionGitActionsService.js';
 import { SessionsWorkspaceFolderLabelService } from '../../../../../sessions/services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { ISessionsService } from '../../../../../sessions/services/sessions/browser/sessionsService.js';
 import { IChatService, type TurnChangeDetails } from '../../../../services/chat/common/chatService.js';
@@ -116,7 +117,7 @@ changesServices.registerInstance(IAccountService, { onDidChangeAccounts: Event.N
 changesServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 changesServices.registerInstance(INotificationService, notifications);
 changesServices.registerInstance(ISessionsService, {
-	activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } },
+	activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture', chats: [] } } },
 	onDidChange: Event.None,
 } as unknown as ISessionsService);
 changesServices.registerInstance(IChecksOperationService, resources.add(changesServices.createInstance(ChecksOperationService)));
@@ -269,7 +270,7 @@ const pane = resources.add(view === 'timeline' ? createTimelinePane() : view ===
 							editors, configuration, contextKeys, notifications, {} as IQuickInputService,
 							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
 							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService,
-							storage, changesServices.createInstance(SessionsWorkspaceFolderLabelService))
+							storage, changesServices.createInstance(SessionsWorkspaceFolderLabelService), resources.add(changesServices.createInstance(SessionGitActionsService)))
 						: view === 'console'
 							? replScope.createInstance(Repl, root, { id: 'fixture.console', title: 'Console' })
 							: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,

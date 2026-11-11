@@ -11,8 +11,6 @@ import { IEditorService } from '../../../../workbench/services/editor/common/edi
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from './sessionChangesEditor.js';
-import { getChangesEditorLabels } from './changesEditorLabels.js';
-import { ILabelService } from '../../../../platform/label/common/label.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesetOperationStatus } from '../../../services/sessions/common/session.js';
 
@@ -39,8 +37,7 @@ class OpenChangedFileAction extends Action2 {
 		if (!workspace) { return; }
 		const root = sessionWorkspaceUri(workspace);
 		const fileResource = root.with({ path: `${root.path.replace(/\/$/u, '')}/${change.file.path}` });
-		const labels = getChangesEditorLabels(fileResource, accessor.get(ILabelService));
-		await accessor.get(IEditorService).openEditor({ resource: fileResource, label: labels.label }, { pinned: true });
+		await accessor.get(IEditorService).openEditor({ resource: fileResource }, { pinned: true });
 	}
 }
 

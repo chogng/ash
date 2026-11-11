@@ -118,6 +118,20 @@
 	align-items: center;
 }
 
+.ash-editor-header-primary:not(:has(> :not([hidden]))),
+.ash-editor-header-layout:not(:has(> :not([hidden]))) {
+	display: none;
+}
+
+.ash-editor-title-actions:has(> :not([hidden]))
+	+ .ash-editor-header-layout::before {
+	content: "";
+	block-size: var(--ash-spacing-size160);
+	margin-inline-end: var(--ash-spacing-size40);
+	border-inline-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-editorGroup-border));
+}
+
 .ash-editor-tabs-and-actions[hidden] {
 	display: none;
 }

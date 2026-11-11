@@ -746,6 +746,8 @@ suite('diff browser component', () => {
 		await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
 		const message = page.locator('#session-changes .ash-sessions-editor-message');
 		await expect(message).toBeHidden();
+		const comparisonPane = page.locator('#session-changes .stanza-multi-diff-editor-pane');
+		await comparisonPane.evaluate(element => { element.setAttribute('data-test-comparison-pane', 'original'); });
 		const editor = page.locator('#session-changes .stanza-multi-diff-editor');
 		const firstHeader = editor.getByRole('button', { name: /file-0.ts/ });
 		await firstHeader.locator('.stanza-multi-diff-editor-chevron.expanded-icon').click();
@@ -754,12 +756,14 @@ suite('diff browser component', () => {
 		await expect.poll(() => page.evaluate(() => (window.ashDiffIntegration.readSessionViewState() as { scrollTop?: number; } | null)?.scrollTop)).toBe(100);
 		await page.evaluate(() => window.ashDiffIntegration.setSessionChangesVisible(false));
 		await expect(editor).toHaveCount(0);
+		await expect(comparisonPane).toHaveAttribute('data-test-comparison-pane', 'original');
 		await page.evaluate(() => window.ashDiffIntegration.setSessionChangesVisible(true));
 		await expect(editor).toBeVisible();
 		await expect(message).toBeHidden();
 		await expect(firstHeader).toHaveAttribute('aria-expanded', 'false');
 		await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
 		await page.evaluate(() => window.ashDiffIntegration.refreshSessionChanges());
+		await expect(comparisonPane).toHaveAttribute('data-test-comparison-pane', 'original');
 		await expect(firstHeader).toHaveAttribute('aria-expanded', 'false');
 		await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
 		await page.evaluate(() => window.ashDiffIntegration.reopenSessionChanges());

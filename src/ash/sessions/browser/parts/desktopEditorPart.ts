@@ -8,6 +8,7 @@ import { ViewDescriptorService } from '../../../workbench/services/views/browser
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
 import { computeScreenAwareSize, type IDimension } from '../../../base/browser/dom.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter } from '../../../base/common/event.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../workbench/common/editor.js';
 import type { IEditorGroupView, IEditorGroupViewOptions } from '../../../workbench/browser/parts/editor/editor.js';
 import type { EditorGroupView } from '../../../workbench/browser/parts/editor/editorGroupView.js';
@@ -20,6 +21,9 @@ import { EditorPart } from './editorPart.js';
 import { DesktopAuxiliaryBarPart } from './desktopAuxiliaryBarPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/editorPart.css';
+
+const DEFAULT_FILES_TREE_WIDTH = 300;
+const MINIMUM_NARROW_EDITOR_WIDTH = 160;
 
 /** Owns the main editor groups and the geometry of their docked details. */
 export class DesktopMainEditorPart extends EditorPart {
@@ -34,6 +38,8 @@ export class DesktopMainEditorPart extends EditorPart {
 	private readonly productDock = this._register(new MutableDisposable());
 	private productDetails: { readonly part: Part; readonly home: HTMLElement; readonly resize: (width: number) => void; } | undefined;
 	private productDetailsWidth: number | undefined;
+	private readonly detailsVisibility = this._register(new Emitter<void>());
+	public readonly onDidChangeDetailsVisibility = this.detailsVisibility.event;
 
 	constructor(
 		container: HTMLElement,
@@ -46,8 +52,8 @@ export class DesktopMainEditorPart extends EditorPart {
 		super(container, { ...options, supportsGroupSplitting: false }, services, theme, storage, identities);
 		this.domNode.classList.add('ash-code-editor-groups');
 		this.groups.find(group => group.id === this.pageGroupId)!.domNode.classList.add('ash-code-page-group');
-		const width = storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, 220);
-		this.preferredDetailsWidth = Number.isFinite(width) && width >= 160 && width <= 800 ? width : 220;
+		const width = storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, DEFAULT_FILES_TREE_WIDTH);
+		this.preferredDetailsWidth = Number.isFinite(width) && width >= 160 && width <= 800 ? width : DEFAULT_FILES_TREE_WIDTH;
 		storage.remove('sessions.code.filesGroup', StorageScope.WORKSPACE);
 		this._register(this.onDidLayout(dimension => {
 			this.detailsDimension = dimension;
@@ -79,7 +85,7 @@ export class DesktopMainEditorPart extends EditorPart {
 			scope.registerInstance(IContextKeyService, context);
 			const part = scope.createInstance(DesktopAuxiliaryBarPart, container, registry);
 			this.auxiliary.value = part;
-			this._register(part.onDidRequestVisibility(visible => visible ? this.showDetails() : this.hideDetails()));
+			this._register(part.onDidRequestClose(() => this.hideDetails()));
 			this.layoutDetails();
 		}
 		return this.auxiliary.value;
@@ -112,7 +118,7 @@ export class DesktopMainEditorPart extends EditorPart {
 			commitWidth: width => {
 				if (!this.productDetails) this.storage.store('sessions.code.filesTreeWidth', width, StorageScope.PROFILE, StorageTarget.MACHINE);
 			},
-			resetWidth: () => this.resizeDetails(this.productDetails?.part.preferredWidth ?? 220),
+			resetWidth: () => this.resizeDetails(this.productDetails ? this.productDetails.part.preferredWidth ?? DockedAuxiliaryBarController.MIN_WIDTH : DEFAULT_FILES_TREE_WIDTH),
 		}));
 	}
 
@@ -141,6 +147,7 @@ export class DesktopMainEditorPart extends EditorPart {
 	}
 
 	public showDetails(): void {
+		const changed = !this.detailsRequested;
 		const part = this.auxiliaryBar;
 		const composite = part.activeCompositeId ?? part.getCompositeIdToRestore();
 		if (composite) part.showComposite(composite);
@@ -148,12 +155,15 @@ export class DesktopMainEditorPart extends EditorPart {
 		this.showEditors = this.fileGroups.some(group => !!group.activeInput);
 		this.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
 		this.layoutDetails();
+		if (changed) this.detailsVisibility.fire();
 	}
 
 	public hideDetails(): void {
+		const changed = this.detailsRequested;
 		this.detailsRequested = false;
 		this.storage.store('sessions.code.filesVisible', false, StorageScope.PROFILE, StorageTarget.MACHINE);
 		this.layoutDetails();
+		if (changed) this.detailsVisibility.fire();
 	}
 
 	public setEditorVisible(visible: boolean): void {
@@ -187,12 +197,19 @@ export class DesktopMainEditorPart extends EditorPart {
 			});
 		} else if (files || this.dockedAuxiliaryBar) {
 			const minimumWidth = files?.minimumWidth ?? 0;
+			const minimumEditorWidth = Math.min(EDITOR_PART_MINIMUM_WIDTH, Math.max(MINIMUM_NARROW_EDITOR_WIDTH, this.detailsDimension.width - minimumWidth));
 			this.getDockedAuxiliaryBar().layout(this.detailsDimension, {
 				part: files,
 				requestedWidth: this.detailsVisible ? this.preferredDetailsWidth : undefined,
 				minimumWidth,
-				minimumEditorWidth: minimumWidth,
+				minimumEditorWidth,
 				editorVisible: this.showEditors && this.fileGroups.some(group => !!group.activeInput),
+				collapse: () => {
+					// A collapse gesture leaves the last saved width available when Files is reopened.
+					this.preferredDetailsWidth = this.storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, DEFAULT_FILES_TREE_WIDTH);
+					this.hideDetails();
+					this.activeGroup.focus();
+				},
 			});
 		}
 	}

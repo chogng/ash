@@ -1,5 +1,7 @@
-import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
+import { createTestEditorServices, registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
+import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
+import '../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
 import assert from 'node:assert/strict';
 import { test, suite } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -12,7 +14,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import { IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
+import { createThreadChangeFileResource, IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
 
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
@@ -29,11 +31,9 @@ import { IEditorGroupsService } from '../../../../../workbench/services/editor/c
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Event } from '../../../../../base/common/event.js';
-import { EditorPanes } from '../../../../../workbench/browser/editor.js';
-import { EditorPane, EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
-import type { MultiDiffEditorInput } from '../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
-import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IDiffService } from '../../../../../workbench/services/diff/common/diffService.js';
+import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { createSessionFileChange } from '../../../../services/sessions/common/session.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
@@ -170,12 +170,32 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 });
 
 
+function createComparisonServices(configuration: IConfigurationService, document: Document): InstantiationService {
+	document.defaultView!.HTMLCanvasElement.prototype.getContext = () => null;
+	const services = createTestEditorServices(configuration, undefined, document);
+	registerCodeEditorServices(services);
+	services.registerInstance(IDiffService, {
+		createComputationService: () => Object.assign(toDisposable(() => { }), {
+			onDidChange: Event.None,
+			computeDiff: async () => assert.fail('A comparison without a viewport must not compute diffs'),
+		}),
+	});
+	services.registerSingleton(IMultiDiffSourceResolverService, () => new MultiDiffSourceResolverService());
+	services.registerInstance(IDialogService, { error: async (error: string) => assert.fail(error) } as unknown as IDialogService);
+	services.registerInstance(IEditorService, {
+		...emptyEditorServiceState,
+		openEditor: async () => assert.fail('Unexpected editor open'),
+		focusActiveEditor: () => assert.fail('Unexpected editor focus'),
+	});
+	return services;
+}
+
 test('the default Changes editor reviews the backend checkpoint, resolves exact file identities and follows undo', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using domOwner = toDisposable(() => dom.window.close());
-	using services = registerTestComponentServices(new InstantiationService());
-	using contexts = new ContextKeyService();
 	using configuration = new InMemoryConfigurationService();
+	using fixture = createComparisonServices(configuration, dom.window.document);
+	using services = fixture.createChild();
 	using history = new Emitter<ThreadUpdateEnvelope>();
 	const file = (path: string) => ({ path, kind: 'modified' as const, binary: false, additions: 1, deletions: 0 });
 	let summary: ThreadChangesSummary = {
@@ -184,23 +204,7 @@ test('the default Changes editor reviews the backend checkpoint, resolves exact 
 			{ repositoryId: 'other', files: [file('main.ts')] },
 		], warnings: []
 	};
-	let comparison: MultiDiffEditorInput | undefined;
 	const counts: (number | undefined)[] = [];
-	class SnapshotPane extends EditorPane {
-		readonly id = 'test.checkpoint';
-		constructor() { super('test.checkpoint', services.get(IThemeService), services.get(IStorageService)); }
-		async setInput(input: MultiDiffEditorInput): Promise<void> { comparison = input; }
-		clearInput(): void { }
-		layout(): void { }
-		focus(): void { }
-	}
-	using registration = EditorPanes.registerEditorPane({
-		id: 'test.checkpoint', name: 'Checkpoint',
-		canOpen: input => input.resource.scheme === 'ash-multi-diff' ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => new SnapshotPane(),
-	});
-	services.registerInstance(IConfigurationService, configuration);
-	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'session' }] } as unknown as ISessionsManagementService);
 	services.registerInstance(ISessionChangesService, { setChangesCount: (_resource: URI, count: number | undefined) => counts.push(count) } as unknown as ISessionChangesService);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -217,17 +221,15 @@ test('the default Changes editor reviews the backend checkpoint, resolves exact 
 	pane.create(dom.window.document.body);
 	pane.setVisible(true);
 	await pane.setInput({ resource: URI.parse('ash-session-changes:/session?thread=thread') }, new AbortController().signal);
-	assert.equal(counts.at(-1), 3);
-	assert.deepEqual(comparison!.items.map(item => item.modified.initialText), ['repo/main.ts', 'repo/repo/main.ts', 'other/main.ts']);
-	assert.equal(new Set(comparison!.items.map(item => item.modified.resource.toString())).size, 3);
-	const nested = comparison!.items[1]!;
-	const change = await pane.getFileChange(nested.original.resource, { review: true });
+	assert.equal(counts.at(-1), 3, pane.getAccessibleContent());
+	assert.match(pane.getAccessibleContent(), /After:\nrepo\/main\.ts[\s\S]*After:\nrepo\/repo\/main\.ts[\s\S]*After:\nother\/main\.ts/u);
+	const nested = createThreadChangeFileResource('session', 'thread', summary.revision, 'repo', 'repo/main.ts');
+	const change = await pane.getFileChange(nested.with({ query: `${nested.query}&side=before` }), { review: true });
 	assert.equal(change?.file.path, 'repo/main.ts');
 	assert.ok(change && !('summary' in change));
 	assert.equal(change.repositoryId, 'repo');
-	assert.equal(comparison!.items[1]!.contextKeys?.['sessions.changesCanReview'], true);
 	summary = { ...emptySummary, sequence: 3, revision: 'undone' };
-	assert.equal(await pane.getFileChange(nested.modified.resource, { review: true }), undefined);
+	assert.equal(await pane.getFileChange(nested, { review: true }), undefined);
 	history.fire({ sessionId: 'session', threadId: 'thread', durableSequence: 3, update: { type: 'committed', event: { type: 'threadHistoryMoved' } } });
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(counts.at(-1), 0);
@@ -237,9 +239,9 @@ test('the default Changes editor reviews the backend checkpoint, resolves exact 
 test('a Turn Changes editor includes every repository capture for that turn and excludes other turns', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using domOwner = toDisposable(() => dom.window.close());
-	using services = registerTestComponentServices(new InstantiationService());
-	using contexts = new ContextKeyService();
 	using configuration = new InMemoryConfigurationService();
+	using fixture = createComparisonServices(configuration, dom.window.document);
+	using services = fixture.createChild();
 	const capture = (changeSetId: string, turnId: string, repositoryId: string): TurnChangeSetSummary => ({
 		sessionId: 'session', threadId: 'thread', changeSetId, turnId, repositoryId, revision: 1,
 		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [],
@@ -248,22 +250,6 @@ test('a Turn Changes editor includes every repository capture for that turn and 
 	const captures = [capture('first', 'older', 'a'), capture('second', 'selected', 'a'), capture('third', 'selected', 'b')];
 	const file = { path: 'main.ts', kind: 'modified' as const, binary: false, additions: 1, deletions: 0 };
 	const fileReads: string[] = [];
-	let comparison: MultiDiffEditorInput | undefined;
-	class TurnPane extends EditorPane {
-		readonly id = 'test.turn';
-		constructor() { super('test.turn', services.get(IThemeService), services.get(IStorageService)); }
-		async setInput(input: MultiDiffEditorInput): Promise<void> { comparison = input; }
-		clearInput(): void { }
-		layout(): void { }
-		focus(): void { }
-	}
-	using registration = EditorPanes.registerEditorPane({
-		id: 'test.turn', name: 'Turn',
-		canOpen: input => input.resource.scheme === 'ash-multi-diff' ? EditorPaneMatch.Default : EditorPaneMatch.None,
-		create: () => new TurnPane(),
-	});
-	services.registerInstance(IConfigurationService, configuration);
-	services.registerInstance(IContextKeyService, contexts);
 	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'session' }] } as unknown as ISessionsManagementService);
 	services.registerInstance(ISessionChangesService, {
 		setChangesCount: () => { },
@@ -288,7 +274,9 @@ test('a Turn Changes editor includes every repository capture for that turn and 
 	pane.setVisible(true);
 	await pane.setInput(new SessionChangesEditorInput(URI.parse('ash-session-changes:/session?thread=thread'), { kind: 'turn', turnId: 'selected' }), new AbortController().signal);
 	assert.deepEqual(fileReads, ['second', 'third']);
-	assert.deepEqual(comparison!.items.map(item => item.modified.initialText), ['second', 'third']);
-	assert.deepEqual(comparison!.items.map(item => item.contextKeys?.['sessions.changesCanReview']), [true, false]);
-	assert.equal(new Set(comparison!.items.map(item => item.modified.resource.toString())).size, 2);
+	assert.match(pane.getAccessibleContent(), /After:\nsecond[\s\S]*After:\nthird/u);
+	const second = createSessionFileChange(captures[1]!, file);
+	const third = createSessionFileChange(captures[2]!, file);
+	assert.equal((await pane.getFileChange(second.modifiedUri, { review: true }))?.file.path, file.path);
+	assert.equal(await pane.getFileChange(third.modifiedUri, { review: true }), undefined);
 });

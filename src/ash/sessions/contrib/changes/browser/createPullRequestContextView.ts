@@ -1,4 +1,5 @@
-import { CancellationError } from '../../../../base/common/errors.js';
+import { CancellationError, getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ContextView, ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -9,14 +10,59 @@ import { GitHubError, GitHubMergeMethod, type GitHubRepository } from '../../../
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
+import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { chatExecutionWorkspace } from '../../../services/sessions/common/session.js';
 import type { ISessionPullRequestCreation, ISessionPullRequestOptions, SessionPullRequestMergeMethod } from '../common/pullRequestCreation.js';
 import { CreatePullRequestChatRequest } from './createPullRequestChatRequest.js';
 import { CreatePullRequestWidget, type ICreatePullRequestWidgetOptions } from './createPullRequestWidget.js';
+
+/** Anchors the existing form to the Code conversation's Environment section. */
+export class CreatePullRequestRailAction extends Disposable {
+	private readonly popup = this._register(new MutableDisposable<CreatePullRequestContextView>());
+
+	constructor(
+		container: HTMLElement,
+		model: Pick<ChatWidgetModel, 'selectedSession' | 'onDidChange'>,
+		@IInstantiationService instantiation: IInstantiationService,
+		@ISessionsService sessions: ISessionsService,
+		@INotificationService notifications: INotificationService,
+	) {
+		super();
+		const button = this._register(new Button(container, {
+			...defaultButtonStyles, size: 'small',
+			label: localize('sessions.changes.createPR', 'Create pull request'),
+			onClick: () => {
+				const target = model.selectedSession;
+				const active = sessions.activeSelection;
+				if (target.kind !== 'session' || active?.kind !== 'session'
+					|| target.active.session.sessionId !== active.active.session.sessionId || target.active.threadId !== active.active.threadId) return;
+				const view = instantiation.createInstance(CreatePullRequestContextView);
+				this.popup.value = view;
+				void view.show(button.domNode).catch(error => {
+					if (!view.isDisposed && !isCancellationError(error)) notifications.error(getErrorMessage(error));
+					view.dispose();
+				});
+			},
+		}));
+		button.domNode.setAttribute('aria-haspopup', 'dialog');
+		const update = () => {
+			const selection = model.selectedSession;
+			button.hidden = selection.kind !== 'session' || !chatExecutionWorkspace(selection.active.session,
+				selection.active.session.chats.find(chat => chat.threadId === selection.active.threadId));
+			if (button.hidden) this.closePopup();
+		};
+		this._register(model.onDidChange(update));
+		update();
+	}
+
+	get hasOpenPopup(): boolean { return this.popup.value?.isDisposed === false; }
+	closePopup(): void { this.popup.clear(); }
+}
 
 /** Captures the Session's repository before mounting a transient creation form. */
 export class CreatePullRequestContextView extends Disposable {
@@ -66,7 +112,8 @@ export class CreatePullRequestContextView extends Disposable {
 			if (error instanceof GitHubError) { throw new Error(localize('sessions.changes.prAccountsError', 'Could not load GitHub accounts. Reconnect GitHub and try again.')); }
 			throw error;
 		}
-		if (!operation || this.isDisposed) { return; }
+		if (!operation) { this.dispose(); return; }
+		if (this.isDisposed) { return; }
 		const options: ICreatePullRequestWidgetOptions = {
 			creation: operation,
 			onCancel: () => this.formContextView.hide(),

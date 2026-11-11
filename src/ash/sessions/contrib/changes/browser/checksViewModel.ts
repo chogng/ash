@@ -27,7 +27,7 @@ interface ChecksState {
 	readonly checks: readonly ChecksEntry[];
 }
 
-/** Owns only the visible Changes surface's cancellable CI detail reads. */
+/** Owns cancellable CI detail reads for the visible Checks widget. */
 export class ChecksViewModel extends Disposable {
 	private readonly state = observableValue<ChecksState>(this, { loading: false, checks: [] });
 	public readonly checksObs: IObservable<ChecksState> = this.state;
