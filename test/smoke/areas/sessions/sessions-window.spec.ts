@@ -68,6 +68,27 @@ emptyWorkspaceTest(
 	},
 );
 
+emptyWorkspaceTest('Code sidebar task run filter is an independent keyboard toggle', { tag: ['@electron-ui'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const more = page.getByRole('tree', { name: 'Sessions', exact: true }).getByRole('button', { name: 'More Sessions Actions', exact: true });
+	const openShowMenu = async () => {
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: 'Show', exact: true }).press('ArrowRight');
+	};
+	const includeRuns = page.getByRole('menuitemcheckbox', { name: 'Include Task Run Conversations', exact: true });
+	const alwaysShowRuns = page.getByRole('menuitemcheckbox', { name: 'Always Show Task Run Conversations', exact: true });
+	await openShowMenu();
+	await expect(includeRuns).not.toBeChecked();
+	await includeRuns.press('Enter');
+	await openShowMenu();
+	await expect(includeRuns).toBeChecked();
+	await expect(alwaysShowRuns).not.toBeChecked();
+	await includeRuns.press('Enter');
+	await openShowMenu();
+	await expect(includeRuns).not.toBeChecked();
+});
+
 test('Sessions Search opens categorized results and creates a new session', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const search = page.locator('[data-action-id="sessions.search"] button');

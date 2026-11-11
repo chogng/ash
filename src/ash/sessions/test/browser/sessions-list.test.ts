@@ -940,7 +940,12 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	};
 	const filter = (list: SessionsList): IAction => {
 		const action = submenuAction(list, 'sessions.list.show', 'sessions.list.toggleAutomationSessions');
-		assert.equal(action.label, '显示任务运行会话');
+		assert.equal(action.label, '始终显示任务运行会话');
+		return action;
+	};
+	const includeRuns = (list: SessionsList): IAction => {
+		const action = submenuAction(list, 'sessions.list.show', 'sessions.list.showAutomationRuns');
+		assert.equal(action.label, '包含任务运行会话');
 		return action;
 	};
 
@@ -967,6 +972,16 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	await submenuAction(chat, 'sessions.list.show', 'sessions.list.showAutomationSessionsAfterReply').run();
 	assert.deepEqual(rows(chat), ['manual', 'run']);
 	const listModel = new SessionsListModelService(storage);
+	await includeRuns(chat).run();
+	assert.deepEqual(rows(chat), ['manual', 'run', remoteId]);
+	assert.equal(includeRuns(code).checked, true);
+	assert.equal(listModel.automationSessionsMode, 'afterReply');
+	listModel.setAutomationSessionOverride(automated, 'hide');
+	assert.deepEqual(rows(chat), ['manual', 'run']);
+	await includeRuns(code).run();
+	assert.equal(listModel.getAutomationSessionOverride(automated), 'hide');
+	listModel.setAutomationSessionOverride(automated, undefined);
+	assert.deepEqual(rows(chat), ['manual', 'run']);
 	listModel.recordAutomationSessionReply(automated);
 	assert.deepEqual(rows(chat), ['manual', 'run', remoteId]);
 

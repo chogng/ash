@@ -95,7 +95,7 @@ export function startConversationRename(row: HTMLElement, store: DisposableStore
 }
 
 export function getSessionsListGroupingHelp(): string {
-	return localize('sessions.list.groupingHelp', 'Use Tab to reach More Sessions Actions beside Projects or Recents and press Enter. Under Group By, choose Projects to browse conversations by project or Flat List to browse recent conversations together. Chat and Code remember their choices separately. Sort By changes the order of conversations.');
+	return localize('sessions.list.groupingHelp', 'Use Tab to reach More Sessions Actions beside Projects or Recents and press Enter. Under Group By, choose Projects to browse conversations by project or Flat List to browse recent conversations together. Chat and Code remember their choices separately. Sort By changes the order of conversations. Under Show, Include Task Run Conversations lists task runs while respecting conversations you hid individually.');
 }
 
 export function getSessionsListAttentionHelp(): string {

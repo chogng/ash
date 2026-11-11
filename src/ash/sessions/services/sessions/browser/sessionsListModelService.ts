@@ -39,6 +39,8 @@ export interface ISessionsListModelService {
 	setShowComparisonGroups(show: boolean): void;
 	readonly automationSessionsMode: AutomationSessionsListMode;
 	setAutomationSessionsMode(mode: AutomationSessionsListMode): void;
+	readonly showAutomationRuns: boolean;
+	setShowAutomationRuns(show: boolean): void;
 	getAutomationSessionOverride(session: SessionListIdentity): 'show' | 'hide' | undefined;
 	setAutomationSessionOverride(session: ISession, override: 'show' | 'hide' | undefined): void;
 	recordAutomationSessionReply(session: ISession): void;
@@ -57,6 +59,7 @@ export interface ISessionsListModelService {
 export const ISessionsListModelService = createServiceIdentifier<ISessionsListModelService>('sessionsListModelService');
 
 const automationVisibilityKey = 'sessions.list.showAutomationSessions';
+const automationFilterKey = 'sessions.list.showAutomationRuns';
 const automationOverridePrefix = 'sessions.list.automationOverride.';
 const automationReplyPrefix = 'sessions.list.automationReply.';
 const sortModeKey = 'sessions.list.sortMode';
@@ -91,7 +94,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key.startsWith(`${sortModeKey}.`)
 				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key.startsWith(`${groupingKey}.`) || event.key === comparisonGroupsKey
-				|| event.key === attentionGroupKey
+				|| event.key === attentionGroupKey || event.key === automationFilterKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
 				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix) || event.key.startsWith(catalogRowIconPrefix))) {
 				listener.call(thisArgs);
@@ -184,6 +187,14 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.storage.store(automationVisibilityKey, mode, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
+	get showAutomationRuns(): boolean {
+		return this.storage.getBoolean(automationFilterKey, StorageScope.PROFILE, false);
+	}
+
+	setShowAutomationRuns(show: boolean): void {
+		this.storage.store(automationFilterKey, show, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
 	getAutomationSessionOverride(session: SessionListIdentity): 'show' | 'hide' | undefined {
 		const value = this.storage.get(automationOverridePrefix + session.sessionId, StorageScope.PROFILE);
 		return value === 'show' || value === 'hide' ? value : undefined;
@@ -203,6 +214,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		if (session.source !== 'automation') return true;
 		const override = this.getAutomationSessionOverride(session);
 		if (override !== undefined) return override === 'show';
+		if (this.showAutomationRuns) return true;
 		const mode = this.automationSessionsMode;
 		return mode === 'always' || mode === 'afterReply'
 			&& this.storage.getBoolean(automationReplyPrefix + session.sessionId, StorageScope.PROFILE, false);
