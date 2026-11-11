@@ -92,6 +92,13 @@
 	gap: var(--ash-spacing-size40);
 }
 
+.ash-editor-group-header-hosted .ash-tab,
+.ash-editor-group-header-hosted .ash-toolbar,
+.ash-editor-group-header-hosted .ash-scrollbar-track.ash-scrollbar-visible,
+.ash-editor-group-header-hosted .ash-scrollbar-track.active {
+	-webkit-app-region: no-drag;
+}
+
 .ash-editor-header-primary {
 	flex: 0 0 auto;
 	min-width: 0;

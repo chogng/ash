@@ -4,17 +4,25 @@ import { Direction, Orientation, SerializableGrid, Sizing, type ISerializableVie
 import { MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { localize } from '../../../nls.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { Part } from '../../../workbench/browser/part.js';
 import { NoWorkbenchPartFrameInsets, WorkbenchPartView, type WorkbenchPartFrameInsets } from '../../../workbench/browser/workbenchPartView.js';
 import type { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';
 import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
+import { GroupDirection } from '../../../workbench/services/editor/common/editorGroupsService.js';
+import { SessionsConfiguration, type SessionsLayoutStyle } from '../../common/configuration.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/desktopEditorArea.css';
 
 const toolFrameInset = 6;
-const toolFrameInsets = { top: toolFrameInset, right: toolFrameInset, bottom: toolFrameInset, left: toolFrameInset };
+const conversationWeight = 2;
+const modernToolFrameInsets = { top: toolFrameInset, right: toolFrameInset, bottom: toolFrameInset, left: toolFrameInset };
+const toolGridOptions = {
+	preserveSplitWeights: true,
+	styles: { separatorBorder: 'var(--ash-sessions-tool-separator, var(--ash-contrastBorder, var(--ash-editorGroup-border)))' },
+};
 
 export type DesktopEditorTool = 'files' | 'changes' | 'browser' | 'terminal' | 'chat';
 export const desktopEditorTools: readonly DesktopEditorTool[] = ['files', 'changes', 'browser', 'terminal', 'chat'];
@@ -29,12 +37,11 @@ export interface ToolSlot {
 
 class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISerializableView {
 	readonly headerHost: HTMLElement;
-	private readonly hostedGroups = new Map<IEditorGroupView, HTMLElement>();
+	private readonly groupLabels = new Map<IEditorGroupView, HTMLElement>();
 
 	constructor(tool: DesktopEditorTool, private readonly editor: EditorPart, private readonly container: HTMLElement) {
 		super(tool, editor);
 		container.append(this.frame);
-		this.setFrameInsets(toolFrameInsets);
 		this.headerHost = container.ownerDocument.createElement('div');
 		this.headerHost.className = 'ash-sessions-tool-header-slot ash-sessions-tool-editor';
 		this.headerHost.dataset.editorTool = tool;
@@ -42,31 +49,38 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 	public override get element(): HTMLElement { return this.container; }
 	public focus(): void { this.editor.focus(); }
 
-	public updateHeaderHost(host: HTMLElement | undefined): void {
-		const groups = new Set(host ? this.editor.groups.filter(group => this.editor.isGroupVisible(group.id)) : []);
-		for (const [group, label] of this.hostedGroups) {
-			if (groups.has(group)) continue;
-			label.remove();
-			if (group.headerElement.parentElement === this.headerHost) group.setHeaderHost(undefined);
-			this.hostedGroups.delete(group);
+	public updateHeaders(visible: boolean, host: HTMLElement | undefined): void {
+		const groups = new Set(visible ? this.editor.groups.filter(group => this.editor.isGroupVisible(group.id)) : []);
+		const docked = new Set(host ? [...groups].filter(group => !this.editor.findGroup({ direction: GroupDirection.UP }, group)) : []);
+		for (const [group, label] of this.groupLabels) {
+			if (!docked.has(group) && group.headerElement.parentElement === this.headerHost) {
+				group.headerElement.style.removeProperty('flex-basis');
+				group.setHeaderHost(undefined);
+			}
+			if (!groups.has(group)) {
+				label.remove();
+				this.groupLabels.delete(group);
+			}
 		}
-		if (!host || !groups.size) {
-			this.headerHost.remove();
-			return;
+		if (!host || !docked.size) this.headerHost.remove();
+		else {
+			this.headerHost.style.width = `${this.element.getBoundingClientRect().width}px`;
+			if (this.headerHost.parentElement !== host) host.append(this.headerHost);
 		}
-		if (this.headerHost.parentElement !== host) host.append(this.headerHost);
 		let cursor = this.headerHost.firstElementChild;
 		for (const group of groups) {
-			let label = this.hostedGroups.get(group);
+			let label = this.groupLabels.get(group);
 			if (!label) {
 				label = this.headerHost.ownerDocument.createElement('span');
 				label.className = 'ash-sessions-tool-header-label';
 				group.headerElement.prepend(label);
-				this.hostedGroups.set(group, label);
-				group.setHeaderHost(this.headerHost);
+				this.groupLabels.set(group, label);
 			}
 			const name = group.activeInput?.label ?? (this.partId === 'files' ? localize('sessions.files.title', 'Files') : '');
 			if (label.textContent !== name) label.textContent = name;
+			if (!docked.has(group)) continue;
+			group.headerElement.style.flexBasis = `${group.domNode.getBoundingClientRect().width}px`;
+			if (group.headerElement.parentElement !== this.headerHost) group.setHeaderHost(this.headerHost);
 			if (cursor && group.headerElement !== cursor) this.headerHost.insertBefore(group.headerElement, cursor);
 			cursor = group.headerElement.nextElementSibling;
 		}
@@ -78,7 +92,8 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 	}
 	public override get minimumWidth(): number {
 		// The session composer needs its usable width inside the tool frame.
-		return this.partId === 'chat' ? Math.max(super.minimumWidth, EDITOR_PART_MINIMUM_WIDTH + 2 * toolFrameInset) : super.minimumWidth;
+		const composerWidth = this.partId === 'chat' ? Math.max(0, EDITOR_PART_MINIMUM_WIDTH - this.editor.minimumWidth) : 0;
+		return super.minimumWidth + composerWidth;
 	}
 }
 
@@ -87,6 +102,11 @@ type ToolLeaf = Extract<SerializedGridDescriptor, { type: 'leaf'; }>;
 
 function toolLeaves(node: SerializedGridDescriptor): ToolLeaf[] {
 	return node.type === 'leaf' ? [node] : node.children.flatMap(toolLeaves);
+}
+
+function toolColumns(layout: SerializedGridDescriptor, isVisible: (leaf: ToolLeaf) => boolean): SerializedGridDescriptor[] {
+	const columns = layout.type === 'branch' && layout.orientation === Orientation.HORIZONTAL ? layout.children : [layout];
+	return columns.filter(column => toolLeaves(column).some(isVisible));
 }
 
 function mapToolLayout(node: SerializedGridDescriptor, map: (node: SerializedGridDescriptor) => SerializedGridDescriptor | undefined): SerializedGridDescriptor | undefined {
@@ -122,25 +142,43 @@ export class DesktopEditorArea extends Part {
 	private readonly positioned = new Set<DesktopEditorTool>();
 	private slots: Partial<Record<DesktopEditorTool, ToolSlot>> = {};
 	private firstTool: DesktopEditorTool | undefined;
-	private pendingInitialWidth = false;
+	private toolWidthWeight: number | undefined;
 	private restoringPlacement: 'legacy' | 'saved' | undefined;
 	private manuallyArranged = false;
 	private updatingVisibility = false;
 	private titlebarHost: HTMLElement | undefined;
 	private readonly updateHeaders: AnimationFrameScheduler;
 
-	constructor(container: HTMLElement, @IThemeService theme: IThemeService, @IStorageService private readonly toolStorage: IStorageService) {
+	constructor(
+		container: HTMLElement,
+		@IThemeService theme: IThemeService,
+		@IStorageService private readonly toolStorage: IStorageService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+	) {
 		super(container, 'editor', theme, toolStorage);
 		this.titleDomNode.hidden = true;
 		this.domNode.classList.add('ash-desktop-editor-area');
 		this.updateHeaders = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => this.layoutHeaders()));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration(SessionsConfiguration.layoutStyle)) return;
+			for (const [tool, view] of this.views) {
+				view.setFrameInsets(this.toolFrameInsets(tool));
+			}
+			this.layout(this.dimension);
+			this.publishMinimumSize();
+		}));
 		this._register(toDisposable(() => {
-			for (const view of this.views.values()) view.updateHeaderHost(undefined);
+			for (const view of this.views.values()) view.updateHeaders(false, undefined);
 		}));
 	}
 
 	public override get minimumWidth(): number { return Math.max(EDITOR_PART_MINIMUM_WIDTH, this.grid.value?.minimumWidth ?? 0); }
 	public override get minimumHeight(): number { return Math.max(120, this.grid.value?.minimumHeight ?? 0); }
+
+	private toolFrameInsets(tool: DesktopEditorTool): WorkbenchPartFrameInsets {
+		const modern = this.configuration.getValue<SessionsLayoutStyle>(SessionsConfiguration.layoutStyle) === 'modern';
+		return modern && !(tool === 'files' && this.hasProductPage) ? modernToolFrameInsets : NoWorkbenchPartFrameInsets;
+	}
 
 	private setGrid(grid: SerializableGrid<ToolPartView>): void {
 		this.gridConstraints.clear();
@@ -159,15 +197,14 @@ export class DesktopEditorArea extends Part {
 
 	public addTool(tool: DesktopEditorTool, part: EditorPart, container: HTMLElement): void {
 		const view = new ToolPartView(tool, part, container);
+		view.setFrameInsets(this.toolFrameInsets(tool));
 		view.element.classList.add('ash-tool-editor-workspace', 'ash-sessions-tool-editor');
 		view.element.dataset.editorTool = tool;
 		part.domNode.dataset.part = 'tool-editor';
 		this.views.set(tool, view);
-		this._register(part.onDidLayout(() => {
-			if (this.titlebarHost) this.updateHeaders.schedule();
-		}));
+		this._register(part.onDidLayout(() => this.updateHeaders.schedule()));
 		if (!this.grid.value) {
-			this.setGrid(new SerializableGrid(this.contentDomNode, { type: 'leaf', view, size: 600 }, { preserveSplitWeights: true }));
+			this.setGrid(new SerializableGrid(this.contentDomNode, { type: 'leaf', view, size: 600 }, toolGridOptions));
 		} else if (tool === 'chat') {
 			this.replaceGrid(this.addChatToLayout(this.grid.value.serialize()));
 		} else {
@@ -210,23 +247,20 @@ export class DesktopEditorArea extends Part {
 	}
 
 	/** Read constraints from the saved topology while the window is showing a temporary arrangement. */
-	private expandedMinimum(axis: Orientation): number {
-		const measure = (node: SerializedGridDescriptor): number => {
-			if (node.type === 'leaf') {
-				const tool = node.data as DesktopEditorTool;
-				if (!this.desired.has(tool)) return 0;
-				const view = this.views.get(tool)!;
-				return axis === Orientation.HORIZONTAL ? view.minimumWidth : view.minimumHeight;
-			}
-			const sizes = node.children.map(measure);
-			return node.orientation === axis ? sizes.reduce((sum, size) => sum + size, 0) : Math.max(...sizes);
-		};
-		return measure(this.saveLayout());
+	private expandedMinimum(node: SerializedGridDescriptor, axis: Orientation): number {
+		if (node.type === 'leaf') {
+			const tool = node.data as DesktopEditorTool;
+			if (!this.desired.has(tool)) return 0;
+			const view = this.views.get(tool)!;
+			return axis === Orientation.HORIZONTAL ? view.minimumWidth : view.minimumHeight;
+		}
+		const sizes = node.children.map(child => this.expandedMinimum(child, axis));
+		return node.orientation === axis ? sizes.reduce((sum, size) => sum + size, 0) : Math.max(...sizes);
 	}
 
 	public get expandedMinimumWidth(): number {
 		return this.maximized ? this.currentMinimumWidth
-			: Math.max(EDITOR_PART_MINIMUM_WIDTH, this.expandedMinimum(Orientation.HORIZONTAL));
+			: Math.max(EDITOR_PART_MINIMUM_WIDTH, this.expandedMinimum(this.saveLayout(), Orientation.HORIZONTAL));
 	}
 
 	public get currentMinimumWidth(): number {
@@ -235,9 +269,7 @@ export class DesktopEditorArea extends Part {
 	}
 
 	public get hasTools(): boolean { return this.desired.size > 0; }
-	public get hasToolCards(): boolean {
-		return this.hasTools && !this.domNode.classList.contains('has-product-page');
-	}
+	public get hasProductPage(): boolean { return this.domNode.classList.contains('has-product-page'); }
 
 	public setTitlebarHost(host: HTMLElement | undefined): void {
 		if (this.titlebarHost === host) return;
@@ -249,12 +281,16 @@ export class DesktopEditorArea extends Part {
 	private layoutHeaders(): void {
 		const host = this.titlebarHost;
 		const grid = this.grid.value;
+		const showToolHeaders = !this.hasProductPage && !this.domNode.hidden;
 		const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
 		for (const [tool, view] of this.views) {
-			view.updateHeaderHost(host && this.isToolVisible(tool) ? host : undefined);
+			const visible = showToolHeaders && this.isToolVisible(tool);
+			// A pane below another pane keeps its title at its own top edge.
+			const dock = visible && host && !grid!.getNeighborViews(view, Direction.Up).length;
+			view.updateHeaders(visible, dock ? host : undefined);
 		}
 		if (host && grid) {
-			// The title bar follows visual tool order even when the cards are stacked.
+			// Only panes along the top edge participate in this left-to-right row.
 			let cursor = host.firstElementChild;
 			for (const leaf of toolLeaves(grid.serialize())) {
 				const slot = this.views.get(leaf.data as DesktopEditorTool)!.headerHost;
@@ -280,7 +316,7 @@ export class DesktopEditorArea extends Part {
 	}
 
 	public get expandedMinimumHeight(): number {
-		return this.maximized ? this.views.get(this.maximized.tool)!.minimumHeight : this.expandedMinimum(Orientation.VERTICAL);
+		return this.maximized ? this.views.get(this.maximized.tool)!.minimumHeight : this.expandedMinimum(this.saveLayout(), Orientation.VERTICAL);
 	}
 
 	public get stackedMinimumHeight(): number {
@@ -291,17 +327,44 @@ export class DesktopEditorArea extends Part {
 		return Math.max(EDITOR_PART_MINIMUM_WIDTH, ...[...this.desired].map(tool => this.views.get(tool)!.minimumWidth));
 	}
 
-	public takeInitialWidth(available: number): number | undefined {
-		if (!this.pendingInitialWidth || !this.firstTool) return undefined;
-		this.pendingInitialWidth = false;
-		const saved = this.toolStorage.getNumber(`sessions.layout.toolShare.${this.firstTool}`, StorageScope.PROFILE);
-		const share = saved !== undefined && saved > 0 && saved < 1
-			? saved : this.firstTool === 'terminal' || this.firstTool === 'chat' ? 1 / 3 : 3 / 5;
-		return Math.round(available * share);
+	private initialToolWeight(): number {
+		const saved = this.firstTool && this.toolStorage.getNumber(`sessions.layout.toolShare.${this.firstTool}`, StorageScope.PROFILE);
+		if (typeof saved === 'number' && saved > 0 && saved < 1) return conversationWeight * saved / (1 - saved);
+		return this.firstTool === 'terminal' || this.firstTool === 'chat' ? 1 : 3;
 	}
 
+	/** Allocate the conversation and the visible tool columns on the same width budget. */
+	public getPreferredWidth(available: number, conversationMinimum: number, previousWidth: number): number {
+		if (this.maximized) return previousWidth;
+		// Working sets saved before width weights used the outer Grid's stored pixel width.
+		const previousShare = previousWidth / available;
+		this.toolWidthWeight ??= previousShare > 0 && previousShare < 1
+			? conversationWeight * previousShare / (1 - previousShare) : this.initialToolWeight();
+		const columns = toolColumns(this.saveLayout(), leaf => this.desired.has(leaf.data as DesktopEditorTool));
+		const columnTotal = columns.reduce((sum, column) => sum + (column.size || 1), 0);
+		const toolWeight = this.toolWidthWeight;
+		const constraints = columns.map(column => ({
+			weight: toolWeight * ((column.size || 1) / columnTotal),
+			minimum: this.expandedMinimum(column, Orientation.HORIZONTAL),
+		}));
+		// A column at its minimum takes that width out of the shared budget first.
+		let width = available;
+		let weight = conversationWeight + toolWeight;
+		for (const column of constraints.sort((a, b) => b.minimum / b.weight - a.minimum / a.weight)) {
+			if (width * column.weight / weight >= column.minimum) break;
+			width -= column.minimum;
+			weight -= column.weight;
+		}
+		const conversation = Math.max(conversationMinimum, width * conversationWeight / weight);
+		return Math.max(this.minimumWidth, Math.round(available - conversation));
+	}
+
+	public get preferredWidthWeight(): number | undefined { return this.toolWidthWeight; }
+
 	public rememberWidth(share: number): void {
-		if (this.firstTool && share > 0 && share < 1) {
+		if (!this.hasTools || this.hasProductPage || !(share > 0 && share < 1)) return;
+		this.toolWidthWeight = conversationWeight * share / (1 - share);
+		if (this.firstTool && this.desired.has(this.firstTool) && toolColumns(this.saveLayout(), leaf => leaf.visible).length === 1) {
 			this.toolStorage.store(`sessions.layout.toolShare.${this.firstTool}`, share, StorageScope.PROFILE, StorageTarget.MACHINE);
 		}
 	}
@@ -314,13 +377,15 @@ export class DesktopEditorArea extends Part {
 
 	public syncVisible(tools: readonly DesktopEditorTool[], active: DesktopEditorTool | undefined, productPage: boolean): void {
 		const files = this.views.get('files')!;
-		const frameChanged = this.domNode.classList.contains('has-product-page') !== productPage;
+		const frameChanged = this.hasProductPage !== productPage;
 		files.element.classList.toggle('ash-product-page-host', productPage);
 		this.domNode.classList.toggle('has-product-page', productPage);
-		files.setFrameInsets(productPage ? NoWorkbenchPartFrameInsets : toolFrameInsets);
+		files.setFrameInsets(this.toolFrameInsets('files'));
 		const place = !productPage;
 		if (active && !tools.includes(active)) active = undefined;
 		const previous = this.desired;
+		const openingAutomaticPair = !this.manuallyArranged && previous.size === 1 && tools.length === 2
+			&& tools.some(tool => previous.has(tool));
 		const restoring = this.restoringPlacement;
 		this.restoringPlacement = undefined;
 		const changed = frameChanged || active !== this.active || tools.length !== previous.size || tools.some(tool => !previous.has(tool));
@@ -332,15 +397,24 @@ export class DesktopEditorArea extends Part {
 				if (slot) this.slots[tool] = slot;
 				else delete this.slots[tool];
 			}
+			if (!frameChanged && this.toolWidthWeight !== undefined) {
+				const columns = toolColumns(layout, leaf => leaf.visible);
+				const total = columns.reduce((sum, column) => sum + (column.size || 1), 0);
+				const retained = columns.filter(column => toolLeaves(column).some(leaf => leaf.visible && tools.includes(leaf.data as DesktopEditorTool)))
+					.reduce((sum, column) => sum + (column.size || 1), 0);
+				if (retained < total) this.toolWidthWeight = retained ? this.toolWidthWeight * (retained / total) : undefined;
+			}
 		}
 		this.active = active;
 		this.desired = new Set(tools);
 		if (!tools.length) {
 			this.firstTool = undefined;
-			this.pendingInitialWidth = false;
-		} else if (!previous.size && place) {
+			this.toolWidthWeight = undefined;
+		} else if (restoring && place) {
+			this.firstTool = toolLeaves(this.saveLayout()).find(leaf => this.desired.has(leaf.data as DesktopEditorTool))?.data as DesktopEditorTool | undefined;
+		} else if (place && !tools.some(tool => previous.has(tool))) {
 			this.firstTool = active ?? tools[0];
-			this.pendingInitialWidth = !restoring;
+			this.toolWidthWeight = this.initialToolWeight();
 		}
 		if (this.maximized && !this.desired.has(this.maximized.tool)) this.toggleMaximize(this.maximized.tool);
 		this.updatingVisibility = true;
@@ -350,7 +424,8 @@ export class DesktopEditorArea extends Part {
 				if (!restoring && place && !previous.has(tool)) {
 					const slot = this.slots[tool];
 					if (slot) {
-						if (!this.restoreSlot(tool, slot)) this.placeTool(tool);
+						const stacksBelow = slot.orientation === Orientation.VERTICAL && slot.after;
+						if (openingAutomaticPair && !stacksBelow || !this.restoreSlot(tool, slot)) this.placeTool(tool);
 						delete this.slots[tool];
 					} else if (!this.manuallyArranged || !this.positioned.has(tool)) {
 						this.placeTool(tool);
@@ -361,9 +436,9 @@ export class DesktopEditorArea extends Part {
 		} finally {
 			this.updatingVisibility = false;
 		}
-		if (changed) this.notifyConstraintsChanged();
 		this.applyVisibility();
 		this.layout(this.dimension);
+		if (changed || restoring) this.notifyConstraintsChanged();
 	}
 
 	/** Repair an automatic pair without changing a recorded manual split. */
@@ -442,8 +517,7 @@ export class DesktopEditorArea extends Part {
 		const leaves = toolLeaves(layout);
 		const opened = new Set(leaves.filter(leaf => leaf.visible && leaf.data !== tool && this.desired.has(leaf.data as DesktopEditorTool)).map(leaf => leaf.data));
 		if (!opened.size) return;
-		const visible = (node: SerializedGridDescriptor) => toolLeaves(node).some(leaf => opened.has(leaf.data));
-		const columns = layout.type === 'branch' && layout.orientation === Orientation.HORIZONTAL ? layout.children.filter(visible) : [layout];
+		const columns = toolColumns(layout, leaf => opened.has(leaf.data));
 		const last = columns.at(-1)!;
 		const cards = toolLeaves(last).filter(leaf => opened.has(leaf.data));
 		const canStack = this.dimension.height === 0 || this.dimension.height >= [...cards.map(card => card.data as DesktopEditorTool), tool]
@@ -451,7 +525,8 @@ export class DesktopEditorArea extends Part {
 		if (cards.length === 1 && canStack) {
 			this.reposition(layout, tool, last, Orientation.VERTICAL, true);
 		} else {
-			this.reposition(layout, tool, layout, Orientation.HORIZONTAL, true);
+			const toolWeight = this.toolWidthWeight ?? this.initialToolWeight();
+			this.reposition(layout, tool, layout, Orientation.HORIZONTAL, true, 1 / toolWeight);
 		}
 	}
 
@@ -498,7 +573,7 @@ export class DesktopEditorArea extends Part {
 	private reposition(layout: SerializedGridDescriptor, tool: DesktopEditorTool, target: SerializedGridDescriptor, orientation: Orientation, after: boolean, ratio?: number, parent?: ToolBranch): void {
 		const source = toolLeaves(layout).find(leaf => leaf.data === tool)!;
 		const isVisibleSibling = (node: SerializedGridDescriptor): boolean =>
-			toolLeaves(node).some(leaf => leaf.visible && leaf.data !== tool);
+			toolLeaves(node).some(leaf => leaf.visible && leaf.data !== tool && this.desired.has(leaf.data as DesktopEditorTool));
 		const restoreShare = (children: readonly SerializedGridDescriptor[], available: number, ratio: number) => {
 			const total = children.reduce((sum, child) => sum + (isVisibleSibling(child) ? child.size : 0), 0);
 			const siblingSpace = (available || total || 2) / (1 + ratio);
@@ -549,6 +624,12 @@ export class DesktopEditorArea extends Part {
 		};
 		const next = normalizeToolLayout(move(layout, this.dimension.width, this.dimension.height)!);
 		if (!next) return;
+		if (orientation === Orientation.HORIZONTAL && ratio !== undefined) {
+			const visible = (leaf: ToolLeaf) => leaf.visible && this.desired.has(leaf.data as DesktopEditorTool);
+			if (toolColumns(next, visible).length > toolColumns(layout, leaf => leaf.data !== tool && visible(leaf)).length) {
+				this.toolWidthWeight = (this.toolWidthWeight ?? this.initialToolWeight()) * (1 + ratio);
+			}
+		}
 		if (this.maximized) this.maximized = { tool: this.maximized.tool, layout: next };
 		else if (this.compact) this.compactLayout = next;
 		else this.replaceGrid(next);
@@ -615,7 +696,7 @@ export class DesktopEditorArea extends Part {
 	public get hasManualArrangement(): boolean { return this.manuallyArranged; }
 	public get closedSlots(): Readonly<Partial<Record<DesktopEditorTool, ToolSlot>>> { return { ...this.slots }; }
 
-	public restoreLayout(layout: SerializedGridDescriptor, positioned?: readonly DesktopEditorTool[], manuallyArranged?: boolean, slots: Readonly<Partial<Record<DesktopEditorTool, ToolSlot>>> = {}): void {
+	public restoreLayout(layout: SerializedGridDescriptor, positioned?: readonly DesktopEditorTool[], manuallyArranged?: boolean, slots: Readonly<Partial<Record<DesktopEditorTool, ToolSlot>>> = {}, widthWeight?: number): void {
 		this.validateLayout(layout);
 		this.slots = { ...slots };
 		this.positioned.clear();
@@ -624,7 +705,7 @@ export class DesktopEditorArea extends Part {
 		}
 		this.manuallyArranged = manuallyArranged ?? false;
 		this.restoringPlacement = manuallyArranged === undefined ? 'legacy' : 'saved';
-		this.pendingInitialWidth = false;
+		this.toolWidthWeight = widthWeight;
 		this.maximized = undefined;
 		this.compactLayout = this.compact ? layout : undefined;
 		this.replaceGrid(layout);
@@ -635,7 +716,7 @@ export class DesktopEditorArea extends Part {
 		const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
 		const restoreFocus = focused && this.domNode.contains(focused);
 		const previous = this.grid.value;
-		const next = SerializableGrid.deserialize(this.contentDomNode, layout, { fromJSON: data => this.views.get(data as DesktopEditorTool)! }, { preserveSplitWeights: true });
+		const next = SerializableGrid.deserialize(this.contentDomNode, layout, { fromJSON: data => this.views.get(data as DesktopEditorTool)! }, toolGridOptions);
 		this.setGrid(next);
 		previous?.element.remove();
 		if (restoreFocus && focused.isConnected && !focused.closest('[hidden]')) focused.focus({ preventScroll: true });
@@ -644,6 +725,6 @@ export class DesktopEditorArea extends Part {
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.grid.value?.layout(dimension.width, dimension.height);
-		if (this.titlebarHost) this.updateHeaders.schedule();
+		this.updateHeaders.schedule();
 	}
 }

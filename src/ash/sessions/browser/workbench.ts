@@ -1162,7 +1162,8 @@ export abstract class Workbench extends Disposable {
 		]);
 		layout.createWorkbenchLayout(parts);
 		const layoutToolHeaders = () => {
-			const dock = contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && editorArea.hasToolCards
+			// An empty editor area still owns its side of the split title bar.
+			const dock = contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && !editorArea.hasProductPage
 				&& layout.isPartVisible('sessions') && layout.isPartVisible('editor');
 			const start = dock ? editorArea.domNode.getBoundingClientRect().left : undefined;
 			editorArea.setTitlebarHost(titlebar.setToolHeaderStart(start));

@@ -11,6 +11,7 @@
 .ash-desktop-editor-area-titlebar-docked::before {
 	content: "";
 	position: absolute;
+	z-index: 4;
 	inset: 0 auto 0 0;
 	border-left: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
@@ -33,6 +34,17 @@
 		.ash-editor-title-header-hosted
 	)::after {
 	content: none;
+}
+
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-tool-editor-workspace:not(.ash-product-page-host)
+	.ash-editor-title-with-group-header:not(
+		.ash-editor-title-header-hosted
+	)::after {
+	content: "";
+	height: var(--ash-strokeThickness);
+	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	pointer-events: none;
 }
 
 .ash-sessions-tool-editor .ash-editor-group-header .ash-tab-list-inset {
@@ -76,12 +88,28 @@
 }
 
 .ash-sessions-tool-header-slot {
-	display: contents;
+	position: relative;
+	display: flex;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-sessions-tool-header-slot
+	+ .ash-sessions-tool-header-slot::before {
+	content: "";
+	position: absolute;
+	z-index: 4;
+	inset: 0 auto 0 0;
+	width: var(--ash-strokeThickness);
+	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	pointer-events: none;
 }
 
 .ash-sessions-tool-header-slot > .ash-editor-group-header {
 	box-sizing: border-box;
-	flex: 1 0 min(100%, 240px);
+	flex: 1 1 auto;
+	min-width: 0;
 	height: 100%;
 	align-items: center;
 	background: transparent;
@@ -93,13 +121,14 @@
 
 .ash-sessions-tool-header-label {
 	min-width: 0;
+	align-self: center;
 	padding-inline: var(--ash-spacing-size40);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.ash-sessions-tool-header-slot .has-tabs > .ash-sessions-tool-header-label {
+.ash-editor-group-header.has-tabs > .ash-sessions-tool-header-label {
 	display: none;
 }
 
@@ -137,17 +166,6 @@
 }
 
 .ash-desktop-editor-area
-	.ash-tool-editor-workspace:not(.ash-product-page-host)
-	.ash-workbench-part-frame
-	> .ash-workbench-part {
-	border-radius: var(--ash-cornerRadius-xLarge);
-	box-shadow:
-		0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border),
-		0 2px 8px
-			color-mix(in srgb, var(--ash-sessions-inputShadow) 45%, transparent);
-}
-
-.ash-desktop-editor-area
 	.ash-product-page-host
 	> .ash-workbench-part-frame
 	> .ash-workbench-part {
@@ -160,14 +178,4 @@
 	.ash-editor-group:not(.ash-code-page-group) {
 	border-radius: 0;
 	box-shadow: none;
-}
-
-:is(.hc-black, .hc-light)
-	.ash-desktop-editor-area
-	.ash-tool-editor-workspace:not(.ash-product-page-host)
-	.ash-workbench-part-frame
-	> .ash-workbench-part {
-	box-shadow: none;
-	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }

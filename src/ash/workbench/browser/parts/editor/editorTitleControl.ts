@@ -126,6 +126,7 @@ export class EditorTitleControl extends Disposable {
 		if (this.headerElement.parentElement === container) return;
 		const focused = this.headerElement.ownerDocument.activeElement as HTMLElement | null;
 		const restoreFocus = focused && this.headerElement.contains(focused);
+		this.headerElement.classList.toggle('ash-editor-group-header-hosted', host !== undefined);
 		if (host) host.append(this.headerElement);
 		else this.domNode.prepend(this.headerElement);
 		this.updateRows();

@@ -203,6 +203,30 @@ suite('Desktop tool EditorParts', () => {
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'changes', 'browser']);
 	});
 
+	test('allocates new tool columns against the conversation and restores their width', async () => {
+		using hosts = fixture();
+		hosts.area.layout({ width: 1800, height: 900 });
+		const width = () => hosts.area.getPreferredWidth(3000, 100, 600);
+		const changes = { resource: URI.parse('ash-session-changes:/fixture') };
+		const toggleChanges = () => hosts.editor.toggleToolEditors(input => input.resource.scheme === changes.resource.scheme);
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		assert.equal(width(), 1800);
+		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
+		assert.equal(width(), 1800);
+		await hosts.editor.openEditor(changes, { pinned: true });
+		assert.equal(width(), 2000);
+
+		await toggleChanges();
+		assert.equal(width(), 1800);
+		const saved = hosts.editor.saveWorkingSet('two-tools');
+		hosts.area.rememberWidth(0.5);
+		assert.equal(width(), 1500);
+		await hosts.editor.applyWorkingSet(saved);
+		assert.equal(width(), 1800);
+		await toggleChanges();
+		assert.equal(width(), 2000);
+	});
+
 	test('migrates a legacy mixed group to separate hosts while retaining all tabs', async () => {
 		using hosts = fixture();
 		await hosts.editor.applyWorkingSet({

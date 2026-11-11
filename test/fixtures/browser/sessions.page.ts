@@ -5,6 +5,8 @@ import { INotificationService } from '../../../src/ash/platform/notification/com
 import { IWorkspacesService } from '../../../src/ash/platform/workspaces/common/workspaces.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
+import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import type { IAgentWorkbenchLayoutService } from '../../../src/ash/sessions/browser/workbench.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
 import { IRemoteAgentHostService, isSSHAgentHost, NullRemoteAgentHostService, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../../src/ash/platform/agentHost/common/remoteAgentHostService.js';
@@ -34,6 +36,21 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 await import('../../../src/ash/sessions/sessions.web.main.js');
+let showEmptyEditorArea: (() => void) | undefined;
+if (new URL(location.href).searchParams.has('emptyEditorArea')) {
+	registerWorkbenchServiceContribution({
+		service: createServiceIdentifier('test.emptyEditorArea'),
+		dependencies: [ILayoutService, IEditorPart],
+		install: ({ container }) => {
+			const layout = container.get(ILayoutService) as IAgentWorkbenchLayoutService;
+			const editor = container.get(IEditorPart);
+			return showEmptyEditorArea = () => {
+				for (const group of editor.groups) editor.setGroupVisible(group.id, false);
+				layout.showPart('editor');
+			};
+		},
+	});
+}
 if (new URL(location.href).searchParams.has('speechProvider')) {
 	registerWorkbenchServiceContribution({
 		service: createServiceIdentifier<object>('test.speechProvider'),
@@ -406,6 +423,7 @@ declare global {
 			disposeAndCheckErrorHandler(): Promise<boolean>;
 			remountAfterDirectDispose(): Promise<void>;
 			openChat(): Promise<void>;
+			showEmptyEditorArea?(): void;
 			setTheme(id: string): Promise<void>;
 			updateConfiguration(key: string, value: unknown): Promise<void>;
 			setUpdateState(value: UpdateState): void;
@@ -427,6 +445,7 @@ window.ashSessionsIntegration = {
 		else await updateInstallation!.complete();
 	},
 	openChat: () => workbench.acceptHandoff({}),
+	showEmptyEditorArea,
 	takeErrors: () => { errorDetails.splice(0); return errors.splice(0); },
 	disposeAndCheckErrorHandler: async () => {
 		await workbench.shutdown('windowClose');

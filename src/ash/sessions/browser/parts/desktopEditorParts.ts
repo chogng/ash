@@ -33,6 +33,7 @@ export interface DesktopEditorWorkingSet extends EditorWorkingSet {
 		readonly positioned?: readonly DesktopEditorTool[];
 		readonly manuallyArranged?: boolean;
 		readonly closedSlots?: Readonly<Partial<Record<DesktopEditorTool, ToolSlot>>>;
+		readonly widthWeight?: number;
 		readonly parts: Readonly<Record<DesktopEditorTool, {
 			readonly groups: readonly number[];
 			readonly layout?: EditorWorkingSetLayout;
@@ -315,7 +316,11 @@ export class DesktopEditorParts extends EditorParts {
 		}
 		return {
 			id, groups, activeGroupIndex: Math.max(0, groups.findIndex(group => group.id === this.activeGroup.id)),
-			toolParts: { version: 1, layout: this.area.saveLayout(), positioned: this.area.positionedTools, manuallyArranged: this.area.hasManualArrangement, closedSlots: this.area.closedSlots, parts },
+			toolParts: {
+				version: 1, layout: this.area.saveLayout(), positioned: this.area.positionedTools,
+				manuallyArranged: this.area.hasManualArrangement, closedSlots: this.area.closedSlots,
+				widthWeight: this.area.preferredWidthWeight, parts,
+			},
 		};
 	}
 
@@ -330,6 +335,9 @@ export class DesktopEditorParts extends EditorParts {
 			metadata.positioned.some(tool => !desktopEditorTools.includes(tool)) ||
 			new Set(metadata.positioned).size !== metadata.positioned.length)) { throw new TypeError('Invalid positioned tools'); }
 		if (metadata.manuallyArranged !== undefined && typeof metadata.manuallyArranged !== 'boolean') { throw new TypeError('Invalid manual tool arrangement'); }
+		if (metadata.widthWeight !== undefined && (typeof metadata.widthWeight !== 'number' || !Number.isFinite(metadata.widthWeight) || metadata.widthWeight <= 0)) {
+			throw new TypeError('Invalid tool workspace width weight');
+		}
 		if (metadata.closedSlots !== undefined && (!isRecord(metadata.closedSlots) || Object.entries(metadata.closedSlots).some(([tool, slot]) =>
 			!desktopEditorTools.includes(tool as DesktopEditorTool) || !isRecord(slot) ||
 			!Array.isArray(slot.anchors) || !slot.anchors.length || new Set(slot.anchors).size !== slot.anchors.length ||
@@ -405,7 +413,9 @@ export class DesktopEditorParts extends EditorParts {
 			}
 			restoringTool = undefined;
 			const layout = metadata?.layout ?? (saved === 'empty' ? undefined : legacyToolLayout(saved));
-			if (layout) { this.area.restoreLayout(layout, metadata ? metadata.positioned : desktopEditorTools, metadata ? metadata.manuallyArranged : true, metadata?.closedSlots); }
+			if (layout) {
+				this.area.restoreLayout(layout, metadata ? metadata.positioned : desktopEditorTools, metadata ? metadata.manuallyArranged : true, metadata?.closedSlots, metadata?.widthWeight);
+			}
 			if (saved !== 'empty') {
 				const activeId = restored.get(saved.groups[saved.activeGroupIndex]?.id ?? -1);
 				if (activeId !== undefined) { this.activateGroup(activeId); }
@@ -431,7 +441,7 @@ export class DesktopEditorParts extends EditorParts {
 				const layout = metadata.parts[tool].layout;
 				if (layout) { restorePartLayout(part, layout, groupIds); }
 			}
-			this.area.restoreLayout(metadata.layout, metadata.positioned, metadata.manuallyArranged, metadata.closedSlots);
+			this.area.restoreLayout(metadata.layout, metadata.positioned, metadata.manuallyArranged, metadata.closedSlots, metadata.widthWeight);
 		} finally {
 			this.applying = false;
 			this.syncArea();
@@ -449,7 +459,7 @@ export class DesktopEditorParts extends EditorParts {
 			const layout = previous.parts[tool].layout;
 			return [tool, { ...state, layout: layout ? projectLayout(layout, new Set(state.groups)) : state.layout }];
 		})) as NonNullable<DesktopEditorWorkingSet['toolParts']>['parts'];
-		return { ...saved, activeGroupIndex, toolParts: { version: 1, layout: previous.layout, positioned: previous.positioned, manuallyArranged: previous.manuallyArranged, closedSlots: previous.closedSlots, parts } };
+		return { ...saved, activeGroupIndex, toolParts: { ...previous, parts } };
 	}
 
 	public restoreLayout(layout: EditorWorkingSetLayout, groupIds: ReadonlyMap<number, number>): void {
