@@ -1,6 +1,8 @@
 import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import { Dimension, h, type IDimension } from '../../base/browser/dom.js';
+import { observeResize } from '../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../base/browser/scheduler.js';
 import type { IPositionedRectangle } from '../../base/browser/geometry.js';
 import {
 	SerializableGrid,
@@ -15,6 +17,7 @@ import {
 	type ILayoutOffsetInfo,
 } from '../../platform/layout/browser/layoutService.js';
 import { DEFAULT_EMPTY_WINDOW_SIZE } from '../../platform/window/common/window.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
@@ -22,6 +25,7 @@ import type { Part } from '../../workbench/browser/part.js';
 import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
 import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.js';
+import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import {
 	Workbench,
 	type IWorkbenchOptions,
@@ -33,6 +37,7 @@ import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js'
 import { DesktopEditorArea } from './parts/desktopEditorArea.js';
 import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
 import { SessionsPart } from './parts/sessionsPart.js';
+import { TitlebarPart } from './parts/titlebarPart.js';
 import { EDITOR_PART_DEFAULT_WIDTH, EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
 import { Position } from '../../workbench/services/layout/browser/layoutService.js';
 
@@ -383,6 +388,7 @@ export class DesktopWorkbenchLayout
 		container: HTMLElement,
 		options: SessionsWorkbenchLayoutOptions,
 		@IStorageService private readonly storageService: IStorageService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super({ root: container, focus: options.focus });
 		this.initialDimension = resolveSessionsInitialDimension(container, options.initialDimension);
@@ -468,6 +474,29 @@ export class DesktopWorkbenchLayout
 		);
 		// Save before the Grid is disposed; hidden views retain their cached user sizes.
 		this._register(toDisposable(() => this.saveState()));
+
+		const titlebar = this.view('titlebar').part;
+		const editor = this.view('editor').part;
+		if (titlebar instanceof TitlebarPart && editor instanceof DesktopEditorArea) {
+			this.registerToolHeaderLayout(titlebar, editor);
+		}
+	}
+
+	private registerToolHeaderLayout(titlebar: TitlebarPart, editor: DesktopEditorArea): void {
+		const setHost = (host: HTMLElement | undefined) => editor.setToolHeaderHost(host);
+		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
+			// An empty editor area still owns its side of the split titlebar.
+			const canDock = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && !editor.hasProductPage
+				&& this.isPartVisible('sessions') && this.isPartVisible('editor');
+			titlebar.layoutToolHeaders(canDock ? editor.domNode.getBoundingClientRect().left : undefined, setHost);
+		}));
+		this._register(this.onDidLayoutMainContainer(() => update.schedule()));
+		this._register(observeResize([editor.domNode, titlebar.domNode], () => update.schedule(), { box: 'border-box' }));
+		const modeKeys = new Set([SessionsWorkspaceModeContext.key]);
+		this._register(this.contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(modeKeys)) update.schedule();
+		}));
+		update.schedule();
 	}
 
 	override get mainContainerOffset(): ILayoutOffsetInfo {

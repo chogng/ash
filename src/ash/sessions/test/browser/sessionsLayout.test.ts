@@ -1354,6 +1354,7 @@ suite('sessions browser component', () => {
 
 		await titlebar.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
 		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+		await filesClose.focus();
 		const dividerX = (await editor.boundingBox())!.x;
 		const dragY = header.y + header.height + 80;
 		await page.mouse.move(dividerX, dragY);
@@ -1365,6 +1366,25 @@ suite('sessions browser component', () => {
 		}
 		await expect(toolHeaders).toBeHidden();
 		await expect(editor.locator('[data-editor-tool="files"] .ash-editor-group-header:visible')).toHaveCount(1);
+		const inlineFilesClose = filesPane.locator('.ash-editor-group-header:visible [data-action-id="ash.sessions.hideTool"] button');
+		await expect(inlineFilesClose).toBeFocused();
+
+		// Widen the conversation again with the tool control still focused.
+		const narrowDividerX = (await editor.boundingBox())!.x;
+		await page.mouse.move(narrowDividerX, dragY);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(dividerX, dragY, { steps: 8 });
+		} finally {
+			await page.mouse.up();
+		}
+		await expect(filesClose).toBeFocused();
+
+		await page.setViewportSize({ width: 480, height: 900 });
+		await expect(toolHeaders).toBeHidden();
+		await expect(inlineFilesClose).toBeFocused();
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await expect(filesClose).toBeFocused();
 	});
 
 	test('Code window actions stay beside the conversation when the editor area is empty', async function () {

@@ -1,9 +1,7 @@
 import { addDisposableListener, Dimension, type IDimension } from '../../../base/browser/dom.js';
-import { observeResize } from '../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { Direction, Orientation, SerializableGrid, Sizing, type ISerializableView, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import { MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { derived, observableFromEvent, type IObservable } from '../../../base/common/observable.js';
 import { isRecord } from '../../../base/common/types.js';
 import { localize } from '../../../nls.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -15,10 +13,7 @@ import type { EditorPart } from '../../../workbench/browser/parts/editor/editorP
 import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
 import { GroupDirection } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { SessionsConfiguration, type SessionsLayoutStyle } from '../../common/configuration.js';
-import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
-import type { IAgentWorkbenchLayoutService } from '../workbench.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
-import type { TitlebarPart } from './titlebarPart.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { EditorToolMaximizedContext } from '../menus.js';
 import './media/desktopEditorArea.css';
@@ -167,7 +162,7 @@ export class DesktopEditorArea extends Part {
 		@IThemeService theme: IThemeService,
 		@IStorageService private readonly toolStorage: IStorageService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, 'editor', theme, toolStorage);
 		this.maximizedContext = EditorToolMaximizedContext.bindTo(contextKeys);
@@ -287,30 +282,12 @@ export class DesktopEditorArea extends Part {
 	public get hasTools(): boolean { return this.desired.size > 0; }
 	public get hasProductPage(): boolean { return this.domNode.classList.contains('has-product-page'); }
 
-	/** Supplies the tool row height and follows the split after the window lays out its Parts. */
-	public configureToolHeaders(
-		titlebar: TitlebarPart,
-		layout: IAgentWorkbenchLayoutService,
-		flatLayout: IObservable<boolean>,
-	): IObservable<number | undefined> {
-		const titlebarHeight = observableFromEvent(this, titlebar.onDidChangeConstraints, () => titlebar.minimumHeight);
-		const updateHost = () => {
-			// An empty editor area still owns its side of the split title bar.
-			const dock = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && !this.hasProductPage
-				&& layout.isPartVisible('sessions') && layout.isPartVisible('editor');
-			const start = dock ? this.domNode.getBoundingClientRect().left : undefined;
-			this.setTitlebarHost(titlebar.setToolHeaderStart(start));
-		};
-		this._register(layout.onDidLayoutMainContainer(updateHost));
-		this._register(observeResize([this.domNode, titlebar.domNode], updateHost, { box: 'border-box' }));
-		return derived(reader => flatLayout.read(reader) ? titlebarHeight.read(reader) : undefined);
-	}
-
-	private setTitlebarHost(host: HTMLElement | undefined): void {
+	/** Moves the existing rows before the titlebar can hide the previous host. */
+	public setToolHeaderHost(host: HTMLElement | undefined): void {
 		if (this.titlebarHost === host) return;
 		this.titlebarHost = host;
 		this.domNode.classList.toggle('ash-desktop-editor-area-titlebar-docked', !!host);
-		this.updateHeaders.schedule();
+		this.layoutHeaders();
 	}
 
 	private layoutHeaders(): void {

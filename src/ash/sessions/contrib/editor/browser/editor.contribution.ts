@@ -22,7 +22,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
-import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
+import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { EditorToolMaximizedContext, Menus, SessionsFlatLayoutContext, sessionToolMenuItems } from '../../../browser/menus.js';
@@ -105,9 +105,9 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
 				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
-					(!(editor as DesktopEditorParts).filesDetailsVisible || (editor as DesktopEditorParts).filesPart.isEditorVisible));
-				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).filesDetailsVisible);
-				fileEditorsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).fileEditorsVisible);
+					(!(editor as EditorParts).filesDetailsVisible || (editor as EditorParts).filesPart.isEditorVisible));
+				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as EditorParts).filesDetailsVisible);
+				fileEditorsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as EditorParts).fileEditorsVisible);
 				changesVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && editor.groups.some(group =>
 					editor.isGroupVisible(group.id) && group.activeInput?.resource.scheme === 'ash-session-changes'));
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
@@ -121,7 +121,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		);
 		this._register(layout.onDidLayoutMainContainer(updateContext));
 		this._register(editor.onDidChangeEditors(updateContext));
-		this._register((editor as DesktopEditorParts).filesPart.onDidChangeDetailsVisibility(updateContext));
+		this._register((editor as EditorParts).filesPart.onDidChangeDetailsVisibility(updateContext));
 		this._register(
 			autorun(reader => {
 				context.documentContent.read(reader);
@@ -235,11 +235,11 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		this._register(CommandsRegistry.register(hideToolId, (_accessor, arg) => run(async () => {
 			const groupId = isRecord(arg) && typeof arg.groupId === 'number' ? arg.groupId : editor.activeGroup.id;
 			if (!editor.groups.some(group => group.id === groupId)) return;
-			(editor as DesktopEditorParts).hideTool(groupId);
+			(editor as EditorParts).hideTool(groupId);
 			if (editor.groups.every(group => !editor.isGroupVisible(group.id))) layout.hidePart('editor');
 		})));
 		this._register(CommandsRegistry.register('ash.sessions.maximizeTool', (_accessor, arg) => run(async () => {
-			(editor as DesktopEditorParts).toggleMaximizeTool(toolGroup(arg));
+			(editor as EditorParts).toggleMaximizeTool(toolGroup(arg));
 		})));
 		for (const [id, operation] of [
 			['ash.sessions.toggleDetails', () => controller.toggleDetails()],
@@ -248,7 +248,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			[
 				'ash.sessions.closeDetails',
 				async () => {
-					if ((editor as DesktopEditorParts).filesDetailsOpen) { await controller.toggleDetails(); }
+					if ((editor as EditorParts).filesDetailsOpen) { await controller.toggleDetails(); }
 				},
 			],
 			['ash.sessions.hideEditor', () => controller.hideEditor()],
@@ -277,7 +277,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					menu: { id: MenuId.ModalEditorTitle, group: 'navigation', order: 98, when: modalToEditor },
 				});
 			}
-			override run(): Promise<void> { return (editor as DesktopEditorParts).moveModalEditorToMain(); }
+			override run(): Promise<void> { return (editor as EditorParts).moveModalEditorToMain(); }
 		}));
 		const openInModal = ContextKeyExpr.and(codeWhen, EditorPartModalVisibleContext.isEqualTo(false),
 			ContextKeyExpr.or(...[Schemas.file, Schemas.ashRemote, Schemas.untitled, 'ash-session-changes'].map(scheme => ResourceSchemeContext.isEqualTo(scheme))));
@@ -290,7 +290,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					precondition: openInModal,
 				});
 			}
-			override run(): Promise<void> { return (editor as DesktopEditorParts).openActiveEditorInModal(); }
+			override run(): Promise<void> { return (editor as EditorParts).openActiveEditorInModal(); }
 		}));
 		const editorShown = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(true));
 		const editorHidden = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(false));

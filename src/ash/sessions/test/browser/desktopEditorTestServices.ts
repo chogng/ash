@@ -1,14 +1,14 @@
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { Dimension } from '../../../base/browser/dom.js';
+import { constObservable } from '../../../base/common/observable.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import type { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
-import { DesktopEditorArea, desktopEditorTools, type DesktopEditorTool } from '../../browser/parts/desktopEditorArea.js';
-import { DesktopEditorParts } from '../../browser/parts/desktopEditorParts.js';
-import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
+import { DesktopEditorArea, type DesktopEditorTool } from '../../browser/parts/desktopEditorArea.js';
+import { EditorParts } from '../../browser/parts/editorParts.js';
 import { DesktopToolEditorPart } from '../../browser/parts/desktopToolEditorPart.js';
 import { IMenuService } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
@@ -46,23 +46,15 @@ export function createDesktopEditorTestServices(services: InstantiationService, 
 		})));
 	}
 	const area = resources.add(services.createInstance(DesktopEditorArea, root));
-	const scope = () => {
-		const container = document.createElement('div');
-		area.domNode.append(container);
-		const context = resources.add(services.get(IContextKeyService).createScoped(container));
-		const child = resources.add(services.createChild());
-		child.registerInstance(IContextKeyService, context);
-		return { container, child, options: { ...options, contextKeyService: context } };
-	};
-	const filesScope = scope();
-	const files = resources.add(filesScope.child.createInstance(DesktopMainEditorPart, filesScope.container, filesScope.options));
+	const editor = resources.add(services.createInstance(EditorParts, area, options, constObservable(false)));
+	const contextKeys = services.get(IContextKeyService);
 	const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
-	for (const tool of desktopEditorTools) {
-		if (tool === 'files') continue;
-		const host = scope();
-		tools.set(tool, resources.add(host.child.createInstance(DesktopToolEditorPart, host.container, host.options)));
+	for (const part of editor.parts) {
+		if (part instanceof DesktopToolEditorPart) {
+			const tool = contextKeys.getContext(part.domNode).getValue<Exclude<DesktopEditorTool, 'files'>>('sessions.editorTool')!;
+			tools.set(tool, part);
+		}
 	}
-	const editor = resources.add(services.createInstance(DesktopEditorParts, files, area, tools));
 	area.layout(new Dimension(1200, 900));
-	return Object.assign(resources, { editor, files, tools, area });
+	return Object.assign(resources, { editor, files: editor.filesPart, tools, area });
 }

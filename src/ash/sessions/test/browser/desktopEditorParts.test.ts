@@ -4,17 +4,23 @@ import { suite, test } from 'mocha';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { Direction, Orientation, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import { URI } from '../../../base/common/uri.js';
+import { constObservable } from '../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { browserEnvironment } from '../../../editor/test/browser/testEditorDom.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { EditorPaneRegistry } from '../../../workbench/browser/editor.js';
 import { EditorPane } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
+import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
+import { EditorParts } from '../../browser/parts/editorParts.js';
 
 function fixture() {
 	const resources = new DisposableStore();
@@ -50,6 +56,19 @@ function fixture() {
 
 suite('Desktop tool EditorParts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('requires the window context service before mounting any tool Parts', () => {
+		using services = createTestEditorServices(undefined, undefined, browserEnvironment.window.document);
+		using hosts = createDesktopEditorTestServices(services, {}, browserEnvironment.window.document);
+		using incompleteServices = new InstantiationService();
+		incompleteServices.registerInstance(IAuxiliaryWindowService, services.get(IAuxiliaryWindowService));
+		incompleteServices.registerInstance(IAccessibilityService, services.get(IAccessibilityService));
+		incompleteServices.registerInstance(IConfigurationService, services.get(IConfigurationService));
+		incompleteServices.registerInstance(IStorageService, services.get(IStorageService));
+		const before = hosts.area.domNode.childElementCount;
+		assert.throws(() => incompleteServices.createInstance(EditorParts, hosts.area, {}, constObservable(false)), /Unknown service: contextKeyService/);
+		assert.equal(hosts.area.domNode.childElementCount, before);
+	});
 
 	test('reopens a product editor in its retained group after closing the last tab', async () => {
 		using hosts = fixture();

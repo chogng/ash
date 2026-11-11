@@ -1,6 +1,6 @@
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import type { DesktopEditorParts } from './parts/desktopEditorParts.js';
+import type { EditorParts } from './parts/editorParts.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -29,7 +29,7 @@ export function registerLayoutActions(
 	layout: IAgentWorkbenchLayoutService,
 	sessions: ISessionsService,
 	contextKeys: IContextKeyService,
-	editor: DesktopEditorParts,
+	editor: EditorParts,
 	workspace: IWorkspaceContextService,
 	hasDesktopChatSource: IObservable<boolean>,
 ): IDisposable {

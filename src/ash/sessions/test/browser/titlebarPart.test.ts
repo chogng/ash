@@ -406,6 +406,7 @@ function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId,
 	const storage = options.storageService ?? ownedStorage!;
 	const services = layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IContextKeyService, layoutTestResources.add(new ContextKeyService()));
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {
 		layout.createWorkbenchLayout(parts);

@@ -179,7 +179,6 @@ import { LanguageService } from '../../editor/common/services/languageService.js
 import { localize, localize2 } from '../../nls.js';
 import { BrowserViewUri } from '../../platform/browserView/common/browserViewUri.js';
 import { IBrowserViewWorkbenchService } from '../../workbench/contrib/browserView/common/browserView.js';
-import { isSearchEditorInput } from '../../workbench/contrib/searchEditor/browser/constants.js';
 import type { EditorWorkingSet } from '../../workbench/services/editor/common/editorWorkingSet.js';
 import { MenusRegistry, MenuId } from '../../platform/actions/common/actions.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
@@ -263,9 +262,8 @@ import { DiffService } from '../../workbench/services/diff/browser/diffService.j
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
-import { DesktopEditorArea, desktopEditorTools, type DesktopEditorTool } from './parts/desktopEditorArea.js';
-import { DesktopEditorParts } from './parts/desktopEditorParts.js';
-import { DesktopToolEditorPart } from './parts/desktopToolEditorPart.js';
+import { DesktopEditorArea } from './parts/desktopEditorArea.js';
+import { EditorParts } from './parts/editorParts.js';
 import { type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
 import { SessionsEntryService } from '../contrib/layout/browser/sessionsEntryService.js';
@@ -926,6 +924,8 @@ export abstract class Workbench extends Disposable {
 		if (!services.has(IStatusbarService)) services.registerInstance(IStatusbarService, this._register(new StatusbarService()));
 		this._register(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(this.domNode, { useFormForDestructiveConfirmations: true })));
 
+		const contextKeys = this._register(new ContextKeyService());
+		services.registerInstance(IContextKeyService, contextKeys);
 		const layout = this._register(services.createInstance(layoutConstructor, this.domNode, {
 			focus: () => this.sessionsPart?.focus(),
 		}));
@@ -952,7 +952,6 @@ export abstract class Workbench extends Disposable {
 		if (!options.nativeHostApi) {
 			this._register(CommandsRegistry.register(OPEN_ASH_WINDOW_COMMAND_ID, () => options.returnToWorkbench()));
 		}
-		const contextKeys = this._register(new ContextKeyService());
 		IsDevelopmentContext.bindTo(contextKeys).set(!services.get(IWorkbenchEnvironmentService).isBuilt);
 		AppServerAvailableContext.bindTo(contextKeys).set(options.api.appServer.isAvailable);
 		IsSessionsWindowContext.bindTo(contextKeys).set(true);
@@ -960,7 +959,6 @@ export abstract class Workbench extends Disposable {
 		const workspaceFolderCount = WorkspaceFolderCountContext.bindTo(contextKeys);
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
 		this._register(workspace.onDidChangeWorkspace(() => workspaceFolderCount.set(workspace.getWorkspace().folders.length)));
-		services.registerInstance(IContextKeyService, contextKeys);
 		const workspaceModeKeys = new Set([SessionsWorkspaceModeContext.key]);
 		this._register(contextKeys.onDidChangeContext(event => {
 			if (event.affectsSome(workspaceModeKeys)) {
@@ -1295,18 +1293,17 @@ export abstract class Workbench extends Disposable {
 		titlebar: TitlebarPart,
 		flatLayout: IObservable<boolean>,
 		languageDiagnosticsService: ILanguageDiagnosticsService | undefined,
-	): DesktopEditorParts {
-		const contextKeys = services.get(IContextKeyService);
+	): EditorParts {
 		const menus = services.get(IMenuService);
 		const contextMenus = services.get(IContextMenuService);
-		const ownerDocument = this.domNode.ownerDocument;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		const editorArea = this._register(services.createInstance(DesktopEditorArea, this.domNode));
+		const titlebarHeight = observableFromEvent(this, titlebar.onDidChangeConstraints, () => titlebar.minimumHeight);
 		const editorOptions: IEditorPartOptions = {
-			headerRowHeight: editorArea.configureToolHeaders(titlebar, this.layoutService, flatLayout),
+			headerRowHeight: derived(reader => flatLayout.read(reader) ? titlebarHeight.read(reader) : undefined),
 			configurationService: this.configurationService,
-			contextKeyService: contextKeys,
+			modalContainer: this.domNode,
 			keybindingService: services.get(IKeybindingService),
 			keyboardLayoutService: services.get(IKeyboardLayoutService),
 			fileService: services.get(IFileService),
@@ -1321,52 +1318,13 @@ export abstract class Workbench extends Disposable {
 			fileDialogService: services.get(IFileDialogService),
 			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
 		};
-		const createToolScope = (tool: DesktopEditorTool): { container: HTMLElement; services: InstantiationService; context: IContextKeyService; } => {
-			const container = ownerDocument.createElement('div');
-			editorArea.domNode.append(container);
-			const context = this._register(contextKeys.createScoped(container));
-			context.createKey('sessions.editorTool', tool);
-			const scope = this._register(services.createChild());
-			scope.registerInstance(IContextKeyService, context);
-			return { container, services: scope, context };
-		};
-		const filesScope = createToolScope('files');
-		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, {
-			...editorOptions,
-			canDropEditor: input => !isSearchEditorInput(input),
-			contextKeyService: filesScope.context,
-			modalContainer: this.domNode,
-		} satisfies IEditorPartOptions));
-		filesScope.services.registerInstance(IEditorPart, filesEditor);
-		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
-		for (const tool of desktopEditorTools) {
-			if (tool === 'files') continue;
-			const scope = createToolScope(tool);
-			const titleActions: IEditorPartOptions['titleActions'] = tool === 'changes' || tool === 'terminal' ? {
-				menuService: menus,
-				contextMenuProvider: {
-					showContextMenu: delegate => contextMenus.showContextMenu(
-						tool === 'changes' || flatLayout.get() ? { ...delegate, iconPlacement: 'trailing' } : delegate,
-					),
-				},
-			} : editorOptions.titleActions;
-			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, {
-				...editorOptions,
-				canDropEditor: input => (tool === 'search') === isSearchEditorInput(input),
-				contextKeyService: scope.context,
-				hideTabs: tool === 'changes',
-				titleActions,
-			} satisfies IEditorPartOptions));
-			scope.services.registerInstance(IEditorPart, part);
-			tools.set(tool, part);
-		}
-		return this._register(services.createInstance(DesktopEditorParts, filesEditor, editorArea, tools));
+		return this._register(services.createInstance(EditorParts, editorArea, editorOptions, flatLayout));
 	}
 
 	private registerEditorServices(
 		services: InstantiationService,
 		options: IWorkbenchOptions,
-		editor: DesktopEditorParts,
+		editor: EditorParts,
 		preferences: SessionsPreferences,
 		ownerWindow: Window,
 	): IBrowserViewWorkbenchService | undefined {
@@ -1442,7 +1400,7 @@ export abstract class Workbench extends Disposable {
 
 	private createWorkbenchLayout(
 		services: InstantiationService,
-		editor: DesktopEditorParts,
+		editor: EditorParts,
 		{ titlebar, sidebar, auxiliarybar, customview }: { titlebar: Part; sidebar: Part; auxiliarybar: Part; customview: Part; },
 	): void {
 		const layout = this.layoutService;
@@ -1466,7 +1424,7 @@ export abstract class Workbench extends Disposable {
 
 	private registerBrowserTool(
 		services: InstantiationService,
-		editor: DesktopEditorParts,
+		editor: EditorParts,
 		browsers: IBrowserViewWorkbenchService,
 	): void {
 		const contextKeys = services.get(IContextKeyService);
@@ -1506,7 +1464,7 @@ export abstract class Workbench extends Disposable {
 
 	private registerWorkbenchListeners(
 		services: InstantiationService,
-		editor: DesktopEditorParts,
+		editor: EditorParts,
 		customViewPart: CustomViewGridPart,
 		setActivityBarLocation: (location: SessionsActivityBarLocation) => void,
 	): void {
@@ -1543,7 +1501,7 @@ export abstract class Workbench extends Disposable {
 	private startContributions(
 		services: InstantiationService,
 		options: IWorkbenchOptions,
-		editor: DesktopEditorParts,
+		editor: EditorParts,
 	): { contributions: WorkbenchContributionHost; terminalContribution: ReturnType<typeof registerSessionsTerminalContribution>; } {
 		const layout = this.layoutService;
 		const contextKeys = services.get(IContextKeyService);
@@ -1567,7 +1525,7 @@ export abstract class Workbench extends Disposable {
 	private restore(
 		services: InstantiationService,
 		options: IWorkbenchOptions,
-		editor: DesktopEditorParts,
+		editor: EditorParts,
 		startup: {
 			contributions: WorkbenchContributionHost;
 			terminalContribution: ReturnType<typeof registerSessionsTerminalContribution>;
@@ -1611,7 +1569,7 @@ export abstract class Workbench extends Disposable {
 
 	private async restoreEditorWorkingSet(
 		services: InstantiationService,
-		editor: DesktopEditorParts,
+		editor: EditorParts,
 		entryLayout: ISessionsEntryService,
 		terminalContribution: ReturnType<typeof registerSessionsTerminalContribution>,
 		workspaceProjectionReady: Promise<void>,

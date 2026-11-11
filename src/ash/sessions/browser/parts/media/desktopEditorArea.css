@@ -230,6 +230,7 @@
 }
 
 .ash-desktop-editor-area
+	.ash-tool-editor-workspace
 	.ash-code-editor-groups
 	.ash-editor-group:not(.ash-code-page-group) {
 	border-radius: 0;

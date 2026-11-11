@@ -10,6 +10,7 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
 import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
@@ -978,11 +979,17 @@ test('Sessions recreates a hidden document host without activating it over a pro
 	assert.equal(editor.isGroupVisible(remainingDocuments[0]!.id), false);
 });
 
-test('Sessions layout creation requires the registered storage service', () => {
+test('Sessions layout creation requires window storage and context services', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}), /storageService|StorageService/);
-	dom.window.close();
+	try {
+		assert.throws(() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}), /storageService|StorageService/);
+		using storage = new BrowserStorageService({ ownerWindow: dom.window.document.defaultView!, workspaceId: 'sessions', flushInterval: 0 });
+		services.registerInstance(IStorageService, storage);
+		assert.throws(() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}), /contextKeyService/);
+	} finally {
+		dom.window.close();
+	}
 });
 
 const layoutTestResources = new DisposableStore();
@@ -993,6 +1000,9 @@ function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId,
 	const storage = options.storageService ?? ownedStorage!;
 	const services = testServices ?? layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
+	if (!services.has(IContextKeyService)) {
+		services.registerInstance(IContextKeyService, layoutTestResources.add(new ContextKeyService()));
+	}
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {
 		layout.createWorkbenchLayout(parts);
@@ -1129,7 +1139,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	await controller.restore(savedB, 'session:b');
 	assert.equal(editor.groups.some(group => editor.isGroupVisible(group.id)), false);
 	const hiddenSnapshot = controller.capture('session:b');
-	assert.deepEqual((hiddenSnapshot as import('../../browser/parts/desktopEditorParts.js').DesktopEditorWorkingSet).toolParts, (savedB as import('../../browser/parts/desktopEditorParts.js').DesktopEditorWorkingSet).toolParts);
+	assert.deepEqual((hiddenSnapshot as import('../../browser/parts/editorParts.js').DesktopEditorWorkingSet).toolParts, (savedB as import('../../browser/parts/editorParts.js').DesktopEditorWorkingSet).toolParts);
 	controller.setDocumentGroupsVisible(true);
 	assert.equal(editor.activeGroup, second);
 	assert.equal(second.activePane, secondPane);

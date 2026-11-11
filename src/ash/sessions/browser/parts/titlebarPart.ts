@@ -223,7 +223,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.toolHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
-	public setToolHeaderStart(left: number | undefined): HTMLElement | undefined {
+	public layoutToolHeaders(left: number | undefined, setHost: (host: HTMLElement | undefined) => void): void {
 		let width = 0;
 		if (left !== undefined) {
 			// A very narrow conversation split still needs its title menu and tool overflow trigger.
@@ -235,10 +235,12 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			}
 		}
 		const visible = width > 0;
+		// Return the focused row to its group before hiding the titlebar slot.
+		if (!visible) setHost(undefined);
 		this.toolHeaders.hidden = !visible;
 		this.domNode.classList.toggle('has-tool-headers', visible);
 		this.toolHeaders.style.flexBasis = `${width}px`;
-		return visible ? this.toolHeaders : undefined;
+		if (visible) setHost(this.toolHeaders);
 	}
 
 	public override updateStyles(): void {

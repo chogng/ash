@@ -173,7 +173,7 @@ test('Code Sessions starts with dialog dependencies and confirms closing a dirty
 	await expect(input).toBeVisible();
 	await input.focus();
 	await input.pressSequentially('Keep this unsaved draft');
-	const tab = editors.getByRole('tab', { name: /^Untitled-1(?:,|$)/u });
+	const tab = page.locator('[data-editor-tool="files"]').getByRole('tab', { name: /^Untitled-1(?:,|$)/u });
 	await tab.press('Delete');
 	const dialog = page.getByRole('dialog', { name: 'Save Changes', exact: true });
 	await expect(dialog).toBeVisible();
@@ -493,11 +493,11 @@ test('Files and Changes use independent editor Parts and tool maximization resto
 	await expect(files).toBeVisible();
 	const reviewGroup = editor.locator('.ash-editor-group').filter({ has: page.locator('.ash-sessions-changes-editor') });
 	const retained = await review.elementHandle();
-	const toggleSize = page.locator('[data-editor-tool="changes"]').getByRole('button', { name: 'Toggle tool size', exact: true });
-	await toggleSize.click();
+	const changesTool = page.locator('[data-editor-tool="changes"]');
+	await changesTool.getByRole('button', { name: 'Maximize Tool', exact: true }).click();
 	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(1);
 	await expect(reviewGroup).toBeVisible();
-	await toggleSize.click();
+	await changesTool.getByRole('button', { name: 'Restore Tool Size', exact: true }).click();
 	await expect(files).toBeVisible();
 	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(2);
 	expect(await review.evaluate((node, original) => node === original, retained)).toBe(true);
@@ -525,7 +525,7 @@ test('Changes editor exposes diff view modes and review help in Chinese', async 
 		.filter(item => item.checked).map(item => item.label)).toEqual(['行内']);
 	await changesPane.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/更改编辑器[\s\S]*“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏[\s\S]*预览选中的更改[\s\S]*打开“差异视图”/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/更改编辑器[\s\S]*按空格预览并保留列表焦点[\s\S]*“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏[\s\S]*打开“差异视图”/u);
 	await page.keyboard.press('Escape');
 	await expect(changesPane).toBeFocused();
 });

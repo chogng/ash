@@ -15,7 +15,7 @@ import { ITerminalEditorService, ITerminalService, type ITerminalInstance } from
 import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { Menus } from '../../../browser/menus.js';
-import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
+import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 
 const terminalVisibleContext = new RawContextKey<boolean>('sessions.terminalVisible', false);
@@ -25,7 +25,7 @@ const codeVisible = ContextKeyExpr.equals('sessions.desktopCode', true);
 export function registerSessionsTerminalContribution(
 	layout: IAgentWorkbenchLayoutService,
 	contextKeys: IContextKeyService,
-	editor: DesktopEditorParts,
+	editor: EditorParts,
 ): IDisposable & { startRestoringTabs(accessor: ServicesAccessor): Promise<void>; } {
 	const disposables = new DisposableStore();
 	const terminalVisible = terminalVisibleContext.bindTo(contextKeys);

@@ -4,12 +4,13 @@ import { TextEditorSelectionSource } from '../../../platform/editor/common/edito
 import { SessionSideChatEditorInput } from '../../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { Emitter } from '../../../base/common/event.js';
 import { isCancellationError } from '../../../base/common/errors.js';
-import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import type { IObservable } from '../../../base/common/observable.js';
 import type { SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import type { IDimension } from '../../../base/browser/dom.js';
 import { isRecord } from '../../../base/common/types.js';
-import { EditorParts } from '../../../workbench/browser/parts/editor/editorParts.js';
-import type { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';
+import { EditorParts as WorkbenchEditorParts } from '../../../workbench/browser/parts/editor/editorParts.js';
+import { IEditorPart, type EditorPart, type IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
 import type { IEditorGroupView } from '../../../workbench/browser/parts/editor/editor.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../workbench/common/editor.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
@@ -18,10 +19,12 @@ import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser
 import { isSearchEditorInput, SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { URI } from '../../../base/common/uri.js';
 import { BrowserViewUri } from '../../../platform/browserView/common/browserViewUri.js';
+import type { Constructor } from '../../../platform/instantiation/common/descriptors.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { DesktopMainEditorPart } from './desktopEditorPart.js';
 import { DesktopToolEditorPart } from './desktopToolEditorPart.js';
@@ -131,45 +134,100 @@ function hasVisibleGroup(layout: EditorWorkingSetLayout): boolean {
 	return layout.type === 'leaf' ? layout.visible : layout.children.some(hasVisibleGroup);
 }
 
-/** Coordinates tool Parts; the shared coordinator remains the owner of editor commands and activation. */
-export class DesktopEditorParts extends EditorParts {
+/** Owns the Sessions tool Parts and their scoped contexts. */
+export class EditorParts extends WorkbenchEditorParts {
 	private readonly revealed = this._register(new Emitter<void>());
 	public readonly onDidRevealActiveEditor = this.revealed.event;
 	private inWorkingSet: (id: number) => boolean = () => true;
 	private applying = false;
 	private readonly hosts: ReadonlyMap<DesktopEditorTool, EditorPart>;
+	public readonly filesPart: DesktopMainEditorPart;
 
 	constructor(
-		public readonly filesPart: DesktopMainEditorPart,
 		public readonly area: DesktopEditorArea,
-		toolParts: ReadonlyMap<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>,
+		options: IEditorPartOptions,
+		flatLayout: IObservable<boolean>,
 		@IAuxiliaryWindowService windows: IAuxiliaryWindowService,
 		@IAccessibilityService accessibility: IAccessibilityService,
 		@IStorageService storage: IStorageService,
 		@IInstantiationService services: IInstantiationService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
+		// The base coordinator needs the main Part at construction time.
+		using pending = new DisposableStore();
+		const resources = pending.add(new DisposableStore());
+		const createTool = <T extends EditorPart>(
+			ctor: Constructor<T>,
+			tool: DesktopEditorTool,
+			partOptions: IEditorPartOptions,
+		): T => {
+			const container = area.domNode.ownerDocument.createElement('div');
+			area.domNode.append(container);
+			resources.add(toDisposable(() => container.remove()));
+			const context = resources.add(contextKeys.createScoped(container));
+			context.createKey('sessions.editorTool', tool);
+			const scope = services.createChild(undefined, resources);
+			scope.registerInstance(IContextKeyService, context);
+			const part = resources.add(scope.createInstance(ctor, container, { ...partOptions, contextKeyService: context }));
+			scope.registerInstance(IEditorPart, part);
+			return part;
+		};
+		const { modalContainer, titleActions, ...toolOptions } = options;
+		const filesPart = createTool(DesktopMainEditorPart, 'files', {
+			...toolOptions,
+			modalContainer,
+			titleActions,
+			canDropEditor: input => !isSearchEditorInput(input),
+		});
 		super(filesPart, windows, undefined, accessibility, storage, services, configuration);
-		this.hosts = new Map<DesktopEditorTool, EditorPart>([['files', filesPart], ...toolParts]);
-		for (const [tool, part] of this.hosts) {
-			area.addTool(tool, part, part.domNode.parentElement!);
-			for (const group of part.groups) {
-				if (!group.inputs.length) { part.setGroupVisible(group.id, false); }
+		this.filesPart = filesPart;
+		pending.delete(resources);
+		this._register(resources);
+		const hosts = new Map<DesktopEditorTool, EditorPart>([['files', filesPart]]);
+		this.hosts = hosts;
+		try {
+			for (const tool of desktopEditorTools) {
+				if (tool === 'files') continue;
+				const toolTitleActions: IEditorPartOptions['titleActions'] = titleActions && (tool === 'changes' || tool === 'terminal') ? {
+					menuService: titleActions.menuService,
+					contextMenuProvider: {
+						showContextMenu: delegate =>
+							titleActions.contextMenuProvider.showContextMenu(
+								tool === 'changes' || flatLayout.get() ? { ...delegate, iconPlacement: 'trailing' } : delegate,
+							),
+					},
+				} : titleActions;
+				hosts.set(tool, createTool(DesktopToolEditorPart, tool, {
+					...toolOptions,
+					canDropEditor: input => (tool === 'search') === isSearchEditorInput(input),
+					hideTabs: tool === 'changes',
+					titleActions: toolTitleActions,
+				}));
 			}
-			if (tool !== 'files') {
-				this._register(this.registerEditorPart(part, input => editorTool(input) === tool, () => this.syncArea()));
+			for (const [tool, part] of hosts) {
+				area.addTool(tool, part, part.domNode.parentElement!);
+				for (const group of part.groups) {
+					if (!group.inputs.length) { part.setGroupVisible(group.id, false); }
+				}
+				if (tool !== 'files') {
+					this._register(this.registerEditorPart(part, input => editorTool(input) === tool, () => this.syncArea()));
+				}
 			}
-		}
-		this._register(this.onDidChangeEditors(event => {
-			if (this.applying) { return; }
-			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed') {
-				const host = this.owner(event.groupId);
-				const group = host.groups.find(candidate => candidate.id === event.groupId);
-				if (host !== filesPart && group && group.inputs.length === 0) { host.setGroupVisible(group.id, false); }
-			}
+			this._register(this.onDidChangeEditors(event => {
+				if (this.applying) { return; }
+				if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed') {
+					const host = this.owner(event.groupId);
+					const group = host.groups.find(candidate => candidate.id === event.groupId);
+					if (host !== filesPart && group && group.inputs.length === 0) { host.setGroupVisible(group.id, false); }
+				}
+				this.syncArea();
+			}));
 			this.syncArea();
-		}));
-		this.syncArea();
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
 	}
 
 	public get pageGroupId(): number { return this.filesPart.pageGroupId; }

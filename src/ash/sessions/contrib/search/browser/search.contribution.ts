@@ -27,7 +27,7 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
-import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
+import type { EditorParts } from '../../../browser/parts/editorParts.js';
 import { ISessionsSearchService, SessionsSearchService } from './searchService.js';
 
 registerSingleton(ISessionsSearchService, SessionsSearchService, InstantiationType.Delayed);
@@ -46,7 +46,7 @@ registerAction2(class OpenSearchEditorAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const editor = accessor.get(IEditorPart) as DesktopEditorParts;
+		const editor = accessor.get(IEditorPart) as EditorParts;
 		const groups = editor.getToolGroups(isSearchEditorInput);
 		const group = groups.find(group => group.id === editor.activeGroup.id) ?? groups[0];
 		const input = group?.activeInput && isSearchEditorInput(group.activeInput) ? group.activeInput : group?.inputs.find(isSearchEditorInput);

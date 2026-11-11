@@ -1,6 +1,6 @@
 import { constObservable, observableValue } from '../../../base/common/observable.js';
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
-import { DesktopEditorParts } from '../../browser/parts/desktopEditorParts.js';
+import { EditorParts } from '../../browser/parts/editorParts.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
 import { createTestEditorServices, createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
@@ -22,7 +22,7 @@ import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlo
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { MenuId } from '../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
-import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { Part } from '../../../workbench/browser/part.js';
@@ -345,7 +345,7 @@ function terminalLayoutFixture(owner: DisposableStore, options: {
 	readonly onCreate?: () => void;
 	creationError?: Error;
 } = {}): {
-	editor: DesktopEditorParts;
+	editor: EditorParts;
 	commands: CommandService;
 	instances: ITerminalInstance[];
 	attempts: ICreateTerminalOptions[];
@@ -434,6 +434,7 @@ function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId,
 	const storage = options.storageService ?? ownedStorage!;
 	const services = layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IContextKeyService, layoutTestResources.add(new ContextKeyService()));
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {
 		layout.createWorkbenchLayout(parts);
