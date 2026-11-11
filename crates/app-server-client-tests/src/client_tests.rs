@@ -515,6 +515,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
                 mode: ash_protocol::CollaborationMode::Agent,
                 approval_mode: Some(ash_protocol::ApprovalMode::default()),
                 model: None,
+                model_routing: None,
                 reasoning_effort: None,
                 tool_mode: None,
                 input: vec![

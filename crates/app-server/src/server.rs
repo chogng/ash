@@ -3055,7 +3055,7 @@ impl AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
-        self.admit_bound_turn_with_ide(thread, request, connection, document_mode, None)
+        self.admit_bound_turn_with_ide(thread, request, connection, document_mode, None, None)
     }
 
     pub(super) fn admit_bound_turn_with_ide(
@@ -3065,6 +3065,7 @@ impl AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
+        model_routing: Option<ash_protocol::TurnModelRouting>,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
         let record = self.threads.thread_catalog_record(thread)?;
         let route = session_execution_router::SessionExecutionRouter::new(&self.threads)
@@ -3095,9 +3096,12 @@ impl AppServer {
             document_mode,
             expected_ide,
             || {
-                let result = self
-                    .threads
-                    .start_turn_in_directory(thread, request, directory)?;
+                let result = self.threads.start_turn_with_model_routing(
+                    thread,
+                    request,
+                    directory,
+                    model_routing,
+                )?;
                 let receipt = core_api::TurnReceipt {
                     turn_id: result.turn_id.clone(),
                     sequence: result.sequence,
@@ -3129,6 +3133,7 @@ impl AppServer {
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
     ) -> Result<workflows::Receipt, CoreError> {
+        let model_routing = request.model_routing;
         self.workflow_runtime().execute_with_turn_submission(
             thread,
             command,
@@ -3149,13 +3154,15 @@ impl AppServer {
                 activated_skills: request.activated_skills,
                 input: request.input,
             },
-            |thread, request| {
+            model_routing,
+            |thread, request, model_routing| {
                 self.admit_bound_turn_with_ide(
                     thread,
                     request,
                     connection,
                     document_mode,
                     expected_ide,
+                    model_routing,
                 )
             },
         )

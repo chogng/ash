@@ -274,6 +274,7 @@ fn ide_desktop_handoff_rejects_invalid_identity_and_accepted_work_without_callin
             }],
             mode: Default::default(),
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_mode: ash_protocol::ToolMode::Direct,
             approval_mode: ash_protocol::ApprovalMode::Manual,

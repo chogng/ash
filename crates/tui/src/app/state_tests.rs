@@ -377,6 +377,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             instructions: None,
             directory: None,
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,

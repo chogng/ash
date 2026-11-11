@@ -196,7 +196,11 @@ pub(crate) struct Submission {
 }
 
 impl Submission {
-    pub fn new(request: ash_core::StartTurnRequest, sequence: u64) -> Self {
+    pub fn new(
+        request: ash_core::StartTurnRequest,
+        sequence: u64,
+        model_routing: Option<protocol::TurnModelRouting>,
+    ) -> Self {
         Self {
             command_id: request.command_id,
             sequence,
@@ -207,6 +211,7 @@ impl Submission {
                 mode: request.mode,
                 instructions: Some(request.instructions),
                 model: request.model,
+                model_routing,
                 reasoning_effort: request.reasoning_effort,
                 advisor: request.advisor,
                 activated_skills: request.activated_skills.clone(),
@@ -218,6 +223,14 @@ impl Submission {
             },
         }
     }
+
+    pub fn model_routing(&self) -> Option<protocol::TurnModelRouting> {
+        match &self.command {
+            protocol::ThreadCommand::StartTurn { model_routing, .. } => *model_routing,
+            _ => unreachable!("workflow submissions only start control Turns"),
+        }
+    }
+
     pub fn request(&self) -> ash_core::StartTurnRequest {
         let protocol::ThreadCommand::StartTurn {
             context_policy,

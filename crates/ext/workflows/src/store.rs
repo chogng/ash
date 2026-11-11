@@ -52,6 +52,7 @@ impl Store {
         mode: protocol::CollaborationMode,
         tool_mode: protocol::ToolMode,
         approval_mode: protocol::ApprovalMode,
+        automatic_model: bool,
     ) -> Result<Option<core_api::TurnReceipt>, CoreError> {
         let database = self
             .database
@@ -69,7 +70,8 @@ impl Store {
         let Some((original, plan)) = existing else {
             return Ok(None);
         };
-        if original != command_request_key(input, mode, tool_mode, approval_mode)? {
+        if original != command_request_key(input, mode, tool_mode, approval_mode, automatic_model)?
+        {
             return Err(CoreError::CommandConflict);
         }
         let plan: Plan = serde_json::from_str(&plan).map_err(journal)?;
@@ -568,8 +570,21 @@ pub(crate) fn command_request_key(
     mode: protocol::CollaborationMode,
     tool_mode: protocol::ToolMode,
     approval_mode: protocol::ApprovalMode,
+    automatic_model: bool,
 ) -> Result<String, CoreError> {
-    serde_json::to_string(&(input, mode, tool_mode, approval_mode)).map_err(journal)
+    // Requests without routing retain the key used by existing workflow plans.
+    if automatic_model {
+        serde_json::to_string(&(
+            input,
+            mode,
+            tool_mode,
+            approval_mode,
+            protocol::ModelRoutingMode::Auto,
+        ))
+    } else {
+        serde_json::to_string(&(input, mode, tool_mode, approval_mode))
+    }
+    .map_err(journal)
 }
 
 #[derive(Clone, Copy)]

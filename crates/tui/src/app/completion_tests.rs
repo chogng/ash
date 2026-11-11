@@ -282,6 +282,7 @@ fn status_line_context_follows_thread_snapshots() {
             instructions: None,
             directory: None,
             model: Some(model),
+            model_routing: None,
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,

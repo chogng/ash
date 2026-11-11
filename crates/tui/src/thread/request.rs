@@ -191,6 +191,7 @@ where
             mode: submission.mode,
             approval_mode: Some(approval_mode),
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_mode: None,
             input: {

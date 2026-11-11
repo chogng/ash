@@ -4034,6 +4034,7 @@ for (const phase of ['creating the Session', 'loading the Thread'] as const) tes
 	}
 
 	assert.deepEqual(fake.turnStartRequests[0]?.model, entry.model);
+	assert.equal(fake.turnStartRequests[0]?.modelRouting, undefined);
 	assert.equal(fake.turnStartRequests[0]?.reasoningEffort, 'high');
 	assert.equal(model.inputState.isAutomaticModel, true);
 	assert.equal(model.inputState.selectedReasoningEffort, undefined);
@@ -4059,6 +4060,7 @@ test('ChatWidgetModel Auto retains the configured profile model and leaves Turn 
 	await model.send('Use the session model');
 
 	assert.equal(fake.turnStartRequests[0]?.model, undefined);
+	assert.equal(fake.turnStartRequests[0]?.modelRouting, 'auto');
 	assert.deepEqual((await fake.api.model.readDefaults()).model, sessionModel);
 });
 
@@ -4149,6 +4151,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
+	await model.selectAutomaticModel();
 	model.selectMode('multitask');
 	model.selectApprovalMode('auto');
 	await model.send('Implement independent steps', 'multitask', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
@@ -4158,6 +4161,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 		commandId: fake.queuedRequests[0]!.commandId,
 		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
 		model: undefined, reasoningEffort: undefined,
+		modelRouting: 'auto',
 		commandInterpretation: undefined,
 		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: 'Implement independent steps' }],
 		approvalMode: 'auto',

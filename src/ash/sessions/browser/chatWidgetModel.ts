@@ -434,7 +434,7 @@ export class ChatWidgetModel extends Disposable {
 	get isAutomaticModel(): boolean {
 		return this.selection.kind === 'untitled'
 			? !this.selectedModel
-			: this.threadModelSelection.isAutomatic(this.selection.active.threadId);
+			: this.threadModelSelection.isAutomatic(this.selection.active.threadId, this._thread);
 	}
 
 	private get selectedModelEntry(): ModelCatalogEntry | undefined {
@@ -778,9 +778,10 @@ export class ChatWidgetModel extends Disposable {
 				throw new Error(localize('chatReadOnlyBanner.archivedMessage', 'This conversation is archived.'));
 			}
 			this.assertAIEnabled();
-			const model = this.isAutomaticModel ? undefined : this.selectedModel;
+			const automatic = this.isAutomaticModel;
+			const model = automatic ? undefined : this.selectedModel;
 			await this.awaitOperationPreparation(this.refreshModelAvailability(true), operation);
-			if (!sameModel(model, this.isAutomaticModel ? undefined : this.selectedModel)) throw canceled();
+			if (automatic !== this.isAutomaticModel || (!automatic && !sameModel(model, this.selectedModel))) throw canceled();
 			const unavailable = this.modelUnavailableMessage;
 			if (unavailable) {
 				modelBlock = new Error(unavailable);
@@ -824,6 +825,7 @@ export class ChatWidgetModel extends Disposable {
 				// An unknown/default choice stays with the backend authority; only conversation choices override it.
 				approvalMode: this.submissionApprovalMode,
 				model,
+				...(automatic && { modelRouting: 'auto' as const }),
 				reasoningEffort,
 				contexts,
 				signal: operation.signal,

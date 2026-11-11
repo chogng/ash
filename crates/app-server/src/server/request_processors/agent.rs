@@ -117,7 +117,22 @@ pub(super) enum TurnToolModeSelection {
 
 pub(super) enum TurnModelSelection {
     Current,
+    Auto,
     Explicit(ash_protocol::ModelRef),
+}
+
+impl TurnModelSelection {
+    pub(super) fn from_request(
+        model: Option<ash_protocol::ModelRef>,
+        routing: Option<ash_protocol::ModelRoutingMode>,
+    ) -> Result<Self, RpcError> {
+        match (model, routing) {
+            (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
+            (Some(model), None) => Ok(Self::Explicit(model)),
+            (None, Some(ash_protocol::ModelRoutingMode::Auto)) => Ok(Self::Auto),
+            (None, None) => Ok(Self::Current),
+        }
+    }
 }
 
 enum RewritePhase {
@@ -925,6 +940,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 mode,
                 approval_mode,
                 model,
+                model_routing,
                 reasoning_effort,
                 tool_mode,
                 input,
@@ -936,7 +952,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 thread_id,
                 approval_mode,
                 mode,
-                model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
+                TurnModelSelection::from_request(model, model_routing)?,
                 reasoning_effort,
                 tool_mode,
                 command_interpretation.unwrap_or_default(),
@@ -1138,6 +1154,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 mode,
                 approval_mode,
                 model,
+                model_routing,
                 reasoning_effort,
                 tool_mode,
                 ..
@@ -1154,7 +1171,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 let Some(turn) = target.turns.iter().find(|turn| turn.turn_id == turn_id) else {
                     return Ok(None);
                 };
-                if approval_mode.is_some_and(|mode| mode != turn.approval_mode)
+                TurnModelSelection::from_request(model.clone(), *model_routing)?;
+                if model_routing.is_some() != turn.model_routing.is_some()
+                    || approval_mode.is_some_and(|mode| mode != turn.approval_mode)
                     || model
                         .as_ref()
                         .is_some_and(|model| Some(model) != turn.model.as_ref())
@@ -1176,6 +1195,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     tool_mode.unwrap_or(turn.tool_mode),
                     turn.approval_mode,
                     &selection,
+                    model_routing.is_some(),
                 )?;
                 Ok(receipt.map(SessionRequestResult::Turn))
             }
@@ -1236,6 +1256,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     tool_mode.unwrap_or(turn.tool_mode),
                     turn.approval_mode,
                     &selection,
+                    turn.model_routing.is_some(),
                 )?
                 else {
                     return Ok(None);
@@ -1259,6 +1280,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         tool_mode: ash_protocol::ToolMode,
         approval_mode: ash_protocol::ApprovalMode,
         selection: &TurnInstructionSelection,
+        automatic_model: bool,
     ) -> Result<Option<TurnStartResult>, RpcError> {
         let receipt = if matches!(selection, TurnInstructionSelection::Workflow(_)) {
             self.context.workflow_store().replay_completed(
@@ -1269,6 +1291,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 mode,
                 tool_mode,
                 approval_mode,
+                automatic_model,
             )
         } else {
             self.context.agent_runtime().replay_turn(
@@ -1279,6 +1302,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     mode,
                     tool_mode,
                     input,
+                    automatic_model,
                 },
             )
         };
@@ -1577,10 +1601,14 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                             &mutation.session_id,
                             Some(source_turn.approval_mode),
                         )?,
-                        source_turn
-                            .model
-                            .clone()
-                            .map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
+                        if source_turn.model_routing.is_some() {
+                            TurnModelSelection::Auto
+                        } else {
+                            source_turn
+                                .model
+                                .clone()
+                                .map_or(TurnModelSelection::Current, TurnModelSelection::Explicit)
+                        },
                         source_turn.reasoning_effort,
                     )
                 } else {
@@ -2099,6 +2127,59 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         )
     }
 
+    fn resolve_turn_model(
+        &self,
+        thread: &ThreadView,
+        selection: TurnModelSelection,
+        input: &[UserInput],
+    ) -> Result<
+        (
+            Option<ash_protocol::ModelRef>,
+            Option<ash_protocol::TurnModelRouting>,
+        ),
+        RpcError,
+    > {
+        use ash_protocol::TurnModelRouting;
+
+        let routing = match selection {
+            TurnModelSelection::Explicit(model) => return Ok((Some(model), None)),
+            TurnModelSelection::Current => None,
+            TurnModelSelection::Auto => {
+                match thread
+                    .turns
+                    .iter()
+                    .find(|turn| turn.kind == ash_protocol::TurnKind::Coding)
+                {
+                    Some(first) => {
+                        if let Some(model) = first.model.as_ref()
+                            && first.model_routing.is_some()
+                        {
+                            return Ok((Some(model.clone()), Some(TurnModelRouting::Reused)));
+                        }
+                    }
+                    None => {
+                        if let Some(model) = self
+                            .model_catalog
+                            .select_automatic_model(input)
+                            .map_err(core_error)?
+                        {
+                            return Ok((Some(model), Some(TurnModelRouting::Selected)));
+                        }
+                    }
+                }
+                Some(TurnModelRouting::Fallback)
+            }
+        };
+        let model = match thread.agent_configuration().and_then(|agent| agent.model()) {
+            Some(model) => Some(model.clone()),
+            None => self
+                .model_catalog
+                .configured_default()
+                .map_err(core_error)?,
+        };
+        Ok((model, routing))
+    }
+
     pub(super) fn start_agent_turn_request(
         &self,
         mutation: ThreadMutation,
@@ -2154,6 +2235,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                         tool_mode,
                         mode,
                         input: &input,
+                        automatic_model: matches!(&model_selection, TurnModelSelection::Auto),
                     },
                 )
                 .map_err(core_error)?
@@ -2224,19 +2306,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             return Err(RpcError::new(-32125, AppServerErrorName::FeatureDisabled));
         }
         self.context.refresh_analytics()?;
-        let model = match model_selection {
-            TurnModelSelection::Explicit(model) => Some(model),
-            TurnModelSelection::Current => match thread_before
-                .agent_configuration()
-                .and_then(|agent| agent.model())
-            {
-                Some(model) => Some(model.clone()),
-                None => self
-                    .model_catalog
-                    .configured_default()
-                    .map_err(core_error)?,
-            },
-        };
+        let (model, model_routing) =
+            self.resolve_turn_model(&thread_before, model_selection, &input)?;
         let base = thread_before
             .agent_configuration()
             .and_then(|agent| agent.base_instructions.clone())
@@ -2309,6 +2380,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             command_id: mutation.command_id,
             expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
             model,
+            model_routing,
             reasoning_effort,
             advisor,
             kind,

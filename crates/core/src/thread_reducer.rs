@@ -252,6 +252,7 @@ impl ThreadSnapshot {
                     instructions: turn.instructions.clone(),
                     directory: turn.directory.clone(),
                     model: turn.model.clone(),
+                    model_routing: turn.model_routing,
                     reasoning_effort: turn.reasoning_effort,
                     advisor: turn.advisor.clone(),
                     tool_profile: turn.tool_profile.clone(),
@@ -345,6 +346,7 @@ pub struct TurnSnapshot {
     pub instructions: Option<TurnInstructions>,
     pub directory: Option<ash_protocol::SessionExecutionTarget>,
     pub model: Option<ModelRef>,
+    pub model_routing: Option<ash_protocol::TurnModelRouting>,
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub policy_revision: String,
@@ -1475,6 +1477,25 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 crate::tool_profile::validate_tool_profile_snapshot(tool_profile)
                     .map_err(CoreError::Journal)?;
             }
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("Turn acceptance requires a command receipt".into())
+            })?;
+            let model_routing = match &receipt.command {
+                ThreadCommand::StartTurn { model_routing, .. } => *model_routing,
+                _ => None,
+            };
+            if matches!(
+                model_routing,
+                Some(
+                    ash_protocol::TurnModelRouting::Selected
+                        | ash_protocol::TurnModelRouting::Reused
+                )
+            ) && model.is_none()
+            {
+                return Err(CoreError::Journal(
+                    "automatic selection requires a frozen model".into(),
+                ));
+            }
             create_turn(
                 &mut snapshot,
                 TurnSnapshot {
@@ -1488,6 +1509,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     instructions: instructions.clone(),
                     directory: directory.clone(),
                     model: model.clone(),
+                    model_routing,
                     reasoning_effort: *reasoning_effort,
                     advisor: advisor.clone(),
                     policy_revision: policy_revision.clone(),
@@ -1505,9 +1527,6 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     nonterminal_continuations: 0,
                 },
             )?;
-            let receipt = envelope.command.clone().ok_or_else(|| {
-                CoreError::Journal("Turn acceptance requires a command receipt".into())
-            })?;
             let matching_start = match &receipt.command {
                 ThreadCommand::StartTurn {
                     kind: command_kind,
@@ -3001,6 +3020,7 @@ fn import_history(
             instructions: turn.instructions.clone(),
             directory: turn.directory.clone(),
             model: turn.model.clone(),
+            model_routing: turn.model_routing,
             reasoning_effort: turn.reasoning_effort,
             advisor: turn.advisor.clone(),
             policy_revision: "imported-history-policy".into(),
@@ -3112,6 +3132,7 @@ fn append_imported_turn(
         instructions: turn.instructions.clone(),
         directory: turn.directory.clone(),
         model: turn.model.clone(),
+        model_routing: turn.model_routing,
         reasoning_effort: turn.reasoning_effort,
         advisor: turn.advisor.clone(),
         policy_revision: "imported-history-policy".into(),

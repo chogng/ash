@@ -423,6 +423,7 @@ impl Serialize for StoredThreadCommand<'_> {
                 mode,
                 instructions,
                 model,
+                model_routing,
                 reasoning_effort,
                 advisor,
                 activated_skills,
@@ -432,7 +433,7 @@ impl Serialize for StoredThreadCommand<'_> {
                 tool_profile,
                 input,
             } => {
-                let mut command = serializer.serialize_struct("StartTurn", 13)?;
+                let mut command = serializer.serialize_struct("StartTurn", 14)?;
                 command.serialize_field("type", "startTurn")?;
                 command.serialize_field("kind", kind)?;
                 if !mode.is_agent() {
@@ -443,6 +444,9 @@ impl Serialize for StoredThreadCommand<'_> {
                 }
                 if let Some(value) = model {
                     command.serialize_field("model", value)?;
+                }
+                if let Some(value) = model_routing {
+                    command.serialize_field("modelRouting", value)?;
                 }
                 if let Some(value) = reasoning_effort {
                     command.serialize_field("reasoningEffort", value)?;

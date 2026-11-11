@@ -115,6 +115,32 @@ async function turnTask(): Promise<void> { await new Promise(resolve => setTimeo
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
 
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind === 'Code' ? 'Code' : 'Native Chat'} restores Auto from the accepted Turn and sends it on the next request`, async () => {
+		const value = messageHistory('A', 3, 'First response');
+		const turn = value.thread.turns[0]!;
+		const restored: ThreadSubscription = {
+			...value,
+			thread: {
+				...value.thread,
+				turns: [
+					{ ...turn, model: { provider: 'provider', model: 'routed' }, modelRouting: 'selected' },
+					{ ...turn, turnId: 'shell-turn', kind: 'shell', items: [] },
+				],
+			},
+			updates: [],
+		};
+		const f = fixture(kind, async () => restored);
+		using resources = f.resources;
+		f.threadApi.read = async () => restored;
+		await f.model.initialize();
+		assert.equal(f.model.inputState.isAutomaticModel, true);
+		await f.model.send('Continue');
+		assert.equal(f.starts[0]?.modelRouting, 'auto');
+		assert.equal(f.starts[0]?.model, undefined);
+	});
+}
+
 test('Code reconnect restores recap presence for open surfaces', async () => {
 	const f = fixture('Code');
 	using resources = f.resources;

@@ -426,6 +426,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
             ],
             mode: Default::default(),
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_mode: ash_protocol::ToolMode::Direct,
             approval_mode: ash_protocol::ApprovalMode::Manual,

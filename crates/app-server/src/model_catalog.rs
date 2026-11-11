@@ -147,6 +147,12 @@ pub(crate) trait ModelCatalog: Send + Sync {
     /// Reads the current request path for a model; catalog metadata can differ from the active account.
     fn current_access(&self, model: &ModelRef) -> Result<ModelAccess, CoreError>;
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError>;
+    fn select_automatic_model(
+        &self,
+        _input: &[ash_protocol::UserInput],
+    ) -> Result<Option<ModelRef>, CoreError> {
+        Ok(None)
+    }
 }
 
 pub(crate) struct UnavailableModelCatalog;

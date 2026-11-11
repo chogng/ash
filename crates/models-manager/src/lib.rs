@@ -19,6 +19,7 @@ pub use filter::CatalogQuery;
 pub use filter::ModelCapability;
 pub use filter::ModelRequirements;
 pub use filter::UnknownCapabilityPolicy;
+pub use filter::select_automatic_model;
 pub use instructions::ModelInstructionCatalog;
 pub use instructions::ModelInstructionError;
 pub use instructions::ModelInstructionProfile;

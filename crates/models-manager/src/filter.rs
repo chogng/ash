@@ -5,7 +5,9 @@ use crate::ModelsManagerError;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ModelAvailability;
 use ash_protocol::ModelCapabilities;
+use ash_protocol::ModelInputModality;
 use ash_protocol::ModelLifecycle;
+use ash_protocol::ModelRef;
 use std::collections::BTreeSet;
 use std::fmt;
 
@@ -185,6 +187,34 @@ pub(crate) fn validate_requirements(
         }
     }
     Ok(warnings)
+}
+
+/// Selects the first eligible candidate from the host's ordered, ready connections.
+/// The host supplies effective input budgets after provider configuration is applied.
+pub fn select_automatic_model(
+    candidates: impl IntoIterator<Item = (ModelCatalogEntry, u32)>,
+    input_tokens: u32,
+    input_modalities: &[ModelInputModality],
+) -> Option<ModelRef> {
+    let requirements = ModelRequirements::agent()
+        .require_capability(ModelCapability::Tools)
+        .with_unknown_capability_policy(UnknownCapabilityPolicy::Exclude);
+    candidates
+        .into_iter()
+        .find(|(entry, usable_input)| {
+            *usable_input >= input_tokens
+                && entry.info().capabilities.agent_mode != CapabilitySupport::Unsupported
+                && input_modalities.iter().all(|modality| {
+                    entry
+                        .info()
+                        .settings
+                        .input_modalities
+                        .as_ref()
+                        .is_some_and(|supported| supported.contains(modality))
+                })
+                && validate_requirements(entry, &requirements).is_ok()
+        })
+        .map(|(entry, _)| entry.model().clone())
 }
 
 fn capability_support(

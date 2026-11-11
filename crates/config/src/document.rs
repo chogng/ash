@@ -213,6 +213,9 @@ pub struct AgentConfig {
     pub time_context: crate::TimeContextConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelRef>,
+    /// Ordered models eligible for automatic selection on a conversation's first Turn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_model_candidates: Vec<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_reasoning_effort: Option<ReasoningEffort>,
     #[serde(default)]
@@ -414,6 +417,21 @@ impl UserConfigDocument {
                 model.provider
             )));
         }
+        let mut candidates = std::collections::BTreeSet::new();
+        for model in &self.agent.auto_model_candidates {
+            if !self.has_model_provider(&model.provider) {
+                return Err(ConfigError(format!(
+                    "automatic model candidate provider '{}' is not configured",
+                    model.provider
+                )));
+            }
+            if !candidates.insert((&model.provider, &model.model)) {
+                return Err(ConfigError(format!(
+                    "duplicate automatic model candidate '{}/{}'",
+                    model.provider, model.model
+                )));
+            }
+        }
         if let Some(model) = self.agent.approval_review_model.explicit_model()
             && !self.has_model_provider(&model.provider)
         {
@@ -539,6 +557,7 @@ pub struct ResolvedConfig {
     pub git: GitConfig,
     pub git_configured: bool,
     pub model: Option<ModelRef>,
+    pub auto_model_candidates: Vec<ModelRef>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelection,
     pub thread_title_model: Option<TaskModelSelection>,
@@ -741,6 +760,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             git: document.git.unwrap_or_default(),
             git_configured: document.git.is_some(),
             model: document.agent.model.clone(),
+            auto_model_candidates: document.agent.auto_model_candidates.clone(),
             model_reasoning_effort: document.agent.model_reasoning_effort,
             approval_review_model: document.agent.approval_review_model.clone(),
             thread_title_model: document.agent.thread_title_model.clone(),

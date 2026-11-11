@@ -75,6 +75,7 @@ pub struct SubmitTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub model_routing: Option<ash_protocol::TurnModelRouting>,
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
@@ -122,6 +123,7 @@ pub enum SubmittedCommand<'a> {
         mode: ash_protocol::CollaborationMode,
         input: &'a [UserInput],
         tool_mode: ToolMode,
+        automatic_model: bool,
     },
     Input {
         input: &'a [UserInput],
@@ -135,6 +137,7 @@ pub enum AcceptedCommand<'a> {
         input: &'a [UserInput],
         tool_mode: ToolMode,
         approval_mode: ApprovalMode,
+        automatic_model: bool,
     },
     Steer {
         input: &'a [UserInput],

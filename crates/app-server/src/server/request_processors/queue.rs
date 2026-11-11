@@ -251,6 +251,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         value: &Value,
     ) -> Result<Value, RpcError> {
         let params: QueueEnqueueParams = decode(value)?;
+        TurnModelSelection::from_request(params.model.clone(), params.model_routing)?;
         let snapshot = self
             .context
             .read_session_thread(&params.session_id, &params.thread_id)?;
@@ -324,6 +325,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                     mode: params.mode,
                     command_interpretation: params.command_interpretation.unwrap_or_default(),
                     model: params.model,
+                    model_routing: params.model_routing,
                     reasoning_effort: params.reasoning_effort,
                     tool_mode,
                     approval_mode,
@@ -483,11 +485,8 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             input,
             ash_protocol::TurnKind::Coding,
             selection,
-            request
-                .model
-                .clone()
-                .map(TurnModelSelection::Explicit)
-                .unwrap_or(TurnModelSelection::Current),
+            TurnModelSelection::from_request(request.model.clone(), request.model_routing)
+                .map_err(|error| format!("{:?}", error.message))?,
             request.reasoning_effort,
         );
         let current = self
@@ -550,6 +549,7 @@ fn accepted(
             input: &request.input,
             tool_mode: request.tool_mode,
             approval_mode: request.approval_mode,
+            automatic_model: request.model_routing.is_some(),
         },
     };
     runtime.accepted_command(&request.thread_id, &request.command_id, command)

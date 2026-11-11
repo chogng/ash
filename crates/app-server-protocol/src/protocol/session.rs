@@ -359,6 +359,10 @@ pub enum SessionRequest {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         reasoning_effort: Option<ash_protocol::ReasoningEffort>,
+        /// Mutually exclusive with an explicit model.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        model_routing: Option<ash_protocol::ModelRoutingMode>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_mode: Option<ToolMode>,

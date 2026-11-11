@@ -62,6 +62,7 @@ interface SessionOperations {
 		readonly commandInterpretation?: CommandInterpretation;
 		readonly approvalMode?: ApprovalMode | null;
 		readonly model?: ModelRef | null;
+		readonly modelRouting?: 'auto';
 		readonly reasoningEffort?: ModelReasoningEffort | null;
 		readonly toolMode?: 'direct' | 'codeMode' | 'codeModeOnly' | null;
 		readonly input: AgentInput[];
@@ -267,6 +268,7 @@ export interface QueueEnqueueParams extends SessionMutationParams {
 	readonly threadId: string;
 	readonly mode: SessionMode;
 	readonly model?: ModelRef | null;
+	readonly modelRouting?: 'auto';
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly approvalMode?: ApprovalMode;
 	readonly input: AgentInput[];
@@ -569,6 +571,7 @@ export interface Turn {
 	readonly mode: ChatMode;
 	readonly approvalMode: ApprovalMode;
 	readonly model?: ModelRef | null;
+	readonly modelRouting?: 'selected' | 'fallback' | 'reused';
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly plan?: PlanUpdate | null;
 	/** Durable execution-start evidence; results and pending interactions take precedence. */

@@ -3451,6 +3451,65 @@ impl ModelCatalog for ConfigBackedModelService {
         Ok(self.resolved_config()?.model)
     }
 
+    fn select_automatic_model(
+        &self,
+        input: &[ash_protocol::UserInput],
+    ) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
+        use ash_protocol::ModelInputModality;
+        use ash_protocol::UserInput;
+
+        let snapshot = self.config_snapshot()?;
+        if snapshot.values.auto_model_candidates.is_empty() {
+            return Ok(None);
+        }
+        let (mut config, preferred) = self.resolve_config_connections(&snapshot)?;
+        let ready: BTreeSet<_> = preferred.keys().cloned().collect();
+        config.providers.extend(preferred);
+        let contexts = self.context_catalog(&config)?;
+        let candidates = config.auto_model_candidates.iter().filter_map(|model| {
+            if !ready.contains(&model.provider) {
+                return None;
+            }
+            let provider = config.providers.get(&model.provider)?;
+            let entry = contexts.resolve_entry(model).ok()?;
+            let context = ModelContext::resolve(&entry, provider, contexts.registry()).ok()?;
+            Some((entry, context.usable_input()?))
+        });
+
+        let mut text_bytes = 0usize;
+        let mut modalities = Vec::new();
+        for item in input {
+            let (bytes, modality) = match item {
+                UserInput::Text { text } => (text.len(), None),
+                UserInput::Context { name, content, .. } => {
+                    (name.len().saturating_add(content.len()), None)
+                }
+                UserInput::Image { .. }
+                | UserInput::LocalImage { .. }
+                | UserInput::ImageAttachment { .. } => (0, Some(ModelInputModality::Image)),
+                UserInput::Audio { .. } | UserInput::AudioAttachment { .. } => {
+                    (0, Some(ModelInputModality::Audio))
+                }
+                _ => (0, None),
+            };
+            text_bytes = text_bytes.saturating_add(bytes);
+            if let Some(modality) = modality
+                && !modalities.contains(&modality)
+            {
+                modalities.push(modality);
+            }
+        }
+        // This is a lower-cost first-pass estimate. Core budgets the full prompt at execution.
+        let input_tokens =
+            u32::try_from(ash_utils_string::approx_tokens_from_byte_count(text_bytes))
+                .unwrap_or(u32::MAX);
+        Ok(ash_models_manager::select_automatic_model(
+            candidates,
+            input_tokens,
+            &modalities,
+        ))
+    }
+
     fn execution_availability(
         &self,
         model: Option<&ash_protocol::ModelRef>,

@@ -164,6 +164,7 @@ export interface StartTurnOptions extends ChatSubmissionOptions {
 	readonly mode: ChatMode;
 	readonly approvalMode?: ApprovalMode;
 	readonly model?: ModelRef;
+	readonly modelRouting?: 'auto';
 	/** Overrides this Turn's model effort without changing the user's model settings. */
 	readonly reasoningEffort?: ModelReasoningEffort;
 	readonly contexts?: readonly ResolvedChatContext[];

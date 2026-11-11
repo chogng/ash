@@ -67,6 +67,9 @@ pub enum ThreadCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        model_routing: Option<crate::TurnModelRouting>,
         /// Frozen with the Turn so retries and restored executions use the same effort.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]

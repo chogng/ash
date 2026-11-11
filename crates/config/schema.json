@@ -66,6 +66,13 @@
             "type": "automatic"
           }
         },
+        "autoModelCandidates": {
+          "description": "Ordered models eligible for automatic selection on a conversation's first Turn.",
+          "items": {
+            "$ref": "#/$defs/ModelRef"
+          },
+          "type": "array"
+        },
         "codeReviewModel": {
           "anyOf": [
             {

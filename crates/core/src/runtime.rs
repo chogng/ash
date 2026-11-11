@@ -96,9 +96,11 @@ impl<'a> Runtime<'a> {
         admit: impl FnOnce(
             &ThreadId,
             crate::StartTurnRequest,
+            Option<ash_protocol::TurnModelRouting>,
         ) -> Result<crate::StartTurnResult, CoreError>,
         schedule_title: impl FnOnce(crate::ThreadTitleRequest, Arc<dyn ThreadUpdateSink>),
     ) -> Result<TurnReceipt, CoreError> {
+        let automatic_model = request.model_routing.is_some();
         if let Some(receipt) = self.replay_turn(
             thread_id,
             &request.command_id,
@@ -107,6 +109,7 @@ impl<'a> Runtime<'a> {
                 input: &request.input,
                 tool_mode: request.tool_mode,
                 mode: request.mode,
+                automatic_model,
             },
         )? {
             return Ok(receipt);
@@ -141,6 +144,7 @@ impl<'a> Runtime<'a> {
                 activated_skills: request.activated_skills,
                 input: request.input,
             },
+            request.model_routing,
         )?;
         if start.disposition == crate::StartTurnDisposition::Replayed {
             return self
@@ -152,6 +156,7 @@ impl<'a> Runtime<'a> {
                         input: &input,
                         tool_mode,
                         mode,
+                        automatic_model,
                     },
                 )?
                 .ok_or_else(|| CoreError::Journal("accepted Turn receipt is missing".into()));
@@ -252,7 +257,10 @@ impl AgentRuntime for Runtime<'_> {
         self.submit_turn_with_admission(
             thread_id,
             request,
-            |thread, request| self.threads.start_turn(thread, request),
+            |thread, request, routing| {
+                self.threads
+                    .start_turn_with_model_routing(thread, request, None, routing)
+            },
             |_, _| {},
         )
     }
@@ -384,6 +392,7 @@ impl AgentRuntime for Runtime<'_> {
                     mode,
                     tool_mode,
                     kind,
+                    model_routing,
                     ..
                 },
                 SubmittedCommand::Turn {
@@ -391,12 +400,14 @@ impl AgentRuntime for Runtime<'_> {
                     input: wanted,
                     tool_mode: wanted_tool_mode,
                     mode: wanted_mode,
+                    automatic_model,
                 },
             ) => {
                 input == wanted
                     && *tool_mode == wanted_tool_mode
                     && *kind == wanted_kind
                     && *mode == wanted_mode
+                    && model_routing.is_some() == automatic_model
             }
             (ThreadCommand::StartTurn { input, .. }, SubmittedCommand::Input { input: wanted }) => {
                 input == wanted
@@ -438,6 +449,7 @@ impl AgentRuntime for Runtime<'_> {
                     mode,
                     tool_mode,
                     approval_mode,
+                    model_routing,
                     ..
                 },
                 AcceptedCommand::Turn {
@@ -445,12 +457,14 @@ impl AgentRuntime for Runtime<'_> {
                     input: wanted,
                     tool_mode: mode_tool,
                     approval_mode: approval,
+                    automatic_model,
                 },
             ) => {
                 input == wanted
                     && *mode == wanted_mode
                     && *tool_mode == mode_tool
                     && *approval_mode == approval
+                    && model_routing.is_some() == automatic_model
             }
             (
                 ThreadCommand::SteerTurn { input, turn_id },

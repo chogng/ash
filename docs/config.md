@@ -130,6 +130,18 @@ directory = "/absolute/path/to/recordings"
 
 主 Agent 使用 `[agent.model]` 中的 `provider`、`model` 选择模型；可选的 `[agent] modelReasoningEffort` 指定推理强度，缺失时使用模型目录默认值。会话标题、会话回顾和代码审查分别使用可选的 `[agent.threadTitleModel]`、`[agent.threadRecapModel]` 和 `[agent.codeReviewModel]`。每项包含 `provider`、`model` 和可选的 `reasoningEffort`。未指定档位时，标题和回顾优先使用低成本档，代码审查按所选模型解析默认档。未指定任务模型时，标题和回顾使用对话提供商的推荐模型，代码审查跟随当前 Thread 的模型。审批审查和提交说明分别使用独立的 `approvalReviewModel`、`commitMessageModel`。
 
+在 Code 和原生 Chat 的会话视图选择「自动」时，可以在用户配置中指定首轮候选模型，按填写顺序尝试。
+
+```toml
+[agent]
+autoModelCandidates = [
+  { provider = "openai", model = "gpt-6.1-sol" },
+  { provider = "openai", model = "gpt-6-luna" },
+]
+```
+
+Ash 选择第一个接入已就绪、模型可用、明确支持工具及所附媒体，并且输入预算足以容纳首轮文本估算的候选。候选列表为空或全部不符合时，使用该 Thread 的 Agent 模型或配置默认模型。首轮确定的具体模型随会话保存，重启后的自动发送仍沿用该模型。手动选模始终对当前发送生效。列表中的每个提供商都可能收到消息及附件。
+
 `approvalReviewModel` 可独立指定 `connection`、`model` 和 `reasoningEffort`。自动选择时，ChatGPT 订阅
 使用 `codex-auto-review`，OpenAI API 使用 `gpt-6-luna`，均使用 `low`；不继承主模型的推理强度。
 其他提供方保留自己的审核默认值。配置和连接约束见 [审核模型选择](guardian.md#审核模型选择)。

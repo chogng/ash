@@ -160,6 +160,7 @@ impl Fixture {
             command_id: CommandId::new("start").unwrap(),
             expected_sequence: SequenceExpectation::Exact(1),
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             kind: TurnKind::Coding,
             instructions: crate::test_turn_instructions(),

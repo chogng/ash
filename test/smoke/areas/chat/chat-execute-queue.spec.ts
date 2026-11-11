@@ -82,6 +82,69 @@ test('Agents Code reorders durable queued messages with the keyboard and by drag
 	}
 });
 
+test('Agents Code sends Auto through the App Server and records the default fallback', { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }) => {
+	const provider = 'custom-auto-routing-fixture';
+	const model = { provider, model: 'auto-routing-fixture' };
+	const requests: string[] = [];
+	const server = createServer(async (request, response) => {
+		if (request.method === 'GET') {
+			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
+			return;
+		}
+		const chunks = [];
+		for await (const chunk of request) chunks.push(chunk);
+		const body = JSON.parse(Buffer.concat(chunks).toString());
+		requests.push(body.model);
+		response.writeHead(200, { 'content-type': 'text/event-stream' });
+		response.end('data: {"id":"auto","choices":[{"index":0,"delta":{"content":"Automatic reply"},"finish_reason":null}]}\n\ndata: {"id":"auto","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		const page = await workbench.openAgentsWindow(target.kind);
+		connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
+		const { client } = connection;
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Missing Auto routing fixture port');
+		const config = await client.request(methods['config/read'], {});
+		await client.request(methods['provider/configure'], {
+			commandId: 'auto-routing-provider', expectedRevision: config.revision, config: {
+				connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+				custom: { name: 'Auto routing fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+				modelContext: { [model.model]: { contextWindow: 272_000 } },
+			}
+		});
+		await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-auto-routing-key' });
+		const configured = await client.request(methods['config/read'], {});
+		await client.request(methods['config/update'], { commandId: 'auto-routing-default', expectedRevision: configured.revision, model });
+		const created = await client.request(methods['session/create'], {
+			commandId: 'auto-routing-session', kind: 'code', title: 'Auto routing conversation', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: testWorkspace.directory }
+		});
+		const { sessionId, threads: [{ threadId }] } = created.session;
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Auto routing conversation' }).click();
+		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await expect(chat).toHaveAttribute('data-thread-id', threadId);
+		await new Workbench(page).quickaccess.runCommand('workbench.action.chat.openModelPicker');
+		const auto = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('switch', { name: 'Auto', exact: true });
+		if (!await auto.isChecked()) await auto.press('Space');
+		await expect(auto).toBeChecked();
+		await page.keyboard.press('Escape');
+		await chat.locator('.stanza-editor-input').focus();
+		await page.keyboard.insertText('Use automatic routing');
+		await page.keyboard.press('Enter');
+		await expect.poll(async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread.turns[0]).toMatchObject({
+			status: 'completed', modelRouting: 'fallback', model,
+		});
+		expect(requests).toEqual([model.model]);
+	} finally {
+		await connection?.close();
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
 for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 	test(`${surface} sends, queues, steers and stops through the owning execution model`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);

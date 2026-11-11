@@ -645,6 +645,7 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					mode: params.mode,
 					approvalMode: params.approvalMode,
 					model: params.model,
+					modelRouting: params.modelRouting,
 					reasoningEffort: params.reasoningEffort,
 					toolMode: params.toolMode,
 					input
@@ -804,6 +805,7 @@ function toThread(thread: ThreadDto, remoteHost?: string | { readonly authority:
 				deadline: turn.pendingInteraction.deadline ? { ...turn.pendingInteraction.deadline } : turn.pendingInteraction.deadline,
 			} : turn.pendingInteraction,
 			model: turn.model ? { ...turn.model } : turn.model,
+			modelRouting: turn.modelRouting,
 			reasoningEffort: turn.reasoningEffort,
 			plan: turn.plan
 				? {

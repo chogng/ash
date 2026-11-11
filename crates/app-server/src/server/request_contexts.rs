@@ -840,7 +840,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
         AppServer::agent_runtime(self).submit_turn_with_admission(
             thread,
             request,
-            |thread, request| {
+            |thread, request, model_routing| {
                 AppServer::admit_bound_turn_with_ide(
                     self,
                     thread,
@@ -848,6 +848,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
                     connection,
                     document_mode,
                     expected_ide,
+                    model_routing,
                 )
             },
             |request, updates| self.schedule_thread_title(request, updates),

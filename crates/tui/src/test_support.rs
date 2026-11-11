@@ -211,6 +211,7 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
             command_interpretation: ash_protocol::CommandInterpretation::Product,
             mode: submission.mode,
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             command_id,
             session_id: ash_protocol::SessionId::new("session").unwrap(),

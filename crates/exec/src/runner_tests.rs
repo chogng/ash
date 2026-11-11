@@ -369,6 +369,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         instructions: None,
         directory: None,
         model: None,
+        model_routing: None,
         reasoning_effort: None,
         tool_profile: None,
         tool_mode: ash_protocol::ToolMode::Direct,

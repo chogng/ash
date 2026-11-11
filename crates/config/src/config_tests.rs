@@ -442,6 +442,44 @@ fn model_settings_are_migrated_once_from_version_two() {
 }
 
 #[test]
+fn automatic_model_candidates_roundtrip_in_order_and_reject_duplicates() {
+    let mut document = UserConfigDocument::default();
+    let candidates = vec![
+        model_ref("openai", "gpt-6.1-sol"),
+        model_ref("openai", "gpt-6-luna"),
+    ];
+    document.agent.auto_model_candidates = candidates.clone();
+    document.validate().unwrap();
+    let encoded = crate::document_migration::encode(&document).unwrap();
+    let decoded = crate::document_migration::decode(&encoded).unwrap();
+    assert_eq!(decoded.document.agent.auto_model_candidates, candidates);
+    assert_eq!(
+        ResolvedConfig::from(&decoded.document).auto_model_candidates,
+        candidates
+    );
+
+    document
+        .agent
+        .auto_model_candidates
+        .push(candidates[0].clone());
+    assert!(
+        document
+            .validate()
+            .unwrap_err()
+            .0
+            .contains("duplicate automatic model candidate")
+    );
+    document.agent.auto_model_candidates = vec![model_ref("unregistered", "example")];
+    assert!(
+        document
+            .validate()
+            .unwrap_err()
+            .0
+            .contains("is not configured")
+    );
+}
+
+#[test]
 fn legacy_xai_subscription_provider_moves_to_vendor_identity_once() {
     let legacy = r#"schemaVersion = 5
 [providers.openai]
