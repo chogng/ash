@@ -23,6 +23,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 	private readonly labelDomNode = $('.ash-chat-editing-count');
 	private readonly countdownDomNode = $('.ash-chat-editing-auto-accept');
 	private countingDown = false;
+	private announcedSuspension: IModifiedFileEntry | undefined;
 	private readonly toolbar: WorkbenchToolBar;
 	private readonly decorations;
 	private zones: string[] = [];
@@ -71,7 +72,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 
 	private accessibleContent(type: AccessibleViewType): string {
 		if (type === AccessibleViewType.Help) {
-			return localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Shared file changes affect all contributing chats. Accept all and Reject all apply to the chosen chat and require shared changes to be reviewed separately. Cancel automatic acceptance to keep reviewing when a countdown appears. Use Restore Checkpoint to create a new chat and directory at a recorded message boundary; Files follows that directory. Undo Last Request and Redo Last Request move the current chat history and restore its files. Save unsaved files first. Sending a new request clears Redo. Pending reviews are restored after reopening the workspace; their automatic acceptance stays paused. Press Escape to return to the editor. Use the Review Agent changes command to choose a chat and review closed or deleted files.') + '\n' + localize('chatEditing.savePending', 'Rejected changes have not been saved. Retry saving to finish this review.') + ' ' + localize('chatEditing.retrySave', 'Retry saving reviewed changes');
+			return localize('chatEditing.help', 'Review Agent changes\nUse Left and Right arrows to move between toolbar actions. Previous and Next reveal each change. Accept or reject the current change or the file. File operations are reviewed as one atomic change set. Shared file changes affect all contributing chats. Accept all and Reject all apply to the chosen chat and require shared changes to be reviewed separately. Cancel automatic acceptance to keep reviewing when a countdown appears. Use Restore Checkpoint to create a new chat and directory at a recorded message boundary; Files follows that directory. Undo Last Request and Redo Last Request move the current chat history and restore its files. Save unsaved files first. Sending a new request clears Redo. Pending reviews are restored after reopening the workspace; their automatic acceptance stays paused. Press Escape to return to the editor. Use the Review Agent changes command to choose a chat and review closed or deleted files.') + '\n' + localize('chatEditing.savePending', 'Rejected changes have not been saved. Retry saving to finish this review.') + ' ' + localize('chatEditing.retrySave', 'Retry saving reviewed changes') + '\n' + localize('chatEditing.suspendedHelp', 'If a file change pauses review, undo the conflicting change to make Accept and Reject available again.');
 		}
 		const chats = this.entry ? this.chatCount(this.entry) : 0;
 		const content = this.entry?.getAccessibleContent();
@@ -86,6 +87,10 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		const entry = resource ? this.editing.entries.find(candidate => candidate.resources.some(uri => extUriBiasedIgnorePathCase.isEqual(resource, uri))) : undefined;
 		if (entry !== this.entry) { this.index = 0; }
 		this.entry = entry;
+		const suspended = entry?.isReviewSuspended ? entry : undefined;
+		const reviewHadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
+		if (suspended && suspended !== this.announcedSuspension && !reviewHadFocus && this.editor.hasWidgetFocus()) status(suspended.getAccessibleContent());
+		this.announcedSuspension = suspended;
 		this.domNode.hidden = !entry;
 		this.clearZones();
 		this.decorations.clear();
@@ -99,7 +104,18 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 			this.toolbar.setActions([]); this.editor.layoutOverlayWidget(this); return;
 		}
 		this.index = Math.min(this.index, Math.max(0, entry.hunks.length - 1));
-		this.labelDomNode.textContent = entry.hasPendingSave ? localize('chatEditing.retrySave', 'Retry saving reviewed changes') : entry.hunks.length > 0 ? localize('chatEditing.counter', '{0} of {1}', this.index + 1, entry.hunks.length) : localize('chatEditing.fileSet', '{0} files', entry.resources.length);
+		this.labelDomNode.textContent = entry.isReviewSuspended ? localize('chatEditing.reviewPaused', 'Review paused')
+			: entry.hasPendingSave ? localize('chatEditing.retrySave', 'Retry saving reviewed changes')
+				: entry.hunks.length > 0 ? localize('chatEditing.counter', '{0} of {1}', this.index + 1, entry.hunks.length) : localize('chatEditing.fileSet', '{0} files', entry.resources.length);
+		this.labelDomNode.title = entry.isReviewSuspended ? entry.getAccessibleContent() : '';
+		this.labelDomNode.tabIndex = entry.isReviewSuspended ? 0 : -1;
+		if (entry.isReviewSuspended) {
+			this.labelDomNode.setAttribute('role', 'note');
+			this.labelDomNode.setAttribute('aria-label', this.labelDomNode.title);
+		} else {
+			this.labelDomNode.removeAttribute('role');
+			this.labelDomNode.removeAttribute('aria-label');
+		}
 		this.decorations.set(entry.hunks.map(hunk => ({ range: hunk.range, options: { description: 'chat-editing-review', isWholeLine: true, className: 'ash-chat-editing-added', linesDecorationsClassName: 'ash-chat-editing-gutter' } })));
 		this.editor.changeViewZones(accessor => {
 			for (const hunk of entry.hunks) {
@@ -116,6 +132,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		});
 		this.updateCountdown();
 		this.renderActions(entry);
+		if (reviewHadFocus && entry.isReviewSuspended && !this.domNode.contains(this.domNode.ownerDocument.activeElement)) this.labelDomNode.focus();
 		this.editor.layoutOverlayWidget(this);
 	}
 
@@ -137,7 +154,7 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 			: entry.isFileOperation ? localize('chatEditing.rejectSet', 'Reject change set') : localize('chatEditing.reject', 'Reject file changes');
 		actions.push(
 			this.action('accept', acceptFile, Lxicon.check, () => this.decide(entry, true)),
-			this.action('reject', rejectFile, Lxicon.discard, () => this.decide(entry, false)),
+			this.action('reject', rejectFile, Lxicon.discard, () => this.decide(entry, false), !entry.isBusy && (entry.hasPendingSave || !entry.isReviewSuspended)),
 		);
 		if (this.countingDown) {
 			actions.push(this.action('cancelAutoAccept', localize('chatEditing.cancelAutoAccept', 'Cancel automatic acceptance'), Lxicon.close, () => {
@@ -167,8 +184,8 @@ export class ChatEditingCodeEditorIntegration extends Disposable implements IOve
 		this.editor.layoutOverlayWidget(this);
 	}
 
-	private action(id: string, label: string, icon: IAction['icon'], run: () => unknown): IAction {
-		return { id: `chatEditing.${id}`, label, tooltip: label, icon, enabled: !this.entry?.isBusy, run };
+	private action(id: string, label: string, icon: IAction['icon'], run: () => unknown, enabled = !this.entry?.isBusy && !this.entry?.isReviewSuspended): IAction {
+		return { id: `chatEditing.${id}`, label, tooltip: label, icon, enabled, run };
 	}
 
 	private navigate(delta: number): void {

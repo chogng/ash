@@ -180,10 +180,10 @@ test('rejecting all after a failed hunk save still rejects the remaining Agent c
 });
 
 
-async function deferredSaveFixture() {
+async function deferredSaveFixture(initial = 'original') {
 	const lifetime = new DisposableStore();
 	const identity = lifetime.add(new TestUriIdentityServices());
-	let disk = 'original';
+	let disk = initial;
 	let revision = 0;
 	let complete = 0;
 	let nextWrite: { entered: DeferredPromise<string>; release: DeferredPromise<void>; } | undefined;
@@ -224,6 +224,11 @@ async function deferredSaveFixture() {
 			entry.endAgentEdit();
 			if (save) { await reference.save(new AbortController().signal); }
 		},
+		async reload(text: string) {
+			disk = text;
+			revision++;
+			await models.refresh(resource);
+		},
 		append(text: string) {
 			const end = editor.model.getPositionAt(editor.model.getText().length);
 			editor.model.applyOperations([{ range: new Range(end.lineNumber, end.column, end.lineNumber, end.column), text }]);
@@ -231,6 +236,60 @@ async function deferredSaveFixture() {
 		dispose: () => lifetime.dispose(), [Symbol.dispose]: () => lifetime.dispose(),
 	};
 }
+
+for (const eol of ['\n', '\r\n']) {
+	test(`disk reload and its undo and redo preserve pending Agent edits (${JSON.stringify(eol)})`, async () => {
+		using review = await deferredSaveFixture(['top', 'original', 'bottom'].join(eol));
+		await review.agent(['top', 'agent edit', 'bottom'].join(eol));
+		await review.reload(['external top', 'agent edit', 'external bottom'].join(eol));
+		assert.equal(review.entry.hunks.length, 1);
+		assert.equal(review.entry.hunks[0]?.range.startLineNumber, 2);
+		assert.equal(review.complete, 0);
+		review.model.undo();
+		assert.equal(review.entry.hunks.length, 1);
+		review.model.redo();
+		assert.equal(review.entry.hunks.length, 1);
+		await review.entry.reject();
+		assert.equal(review.disk, ['external top', 'original', 'external bottom'].join(eol));
+	});
+}
+
+test('disk reload preserves external text adjacent to a pending Agent edit on the same line', async () => {
+	using review = await deferredSaveFixture('user=old; value=before; end=old');
+	await review.agent('user=old; value=agent; end=old');
+	await review.reload('user=new; value=agent; end=new');
+	assert.equal(review.entry.isReviewSuspended, false);
+	assert.equal(review.entry.hunks.length, 1);
+	await review.entry.reject();
+	assert.equal(review.disk, 'user=new; value=before; end=new');
+});
+
+test('disk reload preserves appended lines after a final blank line', async () => {
+	using review = await deferredSaveFixture('top\noriginal\n\n');
+	await review.agent('top\nagent edit\n\n');
+	await review.reload('top\nagent edit\n\n\nexternal tail');
+	assert.equal(review.entry.hunks.length, 1);
+	await review.entry.reject();
+	assert.equal(review.disk, 'top\noriginal\n\n\nexternal tail');
+});
+
+test('an overlapping reload suspends review, survives reopening, and resumes after undo', async () => {
+	using review = await deferredSaveFixture('value=original');
+	await review.agent('value=agent');
+	await review.reload('value=external');
+	assert.equal(review.entry.isReviewSuspended, true);
+	assert.equal(review.complete, 0);
+	await assert.rejects(review.entry.reject(), /review is paused/);
+	await assert.rejects(review.entry.accept(), /review is paused/);
+	using restored = fixture(review.disk, review.entry.createSnapshot());
+	assert.equal(restored.entry.isReviewSuspended, true);
+	assert.equal(restored.model.getText(), 'value=external');
+	review.model.undo();
+	assert.equal(review.entry.isReviewSuspended, false);
+	assert.equal(review.entry.hunks.length, 1);
+	await review.entry.reject();
+	assert.equal(review.disk, 'value=original');
+});
 
 test('Accept retains a new Agent hunk delivered while its captured text is saving', async () => {
 	using current = await deferredSaveFixture();

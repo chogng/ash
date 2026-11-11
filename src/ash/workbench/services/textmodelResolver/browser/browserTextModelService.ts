@@ -13,6 +13,7 @@ import { createPieceTreeTextBuffer } from '../../../../editor/common/model/piece
 import { EndOfLineSequence, EndOfLinePreference } from '../../../../editor/common/model.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TextModel, type TextModelMaintenanceOptions } from '../../../../editor/common/model/textModel.js';
+import { EditSources } from '../../../../editor/common/textModelEditSource.js';
 import { RetainedModelUndoRedoHistory } from '../common/retainedModelUndoRedoHistory.js';
 import { type IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import { type ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -618,7 +619,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			} else {
 				const edits = ModelService._computeEdits(entry.model, buffer);
 				entry.model.pushStackElement();
-				entry.model.pushEditOperations(null, edits, () => null);
+				entry.model.pushEditOperations(null, edits, () => null, undefined, EditSources.reloadFromDisk());
 				entry.model.pushEOL(buffer.getEOL() === '\r\n' ? EndOfLineSequence.CRLF : EndOfLineSequence.LF);
 				entry.model.pushStackElement();
 			}

@@ -64,7 +64,7 @@ function* diffLines(original: readonly string[], modified: readonly string[], op
 				modified[modifiedStart + right]!,
 				originalStart + left + 1,
 				modifiedStart + right + 1,
-				options.languageId,
+				options,
 			)));
 			yield;
 		}
@@ -154,7 +154,7 @@ function lineIndentation(line: string): number {
 	return indentation < 0 ? 0 : indentation;
 }
 
-function* diffCharacters(original: string, modified: string, originalLineNumber: number, modifiedLineNumber: number, languageId: string | undefined): Generator<void, RangeMapping[]> {
+function* diffCharacters(original: string, modified: string, originalLineNumber: number, modifiedLineNumber: number, options: ILinesDiffComputerOptions): Generator<void, RangeMapping[]> {
 	const originalTokens = diffTokens(original);
 	const modifiedTokens = diffTokens(modified);
 	const originalContent = tokenContentRange(originalTokens.values);
@@ -193,7 +193,7 @@ function* diffCharacters(original: string, modified: string, originalLineNumber:
 		originalIndex = originalMatch + 1;
 		modifiedIndex = modifiedMatch + 1;
 	}
-	return coalesceCharacterChanges(original, modified, changes, matchingWords, languageId);
+	return options.computeRawChanges ? changes : coalesceCharacterChanges(original, modified, changes, matchingWords, options.languageId);
 }
 
 function coalesceCharacterChanges(original: string, modified: string, changes: readonly RangeMapping[], matchingWords: number, languageId: string | undefined): RangeMapping[] {
