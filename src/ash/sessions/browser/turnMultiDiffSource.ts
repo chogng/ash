@@ -66,10 +66,14 @@ export async function createTurnMultiDiffEditorInput(
 				session: active.session.sessionId, thread: active.threadId, captures: JSON.stringify(selected.map(({ changeSetId, revision }) => [changeSetId, revision])),
 			}).toString()
 		});
-		const multipleRepositories = new Set(selected.map(changeSet => changeSet.repositoryId)).size > 1;
+		const repositories = [...new Set(selected.map(changeSet => changeSet.repositoryId))];
 		const items = [...composed.values()].map(file => {
 			const item = turnFileInput(file);
-			return { ...item, label: multipleRepositories ? `${file.latestSummary.repositoryId}: ${item.label}` : item.label, contextKeys: undefined };
+			const repositoryId = file.latestSummary.repositoryId;
+			return {
+				...item, label: repositories.length > 1 ? `${repositoryId}: ${item.label}` : item.label, contextKeys: undefined,
+				fileList: { path: file.file.path, group: turnFileListGroup(repositories, repositoryId) },
+			};
 		});
 		return createMultiDiffEditorInput(source, items, label, { kind: 'snapshot', label });
 	}
@@ -93,10 +97,12 @@ export async function createTurnChangesSelectionInput(
 	changes: readonly { readonly change: ISessionFileChange; readonly canReview: boolean; }[],
 	signal: AbortSignal,
 ): Promise<MultiDiffEditorInput> {
+	const repositories = [...new Set(changes.map(({ change }) => change.summary.repositoryId))];
 	const items = await Promise.all(changes.map(async ({ change, canReview }): Promise<MultiDiffEditorInputItem> => {
 		const contents = await readTurnFileContents(chat, change, signal);
 		return {
-			label: change.file.path, binary: contents.binary,
+			label: change.file.previousPath ? `${change.file.previousPath} → ${change.file.path}` : change.file.path, binary: contents.binary,
+			fileList: { path: change.file.path, group: turnFileListGroup(repositories, change.summary.repositoryId) },
 			contextKeys: turnReviewContextKeys(change.summary, change.file.path, canReview),
 			original: turnSnapshotSide(change.originalUri, contents.before),
 			modified: turnSnapshotSide(change.modifiedUri, contents.after),
@@ -105,6 +111,11 @@ export async function createTurnChangesSelectionInput(
 	const captures = new Map(changes.map(({ change }) => [JSON.stringify([change.summary.sessionId, change.summary.threadId, change.summary.changeSetId]), change.summary]));
 	await Promise.all([...captures.values()].map(summary => assertTurnCaptureCurrent(chat, summary, signal)));
 	return createMultiDiffEditorInput(resource, items, label, { kind: 'snapshot', label });
+}
+
+function turnFileListGroup(repositories: readonly string[], repositoryId: string) {
+	if (repositories.length <= 1) return undefined;
+	return { id: JSON.stringify([repositoryId]), label: localize('sessions.changes.repository', 'Repository {0}', repositories.indexOf(repositoryId) + 1) };
 }
 
 function sealedTurnChanges(changeSets: readonly TurnChangeSetSummary[], turnId: string): readonly TurnChangeSetSummary[] {
@@ -138,6 +149,13 @@ async function readTurnFileContents(chat: IChatService, change: ISessionFileChan
 	const contents = await (signal ? raceCancellationError(pending, signal) : pending);
 	if (signal) throwIfCancelled(signal);
 	if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
+	return contents;
+}
+
+/** Reads one file and verifies it still belongs to the displayed capture. */
+export async function readCapturedTurnFile(chat: IChatService, change: ISessionFileChange, signal: AbortSignal): Promise<TurnChangeFileContents> {
+	const contents = await readTurnFileContents(chat, change, signal);
+	await assertTurnCaptureCurrent(chat, change.summary, signal);
 	return contents;
 }
 
@@ -185,6 +203,7 @@ function turnFileInput(file: ComposedTurnFile): MultiDiffEditorInputItem {
 	return {
 		binary: file.binary,
 		label: file.file.previousPath ? `${file.file.previousPath} → ${file.file.path}` : file.file.path,
+		fileList: { path: file.file.path },
 		original: file.original,
 		modified: file.modified,
 		goToFile: file.modified,
@@ -224,7 +243,7 @@ export async function createTurnCommitPreviewInput(chat: IChatService, sessionId
 		if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) {
 			label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode);
 		}
-		return { label, original, modified, binary: contents.binary, goToFile: modified };
+		return { label, original, modified, binary: contents.binary, goToFile: modified, fileList: { path: file.path } };
 	}));
 	const resource = URI.parse(`ash-multi-diff:/turn-commit/${encodeURIComponent(preview.commitId)}?session=${encodeURIComponent(sessionId)}&thread=${encodeURIComponent(threadId)}`);
 	const title = localize('sessions.changes.commitPreview', '{0} files to commit to {1}: {2}', preview.files.length, preview.targetBranch, preview.message);

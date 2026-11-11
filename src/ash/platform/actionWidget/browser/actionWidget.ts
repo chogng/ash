@@ -80,7 +80,9 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 				this.notifyHide = undefined;
 			}
 		}));
+		const canRelayout = () => !list.domNode.classList.contains(ACTION_WIDGET_DROPDOWN_MOTION_CLOSING_CLASS);
 		const layout = (): void => {
+			if (!canRelayout()) return;
 			list.domNode.style.width = `${list.layout(0)}px`;
 			this.contextViewService.layout();
 		};
@@ -97,6 +99,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 			anchor,
 			anchorPosition: listOptions.anchorPosition,
 			content: list.domNode,
+			get canRelayout() { return canRelayout(); },
 			presentation: 'plain',
 			gap: 4,
 			layer: contextViewLayer,

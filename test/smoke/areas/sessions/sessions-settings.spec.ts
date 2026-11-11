@@ -18,7 +18,7 @@ test('Sessions Memory guards unsaved changes at every Settings close control', {
 	const body = memory.getByRole('textbox', { name: 'Memory content', exact: true });
 	const save = memory.getByRole('button', { name: 'Save memory', exact: true });
 	const close = settings.getByRole('button', { name: 'Close Dialog', exact: true });
-	const saved = memory.getByLabel('Saved memories', { exact: true });
+	const manage = memory.getByRole('button', { name: 'Manage saved memories', exact: true });
 	const prompt = page.getByText('Discard unsaved memory changes?', { exact: true });
 	const clickBackdrop = async () => {
 		const box = await settings.boundingBox();
@@ -26,6 +26,8 @@ test('Sessions Memory guards unsaved changes at every Settings close control', {
 		await page.mouse.click(box!.x / 2, box!.y / 2);
 	};
 	await quickAccess.runCommand('ash.memories.open');
+	await manage.click();
+	await memory.getByRole('button', { name: 'New memory', exact: true }).click();
 	await expect(save).toBeEnabled();
 	await title.fill('Synthetic saved memory');
 	await body.fill('Saved content');
@@ -47,7 +49,8 @@ test('Sessions Memory guards unsaved changes at every Settings close control', {
 	await expect(settings).toHaveCount(0);
 
 	await quickAccess.runCommand('ash.memories.open');
-	await saved.selectOption({ label: 'Synthetic saved memory' });
+	await manage.click();
+	await memory.getByRole('button', { name: 'Synthetic saved memory', exact: true }).click();
 	await expect(body).toHaveValue('Saved content');
 	await close.click();
 	await expect(settings).toHaveCount(0);
@@ -61,6 +64,8 @@ test.describe('Sessions Memory in Simplified Chinese', () => {
 		await new QuickAccess(page).runCommand('ash.memories.open');
 		const settings = page.getByRole('dialog', { name: '设置', exact: true });
 		const body = settings.getByRole('textbox', { name: '记忆内容', exact: true });
+		await settings.getByRole('button', { name: '管理已保存的记忆', exact: true }).click();
+		await settings.getByRole('button', { name: '新建记忆', exact: true }).click();
 		await expect(settings.getByRole('button', { name: '保存记忆', exact: true })).toBeEnabled();
 		await body.fill('未保存的测试记忆');
 		await body.press('Escape');

@@ -334,6 +334,7 @@ fn user_answers_keep_their_question_and_precede_a_later_revocation() {
                 deadline: None,
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
+                        plan_review: None,
                         questions: vec![ash_protocol::UserInputQuestion {
                             required: true,
                             id: "destination".into(),

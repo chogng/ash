@@ -24,6 +24,8 @@ import { AgentThreadHistoryAnchorError, AgentThreadHistoryConflictError, AgentWi
 import type {
 	AgentResponse as AgentResponseDto,
 	ContentPart as ContentPartDto,
+	SessionThreadReadResult as SessionThreadReadResultDto,
+	ToolResultPreview as ToolResultPreviewDto,
 	Thread as ThreadDto,
 	ThreadItem as ThreadItemDto,
 	ThreadTranscriptEntry as ThreadTranscriptEntryDto,
@@ -39,6 +41,7 @@ import type {
 	ChatContentPart,
 	Thread,
 	ThreadItem,
+	ThreadRead,
 	ThreadTranscriptEntry,
 	ThreadTranscriptSnapshot,
 	ThreadTranscriptUpdateEnvelope,
@@ -99,6 +102,7 @@ export function createDisconnectedAgentThreadService(unavailable: UnavailableOpe
 		onDidChangeConnection: Event.None,
 		onDidUpdateThread: Event.None,
 		onDidUpdateThreadTranscript: Event.None,
+		readToolResultText: () => unavailable('thread.readToolResultText'),
 		readAttachment: () => unavailable('thread.readAttachment'),
 		readToolResource: () => unavailable('thread.readToolResource'),
 		readAppResource: () => unavailable('thread.readAppResource'),
@@ -444,6 +448,14 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		onDidUpdateThreadTranscript: Event.any<ThreadTranscriptUpdateEnvelope>((listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'session/thread/transcript/update') listener.call(thisArgs, toThreadTranscriptUpdate(event.params));
 		})),
+		readToolResultText: async ({ sessionId, threadId, turnId, itemId, itemOrdinal }, offset, signal) => {
+			if (signal?.aborted) throw canceled();
+			const generation = connection.generation;
+			const { text, nextOffset } = await appServerRequest(connection, 'session/thread/toolResult/text/read', { sessionId, threadId, source: { turnId, itemId, itemOrdinal }, offset });
+			if (signal?.aborted) throw canceled();
+			if (connection.generation !== generation) throw new Error('Tool result belongs to a retired connection');
+			return { text, ...(nextOffset == null ? {} : { nextOffset }) };
+		},
 		readAttachment: async (source, signal) => {
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
@@ -561,8 +573,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		read: async (params) => {
 			try {
 				const result = await appServerRequest(connection, 'session/thread/read', params);
-				const thread = toThread(result.thread, remoteHost);
-				return { thread, directory: toExecutionTarget(result.directory, remoteHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
+				return toThreadRead(result, remoteHost);
 			} catch (error) {
 				if (params.history?.type === 'before' && error instanceof AppServerRemoteError && error.errorName === 'InvalidParams') {
 					throw new AgentThreadHistoryAnchorError(error.message, { cause: error });
@@ -587,14 +598,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		},
 		subscribe: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/subscribe', params);
-			const thread = toThread(result.thread, remoteHost);
-			return {
-				thread,
-				directory: toExecutionTarget(result.directory, remoteHost),
-				transcript: toThreadTranscriptSnapshot(result.transcript, thread),
-				updates: result.updates.map(toThreadUpdate),
-				...(result.history ? { history: { ...result.history } } : {})
-			};
+			return { ...toThreadRead(result, remoteHost), updates: result.updates.map(toThreadUpdate) };
 		},
 		unsubscribe: (params) => voidResult(appServerRequest(connection, 'session/thread/unsubscribe', params))
 	};
@@ -641,6 +645,7 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					mode: params.mode,
 					approvalMode: params.approvalMode,
 					model: params.model,
+					modelRouting: params.modelRouting,
 					reasoningEffort: params.reasoningEffort,
 					toolMode: params.toolMode,
 					input
@@ -800,6 +805,7 @@ function toThread(thread: ThreadDto, remoteHost?: string | { readonly authority:
 				deadline: turn.pendingInteraction.deadline ? { ...turn.pendingInteraction.deadline } : turn.pendingInteraction.deadline,
 			} : turn.pendingInteraction,
 			model: turn.model ? { ...turn.model } : turn.model,
+			modelRouting: turn.modelRouting,
 			reasoningEffort: turn.reasoningEffort,
 			plan: turn.plan
 				? {
@@ -845,7 +851,7 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 				: request.type === 'permissions'
 					? { type: 'permissions', request: structuredClone(request.request) }
 					: request.type === 'userInput'
-						? { type: 'userInput', request: { questions: request.request.questions.map(question => ({ ...question, required: question.required ?? true, options: question.options?.map(option => ({ ...option })) })) } }
+						? { type: 'userInput', request: { ...request.request, questions: request.request.questions.map(question => ({ ...question, required: question.required ?? true, options: question.options?.map(option => ({ ...option })) })) } }
 						: { type: 'dynamicTool', call: { ...request.call, arguments: structuredClone(request.call.arguments) } },
 	};
 }
@@ -894,13 +900,34 @@ function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto['update']): ThreadU
 	}
 }
 
-function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto, thread: Thread): ThreadTranscriptSnapshot {
+function toThreadRead(result: SessionThreadReadResultDto, remoteHost?: string | { readonly authority: string; }): ThreadRead {
+	const thread = toThread(result.thread, remoteHost);
+	const boundary = result.history;
+	return {
+		thread,
+		directory: toExecutionTarget(result.directory, remoteHost),
+		transcript: toThreadTranscriptSnapshot(result.transcript, thread, boundary?.toolResultPreviews),
+		...(boundary ? {
+			history: {
+				hasOlderTurns: boundary.hasOlderTurns,
+				...(boundary.oldestTurnId === undefined ? {} : { oldestTurnId: boundary.oldestTurnId }),
+			},
+		} : {}),
+	};
+}
+
+function toThreadTranscriptSnapshot(
+	snapshot: ThreadTranscriptSnapshotDto,
+	thread: Thread,
+	previews?: readonly ToolResultPreviewDto[],
+): ThreadTranscriptSnapshot {
 	// The index lives only for this conversion and contains domain items from the same
 	// durable snapshot. Share immutable text, never mutable Item shells or transport
 	// objects. A later streaming revision still owns its independently converted text.
 	const turns = snapshot.sessionId === thread.sessionId && snapshot.threadId === thread.threadId && snapshot.durableSequence === thread.sequence
 		? new Map(thread.turns.map(turn => [turn.turnId, new Map(turn.items.map(item => [item.itemId, item]))]))
 		: undefined;
+	const resultPreviews = previews?.length ? new Map(previews.map(preview => [JSON.stringify([preview.turnId, preview.itemId]), preview.itemOrdinal])) : undefined;
 	return {
 		sessionId: snapshot.sessionId,
 		threadId: snapshot.threadId,
@@ -911,6 +938,12 @@ function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto, threa
 			if (converted.type !== 'item' || converted.transient) return converted;
 			const canonical = turns?.get(converted.turnId)?.get(converted.item.itemId);
 			if (canonical?.type !== converted.item.type || canonical.turnId !== converted.turnId || converted.item.turnId !== converted.turnId) return converted;
+			if (canonical.type === 'toolResult' && converted.item.type === 'toolResult') {
+				const itemOrdinal = resultPreviews?.get(JSON.stringify([converted.turnId, converted.item.itemId]));
+				if (itemOrdinal !== undefined) {
+					return { ...converted, item: { ...converted.item, text: canonical.text, outputPreview: { itemOrdinal } } };
+				}
+			}
 			if ('text' in canonical && 'text' in converted.item && canonical.text === converted.item.text) {
 				return { ...converted, item: { ...converted.item, text: canonical.text } };
 			}
@@ -960,7 +993,7 @@ function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscr
 				turnId: entry.turnId,
 				item: toThreadItem(entry.item),
 				transient: entry.transient,
-				timestamp: entry.timestamp != null && Number.isFinite(new Date(entry.timestamp).getTime()) ? entry.timestamp : undefined,
+				...(entry.timestamp != null && Number.isFinite(new Date(entry.timestamp).getTime()) ? { timestamp: entry.timestamp } : {}),
 			};
 		case 'turnPlan':
 			return {
@@ -987,6 +1020,10 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 	// Detach tool provenance and result content from transport values before Chat retains them.
 	// Reads and notifications share this conversion.
 	switch (item.type) {
+		case 'agentMessage': return {
+			...item,
+			citations: item.citations?.map(citation => ({ ...citation })),
+		};
 		case 'toolCall': {
 			const binding = item.binding;
 			return {
@@ -1110,6 +1147,7 @@ function toAgentExecutionNode(node: AgentNodeDto): AgentExecutionNode {
 		threadId: node.threadId,
 		threadSequence: node.threadSequence,
 		title: node.title,
+		origin: node.origin ? { ...node.origin } : undefined,
 		parentThreadId: node.parentThreadId,
 		forkedFromId: node.forkedFromId,
 		executionStatus: node.executionStatus,

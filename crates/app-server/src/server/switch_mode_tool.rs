@@ -19,6 +19,7 @@ use ash_protocol::ActionProvenance;
 use ash_protocol::ActionSource;
 use ash_protocol::CapabilitySet;
 use ash_protocol::CollaborationMode;
+use ash_protocol::PlanReview;
 use ash_protocol::RequestUserInput;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
@@ -32,6 +33,7 @@ use serde_json::json;
 use std::sync::Arc;
 
 pub(crate) const SWITCH_MODE_TOOL_NAME: &str = "switch_mode";
+const PLAN_FEEDBACK_QUESTION: &str = "plan_feedback";
 
 pub(super) struct SwitchModeToolService {
     threads: Arc<ThreadController>,
@@ -80,40 +82,77 @@ impl SwitchModeToolService {
             .ok_or_else(|| CoreError::NotFound(identity.turn_id().to_string()))?;
         let from = turn.mode;
         let mut authority = ModeChangeAuthority::Agent;
+        let mut feedback = None;
         if from.is_analysis() && !args.mode.is_analysis() {
             let interactions = interactions.ok_or_else(|| {
                 CoreError::Policy("leaving Plan or Ask requires a user decision".into())
             })?;
             // Mode IDs and the model-authored reason are protocol/user content. The existing
             // user-input surface owns localized controls and accessibility; no extra dialog is used.
+            let approve_value = mode_id(args.mode);
+            let revise_value = mode_id(from);
+            let plan_review = (from == CollaborationMode::Plan)
+                .then_some(args.plan)
+                .flatten()
+                .map(|markdown| PlanReview {
+                    markdown,
+                    decision_question_id: SWITCH_MODE_TOOL_NAME.into(),
+                    approve_value: approve_value.clone(),
+                    revise_value: revise_value.clone(),
+                    feedback_question_id: PLAN_FEEDBACK_QUESTION.into(),
+                });
+            let mut questions = vec![UserInputQuestion {
+                required: true,
+                id: SWITCH_MODE_TOOL_NAME.into(),
+                header: SWITCH_MODE_TOOL_NAME.into(),
+                question: args.reason.clone(),
+                options: [approve_value.clone(), revise_value]
+                    .into_iter()
+                    .map(|label| UserInputOption {
+                        label,
+                        description: String::new(),
+                    })
+                    .collect(),
+                allow_free_form: false,
+                validation: None,
+            }];
+            if plan_review.is_some() {
+                questions.push(UserInputQuestion {
+                    required: false,
+                    id: PLAN_FEEDBACK_QUESTION.into(),
+                    header: "Plan feedback".into(),
+                    question: "What should change in the plan?".into(),
+                    options: Vec::new(),
+                    allow_free_form: true,
+                    validation: Some(ash_protocol::UserInputValidation::String {
+                        min: None,
+                        max: Some("2000".into()),
+                    }),
+                });
+            }
             let outcome = interactions.request_user_input(RequestUserInput {
-                questions: vec![UserInputQuestion {
-                    required: true,
-                    id: SWITCH_MODE_TOOL_NAME.into(),
-                    header: SWITCH_MODE_TOOL_NAME.into(),
-                    question: args.reason.clone(),
-                    options: vec![args.mode, from]
-                        .into_iter()
-                        .map(|mode| UserInputOption {
-                            label: mode_id(mode),
-                            description: String::new(),
-                        })
-                        .collect(),
-                    allow_free_form: false,
-                    validation: None,
-                }],
+                questions,
+                plan_review,
             })?;
-            let approved = match outcome {
-                ToolUserInputOutcome::Answered(response) => response
-                    .answers
-                    .get(SWITCH_MODE_TOOL_NAME)
-                    .is_some_and(|answer| answer.value == mode_id(args.mode)),
-                ToolUserInputOutcome::Cancelled(_) => false,
+            let mut response = match outcome {
+                ToolUserInputOutcome::Answered(response) => Some(response),
+                ToolUserInputOutcome::Cancelled(_) => None,
             };
+            let approved = response
+                .as_ref()
+                .and_then(|response| response.answers.get(SWITCH_MODE_TOOL_NAME))
+                .is_some_and(|answer| answer.value == approve_value);
+            feedback = response
+                .as_mut()
+                .and_then(|response| response.answers.remove(PLAN_FEEDBACK_QUESTION))
+                .map(|answer| answer.value)
+                .filter(|value| !value.trim().is_empty());
             if !approved {
-                return Ok(ToolExecutionOutput::Success(
-                    json!({"changed": false, "mode": from, "rejected": true}).to_string(),
-                ));
+                let mut result = json!({"changed": false, "mode": from, "rejected": true});
+                if let Some(feedback) = feedback {
+                    result["feedback"] = json!(feedback);
+                }
+                return Ok(ToolExecutionOutput::Success(result.to_string()));
             }
             authority = ModeChangeAuthority::User;
         }
@@ -130,9 +169,13 @@ impl SwitchModeToolService {
                 authority,
             },
         )?;
-        Ok(ToolExecutionOutput::Success(json!({
+        let mut output = json!({
             "changed": result.changed, "from_mode": from, "mode": result.mode, "sequence": result.sequence,
-        }).to_string()))
+        });
+        if let Some(feedback) = feedback {
+            output["feedback"] = json!(feedback);
+        }
+        Ok(ToolExecutionOutput::Success(output.to_string()))
     }
 }
 
@@ -225,10 +268,11 @@ impl ToolService for SwitchModeToolService {
 struct SwitchModeArguments {
     mode: CollaborationMode,
     reason: String,
+    plan: Option<String>,
 }
 
 fn arguments(call: &ToolCall) -> Result<SwitchModeArguments, CoreError> {
-    let args: SwitchModeArguments =
+    let mut args: SwitchModeArguments =
         serde_json::from_value(call.arguments.clone()).map_err(|error| {
             CoreError::InvalidInput(format!("invalid switch_mode arguments: {error}"))
         })?;
@@ -236,6 +280,14 @@ fn arguments(call: &ToolCall) -> Result<SwitchModeArguments, CoreError> {
         return Err(CoreError::InvalidInput(
             "switch_mode reason must contain between 1 and 1000 characters".into(),
         ));
+    }
+    if let Some(plan) = &mut args.plan {
+        *plan = plan.trim().to_owned();
+        if plan.is_empty() || plan.chars().count() > 16_000 {
+            return Err(CoreError::InvalidInput(
+                "switch_mode plan must contain between 1 and 16000 characters".into(),
+            ));
+        }
     }
     Ok(args)
 }
@@ -256,9 +308,10 @@ fn definition() -> ToolDefinition {
             "type": "object",
             "properties": {
                 "mode": {"type": "string", "enum": CollaborationMode::ALL},
-                "reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+                "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+                "plan": {"type": ["string", "null"], "description": "Proposed plan in Markdown when requesting approval to leave Plan mode for implementation. Otherwise null.", "minLength": 1, "maxLength": 16000}
             },
-            "required": ["mode", "reason"], "additionalProperties": false
+            "required": ["mode", "reason", "plan"], "additionalProperties": false
         }),
         strict: true,
     }

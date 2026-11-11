@@ -131,7 +131,12 @@ export const IEditorPart =
 
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
+	readonly headerRowHeight?: IEditorGroupViewOptions['headerRowHeight'];
 	readonly hideTabs?: boolean;
+	/** Restricts which tabs can be transferred into an independently routed editor part. */
+	readonly canDropEditor?: (input: IResourceEditorInput) => boolean;
+	/** Whether interactive operations can split the editor into additional groups. */
+	readonly supportsGroupSplitting?: boolean;
 	/** Hosts modal editors outside an editor region that can be hidden independently. */
 	readonly modalContainer?: HTMLElement;
 	/** Waits for resource-owned save recovery before reading dirty state or releasing a pane. */
@@ -187,6 +192,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly modalEditor: ModalEditorPart;
 	private movingModalEditor = false;
 	private readonly groupOptions: Omit<EditorGroupOptions, 'onDidActivate' | 'dragAndDrop'>;
+	private readonly supportsGroupSplitting: boolean;
 	private readonly _groups: EditorGroupHost[] = [];
 	/** Grid retains hidden sizes; retain only the visibility and layout needed to restore this operation. */
 	private maximizedGroup: { id: EditorGroupId; visible: readonly EditorGroupId[]; layout: EditorWorkingSetLayout; } | undefined;
@@ -201,6 +207,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly dialogService: IDialogService | undefined;
 	private readonly fileDialogService: IFileDialogService | undefined;
 	private readonly beforeCloseEditor: IEditorPartOptions['beforeCloseEditor'];
+	private readonly canDropEditor: IEditorPartOptions['canDropEditor'];
 	private readonly editorsObserver: EditorsObserver;
 	private readonly openingIdentities = new Map<string | EditorGroupId, AbortController>();
 	private readonly dragOverlays = this._register(new DisposableStore());
@@ -225,9 +232,12 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.openingIdentities.clear();
 		}));
 		this.beforeCloseEditor = options.beforeCloseEditor;
+		this.canDropEditor = options.canDropEditor;
+		this.supportsGroupSplitting = options.supportsGroupSplitting ?? true;
 		this.titleDomNode.remove();
 		this.domNode.setAttribute('aria-label', localize({ bundle: 'ash.regions', key: 'editor' }, 'Editor'));
 		this.groupOptions = {
+			headerRowHeight: options.headerRowHeight,
 			hideTabs: options.hideTabs,
 			editorLimit: options.editorLimit,
 			registry: options.registry ?? EditorPanes,
@@ -279,6 +289,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.contentDomNode,
 			(target: Node) => this._groups.find(host => host.group.domNode.contains(target))?.group,
 			this.tabDragAndDrop,
+			this.supportsGroupSplitting,
 		));
 		this.modalEditor = this._register(instantiationService.createInstance(ModalEditorPart, {
 			container: options.modalContainer ?? container,
@@ -328,7 +339,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView {
-		return this.insertGroup(this.groupHosts.get(reference)!.group, direction).group;
+		const source = this.groupHosts.get(reference)!.group;
+		return this.supportsGroupSplitting ? this.insertGroup(source, direction).group : source;
 	}
 
 	public activateGroup(id: EditorGroupId): void {
@@ -381,7 +393,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	public moveGroup(group: IEditorGroupView | EditorGroupId, location: IEditorGroupView | EditorGroupId, direction: GroupDirection): IEditorGroupView {
 		const source = this.groupHosts.get(typeof group === 'number' ? group : group.id)!;
 		const target = this.groupHosts.get(typeof location === 'number' ? location : location.id)!;
-		if (source === target) return source.group;
+		if (!this.supportsGroupSplitting || source === target) return source.group;
 		const directions = { [GroupDirection.LEFT]: Direction.Left, [GroupDirection.RIGHT]: Direction.Right, [GroupDirection.UP]: Direction.Up, [GroupDirection.DOWN]: Direction.Down };
 		this.changeGrid(() => {
 			this.editorGrid.moveView(source.view, Sizing.Split, target.view, directions[direction]);
@@ -449,6 +461,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	hasMaximizedGroup(): boolean { return this.maximizedGroup !== undefined; }
 
 	toggleMaximizeGroup(group: IEditorGroup | EditorGroupId = this.activeGroup): void {
+		if (!this.supportsGroupSplitting) return;
 		const id = typeof group === 'number' ? group : group.id;
 		const host = this.groupHosts.get(id);
 		if (!host) return;
@@ -511,6 +524,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
+		if (!this.supportsGroupSplitting && target === 'sideGroup') target = 'activeGroup';
 		const sideGroup = target === 'sideGroup' ? this.findSideGroup(this._activeGroup)?.group : undefined;
 		const destination = typeof target === 'object' ? target.groupId : target === 'modalGroup' ? 'modalGroup' : target === 'sideGroup' ? sideGroup?.id ?? `sideGroup:${this._activeGroup.id}` : this._activeGroup.id;
 		const controller = new AbortController();
@@ -838,6 +852,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void> {
+		if (!this.supportsGroupSplitting) return;
 		const splittable = inputs.filter(input => !((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton));
 		if (inputs.length > 0 && splittable.length === 0) return;
 		const source = this.groupHosts.get(groupId)!.group;
@@ -899,7 +914,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	private layoutEditorContent(): void {
 		this.groupOptions.contextKeyService?.bufferChangeEvents(() => {
-			this.groupOptions.contextKeyService!.setContext(EditorPartMultipleEditorGroupsContext.key, this._groups.length > 1);
+			this.groupOptions.contextKeyService!.setContext(EditorPartMultipleEditorGroupsContext.key, this.supportsGroupSplitting && this._groups.length > 1);
 			this.groupOptions.contextKeyService!.setContext(EditorPartMaximizedEditorGroupContext.key, this.hasMaximizedGroup());
 		});
 		// A single group keeps its tabs across the shared column. Split groups reserve
@@ -1044,7 +1059,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			onDidFinishOpenEditor: () => queueMicrotask(() => this.removeEmptyGroup(group)),
 			dragAndDrop: {
 				start: (source, input) => { this.tabDragAndDrop.start(source, input); this.showDragOverlays(); },
-				startGroup: source => { this.tabDragAndDrop.startGroup(source); this.showDragOverlays(); },
+				startGroup: this.supportsGroupSplitting ? source => { this.tabDragAndDrop.startGroup(source); this.showDragOverlays(); } : undefined,
 				isDragging: () => this.tabDragAndDrop.isDragging(),
 				getOperation: (target, copyRequested, splitDirection) => this.tabDragAndDrop.getOperation(target, copyRequested, splitDirection),
 				getGroupDropOperation: (target, copyRequested) => this.tabDragAndDrop.getGroupDropOperation(target, copyRequested),
@@ -1054,7 +1069,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		} satisfies EditorGroupOptions);
 		const listeners = new DisposableStore();
 		const moveGroupFromHeader = (event: KeyboardEvent) => {
-			if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey ||
+			if (!this.supportsGroupSplitting || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey ||
 				!(event.target instanceof group.domNode.ownerDocument.defaultView!.Element) ||
 				!(group.headerElement.contains(event.target) || event.target.closest('.ash-editor-title-control'))) return;
 			const direction = ({ ArrowLeft: GroupDirection.LEFT, ArrowRight: GroupDirection.RIGHT, ArrowUp: GroupDirection.UP, ArrowDown: GroupDirection.DOWN } as Record<string, GroupDirection | undefined>)[event.key];
@@ -1178,10 +1193,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			}
 			return;
 		}
-		// Independent editor hosts can have different pane registries. Reject a transfer
-		// the receiving host cannot render before moving or closing its source input.
+		// Reject transfers the receiving host does not own or cannot render before moving the source input.
 		const inputs = source && event.wholeGroup ? [...source.inputs] : event.inputs ?? [event.input];
-		if (!inputs.every(input => this.groupOptions.registry.getEditorPanesForInput(input).length)) return;
+		if (!inputs.every(input => this.canDropEditor?.(input) !== false && this.groupOptions.registry.getEditorPanesForInput(input).length)) return;
 		if (this.groupOptions.editorLimit === 1 && inputs.length > 1) return;
 		if (source && event.splitDirection !== undefined) {
 			if (!event.copy && this.groupOptions.editorLimit === 1 && this.groupHosts.get(source.id)?.group === source) {

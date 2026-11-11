@@ -115,7 +115,7 @@ export class IconSelectBox extends Disposable {
 		this.focusIcon(index);
 		const icon = this.renderedIcons[index]!.icon;
 		this.selectedIconId = icon.id;
-		for (const item of this.renderedIcons) setAriaAttribute(item.element, 'selected', item.icon.id === icon.id);
+		for (const item of this.renderedIcons) this.updateItemSelection(item.element, item.icon.id === icon.id);
 		this.onDidSelectEmitter.fire(icon);
 	}
 
@@ -149,7 +149,7 @@ export class IconSelectBox extends Disposable {
 			element.dataset.index = String(index);
 			element.setAttribute('role', 'option');
 			element.setAttribute('aria-label', icon.id);
-			setAriaAttribute(element, 'selected', icon.id === this.selectedIconId);
+			this.updateItemSelection(element, icon.id === this.selectedIconId);
 			element.title = icon.id;
 			appendIcon(icon, element);
 			fragment.append(element);
@@ -166,6 +166,11 @@ export class IconSelectBox extends Disposable {
 		const index = icons.findIndex(icon => icon.id === (previousId ?? this.selectedIconId));
 		this.focusIcon(index >= 0 ? index : icons.length > 0 ? 0 : -1);
 		this.scrollable.layout();
+	}
+
+	private updateItemSelection(element: HTMLElement, selected: boolean): void {
+		element.classList.toggle('selected', selected);
+		setAriaAttribute(element, 'selected', selected);
 	}
 
 	private focusIcon(index: number): void {

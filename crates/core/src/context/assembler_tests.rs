@@ -486,6 +486,7 @@ fn interrupted_history_keeps_partial_output_and_marks_the_reusable_prefix() {
             },
             ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id: id("interrupted-agent"),
                 turn_id: interrupted_turn_id.clone(),
                 text: "partial answer".into(),
@@ -699,6 +700,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             started_at_unix_ms: None,
             duration_ms: None,
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             policy_revision: "test-policy-v1".into(),
             approval_mode: ash_protocol::ApprovalMode::Manual,

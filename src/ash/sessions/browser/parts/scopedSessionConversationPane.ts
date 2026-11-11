@@ -1,17 +1,16 @@
-import { Disposable } from '../../../base/common/lifecycle.js';
-import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { ISessionsConversationPane } from './sessionView.js';
 import type { ChatWidgetModel } from '../chatWidgetModel.js';
 
 /** A retained pane releases its host-specific model bindings when the pane is closed. */
 export class ScopedSessionConversationPane extends Disposable implements ISessionsConversationPane {
-	constructor(private readonly pane: ISessionsConversationPane, scope: IInstantiationService, model: Pick<ChatWidgetModel, 'state' | 'items' | 'onDidChange'>) {
+	constructor(private readonly pane: ISessionsConversationPane, scope: IDisposable, model: Pick<ChatWidgetModel, 'state' | 'items' | 'onDidChange'>) {
 		super();
 		this._register(scope);
 		this._register(pane);
 		const update = (): void => {
 			const loading = model.state === 'loading';
-			pane.element.querySelector(':scope > .ash-chat-list-widget, :scope > .ash-cowork-list-widget')?.setAttribute('aria-busy', String(loading));
+			pane.element.querySelector(':scope > .ash-chat-transcript-viewport')?.setAttribute('aria-busy', String(loading));
 		};
 		this._register(model.onDidChange(update));
 		update();

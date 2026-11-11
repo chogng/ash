@@ -1,9 +1,12 @@
-import { readFile, realpath, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import type { BaseWindow, OpenDialogOptions } from 'electron';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS } from '../../../../src/ash/platform/workspace/common/workspaceTrust.js';
 import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
@@ -287,6 +290,9 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect(conversation).toBeVisible();
 		await conversation.click();
 		await expect(conversation).toHaveAttribute('aria-current', 'page');
+		const titleBar = page.locator('.ash-sessions-titlebar');
+		await expect(titleBar.locator('.ash-sessions-titlebar-page-content')).toBeHidden();
+		await expect(titleBar.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: `Rename session (${title})`, exact: true })).toBeVisible();
 		await expect(code).toBeVisible();
 		await conversation.click({ button: 'right' });
 		await expectConversationMenu('code');
@@ -362,7 +368,6 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			await expect(card).toBeVisible();
 			await card.click();
 			await expect(projectTitle).toBeVisible();
-			await projects.getByRole('tab', { name: 'Chats', exact: true }).click();
 		};
 		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).getByRole('button');
 		const sidebar = () => page.locator('.ash-chat-navigation-list');
@@ -413,6 +418,9 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		await expect(projectChats().last()).toBeFocused();
 		await page.keyboard.press('Enter');
 		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
+		const titleBar = page.locator('.ash-sessions-titlebar');
+		await expect(titleBar.locator('.ash-sessions-titlebar-page-content')).toBeHidden();
+		await expect(titleBar.locator('.ash-sessions-titlebar-widget').getByRole('button', { name: `Rename session (${prompts[0]})`, exact: true })).toBeVisible();
 		await expect(projectName()).toHaveAttribute('aria-expanded', 'false');
 		await expect(sidebarChats()).toHaveCount(0);
 		await expect(sidebar().locator('[data-parent-section="recent"] .ash-chat-navigation-item')).toHaveCount(0);
@@ -472,6 +480,113 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 test.describe('Code folder projects in Simplified Chinese', () => {
 	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
 
+	test('creating a Code project confirms missing folder grants together and reuses them in subsequent drafts', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }, testInfo) => {
+		if (!('windows' in application)) throw new Error('Code project creation requires the desktop file dialog');
+		const directory = await realpath(testWorkspace.directory);
+		const connection = await connectProfile(application, undefined, directory, workbench.page, { directoryGrantsHost: true });
+		const folder = await realpath(await mkdtemp(join(tmpdir(), 'ash-code-project-')));
+		const secondFolder = await realpath(await mkdtemp(join(tmpdir(), 'ash-code-project-second-')));
+		const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+		try {
+			const config = await connection.client.request(APP_SERVER_METHODS['config/read'], {});
+			await connection.client.request(APP_SERVER_METHODS['config/directoryGrants/set'], {
+				path: folder, expectedRevision: config.revision, commandId: randomUUID(), permissions: [...RESTRICTED_DIR_PERMISSIONS],
+			});
+			const { session } = await connection.client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: randomUUID(), kind: 'code', title: 'Previous Code conversation',
+				agent: { type: 'default' }, executionTarget: { type: 'local', root: directory },
+			});
+			await application.evaluate(({ dialog }, paths) => {
+				dialog.showOpenDialog = async (windowOrOptions: BaseWindow | OpenDialogOptions, options?: OpenDialogOptions) => {
+					const request = options ?? windowOrOptions;
+					if (!('properties' in request) || !request.properties?.includes('multiSelections')) throw new Error('Project picker must accept multiple folders');
+					return { canceled: false, filePaths: paths };
+				};
+			}, [folder, secondFolder, directory]);
+			const page = await workbench.openAgentsWindow(target.kind);
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+			const previous = page.locator(`[data-item="session:${session.sessionId}"] > button.ash-sessions-list-item`);
+			await previous.click();
+			const active = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat:visible');
+			await expect(active).toHaveAttribute('data-thread-id', session.threads[0]!.threadId);
+			const projectToolbar = page.locator('.ash-sessions-list[data-mode="code"] .ash-sessions-list-section-with-actions');
+			const newProject = projectToolbar.getByRole('button', { name: '创建项目', exact: true });
+			const dialog = page.getByRole('dialog', { name: '创建项目', exact: true });
+			const submit = dialog.getByRole('button', { name: '创建', exact: true });
+			const workspace = active.locator('.ash-sessions-workspace-picker');
+			const newSession = page.locator('[data-action-id="sessions.newSession"] button');
+			const projectName = dialog.getByRole('textbox');
+
+			await newProject.press('Enter');
+			await projectName.fill('New Code project');
+			await dialog.getByRole('button', { name: '添加文件夹', exact: true }).click();
+			await expect(dialog.getByRole('list', { name: '源文件夹' }).getByText(basename(folder), { exact: true })).toBeVisible();
+			await submit.click();
+			const trust = page.getByRole('dialog', { name: '是否信任这些文件夹？', exact: true });
+			const trustAndOpen = trust.getByRole('button', { name: '信任文件夹', exact: true });
+			const cancelTrust = trust.getByRole('button', { name: '取消', exact: true });
+			await expect(trust.getByRole('listitem')).toHaveText([folder, secondFolder]);
+			await expect(trust.getByRole('button')).toHaveCount(2);
+			await expect(cancelTrust).toBeFocused();
+			await trust.screenshot({ path: testInfo.outputPath('project-folder-trust.png') });
+			await cancelTrust.click();
+			await expect(projectName).toHaveValue('New Code project');
+			await expect(projectName).toBeFocused();
+			await expect(active).toHaveAttribute('data-thread-id', session.threads[0]!.threadId);
+			const { projects } = await connection.client.request(APP_SERVER_METHODS['project/list'], { scope: 'code' });
+			expect(projects.some(project => project.name === 'New Code project')).toBe(false);
+			const unchangedGrant = await connection.client.request(APP_SERVER_METHODS['config/directoryGrants/read'], { path: folder });
+			expect(unchangedGrant.permissions?.toSorted()).toEqual([...RESTRICTED_DIR_PERMISSIONS].sort());
+			expect((await connection.client.request(APP_SERVER_METHODS['config/directoryGrants/read'], { path: secondFolder })).permissions).toBeFalsy();
+
+			await submit.click();
+			await trustAndOpen.click();
+			await expect(active).toHaveAttribute('data-untitled-session-id', /.+/u);
+			await expect(workspace).toHaveText('New Code project');
+			await expect(workspace).toHaveAccessibleName(`项目：New Code project ${folder}`);
+			const composer = new Editor(active).input;
+			await expect(composer).toBeFocused();
+			for (const path of [folder, secondFolder]) {
+				const grant = await connection.client.request(APP_SERVER_METHODS['config/directoryGrants/read'], { path });
+				expect(grant.permissions?.toSorted()).toEqual([...DEVELOPMENT_DIR_PERMISSIONS].sort());
+			}
+			await composer.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/信任对话框会列出所有仍需授权的源文件夹/u);
+			await page.keyboard.press('Escape');
+
+			const draftId = await active.getAttribute('data-untitled-session-id');
+			await newSession.click();
+			await expect(active).not.toHaveAttribute('data-untitled-session-id', draftId!);
+			await expect(workspace).toHaveAccessibleName(`项目：New Code project ${folder}`);
+			await previous.click();
+			await expect(active).toHaveAttribute('data-thread-id', session.threads[0]!.threadId);
+
+			await application.evaluate(({ dialog }, path) => {
+				dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+			}, secondFolder);
+			await projectToolbar.hover();
+			await newProject.click();
+			await projectName.fill('Project using a trusted folder');
+			await dialog.getByRole('button', { name: '添加文件夹', exact: true }).click();
+			await submit.click();
+			await expect(workspace).toHaveAccessibleName(`项目：Project using a trusted folder ${secondFolder}`);
+			await expect(page.getByRole('dialog', { name: /是否信任/u })).toHaveCount(0);
+
+			await projectToolbar.hover();
+			await newProject.click();
+			await projectName.fill('Project awaiting a source folder');
+			await submit.click();
+			await expect(workspace).toHaveAccessibleName('Project awaiting a source folder');
+			await newSession.click();
+			await expect(workspace).toHaveAccessibleName('Project awaiting a source folder');
+		} finally {
+			await application.evaluate(({ dialog }, saved) => { dialog.showOpenDialog = saved; }, original);
+			await original.dispose();
+			await connection.close();
+			await Promise.all([folder, secondFolder].map(path => rm(path, { recursive: true, force: true })));
+		}
+	});
+
 	test('legacy Code folders get persisted projects and the shared menu before interaction', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		const directory = await realpath(testWorkspace.directory);
 		const connection = await connectProfile(application, undefined, directory, workbench.page);
@@ -501,13 +616,17 @@ test.describe('Code folder projects in Simplified Chinese', () => {
 			expect((await client.request(APP_SERVER_METHODS['project/list'], { scope: 'chat' })).projects).toEqual([]);
 
 			const header = () => page.locator(`[data-project-id="${project.projectId}"]`).getByRole('button', { name: project.name, exact: true });
-			const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['置顶', '重命名', '更改图标…', '更改颜色…', '归档', '删除']);
+			const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['置顶', '编辑', '归档', '删除']);
 			await header().click({ button: 'right' });
 			await expectProjectMenu();
 			await page.keyboard.press('Escape');
 			await header().press('Shift+F10');
 			await expectProjectMenu();
-			await page.keyboard.press('Escape');
+			await page.getByRole('menuitem', { name: '编辑', exact: true }).click();
+			const edit = page.getByRole('dialog', { name: '编辑', exact: true });
+			await expect(edit.getByRole('textbox')).toHaveValue(project.name);
+			await expect(edit.getByRole('list', { name: '源文件夹' }).getByText(basename(directory), { exact: true })).toBeVisible();
+			await edit.getByRole('button', { name: '取消', exact: true }).click();
 			await expect(header()).toBeFocused();
 
 			const row = page.locator(`[data-item="session:${sessionIds[0]}"]`).locator(':scope > button.ash-sessions-list-item');
@@ -562,7 +681,6 @@ test.describe('Projects sorting persistence', () => {
 			await dialog.getByRole('textbox', { name: '你正在做什么？', exact: true }).fill(name);
 			await dialog.getByRole('button', { name: '创建', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
-			await expect(page.getByRole('heading', { name: '项目对话', exact: true })).toBeVisible();
 			await expect(page.getByText('此项目中没有聊天', { exact: true })).toBeVisible();
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
 			for (const caption of await page.locator('.ash-projects-card-caption').all()) { await expect(caption).toHaveText('刚刚'); }
@@ -746,7 +864,7 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name');
 	await expect(projectTitle).toHaveText('Research workspace');
 	await expect(projectTitle).toHaveAttribute('aria-current', 'page');
-	await expect(projects.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect(projects.getByRole('tablist')).toHaveCount(0);
 	await page.screenshot({ path: testInfo.outputPath('projects-detail.png') });
 	await expect(projects.getByText('Collect images, papers and working documents.', { exact: true })).toBeVisible();
 	await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Projects', exact: true }).click();
@@ -786,9 +904,8 @@ test('Sessions Projects persists instructions through a real backend and reopene
 	}
 	await expect(projects).toHaveClass(/narrow/);
 	await expect.poll(() => projects.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-	await projects.getByRole('tab', { name: 'Files', exact: true }).click();
-	await expect(projects.getByRole('region', { name: 'Project files', exact: true })).toBeVisible();
-	await expect(projects.locator('.ash-projects-composer')).toBeHidden();
+	await expect(projects.getByRole('region', { name: 'Context', exact: true })).toBeVisible();
+	await expect(projects.locator('.ash-projects-composer')).toBeInViewport();
 	await page.screenshot({ path: testInfo.outputPath('projects-narrow.png') });
 });
 
@@ -893,14 +1010,13 @@ test('Sessions Projects persists imported file sizes across window reopen', { ta
 		];
 		await Promise.all(files.map(file => writeFile(join(directory, file.name), file.content)));
 		let page = await workbench.openAgentsWindow(target.kind);
-		const openFiles = async () => {
+		const openContext = async () => {
 			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const projects = page.locator('.ash-projects');
 			await projects.getByRole('button', { name: project.name, exact: true }).click();
-			await projects.getByRole('tab', { name: 'Files', exact: true }).click();
-			return projects.getByRole('region', { name: 'Project files', exact: true });
+			return projects.getByRole('region', { name: 'Context', exact: true });
 		};
-		let materials = await openFiles();
+		let materials = await openContext();
 		await materials.getByRole('button', { name: 'Add project materials', exact: true }).click();
 		const chooser = page.waitForEvent('filechooser');
 		await page.getByRole('menuitem', { name: 'Upload or add files', exact: true }).click();
@@ -913,7 +1029,7 @@ test('Sessions Projects persists imported file sizes across window reopen', { ta
 			name: file.name, kind: 'file', path: pathToFileURL(join(directory, file.name)).toString(), sizeBytes: Buffer.byteLength(file.content),
 		}))));
 		page = await workbench.reopenAgentsWindow(application, page);
-		materials = await openFiles();
+		materials = await openContext();
 		for (const file of files) {
 			await expect(materials.getByRole('button', { name: file.name, exact: true })).toHaveAccessibleDescription(new RegExp(file.display));
 		}

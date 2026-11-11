@@ -198,6 +198,38 @@ test('Thread history windows reach read and subscribe and retain detached pagina
 	assert.deepEqual(subscription.thread.turns[0]!.items, items);
 });
 
+test('Tool result previews stay scoped to their durable Item and page reads use that coordinate', async () => {
+	const snapshot = messageSnapshot('ready');
+	const item = { type: 'toolResult' as const, itemId: 'result', turnId: 'turn', toolCallId: 'call', text: 'preview', isError: false };
+	const preview = { turnId: item.turnId, itemId: item.itemId, itemOrdinal: 0 };
+	const requests: unknown[] = [];
+	const service = createAppServerAgentThreadService({
+		generation: 1,
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			if (definition.method === 'session/thread/toolResult/text/read') return { text: '完整输出', nextOffset: 12 };
+			return {
+				...snapshot,
+				thread: { ...snapshot.thread, turns: [{ ...snapshot.thread.turns[0], items: [item] }] },
+				transcript: { ...snapshot.transcript, entries: [{ type: 'item', entryId: 'result', turnId: item.turnId, item, transient: false }] },
+				history: { hasOlderTurns: false, toolResultPreviews: [preview] },
+			};
+		},
+	} as unknown as AppServerProtocolClient);
+	const identity = { sessionId: 'session', threadId: 'thread' };
+	const history = { type: 'latest' as const, turnLimit: 20, previewToolResults: true };
+	const read = await service.read({ ...identity, history });
+	const entry = read.transcript.entries[0];
+	assert.ok(entry.type === 'item' && entry.item.type === 'toolResult');
+	assert.deepEqual(entry.item.outputPreview, { itemOrdinal: 0 });
+	assert.deepEqual(read.history, { hasOlderTurns: false });
+	assert.deepEqual(await service.readToolResultText({ ...identity, ...preview }, 0), { text: '完整输出', nextOffset: 12 });
+	assert.deepEqual(requests, [
+		{ method: 'session/thread/read', params: { ...identity, history } },
+		{ method: 'session/thread/toolResult/text/read', params: { ...identity, source: preview, offset: 0 } },
+	]);
+});
+
 test('Thread reads translate a rejected older anchor without reclassifying a latest read', async () => {
 	const invalid = new AppServerRemoteError(-32602, 'InvalidParams', { kind: 'InvalidParams' });
 	const service = createAppServerAgentThreadService({ request: async () => { throw invalid; } } as unknown as AppServerProtocolClient);

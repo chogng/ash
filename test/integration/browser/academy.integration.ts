@@ -1,6 +1,6 @@
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
-import { exportDocumentArtifact, importDocumentArtifact } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentActions.js';
+import { exportDocumentArtifact, importDocumentArtifact } from '../../../src/ash/sessions/contrib/artifacts/contrib/docs/browser/documentActions.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -199,7 +199,12 @@ class BrowserDocumentCollaborationConnection extends Disposable implements Docum
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') { setNlsMessages('zh-CN', { ...messages, ...editorMessages, ash: { ...messages.ash, ...editorMessages.ash } }); }
 const schema = createDefaultDocumentSchema();
 const generalDocument = new URLSearchParams(location.search).has('generalDocument');
-if (generalDocument) await import('../../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.js');
+if (generalDocument) {
+	await import('../../../src/ash/workbench/contrib/documentEditor/browser/documentEditor.contribution.js');
+	await import('../../../src/ash/sessions/contrib/artifacts/contrib/docs/browser/docs.contribution.js');
+} else {
+	DocumentTypes.enableFileEditors();
+}
 const apiDocument = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('editor-api')] })]);
 const apiModel = DocumentTextModel.create(schema, apiDocument);
 const codeBlockResource = URI.parse('inmemory://editor/code-block.ash-academy');

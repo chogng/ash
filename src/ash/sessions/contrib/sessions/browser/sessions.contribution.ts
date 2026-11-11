@@ -1,3 +1,4 @@
+import { ISessionGitActionsService, SessionGitActionsService } from '../../../services/sessions/browser/sessionGitActionsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -40,3 +41,5 @@ registerWorkbenchContribution(SessionsMouseNavigationContribution.ID, WorkbenchP
 
 registerWorkbenchContribution(AutomationSessionsListingContribution.ID, WorkbenchPhase.BlockRestore,
 	accessor => accessor.get(IInstantiationService).createInstance(AutomationSessionsListingContribution));
+
+registerSingleton(ISessionGitActionsService, SessionGitActionsService, InstantiationType.Delayed);

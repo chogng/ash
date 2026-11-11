@@ -111,6 +111,9 @@ pub struct GitCheckIgnoreResult {
 pub struct GitCheckIgnoreCancelParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub client: Option<GitClientOptionsDto>,
     #[schemars(length(min = 1, max = 128))]
     pub operation_id: String,
@@ -240,6 +243,55 @@ pub struct GitRepositoryContextDto {
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryContextsResult {
     pub repositories: Vec<GitRepositoryContextDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct GitSessionComparisonParams {
+    pub session_directory: super::environment::SessionDirSelector,
+    #[schemars(length(min = 1, max = 128))]
+    pub repository_id: String,
+    pub comparison: GitSessionComparisonDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind",
+    deny_unknown_fields
+)]
+#[ts(rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum GitSessionComparisonDto {
+    Branches,
+    Uncommitted,
+    Branch {
+        base_object_id: String,
+        head_object_id: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(rename_all = "camelCase")]
+pub enum GitSessionComparisonResult {
+    Branches {
+        references: Vec<GitReferenceDto>,
+    },
+    Changes {
+        files: Vec<GitSessionComparisonFileDto>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitSessionComparisonFileDto {
+    pub path: String,
+    pub original_path: Option<String>,
+    pub original: GitCommitFileContentDto,
+    pub modified: GitCommitFileContentDto,
 }
 
 /// Stable, directory-relative identity for one discovered Git repository projection.

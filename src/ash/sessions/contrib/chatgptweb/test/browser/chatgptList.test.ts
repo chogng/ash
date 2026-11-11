@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { EOL } from 'node:os';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { suite, test } from 'mocha';
@@ -168,6 +168,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(more).toHaveAttribute('aria-expanded', 'false');
 		await editor.getByRole('button', { name: '取消', exact: true }).click();
 		await expect(editor).toHaveCount(0);
+		await expect(more).toBeFocused();
 
 		await project('Writing').click({ button: 'right' });
 		const deleteAction = action('删除');
@@ -749,8 +750,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		}));
 		await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
 		const button = page.getByRole('button', { name: longTitle, exact: true });
-		const label = button.locator('.ash-sessions-list-label');
-		const text = label.locator('span');
+		const label = button.locator('.ash-sessions-list-title-viewport');
+		const text = label.locator('> span');
 		const short = page.getByRole('button', { name: '短标题', exact: true });
 		await expect(label).toHaveCSS('text-overflow', 'clip');
 		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
@@ -762,16 +763,19 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
 			expect(await text.evaluate((element, dir) => {
 				element.getAnimations()[0]!.finish();
-				const viewport = element.parentElement!.getBoundingClientRect();
+				const label = element.parentElement!;
+				label.getAnimations()[0]!.finish();
+				const viewport = label.getBoundingClientRect();
 				const content = element.getBoundingClientRect();
 				return dir === 'rtl' ? content.left - viewport.left : viewport.right - content.right;
-			}, direction)).toBeGreaterThanOrEqual(15);
-			await expect(label).toHaveCSS('mask-size', '100% 100%');
+			}, direction)).toBeCloseTo(0, 0);
+			await expect(label).toHaveCSS('mask-size', 'calc(100% + 24px) 100%');
+			await expect(label).toHaveCSS('mask-position', direction === 'rtl' ? '100% 50%' : '0% 50%');
 
 			await short.hover();
 			await expect(text).toHaveCSS('transform', 'none');
 			await expect(label).toHaveCSS('animation-name', 'none');
-			await expect(short.locator('.ash-sessions-list-label')).toHaveCSS('mask-image', 'none');
+			await expect(short.locator('.ash-sessions-list-title-viewport')).toHaveCSS('mask-image', 'none');
 		}
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await button.hover();
@@ -786,6 +790,65 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(label).toHaveCSS('mask-image', 'none');
 		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
 		await expect(text).toHaveCSS('animation-name', 'none');
+	});
+
+	test('project titles retain their width while the fade moves to the floating actions', async () => {
+		const { page } = browserTests;
+		const longTitle = '用于测试侧栏渐隐和行尾操作布局的超长项目标题';
+		const shortTitle = '短项目';
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: {
+				items: [longTitle, shortTitle].map((name, index) => ({
+					gizmo: { id: `g-p-title-${index}`, display: { name } },
+				})),
+				cursor: null,
+			},
+		}));
+		await page.goto('/chatgptNavigation.html?projects&locale=zh-CN&theme=light');
+		const sidebar = page.locator('.ash-chat-navigation-list');
+		const row = sidebar.locator('[data-project-id="g-p-title-0"]');
+		const project = row.getByRole('button', { name: longTitle, exact: true });
+		const label = project.locator('.ash-sessions-list-title-viewport');
+		const text = label.locator('> span');
+		const actions = row.locator('.ash-sessions-list-actions');
+		const short = sidebar.getByRole('button', { name: shortTitle, exact: true });
+		await expect(project).toHaveAttribute('title', longTitle);
+		await expect(actions).toHaveCSS('opacity', '0');
+		await expect(actions).toHaveCSS('pointer-events', 'none');
+		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
+		await expect(label).toHaveCSS('text-overflow', 'clip');
+		const resting = (await label.boundingBox())!;
+		const buttonBounds = await project.boundingBox();
+		const actionBounds = (await actions.boundingBox())!;
+
+		await project.hover();
+		await expect(actions).toHaveCSS('opacity', '1');
+		const hovered = (await label.boundingBox())!;
+		expect(hovered.x).toBe(resting.x);
+		expect(hovered.width).toBeLessThan(resting.width);
+		expect(actionBounds.x - (hovered.x + hovered.width)).toBeCloseTo(4, 0);
+		expect(await project.boundingBox()).toEqual(buttonBounds);
+		expect(await actions.boundingBox()).toEqual(actionBounds);
+		await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
+
+		await short.hover();
+		await expect(actions).toHaveCSS('opacity', '0');
+		expect(await label.boundingBox()).toEqual(resting);
+		await expect(short.locator('.ash-sessions-list-title-viewport')).toHaveCSS('mask-image', 'none');
+
+		const navigation = page.locator('#navigation');
+		await navigation.evaluate(node => { node.style.width = '460px'; });
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await navigation.evaluate(node => { node.style.removeProperty('width'); });
+		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
+
+		await project.focus();
+		await expect(actions).toHaveCSS('opacity', '1');
+		await expect(text).toHaveCSS('animation-name', 'none');
+		await page.emulateMedia({ forcedColors: 'active' });
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
 	});
 
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
@@ -1123,10 +1186,22 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await create.click();
 			await expect(dialog).toBeHidden();
 			await expect(projects).toHaveAttribute('aria-label', 'Cloud project');
-			await expect(projects.getByText('Keep an experiment log.', { exact: true })).toBeVisible();
 			expect(writes).toEqual([{ name: 'Cloud project', instructions: 'Keep an experiment log.', emoji: null, theme: null, memory_scope: 'project_v2' }]);
 			const projectMemory = projects.getByRole('region', { name: zh ? '项目记忆' : 'Project memory', exact: true });
-			await expect(projectMemory.getByText(zh ? '仅限项目的记忆' : 'Project-only memory', { exact: true })).toBeVisible();
+			const memoryDescription = projectMemory.getByText(zh ? '仅限项目的记忆' : 'Project-only memory', { exact: true });
+			const instructionsPreview = projects.getByText('Keep an experiment log.', { exact: true });
+			const contextHint = projects.getByText(zh ? '添加 PDF、文档或其他文件，供此项目参考。' : 'Add PDFs, documents, or other files to reference in this project.', { exact: true });
+			const descriptionColor = await memoryDescription.evaluate(element => getComputedStyle(element).color);
+			const memoryHeading = projectMemory.getByRole('heading', { name: zh ? '记忆' : 'Memory', exact: true });
+			await expect(memoryHeading).toHaveCSS('font-size', '14px');
+			await expect(memoryHeading).not.toHaveCSS('color', descriptionColor);
+			for (const description of [memoryDescription, instructionsPreview, contextHint]) {
+				await expect(description).toBeVisible();
+				await expect(description).toHaveCSS('font-size', '14px');
+				await expect(description).toHaveCSS('font-weight', '400');
+				await expect(description).toHaveCSS('line-height', '21px');
+				await expect(description).toHaveCSS('color', descriptionColor);
+			}
 			const viewMemory = projectMemory.getByRole('button', { name: zh ? '查看记忆' : 'View memory', exact: true });
 			await viewMemory.press('Enter');
 			const memoryDialog = page.getByRole('dialog', { name: zh ? '项目记忆' : 'Project memory', exact: true });
@@ -1232,7 +1307,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 					], cursor: null,
 				},
 			}));
-			const pinned = { id: 'pinned', title: 'Pinned project chat', gizmo_id: 'g-p-one' };
+			const updatedAt = '2026-10-25T18:00:00.000Z';
+			const pinned = { id: 'pinned', title: 'Pinned project chat', gizmo_id: 'g-p-one', update_time: updatedAt };
 			const firstPage = [pinned, { id: 'one', title: 'First research chat' },
 				...Array.from({ length: 18 }, (_, index) => ({ id: `project-chat-${index}`, title: `Research chat ${index + 2}` }))];
 			const firstPageTitles = firstPage.map(item => item.title);
@@ -1295,7 +1371,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(projectIcon).toBeHidden();
 			expect(await toggle.boundingBox()).toEqual(restingBounds);
 			const recentChat = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
-			const recentBounds = (await recentChat.boundingBox())!;
+			const chatRowBounds = (chat: Locator) => chat.evaluate(button => {
+				const { x, width } = button.closest('.ash-tree-row')!.getBoundingClientRect();
+				return { x, width };
+			});
+			const recentBounds = await chatRowBounds(recentChat);
 			await recentChat.hover();
 			const hoverBackground = await recentChat.evaluate(row => getComputedStyle(row).backgroundColor);
 			await toggle.getByText('Research', { exact: true }).click();
@@ -1306,9 +1386,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(children).toHaveText(firstPageTitles);
 			expect(cursors).toEqual([null]);
 			const projectChat = children.first();
-			const projectBounds = (await projectChat.boundingBox())!;
-			expect(projectBounds.x).toBe(recentBounds.x);
-			expect(projectBounds.width).toBe(recentBounds.width);
+			expect(await chatRowBounds(projectChat)).toEqual(recentBounds);
 			await projectChat.hover();
 			await expect(projectChat).toHaveCSS('background-color', hoverBackground);
 			await children.last().scrollIntoViewIfNeeded();
@@ -1333,16 +1411,16 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await research.press('Enter');
 			await expect(projects).toBeFocused();
 			await expect(projects.getByRole('button', { name: zh ? '查看记忆' : 'View memory', exact: true })).toBeEnabled();
-			const chatsTab = projects.getByRole('tab', { name: zh ? '对话' : 'Chats', exact: true });
-			await chatsTab.click();
-			const overview = projects.getByRole('tabpanel', { name: zh ? '对话' : 'Chats', exact: true });
-			const list = overview.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' });
-			const rows = list.getByRole('button');
-			await expect(rows).toHaveText(firstPageTitles);
+			const conversations = projects.locator('.ash-projects-conversations');
+			const list = conversations.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' });
+			const rows = list.locator('.ash-projects-conversation');
+			const rowTitles = rows.locator('.ash-button-label');
+			await expect(rowTitles).toHaveText(firstPageTitles);
 			await expect(projects).toHaveAccessibleName('Research');
-			await expect(chatsTab).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(rows.first()).toBeFocused();
 			await expect(list).toHaveAttribute('aria-busy', 'true');
-			const loading = overview.getByRole('status').filter({ hasText: zh ? '正在加载项目聊天…' : 'Loading project chats…' });
+			const loading = conversations.getByRole('status').filter({ hasText: zh ? '正在加载项目聊天…' : 'Loading project chats…' });
 			await expect(loading).toHaveCSS('clip-path', 'inset(50%)');
 			await expect(rows.first()).toHaveCSS('height', '32px');
 			await rows.first().press('ArrowDown');
@@ -1356,18 +1434,44 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(ring).toHaveCount(0);
 			await expect(projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true })).toHaveCount(0);
 			await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
-			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat']);
+			await expect(rowTitles).toHaveText([...firstPageTitles, 'Older research chat']);
 			await expect(rows.nth(1)).toBeFocused();
 			await expect(list).toHaveAttribute('aria-busy', 'false');
 			await page.screenshot({ path: info.outputPath(`project-conversations-${locale}.png`) });
 			await expect.poll(() => historyNotices(page)).toEqual([]);
-			await expect(overview.getByRole('button', { name: zh ? '加载更多项目聊天' : 'Load more project chats', exact: true })).toHaveCount(0);
+			await expect(conversations.getByRole('button', { name: zh ? '加载更多项目聊天' : 'Load more project chats', exact: true })).toHaveCount(0);
 			const olderChat = rows.getByText('Older research chat', { exact: true });
 			if (zh) await rows.nth(1).press('End');
 			else await olderChat.scrollIntoViewIfNeeded();
-			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat', 'Oldest research chat']);
+			await expect(rowTitles).toHaveText([...firstPageTitles, 'Older research chat', 'Oldest research chat']);
 			await expect(zh ? rows.filter({ hasText: 'Older research chat' }) : rows.nth(1)).toBeFocused();
 			expect(cursors).toEqual([null, 'page+two', 'page+two', 'page+three']);
+			const first = list.getByRole('button', { name: pinned.title, exact: true });
+			const more = first.locator('..').locator('.ash-projects-conversation-more');
+			const time = first.locator('time');
+			await expect(time).toHaveAttribute('datetime', updatedAt);
+			await expect(first).toHaveAccessibleDescription(zh ? /^最后活动时间为 /u : /^Last active /u);
+			await expect(rows.nth(1).locator('time')).toHaveCount(0);
+			await page.mouse.move(0, 0);
+			await expect(more).toHaveCSS('opacity', '0');
+			await first.hover();
+			await expect(more).toHaveCSS('opacity', '1');
+			await time.hover();
+			await expect(page.getByRole('tooltip')).toHaveText((await time.getAttribute('aria-label'))!);
+			await more.click();
+			const menu = page.getByRole('menu');
+			await expect(menu.getByRole('menuitem')).toHaveText(zh
+				? ['重命名', '分享', '移至项目', '从项目中移除', '归档', '删除']
+				: ['Rename', 'Share', 'Move to project', 'Remove from project', 'Archive', 'Delete']);
+			await page.keyboard.press('Escape');
+			await expect(more).toBeFocused();
+			await first.press('Shift+F10');
+			await menu.getByRole('menuitem', { name: zh ? '重命名' : 'Rename', exact: true }).press('Enter');
+			const rename = list.getByRole('textbox', { name: zh ? '会话名称' : 'Session name', exact: true });
+			await expect(rename).toHaveValue(pinned.title);
+			await rename.press('Escape');
+			await expect(rename).toHaveCount(0);
+			await expect(first).toBeFocused();
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await expect(research).toBeFocused();
 			const writingToggle = sidebar.getByRole('button', { name: 'Writing', exact: true });
@@ -1375,16 +1479,15 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await writingToggle.press('ArrowRight');
 			await expect.poll(() => emptyReads).toBe(1);
 			await writing.click();
-			await chatsTab.click();
-			await expect(overview.getByRole('status')).toHaveText(zh ? '正在加载项目聊天…' : 'Loading project chats…');
+			await expect(conversations.getByRole('status')).toHaveText(zh ? '正在加载项目聊天…' : 'Loading project chats…');
 			releaseEmptyPage();
 			await expect(writingToggle).not.toHaveAttribute('aria-expanded');
 			await expect(writingToggle.locator('.ash-sessions-list-project-chevron')).toHaveCount(0);
 			await expect(sidebar.getByText(zh ? '此项目中没有聊天' : 'No chats in this project', { exact: true })).toHaveCount(0);
-			const empty = overview.getByRole('status').filter({ hasText: zh ? '此项目中没有聊天' : 'No chats in this project' });
+			const empty = conversations.getByRole('status').filter({ hasText: zh ? '此项目中没有聊天' : 'No chats in this project' });
 			await expect(empty).toBeVisible();
 			await expect(empty).toHaveCSS('text-align', 'center');
-			await expect(projects.locator('.ash-projects-materials')).toBeHidden();
+			await expect(projects.getByRole('region', { name: zh ? '上下文' : 'Context', exact: true })).toBeVisible();
 			await expect(projects.locator('.ash-projects-composer')).toBeVisible();
 			await page.screenshot({ path: info.outputPath(`project-conversations-empty-${locale}.png`) });
 			expect(cursors).toHaveLength(4);
@@ -1524,14 +1627,10 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.goto(`/chatgptNavigation.html?projects&projectMaterials&locale=${locale}`);
 			const projects = page.locator('.ash-projects');
 			await projects.getByRole('button', { name: 'Research', exact: true }).click();
-			const filesTab = projects.getByRole('tab', { name: zh ? '文件' : 'Files', exact: true });
-			const overviewTab = projects.getByRole('tab', { name: zh ? '概览' : 'Overview', exact: true });
-			const materials = projects.getByRole('region', { name: zh ? '项目文件' : 'Project files', exact: true });
-			await filesTab.click();
+			const materials = projects.getByRole('region', { name: zh ? '上下文' : 'Context', exact: true });
 			const guidance = projects.getByRole('region', { name: zh ? '指令' : 'Instructions', exact: true });
 			const editInstructions = guidance.getByRole('button', { name: zh ? '编辑指令' : 'Edit instructions', exact: true });
 			await materials.getByRole('button', { name: zh ? '重试' : 'Try again', exact: true }).press('Enter');
-			await overviewTab.click();
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('Saved instructions\nUse concise examples.');
 			await editInstructions.press('Enter');
 			const dialog = page.getByRole('dialog', { name: zh ? '设置项目指令' : 'Set project instructions', exact: true });
@@ -1548,7 +1647,6 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await save.click();
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 			await expect(editInstructions).toBeFocused();
-			await filesTab.click();
 			const existing = materials.getByRole('button', { name: 'Existing.txt', exact: true });
 			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Existing.txt'))).toBe('Saved remote file');
 			const existingSize = existing.locator('.ash-file-card-size');
@@ -1561,7 +1659,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			expect(downloads).toEqual(['file-existing']);
 			await page.evaluate(() => window.ashChatGPTIntegration.setOffline(false));
 			const addMaterials = materials.getByRole('button', { name: zh ? '添加项目资料' : 'Add project materials', exact: true });
-			const dropTarget = projects.getByRole('tabpanel', { name: zh ? '文件' : 'Files', exact: true }).locator('.ash-projects-file-content');
+			const dropTarget = projects.locator('.ash-projects-file-content');
 			const dropOverlay = dropTarget.locator('.ash-projects-drop-overlay');
 			if (zh) {
 				const dataTransfer = await page.evaluateHandle(() => {
@@ -1608,20 +1706,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const note = materials.getByRole('button', { name: upload.name, exact: true });
 			await expect(note.locator('.ash-badge.outlined')).toHaveText('MD');
 			await expect(note.locator('.ash-file-card-size')).toHaveText(`${Buffer.byteLength(upload.content)}B`);
-			const grid = materials.locator('.ash-projects-material-list');
-			const columnCounts = await grid.evaluate(element => {
-				const previous = element.style.inlineSize;
-				try {
-					return [240, 360, 600].map(width => {
-						element.style.inlineSize = `${width}px`;
-						const cards = [...element.querySelectorAll('.ash-projects-material-card')].map(card => card.getBoundingClientRect());
-						return cards.filter(card => Math.abs(card.top - cards[0].top) < 1).length;
-					});
-				} finally {
-					element.style.inlineSize = previous;
-				}
-			});
-			expect(columnCounts).toEqual([1, 2, 3]);
+			const cards = materials.locator('.ash-projects-material-card');
+			await expect(cards).toHaveCount(3);
+			const [first, second, third] = await cards.evaluateAll(elements => elements.map(card => card.getBoundingClientRect().top));
+			expect(second).toBeCloseTo(first);
+			expect(third).toBeGreaterThan(first);
 			await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.readSavedMaterial('Project notes.md'))).toBe(upload.content);
 			await page.evaluate(() => window.ashChatGPTIntegration.setOffline(true));
 			await note.press('Enter');
@@ -1652,7 +1741,6 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(note).toHaveCount(0);
 			await expect(fileCard).toBeVisible();
 			expect(removals).toEqual(['file-existing', 'file-markdown']);
-			await overviewTab.click();
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 			const freshReads = reads;
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
@@ -1667,7 +1755,6 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(materials.getByRole('checkbox')).toHaveCount(0);
 			await expect(dropOverlay).toHaveCount(0);
 			await expect(editInstructions).toHaveCount(0);
-			await filesTab.click();
 			await expect(materials.getByRole('button', { name: 'notes.txt', exact: true })).toBeVisible();
 
 			let releaseDetails!: () => void;
@@ -1679,13 +1766,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				await projects.getByRole('button', { name: 'Research', exact: true }).click();
 				await expect(guidance.locator('.ash-projects-description')).toHaveText('New instructions\nKeep examples short.');
 				await expect(editInstructions).toHaveCount(0);
-				await filesTab.click();
 				await expect(materials.getByRole('button', { name: 'notes.txt', exact: true })).toBeVisible();
 				await expect(materials.getByText(zh ? '正在加载项目详情…' : 'Loading project details…', { exact: true })).toHaveCount(0);
 			} finally {
 				releaseDetails();
 			}
-			await overviewTab.click();
 			await expect(guidance.locator('.ash-projects-description')).toHaveText('Updated on ChatGPT Web');
 			await expect(editInstructions).toBeVisible();
 		});

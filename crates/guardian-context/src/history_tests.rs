@@ -15,6 +15,7 @@ fn history_keeps_author_order_and_never_promotes_an_agent_task() {
         },
         ThreadItem::AgentMessage {
             phase: None,
+            citations: None,
             item_id: ItemId::new("agent").unwrap(),
             turn_id: turn.clone(),
             text: "I propose publishing".into(),

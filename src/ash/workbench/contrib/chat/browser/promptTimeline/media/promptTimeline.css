@@ -118,10 +118,6 @@
 	border-block-start: var(--ash-spacing-size20) solid currentColor;
 }
 
-.ash-prompt-timeline-gutter-marks > .active {
-	color: var(--ash-foreground);
-}
-
 @media (hover: hover) {
 	.ash-prompt-timeline-gutter-marks
 		> :is(
@@ -145,9 +141,13 @@
 		inline-size: var(--ash-spacing-size240);
 	}
 
-	.ash-prompt-timeline-gutter-marks > span:hover:not(.active) {
+	.ash-prompt-timeline-gutter-marks > :where(span):hover {
 		color: var(--ash-description-foreground);
 	}
+}
+
+.ash-prompt-timeline-gutter-marks > .active {
+	color: var(--ash-foreground);
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {

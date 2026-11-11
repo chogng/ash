@@ -15,6 +15,48 @@ fn data(value: &str) -> SseFrame {
 }
 
 #[test]
+fn decoder_retains_code_matches_from_annotation_only_chunks() {
+    let mut decoder = OpenAiChatCompletionsSseDecoder::new();
+    let annotations = json!({"choices":[{"index":0,"delta":{"copilot_annotations":{
+        "IPCodeCitations":[
+            {"citations":{"url":"https://github.com/example/repo/blob/main/lib.rs","license":"MIT","snippet":"fn example() {}"}},
+            {"citations":{"url":"file:///private/lib.rs","license":"MIT","snippet":"private"}}
+        ]
+    }}}]});
+    decoder
+        .decode(&data(
+            r#"{"choices":[{"index":0,"delta":{"content":"An example"}}]}"#,
+        ))
+        .unwrap();
+    for _ in 0..2 {
+        assert!(
+            decoder
+                .decode(&data(&annotations.to_string()))
+                .unwrap()
+                .is_empty()
+        );
+    }
+    decoder
+        .decode(&data(
+            r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
+        ))
+        .unwrap();
+    decoder.decode(&data("[DONE]")).unwrap();
+    assert_eq!(
+        decoder.take_citations(),
+        vec![ash_protocol::ResponseCitation::Code {
+            url: "https://github.com/example/repo/blob/main/lib.rs".into(),
+            license: "MIT".into(),
+            snippet: "fn example() {}".into(),
+        }]
+    );
+    assert_eq!(
+        decoder.finish_response().unwrap()["choices"][0]["message"]["content"],
+        "An example"
+    );
+}
+
+#[test]
 fn decoder_streams_text_reasoning_and_reassembles_tool_calls() {
     let mut decoder = OpenAiChatCompletionsSseDecoder::new();
     assert_eq!(

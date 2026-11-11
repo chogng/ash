@@ -1,16 +1,3 @@
-import type { IChangesStats } from '../../../../browser/changesStatsWidget.js';
-
-interface PromptFileDiff {
-	readonly id: string;
-	readonly path: string;
-	readonly review: () => void;
-}
-
-export interface PromptTurnChanges extends IChangesStats {
-	readonly fileDiffs: readonly PromptFileDiff[];
-	review(): void | Promise<void>;
-}
-
 export interface PromptTimelinePrompt {
 	readonly id: string;
 	readonly text: string;

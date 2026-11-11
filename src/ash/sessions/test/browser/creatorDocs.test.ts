@@ -8,21 +8,20 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IExtensionRecommendationsService } from '../../../workbench/services/extensionRecommendations/common/extensionRecommendations.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService, type ISessionsEntry } from '../../services/layout/common/sessionsEntryService.js';
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { EditorPanes } from '../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { generalProfile } from '../../../../../extensions/academy/browser/generalProfile.js';
-import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../../../workbench/contrib/documentEditor/browser/documentEditorInput.js';
-import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/common/creator.js';
+import { DOCS_EDITOR_SETTING, GENERAL_DOCUMENT_CONTENT_TYPE } from '../../contrib/artifacts/contrib/docs/common/docs.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://docs.test' });
 for (const [key, value] of Object.entries({ window: browser.window, document: browser.window.document, HTMLElement: browser.window.HTMLElement, Node: browser.window.Node })) {
 	Object.defineProperty(globalThis, key, { configurable: true, value });
 }
-await import('../../contrib/artifacts/browser/artifacts.contribution.js');
+await import('../../contrib/artifacts/contrib/docs/browser/docs.contribution.js');
 
 for (const [preference, provider, extension, recommends] of [
 	['automatic', false, '.md', true], ['automatic', true, '.ash-doc', false],
@@ -37,7 +36,7 @@ for (const [preference, provider, extension, recommends] of [
 	services.registerInstance(IEditorPart, { groups: [] } as unknown as IEditorPart);
 	services.registerInstance(IViewsService, { getVisibleViewContainer: () => null } as unknown as IViewsService);
 	const entries: ISessionsEntry[] = [];
-	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as unknown as ISessionsLayoutService);
+	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { entries.push(entry); } } as unknown as ISessionsEntryService);
 	let recommended = 0;
 	services.registerInstance(IExtensionRecommendationsService, { recommendForResource: resource => { assert.equal(resource.path, '/document.ash-doc'); ++recommended; } } as IExtensionRecommendationsService);
 	if (provider) {

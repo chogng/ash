@@ -218,6 +218,7 @@ export interface IAgentThreadService {
 	/** Domain notifications from this renderer's connection; disposing the listener releases it. */
 	readonly onDidUpdateThread: Event<Agent.ThreadUpdateEnvelope>;
 	readonly onDidUpdateThreadTranscript: Event<Agent.ThreadTranscriptUpdateEnvelope>;
+	readToolResultText(source: Agent.ToolResultTextSource, offset: number, signal?: AbortSignal): Promise<Agent.ToolResultTextPage>;
 	readAttachment(source: Agent.AgentAttachmentSource, signal?: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string; }>;
 	listAppTools(source: Agent.AgentAttachmentSource & { readonly contentIndex: number; }, signal?: AbortSignal): Promise<readonly Agent.AgentMcpAppTool[]>;
 	invokeAppTool(source: Agent.AgentAttachmentSource & { readonly contentIndex: number; }, name: string, argumentsJson: string, signal?: AbortSignal): Promise<Extract<Agent.ThreadItem, { readonly type: 'toolResult'; }>>;

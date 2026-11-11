@@ -1,10 +1,11 @@
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import type { DesktopEditorParts } from './parts/desktopEditorParts.js';
+import type { EditorParts } from './parts/editorParts.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { autorun, type IObservable } from '../../base/common/observable.js';
 import { MenusRegistry, MenuId, Action2, registerAction2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { ContextKeyExpr, RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
@@ -28,8 +29,9 @@ export function registerLayoutActions(
 	layout: IAgentWorkbenchLayoutService,
 	sessions: ISessionsService,
 	contextKeys: IContextKeyService,
-	editor: DesktopEditorParts,
+	editor: EditorParts,
 	workspace: IWorkspaceContextService,
+	hasDesktopChatSource: IObservable<boolean>,
 ): IDisposable {
 	const disposables = new DisposableStore();
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);
@@ -49,11 +51,14 @@ export function registerLayoutActions(
 			panelVisible.set(false);
 			covered.set(codeAvailable.get() === true && layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
 			const selection = sessions.activeSelection;
-			isNewSession.set(layout.isPartVisible('sessions') && selection?.kind === 'untitled' && !selection.session.forkSource);
+			isNewSession.set(!hasDesktopChatSource.get() && layout.isPartVisible('sessions') && selection?.kind === 'untitled' && !selection.session.forkSource);
 			hasUsableWorkspace.set(selection?.kind === 'untitled' && hasSelectedCodeWorkspace(selection.session)
 				&& workspace.getWorkspace().folders.length > 0);
 		});
-	updateContext();
+	disposables.add(autorun(reader => {
+		hasDesktopChatSource.read(reader);
+		updateContext();
+	}));
 	disposables.add(layout.onDidChangePartVisibility(updateContext));
 	disposables.add(editor.onDidChangeEditors(updateContext));
 	disposables.add(sessions.onDidChange(updateContext));

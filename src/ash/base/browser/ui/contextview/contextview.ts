@@ -38,6 +38,8 @@ export type ContextViewPresentation = 'default' | 'hover' | 'menu' | 'dialog' | 
 export interface ContextViewOptions {
 	readonly anchor: ContextViewAnchor;
 	readonly content: HTMLElement;
+	/** Keep the last position when false, for example while the view animates out. */
+	readonly canRelayout?: boolean;
 	readonly anchorAlignment?: AnchorAlignment;
 	readonly anchorPosition?: AnchorPosition;
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;
@@ -193,7 +195,7 @@ export class ContextView
 		} else {
 			this.element.removeAttribute('popover');
 		}
-		this.layout();
+		this.layoutAtAnchor(options, true);
 		if (!this.visible) return false;
 		this.element.style.visibility = '';
 		registerVisibleContextView(this);
@@ -282,12 +284,15 @@ export class ContextView
 
 	layout(): void {
 		const options = this.options;
-		if (!options) return;
+		if (options) this.layoutAtAnchor(options);
+	}
+
+	private layoutAtAnchor(options: ContextViewOptions, initial = false): void {
 		if (isElementAnchor(options.anchor) && !options.anchor.isConnected) {
 			this.hide(ContextViewHideReason.AnchorRemoved);
 			return;
 		}
-
+		if (!initial && options.canRelayout === false) return;
 		const targetWindow = getWindow(this.element);
 		const anchor = getAnchorRectangle(options.anchor);
 		const bounds = this.element.getBoundingClientRect();

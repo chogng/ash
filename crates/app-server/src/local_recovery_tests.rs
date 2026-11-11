@@ -12,6 +12,220 @@ use core_api::StartThreadRequest;
 use std::time::Instant;
 
 #[test]
+fn automatic_model_routing_survives_restart_and_queued_delivery() {
+    #[derive(Default)]
+    struct RoutingModel(Mutex<Vec<String>>);
+    impl OperationClient for RoutingModel {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            panic!("unexpected non-streaming request: {}", request.url());
+        }
+
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn ash_client::OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            let body: serde_json::Value = serde_json::from_slice(request.body()).unwrap();
+            self.0
+                .lock()
+                .unwrap()
+                .push(body["model"].as_str().unwrap().into());
+            sink.emit(b"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"route-ok\"}]}]}}\n\n")?;
+            Ok(ClientResponse::new(200, vec![], vec![]))
+        }
+    }
+
+    let profile = tempfile::tempdir().unwrap();
+    let config_path = profile.path().join("config.toml");
+    let write_config = |candidates: &str, limits: &str| {
+        std::fs::write(
+            &config_path,
+            format!(
+                "schemaVersion = {}
+{candidates}
+[agent.model]
+provider = 'openai'
+model = 'gpt-6-luna'
+[connections.openai]
+provider = 'openai'
+connection = 'openai'
+maxOutputTokens = 1024
+{limits}",
+                ash_config::CONFIG_FILE_SCHEMA_VERSION
+            ),
+        )
+        .unwrap();
+    };
+    write_config(
+        "[agent]\nautoModelCandidates = [\
+         { provider = 'anthropic', model = 'claude-sonnet-5-5' },\
+         { provider = 'openai', model = 'gpt-6-luna' },\
+         { provider = 'openai', model = 'gpt-6.1-sol' }]",
+        "[connections.openai.modelContext.gpt-6-luna]\ncontextWindow = 2500\n",
+    );
+    let runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+    runtime
+        .secrets
+        .set_storage_mode(ash_secrets::SecretStorageMode::File)
+        .unwrap();
+    ash_model_provider::ProviderCredentialService::new(
+        ProviderConfigRegistry::builtin(),
+        runtime.secrets.clone(),
+    )
+    .set_api_key(
+        &ash_protocol::ModelConnectionId::new("openai").unwrap(),
+        b"test-key".to_vec(),
+    )
+    .unwrap();
+    drop(runtime);
+
+    let client = Arc::new(RoutingModel::default());
+    let open = || {
+        open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_codex_home(profile.path().join("codex"))
+                .with_model_operation_client(client.clone())
+                .without_built_in_skills(),
+            ash_app_server_diff::compute,
+        )
+        .unwrap()
+    };
+    let next_id = std::cell::Cell::new(0);
+    let rpc = |server: &AppServer, connection: &mut ConnectionState, method, params| {
+        let id = next_id.get() + 1;
+        next_id.set(id);
+        let response = local_call(
+            server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+        );
+        assert!(response.get("error").is_none(), "{method}: {response}");
+        response["result"].clone()
+    };
+    let initialize = |server: &AppServer| {
+        let mut connection = server.connection();
+        rpc(
+            server,
+            &mut connection,
+            "initialize",
+            serde_json::json!({
+                "clientInfo":{"name":"routing-test","version":"1"},"capabilities":{}
+            }),
+        );
+        connection
+    };
+    let server = open();
+    let mut connection = initialize(&server);
+    let created = rpc(
+        &server,
+        &mut connection,
+        "session/create",
+        serde_json::json!({
+            "commandId":"routing-create","title":"Routing fixture","kind":"code","executionTarget":null
+        }),
+    );
+    let session = &created["session"]["sessionId"];
+    let thread = &created["session"]["threads"][0]["threadId"];
+    let read = |server: &AppServer, connection: &mut ConnectionState| {
+        rpc(
+            server,
+            connection,
+            "session/thread/read",
+            serde_json::json!({"sessionId":session,"threadId":thread}),
+        )["thread"]
+            .clone()
+    };
+    let completed = |server: &AppServer, connection: &mut ConnectionState, index: usize| {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            let snapshot = read(server, connection);
+            let turn = &snapshot["turns"][index];
+            assert_ne!(turn["status"], "failed", "{snapshot}");
+            if turn["status"] == "completed" {
+                return turn.clone();
+            }
+            assert!(Instant::now() < deadline, "{snapshot}");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+    let sequence = read(&server, &mut connection)["sequence"].clone();
+    let first_request = serde_json::json!({
+        "commandId":"routing-first","sessionId":session,"request":{
+            "type":"startTurn","threadId":thread,"expectedSequence":sequence,
+            "modelRouting":"auto","input":[{"type":"text","text":"example ".repeat(2000)}]
+        }
+    });
+    let first_receipt = rpc(
+        &server,
+        &mut connection,
+        "session/request",
+        first_request.clone(),
+    );
+    let first = completed(&server, &mut connection, 0);
+    assert_eq!(first["modelRouting"], "selected");
+    assert_eq!(first["model"]["model"], "gpt-6.1-sol");
+    let queued: queue::QueuedMessage = serde_json::from_value(rpc(
+        &server,
+        &mut connection,
+        "queue/enqueue",
+        serde_json::json!({
+            "commandId":"routing-queued","sessionId":session,"threadId":thread,
+            "modelRouting":"auto","input":[{"type":"text","text":"Continue"}]
+        }),
+    ))
+    .unwrap();
+    server.close_connection(connection);
+    drop(server);
+
+    write_config(
+        "[agent]\nautoModelCandidates = [{ provider = 'openai', model = 'gpt-6-luna' }]",
+        "",
+    );
+    let server = open();
+    let mut connection = initialize(&server);
+    let replay = rpc(
+        &server,
+        &mut connection,
+        "session/request",
+        first_request.clone(),
+    );
+    assert_eq!(replay, first_receipt);
+    let mut conflicting = first_request;
+    conflicting["request"]
+        .as_object_mut()
+        .unwrap()
+        .remove("modelRouting");
+    let rejected = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1000,"method":"session/request","params":conflicting
+        }),
+    );
+    assert!(rejected.get("error").is_some(), "{rejected}");
+    let stored = rpc(
+        &server,
+        &mut connection,
+        "queue/list",
+        serde_json::json!({
+            "sessionId":session,"threadId":thread
+        }),
+    );
+    let stored: queue::QueuedMessage =
+        serde_json::from_value(stored["messages"][0].clone()).unwrap();
+    assert_eq!(stored, queued);
+    assert!(matches!(
+        server.deliver_queued_message(&stored).unwrap(),
+        queue::Delivery::Started(_)
+    ));
+    let second = completed(&server, &mut connection, 1);
+    assert_eq!(second["modelRouting"], "reused");
+    assert_eq!(second["model"], first["model"]);
+    assert_eq!(*client.0.lock().unwrap(), ["gpt-6.1-sol", "gpt-6.1-sol"]);
+    server.close_connection(connection);
+}
+
+#[test]
 fn legacy_goal_failure_does_not_block_startup_or_other_goal_recovery() {
     struct RecoveryModel(std::sync::atomic::AtomicUsize);
     impl OperationClient for RecoveryModel {

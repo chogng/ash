@@ -30,7 +30,7 @@ export class ProjectChatModel extends AshChatModel {
 		@INotificationService notifications: INotificationService,
 		@IOpenerService opener: IOpenerService,
 	) {
-		super({ kind: 'untitled', session: draft }, management, primary, configuration, storage, contexts);
+		super({ kind: 'untitled', session: draft }, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, contexts, undefined);
 		// Let the shared input clear the accepted draft before navigation hides it.
 		this.reveal = this._register(new RunOnceScheduler(() => {
 			const open = draft.kind === 'chat'

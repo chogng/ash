@@ -1,0 +1,14 @@
+.ash-chat-subagent-navigation-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+
+.ash-chat-subagent-navigation {
+	justify-content: space-between;
+}
+
+.ash-chat-subagent-navigation > p {
+	font-weight: var(--ash-fontWeight-semiBold);
+}

@@ -2,7 +2,7 @@ import type { IResourceEditorInput } from '../../../common/editor.js';
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { Action2, MenuId } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
@@ -11,6 +11,9 @@ import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffEditor, MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions, MultiDiffEditorPreview } from './multiDiffEditor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { getMultiDiffEditorFilesViewTitle, getToggleMultiDiffEditorFileListTitle, MultiDiffEditorFileListAvailableContext, MultiDiffEditorFileListEnabledContext, MultiDiffEditorFileListViewModeContext, MultiDiffEditorFilesViewMenu, setMultiDiffEditorFileListViewMode, TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID, toggleMultiDiffEditorFileList } from '../common/multiDiffEditor.js';
 
 export const MultiDiffGoToNextChangeCommandId = 'multiDiffEditor.goToNextChange';
 export const MultiDiffGoToPreviousChangeCommandId = 'multiDiffEditor.goToPreviousChange';
@@ -21,6 +24,43 @@ export const MultiDiffGoToFileCommandId = 'multiDiffEditor.goToFile';
 export const MultiDiffToggleCollapseUnchangedRegionsCommandId = 'multiDiffEditor.toggleCollapseUnchangedRegions';
 
 const MultiDiffEditorActive = ActiveEditorContext.isEqualTo(MULTI_DIFF_EDITOR_ID);
+
+export function registerMultiDiffEditorFileListViewActions(): DisposableStore {
+	const actions = new DisposableStore();
+	actions.add(MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+		submenu: MultiDiffEditorFilesViewMenu, title: getMultiDiffEditorFilesViewTitle(), group: '2_fileList',
+		when: ContextKeyExpr.and(MultiDiffEditorActive, MultiDiffEditorFileListAvailableContext.isEqualTo(true)),
+	}));
+	for (const [mode, id, title, order] of [
+		['list', 'multiDiffEditor.viewFileListAsList', localize2('multiDiff.viewAsList', 'View as List'), 1],
+		['tree', 'multiDiffEditor.viewFileListAsTree', localize2('multiDiff.viewAsTree', 'View as Tree'), 2],
+	] as const) {
+		actions.add(registerAction2(class extends Action2 {
+			constructor() {
+				super({ id, title, toggled: MultiDiffEditorFileListViewModeContext.isEqualTo(mode), menu: { id: MultiDiffEditorFilesViewMenu, order } });
+			}
+			run(accessor: ServicesAccessor): void { setMultiDiffEditorFileListViewMode(accessor.get(IStorageService), mode); }
+		}));
+	}
+	return actions;
+}
+
+export class ToggleFileListAction extends Action2 {
+	constructor() {
+		super({
+			id: TOGGLE_MULTI_DIFF_EDITOR_FILE_LIST_COMMAND_ID,
+			title: getToggleMultiDiffEditorFileListTitle(),
+			icon: Lxicon.listUnordered,
+			toggled: MultiDiffEditorFileListEnabledContext.isEqualTo(true),
+			precondition: MultiDiffEditorFileListAvailableContext.isEqualTo(true),
+			menu: { id: MenuId.EditorTitle, when: ContextKeyExpr.and(MultiDiffEditorActive, MultiDiffEditorFileListAvailableContext.isEqualTo(true)), group: 'navigation', order: 21 },
+		});
+	}
+
+	run(accessor: ServicesAccessor): void {
+		toggleMultiDiffEditorFileList(accessor.get(IStorageService));
+	}
+}
 
 export class MultiDiffGoToFileAction extends Action2 {
 	constructor() {

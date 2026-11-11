@@ -17,8 +17,7 @@ import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/c
 import { getChatCodeBlockCardAccessibilityHelp, getChatRequestAccessibilityHelp } from '../../../../workbench/contrib/chat/browser/actions/chatAccessibilityHelp.js';
 import { getSessionsListGroupingHelp } from '../../sessions/browser/views/sessionsListActions.js';
 import type { IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
-import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
-import { registerReplyChatEditor, type ChatDraftModelSource, type IReplyChatEditorModel, type ReplyChatEditorOptions } from '../browser/replyChatEditor.js';
+import { IChatViewFactory, type ChatDraftModelSource, type ICompactChatModel, type IChatViewSource } from '../browser/chatViewFactory.js';
 import { Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
@@ -30,21 +29,21 @@ import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { AshChatModel } from '../browser/ashChatModel.js';
+import { registerChatEntityDetails } from '../browser/chatEntityDetails.js';
 import { SessionWorkspaceStatus } from '../browser/sessionWorkspaceStatus.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
 import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, NativeChatCatalogSource, type ChatListSource } from '../browser/chatListModel.js';
 import { registerNativeConversationSharing } from '../browser/nativeConversationShare.js';
 import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
 import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/sessionsCatalogList.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { INativeChatModelPreferencesService } from '../common/nativeChatModelPreferencesService.js';
 import '../browser/chat.contribution.js';
 
-const ashChatEditor = {
+const ashChatViewSource = {
 	id: 'sessions.editor.ashChat',
-	scheme: 'ash-native-chat',
-	name: 'Ash Chat',
 	rootClass: 'ash-native-chat-widget',
 	title: () => localize('sessions.chat.ashTitle', 'Ash Chat'),
 	inputLabel: () => localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
@@ -59,10 +58,10 @@ const ashChatEditor = {
 		verbositySetting: AccessibilityVerbositySettingId.Chat,
 		hint: () => localize('sessions.chat.ashAccessibilityHint', 'Press Alt+F1 for Ash Chat accessibility help.'),
 	},
-} satisfies Omit<ReplyChatEditorOptions, 'model'>;
+} satisfies Omit<IChatViewSource, 'model'>;
 
-/** Binds the compact editor to a Sessions slot and contributes cross-source draft choices. */
-class NativeReplyEditorModel extends AshChatModel implements IReplyChatEditorModel {
+/** Binds the compact Chat view to the native selection and contributes cross-source draft choices. */
+class NativeChatWorkspaceModel extends AshChatModel implements ICompactChatModel {
 	private readonly draftModels: ChatDraftModelSource;
 
 	constructor(
@@ -75,10 +74,11 @@ class NativeReplyEditorModel extends AshChatModel implements IReplyChatEditorMod
 		@IStorageService storage: IStorageService,
 		@IContextKeyService contexts: IContextKeyService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@INativeChatModelPreferencesService modelPreferences: INativeChatModelPreferencesService,
 	) {
 		const initial = view.getChatSelection();
-		if (!initial) throw new Error('The compact Chat editor needs a restored Sessions selection');
-		super(initial, management, primary, configuration, storage, contexts);
+		if (!initial) throw new Error('The compact Chat view needs a restored Sessions selection');
+		super(initial, 'compact', management, primary.chat, primary.prompts, primary.models, primary.execution, configuration, storage, contexts, modelPreferences);
 		this.draftModels = instantiation.createInstance(modelSource);
 		let previous: ReturnType<typeof view.chatSelection.get>;
 		this._register(autorun(reader => {
@@ -146,8 +146,8 @@ export function registerChatWorkspace(source: {
 	readonly openCommand: string;
 	readonly createDraft: (commands: ICommandService, origin: unknown) => Promise<void>;
 }): void {
-	registerReplyChatEditor({ ...ashChatEditor, model: new SyncDescriptor(NativeReplyEditorModel, [source.draftModels]) });
 	registerAshChatAccessibility();
+	registerChatEntityDetails();
 	registerNativeConversationSharing();
 	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
 		source.catalog,
@@ -159,7 +159,7 @@ export function registerChatWorkspace(source: {
 	CommandsRegistry.register('sessions.open.new', (accessor, origin) => source.createDraft(accessor.get(ICommandService), origin));
 
 	registerWorkbenchContribution(ChatWorkspaceContribution.ID, WorkbenchPhase.BlockRestore,
-		accessor => accessor.get(IInstantiationService).createInstance(ChatWorkspaceContribution, source.openCommand));
+		accessor => accessor.get(IInstantiationService).createInstance(ChatWorkspaceContribution, source.openCommand, source.draftModels));
 }
 
 export function registerChatWorkspaceNavigation(accessibility: Omit<SessionsCatalogAccessibility, 'focusContext'>): IDisposable {
@@ -185,25 +185,24 @@ export class ChatWorkspaceContribution extends Disposable {
 
 	constructor(
 		openContributedChatCommand: string,
-		@ISessionsLayoutService layout: ISessionsLayoutService,
+		draftModels: SyncDescriptor<ChatDraftModelSource>,
+		@ISessionsEntryService layout: ISessionsEntryService,
 		@IStorageService storage: IStorageService,
 		@ISessionsService view: ISessionsService,
 		@ISessionsManagementService sessions: ISessionsManagementService,
 		@IOpenerService opener: IOpenerService,
+		@IChatViewFactory chatViews: IChatViewFactory,
 	) {
 		super();
+		const chatSource = 'ashChat';
+		this._register(chatViews.registerSource(chatSource, { ...ashChatViewSource, model: new SyncDescriptor(NativeChatWorkspaceModel, [draftModels]) }));
 		const newDraft = view.chatSelection.map(current => current?.kind === 'draft');
 		const openAshChat = async (source?: unknown): Promise<void> => {
 			if (this.isDisposed) throw canceled();
 			await layout.openEntry({
-				id: 'ashChat', workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
-				content: 'editor', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID,
-				showEditorTabs: false,
-				editorInput: {
-					resource: URI.from({ scheme: ashChatEditor.scheme, path: '/page' }), label: ashChatEditor.title(),
-					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
-				},
-				restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'editor',
+				id: chatSource, workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
+				content: 'conversation', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, chatSource,
+				restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'conversation',
 			}, undefined, source === 'restore' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
@@ -236,7 +235,7 @@ export class ChatWorkspaceContribution extends Disposable {
 					await sessions.prepareThread(address.sessionId, address.threadId);
 					if (this.isDisposed || previous !== view.chatSelection.get() || entryCommand !== layout.newSessionCommand) throw canceled();
 				}
-				// The editor needs a selection during construction. An explicit link supplies its own.
+				// The Chat view needs a selection during construction. An explicit link supplies its own.
 				view.selectChatThread(address.sessionId, address.threadId);
 				await openAshChat();
 				return true;
@@ -248,7 +247,7 @@ export class ChatWorkspaceContribution extends Disposable {
 function registerAshChatAccessibility(): void {
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		AccessibleViewRegistry.register({
-			type, priority: 100, name: `sessionsAshChat${type}`, when: ContextKeyExpr.has(ashChatEditor.accessibility.focusContext),
+			type, priority: 100, name: `sessionsAshChat${type}`, when: ContextKeyExpr.has(ashChatViewSource.accessibility.focusContext),
 			getProvider: accessor => {
 				const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 				const widget = accessor.get(IChatWidgetService).getAllWidgets().find(candidate => candidate.visible && candidate.domNode.contains(focused));

@@ -20,29 +20,29 @@
 	min-height: 0;
 }
 
-.ash-reply-chat-editor > .ash-chat {
+.ash-compact-chat-view > .ash-chat {
 	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
 	background: var(--ash-chat-transcript-surface);
 }
 
-.ash-reply-chat-editor > .ash-chat-show-welcome {
+.ash-compact-chat-view > .ash-chat-show-welcome {
 	overflow-y: auto;
 }
 
 /* Anchor the welcome and composer while suggestions open. In a short window,
  * the spacer gives up room before the page needs to scroll. */
-.ash-reply-chat-editor > .ash-chat-show-welcome::before {
+.ash-compact-chat-view > .ash-chat-show-welcome::before {
 	content: "";
 	flex: 0 1 26%;
 }
 
-.ash-reply-chat-editor > .ash-chat > .ash-chat-welcome:not([hidden]) {
+.ash-compact-chat-view > .ash-chat > .ash-chat-welcome:not([hidden]) {
 	flex: 0 0 auto;
 	overflow: visible;
 	padding-block-end: var(--ash-spacing-size320);
 }
 
-.ash-reply-chat-editor > .ash-chat-show-welcome > .ash-chat-input-part {
+.ash-compact-chat-view > .ash-chat-show-welcome > .ash-chat-input-part {
 	margin-block-start: 0;
 }
 
@@ -57,6 +57,6 @@
 	display: none;
 }
 
-.ash-reply-chat-editor {
+.ash-compact-chat-view {
 	flex-direction: column;
 }

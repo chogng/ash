@@ -17,7 +17,7 @@ test('Advisor settings and Quick Pick preserve budgets and remove incompatible e
 	using services = new InstantiationService();
 	assert.throws(() => services.createInstance(AdvisorSettingsModel), /chatService/);
 	const initial: AdvisorConfig = { model: { provider: 'test', model: 'old' }, enabled: false, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: 'high' };
-	const next: ModelCatalogEntry = { model: { provider: 'test', model: 'next' }, displayName: 'Next Advisor', longContext: null, recommendedFor: [ModelPurpose.Advisor], supportedReasoningEfforts: [{ effort: 'medium', description: 'Medium' }] };
+	const next: ModelCatalogEntry = { model: { provider: 'test', model: 'next' }, displayName: 'Next Advisor', longContext: null, recommendedFor: [ModelPurpose.Advisor], supportedReasoningEfforts: [] };
 	const expected = { model: next.model, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined };
 	const writes: (AdvisorConfig | null)[] = [];
 	const wrote = new DeferredPromise<void>();
@@ -56,12 +56,14 @@ test('Advisor settings and Quick Pick preserve budgets and remove incompatible e
 	const settings = resources.add(services.createInstance(AdvisorSettingsModel));
 	const loaded = new DeferredPromise<void>();
 	resources.add(settings.onDidChange(() => {
-		if (settings.fields.some(field => field.kind === 'select' && field.enabled)) { void loaded.complete(); }
+		if (settings.fields.some(field => field.kind === 'menu' && field.enabled)) { void loaded.complete(); }
 	}));
 	settings.setVisible(true);
 	await loaded.p;
-	const field = settings.fields.find(field => field.kind === 'select');
-	assert.ok(field?.kind === 'select');
-	field.setValue(field.options.find(option => option.label === 'Next Advisor · Default')!.value);
+	const field = settings.fields.find(field => field.kind === 'menu');
+	assert.ok(field?.kind === 'menu');
+	const nextModel = field.options.find(option => 'value' in option && option.label === 'Next Advisor');
+	assert.ok(nextModel && 'value' in nextModel);
+	field.setValue(nextModel.value);
 	assert.deepEqual([...writes], [expected, expected]);
 });

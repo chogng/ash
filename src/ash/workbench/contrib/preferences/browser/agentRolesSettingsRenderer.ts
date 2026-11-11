@@ -21,7 +21,7 @@ export class AgentRolesSettingsRenderer extends SettingsPageRenderer<SettingsSec
 		return [{
 			element: {
 				kind: 'item', id: 'agents.definitions',
-				title: localize({ bundle: 'ash.settings', key: 'roles.title' }, 'Agent definitions'),
+				title: localize({ bundle: 'ash.settings', key: 'roles.custom' }, 'Custom Agents'),
 				description: '', keywords: this.roles.keywords,
 				value: this.retainElement('agents.definitions', this.roles.domNode),
 			}

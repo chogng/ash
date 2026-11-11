@@ -139,8 +139,13 @@ const documentTest = test.extend<{
 			await workbench.settingsEditor.openUserSettingsUI();
 			await workbench.settingsEditor.selectGroup('agents');
 			await workbench.settingsEditor.selectCategory('models');
-			const enabled = source.getByRole('switch', { name: 'Enable review-fixture', exact: true });
+			const settings = workbench.settingsEditor.element;
+			const search = settings.getByRole('searchbox', { name: 'Search settings' });
+			await search.fill('Editor review fixture');
+			const enabled = settings.getByRole('switch', { name: 'Show review-fixture in model picker', exact: true });
 			if (!await enabled.isChecked()) await enabled.press('Space');
+			await expect(enabled).toBeChecked();
+			await search.clear();
 			if (reviewAutoAcceptDelay) {
 				await workbench.settingsEditor.selectCategory('agent-defaults');
 				const setting = source.getByRole('spinbutton', { name: 'Automatically accept Agent changes', exact: true });
@@ -162,15 +167,14 @@ const documentTest = test.extend<{
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Editor document fixture' }).click();
 			const sessions = new Workbench(page);
-			const composer = page.locator('.ash-sessions-chat-slot.active:visible [role=region][data-thread-id]');
+			const composer = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			await expect(composer).toHaveAttribute('data-thread-id', identity.threadId);
-			await composer.locator('.ash-chat-input-mode-action').click();
-			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
+			await expect(composer.getByRole('button', { name: 'Mode: Agent', exact: true })).toBeVisible();
 			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
 			await composer.getByRole('button', { name: /^Permissions:/ }).click();
 			await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
 			await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: bypass.label.english, exact: true }).click();
-			await sessions.quickaccess.runCommand('workbench.sessions.auxiliaryBar.filesContainer');
+			await sessions.quickaccess.runCommand('workbench.action.agentSessions.newFileTab');
 			await use({
 				page, workbench: sessions, code: workbench, directory: before.directory.root,
 				async send(prompt, patch) {
@@ -268,6 +272,32 @@ documentTest('Real Agent document callbacks preserve dirty BOM/CRLF text and rev
 	await expect.poll(() => readFile(created, 'utf8')).toBe('new file\n');
 	await workbench.quickaccess.runCommand('chatEditing.rejectAll');
 	await expect.poll(() => readFile(created, 'utf8').catch(error => (error as NodeJS.ErrnoException).code)).toBe('ENOENT');
+});
+
+documentTest('External file reload keeps pending Agent review and preserves disk changes on Reject', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ agent }) => {
+	test.setTimeout(180_000);
+	const { page, directory } = agent;
+	const file = join(directory, 'agent-reload.txt');
+	await writeFile(file, 'first\nmiddle\nlast');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'agent-reload.txt', exact: true }).dblclick();
+	const editor = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid) .ash-editor-group').first());
+	await editor.waitForEditorFocus();
+	await agent.send('Change the middle line.', '*** Begin Patch\n*** Update File: agent-reload.txt\n@@\n-middle\n+agent middle\n*** End Patch');
+	const review = editor.element.locator('.ash-chat-editing-overlay');
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 1');
+	await expect.poll(() => readFile(file, 'utf8')).toBe('first\nagent middle\nlast');
+	const external = 'external first\nagent middle\nexternal last';
+	await writeFile(file, external);
+	await expect(editor.element.locator('.view-lines')).toContainText('external last');
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 1');
+	await writeFile(file, external.replace('agent middle', 'conflicting edit'));
+	await expect(review.getByRole('note', { name: /^Agent edit review is paused/ })).toHaveText('Review paused');
+	await expect(review.getByRole('button', { name: 'Reject file changes', exact: true })).toBeDisabled();
+	await writeFile(file, external);
+	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 1');
+	await review.getByRole('button', { name: 'Reject file changes', exact: true }).click();
+	await expect.poll(() => readFile(file, 'utf8')).toBe('external first\nmiddle\nexternal last');
+	await expect(review).toBeHidden();
 });
 
 const countdownTest = documentTest.extend({ reviewAutoAcceptDelay: 3 });

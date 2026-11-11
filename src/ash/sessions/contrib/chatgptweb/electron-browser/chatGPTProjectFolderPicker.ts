@@ -1,8 +1,4 @@
-import './chatGPTProjectFolderPicker.css';
-import { h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { streamToBuffer } from '../../../../base/common/buffer.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -17,8 +13,9 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { ChatInputPickerActionViewItem } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem.js';
+import { ChatInputProjectPill } from '../../projects/browser/chatInputProjectPill.js';
+import { resolveProjectAppearance } from '../../projects/browser/projectAppearance.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
 import { chatGPTAttachmentLimitMessage, chatGPTAttachmentLimits, chatGPTProjectPreferenceKey, IChatGPTService, isChatGPTNewDraft, type ChatGPTState } from '../browser/chatGPTService.js';
 
@@ -77,25 +74,14 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 				filterPlaceholder: localize('sessions.chatgpt.searchProjectOrFolder', 'Search'),
 			},
 		}, instantiation);
-		const host = h(footer.ownerDocument, 'div', { className: 'ash-chat-input-workspace-slot ash-chatgpt-draft-target' });
-		footer.prepend(host);
-		host.hidden = true;
-		this._register(toDisposable(() => host.remove()));
-		this.render(host);
-		this.element.classList.add('ash-chat-input-workspace-picker');
 		const clearProject = localize('sessions.chatgpt.clearProject', 'Clear project');
-		const remove = this._register(new Button(host, {
-			label: '', ariaLabel: clearProject, title: clearProject, size: 'small',
-			onClick: () => {
-				if (!host.hidden && canChoose(chat.state.get())) {
-					this.choose({ projectId: undefined, ashProjectId: undefined });
-				}
-			},
+		const pill = this._register(new ChatInputProjectPill(footer, clearProject, () => {
+			if (!pill.element.hidden && canChoose(chat.state.get())) {
+				this.choose({ projectId: undefined, ashProjectId: undefined });
+			}
 		}));
-		remove.domNode.classList.add('ash-chatgpt-project-remove');
-		const closeIcon = appendIcon(Lxicon.close, remove.domNode);
-		let projectIcon: HTMLElement | undefined;
-		host.prepend(remove.domNode);
+		this.render(pill.element);
+		this.element.classList.add('ash-chat-input-workspace-picker');
 		// The picker can open before the sidebar has mounted.
 		const projectCatalog = projects.state.get();
 		if (!projectCatalog.loading && !projectCatalog.projects.length) void projects.reload();
@@ -103,32 +89,21 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 		this._register(autorun(reader => {
 			const state = chat.state.read(reader);
 			const shown = visible.read(reader) && isChatGPTNewDraft(state);
+			const enabled = canChoose(state);
 			const current = shown ? `${state.localConversationId}:${chat.newDraftRevision}` : undefined;
-			if (current !== identity || !canChoose(state)) {
+			if (current !== identity || !enabled) {
 				this.hide();
 				this.operation.clear();
 			}
 			identity = current;
-			host.hidden = !shown;
+			pill.element.hidden = !shown;
 			if (!shown) return;
 			const ashProject = projects.state.read(reader).projects.find(project => project.id === state.draftTarget?.ashProjectId);
 			const projectId = state.draftTarget?.projectId;
 			const hasProject = Boolean(projectId || state.draftTarget?.ashProjectId);
-			host.classList.toggle('has-project', hasProject);
-			remove.domNode.hidden = !hasProject;
-			if (hasProject) {
-				const key = projectId ? chatGPTProjectPreferenceKey(state.catalogScope, projectId) : undefined;
-				const appearance = this.resolveAppearance(ashProject ?? (key ? projects.getCatalogProjectAppearance(key) : undefined));
-				const icon = appearance.icon ?? Lxicon.projectsFilled;
-				if (!projectIcon || projectIcon.dataset.ashIconId !== icon.id) {
-					projectIcon?.remove();
-					projectIcon = appendIcon(icon, remove.domNode);
-					projectIcon.classList.add('ash-chatgpt-project-icon');
-					closeIcon.before(projectIcon);
-				}
-				projectIcon.style.color = appearance.color ?? '';
-			}
-			remove.enabled = canChoose(state);
+			const key = projectId ? chatGPTProjectPreferenceKey(state.catalogScope, projectId) : undefined;
+			const appearance = ashProject ?? (key ? projects.getCatalogProjectAppearance(key) : {});
+			pill.update(hasProject ? appearance : undefined, enabled);
 			this.updateEnabled();
 			this.setTabbable(shown);
 			this.refreshActionLabel();
@@ -159,7 +134,7 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 	private getProjectActions(state: ChatGPTState, isCurrent: () => boolean): IAction[] {
 		const chatGPTProjects = state.projects.map(project => {
 			const key = chatGPTProjectPreferenceKey(state.catalogScope, project.id);
-			const appearance = this.resolveAppearance(key ? this.projects.getCatalogProjectAppearance(key) : undefined);
+			const appearance = resolveProjectAppearance(this.element.ownerDocument, key ? this.projects.getCatalogProjectAppearance(key) : undefined);
 			return {
 				id: `project.${project.id}`, label: project.title, tooltip: project.title,
 				icon: appearance.icon ?? Lxicon.projects, iconColor: appearance.color,
@@ -170,7 +145,7 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 			};
 		});
 		const ashProjects = this.projects.state.get().projects.filter(project => !project.archived).map(project => {
-			const appearance = this.resolveAppearance(project);
+			const appearance = resolveProjectAppearance(this.element.ownerDocument, project);
 			return {
 				id: `ash-project.${project.id}`, label: project.name, tooltip: project.name,
 				icon: appearance.icon ?? Lxicon.projects, iconColor: appearance.color,
@@ -183,13 +158,6 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 			};
 		});
 		return [...chatGPTProjects, ...ashProjects];
-	}
-
-	private resolveAppearance(appearance: { readonly icon?: string; readonly color?: string; } | undefined) {
-		return {
-			icon: appearance?.icon ? getRegisteredIcon(appearance.icon, this.element.ownerDocument) : undefined,
-			color: appearance?.color ? `var(${colorCssVariable(appearance.color)})` : undefined,
-		};
 	}
 
 	private getActions(): readonly IAction[] {

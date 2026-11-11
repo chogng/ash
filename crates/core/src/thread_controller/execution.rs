@@ -314,6 +314,7 @@ impl ThreadController {
             turn_id,
             ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id,
                 turn_id: turn_id.clone(),
                 text,
@@ -367,6 +368,7 @@ impl ThreadController {
         self.mutate_thread(thread_id, |snapshot| {
             let item = ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id,
                 turn_id: turn_id.clone(),
                 text: output,

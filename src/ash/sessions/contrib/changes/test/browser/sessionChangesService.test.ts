@@ -13,16 +13,39 @@ import type { IResourceEditorInput } from '../../../../../workbench/common/edito
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionsChatResponseFileChangesService } from '../../../chat/browser/sessionTurnChanges.js';
 import type { ChatWidgetModel } from '../../../../browser/chatWidgetModel.js';
-import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { SessionChangesService } from '../../browser/sessionChangesService.js';
+import { ISessionChangesService } from '../../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { SessionChangesetOperationScope, SessionChangesetOperationStatus } from '../../../../services/sessions/common/session.js';
+import { createSessionFileChange, matchesSessionFileChange, SessionChangesetOperationScope, SessionChangesetOperationStatus } from '../../../../services/sessions/common/session.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 
 suite('Session Changes opening and capture contract', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('deleted file identity matches both comparison sides but never another capture or conversation', () => {
+		const change = {
+			file: { path: 'src/deleted.ts', kind: 'deleted' },
+			summary: { sessionId: 'session', threadId: 'thread', changeSetId: 'turn', revision: 7 },
+		} as Pick<TurnChangeDetails, 'summary'> & { file: TurnChangeDetails['files'][number]; };
+		const normalized = createSessionFileChange(change.summary, change.file);
+		const resource = normalized.uri;
+		assert.equal(resource.toString(), 'ash-turn-diff:/turn/src/deleted.ts?session=session&thread=thread&revision=7');
+		for (const side of ['', '&side=before', '&side=after']) {
+			assert.equal(matchesSessionFileChange(normalized, resource.with({ query: resource.query + side })), true);
+		}
+		for (const query of [
+			'session=session&thread=thread&revision=6',
+			'session=other&thread=thread&revision=7',
+			'session=session&thread=other&revision=7',
+			resource.query + '&side=unknown',
+		]) {
+			assert.equal(matchesSessionFileChange(normalized, resource.with({ query })), false);
+		}
+		assert.equal(matchesSessionFileChange(normalized, resource.with({ path: '/turn/src/other.ts' })), false);
+	});
 
 	test('keeps a selected capture across serialization, preserves reveal options and invalidates count decorations', async () => {
 		using services = new InstantiationService();
@@ -54,6 +77,7 @@ suite('Session Changes opening and capture contract', () => {
 		services.registerInstance(IQuickInputService, { input: async () => 'Delete file' } as unknown as IQuickInputService);
 		services.registerInstance(IChatService, {
 			readTurnChange: async () => currentDetails,
+			readTurnChangeFile: async () => ({ path: 'deleted.ts', binary: false, truncated: false, before: 'deleted' }),
 			prepareTurnCommit: async (_session: string, _thread: string, selections: unknown, message: string) => {
 				prepared.push({ selections, message });
 				return { commitId: 'prepared', targetBranch: 'main', message, files: details.files, warnings: [] };
@@ -82,9 +106,11 @@ suite('Session Changes opening and capture contract', () => {
 		assert.equal(restored.resource.toString(), editor.toString());
 		assert.deepEqual(restored.changesetSelection, { kind: 'id', id: 'capture' });
 		const model = { sessionId: 'session', threadId: 'thread', composerGeneration: 0, changeSets: [details.summary], turnChangeDetails: () => currentDetails };
-		const responseChanges = new SessionsChatResponseFileChangesService(model as unknown as ChatWidgetModel, service, {
+		services.registerInstance(ISessionChangesService, service);
+		services.registerInstance(INotificationService, {
 			error: (error: unknown) => assert.fail(String(error)),
 		} as unknown as INotificationService);
+		const responseChanges = services.createInstance(SessionsChatResponseFileChangesService, model as unknown as ChatWidgetModel);
 		const turn = responseChanges.getChangesForRequest({
 			id: 'prompt', type: 'userMessage', text: 'Delete file', transient: false,
 			requestSource: { sessionId: 'session', threadId: 'thread', turnId: 'turn', itemId: 'prompt' },
@@ -99,6 +125,17 @@ suite('Session Changes opening and capture contract', () => {
 		const turnInput = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(opened[2]!.input)))) as SessionChangesEditorInput;
 		assert.deepEqual(turnInput.changesetSelection, { kind: 'turn', turnId: 'turn' });
 		assert.equal(opened[2]?.options?.viewState, undefined);
+		const replySource = { sessionId: 'session', threadId: 'thread', turnId: 'turn' };
+		const replyFile = responseChanges.getChangesForResponse(replySource)?.fileDiffs[0];
+		assert.equal(replyFile?.deletions, 2);
+		const signal = new AbortController().signal;
+		assert.deepEqual(await replyFile?.preview?.read(signal), { beforeContent: 'deleted', afterContent: '' });
+		currentDetails = { ...details, summary: { ...details.summary, revision: 4 } };
+		assert.deepEqual(responseChanges.getChangesForResponse(replySource)?.fileDiffs, []);
+		await assert.rejects(replyFile!.preview!.read(signal));
+		await replyFile?.review();
+		assert.equal(opened.length, 3);
+		currentDetails = details;
 		model.composerGeneration++;
 		await file?.review();
 		await turn?.review();

@@ -34,7 +34,7 @@ export class ChatMarkdownFileReferences extends Disposable {
 	constructor(
 		private readonly root: HTMLElement,
 		private readonly directory: FileSearchDirectory,
-		private readonly onDidResolve: () => void,
+		private readonly onDidResolve: (anchor: HTMLAnchorElement) => void,
 		@IFileService private readonly files: IFileService,
 		@IFileSearchService private readonly search: IFileSearchService,
 	) {
@@ -102,7 +102,7 @@ export class ChatMarkdownFileReferences extends Disposable {
 		anchor.removeAttribute(deferredMarkdownLinkAttribute);
 		anchor.setAttribute('href', href);
 		anchor.setAttribute('rel', 'noopener noreferrer');
-		this.onDidResolve();
+		this.onDidResolve(anchor);
 	}
 
 	private resolve(value: string, explicit: boolean): Promise<string | undefined> {

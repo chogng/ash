@@ -115,7 +115,7 @@ mod config_operations;
 pub(crate) mod config_runtime;
 #[path = "server/request_processors/connectors.rs"]
 mod connector_operations;
-mod connector_runtime;
+pub(crate) mod connector_runtime;
 #[cfg(test)]
 mod context_read_tests;
 #[path = "server/request_processors/debug.rs"]
@@ -202,6 +202,7 @@ mod message_checkpoints;
 #[path = "server/request_processors/message_history.rs"]
 mod message_history_processor;
 pub(crate) mod message_queue;
+pub(crate) use git_runtime::SESSION_GIT_REPOSITORY_PREFIX;
 #[path = "server/request_processors/models.rs"]
 mod models_processor;
 #[path = "server/request_processors/network.rs"]
@@ -487,6 +488,7 @@ enum ConnectionAuthority {
 
 #[derive(Debug, Default)]
 struct ConnectionMutableState {
+    session_git: Option<Arc<git_runtime::SessionGitScope>>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     closed: bool,
     initialized: bool,
@@ -497,6 +499,36 @@ struct ConnectionMutableState {
 }
 
 impl ConnectionState {
+    fn session_git_runtime(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<Option<Arc<git_runtime::GitRuntime>>, RpcError> {
+        if !repository_id
+            .is_some_and(|id| id.starts_with(git_runtime::SESSION_GIT_REPOSITORY_PREFIX))
+        {
+            return Ok(None);
+        }
+        self.session_git_scope()
+            .map(|scope| Some(Arc::clone(&scope.runtime)))
+            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::GitRepositoryNotFound))
+    }
+
+    fn session_git_scope(&self) -> Option<Arc<git_runtime::SessionGitScope>> {
+        connection_state(self).session_git.clone()
+    }
+
+    fn replace_session_git_scope(&self, scope: Option<Arc<git_runtime::SessionGitScope>>) {
+        let previous = {
+            let mut state = connection_state(self);
+            if state.closed {
+                return;
+            }
+            std::mem::replace(&mut state.session_git, scope)
+        };
+        // A watcher can be waiting for Git I/O. Never join it with the connection locked.
+        drop(previous);
+    }
+
     pub(crate) fn wire_received(&self, raw: &str, envelope: &Value) {
         self.wire_log.lock().unwrap().received(raw, envelope);
     }
@@ -513,6 +545,9 @@ impl ConnectionState {
         let mut state = connection_state(self);
         let was_open = !state.closed;
         state.closed = true;
+        let git_scope = state.session_git.take();
+        drop(state);
+        drop(git_scope);
         was_open
     }
 
@@ -662,6 +697,7 @@ struct PreparedRequest {
     request: JsonRpcRequest<Value>,
     cancellation: CancellationToken,
     scope: Option<request_serialization::RequestSerializationScope>,
+    admitted_git_runtime: Option<Arc<git_runtime::GitRuntime>>,
     received_at: Instant,
     received_time: SystemTime,
 }
@@ -865,9 +901,28 @@ impl AppServer {
             &self.resources,
         )
     }
-    fn git_processor(&self) -> git_operations::GitRequestProcessor<'_, Self> {
+    fn git_runtime_for_connection(
+        &self,
+        connection: &ConnectionState,
+        repository_id: Option<&str>,
+    ) -> Result<Arc<git_runtime::GitRuntime>, RpcError> {
+        match connection.session_git_runtime(repository_id)? {
+            Some(runtime) => Ok(runtime),
+            None => self.git_runtime_service(),
+        }
+    }
+    fn git_processor<'a>(
+        &'a self,
+        connection: &'a ConnectionState,
+        admitted_git_runtime: Option<&'a Arc<git_runtime::GitRuntime>>,
+        repository_id: Option<&'a str>,
+    ) -> git_operations::GitRequestProcessor<'a, Self> {
         git_operations::GitRequestProcessor::new(
             self,
+            connection,
+            admitted_git_runtime,
+            repository_id,
+            &self.updates,
             &self.env_runtime,
             &self.env_runtime_gate,
             &self.config,
@@ -2218,12 +2273,22 @@ impl AppServer {
 
     /// Installs the product-owned Connector credential service and change notifications.
     pub fn with_connector_service(
-        mut self,
+        self,
         connectors: Arc<connectors::ConnectorCredentialService>,
     ) -> Self {
-        self.connector_processor = self
-            .connector_processor
-            .with_service(connectors, Arc::clone(&self.updates));
+        let watcher = Arc::new(connector_runtime::ConnectorWatcher::start(
+            connectors.authority(),
+            Arc::clone(&self.updates),
+        ));
+        self.with_profile_connector_service(connectors, watcher)
+    }
+
+    pub(crate) fn with_profile_connector_service(
+        mut self,
+        connectors: Arc<connectors::ConnectorCredentialService>,
+        watcher: Arc<connector_runtime::ConnectorWatcher>,
+    ) -> Self {
+        self.connector_processor = self.connector_processor.with_service(connectors, watcher);
         self
     }
 
@@ -2990,7 +3055,7 @@ impl AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
-        self.admit_bound_turn_with_ide(thread, request, connection, document_mode, None)
+        self.admit_bound_turn_with_ide(thread, request, connection, document_mode, None, None)
     }
 
     pub(super) fn admit_bound_turn_with_ide(
@@ -3000,6 +3065,7 @@ impl AppServer {
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
+        model_routing: Option<ash_protocol::TurnModelRouting>,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
         let record = self.threads.thread_catalog_record(thread)?;
         let route = session_execution_router::SessionExecutionRouter::new(&self.threads)
@@ -3030,9 +3096,12 @@ impl AppServer {
             document_mode,
             expected_ide,
             || {
-                let result = self
-                    .threads
-                    .start_turn_in_directory(thread, request, directory)?;
+                let result = self.threads.start_turn_with_model_routing(
+                    thread,
+                    request,
+                    directory,
+                    model_routing,
+                )?;
                 let receipt = core_api::TurnReceipt {
                     turn_id: result.turn_id.clone(),
                     sequence: result.sequence,
@@ -3064,6 +3133,7 @@ impl AppServer {
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
     ) -> Result<workflows::Receipt, CoreError> {
+        let model_routing = request.model_routing;
         self.workflow_runtime().execute_with_turn_submission(
             thread,
             command,
@@ -3084,13 +3154,15 @@ impl AppServer {
                 activated_skills: request.activated_skills,
                 input: request.input,
             },
-            |thread, request| {
+            model_routing,
+            |thread, request, model_routing| {
                 self.admit_bound_turn_with_ide(
                     thread,
                     request,
                     connection,
                     document_mode,
                     expected_ide,
+                    model_routing,
                 )
             },
         )
@@ -3403,15 +3475,16 @@ impl AppServer {
         connection: &mut ConnectionState,
         request: &mut JsonRpcRequest<Value>,
         cancellation: &CancellationToken,
+        admitted_git_runtime: Option<&Arc<git_runtime::GitRuntime>>,
     ) -> Result<Value, RpcError> {
         if connection.is_initialized() && request.method.starts_with("git/") {
             if let Some(client) = git_operations::request_client(&request.params)? {
                 return crate::git_service::with_client(client, || {
-                    self.dispatch_request(connection, request, cancellation)
+                    self.dispatch_request(connection, request, cancellation, admitted_git_runtime)
                 });
             }
         }
-        self.dispatch_request(connection, request, cancellation)
+        self.dispatch_request(connection, request, cancellation, admitted_git_runtime)
     }
 
     fn check_code_session_access(&self, params: &Value) -> Result<(), RpcError> {
@@ -3463,6 +3536,7 @@ impl AppServer {
         connection: &mut ConnectionState,
         request: &mut JsonRpcRequest<Value>,
         cancellation: &CancellationToken,
+        admitted_git_runtime: Option<&Arc<git_runtime::GitRuntime>>,
     ) -> Result<Value, RpcError> {
         match client_method(&request.method) {
             Some(ClientMethod::TransportHello) => {
@@ -3480,6 +3554,13 @@ impl AppServer {
         if connection.code_sessions_only() {
             self.check_code_session_access(&request.params)?;
         }
+        let git = || {
+            self.git_processor(
+                connection,
+                admitted_git_runtime,
+                request.params.get("repositoryId").and_then(Value::as_str),
+            )
+        };
         match client_method(&request.method) {
             Some(ClientMethod::Initialize | ClientMethod::TransportHello) => {
                 unreachable!("startup requests are handled before the initialization gate")
@@ -3805,6 +3886,9 @@ impl AppServer {
             Some(ClientMethod::SessionThreadRead) => {
                 self.agent_processor().session_thread_read(&request.params)
             }
+            Some(ClientMethod::ToolResultTextRead) => self
+                .agent_processor()
+                .tool_result_text_read(&request.params),
             Some(ClientMethod::ThreadGoalGet) => {
                 self.agent_processor().thread_goal_get(&request.params)
             }
@@ -4774,146 +4858,81 @@ impl AppServer {
             }
             Some(ClientMethod::FsRename) => self.fs_processor().fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_processor().fs_delete(&request.params),
-            Some(ClientMethod::GitInit) => {
-                self.git_processor().git_init(&request.params, cancellation)
+            Some(ClientMethod::GitInit) => git().git_init(&request.params, cancellation),
+            Some(ClientMethod::GitCatalog) => git().git_catalog(&request.params),
+            Some(ClientMethod::GitCommand) => git().git_command(&request.params, cancellation),
+            Some(ClientMethod::GitIndexDiff) => git().git_index_diff(&request.params),
+            Some(ClientMethod::GitIndexEdit) => git().git_index_edit(&request.params),
+            Some(ClientMethod::GitRepositoryContexts) => {
+                git().git_repository_contexts(&request.params, cancellation)
             }
-            Some(ClientMethod::GitCatalog) => self.git_processor().git_catalog(&request.params),
-            Some(ClientMethod::GitCommand) => self
-                .git_processor()
-                .git_command(&request.params, cancellation),
-            Some(ClientMethod::GitIndexDiff) => {
-                self.git_processor().git_index_diff(&request.params)
+            Some(ClientMethod::GitSessionComparison) => {
+                git().git_session_comparison(&request.params, cancellation)
             }
-            Some(ClientMethod::GitIndexEdit) => {
-                self.git_processor().git_index_edit(&request.params)
-            }
-            Some(ClientMethod::GitRepositoryContexts) => self
-                .git_processor()
-                .git_repository_contexts(&request.params, cancellation),
-            Some(ClientMethod::GitRepositories) => self
-                .git_processor()
-                .git_repositories(connection, &request.params),
+            Some(ClientMethod::GitRepositories) => git().git_repositories(&request.params),
             Some(ClientMethod::GitClone) => {
-                self.git_processor()
-                    .git_clone(connection, &request.params, cancellation)
+                git().git_clone(connection, &request.params, cancellation)
             }
             Some(ClientMethod::GitCloneTo) => {
-                self.git_processor()
-                    .git_clone_to(connection, &request.params, cancellation)
+                git().git_clone_to(connection, &request.params, cancellation)
             }
-            Some(ClientMethod::GitCloneCancel) => self
-                .git_processor()
-                .git_clone_cancel(connection, &request.params),
-            Some(ClientMethod::GitStatus) => self.git_processor().git_status(&request.params),
-            Some(ClientMethod::GitStagedCommitPreview) => self
-                .git_processor()
-                .git_staged_commit_preview(&request.params),
-            Some(ClientMethod::GitTransport) => self
-                .git_processor()
-                .git_transport(&request.params, cancellation),
-            Some(ClientMethod::GitTransportCancel) => self
-                .git_processor()
-                .git_check_ignore_cancel(connection, &request.params),
-            Some(ClientMethod::GitVersion) => self.git_processor().git_version(&request.params),
-            Some(ClientMethod::GitPullPreflight) => {
-                self.git_processor().git_pull_preflight(&request.params)
+            Some(ClientMethod::GitCloneCancel) => {
+                git().git_clone_cancel(connection, &request.params)
             }
-            Some(ClientMethod::GitBlame) => self.git_processor().git_blame(&request.params),
-            Some(ClientMethod::GitFileHistory) => {
-                self.git_processor().git_file_history(&request.params)
+            Some(ClientMethod::GitStatus) => git().git_status(&request.params),
+            Some(ClientMethod::GitStagedCommitPreview) => {
+                git().git_staged_commit_preview(&request.params)
             }
-            Some(ClientMethod::GitCheckIgnore) => self
-                .git_processor()
-                .git_check_ignore(&request.params, cancellation),
-            Some(ClientMethod::GitCheckIgnoreCancel) => self
-                .git_processor()
-                .git_check_ignore_cancel(connection, &request.params),
-            Some(ClientMethod::GitChangesSummary) => {
-                self.git_processor().git_changes_summary(&request.params)
+            Some(ClientMethod::GitTransport) => git().git_transport(&request.params, cancellation),
+            Some(ClientMethod::GitTransportCancel) => {
+                git().git_check_ignore_cancel(connection, &request.params)
             }
-            Some(ClientMethod::GitTextDiff) => self.git_processor().git_text_diff(&request.params),
-            Some(ClientMethod::GitBranchList) => {
-                self.git_processor().git_branch_list(&request.params)
+            Some(ClientMethod::GitVersion) => git().git_version(&request.params),
+            Some(ClientMethod::GitPullPreflight) => git().git_pull_preflight(&request.params),
+            Some(ClientMethod::GitBlame) => git().git_blame(&request.params),
+            Some(ClientMethod::GitFileHistory) => git().git_file_history(&request.params),
+            Some(ClientMethod::GitCheckIgnore) => {
+                git().git_check_ignore(&request.params, cancellation)
             }
-            Some(ClientMethod::GitHistory) => self.git_processor().git_history(&request.params),
-            Some(ClientMethod::GitHistoryRefs) => {
-                self.git_processor().git_history_refs(&request.params)
+            Some(ClientMethod::GitCheckIgnoreCancel) => {
+                git().git_check_ignore_cancel(connection, &request.params)
             }
-            Some(ClientMethod::GitGraph) => self
-                .git_processor()
-                .git_graph(connection.connection_id, &request.params),
-            Some(ClientMethod::GitCommitChanges) => {
-                self.git_processor().git_commit_changes(&request.params)
+            Some(ClientMethod::GitChangesSummary) => git().git_changes_summary(&request.params),
+            Some(ClientMethod::GitTextDiff) => git().git_text_diff(&request.params),
+            Some(ClientMethod::GitBranchList) => git().git_branch_list(&request.params),
+            Some(ClientMethod::GitHistory) => git().git_history(&request.params),
+            Some(ClientMethod::GitHistoryRefs) => git().git_history_refs(&request.params),
+            Some(ClientMethod::GitGraph) => {
+                git().git_graph(connection.connection_id, &request.params)
             }
-            Some(ClientMethod::GitCompareChanges) => {
-                self.git_processor().git_compare_changes(&request.params)
+            Some(ClientMethod::GitCommitChanges) => git().git_commit_changes(&request.params),
+            Some(ClientMethod::GitCompareChanges) => git().git_compare_changes(&request.params),
+            Some(ClientMethod::GitCommitMessage) => git().git_commit_message(&request.params),
+            Some(ClientMethod::GitCommitDetails) => git().git_commit_details(&request.params),
+            Some(ClientMethod::GitCommitFile) => git().git_commit_file(&request.params),
+            Some(ClientMethod::GitChangeFile) => git().git_change_file(&request.params),
+            Some(ClientMethod::GitChangeFiles) => git().git_change_files(&request.params),
+            Some(ClientMethod::GitConflictFile) => git().git_conflict_file(&request.params),
+            Some(ClientMethod::GitCompleteConflict) => git().git_complete_conflict(&request.params),
+            Some(ClientMethod::GitBranchSwitch) => git().git_branch_switch(&request.params),
+            Some(ClientMethod::GitBranchCreate) => git().git_branch_create(&request.params),
+            Some(ClientMethod::GitBranchDelete) => git().git_branch_delete(&request.params),
+            Some(ClientMethod::GitWorktreeCreate) => git().git_worktree_create(&request.params),
+            Some(ClientMethod::GitWorktreeDelete) => git().git_worktree_delete(&request.params),
+            Some(ClientMethod::GitWorktreeList) => {
+                git().git_worktree_list(connection, &request.params)
             }
-            Some(ClientMethod::GitCommitMessage) => {
-                self.git_processor().git_commit_message(&request.params)
-            }
-            Some(ClientMethod::GitCommitDetails) => {
-                self.git_processor().git_commit_details(&request.params)
-            }
-            Some(ClientMethod::GitCommitFile) => {
-                self.git_processor().git_commit_file(&request.params)
-            }
-            Some(ClientMethod::GitChangeFile) => {
-                self.git_processor().git_change_file(&request.params)
-            }
-            Some(ClientMethod::GitChangeFiles) => {
-                self.git_processor().git_change_files(&request.params)
-            }
-            Some(ClientMethod::GitConflictFile) => {
-                self.git_processor().git_conflict_file(&request.params)
-            }
-            Some(ClientMethod::GitCompleteConflict) => {
-                self.git_processor().git_complete_conflict(&request.params)
-            }
-            Some(ClientMethod::GitBranchSwitch) => {
-                self.git_processor().git_branch_switch(&request.params)
-            }
-            Some(ClientMethod::GitBranchCreate) => {
-                self.git_processor().git_branch_create(&request.params)
-            }
-            Some(ClientMethod::GitBranchDelete) => {
-                self.git_processor().git_branch_delete(&request.params)
-            }
-            Some(ClientMethod::GitWorktreeCreate) => {
-                self.git_processor().git_worktree_create(&request.params)
-            }
-            Some(ClientMethod::GitWorktreeDelete) => {
-                self.git_processor().git_worktree_delete(&request.params)
-            }
-            Some(ClientMethod::GitWorktreeList) => self
-                .git_processor()
-                .git_worktree_list(connection, &request.params),
-            Some(ClientMethod::GitWorktreeResolve) => {
-                self.git_processor().git_worktree_resolve(&request.params)
-            }
-            Some(ClientMethod::GitStage) => self.git_processor().git_stage(&request.params),
-            Some(ClientMethod::GitUnstage) => self.git_processor().git_unstage(&request.params),
-            Some(ClientMethod::GitAIContribution) => {
-                self.git_processor().git_ai_contribution(&request.params)
-            }
-            Some(ClientMethod::GitReviewRemoval) => {
-                self.git_processor().git_review_removal(&request.params)
-            }
-            Some(ClientMethod::GitRemoveFiles) => {
-                self.git_processor().git_remove_files(&request.params)
-            }
-            Some(ClientMethod::GitDiscardWorktree) => {
-                self.git_processor().git_discard_worktree(&request.params)
-            }
-            Some(ClientMethod::GitCommit) => self.git_processor().git_commit(&request.params),
-            Some(ClientMethod::GitFetch) => self
-                .git_processor()
-                .git_fetch(&request.params, cancellation),
-            Some(ClientMethod::GitPull) => {
-                self.git_processor().git_pull(&request.params, cancellation)
-            }
-            Some(ClientMethod::GitPush) => {
-                self.git_processor().git_push(&request.params, cancellation)
-            }
+            Some(ClientMethod::GitWorktreeResolve) => git().git_worktree_resolve(&request.params),
+            Some(ClientMethod::GitStage) => git().git_stage(&request.params),
+            Some(ClientMethod::GitUnstage) => git().git_unstage(&request.params),
+            Some(ClientMethod::GitAIContribution) => git().git_ai_contribution(&request.params),
+            Some(ClientMethod::GitReviewRemoval) => git().git_review_removal(&request.params),
+            Some(ClientMethod::GitRemoveFiles) => git().git_remove_files(&request.params),
+            Some(ClientMethod::GitDiscardWorktree) => git().git_discard_worktree(&request.params),
+            Some(ClientMethod::GitCommit) => git().git_commit(&request.params),
+            Some(ClientMethod::GitFetch) => git().git_fetch(&request.params, cancellation),
+            Some(ClientMethod::GitPull) => git().git_pull(&request.params, cancellation),
+            Some(ClientMethod::GitPush) => git().git_push(&request.params, cancellation),
             Some(ClientMethod::FileGlob) => self
                 .search_processor()
                 .file_glob(&request.params, cancellation),
@@ -5485,10 +5504,10 @@ impl AppServer {
 }
 
 impl AppServer {
-    pub(crate) fn terminal_session_directory(
+    pub(crate) fn session_directory_from_workspace_id(
         dir_id: Option<&str>,
     ) -> Result<Option<(ash_protocol::SessionId, std::path::PathBuf)>, String> {
-        terminal_operations::TerminalRequestProcessor::<Self>::terminal_session_directory(dir_id)
+        environment_runtime::session_directory_from_workspace_id(dir_id)
     }
     pub(crate) fn poll_symphony(
         &self,

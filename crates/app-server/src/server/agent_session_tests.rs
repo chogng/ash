@@ -1738,6 +1738,161 @@ fn thread_read_and_subscribe_keep_transients_within_the_visible_running_history(
 }
 
 #[test]
+fn thread_tool_result_preview_reads_full_text_by_stable_byte_cursor() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        ash_state::SqliteThreadStore::open(&directory.path().join("history.sqlite3")).unwrap(),
+    );
+    let (sender, _) = mpsc::channel();
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(store)),
+        Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
+    );
+    let mut connection = server.connection();
+    crate::tests::initialize(&server, &mut connection);
+    let (session_id, thread_id) = subscription_test_thread(&server, &mut connection);
+    let threads = server.threads();
+    let started = threads
+        .start_turn(
+            &thread_id,
+            ash_core::StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                command_id: CommandId::new("large-tool-result-turn").unwrap(),
+                expected_sequence: core_api::SequenceExpectation::Exact(
+                    threads.read_thread(&thread_id).unwrap().sequence,
+                ),
+                model: None,
+                reasoning_effort: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_protocol::TurnInstructions::new(
+                    "fixture",
+                    "large-tool-result",
+                    "1",
+                    "Run a test tool.",
+                )
+                .unwrap(),
+                policy_revision: "test-policy".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![ash_protocol::UserInput::Text {
+                    text: "Run the fixture.".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let turn_id = started.turn_id;
+    let first = "a".to_owned() + &"输出🧪\n".repeat(17_000);
+    let last = "最后一段 🧪";
+    let expected = format!("{first}\n{last}");
+    for (name, output) in [
+        ("large-output", ash_core::ToolCallOutput::SuccessContent(vec![
+            ash_protocol::ContentPart::Text(first),
+            ash_protocol::ContentPart::ImageUrl {
+                url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=".into(),
+                detail: ash_protocol::ImageDetail::Auto,
+            },
+            ash_protocol::ContentPart::Text(last.into()),
+        ])),
+        ("small-output", ash_core::ToolCallOutput::Failure("short failure".into())),
+    ] {
+        let tool = threads.record_tool_call(&thread_id, &turn_id, ash_core::RecordToolCallRequest {
+            tool_call_id: None,
+            name: ToolName::new(name).unwrap(),
+            arguments_json: "{}".into(),
+            binding: None,
+        }).unwrap();
+        threads.record_tool_result(&thread_id, &turn_id, ash_core::RecordToolResultRequest { tool_call_id: tool.tool_call_id, output }).unwrap();
+    }
+    threads
+        .complete_turn(&thread_id, &turn_id, "done".into())
+        .unwrap();
+    let mut request_id = 10;
+    let mut request = |method: &str, params: Value| {
+        request_id += 1;
+        crate::tests::call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":request_id, "method":method, "params":params
+            }),
+        )
+    };
+    let history = |preview: bool| {
+        serde_json::json!({
+            "sessionId":session_id, "threadId":thread_id,
+            "history":{"type":"latest", "turnLimit":1, "previewToolResults":preview}
+        })
+    };
+    let full = request("session/thread/read", history(false));
+    let mut subscription = history(true);
+    subscription["afterSequence"] = 0.into();
+    let preview = request("session/thread/subscribe", subscription);
+    assert!(full.get("result").is_some(), "full history failed: {full}");
+    assert!(
+        preview.get("result").is_some(),
+        "preview subscription failed: {preview}"
+    );
+    let coordinates = preview["result"]["history"]["toolResultPreviews"]
+        .as_array()
+        .expect("large result must expose a deferred text coordinate");
+    assert_eq!(coordinates.len(), 1);
+    let source = &coordinates[0];
+    let ordinal = source["itemOrdinal"].as_u64().unwrap() as usize;
+    let full_item = &full["result"]["thread"]["turns"][0]["items"][ordinal];
+    let preview_item = &preview["result"]["thread"]["turns"][0]["items"][ordinal];
+    assert_eq!(preview_item["itemId"], full_item["itemId"]);
+    assert_eq!(preview_item["content"][1], full_item["content"][1]);
+    assert_eq!(preview_item["content"][1]["type"], "imageAttachment");
+    assert_eq!(preview_item["content"][2]["text"], "");
+    assert_eq!(full_item["content"][2]["text"], last);
+    let entry = preview["result"]["transcript"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["item"]["itemId"] == source["itemId"])
+        .unwrap();
+    assert_eq!(&entry["item"], preview_item);
+    assert!(preview.to_string().len() * 10 < full.to_string().len());
+
+    let mut offset = 0;
+    let mut actual = String::new();
+    loop {
+        let page = request(
+            "session/thread/toolResult/text/read",
+            serde_json::json!({
+                "sessionId":session_id, "threadId":thread_id, "source":source, "offset":offset
+            }),
+        );
+        let text = page["result"]["text"]
+            .as_str()
+            .unwrap_or_else(|| panic!("detail page failed: {page}"));
+        assert!(text.len() <= 64 * 1024);
+        actual.push_str(text);
+        let Some(next_offset) = page["result"]["nextOffset"].as_u64() else {
+            break;
+        };
+        assert_eq!(next_offset, actual.len() as u64);
+        assert!(next_offset > offset);
+        offset = next_offset;
+    }
+    assert_eq!(actual, expected);
+    for (owner, offset) in [(session_id.as_str(), 2), ("wrong-owner", 0)] {
+        let denied = request(
+            "session/thread/toolResult/text/read",
+            serde_json::json!({
+                "sessionId":owner, "threadId":thread_id, "source":source, "offset":offset
+            }),
+        );
+        assert!(denied.get("error").is_some(), "{denied}");
+    }
+}
+
+#[test]
 fn thread_naming_updates_the_durable_catalog_and_other_windows_without_opening_details() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("titles.sqlite3");
@@ -1885,7 +2040,7 @@ fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
     let config_path = directory.path().join("config.toml");
     std::fs::write(
         &config_path,
-        "[agent.threadTitleModel]\nprovider = 'openai'\nmodel = 'gpt-6-luna'\n",
+        "[agent.threadTitleModel]\nprovider = 'openai'\nmodel = 'gpt-6-luna'\nreasoningEffort = 'high'\n",
     )
     .unwrap();
     let config = Arc::new(
@@ -1939,8 +2094,13 @@ fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
     assert!(started.get("result").is_some(), "{started}");
     let (model, request) = invoked.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(model.model.as_str(), "gpt-6-luna");
+    assert_eq!(
+        request.reasoning.as_ref().map(|reasoning| reasoning.effort),
+        Some(ash_protocol::ReasoningEffort::High)
+    );
     assert!(request.tools.is_empty());
     assert_eq!(request.tool_choice, ash_protocol::ToolChoice::None);
+    assert_eq!(request.max_output_tokens, None);
     assert_eq!(
         call(
             &server,

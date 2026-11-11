@@ -1,0 +1,97 @@
+.ash-canvas-editor-toolbar {
+	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-actionBar-toggledBackground: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chromeForeground) 20%,
+		var(--ash-sessions-design-chromeBackground)
+	);
+	--ash-button-hoverBackground: var(--ash-actionBar-toggledBackground);
+	--ash-button-activeBackground: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chromeForeground) 30%,
+		var(--ash-sessions-design-chromeBackground)
+	);
+
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size160);
+	box-sizing: border-box;
+	max-width: calc(100% - 32px);
+	padding: var(--ash-spacing-size60);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-sessions-design-chromeBackground);
+	color: var(--ash-sessions-design-chromeForeground);
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+	overflow-x: auto;
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-canvas-editor-toolbar-group .ash-button.ash-button-standard {
+	width: 32px;
+	height: 32px;
+	padding: 0;
+}
+
+.ash-canvas-editor-toolbar-group
+	.ash-dropdown-with-primary-dropdown
+	> .ash-button {
+	width: 20px;
+	min-width: 0;
+}
+
+/* Menus live in the context-view host, outside the canvas DOM. */
+.ash-context-view-menu:has(> .ash-canvas-editor-menu) {
+	--ash-menu-background: var(--ash-sessions-design-chromeBackground);
+	--ash-menu-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-border: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chromeForeground) 20%,
+		var(--ash-sessions-design-chromeBackground)
+	);
+	--ash-menu-selectionBackground: color-mix(
+		in srgb,
+		var(--ash-sessions-design-chromeForeground) 20%,
+		var(--ash-sessions-design-chromeBackground)
+	);
+	--ash-menu-selectionForeground: var(--ash-sessions-design-chromeForeground);
+	--ash-muted-foreground: var(--ash-sessions-design-chromeForeground);
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+/* Canvas editor menus stay dark even when the window uses the light theme. */
+[data-color-scheme="light"]
+	.ash-context-view-menu:has(> .ash-canvas-editor-menu) {
+	--ash-menu-check-foreground: color-mix(
+		in srgb,
+		var(--ash-accent-foreground) 60%,
+		var(--ash-sessions-design-chromeForeground)
+	);
+}
+
+[data-color-scheme="hcDark"]
+	.ash-context-view-menu:has(> .ash-canvas-editor-menu),
+[data-color-scheme="hcLight"]
+	.ash-context-view-menu:has(> .ash-canvas-editor-menu) {
+	--ash-border: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+.ash-canvas-editor-toolbar-group {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-canvas-editor-toolbar-workspace {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+[data-color-scheme="hcDark"] .ash-canvas-editor-toolbar,
+[data-color-scheme="hcLight"] .ash-canvas-editor-toolbar {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}

@@ -129,11 +129,10 @@ pub(super) fn write(
     Ok(())
 }
 
-pub(super) fn read(
+fn read_header(
     connection: &Connection,
     thread_id: &ThreadId,
-    window: &ThreadHistoryWindow,
-) -> Result<Option<ThreadHistoryPage>, ThreadStoreError> {
+) -> Result<Option<Header>, ThreadStoreError> {
     let row = connection.query_row(
         "SELECT cache.sequence, cache.header_json, cache.header_digest, streams.current_sequence
          FROM thread_history_index AS cache JOIN thread_streams AS streams USING(thread_id) WHERE thread_id = ?1",
@@ -145,7 +144,7 @@ pub(super) fn read(
     if sequence != current || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
         return Ok(None);
     }
-    let Ok(mut header) = serde_json::from_str::<Header>(&json) else {
+    let Ok(header) = serde_json::from_str::<Header>(&json) else {
         return Ok(None);
     };
     if header.thread.sequence != from_sql_integer(current).map_err(error)?
@@ -154,6 +153,47 @@ pub(super) fn read(
     {
         return Ok(None);
     }
+    Ok(Some(header))
+}
+
+pub(super) fn read_item(
+    connection: &Connection,
+    session_id: &ash_protocol::SessionId,
+    thread_id: &ThreadId,
+    turn_id: &ash_protocol::TurnId,
+    ordinal: u32,
+) -> Result<Option<Option<ash_protocol::ThreadItem>>, ThreadStoreError> {
+    let Some(header) = read_header(connection, thread_id)? else {
+        return Ok(None);
+    };
+    if header.thread.session_id != *session_id {
+        return Ok(Some(None));
+    }
+    let row = connection.query_row(
+        "SELECT item_json, item_digest FROM thread_history_items WHERE thread_id = ?1 AND turn_id = ?2 AND ordinal = ?3",
+        params![thread_id.as_str(), turn_id.as_str(), ordinal],
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+    ).optional().map_err(error)?;
+    let Some((json, digest)) = row else {
+        return Ok(Some(None));
+    };
+    let Ok(item) = serde_json::from_str::<ash_protocol::ThreadItem>(&json) else {
+        return Ok(None);
+    };
+    if item.turn_id() != turn_id || ContentDigest::sha256(json.as_bytes()).as_str() != digest {
+        return Ok(None);
+    }
+    Ok(Some(Some(item)))
+}
+
+pub(super) fn read(
+    connection: &Connection,
+    thread_id: &ThreadId,
+    window: &ThreadHistoryWindow,
+) -> Result<Option<ThreadHistoryPage>, ThreadStoreError> {
+    let Some(mut header) = read_header(connection, thread_id)? else {
+        return Ok(None);
+    };
     let (end, limit) = match window {
         ThreadHistoryWindow::Latest { turn_limit } => {
             (header.turn_count, turn_limit.get() as usize)
@@ -261,6 +301,7 @@ fn turn_metadata(turn: &ash_protocol::Turn) -> ash_protocol::Turn {
         instructions: turn.instructions.clone(),
         directory: turn.directory.clone(),
         model: turn.model.clone(),
+        model_routing: turn.model_routing,
         reasoning_effort: turn.reasoning_effort,
         advisor: turn.advisor.clone(),
         tool_profile: turn.tool_profile.clone(),

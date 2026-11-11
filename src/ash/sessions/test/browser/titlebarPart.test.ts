@@ -45,7 +45,7 @@ import { BlockedSessionsIndicatorModel } from '../../contrib/sessions/browser/bl
 import { showBlockedSessionsList } from '../../contrib/sessions/browser/blockedSessionsList.js';
 import { BlockedSessionsCIFixModel } from '../../contrib/sessions/browser/blockedSessionsCIFixModel.js';
 import type { IBlockedSession } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
-import { ChecksOperationService } from '../../contrib/changes/browser/checksOperationService.js';
+import { ChecksOperationService } from '../../contrib/github/browser/checksOperationService.js';
 import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import type { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { URI } from '../../../base/common/uri.js';
@@ -292,7 +292,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	const hosts = resources.add(createDesktopEditorTestServices(editorServices, {}, browser.window.document));
 	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
-	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService));
+	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor, editorServices.get(IWorkspaceContextService), constObservable(false));
 	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
 	const openMenus = (): number => browser.window.document.querySelectorAll('.ash-context-view [role="menu"]').length;
@@ -406,6 +406,7 @@ function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId,
 	const storage = options.storageService ?? ownedStorage!;
 	const services = layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IContextKeyService, layoutTestResources.add(new ContextKeyService()));
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {
 		layout.createWorkbenchLayout(parts);

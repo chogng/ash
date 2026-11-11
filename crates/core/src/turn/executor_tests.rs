@@ -2537,7 +2537,15 @@ fn streaming_delta_and_final_item_share_one_identity() {
     });
     let snapshot = threads.read_thread(&thread_id).unwrap();
     let completed_item_id = snapshot.items.iter().find_map(|item| match item {
-        ThreadItem::AgentMessage { item_id, .. } => Some(item_id.clone()),
+        ThreadItem::AgentMessage {
+            item_id, citations, ..
+        } => {
+            assert_eq!(
+                citations.as_deref(),
+                Some(chunked_model_citations().as_slice())
+            );
+            Some(item_id.clone())
+        }
         _ => None,
     });
 
@@ -3592,6 +3600,20 @@ impl ThreadUpdateSink for RecordingUpdates {
 
 struct ChunkedModel;
 
+fn chunked_model_citations() -> Vec<ash_protocol::ResponseCitation> {
+    vec![
+        ash_protocol::ResponseCitation::Web {
+            url: "https://example.test/hello".into(),
+            title: "Hello".into(),
+        },
+        ash_protocol::ResponseCitation::Code {
+            url: "https://github.com/example/repo/blob/main/hello.rs".into(),
+            license: "MIT".into(),
+            snippet: "fn hello() {}".into(),
+        },
+    ]
+}
+
 impl ModelService for ChunkedModel {
     fn invoke(
         &self,
@@ -3611,7 +3633,15 @@ impl ModelService for ChunkedModel {
     ) -> Result<ModelResponse, CoreError> {
         sink.emit(ModelStreamEvent::TextDelta("hel".into()))?;
         sink.emit(ModelStreamEvent::TextDelta("lo".into()))?;
-        Ok(text_response("hello"))
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Message(ash_protocol::AssistantMessage {
+                id: "completion".into(),
+                text: "hello".into(),
+                phase: None,
+                citations: Some(chunked_model_citations()),
+            })],
+            ..text_response("hello")
+        })
     }
 }
 
@@ -3935,6 +3965,7 @@ impl ToolService for InteractiveTool {
         _: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let outcome = interactions.request_user_input(RequestUserInput {
+            plan_review: None,
             questions: vec![UserInputQuestion {
                 required: true,
                 id: "city".into(),

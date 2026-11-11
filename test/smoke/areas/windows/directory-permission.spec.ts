@@ -5,7 +5,7 @@ import type { DialogRequest } from '../../../../src/ash/platform/dialogs/common/
 for (const locale of ['en', 'zh-CN']) {
 	test.describe(`directory permission presentation (${locale})`, () => {
 		test.use({ openWorkspace: false, electronUserSettings: { 'workbench.locale': locale } });
-		test('Desktop IPC identifies the remote environment, preserves the path and retains local wording', { tag: ['@electron-ui'] }, async ({ workbench }) => {
+		test('Desktop IPC scopes the IDE permission prompt to the IDE and preserves folder details', { tag: ['@electron-ui'] }, async ({ workbench }) => {
 			const prompts = await workbench.page.evaluate(async () => {
 				const bridge = (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer;
 				const remote = await bridge.invoke('ash:host:directoryPermissionPrompt', {
@@ -23,6 +23,11 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(prompts.remote.detail).toContain(locale === 'zh-CN' ? '此选择控制 Ash 对该环境中此文件夹的访问权限' : 'This choice controls Ash access to this folder in that environment');
 			expect(prompts.local.detail).toContain(locale === 'zh-CN' ? '受限模式下可编辑和保存文件' : 'You can edit and save files in Restricted Mode');
 			expect(prompts.local.detail).toContain('/synthetic/local-project');
+			const agents = await workbench.openAgentsWindow('electron');
+			await expect(agents.evaluate(() => {
+				const bridge = (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer;
+				return bridge.invoke('ash:host:directoryPermissionPrompt', { path: '/synthetic/local-project' });
+			})).rejects.toThrow(/Untrusted renderer IPC sender/);
 		});
 	});
 }

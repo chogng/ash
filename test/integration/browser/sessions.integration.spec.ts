@@ -395,7 +395,7 @@ for (const locale of ['en', 'zh-CN'])
 			await mode.click();
 			await expect(mode).toHaveAttribute('aria-pressed', 'true');
 			await expect(
-				pane.locator(mode === code ? '.ash-sessions-chat-input' : '.ash-sessions-cowork-input'),
+				pane.locator(mode === code ? '.ash-sessions-chat-input' : '.ash-sessions-native-chat-input'),
 			).toBeVisible();
 			const sidebar = await page.locator('[data-part="sidebar"]').boundingBox();
 			const bounds = await modes.boundingBox();
@@ -900,10 +900,10 @@ test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ pag
 	await expect(creator.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'artifacts');
 	await expect(creator).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
-	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await new QuickAccess(page).runCommand('sessions.creator.open.design');
 	const canvas = page.getByRole('region', { name: 'Design canvas' });
 	await expect(canvas).toBeVisible();
-	const tools = page.locator('.ash-design-tools-widget');
+	const tools = page.locator('.ash-canvas-editor-toolbar');
 	const split = tools.locator('.ash-dropdown-with-primary-dropdown > .ash-button').first();
 	await expect(split).toHaveCSS('width', '20px');
 	await expect(split).toHaveCSS('height', '32px');
@@ -1644,9 +1644,9 @@ test.describe('Sessions settings components', () => {
 		const sharedSettings = page.locator('.ash-settings-editor');
 		await expect(sharedSettings).toBeVisible();
 		await expect(sharedSettings.getByRole('searchbox')).toBeFocused();
-		await sharedSettings.getByRole('searchbox').fill('cowork.defaultmodel');
+		await sharedSettings.getByRole('searchbox').fill('sessions.chat.defaultModel');
 		await expect(
-			sharedSettings.locator('[data-settings-item-id="cowork.defaultmodel"]').getByRole('textbox'),
+			sharedSettings.locator('[data-settings-item-id="sessions.chat.defaultModel"]').getByRole('textbox'),
 		).toBeVisible();
 		await sharedSettings.getByRole('searchbox').fill('');
 		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true });

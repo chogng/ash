@@ -438,6 +438,7 @@ fn queue_request(
                 command_interpretation: None,
                 mode,
                 model: None,
+                model_routing: None,
                 reasoning_effort: None,
                 command_id,
                 session_id: scope.session_id().clone(),

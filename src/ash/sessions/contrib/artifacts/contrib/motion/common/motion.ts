@@ -1,4 +1,4 @@
-import type { DesignKeyframe, DesignShape } from '../../../common/model/document.js';
+import type { DesignKeyframe, DesignShape } from '../../../common/model/designDocument.js';
 
 /** Linear interpolation matches the CSS animation emitted by the code generator. */
 export function sampleDesignMotion(shape: DesignShape, time: number): DesignKeyframe {

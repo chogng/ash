@@ -1,5 +1,5 @@
 import { BulkTextEdits } from './bulkTextEdits.js';
-import { BulkFileEdits } from './bulkFileEdits.js';
+import { BulkFileEdits, sameFileBytes } from './bulkFileEdits.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { normalizeTextLineEndings } from '../../../../editor/common/core/textChange.js';
 import { TextModel, type TextModelUndoRedoSnapshot } from '../../../../editor/common/model/textModel.js';
@@ -19,6 +19,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { Extensions, type IConfigurationRegistry, ConfigurationScope } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
+import type { VSBuffer } from '../../../../base/common/buffer.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
 const autoSaveSetting = Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<boolean>({
@@ -55,6 +56,7 @@ interface AcquiredModel {
 interface VirtualFile {
 	exists: boolean;
 	text: string | undefined;
+	bytes?: Uint8Array;
 	synthetic: boolean;
 	document?: AcquiredModel;
 	serializedText?: string;
@@ -74,6 +76,7 @@ interface PreparedResourceEdit {
 	readonly applies: boolean;
 	readonly sourceBefore?: string;
 	readonly targetBefore?: string;
+	readonly binaryCreate?: { readonly contents: Uint8Array; readonly before?: Uint8Array; };
 }
 
 type PreparedEdit = PreparedTextEdit | PreparedResourceEdit;
@@ -154,12 +157,13 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			// cursor history and reference metadata on that exact model's undo stack.
 			return this.applyToEmbeddedEditor(options.editor!, editorModel, edits, signal);
 		}
-		const edit = sourceEdit && !previewed ? sourceEdit : await toLanguageWorkspaceEdit(edits);
+		const binaryCreates = new Map<number, VSBuffer>();
+		const edit = sourceEdit && !previewed ? sourceEdit : await toLanguageWorkspaceEdit(edits, binaryCreates);
 		throwIfCancelled(signal);
 		if (edit.entries.length === 0) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
 		// Approval transfers ownership to the transaction. Its own document changes can retire
 		// the originating language request, which must not cancel an approved multi-file commit.
-		const result: WorkspaceEditResult = await this.applyTransaction(edit, previewed ? new AbortController().signal : signal, options);
+		const result: WorkspaceEditResult = await this.applyTransaction(edit, binaryCreates, previewed ? new AbortController().signal : signal, options);
 		if (result.resources.length === 0) return { ariaSummary: localize('bulkEdit.noneApplied', 'No edits were applied'), isApplied: false };
 		let group: { readonly edits: WorkspaceEditResult[]; reverted: boolean; };
 		if (options.undoRedoGroupId !== undefined) {
@@ -239,7 +243,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		};
 	}
 
-	private async applyTransaction(value: LanguageWorkspaceEdit, signal: AbortSignal, options: IBulkEditOptions): Promise<WorkspaceEditResult> {
+	private async applyTransaction(value: LanguageWorkspaceEdit, binaryCreates: ReadonlyMap<number, VSBuffer>, signal: AbortSignal, options: IBulkEditOptions): Promise<WorkspaceEditResult> {
 		const progress = options.progress;
 		const edit = normalizeLanguageWorkspaceEdit(value);
 		const states = new Map<string, VirtualFile>();
@@ -247,9 +251,9 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		const prepared: PreparedEdit[] = [];
 		const touched = new Map<string, URI>();
 		try {
-			for (const entry of edit.entries) {
+			for (const [index, entry] of edit.entries.entries()) {
 				throwIfCancelled(signal, 'Workspace edit was cancelled');
-				prepared.push(await this.preflight(entry, states, acquired, signal));
+				prepared.push(await this.preflight(entry, states, acquired, signal, binaryCreates.get(index)?.buffer));
 			}
 			const operations = prepared.filter(operation => operation.kind === 'textDocument' ? operation.before !== operation.after : operation.applies);
 			for (const operation of operations) {
@@ -344,6 +348,11 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 				}
 				continue;
 			}
+			if (expected.bytes) {
+				const actual = (await this.files.readFileBytes(resource)).bytes;
+				if (!sameFileBytes(actual, expected.bytes)) throw new WorkspaceEditConflictError(`Workspace edit target '${resource.toString()}' changed before replacement`);
+				continue;
+			}
 			const actual = await this.fileState(resource, new Map());
 			if (actual.exists !== expected.exists || (expected.exists && actual.text !== expected.text)) {
 				throw new Error(`Workspace edit target '${resource.toString()}' changed before replacement`);
@@ -351,7 +360,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 		}
 	}
 
-	private async preflight(entry: LanguageWorkspaceEditEntry, states: Map<string, VirtualFile>, acquired: Map<string, AcquiredModel>, signal: AbortSignal): Promise<PreparedEdit> {
+	private async preflight(entry: LanguageWorkspaceEditEntry, states: Map<string, VirtualFile>, acquired: Map<string, AcquiredModel>, signal: AbortSignal, bytes?: Uint8Array): Promise<PreparedEdit> {
 		switch (entry.kind) {
 			case 'textDocument': {
 				const state = await this.textState(entry.resource, states, acquired, signal);
@@ -371,9 +380,25 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 			}
 			case 'create': {
 				this.requireClosed(entry.resource, 'create');
+				if (bytes) {
+					const key = entry.resource.toString();
+					const previous = states.get(key);
+					let exists = previous?.exists;
+					if (exists === undefined) {
+						try { await this.files.stat(entry.resource); exists = true; }
+						catch (error) { if (!(error instanceof FileNotFoundError)) throw error; exists = false; }
+					}
+					if (exists && entry.existing === 'error') throw new Error(`Workspace create target '${key}' already exists`);
+					if (exists && entry.existing === 'ignore') return { kind: entry.kind, entry, applies: false };
+					const before = !exists ? undefined : previous?.bytes ?? (previous?.text === undefined
+						? (await this.files.readFileBytes(entry.resource)).bytes : new TextEncoder().encode(previous.text));
+					states.set(key, { exists: true, text: undefined, bytes, synthetic: true });
+					return { kind: entry.kind, entry, applies: true, binaryCreate: { contents: bytes, before } };
+				}
 				const target = await this.fileState(entry.resource, states);
 				if (target.exists && entry.existing === 'error') throw new Error(`Workspace create target '${entry.resource.toString()}' already exists`);
 				const applies = !target.exists || entry.existing === 'overwrite';
+				if (applies && target.bytes) throw new Error(`Cannot replace binary workspace create target '${entry.resource.toString()}' with a text edit`);
 				const targetBefore = target.exists ? target.text : undefined;
 				if (applies) states.set(entry.resource.toString(), { exists: true, text: entry.contents ?? '', synthetic: true });
 				return { kind: entry.kind, entry, applies, targetBefore };
@@ -408,7 +433,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 	private async textState(resource: URI, states: Map<string, VirtualFile>, acquired: Map<string, AcquiredModel>, signal: AbortSignal): Promise<VirtualFile> {
 		const key = resource.toString();
 		const existing = states.get(key);
-		if (existing && !existing.exists) return existing;
+		if (existing && (!existing.exists || existing.bytes)) return existing;
 		let model = acquired.get(key);
 		if (!model) {
 			const wasOpen = this.workingCopies.get(resource).length > 0;
@@ -466,7 +491,7 @@ export class BulkEditService extends Disposable implements IBulkEditService {
 	}
 }
 
-export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): Promise<LanguageWorkspaceEdit> {
+export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[], binaryCreates?: Map<number, VSBuffer>): Promise<LanguageWorkspaceEdit> {
 	const entries: LanguageWorkspaceEditEntry[] = [];
 	const groups = new Map<string, { kind: 'textDocument'; resource: ResourceTextEdit['resource']; version?: number; expectedText?: string; edits: ResourceTextEdit['textEdit'][]; }>();
 	let snapshot: LanguageTextDocumentEdit | undefined;
@@ -497,7 +522,17 @@ export async function toLanguageWorkspaceEdit(edits: readonly ResourceEdit[]): P
 		snapshot = undefined;
 		if (!(edit instanceof ResourceFileEdit)) throw new TypeError('Unknown resource edit');
 		if (edit.oldResource && edit.newResource) entries.push({ kind: 'rename', source: edit.oldResource, target: edit.newResource, existing: existing(edit.options) });
-		else if (edit.newResource) entries.push({ kind: 'create', resource: edit.newResource, existing: existing(edit.options), ...(edit.options.contents ? { contents: (await edit.options.contents).toString() } : {}) });
+		else if (edit.newResource) {
+			const data = await edit.options.contents;
+			let contents: string | undefined;
+			if (data) {
+				// The language edit remains a text projection. Keep non-text bytes
+				// in the local transaction, indexed by their ordered create step.
+				try { contents = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data.buffer); }
+				catch { binaryCreates?.set(entries.length, data); }
+			}
+			entries.push({ kind: 'create', resource: edit.newResource, existing: existing(edit.options), ...(contents !== undefined ? { contents } : {}) });
+		}
 		else entries.push({ kind: 'delete', resource: edit.oldResource!, missing: edit.options.ignoreIfNotExists ? 'ignore' : 'error', mode: edit.options.recursive ? 'recursive' : 'fileOrEmptyDirectory' });
 	}
 	flushText();

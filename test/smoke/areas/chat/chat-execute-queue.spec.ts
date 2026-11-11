@@ -7,6 +7,144 @@ import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
 test.use({ gitRepository: true });
 
+test('Agents Code reorders durable queued messages with the keyboard and by dragging', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }) => {
+	const model = { provider: 'custom-reorder-queue-fixture', model: 'reorder-queue-model' };
+	const server = createServer((request, response) => {
+		if (request.method === 'GET') {
+			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
+			return;
+		}
+		request.resume();
+		response.writeHead(200, { 'content-type': 'text/event-stream' });
+		response.write('data: {"choices":[{"index":0,"delta":{"content":"Queue fixture is running."}}]}\n\n');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		const page = await workbench.openAgentsWindow(target.kind);
+		connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
+		const { client } = connection;
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Missing queue fixture port');
+		const config = await client.request(methods['config/read'], {});
+		await client.request(methods['provider/configure'], {
+			commandId: 'reorder-queue-provider', expectedRevision: config.revision, config: {
+				connection: model.provider, provider: model.provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+				custom: { name: 'Queue reorder fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+				modelContext: { [model.model]: { contextWindow: 272_000 } },
+			},
+		});
+		await client.request(methods['provider/apiKey/set'], { connection: model.provider, apiKey: 'isolated-queue-key' });
+		const { session } = await client.request(methods['session/create'], {
+			commandId: 'reorder-queue-session', kind: 'code', title: 'Reorder queue fixture', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: testWorkspace.directory },
+		});
+		const sessionId = session.sessionId;
+		const threadId = session.threads[0]!.threadId;
+		const read = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;
+		const queue = async () => (await client.request(methods['queue/list'], { sessionId, threadId })).messages;
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Reorder queue fixture' }).click();
+		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await expect(chat).toHaveAttribute('data-thread-id', threadId);
+		await client.request(methods['session/request'], {
+			commandId: 'reorder-queue-active', sessionId, request: {
+				type: 'startTurn', threadId, expectedSequence: (await read()).sequence, mode: 'ask', model,
+				input: [{ type: 'text', text: 'Wait for pending queue fixtures.' }],
+			},
+		});
+		await expect(chat).toContainText('Queue fixture is running.');
+		for (const [commandId, text] of [['queue-first', 'First queued fixture'], ['queue-second', 'Second queued fixture']]) {
+			await client.request(methods['queue/enqueue'], {
+				commandId, sessionId, threadId, mode: 'ask', model,
+				input: [{ type: 'text', text }, { type: 'context', name: 'Frozen context', content: 'Keep these bytes.' }],
+			});
+		}
+		const original = await queue();
+		const rows = chat.locator('[data-item-id^="queue:"]');
+		const first = rows.filter({ hasText: 'First queued fixture' });
+		const second = rows.filter({ hasText: 'Second queued fixture' });
+		const reorder = first.getByRole('button', { name: 'Reorder queued message', exact: true });
+		const order = async () => (await queue()).map(message => message.request.commandId);
+		await expect(rows.first()).toContainText('First queued fixture');
+		await reorder.press('Enter');
+		await page.getByRole('menuitem', { name: 'Move later', exact: true }).press('Enter');
+		await expect.poll(order).toEqual(['queue-second', 'queue-first']);
+		await expect(rows.first()).toContainText('Second queued fixture');
+		await reorder.dragTo(second);
+		await expect.poll(order).toEqual(['queue-first', 'queue-second']);
+		await expect(rows.first()).toContainText('First queued fixture');
+		expect((await queue()).map(message => message.request)).toEqual(original.map(message => message.request));
+	} finally {
+		await connection?.close();
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
+test('Agents Code sends Auto through the App Server and records the default fallback', { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }) => {
+	const provider = 'custom-auto-routing-fixture';
+	const model = { provider, model: 'auto-routing-fixture' };
+	const requests: string[] = [];
+	const server = createServer(async (request, response) => {
+		if (request.method === 'GET') {
+			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
+			return;
+		}
+		const chunks = [];
+		for await (const chunk of request) chunks.push(chunk);
+		const body = JSON.parse(Buffer.concat(chunks).toString());
+		requests.push(body.model);
+		response.writeHead(200, { 'content-type': 'text/event-stream' });
+		response.end('data: {"id":"auto","choices":[{"index":0,"delta":{"content":"Automatic reply"},"finish_reason":null}]}\n\ndata: {"id":"auto","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		const page = await workbench.openAgentsWindow(target.kind);
+		connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
+		const { client } = connection;
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Missing Auto routing fixture port');
+		const config = await client.request(methods['config/read'], {});
+		await client.request(methods['provider/configure'], {
+			commandId: 'auto-routing-provider', expectedRevision: config.revision, config: {
+				connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+				custom: { name: 'Auto routing fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+				modelContext: { [model.model]: { contextWindow: 272_000 } },
+			}
+		});
+		await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-auto-routing-key' });
+		const configured = await client.request(methods['config/read'], {});
+		await client.request(methods['config/update'], { commandId: 'auto-routing-default', expectedRevision: configured.revision, model });
+		const created = await client.request(methods['session/create'], {
+			commandId: 'auto-routing-session', kind: 'code', title: 'Auto routing conversation', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: testWorkspace.directory }
+		});
+		const { sessionId, threads: [{ threadId }] } = created.session;
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list-item').filter({ hasText: 'Auto routing conversation' }).click();
+		const chat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await expect(chat).toHaveAttribute('data-thread-id', threadId);
+		await new Workbench(page).quickaccess.runCommand('workbench.action.chat.openModelPicker');
+		const auto = page.getByRole('dialog', { name: 'Choose a chat model' }).getByRole('switch', { name: 'Auto', exact: true });
+		if (!await auto.isChecked()) await auto.press('Space');
+		await expect(auto).toBeChecked();
+		await page.keyboard.press('Escape');
+		await chat.locator('.stanza-editor-input').focus();
+		await page.keyboard.insertText('Use automatic routing');
+		await page.keyboard.press('Enter');
+		await expect.poll(async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread.turns[0]).toMatchObject({
+			status: 'completed', modelRouting: 'fallback', model,
+		});
+		expect(requests).toEqual([model.model]);
+	} finally {
+		await connection?.close();
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
 for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 	test(`${surface} sends, queues, steers and stops through the owning execution model`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);
@@ -71,7 +209,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.locator('[data-action-id="workbench.action.chat.showHistory"] button').click();
 				await page.getByRole('option').filter({ hasText: 'Execution queue conversation' }).click();
 			}
-			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-cowork'}` : '.ash-chat-view-pane .ash-chat:visible');
+			const chat = page.locator(agents ? `.ash-sessions-chat-slot.active:visible ${surface === 'Agents Code' ? '.ash-chat' : '.ash-native-chat'}` : '.ash-chat-view-pane .ash-chat:visible');
 			const composer = chat.locator('.ash-chat-input-part');
 			const draft = composer.locator('.stanza-editor-input');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
@@ -129,7 +267,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			const initialTurn = (await read()).turns.at(-1)!;
 			expect(initialTurn.mode).toBe(surface === 'Agents Cowork' ? 'agent' : 'ask');
 			expect(initialTurn.approvalMode).toBe('auto');
-			await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
+			await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
 			await window.quickaccess.runCommand('workbench.action.chat.nextCodeBlock');
 			const codeInputs = chat.locator('.ash-chat-code-block .stanza-editor-input');
 			await expect(codeInputs.nth(0)).toBeFocused();
@@ -143,7 +281,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			// Both public entries create an independent persisted branch while the source stream stays active.
 			for (const entry of ['menu', 'slash'] as const) {
 				await expect(chat).toHaveClass(/has-conversation/);
-				await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
+				await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
 				await draft.focus();
 				await page.keyboard.insertText(`${entry === 'slash' ? '/btw ' : ''}side-question-fixture ${entry}`);
 				if (entry === 'menu') {
@@ -172,7 +310,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.screenshot({ path: testInfo.outputPath(`side-chat-${entry}.png`) });
 				await chat.locator('.ash-chat-side-chat-origin').getByRole('button').click();
 				await expect(chat).toHaveAttribute('data-thread-id', threadId);
-				await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
+				await expect(chat.locator('.ash-chat-list-widget, .ash-native-chat-list-widget')).toContainText('Controlled execution is running.');
 				await expect(composer.locator('.view-lines')).not.toContainText('side-question-fixture');
 			}
 

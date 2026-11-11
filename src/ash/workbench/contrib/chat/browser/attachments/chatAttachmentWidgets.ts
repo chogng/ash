@@ -48,7 +48,7 @@ import { isRemoteResource } from '../../../../../platform/remote/common/remote.j
 import { basename, dirname } from '../../../../../base/common/resources.js';
 import { extname } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { ImagePreviewPopup, type IImagePreviewAnnotationTarget } from '../../../mediaPreview/browser/imagePreviewPopup.js';
+import { ImagePreviewPopup, type IImagePreviewAnnotationTarget, type IImagePreviewGallery } from '../../../mediaPreview/browser/imagePreviewPopup.js';
 import { decodeBase64 } from '../../../../../base/common/buffer.js';
 
 /** Generic sources keep their original navigation; source-less contexts expose their saved-content intent. */
@@ -536,6 +536,7 @@ export type IChatImageAnnotationTarget = IImagePreviewAnnotationTarget;
 /** Displays the image supplied by the attachment owner in either input presentation. */
 export class ImageAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
 	readonly element: HTMLElement;
+	private readonly source: Button;
 	private readonly previewResolved = this._register(new Emitter<boolean>());
 	readonly onDidResolvePreview = this.previewResolved.event;
 	private readonly deleted = this._register(new Emitter<globalThis.Event>());
@@ -554,6 +555,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 			allowProviderImageUrls?: boolean;
 			retryOnFailure?: boolean;
 			imageAnnotationTarget?: () => IChatImageAnnotationTarget | undefined;
+			imagePreviewGallery?: IImagePreviewGallery;
 		},
 		container: HTMLElement,
 		@IInstantiationService instantiation: IInstantiationService,
@@ -574,7 +576,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 		}
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
-		const source = this._register(new Button(element, {
+		const source = this.source = this._register(new Button(element, {
 			...defaultButtonStyles,
 			label: tile ? '' : attachment.name,
 			ariaLabel: previewLabel,
@@ -611,7 +613,7 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 			this.preview.value = resources;
 			source.domNode.focus({ preventScroll: true });
 			const preview = instantiation.createInstance(ImagePreviewPopup,
-				{ name: attachment.name, blob: image, url: thumbnail.src }, source.domNode, resources, options.imageAnnotationTarget?.(),
+				{ name: attachment.name, blob: image, url: thumbnail.src, gallery: options.imagePreviewGallery }, source.domNode, resources, options.imageAnnotationTarget?.(),
 				() => { if (this.preview.value === resources) this.preview.clear(); });
 			if (preview.show()) this.opened.fire();
 			else this.preview.clear();
@@ -721,6 +723,12 @@ export class ImageAttachmentWidget extends Disposable implements IChatAttachment
 	}
 
 	closePreview(): void { this.preview.clear(); }
+
+	focusPreview(): boolean {
+		if (!this.source.enabled || this.source.domNode.hidden) return false;
+		this.source.domNode.focus({ preventScroll: true });
+		return true;
+	}
 }
 
 /** Owns frozen terminal rendering and the optional action back to its original terminal. */

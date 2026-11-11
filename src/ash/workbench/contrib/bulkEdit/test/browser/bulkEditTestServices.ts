@@ -124,42 +124,48 @@ export class MemoryFileService implements IFileSystemProvider {
 	public watch(): IDisposable { return Disposable.None; }
 
 	readonly onDidChangeFiles = Event.None;
-	private readonly resources = new Map<string, string>();
+	private readonly resources = new Map<string, Uint8Array>();
 	failRename = false;
 
 	constructor(resources: readonly (readonly [URI, string])[]) {
-		for (const [resource, text] of resources) this.resources.set(resource.toString(), text);
+		for (const [resource, text] of resources) this.resources.set(resource.toString(), new TextEncoder().encode(text));
 	}
 
 	has(resource: URI): boolean { return this.resources.has(resource.toString()); }
-	text(resource: URI): string { const text = this.resources.get(resource.toString()); if (text === undefined) throw new Error(`Unknown resource ${resource.toString()}`); return text; }
-	async stat(resource: URI) { if (!this.has(resource)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.text(resource).length, readonly: false, modifiedAtMillis: undefined }; }
+	text(resource: URI): string { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(this.bytes(resource)); }
+	private bytes(resource: URI): Uint8Array {
+		const bytes = this.resources.get(resource.toString());
+		if (!bytes) throw new FileNotFoundError(resource);
+		return bytes;
+	}
+	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.bytes(resource).length, readonly: false, modifiedAtMillis: undefined }; }
 	async readDirectory(): Promise<readonly never[]> { return []; }
-	async readFile(resource: URI) { return { resource, bytes: new TextEncoder().encode(this.text(resource)), revision: this.text(resource) }; }
+	async readFile(resource: URI) { const bytes = this.bytes(resource).slice(); return { resource, bytes, revision: bytes.join(',') }; }
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		if (!options.overwrite) { this.resources.set(resource.toString(), new TextDecoder().decode(bytes)); return { stat: await this.stat(resource), revision: 'bytes' }; }
-		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
-		this.resources.set(request.resource.toString(), request.content); return { stat: await this.stat(request.resource), revision: request.content };
+		if (this.has(resource) ? !options.overwrite : !options.create) throw new Error('FileSystemOperationFailed');
+		if (options.expectedRevision !== undefined && (await this.readFile(resource)).revision !== options.expectedRevision) throw new Error('File changed');
+		this.resources.set(resource.toString(), bytes.slice());
+		return { stat: await this.stat(resource), revision: bytes.join(',') };
 	}
 	async createFile(resource: URI, existing: FileExistingTargetBehavior) {
 		if (this.has(resource)) {
 			if (existing === 'error') throw new Error('FileSystemOperationFailed');
 			if (existing === 'ignore') return this.stat(resource);
 		}
-		this.resources.set(resource.toString(), '');
+		this.resources.set(resource.toString(), new Uint8Array());
 		return this.stat(resource);
 	}
 	async createDirectory(): Promise<never> { throw new Error('Workspace edit tests do not create directories'); }
 	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
 	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		if (this.failRename) throw new Error('injected rename failure');
-		const sourceText = this.text(source);
+		const sourceBytes = this.bytes(source);
 		if (this.has(target)) {
 			if (existing === 'error') throw new Error('FileSystemOperationFailed');
 			if (existing === 'ignore') return;
 		}
 		this.resources.delete(source.toString());
-		this.resources.set(target.toString(), sourceText);
+		this.resources.set(target.toString(), sourceBytes);
 	}
 	async delete(resource: URI, missing: FileMissingTargetBehavior, _mode: FileDeleteMode): Promise<void> {
 		if (!this.resources.delete(resource.toString()) && missing === 'error') throw new Error('FileSystemOperationFailed');

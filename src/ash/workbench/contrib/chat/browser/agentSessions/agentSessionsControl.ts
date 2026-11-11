@@ -103,7 +103,7 @@ export class AgentSessionsControl extends Disposable {
 					id, label, tooltip: '', enabled: true, checked: this.filter.selection === id,
 					run: () => {
 						this.filter.setSelection(id);
-						filter.domNode.setAttribute('aria-pressed', String(!this.filter.isDefault()));
+						filter.checked = !this.filter.isDefault();
 						void this.update().catch(onUnexpectedError);
 					},
 				})),
@@ -117,7 +117,7 @@ export class AgentSessionsControl extends Disposable {
 		});
 		filter.domNode.setAttribute('aria-haspopup', 'menu');
 		filter.domNode.setAttribute('aria-expanded', 'false');
-		filter.domNode.setAttribute('aria-pressed', String(!this.filter.isDefault()));
+		filter.checked = !this.filter.isDefault();
 		button(localize('chat.sessions.toggleLayout', 'Toggle Session Layout'), Lxicon.layoutSidebarRight, () => this.toggleLayoutRequested.fire());
 		this.searchInput = h(document, 'input');
 		this.searchInput.type = 'search';

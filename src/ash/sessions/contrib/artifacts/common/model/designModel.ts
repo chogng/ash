@@ -1,9 +1,9 @@
 import type { DesignTextMeasurer } from './designText.js';
-import { CreatorMode } from '../creator.js';
+import { ArtifactWorkspaceId } from '../artifactWorkspace.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { documentFromShapes, serializeDesignDocument, type DesignAsset, type DesignDocument, type DesignShape } from './document.js';
+import { documentFromShapes, serializeDesignDocument, type DesignAsset, type DesignDocument, type DesignShape } from './designDocument.js';
 import { recordDesignOverrides, resolveDesignComponents } from './components.js';
 import { emptyDesignResources, getDesignLibraryShapes, recordDesignResourceEdits, resolveDesignResources, type DesignResources } from './designResources.js';
 import { reconcilePrototypeLinks } from './prototype.js';
@@ -12,7 +12,7 @@ import { resolveDesignLayout } from './layout.js';
 /** Owns committed edits. A pointer gesture commits once, so undo restores the whole gesture. */
 export class DesignModel extends Disposable {
 	private document: DesignDocument;
-	constructor(mode: CreatorMode = CreatorMode.Design, public readonly measureText?: DesignTextMeasurer) {
+	constructor(mode: ArtifactWorkspaceId = ArtifactWorkspaceId.Design, public readonly measureText?: DesignTextMeasurer) {
 		super();
 		this.document = documentFromShapes([], { documentId: generateUuid(), artifactId: generateUuid(), mode });
 	}

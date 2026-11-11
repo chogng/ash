@@ -6,7 +6,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SessionsConfiguration } from '../../common/configuration.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../workbench/common/configuration.js';
-import { TestConfigurationService as WorkbenchConfigurationService, testConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
+import { TestConfigurationFiles, TestConfigurationService as WorkbenchConfigurationService, testConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 
 test('Sessions settings keep their values while their labels belong to the Sessions page', () => {
@@ -102,4 +102,41 @@ test('Agents Window editor preferences override inherited settings only in that 
 	assert.equal(workbench.getValue('diffEditor.wordWrap'), 'off');
 	await sessions.updateValue(SESSIONS_DIFF_VIEW_MODE, 'inherit');
 	assert.equal(sessions.getValue('diffEditor.renderSideBySide'), true);
+});
+
+test('Agent Window terminal settings are independent in the shared profile document', async () => {
+	const { ConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
+	const SessionsConfigurationService = testConfigurationService(ConfigurationService);
+	using files = new TestConfigurationFiles();
+	using sessions = new SessionsConfigurationService({ files });
+	using workbench = new WorkbenchConfigurationService({ files });
+	const defaultProfile = 'terminal.integrated.defaultProfile.osx';
+	const fontSize = 'terminal.integrated.fontSize';
+	const changes: string[] = [];
+	using listener = sessions.onDidChangeConfiguration(event => {
+		for (const key of [defaultProfile, fontSize]) {
+			if (event.affectsConfiguration(key)) changes.push(key);
+		}
+	});
+	await workbench.updateValue(defaultProfile, 'IDE profile');
+	await workbench.updateValue(fontSize, 21);
+	await sessions.reloadConfiguration();
+	assert.equal(sessions.getValue(defaultProfile), null);
+	assert.equal(sessions.inspect(fontSize).userLocalValue, undefined);
+	assert.deepEqual(changes, []);
+	await sessions.updateValue(defaultProfile, 'Agent profile');
+	await sessions.updateValue('sessions.terminal.fontSize', 17);
+	await workbench.reloadConfiguration();
+	assert.equal(workbench.getValue(defaultProfile), 'IDE profile');
+	assert.equal(workbench.getValue(fontSize), 21);
+	assert.equal(sessions.getValue(defaultProfile), 'Agent profile');
+	assert.equal(sessions.getValue<{ fontSize: number; }>('terminal.integrated').fontSize, 17);
+	assert.equal(sessions.inspect(fontSize).userLocalValue, 17);
+	assert.deepEqual(changes, [defaultProfile, fontSize]);
+	assert.deepEqual(JSON.parse((await sessions.read()).source), {
+		[defaultProfile]: 'IDE profile',
+		[fontSize]: 21,
+		'sessions.terminal.defaultProfile.osx': 'Agent profile',
+		'sessions.terminal.fontSize': 17,
+	});
 });

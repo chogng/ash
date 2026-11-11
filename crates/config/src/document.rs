@@ -59,6 +59,17 @@ impl ApprovalReviewModelSelection {
     }
 }
 
+/// A dedicated model and optional effort for one Agent task.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TaskModelSelection {
+    #[serde(flatten)]
+    pub model: ModelRef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<ReasoningEffort>,
+}
+
 /// Monotonic revision of the user configuration authority.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -202,21 +213,24 @@ pub struct AgentConfig {
     pub time_context: crate::TimeContextConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelRef>,
+    /// Ordered models eligible for automatic selection on a conversation's first Turn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_model_candidates: Vec<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_reasoning_effort: Option<ReasoningEffort>,
     #[serde(default)]
     pub approval_review_model: ApprovalReviewModelSelection,
     /// Optional dedicated model for automatic thread titles. None uses a catalog recommendation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thread_title_model: Option<ModelRef>,
+    pub thread_title_model: Option<TaskModelSelection>,
     /// Optional dedicated model for recaps. None uses a catalog recommendation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thread_recap_model: Option<ModelRef>,
+    pub thread_recap_model: Option<TaskModelSelection>,
     /// Opts in to automatic conversation recaps.
     #[serde(default)]
     pub thread_recap_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code_review_model: Option<ModelRef>,
+    pub code_review_model: Option<TaskModelSelection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     /// No override inherits the model of the Turn that produced the changes.
     pub commit_message_model: Option<ModelRef>,
@@ -403,6 +417,21 @@ impl UserConfigDocument {
                 model.provider
             )));
         }
+        let mut candidates = std::collections::BTreeSet::new();
+        for model in &self.agent.auto_model_candidates {
+            if !self.has_model_provider(&model.provider) {
+                return Err(ConfigError(format!(
+                    "automatic model candidate provider '{}' is not configured",
+                    model.provider
+                )));
+            }
+            if !candidates.insert((&model.provider, &model.model)) {
+                return Err(ConfigError(format!(
+                    "duplicate automatic model candidate '{}/{}'",
+                    model.provider, model.model
+                )));
+            }
+        }
         if let Some(model) = self.agent.approval_review_model.explicit_model()
             && !self.has_model_provider(&model.provider)
         {
@@ -434,28 +463,28 @@ impl UserConfigDocument {
                 )));
             }
         }
-        if let Some(model) = &self.agent.thread_title_model
-            && !self.has_model_provider(&model.provider)
+        if let Some(selection) = &self.agent.thread_title_model
+            && !self.has_model_provider(&selection.model.provider)
         {
             return Err(ConfigError(format!(
                 "thread-title model provider '{}' is not configured",
-                model.provider
+                selection.model.provider
             )));
         }
-        if let Some(model) = &self.agent.thread_recap_model
-            && !self.has_model_provider(&model.provider)
+        if let Some(selection) = &self.agent.thread_recap_model
+            && !self.has_model_provider(&selection.model.provider)
         {
             return Err(ConfigError(format!(
                 "thread-recap model provider '{}' is not configured",
-                model.provider
+                selection.model.provider
             )));
         }
-        if let Some(model) = &self.agent.code_review_model
-            && !self.has_model_provider(&model.provider)
+        if let Some(selection) = &self.agent.code_review_model
+            && !self.has_model_provider(&selection.model.provider)
         {
             return Err(ConfigError(format!(
                 "code-review model provider '{}' is not configured",
-                model.provider
+                selection.model.provider
             )));
         }
         if let Some(model) = &self.agent.commit_message_model
@@ -528,12 +557,13 @@ pub struct ResolvedConfig {
     pub git: GitConfig,
     pub git_configured: bool,
     pub model: Option<ModelRef>,
+    pub auto_model_candidates: Vec<ModelRef>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelection,
-    pub thread_title_model: Option<ModelRef>,
-    pub thread_recap_model: Option<ModelRef>,
+    pub thread_title_model: Option<TaskModelSelection>,
+    pub thread_recap_model: Option<TaskModelSelection>,
     pub thread_recap_enabled: bool,
-    pub code_review_model: Option<ModelRef>,
+    pub code_review_model: Option<TaskModelSelection>,
     pub commit_message_model: Option<ModelRef>,
     pub commit_message_enabled: bool,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
@@ -730,6 +760,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             git: document.git.unwrap_or_default(),
             git_configured: document.git.is_some(),
             model: document.agent.model.clone(),
+            auto_model_candidates: document.agent.auto_model_candidates.clone(),
             model_reasoning_effort: document.agent.model_reasoning_effort,
             approval_review_model: document.agent.approval_review_model.clone(),
             thread_title_model: document.agent.thread_title_model.clone(),

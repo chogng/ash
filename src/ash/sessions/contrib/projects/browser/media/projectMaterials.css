@@ -2,19 +2,6 @@
 	position: relative;
 }
 
-.ash-projects-files > .ash-projects-file-content {
-	min-block-size: 100%;
-}
-
-.ash-projects-material-context-title,
-.ash-projects-detail-card .ash-projects-material-files-title {
-	display: none;
-}
-
-.ash-projects-detail-card .ash-projects-material-context-title {
-	display: inline;
-}
-
 section.ash-projects-materials {
 	display: flex;
 	flex-direction: column;
@@ -35,6 +22,12 @@ section.ash-projects-materials {
 	display: none;
 }
 
+.ash-projects-material-actions
+	> [data-project-control="add-materials"][aria-busy="true"]
+	> .ash-button-content {
+	display: none;
+}
+
 .ash-projects-materials-empty {
 	display: grid;
 	justify-items: center;
@@ -49,9 +42,14 @@ section.ash-projects-materials {
 	line-height: 1.5;
 }
 
+.ash-projects-materials-empty[hidden] {
+	display: none;
+}
+
 .ash-projects-materials-empty p {
 	max-width: 30ch;
 	margin: 0;
+	color: var(--ash-projects-description-foreground);
 }
 
 .ash-projects-materials-illustration {
@@ -191,6 +189,19 @@ section.ash-projects-materials {
 	grid-row: 4;
 	align-self: center;
 	max-inline-size: 100%;
+}
+
+.ash-projects-material-placeholder .ash-projects-placeholder {
+	border-radius: var(--ash-cornerRadius-circle);
+}
+
+.ash-projects-material-placeholder .ash-file-card-size {
+	inline-size: 64%;
+}
+
+.ash-projects-material-placeholder .ash-file-card-format {
+	inline-size: 36%;
+	block-size: var(--ash-spacing-size160);
 }
 
 .ash-file-card-format > .ash-badge.outlined {

@@ -49,9 +49,9 @@ function createNativeToast({ title, body }: IToastOptions): INativeToast | undef
 
 export function rendererSystemHostRoutes(
 	window: BrowserWindow,
-	directoryPermissionPrompt: (request: DirectoryPermissionRequest) => DialogRequest,
 	auxiliaryWindows: IAuxiliaryWindowsMainService,
 	opener: ElectronOpenerService,
+	directoryPermissionPrompt?: (request: DirectoryPermissionRequest) => DialogRequest,
 ): readonly IpcRoute<unknown, unknown>[] {
 	const clipboard = new ElectronMainClipboardService(window);
 	const text = (value: unknown): string => { if (typeof value !== 'string' || value.length > 1_000_000) { throw new Error('Invalid host text'); } return value; };
@@ -171,6 +171,10 @@ export function rendererSystemHostRoutes(
 			}
 		},
 		{ channel: 'ash:host:hasClipboardResources', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.hasResources() },
-		{ channel: 'ash:host:directoryPermissionPrompt', validate: validateDirectoryPermissionRequest, invoke: value => directoryPermissionPrompt(value as DirectoryPermissionRequest) },
+		...(directoryPermissionPrompt ? [{
+			channel: 'ash:host:directoryPermissionPrompt',
+			validate: validateDirectoryPermissionRequest,
+			invoke: (value: unknown) => directoryPermissionPrompt(value as DirectoryPermissionRequest),
+		}] : []),
 	];
 }

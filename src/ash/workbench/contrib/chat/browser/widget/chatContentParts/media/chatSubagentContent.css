@@ -1,0 +1,25 @@
+.ash-chat-subagent-content {
+	display: grid;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size80);
+	border: 1px solid
+		var(--ash-widget-border, var(--ash-input-border, transparent));
+	border-radius: var(--ash-cornerRadius-small);
+	margin-block-end: var(--ash-spacing-size40);
+}
+
+.ash-chat-subagent-result {
+	margin: 0;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-subagent-status {
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-subagent-result {
+	white-space: pre-wrap;
+	max-block-size: 7em;
+	overflow: auto;
+}

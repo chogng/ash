@@ -5,7 +5,7 @@ import { addDisposableListener } from '../../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
-import { DesignMode } from '../../../common/config/editorConfiguration.js';
+import { DesignMode } from '../../../common/config/designEditorConfiguration.js';
 import { getDesignShapeEntries } from '../../../common/model/hitTest.js';
 import { designTextStyleAt, designTextSegments, designTextReplacement, parseDesignTextProperties, type DesignTextStyle, type DesignTextShape } from '../../../common/model/designText.js';
 import { renderDesignTextFrame } from '../../../browser/designTextRendering.js';

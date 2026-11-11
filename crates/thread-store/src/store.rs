@@ -266,6 +266,17 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
     ) -> Result<Option<ThreadHistoryPage>, ThreadStoreError> {
         Ok(None)
     }
+    /// Reads one immutable Item from a current index. The inner value is absent when
+    /// the requested coordinate does not exist. An absent index allows canonical replay.
+    fn read_history_item(
+        &self,
+        _session_id: &SessionId,
+        _thread_id: &ThreadId,
+        _turn_id: &ash_protocol::TurnId,
+        _ordinal: u32,
+    ) -> Result<Option<Option<ash_protocol::ThreadItem>>, ThreadStoreError> {
+        Ok(None)
+    }
     fn history_index_sequence(
         &self,
         _thread_id: &ThreadId,

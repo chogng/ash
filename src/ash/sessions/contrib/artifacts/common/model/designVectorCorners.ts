@@ -1,5 +1,5 @@
 import type { DesignPoint } from '../core/geometry.js';
-import type { DesignPathNode } from './document.js';
+import type { DesignPathNode } from './designDocument.js';
 import type { DesignPathContour } from './designVector.js';
 
 /** Radius stays on the editable anchor in pixels; the two tangent points exist only in rendered geometry. */

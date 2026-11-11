@@ -1145,6 +1145,11 @@ impl EnvToolPorts {
         self.reloadable.tools().definitions()
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_tool_service(&self) -> Arc<dyn ash_core::ToolService> {
+        self.reloadable.tools()
+    }
+
     fn new(
         updates: Arc<UpdateBroker>,
         host: ToolPort,
@@ -1360,6 +1365,34 @@ impl fmt::Display for EnvRuntimeError {
 }
 
 impl std::error::Error for EnvRuntimeError {}
+
+/// Decodes a projected Session workspace folder identity. Callers must authorize access separately.
+pub(super) fn session_directory_from_workspace_id(
+    dir_id: Option<&str>,
+) -> Result<Option<(ash_protocol::SessionId, std::path::PathBuf)>, String> {
+    let Some(identity) = dir_id.and_then(|id| id.strip_prefix("session:")) else {
+        return Ok(None);
+    };
+    let (session, path) = identity
+        .split_once(':')
+        .ok_or("Invalid Session folder identity")?;
+    let decode = |value: &str| {
+        url::form_urlencoded::parse(value.as_bytes())
+            .next()
+            .map(|(key, _)| key.into_owned())
+            .ok_or("Empty Session folder identity")
+    };
+    let session =
+        ash_protocol::SessionId::new(decode(session)?).map_err(|error| error.to_string())?;
+    let path = decode(path)?;
+    if (!std::path::Path::new(&path).is_absolute()
+        && ash_remote::RemoteDirPath::parse(&path).is_err())
+        || path.contains('\0')
+    {
+        return Err("Session directory must be absolute".into());
+    }
+    Ok(Some((session, path.into())))
+}
 
 impl AppServer {
     /// Installs explicit execution targets without coupling them to the selected local directory.
@@ -3747,7 +3780,7 @@ impl AppServer {
         &self,
         dir_id: Option<&str>,
     ) -> Result<Arc<exec_server::terminal::TerminalService>, RpcError> {
-        if let Some((session_id, path)) = Self::terminal_session_directory(dir_id)
+        if let Some((session_id, path)) = Self::session_directory_from_workspace_id(dir_id)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
         {
             let authorization =

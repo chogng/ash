@@ -53,19 +53,16 @@ pub(super) struct ConnectorRequestProcessor {
     connectors: Option<std::sync::Arc<connectors::ConnectorCredentialService>>,
     connector_oauth: Option<std::sync::Arc<connectors::ConnectorOAuthService>>,
     connector_device_oauth: Option<std::sync::Arc<connectors::ConnectorDeviceOAuthService>>,
-    _watcher: Option<super::connector_runtime::ConnectorWatcher>,
+    _watcher: Option<std::sync::Arc<super::connector_runtime::ConnectorWatcher>>,
 }
 
 impl ConnectorRequestProcessor {
     pub(super) fn with_service(
         mut self,
         service: std::sync::Arc<connectors::ConnectorCredentialService>,
-        updates: std::sync::Arc<super::update_broker::UpdateBroker>,
+        watcher: std::sync::Arc<super::connector_runtime::ConnectorWatcher>,
     ) -> Self {
-        self._watcher = Some(super::connector_runtime::ConnectorWatcher::start(
-            service.authority(),
-            updates,
-        ));
+        self._watcher = Some(watcher);
         self.connectors = Some(service);
         self
     }

@@ -4,7 +4,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { ActiveEditorGroupEmptyContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
+import { ActiveEditorGroupEmptyContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, IsSessionsWindowContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
 import { IEditorPart } from './editorPart.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { resolveCommandsContext } from './editorCommandsContext.js';
@@ -59,7 +59,7 @@ registerAction2(class CloseEditorGroupAction extends Action2 {
 			id: CLOSE_EDITOR_GROUP_COMMAND_ID,
 			title: localize2({ bundle: 'ash', key: 'workbench.closeEditorGroup' }, 'Close Editor Group'),
 			f1: true,
-			precondition: ContextKeyExpr.and(MultipleEditorGroupsContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false)),
+			precondition: ContextKeyExpr.and(MultipleEditorGroupsContext.isEqualTo(true), EditorPartModalVisibleContext.isEqualTo(false), ContextKeyExpr.not(IsSessionsWindowContext.key)),
 			keybinding: {
 				primary: Keybinding.single(logicalKey('w', { primaryKey: true })),
 				when: ActiveEditorGroupEmptyContext.isEqualTo(true),

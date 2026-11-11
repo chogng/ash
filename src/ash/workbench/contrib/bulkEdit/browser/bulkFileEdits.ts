@@ -8,6 +8,11 @@ interface FileOperation {
 	readonly applies: boolean;
 	readonly sourceBefore?: string;
 	readonly targetBefore?: string;
+	readonly binaryCreate?: { readonly contents: Uint8Array; readonly before?: Uint8Array; };
+}
+
+export function sameFileBytes(actual: Uint8Array, expected: Uint8Array): boolean {
+	return actual.length === expected.length && actual.every((byte, index) => byte === expected[index]);
 }
 
 /** File steps use serialized contents so their inverse preserves BOM and line endings. */
@@ -26,6 +31,17 @@ export class BulkFileEdits {
 		const entry = operation.entry;
 		switch (entry.kind) {
 			case 'create': {
+				if (operation.binaryCreate) {
+					const { contents, before } = operation.binaryCreate;
+					const revision = before && await this.assertFileBytes(entry.resource, before);
+					await this.files.writeFileBytes(entry.resource, contents, { create: !before, overwrite: !!before, expectedRevision: revision });
+					this.inverses.push(async () => {
+						const revision = await this.assertFileBytes(entry.resource, contents);
+						if (before) await this.files.writeFileBytes(entry.resource, before, { create: false, overwrite: true, expectedRevision: revision });
+						else await this.files.delete(entry.resource, 'ignore', 'fileOrEmptyDirectory');
+					});
+					return [entry.resource];
+				}
 				await this.files.createFile(entry.resource, entry.existing);
 				let written = '';
 				this.inverses.push(async () => {
@@ -64,6 +80,14 @@ export class BulkFileEdits {
 				return [entry.resource];
 			}
 		}
+	}
+
+	private async assertFileBytes(resource: URI, expected: Uint8Array): Promise<string> {
+		const actual = await this.files.readFileBytes(resource);
+		if (!sameFileBytes(actual.bytes, expected)) {
+			throw new WorkspaceEditConflictError(`Workspace edit target '${resource.toString()}' changed before replacement`);
+		}
+		return actual.revision;
 	}
 
 	private async assertFileText(resource: URI, expected: string | undefined): Promise<void> {

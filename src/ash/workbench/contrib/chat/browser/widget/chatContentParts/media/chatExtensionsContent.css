@@ -1,0 +1,20 @@
+.ash-chat-extension-requests {
+	display: grid;
+	gap: var(--ash-spacing-size40);
+	padding: 0;
+	margin-block: var(--ash-spacing-size80);
+	list-style: none;
+}
+
+.ash-chat-extension-requests > li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+
+.ash-chat-extension-requests > li > code {
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}

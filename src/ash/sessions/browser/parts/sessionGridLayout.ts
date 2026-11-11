@@ -24,6 +24,7 @@ export class SessionGridLayout extends Disposable {
 	private restorePending = false;
 	private changing = false;
 	private visible = true;
+	private persistLayout = true;
 	private dimension: IDimension | undefined;
 
 	constructor(container: HTMLElement, initialView: IView, @IStorageService private readonly storage: IStorageService) {
@@ -45,8 +46,17 @@ export class SessionGridLayout extends Disposable {
 		this.reconcile([{ id: 'empty', view: initialView }], 'empty');
 	}
 
-	reconcile(entries: readonly ISessionGridEntry[], active: string): void {
+	reconcile(entries: readonly ISessionGridEntry[], active: string, persistLayout = true): void {
 		if (!entries.length) throw new Error('A Sessions grid must have at least one view');
+		if (persistLayout !== this.persistLayout) {
+			this.restoreFrame.clear();
+			this.persistLayout = persistLayout;
+			// The desktop Chat slot shares this grid without replacing the saved Agent splits.
+			if (persistLayout && this.savedLayout && !this.restoring && !this.legacyWidths) {
+				const savedIds = layoutIds(this.savedLayout);
+				this.restorePending = entries.every(entry => entry.id === 'empty' || savedIds.has(entry.id));
+			}
+		}
 		const previous = this.items;
 		const retained = new Map(previous.map(item => [item.entry.view, item]));
 		const renames = new Map<string, string>();
@@ -57,8 +67,8 @@ export class SessionGridLayout extends Disposable {
 			item.entry = entry;
 			return item;
 		});
-		if (this.savedLayout && renames.size) this.savedLayout = renameLayout(this.savedLayout, renames);
-		if (this.restoring && this.savedLayout) {
+		if (persistLayout && this.savedLayout && renames.size) this.savedLayout = renameLayout(this.savedLayout, renames);
+		if (persistLayout && this.restoring && this.savedLayout) {
 			const savedIds = layoutIds(this.savedLayout);
 			if (entries.some(entry => entry.id !== 'empty' && !savedIds.has(entry.id))) {
 				// Explicit navigation supersedes unresolved provider restoration.
@@ -131,7 +141,7 @@ export class SessionGridLayout extends Disposable {
 		this.scheduleRestore();
 	}
 	layout(width: number, height: number): void {
-		if (this.savedLayout && (this.dimension?.width !== width || this.dimension?.height !== height)) this.restorePending = true;
+		if (this.persistLayout && this.savedLayout && (this.dimension?.width !== width || this.dimension?.height !== height)) this.restorePending = true;
 		this.dimension = { width, height };
 		this.changing = true;
 		try { this.grid.value!.layout(width, height); }
@@ -162,7 +172,7 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	private captureLayout(): void {
-		if (this.changing || this.restorePending || this.restoring || this.grid.value?.hasMaximizedView() || !this.dimension?.width || !this.dimension.height || this.items.some(item => item.entry.id === 'empty')) return;
+		if (!this.persistLayout || this.changing || this.restorePending || this.restoring || this.grid.value?.hasMaximizedView() || !this.dimension?.width || !this.dimension.height || this.items.some(item => item.entry.id === 'empty')) return;
 		this.savedLayout = this.grid.value!.serialize() as SessionGridNode;
 		this.saveState();
 	}
@@ -173,7 +183,7 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	private scheduleRestore(): void {
-		if (!this.visible || this.grid.value?.hasMaximizedView() || !this.restorePending || !this.dimension?.width || !this.dimension.height || this.restoreFrame.value) return;
+		if (!this.persistLayout || !this.visible || this.grid.value?.hasMaximizedView() || !this.restorePending || !this.dimension?.width || !this.dimension.height || this.restoreFrame.value) return;
 		this.restoreFrame.value = scheduleAtNextAnimationFrame(this.element.ownerDocument.defaultView!, () => {
 			this.restoreFrame.clear();
 			if (this.items.some(item => item.entry.id === 'empty')) return;

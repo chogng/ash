@@ -3,7 +3,7 @@ import { isUuid } from '../../../../../base/common/uuid.js';
 import { readPrototypeExpression, prototypeExpressionType, type PrototypeExpression } from './prototypeExpression.js';
 import { getDesignResourceCatalog, type DesignResources } from './designResources.js';
 import { localize } from '../../../../../nls.js';
-import { flattenDesignShapes, type DesignShape, type DesignShapeGeometry } from './document.js';
+import { flattenDesignShapes, type DesignShape, type DesignShapeGeometry } from './designDocument.js';
 
 export type PrototypeTrigger = 'click' | 'hover' | 'press' | 'drag' | 'enter' | 'leave' | 'down' | 'up' | 'key' | 'delay';
 export type PrototypeAction = 'navigate' | 'back' | 'overlay' | 'swap' | 'close' | 'url' | 'changeTo' | 'setVariable' | 'setMode' | 'conditional' | 'scrollTo';

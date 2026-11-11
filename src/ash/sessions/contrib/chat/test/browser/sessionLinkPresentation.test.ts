@@ -106,7 +106,7 @@ test('Conversation link previews follow the matching host catalog for the contri
 	const document = dom.window.document;
 	const anchor = document.querySelector('a')!;
 	anchor.href = resource.toString();
-	using decorations = services.createInstance(ChatMarkdownDecorationsRenderer, document.body);
+	using decorations = services.createInstance(ChatMarkdownDecorationsRenderer, document.body, () => { });
 	const rule = links.getLinkPresentationRule(resource)!;
 	using remote = links.createLinkPresentationWatcher(rule.id, resource)!;
 	using local = links.createLinkPresentationWatcher(rule.id, buildOpenSessionLinkUri('same', 'root', 'local'))!;

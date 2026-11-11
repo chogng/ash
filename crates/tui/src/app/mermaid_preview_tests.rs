@@ -41,6 +41,7 @@ fn completed_streamed_mermaid_block_is_ready_before_rendering() {
                 turn_id: turn_id.clone(),
                 item: ThreadItem::AgentMessage {
                     phase: None,
+                    citations: None,
                     item_id: item_id.clone(),
                     turn_id: turn_id.clone(),
                     text: "```mermaid\nflowchart LR\nA --> B".into(),
@@ -68,6 +69,7 @@ fn completed_streamed_mermaid_block_is_ready_before_rendering() {
                     turn_id: turn_id.clone(),
                     item: ThreadItem::AgentMessage {
                         phase: None,
+                        citations: None,
                         item_id,
                         turn_id,
                         text: "```mermaid\nflowchart LR\nA --> B\n```".into(),

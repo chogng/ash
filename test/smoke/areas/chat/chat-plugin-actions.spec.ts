@@ -32,7 +32,7 @@ for (const surface of ['IDE', 'Agent Window']) {
 		if (surface === 'Agent Window') await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const commands = new QuickAccess(page);
 		await commands.runCommand('workbench.action.chat.newChat');
-		const chat = page.locator(surface === 'Agent Window' ? '.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible' : '.ash-chat-view-pane .ash-chat:visible').first();
+		const chat = page.locator(surface === 'Agent Window' ? '.ash-sessions-chat-slot :is(.ash-chat,.ash-native-chat):visible' : '.ash-chat-view-pane .ash-chat:visible').first();
 		const input = chat.locator('.stanza-editor-input');
 		await expect(input).toBeFocused();
 		await page.keyboard.insertText('Plugin draft');

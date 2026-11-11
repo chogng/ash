@@ -6,7 +6,7 @@ import { mapPrototypeActions } from '../model/prototype.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { designBounds, type DesignFrame, toDesignLocal, type DesignPoint } from '../core/geometry.js';
 import { getDesignShapeEntries } from '../model/hitTest.js';
-import { flattenDesignShapes, type DesignAsset, type DesignAutoLayout, type DesignShape, type DesignShapeGeometry } from '../model/document.js';
+import { flattenDesignShapes, type DesignAsset, type DesignAutoLayout, type DesignShape, type DesignShapeGeometry } from '../model/designDocument.js';
 import type { DesignModel } from '../model/designModel.js';
 import { PrototypeCommands } from './prototypeCommands.js';
 import { ResourceCommands } from './resourceCommands.js';

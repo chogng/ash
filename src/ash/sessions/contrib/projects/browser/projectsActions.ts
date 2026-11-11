@@ -315,6 +315,8 @@ export async function confirmProjectDelete(dialogs: IDialogService, title: strin
 			? localize('projects.deleteContentsDetail', 'This permanently deletes the project, its conversations and instructions, and files stored only in the project.')
 			: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
 		primaryButton: localize('projects.delete', 'Delete'),
+		destructive: true,
+		layout: 'form',
 	});
 	return result.confirmed;
 }

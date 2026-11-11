@@ -147,7 +147,7 @@ function isLocalCommand(call: IChatToolInvocation['call']): boolean {
 /** Built-in shell results carry process output in the model-facing JSON envelope. */
 function getShellCommandOutput(invocation: IChatToolInvocation): IToolOutputPresentation | undefined {
 	const { call, result, output } = invocation;
-	if (call.name !== 'shell-command' || result?.isError || !isLocalCommand(call)) return undefined;
+	if (call.name !== 'shell-command' || result?.outputPreview || result?.isError || !isLocalCommand(call)) return undefined;
 	const content = result?.content;
 	if (content?.length && (content.length !== 1 || content[0].type !== 'text')) return undefined;
 	const text = content?.[0]?.type === 'text' ? content[0].text : result?.text

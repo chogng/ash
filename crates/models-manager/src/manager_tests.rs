@@ -540,6 +540,68 @@ fn required_unknown_capability_can_be_excluded() {
     ));
 }
 
+#[test]
+fn automatic_selection_preserves_order_and_requires_tools_media_and_budget() {
+    use ash_protocol::ModelInputModality;
+
+    let mut text = ModelInfo::new(model_id("text"), "Text");
+    text.capabilities.tools = CapabilitySupport::Supported;
+    text.settings.input_modalities = Some(vec![ModelInputModality::Text]);
+    let mut image = text.clone();
+    image.id = model_id("image");
+    image.settings.input_modalities =
+        Some(vec![ModelInputModality::Text, ModelInputModality::Image]);
+    let mut unknown_tools = image.clone();
+    unknown_tools.id = model_id("unknown-tools");
+    unknown_tools.capabilities.tools = CapabilitySupport::Unknown;
+    let mut unsupported_agent = image.clone();
+    unsupported_agent.id = model_id("unsupported-agent");
+    unsupported_agent.capabilities.agent_mode = CapabilitySupport::Unsupported;
+    let manager = ModelsManager::new(
+        ProviderConfigRegistry::from_definitions([definition(
+            "strict",
+            ModelCatalogPolicy::ListedOnly,
+        )
+        .with_models([text, image, unknown_tools, unsupported_agent])])
+        .unwrap(),
+    );
+    let entry = |name| {
+        manager
+            .resolve_static(&model_ref("strict", name), &ModelRequirements::agent())
+            .unwrap()
+            .entry()
+            .clone()
+    };
+    let select = |candidates, modalities: &[ModelInputModality]| {
+        crate::select_automatic_model(candidates, 1000, modalities)
+    };
+    assert_eq!(
+        select(vec![(entry("text"), 1000), (entry("image"), 2000)], &[]),
+        Some(model_ref("strict", "text"))
+    );
+    assert_eq!(
+        select(vec![(entry("text"), 999), (entry("image"), 2000)], &[]),
+        Some(model_ref("strict", "image"))
+    );
+    assert_eq!(
+        select(
+            vec![
+                (entry("text"), 2000),
+                (entry("unknown-tools"), 2000),
+                (entry("unsupported-agent"), 2000),
+                (entry("image"), 2000),
+            ],
+            &[ModelInputModality::Image]
+        ),
+        Some(model_ref("strict", "image"))
+    );
+    assert_eq!(
+        select(vec![(entry("text"), 2000)], &[ModelInputModality::Audio]),
+        None
+    );
+    assert_eq!(select(Vec::new(), &[]), None);
+}
+
 fn registry() -> ProviderConfigRegistry {
     let mut alpha = ModelInfo::new(model_id("alpha"), "Alpha");
     alpha.context_window = ContextWindow::Known(128_000);

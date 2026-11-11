@@ -33,6 +33,7 @@ export class SessionsAgentThreadService extends Disposable implements IAgentThre
 	fork(...args: Parameters<IAgentThreadService['fork']>): ReturnType<IAgentThreadService['fork']> { return this.scopes.getScope(args[0].sessionId).thread.fork(...args); }
 	rewrite(...args: Parameters<IAgentThreadService['rewrite']>): ReturnType<IAgentThreadService['rewrite']> { return this.scopes.getScope(args[0].sessionId).thread.rewrite(...args); }
 	rename(...args: Parameters<IAgentThreadService['rename']>): ReturnType<IAgentThreadService['rename']> { return this.scopes.getScope(args[0].sessionId).thread.rename(...args); }
+	readToolResultText(...args: Parameters<IAgentThreadService['readToolResultText']>): ReturnType<IAgentThreadService['readToolResultText']> { return this.scopes.getScope(args[0].sessionId).thread.readToolResultText(...args); }
 	readAttachment(...args: Parameters<IAgentThreadService['readAttachment']>): ReturnType<IAgentThreadService['readAttachment']> { return this.scopes.getScope(args[0].sessionId).thread.readAttachment(...args); }
 	listAppTools(...args: Parameters<IAgentThreadService['listAppTools']>): ReturnType<IAgentThreadService['listAppTools']> { return this.scopes.getScope(args[0].sessionId).thread.listAppTools(...args); }
 	invokeAppTool(...args: Parameters<IAgentThreadService['invokeAppTool']>): ReturnType<IAgentThreadService['invokeAppTool']> { return this.scopes.getScope(args[0].sessionId).thread.invokeAppTool(...args); }

@@ -78,3 +78,17 @@ test('restored comparisons retain disabled file capabilities and reject corrupte
 	serialized.value.items[0].contextKeys['sessions.changesCanPreview'] = 'true';
 	assert.throws(() => EditorInputSerializers.deserialize(serialized), /Invalid multi-diff context keys/u);
 });
+
+test('restores repository-relative file list paths independently of decorated diff labels', () => {
+	const fileList = { path: 'src/nested/file.ts', group: { id: 'repository', label: 'Repository 1' } };
+	const input = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/grouped'), [{
+		label: 'Repository: src/nested/file.ts (mode 100644 → 100755)',
+		original: { resource: URI.parse('snapshot:/before') }, modified: { resource: URI.parse('snapshot:/after') }, fileList,
+	}], 'Changes');
+	const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+	const restored = EditorInputSerializers.deserialize(serialized);
+	assert.ok(isMultiDiffEditorInput(restored));
+	assert.deepEqual(restored.items[0].fileList, fileList);
+	serialized.value.items[0].fileList.path = '../outside';
+	assert.throws(() => EditorInputSerializers.deserialize(serialized), /Invalid multi-diff file list entry/u);
+});

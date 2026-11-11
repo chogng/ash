@@ -1,6 +1,7 @@
 use crate::ApiError;
 use ash_client::SseFrame;
 use ash_protocol::ModelStreamEvent;
+use ash_protocol::ResponseCitation;
 use serde_json::Value;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -16,6 +17,7 @@ pub struct OpenAiChatCompletionsSseDecoder {
     content: String,
     reasoning: String,
     refusal: String,
+    citations: Vec<ResponseCitation>,
     tool_calls: BTreeMap<u64, ToolCallState>,
     finish_reason: Option<String>,
     usage: Option<Value>,
@@ -35,6 +37,7 @@ impl OpenAiChatCompletionsSseDecoder {
             content: String::new(),
             reasoning: String::new(),
             refusal: String::new(),
+            citations: Vec::new(),
             tool_calls: BTreeMap::new(),
             finish_reason: None,
             usage: None,
@@ -97,6 +100,9 @@ impl OpenAiChatCompletionsSseDecoder {
             return Ok(Vec::new());
         };
         let mut events = Vec::new();
+        if let Some(annotations) = delta.pointer("/copilot_annotations/IPCodeCitations") {
+            crate::response_citations::collect_code_citations(&mut self.citations, annotations);
+        }
         if let Some(content) = optional_string(delta, "content")? {
             self.content.push_str(content);
             if !content.is_empty() {
@@ -143,6 +149,10 @@ impl OpenAiChatCompletionsSseDecoder {
     /// Verifies that the stream ended with the protocol `[DONE]` marker.
     pub fn finish(self) -> Result<(), ApiError> {
         self.validate_terminal()
+    }
+
+    pub(crate) fn take_citations(&mut self) -> Vec<ResponseCitation> {
+        std::mem::take(&mut self.citations)
     }
 
     /// Returns a unary-compatible response assembled from streamed chunks.

@@ -1,6 +1,6 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { BrowserPasswordSettingsRenderer } from './browserPasswordSettingsRenderer.js';
-import { MemorySettingsRenderer } from '../../memories/browser/memorySettingsRenderer.js';
+import { MemorySettingsRenderer } from './memorySettingsRenderer.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -58,7 +58,7 @@ import { AICustomizationManagementEditorInput } from '../../chat/browser/aiCusto
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { LanguageServerSettingsRenderer } from './languageServerSettingsRenderer.js';
 import { getSettingsSections } from '../../../services/preferences/browser/settingsSections.js';
-import { AgentTaskModelSettingsModel } from './agentTaskModelSettingsModel.js';
+import { AgentTaskModelSettingsModel } from '../../chat/browser/agentTaskModelSettingsModel.js';
 import { AgentRolesSettingsRenderer } from './agentRolesSettingsRenderer.js';
 import { ModelSettingsRenderer } from './modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from './dictationSettingsRenderer.js';
@@ -288,7 +288,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 				this._register(this.instantiationService.createInstance(section.model)),
 				section.accessibleViewProviderId, section.accessibilityVerbositySettingId,
 			))),
-			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'codeReviewModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'commitMessageModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
 			this._register(modelServices.createInstance(ModelSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(DictationSettingsRenderer, settingsContent, { showGroupHeader: true })),

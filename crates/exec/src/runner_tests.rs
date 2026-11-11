@@ -327,6 +327,7 @@ impl TestIds {
 
 fn session(ids: &TestIds) -> Session {
     Session {
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         session_id: ids.session_id.clone(),
         title: "test run".into(),
@@ -368,6 +369,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         instructions: None,
         directory: None,
         model: None,
+        model_routing: None,
         reasoning_effort: None,
         tool_profile: None,
         tool_mode: ash_protocol::ToolMode::Direct,
@@ -386,6 +388,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
 fn agent_message(ids: &TestIds, text: &str) -> ThreadItem {
     ThreadItem::AgentMessage {
         phase: None,
+        citations: None,
         item_id: ItemId::new(format!("item-{text}")).unwrap(),
         turn_id: ids.turn_id.clone(),
         text: text.into(),

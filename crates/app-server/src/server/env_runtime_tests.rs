@@ -1147,6 +1147,168 @@ fn dir_mutation_requires_a_directory_grants_host_connection() {
 }
 
 #[test]
+fn git_discovery_uses_session_grants_and_keeps_the_workspace_catalog() {
+    let workspace = TestDir::new("git-workspace", "fixture.txt");
+    let session_dir = TestDir::new("git-session", "fixture.txt");
+    for (dir, branch) in [(&workspace, "workspace"), (&session_dir, "session")] {
+        let output = std::process::Command::new("git")
+            .args(["init", "-b", branch])
+            .current_dir(&dir.path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let initialize = |connection: &mut ConnectionState| {
+        crate::tests::call(
+            &server,
+            connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":1,"method":"initialize","params":{
+                    "clientInfo":{"name":"fixture","version":"1"},
+                    "capabilities":{"directoryGrantsHost":{"version":1}}
+                }
+            }),
+        )
+    };
+    let mut connection = server.product_host_connection();
+    assert!(initialize(&mut connection).get("error").is_none());
+    let call = |connection: &mut ConnectionState, id, method, params| {
+        crate::tests::call(
+            &server,
+            connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":id,"method":method,"params":params
+            }),
+        )
+    };
+    let bound = call(
+        &mut connection,
+        2,
+        "env/dirs/set",
+        serde_json::json!({
+            "dirs":[{"id":"workspace","path":workspace.path,"grant":{"type":"host","permissions":["readFiles","inspectRepository"]}}]
+        }),
+    );
+    assert!(bound.get("error").is_none(), "{bound}");
+    let session = server
+        .start_thread(StartThreadRequest {
+            kind: ash_protocol::SessionKind::Code,
+            execution_target: None,
+            branch_name: None,
+            worktree_start: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("git-discovery-session").unwrap(),
+            title: "fixture".into(),
+        })
+        .unwrap();
+    let added = call(
+        &mut connection,
+        3,
+        "session/dirs/add",
+        serde_json::json!({
+            "sessionId":session.session_id,"path":session_dir.path,"permissions":["readFiles","inspectRepository"]
+        }),
+    );
+    assert!(added.get("error").is_none(), "{added}");
+    let encode = |value: &str| -> String {
+        url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
+    };
+    let folder_id = format!(
+        "session:{}:{}",
+        encode(session.session_id.as_str()),
+        encode(session_dir.path.to_str().unwrap())
+    );
+    let scoped = call(
+        &mut connection,
+        4,
+        "git/repositories",
+        serde_json::json!({"folders":[{
+            "dirId":folder_id,"maxDepth":0,"ignoredFolders":[],"scanRepositories":[],
+            "detectSubmodules":false,"submoduleLimit":0,"detectWorktrees":false,"worktreeLimit":0
+        }]}),
+    );
+    let repository = &scoped["result"]["repositories"][0];
+    assert_eq!(repository["dirId"], folder_id, "{scoped}");
+    let repository_id = repository["id"].as_str().unwrap();
+    let status = call(
+        &mut connection,
+        5,
+        "git/status",
+        serde_json::json!({"repositoryId":repository_id}),
+    );
+    assert_eq!(status["result"]["head"]["name"], "session", "{status}");
+    let denied = call(
+        &mut connection,
+        6,
+        "git/stage",
+        serde_json::json!({
+            "repositoryId":repository_id,"paths":["fixture.txt"]
+        }),
+    );
+    assert_eq!(denied["error"]["message"], "PermissionRequired", "{denied}");
+
+    let mut other = server.product_host_connection();
+    assert!(initialize(&mut other).get("error").is_none());
+    let denied = call(
+        &mut other,
+        2,
+        "git/status",
+        serde_json::json!({"repositoryId":repository_id}),
+    );
+    assert_eq!(
+        denied["error"]["message"], "GitRepositoryNotFound",
+        "{denied}"
+    );
+    let global = call(
+        &mut connection,
+        7,
+        "git/repositories",
+        serde_json::json!({}),
+    );
+    assert_eq!(
+        global["result"]["repositories"][0]["dirId"], "workspace",
+        "{global}"
+    );
+    let status = call(
+        &mut connection,
+        8,
+        "git/status",
+        serde_json::json!({"repositoryId":repository_id}),
+    );
+    assert_eq!(status["result"]["head"]["name"], "session", "{status}");
+
+    let reset = call(
+        &mut connection,
+        9,
+        "git/repositories",
+        serde_json::json!({"folders":[]}),
+    );
+    assert_eq!(
+        reset["result"]["repositories"],
+        serde_json::json!([]),
+        "{reset}"
+    );
+    let denied = call(
+        &mut connection,
+        10,
+        "git/status",
+        serde_json::json!({"repositoryId":repository_id}),
+    );
+    assert_eq!(
+        denied["error"]["message"], "GitRepositoryNotFound",
+        "{denied}"
+    );
+    server.close_connection(other);
+    server.close_connection(connection);
+}
+
+#[test]
 fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_terminal() {
     let dir = TestDir::new("projectless-session-terminal", "fixture.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();

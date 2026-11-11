@@ -1,5 +1,5 @@
 import { CancellationError, isCancellationError } from '../../base/common/errors.js';
-import type { IWorkspaceTrustApi, DirectoryPermissionRequest } from '../../platform/workspace/common/workspaceTrust.js';
+import type { IWorkspaceTrustApi } from '../../platform/workspace/common/workspaceTrust.js';
 import { createSessionFolderTrustRequestService } from '../contrib/workspace/browser/workspace.contribution.js';
 import { removePartsSplash } from '../../workbench/contrib/splash/browser/splash.js';
 import { structuralEquals } from '../../base/common/equals.js';
@@ -174,14 +174,19 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					const directory = await localTrust.readDirectory(path);
 					return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
 				},
-				authorize: (path, signal, host, onTrustDeclined) => authorizeSessionFolder(
-					host?.api.workspaceTrust ?? localTrust,
-					listener => {
-						if (!host) return localClient.onStateChange(listener);
-						const subscription = host.api.appServer.onConnectionState(listener);
-						return toDisposable(() => subscription.dispose());
-					},
-					workspaceTrust.confirmFolderTrust, { path, remoteHostLabel: host?.label }, signal, { onTrustDeclined }),
+				authorize: (paths, signal, options) => {
+					const host = options?.host;
+					return authorizeSessionFolders(
+						host?.api.workspaceTrust ?? localTrust,
+						listener => {
+							if (!host) return localClient.onStateChange(listener);
+							const subscription = host.api.appServer.onConnectionState(listener);
+							return toDisposable(() => subscription.dispose());
+						},
+						(missing, signal) => workspaceTrust.confirmFoldersTrust({ paths: missing, remoteHostLabel: host?.label }, signal),
+						paths, signal, options,
+					);
+				},
 			});
 			return registerLocalTranscriptionService(transcriptionServices, localClient);
 		}], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, workspaceTrust, mainProcessService);
@@ -219,14 +224,14 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				using cancellation = token?.onCancellationRequested(() => controller.abort());
 				if (token) throwIfCancelled(token);
 				for (const { uri } of target.folders) {
-					const accepted = await authorizeSessionFolder(
+					const accepted = await authorizeSessionFolders(
 						api.workspaceTrust,
 						listener => {
 							const subscription = api.appServer.onConnectionState(listener);
 							return toDisposable(() => subscription.dispose());
 						},
-						workspaceTrust.confirmFolderTrust,
-						workspaceAuthority ? { path: getRemoteWorkspacePath(uri), remoteHostLabel: workspaceAuthority } : { path: uri.fsPath },
+						(paths, signal) => workspaceTrust.confirmFoldersTrust({ paths, remoteHostLabel: workspaceAuthority }, signal),
+						[workspaceAuthority ? getRemoteWorkspacePath(uri) : uri.fsPath],
 						controller.signal,
 						{ explicitGrant: true },
 					);
@@ -358,6 +363,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'chat.promptActions',
 					'workbench.contrib.chatSetup',
 					'workbench.contrib.chatContextContribution',
+					'chat.contextContributions',
 					'workbench.contrib.chatReferenceAttachmentWidgetFactory',
 					'chat.sessionReferenceContext',
 					'workbench.contrib.dataChannels',
@@ -474,41 +480,46 @@ import { IWorkbenchEnvironmentService } from '../../workbench/services/environme
 import { ElectronWorkbenchEnvironmentService } from '../../workbench/services/environment/electron-browser/environmentService.js';
 import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';
 
-async function authorizeSessionFolder(
+async function authorizeSessionFolders(
 	trust: IWorkspaceTrustApi,
 	onConnectionState: (listener: (state: string) => void) => IDisposable,
-	confirmFolderTrust: (request: DirectoryPermissionRequest, signal: AbortSignal) => Promise<boolean>,
-	request: DirectoryPermissionRequest,
+	confirmFoldersTrust: (paths: readonly string[], signal: AbortSignal) => Promise<boolean>,
+	paths: readonly string[],
 	signal: AbortSignal,
 	options?: { readonly onTrustDeclined?: () => void; readonly explicitGrant?: boolean; },
 ): Promise<boolean> {
-	const { path } = request;
 	const controller = new AbortController();
 	using selection = addDisposableListener(signal, 'abort', () => controller.abort(), { once: true });
 	using connection = onConnectionState(state => {
 		if (state !== 'ready') { controller.abort(); }
 	});
 	throwIfCancelled(signal);
-	const existing = await trust.readDirectory(path);
-	throwIfCancelled(controller.signal);
-	const permissions = existing.permissions ?? (options?.explicitGrant ? undefined : existing.inheritedWorkspacePermissions);
-	if (hasDevelopmentPermissions(permissions)) { return true; }
+	const read = async (path: string) => {
+		const directory = await trust.readDirectory(path);
+		throwIfCancelled(controller.signal);
+		const permissions = directory.permissions ?? (options?.explicitGrant ? undefined : directory.inheritedWorkspacePermissions);
+		return { path, dir: directory.dir, permissions, trusted: hasDevelopmentPermissions(permissions) };
+	};
+	const existing = await Promise.all(paths.map(read));
+	const missing = existing.filter(folder => !folder.trusted);
+	if (!missing.length) return true;
 
-	const confirmed = await confirmFolderTrust(request, controller.signal);
+	const confirmed = await confirmFoldersTrust(missing.map(folder => folder.path), controller.signal);
 	throwIfCancelled(controller.signal);
 	if (!confirmed) {
 		options?.onTrustDeclined?.();
 		return false;
 	}
-	const grant = await trust.createGrant(path, DEVELOPMENT_DIR_PERMISSIONS);
-	// A concurrent grant wins, and an alias must still identify the folder that was approved.
-	const current = await trust.readDirectory(path);
-	throwIfCancelled(controller.signal);
-	if (current.dir !== existing.dir) { return false; }
-	const currentPermissions = current.permissions ?? (options?.explicitGrant ? undefined : current.inheritedWorkspacePermissions);
-	if (hasDevelopmentPermissions(currentPermissions)) { return true; }
-	if (!structuralEquals(currentPermissions, permissions)) { return false; }
-	await trust.persistGrant(path, grant);
-	throwIfCancelled(controller.signal);
+	// Each write uses the latest revision. A retry can reuse grants saved before a later write failed.
+	for (const folder of existing) {
+		const grant = folder.trusted ? undefined : await trust.createGrant(folder.path, DEVELOPMENT_DIR_PERMISSIONS);
+		const current = await read(folder.path);
+		// A concurrent grant wins, but a moved alias or revoked grant requires a fresh decision.
+		if (current.dir !== folder.dir) return false;
+		if (current.trusted) continue;
+		if (!grant || !structuralEquals(current.permissions, folder.permissions)) return false;
+		await trust.persistGrant(folder.path, grant);
+		throwIfCancelled(controller.signal);
+	}
 	return true;
 }

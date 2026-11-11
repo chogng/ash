@@ -272,7 +272,7 @@ fn memory_requests_forward_cancellation_and_only_notify_committed_writes() {
                 json!({"jsonrpc":"2.0","id":2,"method":method,"params":params}),
             )
             .unwrap();
-            server.dispatch(&mut host, &mut request, cancellation)
+            server.dispatch(&mut host, &mut request, cancellation, None)
         };
         let active = CancellationSource::new();
         let seed = json!({"commandId":"seed","memoryId":"decision","scope":{"type":"profile"},"title":"Decision","body":"Original fact"});

@@ -155,6 +155,8 @@ pub struct AssistantMessage {
     pub text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase: Option<crate::MessagePhase>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub citations: Option<Vec<crate::ResponseCitation>>,
 }
 
 /// A provider-neutral incremental update produced while a model invocation is in progress.

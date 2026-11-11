@@ -1,7 +1,6 @@
-import { renderAsPlaintext } from '../../../../../../base/browser/markdownRenderer.js';
 import { Marked, type Token, type Tokens } from '../../../../../../base/common/marked/marked.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
-import { renderChatRichContentText } from '../chatMarkdownRichContent.js';
+import { renderChatMarkdownPlaintext, renderChatRichContentText } from '../chatMarkdownRichContent.js';
 
 export interface IChatFindTextPart {
 	readonly text: string;
@@ -18,7 +17,7 @@ export function getChatFindTextParts(item: IChatListItem): readonly IChatFindTex
 	}
 	const parts: IChatFindTextPart[] = [];
 	const richContent = item.markdown?.richContent;
-	const asText = (value: string) => richContent ? renderChatRichContentText(value, richContent) : renderAsPlaintext(value);
+	const asText = (value: string) => richContent ? renderChatRichContentText(value, richContent) : renderChatMarkdownPlaintext(value);
 	let codeBlockIndex = 0;
 	const visit = (tokens: readonly Token[]): void => {
 		for (const token of tokens) {

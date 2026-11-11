@@ -35,7 +35,7 @@ suite('ChatGPTProjectFolderPicker', () => {
 			],
 			conversations: [],
 			messages: [],
-			coworkTasks: [],
+			linkedTasks: [],
 			draft: '',
 			activeDraftConversationId: undefined,
 			localConversationId: 'local-1',
@@ -67,7 +67,7 @@ suite('ChatGPTProjectFolderPicker', () => {
 
 		const picker = resources.add(services.createInstance(ChatGPTProjectFolderPicker, footer, visible));
 		const button = footer.querySelector<HTMLButtonElement>('.ash-chat-input-workspace-picker')!;
-		const remove = footer.querySelector<HTMLButtonElement>('.ash-chatgpt-project-remove')!;
+		const remove = footer.querySelector<HTMLButtonElement>('.ash-chat-input-project-pill-remove')!;
 		const getIconId = () => button.querySelector<HTMLElement>('.ash-icon-label-icon .ash-icon')?.dataset.ashIconId;
 
 		return {

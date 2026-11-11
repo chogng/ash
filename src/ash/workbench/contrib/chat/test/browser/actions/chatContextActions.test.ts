@@ -3,7 +3,7 @@ import type { IChatWidgetService } from '../../../browser/chat.js';
 import { type IChatContextPickService } from '../../../browser/attachments/chatContextPickService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { SCMHistoryItemUri } from '../../../../scm/common/history.js';
-import { expect } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../../test/unit/browser/context.js';
 import type { } from '../../../../../../../../test/fixtures/browser/chatInput.page.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
@@ -144,6 +144,15 @@ suite('Attachment source discovery lifetime', () => {
 	});
 });
 
+async function chooseAttachmentSearch(page: Page): Promise<void> {
+	await page.getByRole('menuitem', { name: /^(Search attachments|搜索附件)$/u }).press('Enter');
+}
+
+async function openAttachmentSearch(page: Page, trigger: Locator = page.getByRole('button', { name: /^(Add context|添加上下文)$/u })): Promise<void> {
+	await trigger.press('Enter');
+	await chooseAttachmentSearch(page);
+}
+
 suite('chatContextActions browser component', () => {
 	const browserTests = useBrowserTests();
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'hcDark']) {
@@ -152,7 +161,7 @@ suite('chatContextActions browser component', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/chatInput.html?inlineCode=1&contextProviders=1&locale=${locale}&theme=${theme}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
-			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			await openAttachmentSearch(page);
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('combobox').fill(chinese ? '其他上下文来源' : 'Other context sources');
 			await page.keyboard.press('Enter');
@@ -184,7 +193,7 @@ suite('chatContextActions browser component', () => {
 			window.ashChatInputIntegration.showModels();
 			window.ashChatInputIntegration.setActiveFile('/workspace/provided.ctx');
 		});
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('combobox').fill('Open editors');
 		await page.keyboard.press('Enter');
@@ -265,7 +274,7 @@ suite('chatContextActions browser component', () => {
 					const chinese = locale === 'zh-CN';
 					await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&imageCapability=${capability}&${source === 'editor' ? 'openImageEditor' : 'workspaceImage'}`);
 					await page.evaluate(() => window.ashChatInputIntegration.showModels());
-					await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+					await openAttachmentSearch(page);
 					const picker = page.getByRole('dialog');
 					const editorLabel = chinese ? '已打开的编辑器' : 'Open editors';
 					await picker.getByRole('combobox').fill(source === 'editor' ? editorLabel : 'picture.PNG');
@@ -294,7 +303,7 @@ suite('chatContextActions browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			let picker = page.getByRole('dialog');
 			await picker.getByRole('combobox').fill(chinese ? '已打开的编辑器' : 'Open editors');
 			await page.keyboard.press('Enter');
@@ -302,7 +311,7 @@ suite('chatContextActions browser component', () => {
 			await expect(attachments).toHaveCount(0);
 			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toHaveValue('edited.ts ');
 			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('combobox').fill(chinese ? '文件和文件夹' : 'Files & Folders');
 			await page.keyboard.press('Enter');
 			await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '按名称搜索文件或文件夹' : 'Search file or folder by name');
@@ -313,7 +322,7 @@ suite('chatContextActions browser component', () => {
 			await picker.getByRole('option', { name: /nested.txt/ }).click();
 			await expect(attachments).toHaveCount(0);
 			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toHaveValue('edited.ts nested.txt ');
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('combobox').fill(chinese ? '其他上下文来源' : 'Other context sources');
 			await page.keyboard.press('Enter');
 			await expect(picker).toContainText('Source context');
@@ -358,9 +367,10 @@ suite('chatContextActions browser component', () => {
 				expect(Math.abs(menu.x - Math.max(8, button.x))).toBeLessThanOrEqual(1);
 				expect(menu.width).toBe(380);
 			};
-			await expect(add).toHaveAttribute('aria-haspopup', 'dialog');
+			await expect(add).toHaveAttribute('aria-haspopup', 'menu');
 			await expect(add).toHaveAttribute('aria-expanded', 'false');
 			await add.press('Space');
+			await chooseAttachmentSearch(page);
 			await expect(search).toBeFocused();
 			await expect(add).toHaveAttribute('aria-expanded', 'true');
 			await assertAbove();
@@ -387,7 +397,7 @@ suite('chatContextActions browser component', () => {
 			await expect(picker).toHaveCount(0);
 			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 			await expect(add).toHaveAttribute('aria-expanded', 'false');
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await search.fill('nested');
 			await expect(picker.getByRole('option', { name: /nested.txt/ })).toBeVisible();
 			await page.keyboard.press('ArrowDown');
@@ -398,7 +408,7 @@ suite('chatContextActions browser component', () => {
 		});
 	}
 
-	test('attachment menu flips below Add, fits a narrow viewport, follows resize and toggles closed', async function () {
+	test('attachment search flips below Add, fits a narrow viewport, follows resize and closes with Escape', async function () {
 		const { page } = browserTests;
 
 		await page.setViewportSize({ width: 320, height: 600 });
@@ -407,6 +417,7 @@ suite('chatContextActions browser component', () => {
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
 		const picker = page.getByRole('dialog');
 		await add.click();
+		await chooseAttachmentSearch(page);
 		await expect(picker.getByRole('combobox')).toBeFocused();
 		await expect.poll(async () => {
 			const button = await add.boundingBox();
@@ -424,23 +435,23 @@ suite('chatContextActions browser component', () => {
 			const bounds = await picker.boundingBox();
 			return button && bounds ? Math.round(button.y - bounds.y - bounds.height) : -1;
 		}).toBe(4);
-		await add.click();
+		await page.keyboard.press('Escape');
 		await expect(picker).toHaveCount(0);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 		await expect(add).toHaveAttribute('aria-expanded', 'false');
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await expect(picker).toBeVisible();
 		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
 		await message.click({ position: { x: (await message.boundingBox())!.width - 12, y: 12 } });
 		await expect(picker).toHaveCount(0);
 		await expect(message).toBeFocused();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await picker.getByRole('combobox').press('Tab');
 		await expect.poll(() => picker.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
 		await page.keyboard.press('Escape');
 		await expect(picker).toHaveCount(0);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await picker.getByRole('combobox').press('Shift+Tab');
 		await expect.poll(() => picker.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
 		await page.keyboard.press('Escape');
@@ -454,7 +465,7 @@ suite('chatContextActions browser component', () => {
 		await page.goto('/chatInput.html?inlineCode=1&sendFailure=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		const upload = page.waitForEvent('filechooser');
 		await page.getByRole('dialog').getByRole('combobox').fill('Attach files');
 		await page.keyboard.press('Enter');
@@ -486,11 +497,11 @@ suite('chatContextActions browser component', () => {
 		await page.goto('/chatInput.html');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await page.keyboard.press('Escape');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await page.getByRole('dialog').getByRole('combobox').fill('Other context sources');
 		await page.keyboard.press('Enter');
 		await page.getByRole('dialog').getByRole('combobox').fill('error');
@@ -506,7 +517,7 @@ suite('chatContextActions browser component', () => {
 		await page.goto('/chatInput.html');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		let chooser = page.waitForEvent('filechooser');
 		await page.getByRole('dialog').getByRole('combobox').fill('Attach files');
 		await page.keyboard.press('Enter');
@@ -516,7 +527,7 @@ suite('chatContextActions browser component', () => {
 		]);
 		await expect(page.getByLabel('Context error')).toContainText('binary.dat must be a UTF-8 text file');
 		await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		chooser = page.waitForEvent('filechooser');
 		await page.getByRole('dialog').getByRole('combobox').fill('Attach files');
 		await page.keyboard.press('Enter');
@@ -531,7 +542,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await page.getByRole('dialog').getByRole('combobox').fill('Other context sources');
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('dialog')).toContainText('Source context');
@@ -547,7 +558,7 @@ suite('chatContextActions browser component', () => {
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.setViewportSize({ width: 320, height: 600 });
 		await page.locator('main').evaluate(element => { element.style.width = '260px'; });
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const chooser = page.waitForEvent('filechooser');
 		await page.getByRole('dialog').getByRole('option', { name: 'Attach files', exact: true }).click();
 		const name = `${'very-long-code-file-name-'.repeat(8)}.ts`;
@@ -573,7 +584,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?deferFileSearch=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('combobox').fill('nested');
 		await expect(page.getByLabel('File search reads', { exact: true })).toHaveText('1');
@@ -602,7 +613,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?deferFileSearch=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await page.getByRole('dialog').getByRole('combobox').fill('nested');
 		await expect(page.getByLabel('File search reads', { exact: true })).toHaveText('1');
 		await page.evaluate(() => window.ashChatInputIntegration.dispose());
@@ -617,7 +628,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
 		await expect(picker.getByRole('separator', { name: 'Recently opened' })).toHaveCount(1);
@@ -653,7 +664,7 @@ suite('chatContextActions browser component', () => {
 			await page.goto(`/chatInput.html?locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
-			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			await openAttachmentSearch(page);
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '文件和文件夹…' : 'Files & Folders…', exact: true }).click();
 			await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', chinese ? '按名称搜索文件或文件夹' : 'Search file or folder by name');
@@ -675,11 +686,11 @@ suite('chatContextActions browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			const chooser = page.waitForEvent('filechooser');
 			await page.getByRole('dialog').getByRole('option', { name: chinese ? '添加附件' : 'Attach files', exact: true }).click();
 			await (await chooser).setFiles({ name: 'first.ts', mimeType: 'text/plain', buffer: Buffer.from('First captured snapshot') });
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await page.getByRole('dialog').getByRole('option', { name: chinese ? '会话…' : 'Sessions…', exact: true }).click();
 			await page.getByRole('dialog').getByRole('option', { name: 'Earlier design', exact: true }).click();
 			const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
@@ -806,7 +817,7 @@ suite('chatContextActions browser component', () => {
 			const chinese = locale === 'zh-CN';
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
 			const picker = page.getByRole('dialog');
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 			await picker.getByRole('option', { name: /team\/alpha workspace/ }).click();
 			await expect(picker.getByRole('option', { name: /#12 Attachment issue/ })).toBeVisible();
@@ -814,8 +825,8 @@ suite('chatContextActions browser component', () => {
 			await expect(picker.getByRole('option', { name: /#12 Attachment issue/ })).toBeVisible();
 			await picker.getByRole('option', { name: /#13 Follow-up issue/ }).click();
 			await expect(picker).toHaveCount(0);
-			await add.press('Enter');
-			await picker.getByRole('option', { name: 'Pull Request…', exact: true }).click();
+			await openAttachmentSearch(page, add);
+			await picker.getByRole('option', { name: chinese ? '拉取请求…' : 'Pull Request…', exact: true }).click();
 			await picker.getByRole('combobox').fill('https://github.com/other/project/pull/27');
 			await picker.getByRole('option', { name: 'other/project/pull/27', exact: true }).click();
 			await expect(picker).toHaveCount(0);
@@ -859,12 +870,12 @@ suite('chatContextActions browser component', () => {
 		await page.goto('/chatInput.html?emptyClipboard=1&cancelScreenshot=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await page.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
 		await expect(page.getByLabel('Context error')).toContainText('The clipboard does not contain an image');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await page.getByRole('dialog').getByRole('option', { name: 'Screenshot…', exact: true }).click();
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
@@ -876,7 +887,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 		for (const link of ['https://other.test/team/alpha/issues/12', 'https://github.com/team/alpha/pull/12']) {
@@ -900,7 +911,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 		await picker.getByRole('option', { name: /team\/alpha workspace/ }).click();
@@ -916,7 +927,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?multipleGitHubAccounts=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 		await picker.getByRole('option', { name: /work-developer github.company.test/ }).click();
@@ -933,12 +944,12 @@ suite('chatContextActions browser component', () => {
 		await page.goto('/chatInput.html?noGitHubAccount=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await page.getByRole('dialog').getByRole('option', { name: 'Pull Request…', exact: true }).click();
 		await expect(page.getByLabel('Context error')).toContainText('Connect a GitHub account in Settings');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await page.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
 		await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
 	});
@@ -948,7 +959,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?deferGitHubSearch=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 		await picker.getByRole('option', { name: /team\/alpha workspace/ }).click();
@@ -977,7 +988,7 @@ suite('chatContextActions browser component', () => {
 			await page.goto(`/chatInput.html?imageCapability=${capability}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const add = page.getByRole('button', { name: 'Add context', exact: true });
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			const picker = page.getByRole('dialog');
 			await expect(picker.getByRole('option', { name: 'Image from Clipboard', exact: true })).toHaveCount(capability === 'text' ? 0 : 1);
 			await expect(picker.getByRole('option', { name: 'Screenshot…', exact: true })).toHaveCount(capability === 'text' ? 0 : 1);
@@ -987,7 +998,7 @@ suite('chatContextActions browser component', () => {
 				await (await chooser).setFiles({ name: 'unsupported.png', mimeType: 'image/png', buffer: Buffer.from('image') });
 				await expect(page.getByLabel('Context error')).toContainText('The selected model does not support images');
 				await expect(page.getByRole('list', { name: 'Attached context' })).toBeHidden();
-				await add.press('Enter');
+				await openAttachmentSearch(page, add);
 				await page.getByRole('dialog').getByRole('option', { name: 'Open editors', exact: true }).click();
 				await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
 				await expect(page.getByLabel('Submission')).toContainText('Unsaved editor text');
@@ -1016,17 +1027,17 @@ suite('chatContextActions browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			const chooser = page.waitForEvent('filechooser');
 			await page.getByRole('dialog').getByRole('option', { name: chinese ? '添加附件' : 'Attach files', exact: true }).click();
 			await (await chooser).setFiles({ name: 'saved.ts', mimeType: 'text/plain', buffer: Buffer.from('Captured file') });
 			await expect(page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} saved.ts`, exact: true })).toBeVisible();
 			await expect(message).toBeFocused();
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await page.getByRole('dialog').getByRole('option', { name: chinese ? '剪贴板中的图片' : 'Image from Clipboard', exact: true }).click();
 			await expect(page.getByRole('dialog')).toHaveCount(0);
 			await expect(message).toBeFocused();
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await page.getByRole('dialog').getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
 			await page.getByRole('dialog').getByRole('option', { name: /Shell \/workspace/ }).click();
 			await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -1109,7 +1120,7 @@ suite('chatContextActions browser component', () => {
 			return canvas.toDataURL('image/png').split(',')[1];
 		});
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		let chooser = page.waitForEvent('filechooser');
 		await page.getByRole('dialog').getByRole('option', { name: 'Attach files', exact: true }).click();
 		await (await chooser).setFiles({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.from(large, 'base64') });
@@ -1120,18 +1131,18 @@ suite('chatContextActions browser component', () => {
 			const context = canvas.getContext('2d')!; context.drawImage(element as HTMLImageElement, 0, 0);
 			return context.getImageData(1800, 500, 1, 1).data[3];
 		})).toBe(0);
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await page.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		chooser = page.waitForEvent('filechooser');
 		await page.getByRole('dialog').getByRole('option', { name: 'Attach files', exact: true }).click();
 		await (await chooser).setFiles({ name: 'duplicate.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg==', 'base64') });
 		await expect(page.locator('.ash-chat-image-reference-control img')).toHaveCount(3);
 		await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 		await expect(page.getByRole('img', { name: 'Pasted Image', exact: true })).toBeVisible();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		chooser = page.waitForEvent('filechooser');
 		await page.getByRole('dialog').getByRole('option', { name: 'Attach files', exact: true }).click();
 		await (await chooser).setFiles([{ name: 'valid.txt', mimeType: 'text/plain', buffer: Buffer.from('Valid') }, { name: 'invalid.png', mimeType: 'image/png', buffer: Buffer.from('Invalid image') }]);
@@ -1148,20 +1159,20 @@ suite('chatContextActions browser component', () => {
 			const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
 			const picker = page.getByRole('dialog');
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '文件和文件夹…' : 'Files & Folders…', exact: true }).click();
 			await picker.getByRole('option', { name: /src \/workspace/ }).click();
 			await expect(message).toBeFocused();
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '指令…' : 'Instructions…', exact: true }).click();
 			await picker.getByRole('option', { name: /API review/ }).click();
 			await expect(message).toBeFocused();
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 			await picker.getByRole('combobox').fill('source document');
 			await picker.getByRole('option', { name: /read_file/ }).click();
 			await expect(message).toBeFocused();
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '搜索结果' : 'Search Results', exact: true }).click();
 			await expect(message).toBeFocused();
 			const names = ['src', 'API review', chinese ? '工具：read_file' : 'Tool: read_file', chinese ? '搜索结果：needle' : 'Search Results: needle'];
@@ -1308,6 +1319,7 @@ suite('chatContextActions browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
 			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).click();
+			await chooseAttachmentSearch(page);
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '其他上下文来源' : 'Other context sources', exact: true }).click();
 			await expect(picker.getByRole('option', { name: 'Source context', exact: true })).toBeVisible();
@@ -1334,6 +1346,7 @@ suite('chatContextActions browser component', () => {
 			await page.goto(`/chatInput.html?inlineCode=1&readonlyEditorSnapshot=1&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).click();
+			await chooseAttachmentSearch(page);
 			await page.getByRole('dialog').getByRole('option', { name: chinese ? '已打开的编辑器' : 'Open editors', exact: true }).click();
 			await page.getByRole('button', { name: `${chinese ? '打开' : 'Open'} edited.ts`, exact: true }).click();
 			await expect.poll(async () => JSON.parse(await page.getByLabel('Opened saved content').innerText()).map((input: { text: string; }) => input.text)).toEqual(['Displayed readonly editor version']);
@@ -1407,17 +1420,17 @@ suite('chatContextActions browser component', () => {
 		await page.goto('/chatInput.html?inlineCode=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const add = page.getByRole('button', { name: 'Add context', exact: true });
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		let picker = page.getByRole('dialog');
 		await picker.getByRole('combobox').fill('edited');
 		await page.keyboard.press('Enter');
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await picker.getByRole('option', { name: 'Files & Folders…', exact: true }).click();
 		await picker.getByRole('option', { name: /src \/workspace/ }).click();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await picker.getByRole('option', { name: 'Sessions…', exact: true }).click();
 		await picker.getByRole('option', { name: 'Earlier design', exact: true }).click();
-		await add.press('Enter');
+		await openAttachmentSearch(page, add);
 		await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 		await picker.getByRole('combobox').fill('https://github.com/team/alpha/issues/12');
 		await picker.getByRole('option', { name: 'team/alpha/issues/12', exact: true }).click();
@@ -1439,7 +1452,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?multipleGitHubAccounts=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Sessions…', exact: true }).click();
 		await picker.getByRole('option', { name: 'Go back ↩', exact: true }).click();
@@ -1481,7 +1494,7 @@ suite('chatContextActions browser component', () => {
 		await page.setViewportSize({ width: 320, height: 600 });
 		await page.locator('main').evaluate(element => { element.style.width = '260px'; element.style.setProperty('--ash-contrastBorder', 'rgb(255, 255, 255)'); });
 		const owner = 'a'.repeat(160);
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Issue…', exact: true }).click();
 		await picker.getByRole('combobox').fill(`https://github.com/${owner}/project/issues/12`);
@@ -1507,7 +1520,7 @@ suite('chatContextActions browser component', () => {
 			const chinese = locale === 'zh-CN';
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
 			const picker = page.getByRole('dialog');
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
 			await picker.getByRole('combobox').fill('Shell');
 			await expect(picker.getByRole('option', { name: /Shell \/workspace/ })).toBeVisible();
@@ -1520,7 +1533,7 @@ suite('chatContextActions browser component', () => {
 			await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
 			await picker.getByRole('option', { name: /Shell \/workspace/ }).click();
 			await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '符号…' : 'Symbols…', exact: true }).click();
 			await picker.getByRole('combobox').fill('attach');
 			await expect(picker.getByRole('option', { name: /attach/ })).toBeVisible();
@@ -1557,13 +1570,13 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		for (const name of ['Terminal…', 'Symbols…', 'Search Results']) await expect(picker.getByRole('option', { name, exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await page.goto('/chatInput.html?contextSources=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await picker.getByRole('option', { name: 'Symbols…', exact: true }).click();
 		await picker.getByRole('option', { name: 'Go back ↩', exact: true }).click();
 		await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
@@ -1577,7 +1590,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?contextSources=1&staleSymbol=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await page.getByRole('dialog').getByRole('option', { name: 'Symbols…', exact: true }).click();
 		await page.getByRole('dialog').getByRole('option', { name: /attach/ }).click();
 		await expect(page.getByLabel('Context error')).toContainText('The symbol source changed. Search again to attach its current code.');
@@ -1590,7 +1603,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?contextSources=1&deferSymbolSearch=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Symbols…', exact: true }).click();
 		await picker.getByRole('combobox').fill('pending');
@@ -1612,7 +1625,7 @@ suite('chatContextActions browser component', () => {
 			const chinese = locale === 'zh-CN';
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
 			const picker = page.getByRole('dialog');
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '指令…' : 'Instructions…', exact: true }).click();
 			await picker.getByRole('combobox').fill('contracts');
 			await expect(picker.getByRole('option', { name: /API review/ })).toContainText(chinese ? '目录' : 'Directory');
@@ -1639,12 +1652,12 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?noInstructions=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await expect(page.getByRole('option', { name: 'Instructions…', exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await page.goto('/chatInput.html?instructionFailure=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await page.getByRole('option', { name: 'Instructions…', exact: true }).click();
 		await expect(page.getByLabel('Context error')).toContainText('Instruction catalog failed');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -1656,7 +1669,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?deferInstructions=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await page.getByRole('option', { name: 'Instructions…', exact: true }).click();
 		await page.keyboard.press('Escape');
 		await expect(page.getByRole('dialog').getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
@@ -1676,7 +1689,7 @@ suite('chatContextActions browser component', () => {
 			const chinese = locale === 'zh-CN';
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
 			const picker = page.getByRole('dialog');
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 			await expect(picker.getByRole('option', { name: /internal_broker/ })).toHaveCount(0);
 			await picker.getByRole('combobox').fill('docs-server');
@@ -1711,12 +1724,12 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto('/chatInput.html?noTools=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await expect(page.getByRole('option', { name: 'Tools…', exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await page.goto('/chatInput.html?toolFailure=1');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		await page.getByRole('option', { name: 'Tools…', exact: true }).click();
 		await expect(page.getByLabel('Context error')).toContainText('Tool catalog failed');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -1731,7 +1744,7 @@ suite('chatContextActions browser component', () => {
 			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
-			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			await openAttachmentSearch(page);
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 			await picker.getByRole('combobox').fill('local/directory');
@@ -1753,7 +1766,7 @@ suite('chatContextActions browser component', () => {
 			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
-			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			await openAttachmentSearch(page);
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 			const search = picker.getByRole('combobox');
@@ -1776,13 +1789,14 @@ suite('chatContextActions browser component', () => {
 			await expect(page.getByLabel('Submission')).toContainText('read_file');
 		});
 
-		test(`open tool configuration follows catalog changes without losing pending selection in ${locale}`, async function () {
+		test(`open tool configuration follows the composer catalog without losing pending selection in ${locale}`, async function () {
 			const { page } = browserTests;
 
-			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}`);
+			await page.goto(`/chatInput.html?inlineCode=1&scopedTools&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).click();
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '工具…' : 'Tools…', exact: true }).click();
 			await picker.getByRole('option', { name: chinese ? '配置工具…' : 'Configure tools…', exact: true }).click();
@@ -1822,9 +1836,13 @@ suite('chatContextActions browser component', () => {
 			const configureLabel = chinese ? '配置工具…' : 'Configure tools…';
 			const applyLabel = chinese ? '应用' : 'Apply';
 			const attachments = page.locator('.ash-chat-input-editor');
-			const openSelection = async (): Promise<void> => {
+			const openTools = async (): Promise<void> => {
 				await add.press('Enter');
+				await page.getByRole('menuitem', { name: chinese ? '搜索附件' : 'Search attachments', exact: true }).click();
 				await picker.getByRole('option', { name: toolsLabel, exact: true }).click();
+			};
+			const openSelection = async (): Promise<void> => {
+				await openTools();
 				await picker.getByRole('option', { name: configureLabel, exact: true }).click();
 			};
 			await openSelection();
@@ -1855,8 +1873,7 @@ suite('chatContextActions browser component', () => {
 			const submitted = JSON.parse((await page.getByLabel('Submission').textContent())!);
 			expect(JSON.parse(submitted[0].content)).toEqual(['read_file', 'write_file']);
 			await expect(page.locator('.ash-chat-input-attachments')).toHaveCount(0);
-			await add.press('Enter');
-			await picker.getByRole('option', { name: toolsLabel, exact: true }).click();
+			await openTools();
 			await picker.getByRole('combobox').fill('read_file');
 			await expect(picker.getByRole('option', { name: /^read_file(?:\s|$)/ })).toHaveCount(0);
 			await page.keyboard.press('Escape');
@@ -1875,7 +1892,7 @@ suite('chatContextActions browser component', () => {
 		await page.goto('/chatInput.html?contextSources=1&terminalCwd=%2Fworkspace%2Fcurrent%3Bfolder');
 		await page.waitForFunction(() => Boolean(window.ashChatInputIntegration));
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Terminal…', exact: true }).click();
 		await picker.getByRole('combobox').fill('Shell');
@@ -1889,7 +1906,7 @@ suite('chatContextActions browser component', () => {
 
 		await page.goto(`/chatInput.html?contextSources=1&shellHistory=1${storageDisabled ? '&disableCommandStorage=1' : ''}`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await openAttachmentSearch(page);
 		const picker = page.getByRole('dialog');
 		await picker.getByRole('option', { name: 'Terminal…', exact: true }).click();
 		await picker.getByRole('option', { name: /Shell \/workspace/ }).click();
@@ -1920,7 +1937,7 @@ suite('chatContextActions browser component', () => {
 			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
 			await input.focus();
 			await page.keyboard.type('Existing draft ');
-			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			await openAttachmentSearch(page);
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
 			await picker.getByRole('option', { name: /Shell \/workspace/ }).click();
@@ -1952,7 +1969,7 @@ suite('chatContextActions browser component', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/chatInput.html?inlineCode=1&contextSources=1&locale=${locale}&theme=${chinese ? 'hcLight' : 'dark'}`);
 			const add = page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true });
-			await add.press('Enter');
+			await openAttachmentSearch(page, add);
 			const picker = page.getByRole('dialog');
 			await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
 			await picker.getByRole('option', { name: /Shell \/workspace/ }).click();

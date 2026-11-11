@@ -13,6 +13,8 @@
 .ash-icon-label-icon {
 	display: inline-flex;
 	flex: 0 0 auto;
+	width: var(--ash-icon-label-icon-slot-size, auto);
+	height: var(--ash-icon-label-icon-slot-size, auto);
 	align-items: center;
 	justify-content: center;
 }
@@ -38,7 +40,7 @@
 	flex: 0 0 auto;
 	overflow: hidden;
 	text-overflow: var(--ash-icon-label-text-overflow, ellipsis);
-	white-space: nowrap;
+	white-space: var(--ash-icon-label-white-space, nowrap);
 }
 
 .ash-icon-label-container {
@@ -54,7 +56,7 @@
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
+	white-space: var(--ash-icon-label-white-space, nowrap);
 }
 
 .ash-icon-label-text.multiple {

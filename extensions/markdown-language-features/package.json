@@ -525,6 +525,9 @@
   "ashRuntime": {
     "kind": "rust",
     "entrypoint": "ash-markdown-language-features",
+    "capabilities": [
+      "markdown.mermaid.render.v1"
+    ],
     "requires": {
       "math.render.v2": "ash.markdown-math"
     },
@@ -542,6 +545,7 @@
     ]
   },
   "activationEvents": [
-    "onLanguage:markdown"
+    "onLanguage:markdown",
+    "onCapability:markdown.mermaid.render.v1"
   ]
 }

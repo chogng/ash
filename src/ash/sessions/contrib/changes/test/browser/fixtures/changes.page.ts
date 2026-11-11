@@ -37,6 +37,7 @@ import { SessionChangesEditorInput } from '../../../browser/sessionChangesEditor
 import { IDecorationsService } from '../../../../../../workbench/services/decorations/common/decorations.js';
 import { DecorationsService } from '../../../../../../workbench/services/decorations/browser/decorationsService.js';
 import { Event, Emitter } from '../../../../../../base/common/event.js';
+import { CancellationToken } from '../../../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -51,7 +52,7 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { ISessionsService } from '../../../../../services/sessions/browser/sessionsService.js';
 import { ChangesViewPane } from '../../../browser/changesView.js';
-import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { setNlsMessages } from '../../../../../../nls.js';
 import chinese from '../../../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
@@ -72,12 +73,19 @@ import { AccessibilityService } from '../../../../../../platform/accessibility/b
 import { AnimatedCounterWidget, type IAnimatedCounterWidgetOptions } from '../../../../../../workbench/browser/animatedCounterWidget.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import chineseWorkbench from '../../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
-import { IChecksOperationService } from '../../../common/checksOperationService.js';
-import { ChecksOperationService } from '../../../browser/checksOperationService.js';
+import { IChecksOperationService } from '../../../../github/common/checksOperationService.js';
+import { ChecksOperationService } from '../../../../github/browser/checksOperationService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import type { IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { CustomViewService, ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
+import { SessionInfoRail } from '../../../../../browser/parts/sessionInfoRail.js';
+import type { ChatWidgetModel } from '../../../../../browser/chatWidgetModel.js';
+import { SessionEnvironmentActions } from '../../../../chat/browser/sessionEnvironmentActions.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../../../../services/sessions/browser/sessionGitActionsService.js';
+import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../../../workbench/services/configuration/test/common/testServices.js';
+import { ISCMService } from '../../../../../../workbench/contrib/scm/common/scm.js';
 
 const chineseMessages = { ash: { ...chinese.ash, ...chineseWorkbench.ash } };
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') { setNlsMessages('zh-CN', chineseMessages); }
@@ -92,6 +100,7 @@ services.registerSingleton(IDecorationsService, () => services.createInstance(De
 services.registerSingleton(IChangesViewService, () => resources.add(services.createInstance(ChangesViewService)));
 services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
 services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
+services.registerSingleton(ISessionGitActionsService, () => services.createInstance(SessionGitActionsService));
 services.registerInstance(ISessionsManagementService, {
 	get onDidChange() { return changed.event; },
 	get active() {
@@ -107,6 +116,7 @@ services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEd
 const changed = resources.add(new Emitter<void>());
 const configuration = resources.add(new WorkbenchConfigurationService());
 services.registerInstance(IConfigurationService, configuration);
+const commitPreview = new URL(location.href).searchParams.has('commitPreview');
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
 	root: document.body,
@@ -284,7 +294,9 @@ services.registerInstance(IKeybindingService, {
 services.registerInstance(IMenuService, services.createInstance(MenuService));
 services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
 
-services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
+services.registerInstance(IQuickInputService, commitPreview
+	? resources.add(new TestQuickInputService({ container: document.body, instantiationService: services }))
+	: { input: async () => undefined } as unknown as IQuickInputService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.' } as unknown as IAccessibleViewService);
 const baseHost = createDisconnectedRendererApi();
 const host: IWorkbenchHost = {
@@ -311,8 +323,9 @@ services.registerInstance(ISessionProviderScopeService, {
 services.registerSingleton(IWorkspaceFolderLabelService, () => services.createInstance(SessionsWorkspaceFolderLabelService));
 const container = document.querySelector<HTMLElement>('#changes')!;
 container.style.cssText = 'width: 360px; height: 480px; --ash-spacing-size80: 8px; --ash-fontSize-body1: 13px; --ash-fontSize-body2: 11px; --ash-description-foreground: #666;';
+const viewServices = resources.add(createTestEditorServices(configuration, services));
 const viewOwner = resources.add(new MutableDisposable<ChangesViewPane>());
-let view = services.createInstance(ChangesViewPane, container, { id: 'sessions.changes', title: 'Changes' });
+let view = viewServices.createInstance(ChangesViewPane, container, { id: 'sessions.changes', title: 'Changes' });
 viewOwner.value = view;
 view.setVisible(true);
 window.addEventListener('pagehide', () => { viewOwner.clear(); resources.dispose(); }, { once: true });
@@ -322,9 +335,33 @@ const counterHost = document.createElement('div');
 counterHost.id = 'counter';
 document.body.append(counterHost);
 
+let rail: SessionInfoRail | undefined;
+function openSessionRail(): void {
+	if (!rail) {
+		const railServices = resources.add(services.createChild());
+		railServices.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'rail', folders: [] })));
+		railServices.registerInstance(ISCMService, { repositories: [], onDidAddRepository: Event.None, onDidRemoveRepository: Event.None } as unknown as ISCMService);
+		const model = {
+			onDidChange: changed.event, inputState: {},
+			get selectedSession() { return services.get(ISessionsService).activeSelection; },
+		} as unknown as ChatWidgetModel;
+		const host = document.createElement('div');
+		host.style.cssText = 'position:fixed; inset:0 0 0 auto; width:min(100vw, 500px); pointer-events:none;';
+		document.body.append(host);
+		rail = resources.add(railServices.createInstance(SessionInfoRail, host, model, () => { },
+			(container: HTMLElement) => railServices.createInstance(SessionEnvironmentActions, container, model)));
+		rail.element.style.pointerEvents = 'auto';
+		rail.setVisible(true);
+	}
+	if (!rail.visible) rail.toggle();
+}
+
 declare global {
 	interface Window {
 		ashChangesIntegration: {
+			openSessionRail(): void;
+			closeSessionRail(): void;
+			seedLegacyChecksCollapseState(): void;
 			counter(value: number | undefined, direction?: IAnimatedCounterWidgetOptions['direction'], duration?: number): void;
 			updateCounter(value: number | undefined): void;
 			disposeCounter(): void;
@@ -356,6 +393,7 @@ declare global {
 			activeTurn(value: boolean): void;
 			setLocale(): void;
 			opened(): number;
+			previewCommit(): void;
 			reviews(): readonly { resource: string; changesetId?: string; }[];
 			content(): string;
 			gitCalls(): readonly string[];
@@ -371,6 +409,15 @@ declare global {
 	}
 }
 window.ashChangesIntegration = {
+	openSessionRail,
+	closeSessionRail: () => { if (rail?.visible) rail.toggle(); },
+	seedLegacyChecksCollapseState: () => {
+		const storage = services.get(IStorageService);
+		const key = 'changesView.sessionViewState';
+		const current = JSON.parse(storage.get(key, StorageScope.WORKSPACE) ?? '{"version":1,"changesets":[],"details":[],"reviewed":[]}');
+		const sections = [['ash-session-changes:/session?thread=thread', { checks: true }]];
+		storage.store(key, JSON.stringify({ ...current, sections }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	},
 	counter: (value, direction, duration) => {
 		counterOwner.clear();
 		counterValue.set(value);
@@ -402,7 +449,7 @@ window.ashChangesIntegration = {
 		reviewServices.registerSingleton(IDiffService, () => reviewServices!.createInstance(DiffService));
 		reviewServices.registerInstance(IDialogService, { error: async (message: string) => { throw new Error(message); } } as unknown as IDialogService);
 		reviewServices.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: reviewServices })));
-		const changes = resources.add(reviewServices.createInstance(SessionChangesEditor, { instantiationService: reviewServices }));
+		const changes = resources.add(reviewServices.createInstance(SessionChangesEditor, {}));
 		changes.create(changesHost);
 		changes.setVisible(true);
 		changes.layout({ width: 390, height: 550 });
@@ -459,7 +506,7 @@ window.ashChangesIntegration = {
 	removeSecondTurn: () => { ledger = [details]; changed.fire(); },
 	rebuild: () => {
 		viewOwner.clear();
-		view = services.createInstance(ChangesViewPane, container, { id: 'sessions.changes', title: 'Changes' });
+		view = viewServices.createInstance(ChangesViewPane, container, { id: 'sessions.changes', title: 'Changes' });
 		viewOwner.value = view;
 		view.setVisible(true);
 	},
@@ -469,6 +516,10 @@ window.ashChangesIntegration = {
 	fail: value => { fail = value; changed.fire(); },
 	setLocale: () => { setNlsMessages('zh-CN', chineseMessages); changed.fire(); },
 	opened: () => opened,
+	previewCommit: () => {
+		const selected = services.get(ISessionsService).activeSelection;
+		if (selected?.kind === 'session') void services.get(ISessionChangesService).previewCommit(new SessionChangesEditorInput(selected).sessionResource, CancellationToken.None);
+	},
 	reviews: () => reviews,
 	content: () => view.getAccessibleContent(),
 	gitCalls: () => gitCalls,

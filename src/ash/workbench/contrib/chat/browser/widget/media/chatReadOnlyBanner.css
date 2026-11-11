@@ -1,0 +1,29 @@
+.ash-chat-readonly-banner {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120) var(--ash-chat-content-inset);
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-readonly-banner[hidden],
+.ash-chat-readonly-banner > [hidden],
+.ash-chat.ash-chat-readonly > .ash-chat-input-part {
+	display: none;
+}
+
+.ash-chat-readonly-message {
+	flex: 1 1 auto;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-readonly-banner:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

@@ -258,7 +258,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.evaluate(observeDetails);
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
-			const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
+			const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-native-chat)');
 			const editor = new Editor(active());
 			await expect(active()).toHaveAttribute('data-untitled-session-id', /.+/u);
 			const draftId = await active().getAttribute('data-untitled-session-id');
@@ -345,7 +345,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await new QuickAccess(workbench.page).runCommand('workbench.action.chat.showHistory');
 			const historyRow = workbench.page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'Background management' }).filter({ hasText: `${copy.thread} ${index + 1}` });
 			await expect(historyRow).toContainText(copy.readyForReview); await historyRow.click();
-			await expect(workbench.page.locator('.ash-chat-view-pane :is(.ash-chat,.ash-cowork):visible')).toHaveAttribute('data-thread-id', root.threadId);
+			await expect(workbench.page.locator('.ash-chat-view-pane :is(.ash-chat,.ash-native-chat):visible')).toHaveAttribute('data-thread-id', root.threadId);
 			await start(root.threadId, 'fixture-question');
 			await expect.poll(() => branchState(root.threadId), { timeout: 30_000 }).toBe('needsInput');
 			await assertStatus(copy.needsInput, 'question');

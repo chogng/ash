@@ -92,7 +92,7 @@ The list consumes sessions from `ISessionsManagementService`. Providers expose w
 
 Code and the regular IDE project saved Ash conversations from the same provider catalogs. An active conversation can be opened and continued in either surface with its existing execution context, including when it has no execution folder. Code's project and folder requirements apply to draft creation.
 
-Sessions created by automation runs are hidden by default, with an exception for the active session. Chat and Code share the automation visibility preference and per-session overrides. The reply-based mode lists an automation session after the first accepted user submission. Runs that continue an existing conversation leave its classification intact. Automations retains its own run history. Surfaces that need session-row presentation without sectioning use `SessionsFlatList`.
+Sessions created by automation runs are hidden by default, with an exception for the active session. Chat and Code share the automation visibility preference and per-session overrides. The reply-based mode lists an automation session after the first accepted user submission. The profile remembers the Include Task Run Conversations filter independently of the default policy. The filter includes task runs unless the user explicitly hid the session. Runs that continue an existing conversation leave its classification intact. Automations retains its own run history. Surfaces that need session-row presentation without sectioning use `SessionsFlatList`.
 
 ## Placement precedence
 

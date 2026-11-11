@@ -460,7 +460,9 @@ suite('Rendered tool input/output', () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
 		const item = toolItem();
-		const artifact = { source: { type: 'embeddedResource' as const, uri: 'docs://report' }, mimeType: 'text/markdown', data: { type: 'text' as const, text: '# Report\n\n```ts\nconst value = 1;\n```\n\n<script>window.toolPreviewExecuted=true</script>' }, contentDigest: 'digest', truncated: false };
+		const patch = ['```diff:ts', '-const previous = 1;', '+const next = 2;', '```'].join('\n');
+		const text = ['# Report', '```ts\nconst value = 1;\n```', patch, '<script>window.toolPreviewExecuted=true</script>'].join('\n\n');
+		const artifact = { source: { type: 'embeddedResource' as const, uri: 'docs://report' }, mimeType: 'text/markdown', data: { type: 'text' as const, text }, contentDigest: 'digest', truncated: false };
 		const rendering = { ...item, toolInvocation: { ...item.toolInvocation!, result: { type: 'toolResult' as const, itemId: 'result', turnId: 'turn', toolCallId: 'call', text: 'report', isError: false, content: [{ type: 'artifact' as const, artifact }] } } };
 		await page.evaluate(rendering => window.ashChatTranscriptIntegration.renderItems([rendering]), rendering);
 		const outer = page.locator('.ash-chat-tool-invocation');
@@ -468,6 +470,7 @@ suite('Rendered tool input/output', () => {
 		const preview = outer.getByText('Preview formatted results', { exact: true }).locator('..');
 		await preview.locator(':scope > summary').click();
 		await expect(preview.getByRole('heading', { name: 'Report', exact: true })).toBeVisible();
+		await expect(preview.locator('.ash-chat-markdown-diff .modified .view-lines')).toContainText('const next = 2;');
 		await expect(preview.locator('script')).toHaveCount(0);
 		await expect(outer.getByText('1 result resources', { exact: true })).toBeVisible();
 		await expect(outer.locator('.ash-chat-resources pre')).toHaveText(artifact.data.text);
@@ -475,6 +478,7 @@ suite('Rendered tool input/output', () => {
 		const retained = await editor.elementHandle();
 		await page.evaluate(rendering => window.ashChatTranscriptIntegration.renderItems([{ ...rendering, toolInvocation: { ...rendering.toolInvocation, result: { ...rendering.toolInvocation.result, content: [{ type: 'artifact', artifact: { ...rendering.toolInvocation.result.content[0].artifact, contentDigest: 'next', data: { type: 'text', text: '# Report\n\n```ts\nconst value = 2;\n```' } } }] } } }]), rendering);
 		await expect(editor).toHaveCount(1);
+		await expect(preview.locator('.ash-chat-markdown-diff')).toHaveCount(0);
 		assert.equal(await editor.evaluate((element, retained) => element === retained, retained), true);
 		await preview.locator(':scope > summary').click();
 		await outer.locator(':scope > summary').click();

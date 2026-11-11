@@ -177,6 +177,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
                     ProviderId::new("ollama").unwrap(),
                     ModelId::new("fixture").unwrap(),
                 )),
+                model_routing: None,
                 reasoning_effort: None,
                 tool_mode: None,
                 input: vec![InputItem::Text {

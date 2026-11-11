@@ -156,7 +156,7 @@ test('Code setup shows recent projects in open order and selects a project for t
 	const saved = URI.file('/saved-project');
 	const grants: string[] = [];
 	using f = fixture(undefined, [], [saved, URI.file('/older'), URI.file('/oldest')].map(folderUri => ({ folderUri })),
-		undefined, undefined, undefined, async root => { grants.push(root); return true; }, undefined, {
+		undefined, undefined, undefined, async roots => { grants.push(...roots); return true; }, undefined, {
 		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
 		materials: [{ kind: 'folder', name: 'source', resource: saved }],
 	});
@@ -181,8 +181,8 @@ test('Code setup shows recent projects in open order and selects a project for t
 test('Choose project authorizes its folder and binds only the current Code draft', async () => {
 	const resource = URI.file('/saved-project');
 	const grants: string[] = [];
-	using f = fixture(undefined, [], [{ folderUri: resource }], undefined, { name: 'Window folder', uri: URI.file('/window') }, undefined, async root => {
-		grants.push(root);
+	using f = fixture(undefined, [], [{ folderUri: resource }], undefined, { name: 'Window folder', uri: URI.file('/window') }, undefined, async roots => {
+		grants.push(...roots);
 		return true;
 	}, undefined, {
 		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
@@ -227,10 +227,10 @@ test('Retrying trust reopens the declined folder and completes the original proj
 	const requested: string[] = [];
 	const folder = URI.file('/ash-docs');
 	using f = fixture(undefined, [], [], undefined, { name: 'ash', uri: URI.file('/ash') }, undefined,
-		async (path, _signal, _host, onTrustDeclined) => {
-			requested.push(path);
+		async (paths, _signal, options) => {
+			requested.push(...paths);
 			if (requested.length === 3) return true;
-			onTrustDeclined?.();
+			options?.onTrustDeclined?.();
 			return false;
 		}, undefined, {
 		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], createdAtMs: 1, updatedAtMs: 1, sessionCount: 0,
@@ -257,9 +257,9 @@ test('Retrying trust reopens the declined folder and completes the original proj
 
 test('Changing the active draft discards its declined trust request', async () => {
 	let requests = 0;
-	using f = fixture(undefined, [], [], undefined, undefined, undefined, async (_path, _signal, _host, onTrustDeclined) => {
+	using f = fixture(undefined, [], [], undefined, undefined, undefined, async (_path, _signal, options) => {
 		requests++;
-		onTrustDeclined?.();
+		options?.onTrustDeclined?.();
 		return false;
 	});
 	await f.open();
@@ -275,8 +275,8 @@ test('Changing the active draft discards its declined trust request', async () =
 
 test('A declined worktree grant leaves the draft on its original folder', async () => {
 	const requested: string[] = [];
-	using f = fixture(undefined, [], [], undefined, undefined, undefined, async path => {
-		requested.push(path);
+	using f = fixture(undefined, [], [], undefined, undefined, undefined, async paths => {
+		requested.push(...paths);
 		return false;
 	});
 	await f.open();
@@ -489,16 +489,16 @@ test('Browsing a local folder changes only the owning conversation without chang
 test('Local folder selection waits for permission before changing the draft or recents', async () => {
 	for (const accept of [false, true]) {
 		const target = URI.file('/new-project');
-		const requested = new DeferredPromise<string>();
+		const requested = new DeferredPromise<readonly string[]>();
 		const answer = new DeferredPromise<boolean>();
-		using f = fixture(undefined, [], [], undefined, undefined, undefined, async path => {
-			await requested.complete(path);
+		using f = fixture(undefined, [], [], undefined, undefined, undefined, async paths => {
+			await requested.complete(paths);
 			return answer.p;
 		});
 		await f.open();
 		const selection = f.choose(accept ? 'Open Folder…' : 'Recent project');
 		if (accept) { await f.dialog.complete([target]); }
-		assert.equal(await requested.p, accept ? target.fsPath : URI.file('/recent').fsPath);
+		assert.deepEqual(await requested.p, [accept ? target.fsPath : URI.file('/recent').fsPath]);
 		assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/project').fsPath });
 		assert.equal(f.history.length, 1);
 		await answer.complete(accept);

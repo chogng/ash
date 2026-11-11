@@ -1,0 +1,711 @@
+import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../common/sessionEditorWorkingSet.js';
+import { IOutputService } from '../../../../../workbench/services/output/common/output.js';
+import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { observableValue } from '../../../../../base/common/observable.js';
+import { constObservable } from '../../../../../base/common/observable.js';
+import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
+import { AbstractCustomView } from '../../../../services/customView/browser/customView.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
+import { TestWorkspaceService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
+import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
+import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import type { EditorPartChangeEvent } from '../../../../../workbench/services/editor/common/editorState.js';
+import type { IResourceEditorInput } from '../../../../../workbench/common/editor.js';
+import { ILifecycleService, StartupKind } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycleService.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
+import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
+import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../sessions/browser/views/sessionsView.js';
+import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
+import { NewSessionDraftVisibleContext } from '../../../../common/contextkeys.js';
+import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
+import { SessionsEntryService, documentEntry } from '../../browser/sessionsEntryService.js';
+import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
+import type { ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
+
+suite('SessionsEntryService lifecycle and focus', () => {
+	test('Chat uses the Sessions Part without restoring Code editors, and Code returns to the grid', async () => {
+		using fixture = new EntryFixture();
+		const chatSource = 'desktop-chat';
+		await fixture.service.openEntry({ ...chatEntry, chatSource });
+		assert.deepEqual(fixture.chatSource, [chatSource]);
+		assert.deepEqual(fixture.conversationKinds, []);
+		assert.equal(fixture.service.canRestoreSessionEditors, false);
+		assert.equal(fixture.focused, 'conversation');
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.chatSource, [chatSource, undefined]);
+		assert.deepEqual(fixture.conversationKinds, ['code']);
+		assert.equal(fixture.service.canRestoreSessionEditors, true);
+	});
+
+	test('New follows the active entry draft and clears while a custom view covers it', async () => {
+		using fixture = new EntryFixture();
+		const entryDraft = observableValue('entry draft', true);
+		const replyEntry: ISessionsEntry = { ...chatEntry, id: 'reply', activityContext: 'test.replySelected', newDraft: entryDraft };
+		const showingDraft = () => fixture.contextKeys.getValue(NewSessionDraftVisibleContext.key);
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+
+		await fixture.service.openEntry(replyEntry);
+		assert.equal(showingDraft(), true);
+		entryDraft.set(false, undefined);
+		assert.equal(showingDraft(), false);
+		entryDraft.set(true, undefined);
+		fixture.customViews.showCustomView('automations');
+		assert.equal(showingDraft(), false);
+		fixture.customViews.hideCustomView();
+		assert.equal(showingDraft(), true);
+
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(showingDraft(), false);
+		fixture.conversationDraft.set(true, undefined);
+		assert.equal(showingDraft(), true);
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(showingDraft(), false);
+	});
+
+	test('New follows the active entry and does not retain an override under a Custom View', async () => {
+		using fixture = new EntryFixture();
+		const entry = { ...chatEntry, newSessionCommand: 'test.entry.newChat' };
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.service.newSessionCommand, entry.newSessionCommand);
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		fixture.customViews.showCustomView('automations');
+		assert.equal(fixture.service.newSessionCommand, undefined);
+		fixture.customViews.hideCustomView();
+		assert.equal(fixture.service.newSessionCommand, entry.newSessionCommand);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.service.newSessionCommand, undefined);
+	});
+
+	test('a shared entry selects its explicit conversation presentation while retaining Code mode', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		await fixture.service.openEntry({
+			...chatEntry, id: 'collaboration', workspaceMode: 'current', conversationKind: 'chat',
+		});
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.deepEqual(fixture.conversationKinds, ['code', 'chat']);
+	});
+
+	for (const saved of [undefined, 'sessions.open.code']) {
+		test(`opens a fresh Desktop New when the saved entry is ${saved ?? 'absent'}`, async () => {
+			using fixture = new EntryFixture();
+			if (saved) { fixture.storage.store('sessions.layout.activeEntry', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
+			const calls: (readonly unknown[])[] = [];
+			const freshEntry: ISessionsEntry = { ...chatEntry, id: 'reply', content: 'editor', restoreCommand: 'sessions.open.new' };
+			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, source) => {
+				calls.push([source]);
+				assert.equal(source, 'startup');
+				return fixture.service.openEntry(freshEntry, undefined, { source });
+			});
+			using code = CommandsRegistry.register('sessions.open.code', () => assert.fail('Ordinary launch restored Code'));
+			await fixture.service.restore();
+			assert.deepEqual(calls, [['startup']]);
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), freshEntry.restoreCommand);
+		});
+	}
+
+	for (const kind of [StartupKind.ReloadedWindow, StartupKind.ReopenedWindow]) {
+		test(`restores the saved Desktop entry on ${StartupKind[kind]}`, async () => {
+			using fixture = new EntryFixture(undefined, kind);
+			fixture.storage.store('sessions.layout.activeEntry', 'sessions.show.chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const calls: (readonly unknown[])[] = [];
+			using entry = CommandsRegistry.register('sessions.show.chatgpt', (_accessor, ...args) => { calls.push(args); });
+			using fresh = CommandsRegistry.register('sessions.open.new', () => assert.fail('Restoration started a fresh chat'));
+			await fixture.service.restore();
+			assert.deepEqual(calls, [['restore']]);
+		});
+	}
+
+	for (const command of ['sessions.show.library', 'sessions.show.removedFeature']) {
+		test(`discards the unavailable saved entry ${command} and restores Chat`, async () => {
+			using fixture = new EntryFixture();
+			fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const calls: (readonly unknown[])[] = [];
+			using chat = CommandsRegistry.register('sessions.open.chat', async (_accessor, ...args) => {
+				calls.push(args);
+				assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), undefined);
+				await fixture.service.openEntry(chatEntry);
+			});
+			await fixture.service.restore();
+			assert.deepEqual(calls, [['restore']]);
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.open.chat');
+			assert.equal(fixture.contextKeys.getValue('sessions.activity.chatSelected'), true);
+			assert.deepEqual(fixture.errors, []);
+		});
+	}
+
+	test('restores an available saved entry without replacing it with Chat', async () => {
+		using fixture = new EntryFixture();
+		const command = 'test.sessions.restoreEntry';
+		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const calls: (readonly unknown[])[] = [];
+		const savedEntry: ISessionsEntry = { ...chatEntry, content: 'editor', restoreCommand: command };
+		using entry = CommandsRegistry.register(command, (_accessor, source) => {
+			calls.push([source]);
+			assert.equal(source, 'restore');
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
+			return fixture.service.openEntry(savedEntry, undefined, { source });
+		});
+		await fixture.service.restore();
+		assert.deepEqual(calls, [['restore']]);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
+	});
+
+	test('does not hide a failure from an available restore command', async () => {
+		using fixture = new EntryFixture();
+		const command = 'test.sessions.failingRestore';
+		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const failure = new Error('Restore handler failed');
+		using entry = CommandsRegistry.register(command, () => { throw failure; });
+		await assert.rejects(fixture.service.restore(), error => error === failure);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
+	});
+
+	test('Output requests cannot reveal a Panel in Agent Window', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry({ id: 'chat', activityContext: 'sessions.activity.chatSelected', content: 'conversation', focus: 'conversation', restoreCommand: 'sessions.open.chat' });
+		fixture.partChanges.length = 0;
+		fixture.viewVisibility.fire({ id: WorkbenchViewContainerId.Output, location: ViewContainerLocation.Panel, visible: true });
+		assert.equal(fixture.visible.get('panel'), false);
+		assert.equal(fixture.service.isDocumentContent, false);
+		assert.deepEqual(fixture.partChanges, []);
+		fixture.visible.set('panel', false);
+		fixture.outputReveal.fire();
+		assert.equal(fixture.visible.get('panel'), false);
+	});
+
+	test('legacy Code panel visibility is discarded and entry switches keep the Panel unavailable', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: true, documents: true } });
+		for (const entry of [documentEntry, chatEntry, documentEntry]) {
+			await fixture.service.openEntry(entry);
+			assert.equal(fixture.visible.get('panel'), false);
+		}
+		await fixture.storage.flush();
+		const saved = JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!);
+		assert.equal('panel' in saved.code, false);
+	});
+
+	test('a saved details preference cannot reopen an empty side bar in Chat', async () => {
+		using fixture = new EntryFixture({ ashChat: { details: true, documents: false } });
+		await fixture.service.openEntry({
+			...chatEntry, id: 'ashChat', content: 'editor', focus: 'editor',
+		}, undefined, { source: 'restore' });
+
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+		assert.equal(fixture.partChanges.includes('show:auxiliarybar'), false);
+		const saved = JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!);
+		assert.equal(saved.ashChat.details, false);
+	});
+
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('opening an ordinary document from Cowork reveals its body after switching to Code', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		fixture.changeActiveDocument({ resource: URI.parse('ash-chat-transcript:/saved.md'), readOnly: true, initialText: 'Saved transcript' });
+		fixture.revealActiveEditor.fire();
+		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, true);
+		assert.equal(fixture.visible.get('editor'), true);
+	});
+
+	test('reopening an already active document leaves the conversation entry even without an editor change', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		fixture.activeInput = { resource: URI.parse('untitled:/channel-notes/restored') };
+		fixture.revealActiveEditor.fire();
+		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, true);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+	});
+
+	test('passive changes in a retained Code group preserve the Chat entry', async () => {
+		using fixture = new EntryFixture();
+		const nativeChat = { ...chatEntry, id: 'ashChat', conversationKind: 'code' } as const;
+		await fixture.service.openEntry(documentEntry);
+		fixture.changeActiveDocument({ resource: URI.parse('untitled:/retained-code-file') });
+		await fixture.service.openEntry(nativeChat);
+		assert.equal(fixture.groupVisibility.get('documents'), false);
+
+		const groupId = fixture.activeGroupId;
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId });
+		fixture.changeActiveDocument({ resource: URI.parse('untitled:/another-retained-code-file') });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, false);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), nativeChat.restoreCommand);
+	});
+
+	test('disposal during conversation preparation stops queued entries and Part mutations', async () => {
+		using fixture = new EntryFixture();
+		const gate = new DeferredPromise<void>();
+		fixture.conversationGate = gate.p;
+		const pending = fixture.service.openEntry(chatEntry);
+		await fixture.conversationStarted.p;
+		const queued = fixture.service.openEntry(documentEntry);
+		fixture.service.dispose();
+		await gate.complete();
+		await Promise.all([pending, queued]);
+		assert.deepEqual({ groups: fixture.groupChanges, parts: fixture.partChanges, entries: fixture.opened, errors: fixture.errors }, { groups: [], parts: [], entries: [], errors: [] });
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), undefined);
+	});
+
+	test('disposal while opening navigation prevents later visibility, focus and persistence', async () => {
+		using fixture = new EntryFixture();
+		const gate = new DeferredPromise<void>();
+		fixture.navigationGate = gate.p;
+		const pending = fixture.service.openEntry(chatEntry);
+		await fixture.navigationStarted.p;
+		const beforeDispose = fixture.partChanges.length;
+		fixture.service.dispose();
+		await gate.complete();
+		await pending;
+		assert.equal(fixture.partChanges.length, beforeDispose);
+		assert.equal(fixture.focused, undefined);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), undefined);
+	});
+
+	test('shared Settings modal opening and closing preserves the current conversation entry', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		const before = fixture.partChanges.length;
+		fixture.activeInput = { resource: URI.parse('ash-settings:/user') };
+		fixture.modalVisible = true;
+		fixture.activeEditorChanged.fire();
+		fixture.editorChanged.fire({ kind: 'modalEditorChanged', visible: true });
+		await fixture.service.runOperation(async () => { });
+		fixture.modalVisible = false;
+		fixture.activeEditorChanged.fire();
+		fixture.editorChanged.fire({ kind: 'modalEditorChanged', visible: false });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), chatEntry.restoreCommand);
+		assert.equal(fixture.partChanges.length, before);
+		fixture.revealActiveEditor.fire();
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+	});
+
+	test('entering Code leaves tools closed until explicitly opened', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), false);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+		assert.equal(fixture.filesDetailsOpen, false);
+		assert.equal(fixture.focused, 'conversation');
+		assert.deepEqual(fixture.documentInputs, []);
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), false);
+		assert.equal(fixture.filesDetailsOpen, false);
+	});
+
+	test('an explicit Canvas reveal shows a document group hidden by entry restoration', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		fixture.groupVisibility.set('documents', false);
+		fixture.activeInput = { resource: URI.parse('session-canvas:/live') };
+		fixture.revealActiveEditor.fire();
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.groupVisibility.get('documents'), true);
+		assert.equal(fixture.focused, 'editor');
+	});
+
+	test('Code restores explicitly opened Files inside the shared EditorPart', async () => {
+		using fixture = new EntryFixture({ code: { details: true, documents: true } });
+		fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.filesDetailsOpen, true);
+		assert.equal(fixture.focused, 'files');
+	});
+
+	for (const retained of [false, true]) {
+		test(`Code keeps the closed side pane hidden with ${retained ? 'retained' : 'persisted'} Files`, async () => {
+			using fixture = new EntryFixture({ code: { details: true, documents: false } });
+			fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+			fixture.filesDetailsOpen = retained;
+			const input = new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/retained'));
+			fixture.documentInputs.push(input);
+			await fixture.service.openEntry(documentEntry, undefined, { source: 'restore' });
+			assert.equal(fixture.visible.get('editor'), false);
+			assert.equal(fixture.filesDetailsOpen, retained);
+			assert.equal(fixture.focused, 'conversation');
+			assert.deepEqual(fixture.documentInputs, [input]);
+		});
+	}
+
+	test('Code restores documents without opening Files when navigation was not selected', async () => {
+		using fixture = new EntryFixture({ code: { details: false, documents: true } });
+		const input = { resource: URI.file('/workspace/sample.ts') };
+		fixture.documentInputs.push(input);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.filesDetailsOpen, false);
+		assert.equal(fixture.focused, 'editor');
+		assert.deepEqual(fixture.documentInputs, [input]);
+	});
+
+	test('Code retains restored tool inputs without an active session', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
+		fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		const inputs = [new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old'))];
+		fixture.documentInputs.push(...inputs);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, inputs);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+		assert.equal(fixture.focused, 'files');
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, inputs);
+		assert.equal(fixture.visible.get('editor'), true);
+	});
+
+	test('Code retains Changes and its neighboring document', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
+		const file = { resource: URI.file('/workspace/sample.ts'), label: 'sample.ts' };
+		const changes = new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old'));
+		fixture.documentInputs.push(changes, file);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, [changes, file]);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+	});
+
+	test('background entry restoration preserves the Custom View, focus and activity selection', async () => {
+		using fixture = new EntryFixture();
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		fixture.customViews.showCustomView('automations');
+		await fixture.service.openEntry(documentEntry, undefined, { source: 'restore' });
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.focused, undefined);
+		assert.equal(fixture.contextKeys.getContext().getValue('sessions.activity.codeSelected'), false);
+		fixture.activeInput = { resource: URI.file('/background.ts') };
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 1 });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.customViews.activeCustomView.get(), undefined);
+		assert.equal(fixture.focused, 'conversation');
+		assert.equal(fixture.contextKeys.getContext().getValue('sessions.activity.chatSelected'), true);
+	});
+
+	test('Code child entries retain the Code workspace and a declared Custom View restores its underlying entry', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
+		await fixture.service.openEntry({ ...chatEntry, id: 'collaboration', workspaceMode: 'code', activityContext: 'sessions.activity.collaborationSelected' });
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		using command = CommandsRegistry.register('sessions.open.code', async () => fixture.service.openEntry(documentEntry, undefined, { source: 'restore' }));
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView), entryCommand: 'sessions.open.code' });
+		fixture.customViews.showCustomView('automations');
+		await fixture.service.restore();
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.equal(fixture.contextKeys.getValue('sessions.activity.codeSelected'), false);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.open.code');
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
+		assert.equal(fixture.customViews.activeCustomView.get(), undefined);
+	});
+
+	test('a Custom View opened while navigation awaits keeps its focus after navigation completes', async () => {
+		using fixture = new EntryFixture();
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		const gate = new DeferredPromise<void>();
+		fixture.navigationGate = gate.p;
+		const restoring = fixture.service.openEntry(chatEntry, undefined, { source: 'restore' });
+		await fixture.navigationStarted.p;
+		fixture.customViews.showCustomView('automations');
+		await gate.complete();
+		await restoring;
+		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
+		assert.equal(fixture.focused, undefined);
+	});
+
+	test('a remembered hidden sidebar does not take focus during entry restoration', async () => {
+		using fixture = new EntryFixture({ teams: { sidebar: true, details: false, panel: false, documents: false } });
+		fixture.visible.set('sidebar', false);
+		await fixture.service.openEntry({ ...chatEntry, id: 'teams', focus: 'sidebar' });
+		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
+		assert.equal(fixture.visible.get('sidebar'), false);
+		assert.equal(fixture.focused, 'conversation');
+	});
+
+	test('a product page without a navigation container keeps global navigation and its own selected entry', async () => {
+		using fixture = new EntryFixture({ website: { sidebar: false, details: false, panel: false, documents: false } });
+		await fixture.service.openEntry({ ...chatEntry, id: 'website', activityContext: 'sessions.activity.websiteSelected', restoreCommand: 'sessions.show.website', content: 'editor', sidebarContainerId: undefined, showEditorTabs: false, focus: 'editor' });
+		assert.equal(fixture.visible.get('sidebar'), true);
+		assert.equal(fixture.pageTitleVisible, false);
+		assert.deepEqual(fixture.opened, [{ id: SESSIONS_NAVIGATION_CONTAINER_ID, focus: false }]);
+		assert.equal(fixture.focused, 'editor');
+		assert.equal(fixture.contextKeys.getValue('sessions.activity.websiteSelected'), true);
+		assert.equal(fixture.contextKeys.getValue(chatEntry.activityContext), undefined);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.show.website');
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.visible.get('sidebar'), true);
+		assert.equal(fixture.pageTitleVisible, true);
+		assert.deepEqual(fixture.opened, [{ id: SESSIONS_NAVIGATION_CONTAINER_ID, focus: false }, { id: chatEntry.sidebarContainerId, focus: false }]);
+	});
+
+	test('sidebar visibility follows the window across pages and is removed from legacy entry preferences', async () => {
+		using fixture = new EntryFixture({
+			chat: { sidebar: false, details: false, panel: false, documents: false },
+			website: { sidebar: true, details: false, panel: false, documents: false },
+		});
+		const page = { ...chatEntry, id: 'website', content: 'editor', sidebarContainerId: undefined, focus: 'editor' } as const;
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.visible.get('sidebar'), true, 'A legacy per-entry value cannot collapse global navigation');
+		fixture.visible.set('sidebar', false);
+		await fixture.service.openEntry(page);
+		assert.equal(fixture.visible.get('sidebar'), false);
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(fixture.visible.get('sidebar'), false);
+		fixture.visible.set('sidebar', true);
+		await fixture.service.openEntry(page);
+		assert.equal(fixture.visible.get('sidebar'), true);
+		assert.deepEqual(JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!), {
+			chat: { details: false, documents: false },
+			website: { details: false, documents: false },
+		});
+	});
+
+	test('product pages retain the current workspace conversation sidebar', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		for (const id of ['projects', 'creator.home', 'customize']) {
+			await fixture.service.openEntry({ id, content: 'editor', activityContext: `sessions.activity.${id}Selected`, restoreCommand: `sessions.show.${id}`, focus: 'editor' });
+			assert.equal(fixture.opened.at(-1)?.id, chatEntry.sidebarContainerId);
+		}
+		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
+	});
+
+	test('shared Customize retains Code navigation and restores in Code', async () => {
+		const entry: ISessionsEntry = {
+			id: 'customize', workspaceMode: 'current', content: 'editor',
+			activityContext: 'sessions.activity.customizeSelected', restoreCommand: 'sessions.open.customize', focus: 'editor',
+		};
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.deepEqual(fixture.opened, [{ id: documentEntry.sidebarContainerId, focus: false }]);
+		assert.equal(fixture.contextKeys.getValue(entry.activityContext), true);
+
+		const savedMode = fixture.storage.get('sessions.layout.activeEntryMode', StorageScope.WORKSPACE);
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
+		assert.equal(fixture.opened.at(-1)?.id, chatEntry.sidebarContainerId);
+		fixture.dispose();
+
+		using restored = new EntryFixture();
+		restored.storage.store('sessions.layout.activeEntryMode', savedMode, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		await restored.service.openEntry(entry, undefined, { source: 'restore' });
+		assert.equal(restored.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.deepEqual(restored.opened, [{ id: documentEntry.sidebarContainerId, focus: false }]);
+	});
+
+	for (const fromCode of [false, true]) {
+		test(`product pages use the registered sidebar default ${fromCode ? 'when leaving Code' : 'on cold restoration'}`, async () => {
+			using fixture = new EntryFixture();
+			fixture.defaultSidebarId = 'test.conversations';
+			if (fromCode) { await fixture.service.openEntry(documentEntry); }
+			await fixture.service.openEntry({ id: 'projects', content: 'editor', activityContext: 'sessions.activity.projectsSelected', restoreCommand: 'sessions.show.projects', focus: 'editor' }, undefined, { source: 'restore' });
+			assert.equal(fixture.opened.at(-1)?.id, 'test.conversations');
+		});
+	}
+
+	test('shutdown joins entry navigation then stops periodic storage callbacks', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		await fixture.lifecycle.shutdown('reload');
+		const saved = fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE);
+		fixture.visible.set('sidebar', false);
+		await fixture.storage.flush();
+		assert.equal(fixture.service.isDisposed, true);
+		assert.equal(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE), saved);
+	});
+});
+
+const chatEntry: ISessionsEntry = { id: 'chat', content: 'conversation', activityContext: 'sessions.activity.chatSelected', sidebarContainerId: 'navigation', restoreCommand: 'sessions.open.chat', focus: 'conversation' };
+class TestLifecycle extends AbstractLifecycleService { }
+class TestCustomView extends AbstractCustomView {
+	readonly title = constObservable('Automations');
+	render(): void { }
+	layout(): void { }
+}
+
+class EntryFixture extends Disposable {
+	public readonly conversationDraft = observableValue('conversation draft', false);
+	public readonly conversationKinds: Parameters<ISessionsConversationService['setConversationKind']>[0][] = [];
+	public readonly chatSource: Parameters<ISessionsConversationService['setChatSource']>[0][] = [];
+	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
+	public readonly container = this.dom.window.document.body;
+	private readonly services = this._register(new InstantiationService());
+	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
+	public readonly lifecycle: TestLifecycle;
+	public readonly contextKeys = this._register(new ContextKeyService());
+	public readonly customViews = this._register(new CustomViewService(new NullLoggerService(), this.storage));
+	private readonly workspace = this._register(new TestWorkspaceService({ id: 'sessions', folders: [] }));
+	public readonly editorChanged = this._register(new Emitter<EditorPartChangeEvent>());
+	public readonly activeEditorChanged = this._register(new Emitter<void>());
+	public readonly revealActiveEditor = this._register(new Emitter<void>());
+	public readonly visible = new Map<string, boolean>([['sessions', true], ['editor', false], ['auxiliarybar', false], ['sidebar', true], ['panel', false]]);
+	public readonly partChanges: string[] = [];
+	public readonly groupChanges: string[] = [];
+	public readonly documentInputs: IResourceEditorInput[] = [];
+	public pageTitleVisible = true;
+	public filesDetailsOpen = false;
+	public readonly opened: { id: string; focus: boolean | undefined; }[] = [];
+	private sidebarId: string | undefined;
+	public defaultSidebarId = SESSIONS_NAVIGATION_CONTAINER_ID;
+	public readonly errors: string[] = [];
+	public focused: string | undefined;
+	public conversationGate: Promise<void> | undefined;
+	public navigationGate: Promise<void> | undefined;
+	public readonly conversationStarted = new DeferredPromise<void>();
+	public readonly navigationStarted = new DeferredPromise<void>();
+	public activeInput: IResourceEditorInput | undefined;
+	public readonly groupVisibility = new Map<string, boolean>();
+	public modalVisible = false;
+	public readonly service: SessionsEntryService;
+	public readonly outputReveal = this._register(new Emitter<void>());
+	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
+	public get activeGroupId() { return this.services.get(IEditorPart).activeGroup.id; }
+	public changeActiveDocument(input: IResourceEditorInput): void {
+		this.activeInput = input;
+		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.activeGroupId, event: { kind: 'activeEditorChanged', editor: undefined } });
+	}
+
+	constructor(savedVisibility?: unknown, startupKind?: StartupKind) {
+		super();
+		this.lifecycle = this._register(new TestLifecycle(startupKind, new NullLoggerService(), this.storage));
+		this._register(toDisposable(() => this.dom.window.close()));
+		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
+		const fixture = this;
+		const documentGroup = {
+			id: 'documents', inputs: this.documentInputs,
+			closeEditor: async (input: IResourceEditorInput) => {
+				this.documentInputs.splice(this.documentInputs.indexOf(input), 1);
+				return true;
+			},
+		};
+		const pageGroup = { id: 'pages', inputs: [], setTitleVisible: (visible: boolean) => { this.pageTitleVisible = visible; } };
+		this.services.registerInstance(ISessionEditorWorkingSetService, this.services.createInstance(SessionEditorWorkingSetService));
+		this.services.registerInstance(IStorageService, this.storage);
+		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
+		this.services.registerInstance(ICustomViewService, this.customViews);
+		this.services.registerInstance(ILifecycleService, this.lifecycle);
+		this.services.registerInstance(IContextKeyService, this.contextKeys);
+		this.services.registerInstance(IWorkspaceContextService, this.workspace);
+		this.services.registerInstance(IEditorPart, {
+			setGroupScope: () => Disposable.None,
+			saveWorkingSet: () => ({}),
+			restoreLayout() { },
+			restoreWorkingSetLayout() { },
+			get filesDetailsOpen() { return fixture.filesDetailsOpen; },
+			get filesDetailsVisible() { return fixture.filesDetailsOpen && fixture.visible.get('editor') === true; },
+			get fileEditorsVisible() { return true; },
+			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
+			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
+			filesPart: { isEditorVisible: false, onDidChangeDetailsVisibility: Event.None, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
+			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
+			onDidChangeEditors: this.editorChanged.event,
+			onDidRevealActiveEditor: this.revealActiveEditor.event,
+			get isModalEditorVisible() { return fixture.modalVisible; },
+			setGroupVisible: (id: string, visible: boolean) => {
+				this.groupVisibility.set(id, visible);
+				this.groupChanges.push(id + ':' + visible);
+			},
+			activateGroup: (id: string) => this.groupChanges.push('activate:' + id),
+			focus: () => { this.focused = 'editor'; },
+		} as unknown as IEditorPart);
+		this.services.registerInstance(IEditorService, {
+			onDidActiveEditorChange: this.activeEditorChanged.event, onDidVisibleEditorsChange: Event.None,
+			get activeEditor() { return fixture.activeInput; }, visibleEditors: [],
+			focusActiveEditor: () => { this.focused = 'editor'; },
+		} as unknown as IEditorService);
+		this.services.registerInstance(ISessionsService, { onDidChange: Event.None, activeSelection: undefined, getSelection: () => ({ activeSelection: undefined, visibleSelections: [] }) } as unknown as ISessionsService);
+		this.services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, materializedSessions: observableValue('materialized', new Map()), state: 'loading' } as unknown as ISessionsManagementService);
+		this.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
+		this.services.registerInstance(ILogService, new NullLoggerService());
+		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
+		this.services.registerInstance(ISessionsConversationService, {
+			newDraftVisible: this.conversationDraft,
+			hasDesktopChatSource: constObservable(false),
+			setChatSource: content => { this.chatSource.push(content); },
+			focus: () => { this.focused = 'conversation'; },
+			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
+			focusDraftPicker: () => { throw new Error('Unexpected picker'); },
+			setConversationKind: async kind => {
+				this.conversationKinds.push(kind);
+				if (!this.conversationStarted.isSettled) { await this.conversationStarted.complete(); }
+				await this.conversationGate;
+			}
+		});
+		this.services.registerInstance(IOutputService, { onDidRequestShowChannel: this.outputReveal.event } as unknown as IOutputService);
+		this.services.registerInstance(IViewsService, {
+			onDidChangeViewContainerVisibility: this.viewVisibility.event,
+			isViewContainerActive: (id: string) => this.sidebarId === id,
+			getVisibleViewContainer: () => this.sidebarId ? { id: this.sidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar } : null,
+			openViewContainer: async (id: string, focus?: boolean) => {
+				this.opened.push({ id, focus });
+				this.sidebarId = id;
+				if (!this.navigationStarted.isSettled) { await this.navigationStarted.complete(); }
+				await this.navigationGate;
+				return null;
+			}
+		} as unknown as IViewsService);
+		this.services.registerInstance(IViewDescriptorService, {
+			getDefaultViewContainer: () => ({ id: this.defaultSidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar }),
+		} as unknown as IViewDescriptorService);
+		this.services.registerInstance(IPaneCompositePartService, {
+			onDidPaneCompositeOpen: Event.None, getActivePaneComposite: () => ({ focus: () => { this.focused = 'details'; } }),
+		} as unknown as IPaneCompositePartService);
+		this.services.registerInstance(ILayoutService, {
+			mainContainer: this.container,
+			isEditorPartAutoVisibilitySuppressed: () => false,
+			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
+			isPartVisible: (id: string) => this.visible.get(id) ?? false,
+			isPartRequested: (id: string) => this.visible.get(id) ?? false,
+			showPart: (id: string) => { this.visible.set(id, true); this.partChanges.push('show:' + id); },
+			hidePart: (id: string) => { this.visible.set(id, false); this.partChanges.push('hide:' + id); },
+			setPrimaryPart: (id: string) => this.partChanges.push('primary:' + id),
+			setAuxiliaryBarDocked: () => { },
+			setPartAvailable: (id: string, available: boolean) => { this.visible.set(id, available); this.partChanges.push('available:' + id); },
+			updateParts: (update: () => void) => update(), focus: () => { this.focused = 'conversation'; },
+		} as unknown as ILayoutService);
+		this.service = this._register(this.services.createInstance(SessionsEntryService));
+	}
+}

@@ -1,0 +1,98 @@
+.ash-chat-image-gallery {
+	box-sizing: border-box;
+	inline-size: min(100%, 20rem);
+	padding: var(--ash-spacing-size40);
+	margin-block: var(--ash-spacing-size80);
+}
+
+.ash-chat-image-gallery-stage {
+	position: relative;
+}
+
+.ash-chat-image-gallery-tile {
+	min-width: 0;
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-image-gallery-tile[hidden] {
+	display: none;
+}
+
+.ash-chat-image-gallery-controls {
+	position: absolute;
+	inset-inline: var(--ash-spacing-size80);
+	inset-block-start: 50%;
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.ash-chat-image-gallery-controls > .ash-toolbar {
+	justify-content: space-between;
+}
+
+.ash-chat-image-gallery-controls .ash-action-view-item {
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	pointer-events: auto;
+}
+
+.ash-chat-image-gallery-controls .ash-action-view-item > .ash-button {
+	border-radius: inherit;
+}
+
+.ash-chat-image-gallery-position {
+	position: absolute;
+	inset-block-end: var(--ash-spacing-size80);
+	inset-inline-start: 50%;
+	transform: translateX(-50%);
+	padding-inline: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-editor-background);
+	font-size: var(--ash-fontSize-label2);
+	color: var(--ash-description-foreground);
+	pointer-events: none;
+}
+
+.ash-chat-image-gallery-tile
+	.ash-chat-image-attachment-thumbnail.loaded
+	> .ash-chat-image-attachment-source {
+	inline-size: 100%;
+	block-size: auto;
+	aspect-ratio: 16 / 9;
+}
+
+.ash-chat-image-gallery.compact {
+	display: block;
+	flex: none;
+	inline-size: min(100%, 144px);
+	margin-block: 0;
+	padding: 0;
+	overflow: visible;
+}
+
+.ash-chat-image-gallery.compact .ash-chat-image-gallery-sources > a[href] {
+	margin-block-start: var(--ash-spacing-size20);
+	text-decoration-line: none;
+}
+
+.ash-chat-image-gallery.compact
+	.ash-chat-image-gallery-sources
+	> a[href]:is(:hover, :focus-visible) {
+	text-decoration-line: underline;
+}
+
+.ash-chat-image-gallery.compact
+	.ash-chat-image-attachment-thumbnail.loaded
+	> .ash-chat-image-attachment-source {
+	aspect-ratio: 5 / 4;
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-chat-image-gallery-sources > a:not([hidden]) {
+	display: block;
+	font-size: var(--ash-fontSize-label2);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

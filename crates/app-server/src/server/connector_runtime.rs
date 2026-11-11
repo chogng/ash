@@ -4,13 +4,13 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub(super) struct ConnectorWatcher {
+pub(crate) struct ConnectorWatcher {
     shutdown: Option<std::sync::mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl ConnectorWatcher {
-    pub(super) fn start(authority: &ConnectorAuthority, updates: Arc<UpdateBroker>) -> Self {
+    pub(crate) fn start(authority: &ConnectorAuthority, updates: Arc<UpdateBroker>) -> Self {
         let changes = authority.subscribe();
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()

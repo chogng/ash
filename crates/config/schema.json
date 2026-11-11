@@ -66,10 +66,17 @@
             "type": "automatic"
           }
         },
+        "autoModelCandidates": {
+          "description": "Ordered models eligible for automatic selection on a conversation's first Turn.",
+          "items": {
+            "$ref": "#/$defs/ModelRef"
+          },
+          "type": "array"
+        },
         "codeReviewModel": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ModelRef"
+              "$ref": "#/$defs/TaskModelSelection"
             },
             {
               "type": "null"
@@ -135,7 +142,7 @@
         "threadRecapModel": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ModelRef"
+              "$ref": "#/$defs/TaskModelSelection"
             },
             {
               "type": "null"
@@ -146,7 +153,7 @@
         "threadTitleModel": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ModelRef"
+              "$ref": "#/$defs/TaskModelSelection"
             },
             {
               "type": "null"
@@ -1822,6 +1829,32 @@
           "type": "object"
         }
       },
+      "type": "object"
+    },
+    "TaskModelSelection": {
+      "description": "A dedicated model and optional effort for one Agent task.",
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelId"
+        },
+        "provider": {
+          "$ref": "#/$defs/ProviderId"
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ],
       "type": "object"
     },
     "TimeContextConfig": {

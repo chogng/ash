@@ -1,15 +1,30 @@
-import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { generateUuid } from '../../../../../../base/common/uuid.js';
-import { localize } from '../../../../../../nls.js';
-import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
-import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
-import type { DesignShape } from '../../../common/model/document.js';
+import { localize, localize2 } from '../../../../../../nls.js';
+import { RawContextKey, type IContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
+import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
+import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
+import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
+import type { DesignShape } from '../../../common/model/designDocument.js';
 
-class BrandWorkspace extends CreatorCanvasWorkspace {
+const HasSelectedBrandFrame = new RawContextKey<boolean>('sessions.artifacts.brand.hasSelectedFrame', false);
+
+class BrandWorkspace extends CanvasWorkspace {
+	public static registerToolbarActions(): void {
+		this.registerWorkspaceActions(ArtifactWorkspaceId.Brand, [
+			{ id: 'square', title: localize2('sessions.creator.brand.square', 'Square asset'), run: workspace => workspace.addFrame(1080, 1080) },
+			{ id: 'portrait', title: localize2('sessions.creator.brand.portrait', 'Portrait asset'), run: workspace => workspace.addFrame(1080, 1920) },
+			{ id: 'landscape', title: localize2('sessions.creator.brand.landscape', 'Landscape asset'), run: workspace => workspace.addFrame(1200, 628) },
+			{ id: 'variants', title: localize2('sessions.creator.brand.variants', 'Create size variants'), precondition: HasSelectedBrandFrame.isEqualTo(true), run: workspace => workspace.createVariants() },
+		]);
+	}
+
+	private get selectedFrame(): DesignShape | undefined {
+		return this.document.model.value.shapes.find(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id));
+	}
+
 	private createVariants(): void {
-		const frame = this.document.model.value.shapes.find(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id));
+		const frame = this.selectedFrame;
 		if (frame?.kind !== 'frame') { return; }
 		const clone = (shape: DesignShape): DesignShape => {
 			const copy = { ...shape, id: generateUuid() };
@@ -23,21 +38,18 @@ class BrandWorkspace extends CreatorCanvasWorkspace {
 		this.document.model.applyEdit([...this.document.model.value.shapes, ...variants]);
 		this.editor.revealShape(variants[0].id);
 	}
-	protected override getModeActions(): readonly IAction[] {
-		return [
-			this.action('square', localize('sessions.creator.brand.square', 'Square asset'), () => this.addFrame(1080, 1080)),
-			this.action('portrait', localize('sessions.creator.brand.portrait', 'Portrait asset'), () => this.addFrame(1080, 1920)),
-			this.action('landscape', localize('sessions.creator.brand.landscape', 'Landscape asset'), () => this.addFrame(1200, 628)),
-			this.action('variants', localize('sessions.creator.brand.variants', 'Create size variants'), () => this.createVariants(), this.document.model.value.shapes.some(shape => shape.kind === 'frame' && this.editor.selection.ids.has(shape.id))),
-		];
+	protected override bindToolbarContext(contextKeys: IContextKeyService): () => void {
+		const hasSelectedFrame = HasSelectedBrandFrame.bindTo(contextKeys);
+		return () => hasSelectedFrame.set(this.selectedFrame !== undefined);
 	}
 }
 
-registerCreatorMode({
-	id: CreatorMode.Brand,
-	title: getCreatorModeTitle(CreatorMode.Brand),
+BrandWorkspace.registerToolbarActions();
+registerArtifactWorkspace({
+	id: ArtifactWorkspaceId.Brand,
+	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Brand),
 	description: localize('sessions.creator.brand.description', 'Create campaign artwork and generate size variants.'),
 	icon: Lxicon.symbolColor,
 	help: localize('sessions.creator.brand.help', 'Choose Square asset, Portrait asset or Landscape asset to start a marketing layout. Select a frame and choose Create size variants to create three editable copies with proportional content. Undo removes the whole batch. Import images through the canvas tools.'),
-	create: (instantiation, ownerDocument) => instantiation.createInstance(BrandWorkspace, ownerDocument, CreatorMode.Brand),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(BrandWorkspace, ownerDocument, ArtifactWorkspaceId.Brand),
 });

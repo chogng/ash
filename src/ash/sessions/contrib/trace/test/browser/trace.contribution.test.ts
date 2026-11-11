@@ -5,7 +5,7 @@ import { suite, test } from 'mocha';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService, type ISessionsEntry } from '../../../../services/layout/common/sessionsEntryService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { MenusRegistry } from '../../../../../platform/actions/common/actions.js';
@@ -15,7 +15,7 @@ import '../../browser/trace.contribution.js';
 function registerHosts(services: InstantiationService, opened: ISessionsEntry[], stored: Map<string, string>): void {
 	services.registerInstance(IContextKeyService, new ContextKeyService());
 	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => stored.set(key, value) } as unknown as IStorageService);
-	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: ISessionsEntry) => { opened.push(entry); } } as unknown as ISessionsLayoutService);
+	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: ISessionsEntry) => { opened.push(entry); } } as unknown as ISessionsEntryService);
 }
 
 suite('Sessions Execution Trace entry', () => {

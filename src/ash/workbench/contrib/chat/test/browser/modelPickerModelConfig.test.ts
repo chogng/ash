@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
-import { modelPickerEffortOptions, modelPickerAccelerationOptions, getModelConfigSummary } from '../../browser/widget/input/modelPicker/modelPickerModelConfig.js';
+import { modelPickerEffortOptions, getModelConfigSummary } from '../../browser/widget/input/modelPicker/modelPickerModelConfig.js';
+import { getFastModelVariant, modelPickerAccelerationOptions } from '../../browser/widget/input/modelPicker/modelPickerVariants.js';
+import { applyModelReasoningEffort } from '../../browser/widget/input/chatModelConfigurationLogic.js';
 
 const entry: ModelCatalogEntry = {
 	model: { provider: 'example', model: 'thinking' }, displayName: 'Thinking', longContext: null,
@@ -53,4 +55,25 @@ test('Acceleration choices preserve connection IDs, clear with null and keep pro
 	assert.equal(getModelConfigSummary(accelerated, 'high'), 'High · Provider quick mode');
 	assert.equal(modelPickerAccelerationOptions({ ...accelerated, selectedAcceleration: null })[0]!.checked, true);
 	assert.deepEqual(modelPickerAccelerationOptions(entry), []);
+	assert.equal(getFastModelVariant(accelerated), undefined);
+	assert.equal(getFastModelVariant({ ...accelerated, accelerationOptions: accelerated.accelerationOptions?.slice(0, 1) })?.id, 'priority');
+});
+
+test('An effective Ultra override stays selected until an explicit effort change', async () => {
+	const ultra = { ...entry, reasoningEffortOverride: 'high' } satisfies ModelCatalogEntry;
+	assert.equal(getModelConfigSummary(ultra, 'medium'), 'High');
+	const calls: string[] = [];
+	let current = true;
+	const disableUltra = async () => { calls.push('disable Ultra'); };
+	const apply = async () => { calls.push('save effort'); };
+	await applyModelReasoningEffort('high', 'high', () => current, disableUltra, apply);
+	assert.deepEqual(calls, []);
+	await applyModelReasoningEffort('high', 'medium', () => current, disableUltra, apply);
+	assert.deepEqual(calls, ['disable Ultra', 'save effort']);
+	calls.length = 0;
+	await applyModelReasoningEffort('high', 'medium', () => current, async () => {
+		await disableUltra();
+		current = false;
+	}, apply);
+	assert.deepEqual(calls, ['disable Ultra']);
 });

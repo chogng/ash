@@ -4,6 +4,7 @@ import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../..
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IGitHubService, type GitHubIssueDetails, type GitHubPullRequest, type GitHubPullRequestChecks } from '../../../../platform/github/common/githubService.js';
+import { parseGitHubLinkTarget } from '../../../../platform/github/common/githubUrls.js';
 
 export type GitHubReferenceKind = 'pullRequest' | 'issue';
 
@@ -140,12 +141,9 @@ export class LazyGitHubResourceResolver extends Disposable {
 }
 
 export function parseGitHubReferenceTarget(resource: URI, kind: GitHubReferenceKind): IGitHubReferenceTarget | undefined {
-	const match = /^\/([\w.-]+)\/([\w.-]+)\/(issues|pull)\/([1-9]\d*)$/.exec(resource.path);
-	if (resource.scheme !== 'https' || resource.authority.toLowerCase() !== 'github.com' || !match || match[3] !== (kind === 'issue' ? 'issues' : 'pull')) {
-		return undefined;
-	}
-	const number = Number(match[4]);
-	return Number.isSafeInteger(number) ? { owner: match[1], repo: match[2], number } : undefined;
+	if (resource.authority.toLowerCase() !== 'github.com') return undefined;
+	const target = parseGitHubLinkTarget(resource);
+	return target?.kind === kind ? { owner: target.owner, repo: target.repo, number: target.number } : undefined;
 }
 
 function repository(target: IGitHubReferenceTarget): { host: string; owner: string; name: string; } {

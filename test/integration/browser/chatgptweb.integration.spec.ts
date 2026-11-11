@@ -172,8 +172,8 @@ test('ChatGPT sidebar fades long titles at rest and uses ellipsis in forced colo
 	}));
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
 	const sidebar = page.locator('.ash-chat-navigation');
-	const longLabel = sidebar.getByRole('button', { name: longTitle, exact: true }).locator('.ash-sessions-list-label');
-	const shortLabel = sidebar.getByRole('button', { name: '短标题', exact: true }).locator('.ash-sessions-list-label');
+	const longLabel = sidebar.getByRole('button', { name: longTitle, exact: true }).locator('.ash-sessions-list-title-viewport');
+	const shortLabel = sidebar.getByRole('button', { name: '短标题', exact: true }).locator('.ash-sessions-list-title-viewport');
 
 	await expect(longLabel).toHaveCSS('text-overflow', 'clip');
 	await expect(longLabel).toHaveCSS('mask-image', /^linear-gradient/);
@@ -355,11 +355,12 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	const defaultIcon = trigger.locator('[data-ash-icon-id="chat-session"]');
 	await expect(defaultIcon).toBeVisible();
 	await expect(defaultIcon).toHaveCSS('width', '18px');
+	// This fixture uses the window defaults: a 28px button with a 2px row inset.
 	await expect.poll(async () => {
 		const bounds = (await row.boundingBox())!;
 		const button = (await trigger.boundingBox())!;
 		return [button.x - bounds.x, button.y - bounds.y, button.width, button.height];
-	}).toEqual([7, 2, 28, 28]);
+	}).toEqual([2, 2, 28, 28]);
 	const moreAction = row.locator('.ash-sessions-list-actions button').last();
 	await title.hover();
 	await moreAction.hover();
@@ -376,7 +377,7 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(picker).toBeHidden();
 	await expect(trigger).toBeFocused();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
-	await expect(title).not.toHaveAttribute('aria-current');
+	await expect(title).toHaveAttribute('aria-current', 'false');
 	let releaseHistory!: () => void;
 	const holdHistory = new Promise<void>(resolve => { releaseHistory = resolve; });
 	await page.route('**/service/backend-api/conversation/fixture-chat', async route => {
@@ -405,7 +406,7 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('.ash-session-status-icon-layer')).toHaveCount(1);
 	await expect(title).toHaveAttribute('aria-current', 'page');
 	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(true));
-	await expect(title).not.toHaveAttribute('aria-current');
+	await expect(title).toHaveAttribute('aria-current', 'false');
 	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(false));
 	await expect(title).toHaveAttribute('aria-current', 'page');
 	await page.reload();
@@ -464,7 +465,7 @@ test('ChatGPT dictation inserts text at the cursor and cancels on navigation wit
 	await input.press('Home');
 	await mic.click();
 	const stop = page.getByRole('button', { name: 'Stop dictation', exact: true });
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('interim speech', false));
 	await expect(page.locator('.ash-chatgpt-widget .ash-chat-dictation-preview')).toHaveText('interim speech');
 	await expectDraft(page, 'Please explain');
@@ -474,33 +475,33 @@ test('ChatGPT dictation inserts text at the cursor and cancels on navigation wit
 	await expect(input).toBeFocused();
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await input.focus();
 	await input.press('Escape');
-	await expect(mic).toHaveAttribute('aria-pressed', 'false');
+	await expect(mic).toBeEnabled();
 	await expectDraft(page, 'First Please explain');
 	await expect(page.locator('.ash-chatgpt-widget .ash-chat-dictation-preview')).toBeHidden();
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.newChat());
-	await expect(mic).toHaveAttribute('aria-pressed', 'false');
+	await expect(mic).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('late new-chat speech', true));
 	await expectDraft(page, 'First Please explain');
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	await expectDraft(page, '');
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('late old speech', true));
 	await expectDraft(page, '');
 	await mic.click();
-	await expect(stop).toHaveAttribute('aria-pressed', 'true');
+	await expect(stop).toBeEnabled();
 	await page.evaluate(() => window.ashChatGPTIntegration.setVisible(false));
 	await expect(mic).toBeHidden();
 	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.dictationStops())).toBe(5);
 	await expectDraft(page, '');
 });
 
-test('ChatGPT Send finishes dictation before submitting the final transcript', async ({ page }) => {
+test('ChatGPT keyboard submission finishes dictation before submitting the final transcript', async ({ page }) => {
 	await mockChatGPTRequests(page);
 	let submitted: string | undefined;
 	await page.route('**/service/backend-api/f/conversation', async route => {
@@ -508,10 +509,11 @@ test('ChatGPT Send finishes dictation before submitting the final transcript', a
 		await route.fulfill({ status: 500, json: {} });
 	});
 	await page.goto('/chatgptNavigation.html?dictation=1&locale=en');
-	await expect(page.locator('.ash-chat-input-editor').getByRole('textbox')).toBeEnabled();
+	const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+	await expect(input).toBeEnabled();
 	await page.getByRole('button', { name: 'Dictate message', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toHaveAttribute('aria-pressed', 'true');
-	await page.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
+	await input.press('Enter');
 	await expect.poll(() => submitted).toBe('final words');
 	await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.dictationStops())).toBe(1);
 });
@@ -561,7 +563,7 @@ test('ChatGPT uploads images and documents, waits for readiness and preserves at
 	await composer.getByRole('button', { name: 'Send', exact: true }).click();
 	await expect.poll(() => submitted?.messages[0]?.content.content_type).toBe('multimodal_text');
 	expect(submitted!.messages[0]!.metadata.attachments.map(item => item.name)).toEqual(['notes.txt', 'pixel.png']);
-	expect(submitted!.messages[0]!.content.parts).toEqual([{ content_type: 'image_asset_pointer', asset_pointer: 'file-service://file_image', size_bytes: image.byteLength, width: 1, height: 1 }]);
+	expect(submitted!.messages[0]!.content.parts).toEqual([{ content_type: 'image_asset_pointer', asset_pointer: 'sediment://file_image', size_bytes: image.byteLength, width: 1, height: 1 }]);
 	await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 	await expect(attachments.getByRole('listitem')).toHaveCount(2);
 });
@@ -571,7 +573,7 @@ test('ChatGPT retries failed uploads and keeps removed or old-draft files out of
 	let attempts = 0;
 	let release!: () => Promise<void>;
 	await page.route('**/service/backend-api/files', async route => {
-		if (++attempts === 1) { await route.fulfill({ status: 500, json: {} }); return; }
+		if (++attempts === 1) { await route.fulfill({ status: 400, json: {} }); return; }
 		await route.fulfill({ json: { file_id: 'file_retry', upload_url: 'https://files.oaiusercontent.com/retry?signature=fixture' } });
 	});
 	await page.route('**/service/.upload?*', route => { release = async () => { await route.fulfill({ status: 201, body: '' }).catch(() => { }); }; });
@@ -821,6 +823,47 @@ test('ChatGPT rich diagrams retain their nested content without enabling HTML or
 	await testInfo.attach('chatgpt-rich-diagram', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
+test('Ash lays out reply cards side by side and stacks them when the chat narrows', async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 1200, height: 680 });
+	await chatPage(page, `<box border radius="lg" padding={3} gap={2}>
+  <box background="surface-secondary" radius="md" padding={3} align=center gap={1}>
+    **桌面应用**
+    <caption>业务逻辑、窗口与交互</caption>
+  </box>
+  <row justify=center><icon name="arrow-down"/></row>
+  <grid columns={2} gap={2}>
+    <grid-item><box border padding={3} align=center>**原生界面**</box></grid-item>
+    <grid-item><box border padding={3} align=center>**浏览器引擎**</box></grid-item>
+  </grid>
+  <caption textAlign="center">桌面架构示意</caption>
+</box>`);
+	const body = page.locator('.ash-chat-item-agentMessage .ash-chat-markdown-part');
+	const grid = body.locator('.ash-chat-rich-grid');
+	const cards = grid.locator(':scope > .ash-chat-rich-grid-item');
+	await expect(cards).toHaveText(['原生界面', '浏览器引擎']);
+	await expect(grid).toHaveCSS('display', 'grid');
+	await expect(grid).toHaveCSS('column-gap', '8px');
+	await expect(body.getByText('桌面架构示意')).toHaveCSS('text-align', 'center');
+	await expect(body.locator('.ash-chat-rich-text > p').filter({ hasText: '业务逻辑、窗口与交互' })).toHaveCSS('margin-block', '0px');
+	await expect(body.locator('details, pre, iframe, canvas')).toHaveCount(0);
+	const geometry = () => cards.evaluateAll(elements => elements.map(element => {
+		const { x, y, width } = element.getBoundingClientRect();
+		return { x, y, width };
+	}));
+	const [left, right] = await geometry();
+	expect(right!.y).toBeCloseTo(left!.y);
+	expect(right!.width).toBeCloseTo(left!.width);
+	expect(right!.x - left!.x - left!.width).toBeCloseTo(8);
+	await testInfo.attach('ash-reply-grid-wide', { body: await grid.screenshot(), contentType: 'image/png' });
+
+	await page.setViewportSize({ width: 620, height: 680 });
+	await expect.poll(async () => {
+		const [first, second] = await geometry();
+		return first!.x === second!.x && first!.y < second!.y;
+	}).toBe(true);
+	await testInfo.attach('ash-reply-grid-narrow', { body: await grid.screenshot(), contentType: 'image/png' });
+});
+
 test('ChatGPT replies omit internal citation tags while preserving literal code and links', async ({ page }) => {
 	const citation = '<Cite refs={[["turn744052search0","turn744052search6"]]}/>';
 	await chatPage(page, `Before ${citation} after.\n\n${citation}\n\n\`inline ${citation}\`\n\n\`\`\`html\n${citation}\n\`\`\`\n\n[Source](https://example.com/source)`);
@@ -830,6 +873,42 @@ test('ChatGPT replies omit internal citation tags while preserving literal code 
 	await expect(body.locator('.view-lines')).toHaveText(citation);
 	expect((await body.innerText()).split(citation).length - 1).toBe(2);
 	await expect(body.getByRole('link', { name: 'Source' })).toHaveAttribute('href', 'https://example.com/source');
+});
+
+test('ChatGPT reply cards show external actions and separators as part of the reply', async ({ page }) => {
+	await chatPage(page, [
+		'<box gap={3}>',
+		'<row><box>**Floem**\n\n<Link url="https://github.com/lapce/floem" title="Floem 源码"/></box></row>',
+		'<divider color="subtle"/>',
+		'<row><box>**Slint**\n\n<Link url="https://slint.dev" title="Slint 官网"/></box></row>',
+		'</box>',
+	].join('\n'));
+	const body = page.locator('.ash-chat-item-agentMessage .ash-chat-markdown-part');
+	const floem = body.getByRole('link', { name: 'Floem 源码', exact: true });
+	const slint = body.getByRole('link', { name: 'Slint 官网', exact: true });
+	const divider = body.getByRole('separator');
+	await expect(floem).toHaveAttribute('href', 'https://github.com/lapce/floem');
+	await expect(slint).toHaveAttribute('href', 'https://slint.dev/');
+	await expect(floem.locator('[data-ash-icon-id="link-external"]')).toBeVisible();
+	await expect(body.locator('details, pre')).toHaveCount(0);
+	await expect(divider).toHaveCSS('border-top-width', '1px');
+	await expect(divider).toHaveCSS('margin-top', '0px');
+	await floem.focus();
+	await page.keyboard.press('Tab');
+	await expect(slint).toBeFocused();
+	await floem.hover();
+	const preview = page.getByRole('dialog', { name: '链接预览', exact: true });
+	const previewLink = preview.getByRole('link', { name: 'github.com Floem 源码', exact: true });
+	await expect(previewLink).toHaveAttribute('href', 'https://github.com/lapce/floem');
+	await expect(preview.locator('..')).toHaveClass(/ash-context-view-dialog/u);
+	await previewLink.click();
+	await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://github.com/lapce/floem');
+	await expect(preview).toBeHidden();
+	await page.setViewportSize({ width: 620, height: 680 });
+	const [first, line, second] = await Promise.all([floem.boundingBox(), divider.boundingBox(), slint.boundingBox()]);
+	expect(first!.y + first!.height).toBeLessThan(line!.y);
+	expect(line!.y + line!.height).toBeLessThan(second!.y);
+	expect(line!.width).toBeGreaterThan(Math.max(first!.width, second!.width));
 });
 
 test('ChatGPT retains text around structured media and names file attachments', async ({ page }) => {
@@ -858,6 +937,11 @@ test('ChatGPT retains text around structured media and names file attachments', 
 
 test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames locally without Workbench access', async ({ page }) => {
 	await mockChatGPTRequests(page);
+	const repositoryTitle = 'GitHub - team/project: A long description from a search result';
+	const references = [
+		{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation - Docs.Python.org', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' },
+		{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 2 }, title: repositoryTitle, url: 'https://github.com/team/project', snippet: 'Source repository.' },
+	];
 	const html = '<button onclick="document.querySelector(\'output\').textContent=\'1\'">Increment</button><output>0</output><canvas id="plot" width="16" height="16"></canvas><script>document.querySelector(\'canvas\').getContext(\'2d\').fillRect(0,0,16,16);try{top.document.body.dataset.escaped="true"}catch{document.body.dataset.isolated="true"}</script>';
 	const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 	await page.route('https://frame.example.invalid/**', route => route.fulfill({ contentType: 'text/html', body: html }));
@@ -868,22 +952,49 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 					parent: null, message: {
 						id: 'reply', author: { role: 'assistant' }, content: {
 							content_type: 'text', parts: [
-								`Source <Cite refs={[["turn0search1"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report)`
+								`Source <Cite refs={[["turn0search1","turn0search2"]]}/> urlPython docsturn0search1\n\n<iframe title="Inline preview" srcdoc="${srcdoc}"/>\n\n<iframe title="External preview" src="https://frame.example.invalid/demo"/>\n\n<Chart title="Dataset chart" data={${JSON.stringify({ labels: ['May', 'June'], datasets: [{ label: 'Amount', data: [42, 64] }] })}}/>\n\n**完整可筛选表格：**[实验结果.csv](sandbox:/mnt/data/report.csv) · [在线查看](https://example.com/report)`
 							]
-						}, metadata: { search_result_groups: [{ entries: [{ ref_id: { turn_index: 0, ref_type: 'search', ref_index: 1 }, title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }] }] },
+						}, metadata: { search_result_groups: [{ entries: references }] },
 					}
 				}
 			},
 		}
 	}));
 	await page.route('**/service/.resource?*', route => route.fulfill({ contentType: 'text/csv', body: 'name,value\nMay,42\n' }));
-	await page.goto('/chatgptNavigation.html');
+	await page.goto('/chatgptNavigation.html?locale=zh-CN');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-	const citation = page.locator('.ash-chat-citation');
-	await citation.locator('summary').focus(); await citation.locator('summary').press('Enter');
-	await expect(citation).toContainText('CSV documentation');
-	await expect(citation).toContainText('Read and write tabular data.');
-	await expect(page.getByRole('link', { name: 'Python docs', exact: true })).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
+	const sources = page.getByRole('button', { name: '2 个来源', exact: true });
+	const sourceCard = page.getByRole('dialog', { name: '2 个来源', exact: true });
+	const sourceLinks = sourceCard.getByRole('link');
+	const adjacentLink = page.getByRole('link', { name: 'Python docs', exact: true });
+	const linkOffset = () => adjacentLink.evaluate(element => element.getBoundingClientRect().top - element.closest('.ash-chat-markdown-part')!.getBoundingClientRect().top);
+	const restingY = await linkOffset();
+	await expect(sources).toHaveAttribute('aria-expanded', 'false');
+	await sources.hover();
+	await expect(sourceCard).toBeVisible();
+	await expect(sources).toHaveAttribute('aria-expanded', 'true');
+	await expect(sourceLinks.first()).toHaveAccessibleName('docs.python.org CSV documentation');
+	await expect(sourceLinks.last()).toHaveAccessibleName('github.com team/project');
+	await expect(sourceLinks.last()).toHaveAttribute('href', references[1]!.url);
+	await expect(sourceLinks.last()).toHaveCSS('text-decoration-line', 'none');
+	expect(await linkOffset()).toBe(restingY);
+	await page.mouse.move(1, 1);
+	await expect(sourceCard).toBeHidden();
+	await sources.press('Enter');
+	await expect(sourceCard).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(sourceLinks.first()).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(sourceCard).toBeHidden();
+	await expect(sources).toBeFocused();
+	await sources.press('Space');
+	await sourceLinks.last().hover();
+	await expect(page.getByRole('tooltip')).toContainText(repositoryTitle);
+	await expect(page.getByRole('tooltip')).toContainText('Source repository.');
+	await sourceLinks.last().click();
+	await expect(page.locator('body')).toHaveAttribute('data-opened-external', references[1]!.url);
+	await expect(sourceCard).toBeHidden();
+	await expect(adjacentLink).toHaveAttribute('href', 'https://docs.python.org/3/library/csv.html');
 	const inline = page.frameLocator('iframe[title="Inline preview"]').frameLocator('iframe');
 	await inline.getByRole('button', { name: 'Increment' }).click();
 	await expect(inline.locator('output')).toHaveText('1');
@@ -894,6 +1005,26 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	await expect(external.locator('output')).toHaveText('1');
 	const chart = page.frameLocator('iframe[title="Dataset chart"]').frameLocator('iframe');
 	await expect(chart.getByRole('cell', { name: '64', exact: true })).toBeVisible();
+	await page.locator('iframe[title="Dataset chart"]').evaluate(frame => frame.scrollIntoView({ block: 'center' }));
+	await chart.locator('canvas').evaluate(canvas => canvas.scrollIntoView({ block: 'center' }));
+	const redraw = await chart.locator('canvas').evaluate(async canvas => {
+		const doc = canvas.ownerDocument;
+		const row = doc.querySelector('#rows tr');
+		const zoom = doc.querySelector<HTMLInputElement>('#zoom')!;
+		const context = (canvas as HTMLCanvasElement).getContext('2d')!;
+		const clear = context.clearRect;
+		let draws = 0;
+		context.clearRect = (...args) => { draws++; clear.apply(context, args); };
+		try {
+			for (let i = 0; i < 30; i++) {
+				zoom.value = i % 2 ? '2' : '1.5';
+				zoom.dispatchEvent(new Event('input'));
+			}
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			return { draws, retainedRow: doc.querySelector('#rows tr') === row };
+		} finally { context.clearRect = clear; }
+	});
+	expect(redraw).toEqual({ draws: 1, retainedRow: true });
 	await chart.locator('canvas').focus(); await chart.locator('canvas').press('ArrowRight');
 	await expect(chart.locator('#point')).toContainText('June');
 	expect(await page.locator('body').getAttribute('data-escaped')).toBeNull();
@@ -968,13 +1099,13 @@ test('ChatGPT Stop cancels pending verification without sending or stopping the 
 	expect(stops).toBe(0);
 	await page.getByRole('button', { name: '停止', exact: true }).click();
 	try {
-		await expect(page.locator('.ash-chatgpt-widget')).toContainText('确认本次回复之前被中断');
-		await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
+		await expect(page.getByText('已停止回复', { exact: true })).toBeVisible();
+		await expect(input).toBeEditable();
 		await verify();
 		expect(sent).toBe(0);
 		expect(stops).toBe(0);
 		await expectDraft(page, 'Synthetic cancellation probe');
-		await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
+		await expect(page.getByRole('button', { name: '发送', exact: true })).toBeEnabled();
 	} finally { await verify(); await stop?.(); }
 });
 

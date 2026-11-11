@@ -18,6 +18,7 @@ export class EditorDropTarget extends Disposable {
 		container: HTMLElement,
 		private readonly findGroup: (target: Node) => EditorGroupView | undefined,
 		private readonly dragAndDrop: IEditorTabDragAndDrop,
+		private readonly supportsSplitting: boolean,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
@@ -49,7 +50,9 @@ export class EditorDropTarget extends Disposable {
 			this.clearFeedback();
 			this.activeGroup = group;
 		}
-		this.splitDirection = dropSplitDirection(event, group, operation.wholeGroup, this.configurationService.getValue(EditorOpenSideBySideDirectionConfiguration));
+		this.splitDirection = this.supportsSplitting
+			? dropSplitDirection(event, group, operation.wholeGroup, this.configurationService.getValue(EditorOpenSideBySideDirectionConfiguration))
+			: undefined;
 		if (event.dataTransfer) event.dataTransfer.dropEffect = operation.effect;
 		if (this.splitDirection !== undefined) group.domNode.dataset.editorDropDirection = Direction[this.splitDirection].toLowerCase();
 		else delete group.domNode.dataset.editorDropDirection;

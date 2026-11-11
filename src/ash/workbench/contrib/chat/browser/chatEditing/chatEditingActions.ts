@@ -1,6 +1,6 @@
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../common/chat.js';
+import { OPEN_CHAT_CHANGES_COMMAND_ID, type ChatChangedFileTarget } from '../../common/chat.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { VIEW_PANE_ID } from '../../../scm/common/scm.js';
@@ -24,6 +24,7 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { ChatRequestActionContext, IChatWidgetService, type ChatRequestVersion } from '../chat.js';
+import { isRecord } from '../../../../../base/common/types.js';
 
 export const RestoreCheckpointActionId = 'workbench.action.chat.restoreCheckpoint';
 export const RedoChatHistoryActionId = 'workbench.action.chat.redoEdit';
@@ -263,19 +264,22 @@ export async function createThreadMultiDiffEditorInput(chat: IChatService, sessi
 }
 
 /** Returns the comparison and the metadata from the same checkpoint revision. */
-export async function readThreadChangesComparison(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string, signal?: AbortSignal) {
+export async function readThreadChangesComparison(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string, signal?: AbortSignal, target?: ChatChangedFileTarget) {
 	const read = <T>(promise: Promise<T>): Promise<T> => signal ? raceCancellationError(promise, signal) : promise;
 	if (signal) { throwIfCancelled(signal); }
 	const summary = await read(chat.readThreadChanges(sessionId, threadId));
-	const changed = () => new Error(localize('chat.changes.checkpointChanged', 'The conversation changed while loading. Open Changes again to review its current checkpoint.'));
 	if (expectedRevision !== undefined && summary.revision !== expectedRevision) throw new ThreadChangesNotCurrentError();
 	const items: MultiDiffEditorInputItem[] = [];
-	for (const repository of summary.repositories) {
+	let selectedResource: URI | undefined;
+	for (const [index, repository] of summary.repositories.entries()) {
+		if (target && repository.repositoryId !== target.repositoryId) continue;
 		for (const file of repository.files) {
+			if (target && file.path !== target.path) continue;
 			if (signal) { throwIfCancelled(signal); }
 			const contents = await read(chat.readThreadChangeFile(sessionId, threadId, summary.revision, repository.repositoryId, file.path));
 			if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
 			const resource = createThreadChangeFileResource(sessionId, threadId, summary.revision, repository.repositoryId, file.path);
+			if (target) selectedResource = resource.with({ scheme: 'ash-multi-diff', path: `/conversation-file${resource.path}` });
 			let label = file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
 			if (summary.repositories.length > 1) label = `${repository.repositoryId}: ${label}`;
 			if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) {
@@ -283,16 +287,24 @@ export async function readThreadChangesComparison(chat: IChatService, sessionId:
 			}
 			items.push({
 				label, binary: contents.binary,
+				fileList: {
+					path: file.path, ...(summary.repositories.length > 1 ? {
+						group: { id: JSON.stringify([repository.repositoryId]), label: localize('sessions.changes.repository', 'Repository {0}', index + 1) },
+					} : {})
+				},
 				original: { resource: resource.with({ query: `${resource.query}&side=before` }), initialText: contents.before ?? '', readOnly: true },
 				modified: { resource: resource.with({ query: `${resource.query}&side=after` }), initialText: contents.after ?? '', readOnly: true },
 			});
 		}
 	}
+	if (target && !selectedResource) throw new ThreadChangesNotCurrentError();
 	// A history move between the final file read and publication must not publish a stale review.
-	if (items.length && (await read(chat.readThreadChanges(sessionId, threadId))).revision !== summary.revision) throw changed();
-	const label = localize('chat.changes.conversationTitle', 'Conversation Changes');
+	if (items.length && (await read(chat.readThreadChanges(sessionId, threadId))).revision !== summary.revision) {
+		throw new Error(localize('chat.changes.checkpointChanged', 'The conversation changed while loading. Open Changes again to review its current checkpoint.'));
+	}
+	const label = target ? items[0].label : localize('chat.changes.conversationTitle', 'Conversation Changes');
 	const input = createMultiDiffEditorInput(
-		URI.from({ scheme: 'ash-multi-diff', path: `/conversation/${sessionId}/${threadId}`, query: summary.revision }),
+		selectedResource ?? URI.from({ scheme: 'ash-multi-diff', path: `/conversation/${sessionId}/${threadId}`, query: summary.revision }),
 		items, summary.warnings.length ? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', label, summary.warnings.join('; ')) : label,
 		{ kind: 'snapshot', label },
 	);
@@ -300,8 +312,8 @@ export async function readThreadChangesComparison(chat: IChatService, sessionId:
 }
 
 export function registerChatChangesActions(): void {
-	CommandsRegistry.register(OPEN_CHAT_CHANGES_COMMAND_ID, async (accessor, sessionId, threadId, revision) => {
-		if (sessionId === undefined && threadId === undefined) {
+	CommandsRegistry.register(OPEN_CHAT_CHANGES_COMMAND_ID, async (accessor, sessionId, threadId, revision, file: unknown) => {
+		if (file === undefined && sessionId === undefined && threadId === undefined) {
 			const views = accessor.get(IViewsService);
 			await accessor.get(ICommandService).executeCommand('git.openWorkspaceChanges');
 			await views.focusView(VIEW_PANE_ID);
@@ -316,10 +328,17 @@ export function registerChatChangesActions(): void {
 			throw new Error(localize('chat.changes.unavailable', 'This conversation is no longer available.'));
 		}
 		if (revision !== undefined && typeof revision !== 'string') throw new TypeError('Invalid changes revision');
+		let target: ChatChangedFileTarget | undefined;
+		if (file !== undefined) {
+			if (!revision || !isRecord(file) || typeof file.repositoryId !== 'string' || !file.repositoryId || typeof file.path !== 'string' || !file.path) {
+				throw new TypeError('Invalid changed file selection');
+			}
+			target = { repositoryId: file.repositoryId, path: file.path };
+		}
 		using selection = sessions.captureSelection();
 		const chat = accessor.get(IChatService);
-		const input = await createThreadMultiDiffEditorInput(chat, sessionId, threadId, revision).catch(error => {
-			if (!(error instanceof ThreadChangesNotCurrentError)) throw error;
+		const input = await readThreadChangesComparison(chat, sessionId, threadId, revision, undefined, target).then(result => result.input).catch(error => {
+			if (target || !(error instanceof ThreadChangesNotCurrentError)) throw error;
 			if (!selection.isCurrent()) return undefined;
 			// Capture notifications can update the counts before the final journal revision arrives.
 			// Start once from the current checkpoint; changes during file loading still reject review.

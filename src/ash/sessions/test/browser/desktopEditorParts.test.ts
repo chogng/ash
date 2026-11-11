@@ -4,22 +4,29 @@ import { suite, test } from 'mocha';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { Direction, Orientation, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import { URI } from '../../../base/common/uri.js';
+import { constObservable } from '../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { browserEnvironment } from '../../../editor/test/browser/testEditorDom.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { EditorPaneRegistry } from '../../../workbench/browser/editor.js';
 import { EditorPane } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
+import { SearchEditorID } from '../../../workbench/contrib/searchEditor/browser/constants.js';
 import { EditorInputSerializerRegistry } from '../../../workbench/services/editor/common/editorInputSerializer.js';
+import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
+import { EditorParts } from '../../browser/parts/editorParts.js';
 
 function fixture() {
 	const resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, undefined, browserEnvironment.window.document));
 	const registry = resources.add(new EditorPaneRegistry());
-	for (const id of ['test.tool', TerminalEditorInput.ID]) {
+	for (const id of ['test.tool', TerminalEditorInput.ID, SearchEditorID]) {
 		resources.add(registry.registerEditorPane({
 			id, name: 'Tool fixture', canOpen: () => 1,
 			create: () => new class extends EditorPane {
@@ -49,6 +56,19 @@ function fixture() {
 
 suite('Desktop tool EditorParts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('requires the window context service before mounting any tool Parts', () => {
+		using services = createTestEditorServices(undefined, undefined, browserEnvironment.window.document);
+		using hosts = createDesktopEditorTestServices(services, {}, browserEnvironment.window.document);
+		using incompleteServices = new InstantiationService();
+		incompleteServices.registerInstance(IAuxiliaryWindowService, services.get(IAuxiliaryWindowService));
+		incompleteServices.registerInstance(IAccessibilityService, services.get(IAccessibilityService));
+		incompleteServices.registerInstance(IConfigurationService, services.get(IConfigurationService));
+		incompleteServices.registerInstance(IStorageService, services.get(IStorageService));
+		const before = hosts.area.domNode.childElementCount;
+		assert.throws(() => incompleteServices.createInstance(EditorParts, hosts.area, {}, constObservable(false)), /Unknown service: contextKeyService/);
+		assert.equal(hosts.area.domNode.childElementCount, before);
+	});
 
 	test('reopens a product editor in its retained group after closing the last tab', async () => {
 		using hosts = fixture();
@@ -88,45 +108,82 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '6px');
 	});
 
-	test('splitting Files creates a local group without changing other tool hosts', async () => {
+	test('Files side opens use the current tab group without changing other tool hosts', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		const files = hosts.editor.activeGroup;
 		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
 		const browser = hosts.editor.activeGroup;
 		const pane = browser.activePane;
-		const split = hosts.editor.addGroup(files.id, Direction.Down);
-		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: split.id });
-		assert.equal(hosts.editor.parts.length, 5);
+		assert.equal(hosts.editor.addGroup(files.id, Direction.Down), files);
+		await hosts.editor.splitEditors(files.id, files.inputs, Direction.Down);
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, 'sideGroup');
+		assert.equal(hosts.editor.parts.length, hosts.tools.size + 1);
 		assert.equal(hosts.editor.getEditorState().groups.length, hosts.editor.groups.length);
-		assert.deepEqual(hosts.files.fileGroups.map(group => group.id), [files.id, split.id]);
+		assert.deepEqual(hosts.files.fileGroups.map(group => group.id), [files.id]);
+		assert.equal(files.inputs.length, 2);
 		assert.equal(hosts.tools.get('browser')!.groups.length, 1);
 		assert.equal(browser.activePane, pane);
-		hosts.editor.hideTool(split.id);
+		hosts.editor.hideTool(files.id);
 		assert.ok(hosts.files.fileGroups.every(group => !hosts.editor.isGroupVisible(group.id)));
 		assert.equal(hosts.editor.isGroupVisible(browser.id), true);
+	});
+
+	test('restores legacy terminal splits as tabs with the saved selection', async () => {
+		using hosts = fixture();
+		const { editor, area } = hosts;
+		const firstInput = new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/1'));
+		const secondInput = new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/2'));
+		await editor.openEditor(firstInput, { pinned: true });
+		const groupId = editor.activeGroup.id;
+		await editor.openEditor(secondInput, { pinned: true });
+		const saved = editor.saveWorkingSet('legacy-terminal');
+		const metadata = saved.toolParts!;
+		const original = saved.groups.find(group => group.id === groupId)!;
+		const extraId = Math.max(...saved.groups.map(group => group.id!)) + 1;
+		const [first, second] = original.editors;
+		const leaf = (id: number, visible: boolean) => ({ type: 'leaf', data: { groupId: id }, visible, size: 300, priority: 0 } as const);
+		const legacy = {
+			...saved,
+			groups: [...saved.groups.map(group => group === original ? { ...group, editors: [first!], activeEditorIndex: 0 } : group),
+			{ ...original, id: extraId, editors: [second!], activeEditorIndex: 0 }],
+			activeGroupIndex: saved.groups.length,
+			toolParts: {
+				...metadata, parts: {
+					...metadata.parts, terminal: {
+						groups: [groupId, extraId],
+						layout: { type: 'branch', orientation: Orientation.VERTICAL, priority: 0, size: 600, children: [leaf(groupId, true), leaf(extraId, false)] },
+					}
+				},
+			},
+		} as const;
+		await editor.applyWorkingSet(legacy);
+		const terminal = hosts.tools.get('terminal')!;
+		assert.equal(terminal.groups.length, 1);
+		assert.deepEqual(terminal.activeGroup.inputs.map(input => input.resource.toString()), [firstInput.resource.toString(), secondInput.resource.toString()]);
+		assert.equal(editor.activeGroup.activeInput?.resource.toString(), secondInput.resource.toString());
+		assert.equal(area.isToolVisible('terminal'), true);
 	});
 
 	test('round-trips Part and group geometry with globally unique restored identities', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		const file = hosts.editor.activeGroup;
-		const split = hosts.editor.addGroup(file.id, Direction.Down);
-		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: split.id });
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: file.id });
 		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
 		const browser = hosts.editor.activeGroup;
 		hosts.area.moveTool('browser', 'files', Direction.Right);
 		hosts.editor.setGroupVisible(browser.id, false);
 		const saved = hosts.editor.saveWorkingSet('session:a');
 		assert.equal(saved.groups.flatMap(group => group.editors).length, 3);
-		assert.ok(saved.toolParts!.parts.files.groups.length === 2);
+		assert.equal(saved.toolParts!.parts.files.groups.length, 1);
 		assert.ok(!('editors' in saved.toolParts!.parts.files));
 		await hosts.editor.applyWorkingSet(saved);
 		const ids = hosts.editor.groups.map(group => group.id);
 		assert.equal(new Set(ids).size, ids.length);
 		assert.ok(hosts.editor.groups.some(group => group.id === hosts.editor.pageGroupId));
 		assert.equal(hosts.files.isGroupVisible(hosts.editor.pageGroupId), false);
-		assert.equal(hosts.files.fileGroups.length, 2);
+		assert.equal(hosts.files.fileGroups.length, 1);
 		assert.equal(hosts.tools.get('browser')!.activeInput?.resource.toString(), 'ash-browser:/fixture');
 		assert.equal(hosts.tools.get('browser')!.isGroupVisible(hosts.tools.get('browser')!.activeGroup.id), false);
 		assert.deepEqual(hosts.area.saveLayout(), saved.toolParts!.layout);
@@ -136,13 +193,13 @@ suite('Desktop tool EditorParts', () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		const saved = hosts.editor.saveWorkingSet('before-side-chat');
-		const { chat, ...parts } = saved.toolParts!.parts;
+		const { chat, search, ...parts } = saved.toolParts!.parts;
 		const layout = saved.toolParts!.layout;
 		assert.ok(layout.type === 'branch');
-		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'chat');
-		assert.equal(children.length, layout.children.length - 1);
+		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'chat' && node.data !== 'search');
+		assert.equal(children.length, layout.children.length - 2);
 		const legacy = {
-			...saved, groups: saved.groups.filter(group => !chat.groups.includes(group.id!)), toolParts: {
+			...saved, groups: saved.groups.filter(group => !chat.groups.includes(group.id!) && !search.groups.includes(group.id!)), toolParts: {
 				version: 1, parts, layout: children.length === 1 ? children[0] : { ...layout, children },
 			}
 		};
@@ -150,6 +207,68 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.editor.activeGroup.activeInput?.resource.toString(), 'file:///fixture/a.txt');
 		assert.ok(hosts.tools.get('chat')!.groups.every(group => !hosts.editor.isGroupVisible(group.id)));
 		assert.deepEqual(hosts.area.saveLayout(), layout);
+	});
+
+	test('routes Search to a separate Part even when opened from a Files group', async () => {
+		using hosts = fixture();
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		const filesGroup = hosts.editor.activeGroup;
+		hosts.editor.toggleMaximizeTool(filesGroup.id);
+		const input = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID };
+		await hosts.editor.openEditor(input, { pinned: true }, { groupId: filesGroup.id });
+		const searchPart = hosts.tools.get('search')!;
+		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.deepEqual(filesGroup.inputs.map(entry => entry.resource.path), ['/fixture/a.txt']);
+		assert.equal(searchPart.activeInput, input);
+		assert.equal(hosts.area.isToolVisible('search'), true);
+		assert.equal(hosts.area.isToolVisible('files'), true);
+	});
+
+	test('moves a saved Search tab out of Files while restoring the original active tab', async () => {
+		using hosts = fixture();
+		const file = URI.file('/fixture/a.txt');
+		const search = { resource: URI.parse('untitled:/fixture.code-search'), editorId: SearchEditorID, initialText: 'saved search query' };
+		await hosts.editor.openEditor({ resource: file }, { pinned: true });
+		const fileGroup = hosts.editor.activeGroup;
+		await hosts.files.openEditor(search, { pinned: true }, { groupId: fileGroup.id });
+		const saved = hosts.editor.saveWorkingSet('before-search-tool');
+		const { search: emptySearch, ...parts } = saved.toolParts!.parts;
+		const layout = saved.toolParts!.layout;
+		assert.ok(layout.type === 'branch');
+		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'search');
+		const legacy = {
+			...saved, groups: saved.groups.filter(group => !emptySearch.groups.includes(group.id!)),
+			toolParts: { ...saved.toolParts, parts, layout: { ...layout, children } },
+		};
+		await hosts.editor.applyWorkingSet(legacy);
+		const searchPart = hosts.tools.get('search')!;
+		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.equal(searchPart.activeInput?.resource.toString(), search.resource.toString());
+		assert.equal(searchPart.activeInput?.initialText, search.initialText);
+		assert.equal(hosts.files.fileGroups.flatMap(group => group.inputs).some(input => input.resource.toString() === file.toString()), true);
+		assert.equal(hosts.files.fileGroups.flatMap(group => group.inputs).some(input => input.resource.toString() === search.resource.toString()), false);
+	});
+
+	test('repairs a misplaced Search tab when the working set already contains a hidden Search group', async () => {
+		using hosts = fixture();
+		const file = { resource: URI.file('/fixture/a.txt') };
+		const misplaced = { resource: URI.file('/fixture/old.code-search') };
+		const existing = { resource: URI.parse('untitled:/current.code-search'), editorId: SearchEditorID };
+		await hosts.editor.openEditor(existing, { pinned: true });
+		const searchPart = hosts.tools.get('search')!;
+		hosts.editor.setGroupVisible(searchPart.activeGroup.id, false);
+		await hosts.editor.openEditor(file, { pinned: true });
+		const filesGroup = hosts.editor.activeGroup;
+		await hosts.files.openEditor(misplaced, { pinned: true }, { groupId: filesGroup.id });
+		const saved = hosts.editor.saveWorkingSet('mixed-search');
+
+		await hosts.editor.applyWorkingSet(saved);
+
+		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.equal(searchPart.activeInput?.resource.toString(), misplaced.resource.toString());
+		assert.deepEqual(searchPart.activeGroup.inputs.map(input => input.resource.toString()), [existing.resource.toString(), misplaced.resource.toString()]);
+		assert.deepEqual(hosts.files.fileGroups.flatMap(group => group.inputs.map(input => input.resource.toString())), [file.resource.toString()]);
+		assert.equal(hosts.area.isToolVisible('search'), true);
 	});
 
 	test('restacks an older Files and Changes pair and preserves a recorded manual split', async () => {
@@ -201,6 +320,30 @@ suite('Desktop tool EditorParts', () => {
 		await hosts.editor.toggleFileEditors();
 		await togglePreview();
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'changes', 'browser']);
+	});
+
+	test('allocates new tool columns against the conversation and restores their width', async () => {
+		using hosts = fixture();
+		hosts.area.layout({ width: 1800, height: 900 });
+		const width = () => hosts.area.getPreferredWidth(3000, 100, 600);
+		const changes = { resource: URI.parse('ash-session-changes:/fixture') };
+		const toggleChanges = () => hosts.editor.toggleToolEditors(input => input.resource.scheme === changes.resource.scheme);
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		assert.equal(width(), 1800);
+		await hosts.editor.openEditor({ resource: URI.parse('ash-browser:/fixture') }, { pinned: true });
+		assert.equal(width(), 1800);
+		await hosts.editor.openEditor(changes, { pinned: true });
+		assert.equal(width(), 2000);
+
+		await toggleChanges();
+		assert.equal(width(), 1800);
+		const saved = hosts.editor.saveWorkingSet('two-tools');
+		hosts.area.rememberWidth(0.5);
+		assert.equal(width(), 1500);
+		await hosts.editor.applyWorkingSet(saved);
+		assert.equal(width(), 1800);
+		await toggleChanges();
+		assert.equal(width(), 2000);
 	});
 
 	test('migrates a legacy mixed group to separate hosts while retaining all tabs', async () => {

@@ -1,12 +1,11 @@
 import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
-import type { IChatToolInvocation } from '../../../../common/chatService/chatService.js';
+import { chatToolResultPresentation, type IChatToolInvocation } from '../../../../common/chatService/chatService.js';
 import { h } from '../../../../../../../base/browser/dom.js';
 import { MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
-import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
+import { ChatToolOutputContentSubPart } from '../chatToolOutputContentSubPart.js';
 import { ChatResultListSubPart } from './chatResultListSubPart.js';
-import { ChatInputOutputMarkdownProgressPart } from './chatInputOutputMarkdownProgressPart.js';
 import { ChatSessionTargetResultPillSubPart } from './chatSessionTargetResultPillSubPart.js';
 import { ChatAutomationConfiguredResultSubPart } from './chatAutomationConfiguredResultSubPart.js';
 import { ChatCollapsibleInputOutputContentPart, type IToolOutputPresentation } from '../chatToolInputOutputContentPart.js';
@@ -16,31 +15,32 @@ export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
 	public getFileTreeInfos() { return this.resources.value?.getFileTreeInfos() ?? []; }
 	public getLastFocusedFileTree() { return this.resources.value?.getLastFocusedFileTree(); }
 	private readonly inputOutput: ChatCollapsibleInputOutputContentPart;
-	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
-	private readonly mediaChanges = this._register(new MutableDisposable());
 	private readonly resources = this._register(new MutableDisposable<ChatResultListSubPart>());
 	private readonly resourceChanges = this._register(new MutableDisposable());
-	private readonly markdown: ChatInputOutputMarkdownProgressPart;
+	private readonly preview: ChatToolOutputContentSubPart;
 	private visible = true;
 	private readonly resultTarget = this._register(new MutableDisposable<ChatSessionTargetResultPillSubPart | ChatAutomationConfiguredResultSubPart>());
 	private targetIdentity: string | undefined;
 
-	constructor(document: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(
+		document: Document,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
 		super(h(document, 'div'));
-		this.inputOutput = this._register(new ChatCollapsibleInputOutputContentPart(document));
-		this.markdown = this._register(instantiation.createInstance(ChatInputOutputMarkdownProgressPart, document));
-		this._register(this.markdown.onDidChangeHeight(() => this.changedHeight.fire()));
-		this.domNode.append(this.inputOutput.domNode, this.markdown.domNode);
+		this.inputOutput = this._register(instantiation.createInstance(ChatCollapsibleInputOutputContentPart, document));
+		this.preview = this._register(instantiation.createInstance(ChatToolOutputContentSubPart, document));
+		this._register(this.preview.onDidChangeHeight(() => this.changedHeight.fire()));
+		this.domNode.append(this.inputOutput.domNode, this.preview.domNode);
 		this._register(this.inputOutput.onDidChangeHeight(() => this.changedHeight.fire()));
 	}
 
-	public get codeblocks() { return this.markdown.codeblocks; }
+	public get codeblocks() { return this.preview.codeblocks; }
 
 	public render(invocation: IChatToolInvocation, source: IChatListItem['attachmentSource'], options: { readonly generatedImages: boolean; }, presentation?: IToolOutputPresentation): void {
 		const { result } = invocation;
 		const content = result?.content ?? [];
-		const target = content.flatMap(part => part.type === 'artifact' && part.artifact.source.type === 'viewMetadata' && part.artifact.presentation ? [part.artifact.presentation] : [])[0];
-		const targetIdentity = source && result && !result.isError && target ? JSON.stringify([source, result.itemId, target]) : undefined;
+		const target = invocation.subagentActivity ? undefined : chatToolResultPresentation(result);
+		const targetIdentity = source && result && target ? JSON.stringify([source, result.itemId, target]) : undefined;
 		if (targetIdentity !== this.targetIdentity) {
 			this.targetIdentity = targetIdentity;
 			this.resultTarget.clear();
@@ -53,23 +53,8 @@ export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
 				this.domNode.append(part.domNode);
 			}
 		}
-		this.markdown.render(presentation ? [] : content);
-		this.inputOutput.render(invocation, presentation);
-		const mediaContent = options.generatedImages ? content.map(part => part.type === 'imageUrl' || part.type === 'imageAttachment' ? { type: 'text' as const, text: '' } : part) : content;
-		if (mediaContent.some(part => part.type !== 'text' && part.type !== 'artifact')) {
-			if (!this.media.value) {
-				const media = this.instantiation.createInstance(ChatAttachmentsContentPart, { ownerDocument: this.domNode.ownerDocument, variables: mediaContent, source });
-				this.media.value = media;
-				media.setVisible(this.visible);
-				this.domNode.append(media.domNode);
-				this.mediaChanges.value = media.onDidChangeHeight(() => this.changedHeight.fire());
-			} else {
-				this.media.value.updateVariables(mediaContent, source);
-			}
-		} else {
-			this.mediaChanges.clear();
-			this.media.clear();
-		}
+		this.preview.render(content, source, { generatedImages: options.generatedImages, hideFormattedResults: !!presentation });
+		this.inputOutput.render(invocation, presentation, source);
 		if (content.some(part => part.type === 'artifact' && part.artifact.source.type !== 'mcpApp' && part.artifact.source.type !== 'viewMetadata')) {
 			if (!this.resources.value) {
 				const resources = this.instantiation.createInstance(ChatResultListSubPart, this.domNode.ownerDocument);
@@ -86,8 +71,7 @@ export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
 
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
-		this.markdown.setVisible(visible);
+		this.preview.setVisible(visible);
 		this.resultTarget.value?.setVisible(visible);
-		this.media.value?.setVisible(visible);
 	}
 }

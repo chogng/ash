@@ -20,6 +20,8 @@ export interface ActionViewItemOptions {
 	readonly buttonStyles?: IButtonStyles;
 	/** Selects the shared Button presentation for this action's triggers. */
 	readonly buttonPresentation?: IButtonOptions['presentation'];
+	/** An owning component's class for layout of the action's button root. */
+	readonly buttonClassName?: string;
 	/** Hides button captions while retaining their accessible names and tooltips. */
 	readonly iconOnly?: boolean;
 	/** Allows the host ActionBar to expose this item as a native drag source. */
@@ -94,6 +96,7 @@ export abstract class ActionViewItem extends Disposable {
 			hoverGroupId: options.hoverGroupId ?? this.hoverGroupId,
 			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
 		}));
+		if (this.actionViewItemOptions.buttonClassName) button.domNode.classList.add(this.actionViewItemOptions.buttonClassName);
 		if (options.title) {
 			this.setupDelayedHover(button.domNode, options.title);
 		}

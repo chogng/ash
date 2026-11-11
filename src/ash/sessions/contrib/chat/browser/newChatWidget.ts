@@ -25,7 +25,7 @@ import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/w
 import { BackgroundSendAvailableContext, ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
-import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CODE_HISTORY_VIRTUALIZE_FROM } from '../common/constants.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
 import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
@@ -33,6 +33,7 @@ import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browse
 import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { ChatInputArtifactPill } from '../../artifacts/browser/chatInputArtifactPill.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/newChatEnvironment.css';
@@ -129,9 +130,11 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				return composer.input;
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
+			getTurnChanges: source => turnChanges.getChangesForResponse(source),
 			messagePresentation,
+			virtualizeHistoryFrom: codePresentation.map(code => code ? CODE_HISTORY_VIRTUALIZE_FROM : undefined),
 			welcomeTitle,
-		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
+		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding, configuration);
 		this.composer = this._register(composer);
 		this.codePresentation = codePresentation;
 		const shown = observableFromEvent(this, this.onDidChangeVisibility, () => this.visible);
@@ -192,6 +195,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 				tipContainer.inert = overlaps;
 			}));
 		}
+		this._register(new ChatInputArtifactPill(this.input, model));
 		this.renderDraftNotice(parent);
 		parent.append(footer);
 		this.input.useResponsiveFooter(() => this.sessionControls?.responsivePickers ?? []);

@@ -1,8 +1,8 @@
 use super::AppServer;
+use crate::model_catalog::short_text_reasoning_effort;
 use ash_core::ThreadTitleRequest;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelPurpose;
-use ash_protocol::ReasoningEffort;
 use core_api::ThreadUpdateSink;
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,7 +36,7 @@ impl AppServer {
                 let snapshot = config.read_snapshot().ok()?;
                 let entries = catalog.list().unwrap_or_default();
                 let entry = match &snapshot.values.thread_title_model {
-                    Some(model) => entries.iter().find(|entry| &entry.model == model),
+                    Some(selection) => entries.iter().find(|entry| entry.model == selection.model),
                     None => entries.iter().find(|entry| {
                         entry.model.provider == request.conversation_model.provider
                             && entry.recommended_for.contains(&ModelPurpose::ThreadTitle)
@@ -47,25 +47,14 @@ impl AppServer {
                                 .is_ok_and(|access| access != ModelAccess::Unknown)
                     }),
                 };
-                let selected = snapshot
-                    .values
-                    .thread_title_model
-                    .as_ref()
+                let selection = snapshot.values.thread_title_model.as_ref();
+                let selected = selection
+                    .map(|selection| &selection.model)
                     .or_else(|| entry.map(|entry| &entry.model))?;
-                let effort = entry.and_then(|entry| {
-                    [
-                        ReasoningEffort::None,
-                        ReasoningEffort::Minimal,
-                        ReasoningEffort::Low,
-                    ]
-                    .into_iter()
-                    .find(|effort| {
-                        entry
-                            .supported_reasoning_efforts
-                            .iter()
-                            .any(|option| option.effort == *effort)
-                    })
-                });
+                let effort = short_text_reasoning_effort(
+                    entry,
+                    selection.and_then(|selection| selection.reasoning_effort),
+                );
                 if let Err(error) = request.generate(
                     &threads,
                     model.as_ref(),

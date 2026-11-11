@@ -7,6 +7,7 @@ import { type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import type { DocumentNode } from '../../documentEditor/common/documentCodec.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
+import type { TextModelChange } from '../../../../editor/common/core/textChange.js';
 import type { ISaveOptions, SaveReason } from '../../../common/editor.js';
 import type { IEncodingSupport } from '../../textfile/common/textfiles.js';
 
@@ -33,6 +34,8 @@ export interface ITextModelSaveCompletionParticipant {
 export interface TextModelInput {
 	readonly resource: URI;
 	readonly initialText?: string;
+	/** For untitled tools with generated content, the initial text and accepted changes establish a clean baseline. */
+	readonly isUntitledBaselineChange?: (change: TextModelChange, wasDirty: boolean) => boolean;
 	/** Used only for this acquisition's disk resolution; never retained for background reloads. */
 	readonly readFile?: FileReadOperation;
 	/** Read-only initial content is a supplied snapshot, not a live file baseline. */

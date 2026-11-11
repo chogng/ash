@@ -33,7 +33,7 @@ export interface ISessionCreateOptions {
 
 export interface ISessionsProviderAutomations extends IAutomationStore {
 	/** Resolve a tool receipt on this provider without exposing the catalogue's composite ID format. */
-	getAutomationByBackendId?(id: string): import('../../../../workbench/contrib/chat/common/automations/automation.js').IAutomationDescriptor | undefined;
+	getAutomationByBackendId?(id: string): ReturnType<IAutomationStore['getAutomation']>;
 }
 
 /** Adapts one backend into frontend Session and Chat objects. */

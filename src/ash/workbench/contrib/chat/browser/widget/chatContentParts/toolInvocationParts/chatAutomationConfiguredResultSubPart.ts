@@ -7,6 +7,7 @@ import { defaultButtonStyles } from '../../../../../../../platform/theme/browser
 import { IChatSessionNavigationService } from '../../../../../../services/chat/common/chatSessionNavigationService.js';
 import { localize } from '../../../../../../../nls.js';
 import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
+import '../media/chatSessionCreatedResult.css';
 
 /** A creation receipt opens the live provider-owned definition instead of storing another catalogue. */
 export class ChatAutomationConfiguredResultSubPart extends BaseChatToolInvocationSubPart {
@@ -17,7 +18,7 @@ export class ChatAutomationConfiguredResultSubPart extends BaseChatToolInvocatio
 		@IChatSessionNavigationService navigation: IChatSessionNavigationService,
 		@INotificationService notifications: INotificationService,
 	) {
-		super(h(document, 'section'));
+		super(h(document, 'section', { className: 'ash-chat-created-result' }));
 		this.supported = !!navigation.openToolResult;
 		const label = h(document, 'p');
 		label.textContent = localize('chat.tool.automationConfigured', 'Task configured: {0}', target.label);

@@ -7,7 +7,7 @@ import { Disposable, toDisposable } from '../../../../../../base/common/lifecycl
 import { localize } from '../../../../../../nls.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import type { DesignModel } from '../../../common/model/designModel.js';
-import type { DesignKeyframe, DesignMotion, DesignShape } from '../../../common/model/document.js';
+import type { DesignKeyframe, DesignMotion, DesignShape } from '../../../common/model/designDocument.js';
 import { designMotionDuration, sampleDesignMotion } from '../common/motion.js';
 import type { DesignScene } from '../../../browser/designEditorBrowser.js';
 

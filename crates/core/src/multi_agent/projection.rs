@@ -70,6 +70,7 @@ fn build_node(
         thread_id: thread_id.clone(),
         thread_sequence: thread.sequence,
         title: thread.title.clone(),
+        origin: Some(thread.origin.clone()),
         parent_thread_id: thread.parent_thread_id.clone(),
         forked_from_id: thread.forked_from_id.clone(),
         execution_status: turn

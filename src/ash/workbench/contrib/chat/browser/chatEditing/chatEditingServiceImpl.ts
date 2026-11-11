@@ -72,6 +72,9 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		this.persistence = instantiation.createInstance(ChatEditingSessionStorage);
 		this._register(this.onDidChange(() => {
 			this.reviewRevision++;
+			for (const [entry, review] of this.entryReviews) {
+				if (entry.isReviewSuspended && review.deadline !== undefined) this.cancelAutoAccept(entry);
+			}
 			if (this.initialized && !this.applyingEdits) { this.saveReview.schedule(); }
 		}));
 		this._register(lifecycle.onWillShutdown(event => {
@@ -274,6 +277,8 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 		return this.operations.schedule(async () => {
 			this.assertNotDisposed();
 			const selected = select();
+			const suspended = selected.find(entry => entry.isReviewSuspended);
+			if (suspended) throw new Error(suspended.getAccessibleContent());
 			try {
 				for (const entry of selected) {
 					this.cancelAutoAccept(entry);
@@ -328,7 +333,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 	private startCountdown(entry: IModifiedFileEntry, review: EntryReview): void {
 		const delay = this.configuration.getValue<number>(autoAcceptDelaySetting);
 		review.revision++;
-		review.deadline = delay > 0 && !entry.hasPendingSave && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed') ? Date.now() + delay * 1000 : undefined;
+		review.deadline = delay > 0 && !entry.hasPendingSave && !entry.isReviewSuspended && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed') ? Date.now() + delay * 1000 : undefined;
 		this.autoAcceptChanged.fire(entry);
 	}
 
@@ -346,7 +351,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 				review.deadline = undefined;
 				// Recheck inside the edit queue: a newer tool write or cancellation wins over an expired timer.
 				void this.operations.scheduleSkipIfCleared(async () => {
-					if (this.entryReviews.get(entry) === review && review.revision === revision && !entry.hasPendingSave && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed')) {
+					if (this.entryReviews.get(entry) === review && review.revision === revision && !entry.hasPendingSave && !entry.isReviewSuspended && !review.cancelled && [...review.turns.values()].every(turn => turn.outcome === 'completed')) {
 						await entry.accept();
 						await this.saveReviews();
 						void this.signals.playSignal(AccessibilitySignal.editsKept);
@@ -414,7 +419,7 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 					if (this.isDisposed) { reference.dispose(); return; }
 					key = extUriBiasedIgnorePathCase.getComparisonKey(resource);
 					const document = new ChatEditingModifiedDocumentEntry(resource, reference, () => this.remove(key), () => this.changed.fire(), { resource, original: snapshot.original, current: snapshot.current, ...(snapshot.pendingSaveSource === undefined ? {} : { pendingSaveSource: snapshot.pendingSaveSource }) });
-					if (document.hunks.length === 0 && !document.hasPendingSave) { document.dispose(); continue; }
+					if (document.hunks.length === 0 && !document.hasPendingSave && !document.isReviewSuspended) { document.dispose(); continue; }
 					entry = document;
 				} else {
 					const files = snapshot.files;
@@ -499,6 +504,7 @@ class ChatEditReviewSession extends Disposable implements IChatEditReviewSession
 class ChatEditingFileOperationEntry extends Disposable implements IModifiedFileEntry {
 	public readonly isFileOperation = true;
 	public readonly hasPendingSave = false;
+	public readonly isReviewSuspended = false;
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	public readonly id = crypto.randomUUID();
@@ -519,6 +525,8 @@ class ChatEditingFileOperationEntry extends Disposable implements IModifiedFileE
 	public async accept(): Promise<void> { if (!this.isBusy) { this.complete(); } }
 	public async reject(): Promise<void> {
 		if (this.isBusy) { return; }
+		const suspended = this.remaining.find(entry => entry.isReviewSuspended);
+		if (suspended) throw new Error(suspended.getAccessibleContent());
 		this.isBusy = true;
 		this.changed.fire();
 		try {

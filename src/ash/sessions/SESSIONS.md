@@ -122,12 +122,12 @@ Explicit opens of durable conversations and custom pages update a workspace-loca
 
 ### `ISessionsConversationService`
 
-In the current shared Session path, the Sessions Part owns conversation UI
-selection. Code uses the existing Chat implementation. Chat, Collaboration and
-conversations beside product editors use Cowork. Each implementation retains its
-own panes and models. Switching transfers the unsent drafts of all visible
-conversations while the window Sessions service keeps one selection, arrangement
-and navigation history.
+In the shared Session path, the Sessions Part selects the Code or native Chat
+presentation. Both use the native Chat model for reads, submissions and
+cancellation, the Workbench Chat renderer, and the same draft storage binding.
+Each presentation keeps its layout and model preference policy. Switching the
+retained panes transfers unsent drafts while the window Sessions service keeps
+one selection, arrangement and navigation history.
 
 ### Scoped session context
 

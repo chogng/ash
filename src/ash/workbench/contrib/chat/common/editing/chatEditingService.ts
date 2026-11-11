@@ -29,6 +29,7 @@ export interface IModifiedFileEntry extends IDisposable {
 	readonly resources: readonly URI[];
 	readonly hunks: readonly IModifiedFileEntryChangeHunk[];
 	readonly isBusy: boolean;
+	readonly isReviewSuspended: boolean;
 	readonly hasPendingSave: boolean;
 	readonly onDidChange: Event<void>;
 	accept(hunk?: IModifiedFileEntryChangeHunk): Promise<void>;

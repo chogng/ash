@@ -34,6 +34,7 @@ export class SessionsAccountMenu {
 			{ id: OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID, label: shortcutsLabel, tooltip: shortcutsLabel, icon: Lxicon.recordKeys, enabled: true, run: () => this.commands.executeCommand(OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID) },
 		];
 		const footer = anchor.closest('.ash-sessions-sidebar-footer');
+		anchor.classList.add('active');
 		anchor.setAttribute('aria-expanded', 'true');
 		this.contextMenus.showContextMenu({
 			getAnchor: () => footer ?? anchor,
@@ -42,7 +43,10 @@ export class SessionsAccountMenu {
 			getActions: () => actions,
 			getMenuClassName: () => footer ? 'ash-sessions-account-menu ash-sessions-sidebar-account-menu' : 'ash-sessions-account-menu',
 			autoSelectFirstItem,
-			onHide: () => anchor.setAttribute('aria-expanded', 'false'),
+			onHide: () => {
+				anchor.classList.remove('active');
+				anchor.setAttribute('aria-expanded', 'false');
+			},
 		});
 	}
 }

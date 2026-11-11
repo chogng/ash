@@ -2,6 +2,55 @@ use super::*;
 use crate::Message;
 
 #[test]
+fn completed_response_preserves_safe_web_citations_from_all_text_parts() {
+    let source = json!({
+        "type": "url_citation", "url": "https://example.test/docs",
+        "title": "Documentation", "start_index": 0, "end_index": 5
+    });
+    let item = json!({
+        "type":"message", "id":"msg1", "role":"assistant",
+        "content": [
+            {"type":"output_text", "text":"First", "annotations":[source]},
+            {"type":"output_text", "text":" and second", "annotations":[source,
+                {"type":"url_citation", "url":"https://example.test/second", "title":"Second"},
+                {"type":"url_citation", "url":"javascript:alert(1)", "title":"Invalid"},
+                {"type":"url_citation", "url":"https://name:secret@example.test", "title":"Invalid"},
+                {"type":"file_citation", "file_id":"file1", "filename":"example.rs"}
+            ]}
+        ]
+    });
+    let mut events = ResponsesEventDecoder::new();
+    events
+        .decode_json(&json!({
+            "type":"response.output_item.done", "output_index":0, "item":item
+        }))
+        .unwrap();
+    events
+        .decode_json(&json!({
+            "type":"response.completed", "response":{"status":"completed"}
+        }))
+        .unwrap();
+    let response = parse_response(events.finish_response().unwrap()).unwrap();
+    let [OutputItem::Message(message)] = response.output.as_slice() else {
+        panic!("expected the completed assistant message");
+    };
+    assert_eq!(message.text, "First and second");
+    assert_eq!(
+        message.citations.as_ref().unwrap(),
+        &[
+            ash_protocol::ResponseCitation::Web {
+                url: "https://example.test/docs".into(),
+                title: "Documentation".into()
+            },
+            ash_protocol::ResponseCitation::Web {
+                url: "https://example.test/second".into(),
+                title: "Second".into()
+            },
+        ]
+    );
+}
+
+#[test]
 fn reasoning_replay_estimates_partition_usage_and_preserve_effective_context() {
     let response = parse_response(json!({
         "status": "completed",

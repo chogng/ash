@@ -35,7 +35,7 @@ export class EditorPart extends WorkbenchEditorPart {
 			if (this.isDisposed || event.kind !== 'groupRemoved' || this.groups.length !== 1 || this.groups[0]!.id !== this.pageGroupId) { return; }
 			// Working-set restoration temporarily detaches every group. Recreate a document host only
 			// when the retained product group is actually the sole live group after a close.
-			const documents = this.addGroup(this.pageGroupId, Direction.Left);
+			const documents = this.insertGroup(this.groups[0]!, Direction.Left).group;
 			const productVisible = this.isGroupVisible(this.pageGroupId);
 			this.setGroupVisible(documents.id, !productVisible);
 			if (!productVisible) { this.activateGroup(documents.id); }

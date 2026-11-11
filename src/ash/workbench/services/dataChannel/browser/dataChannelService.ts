@@ -1,5 +1,5 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { IDataChannelService, ILinkPresentationService, type CoreDataChannel, type IDataChannelEvent, type ILinkPresentationProvider, type ILinkPresentationProviderRegistration, type ILinkPresentationRule, type ILinkPresentationWatcher } from '../../../../platform/dataChannel/common/dataChannel.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -23,10 +23,14 @@ export class DataChannelService extends Disposable implements IDataChannelServic
 	}
 }
 
+interface SharedWatcher extends ILinkPresentationWatcher {
+	references: number;
+}
+
 interface ProviderEntry {
 	readonly registration: ILinkPresentationProviderRegistration;
 	readonly provider: ILinkPresentationProvider;
-	readonly watchers: DisposableStore;
+	readonly watchers: DisposableMap<string, SharedWatcher>;
 	readonly enablement: ContextKeyExpression | undefined;
 }
 
@@ -45,7 +49,7 @@ export class LinkPresentationService extends Disposable implements ILinkPresenta
 			}
 			for (const entry of affected) {
 				if (!this.isEnabled(entry)) {
-					entry.watchers.clear();
+					entry.watchers.clearAndDisposeAll();
 				}
 			}
 			this.rulesEmitter.fire();
@@ -63,7 +67,7 @@ export class LinkPresentationService extends Disposable implements ILinkPresenta
 			throw new Error(`Link presentation provider '${registration.id}' is already registered`);
 		}
 		const enablement = registration.enablement ? ContextKeyExpr.deserialize(registration.enablement) : undefined;
-		const watchers = this._register(new DisposableStore());
+		const watchers = this._register(new DisposableMap<string, SharedWatcher>());
 		const entry = { registration, provider, watchers, enablement };
 		this.providers.set(registration.id, entry);
 		this.rulesEmitter.fire();
@@ -88,16 +92,23 @@ export class LinkPresentationService extends Disposable implements ILinkPresenta
 		if (!entry || !this.isEnabled(entry)) {
 			return undefined;
 		}
+		const key = resource.toString();
 		entry.registration.uriPattern.lastIndex = 0;
-		if (!entry.registration.uriPattern.test(resource.toString())) {
+		if (!entry.registration.uriPattern.test(key)) {
 			return undefined;
 		}
-		const watcher = entry.provider.createLinkPresentationWatcher(resource);
-		entry.watchers.add(watcher);
+		const shared = entry.watchers.get(key) ?? this.createSharedWatcher(entry, key, resource);
+		shared.references++;
 		return Object.assign(toDisposable(() => {
-			entry.watchers.delete(watcher);
-			watcher.dispose();
-		}), { presentation: watcher.presentation });
+			if (--shared.references === 0 && entry.watchers.get(key) === shared) {
+				entry.watchers.deleteAndDispose(key);
+			}
+		}), { presentation: shared.presentation });
+	}
+
+	private createSharedWatcher(entry: ProviderEntry, key: string, resource: URI): SharedWatcher {
+		const watcher = entry.provider.createLinkPresentationWatcher(resource);
+		return entry.watchers.set(key, Object.assign(toDisposable(() => watcher.dispose()), { presentation: watcher.presentation, references: 0 }));
 	}
 
 	private isEnabled(entry: ProviderEntry): boolean {

@@ -8,6 +8,8 @@ export interface ILinesDiffComputerOptions {
 	readonly ignoreTrimWhitespace: boolean;
 	readonly maxComputationTimeMs: number;
 	readonly computeMoves: boolean;
+	/** Keep the character mappings separate for consumers that track edit ownership. */
+	readonly computeRawChanges?: boolean;
 	readonly extendToSubwords?: boolean;
 	/** Shared document language, omitted when the compared models use different languages. */
 	readonly languageId?: string;

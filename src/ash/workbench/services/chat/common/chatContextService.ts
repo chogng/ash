@@ -5,6 +5,7 @@ import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { ITerminalOutputSnapshot } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { IMarkdownString } from '../../../../base/common/htmlContent.js';
+import { localize } from '../../../../nls.js';
 
 export interface ResolvedChatContext {
 	readonly sourceUrl?: string;
@@ -35,6 +36,22 @@ export interface ChatContextAttachment {
 	/** Position of the visible reference in the message; older saved drafts may omit it. */
 	readonly reference?: { readonly start: number; readonly end: number; };
 	resolve(): Promise<ResolvedChatContext>;
+}
+
+export const maxDisabledChatTools = 4096;
+
+/** Reads the tool selection captured in a draft or a submitted context attachment. */
+export function parseChatToolSelection(content: string): string[] {
+	try {
+		const disabled: unknown = JSON.parse(content);
+		if (Array.isArray(disabled) && disabled.length <= maxDisabledChatTools
+			&& disabled.every(name => typeof name === 'string' && name.trim()) && new Set(disabled).size === disabled.length) {
+			return disabled;
+		}
+	} catch {
+		// Invalid JSON and an invalid selection both require reconfiguring the tools.
+	}
+	throw new Error(localize('chat.tools.invalidSelection', 'The tool selection is invalid. Configure tools again.'));
 }
 
 /** Carry composer positions alongside the captured content without changing the shared snapshot. */

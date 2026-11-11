@@ -6,7 +6,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workb
 import { AgentTraceOutput, IAgentTraceOutput } from './agentTraceOutput.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { URI } from '../../../../base/common/uri.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { createAgentTraceResource, type AgentTraceLocation } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
@@ -65,7 +65,7 @@ function currentTraceResource(accessor: ServicesAccessor): URI {
 
 async function openTraceEntry(accessor: ServicesAccessor, resource: URI, source?: 'restore'): Promise<void> {
 	const storage = accessor.get(IStorageService);
-	const layout = accessor.get(ISessionsLayoutService);
+	const layout = accessor.get(ISessionsEntryService);
 	await layout.openEntry({
 		id: 'trace', activityContext: 'sessions.activity.traceSelected', content: 'editor',
 		showEditorTabs: true, restoreCommand: 'sessions.open.trace', focus: 'editor',

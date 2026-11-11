@@ -1,43 +1,59 @@
-import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { Dimension, h, addDisposableListener, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
-import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { extUri } from '../../../../base/common/resources.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { hash } from '../../../../base/common/hash.js';
+import { extUri, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
 import { IChatService, createThreadChangeFileResource } from '../../../../workbench/services/chat/common/chatService.js';
-import { EditorPanes } from '../../../../workbench/browser/editor.js';
-import { type EditorPaneCreationOptions, EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { isEditorPaneWithViewState, type IEditorPaneWithViewState } from '../../../../workbench/browser/parts/editor/editorWithViewState.js';
+import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import type { IEditorPaneWithViewState } from '../../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createTurnChangesSelectionInput, createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import { createThreadMultiDiffEditorInput } from '../../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
-import type { IChangesThreadFileItem } from './changesViewRenderer.js';
 import type { MultiDiffEditorInput, MultiDiffEditorInputItem } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { createMultiDiffEditorInput } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { MultiDiffEditor } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { raceCancellationError } from '../../../../base/common/async.js';
+import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { raceCancellationError, RunOnceScheduler } from '../../../../base/common/async.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
-import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
-import { findChangesEditorFileChange } from './changesEditorLabels.js';
-import { multiDiffEditorItemKey } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import type { URI } from '../../../../base/common/uri.js';
+import { getChangesViewMode, getCapturedTurnIds, type IChangesThreadFileItem } from '../common/changes.js';
+import { chatExecutionWorkspace, matchesSessionFileChange, type ISessionFileChange } from '../../../services/sessions/common/session.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { URI } from '../../../../base/common/uri.js';
 import type { MultiDiffEditorViewState } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorViewModel.js';
 import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
-import { ChangesViewPane } from './changesView.js';
-import { CHANGES_VIEW_ID } from '../common/changes.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import type { GitRepositoryContext, GitSessionComparison } from '../../../../platform/git/common/localGitService.js';
+import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 
-interface SessionChangesEditorOptions extends EditorPaneCreationOptions {
-	readonly showChangesView?: boolean;
+export type ChangesScope = 'all' | 'turn' | 'uncommitted' | 'branch';
+export const ChangesScopeContext = new RawContextKey<ChangesScope>('sessions.changes.scope', 'all');
+export const ChangesHasWorkspaceContext = new RawContextKey<boolean>('sessions.changes.hasWorkspace', false);
+
+interface GitComparison {
+	readonly provider: ISessionProviderScope;
+	readonly directory: { readonly sessionId: string; readonly path: string; };
+	readonly repository: GitRepositoryContext;
+	readonly root: URI;
+	readonly comparison: Exclude<GitSessionComparison, { kind: 'branches'; }>;
+	readonly label: string;
+}
+
+interface SessionChangesEditorOptions {
+	readonly showFileList?: boolean;
 }
 
 export const CHANGESET_REVIEW_ACTION_ID = 'changeset.review';
@@ -47,25 +63,23 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	public static readonly ID = 'ash.sessions.changesEditor';
 	public readonly id = SessionChangesEditor.ID;
 	public readonly viewStateTypeId = 'ash.sessions.changesEditor';
-	private readonly comparison = this._register(new MutableDisposable<IEditorPane>());
+	private comparison: MultiDiffEditor | undefined;
 	private domNode!: HTMLDivElement;
-	private comparisonDomNode!: HTMLElement;
-	private detailsDomNode: HTMLElement | undefined;
-	private details: ChangesViewPane | undefined;
-	private readonly split = this._register(new MutableDisposable<SplitView>());
-	private comparisonDimension: IDimension = Dimension.Zero;
 	private messageDomNode!: HTMLParagraphElement;
 	private input: IResourceEditorInput | undefined;
 	private comparisonInput: MultiDiffEditorInput | undefined;
 	private viewState: unknown;
 	private dimension: IDimension = Dimension.Zero;
 	private visible = false;
-	private detailsFocused = false;
-	private detailsVisible = true;
-	private turnDetailsVisible = false;
 	private revision = 0;
 	private inputRequest = 0;
 	private readonly pending = this._register(new MutableDisposable<IDisposable & { readonly signal: AbortSignal; completion?: Promise<void>; }>());
+	private readonly scopeRequest = this._register(new MutableDisposable<IDisposable>());
+	private readonly uncommittedWatch = this._register(new MutableDisposable<DisposableStore>());
+	private readonly uncommittedRefresh = this._register(new RunOnceScheduler(() => { void this.refreshUncommitted(); }, 4_000));
+	private readonly scopeContext;
+	private readonly hasWorkspace;
+	private gitComparison: GitComparison | undefined;
 
 	constructor(
 		private readonly options: SessionChangesEditorOptions,
@@ -77,18 +91,25 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@ISessionChangesService private readonly changesService: ISessionChangesService,
+		@IFileService private readonly files: IFileService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super(SessionChangesEditor.ID, themeService, storageService);
+		this.scopeContext = ChangesScopeContext.bindTo(contextKeys);
+		this.hasWorkspace = ChangesHasWorkspaceContext.bindTo(contextKeys);
+		if (options.showFileList) {
+			getChangesViewMode(storageService);
+			this._register(instantiation.get(ISessionsService).onDidChange(() => this.updateWorkspaceContext()));
+		}
 		this._register(chat.onDidUpdateTurnChanges(event => {
-			if (this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) {
+			if (!this.gitComparison && this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) {
 				void this.refresh();
 			}
 		}));
 		this._register(chat.onDidBecomeReady(() => { void this.refresh(); }));
 		this._register(chat.onDidUpdateThread(event => {
 			if (event.update.type !== 'committed' || event.update.event.type !== 'threadHistoryMoved') { return; }
-			if (this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) { void this.refresh(); }
+			if (!this.gitComparison && this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) { void this.refresh(); }
 		}));
 	}
 
@@ -97,9 +118,6 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this.messageDomNode = h(parent.ownerDocument, 'p', { className: 'ash-sessions-editor-message' });
 		this.messageDomNode.setAttribute('role', 'status');
 		this.domNode.tabIndex = 0;
-		this._register(addDisposableListener(this.domNode, 'focusin', () => {
-			this.detailsFocused = this.details?.element.contains(this.domNode.ownerDocument.activeElement) ?? false;
-		}));
 		this.domNode.setAttribute('aria-label', localize('sessions.changes.title', 'Changes'));
 		const context = this._register(this.contextKeys.createScoped(this.domNode));
 		context.createKey('sessionsChangesEditorFocused', true);
@@ -117,19 +135,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			}
 		}));
 		updateHint();
-		this.comparisonDomNode = this.options.showChangesView
-			? h(parent.ownerDocument, 'div', { className: 'ash-sessions-changes-comparison' }) : this.domNode;
-		this.comparisonDomNode.append(this.messageDomNode);
-		if (this.options.showChangesView) {
-			this.detailsDomNode = h(parent.ownerDocument, 'div', { className: 'ash-sessions-changes-card-details' });
-			const scope = this._register(this.instantiation.createChild());
-			scope.registerInstance(IContextKeyService, context);
-			this.details = this._register(scope.createInstance(ChangesViewPane, this.detailsDomNode, {
-				id: CHANGES_VIEW_ID, title: localize('sessions.changes.title', 'Changes'),
-			}));
-			this.details.setHeaderVisible(false);
-			this.details.setVisible(false);
-		}
+		this.domNode.append(this.messageDomNode);
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -141,9 +147,15 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		if (this.input && !extUri.isEqual(this.input.resource, input.resource)) {
 			this.clearInput();
 		}
+		if (this.input !== input) {
+			this.scopeRequest.clear();
+			this.gitComparison = undefined;
+			this.updateUncommittedWatch();
+		}
 		this.input = input;
-		this.turnDetailsVisible = false;
-		this.details?.setVisible(this.visible && this.showFileList);
+		const selection = input instanceof SessionChangesEditorInput ? input.changesetSelection : undefined;
+		this.scopeContext.set(this.gitComparison?.comparison.kind ?? (selection && (selection.kind !== 'id' || selection.id) ? 'turn' : 'all'));
+		this.updateWorkspaceContext();
 		const inputRequest = ++this.inputRequest;
 		let loading = this.refresh(signal);
 		for (; ;) {
@@ -169,12 +181,15 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	public override clearInput(): void {
 		this.inputRequest++;
 		this.input = undefined;
-		this.details?.setVisible(false);
-		this.comparisonInput = undefined;
+		this.hasWorkspace.reset();
+		this.scopeRequest.clear();
+		this.gitComparison = undefined;
+		this.updateUncommittedWatch();
+		this.scopeContext.reset();
+		this.clearComparison();
 		this.viewState = undefined;
 		this.revision++;
 		this.pending.clear();
-		this.comparison.clear();
 		this.domNode?.setAttribute('aria-busy', 'false');
 	}
 
@@ -185,12 +200,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	}
 
 	public getAccessibleContent(): string {
-		if (this.showFileList && this.details && !this.comparisonInput) { return this.details.getAccessibleContent(); }
-		if (!this.comparisonInput) {
-			return this.messageDomNode.textContent ?? '';
-		}
-		const comparison = this.comparisonInput.items.map(item => localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label ?? item.modified.resource.path, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n');
-		return [this.showFileList ? this.details?.getAccessibleContent() : undefined, comparison].filter(Boolean).join('\n\n');
+		return this.comparisonInput?.items.map(item => localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label ?? item.modified.resource.path, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n')
+			?? this.messageDomNode.textContent;
 	}
 
 	public override setVisible(visibility: boolean): void {
@@ -203,14 +214,15 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			return;
 		}
 		this.visible = visible;
-		this.details?.setVisible(visible && this.showFileList);
+		this.updateUncommittedWatch();
+		this.updateWorkspaceContext();
 		if (this.visible) {
 			void this.refresh();
 		} else {
 			this.revision++;
+			this.scopeRequest.clear();
 			this.pending.clear();
-			this.comparison.clear();
-			this.comparisonInput = undefined;
+			this.clearComparison();
 		}
 	}
 
@@ -218,82 +230,206 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		return !!this.input && !!new URLSearchParams(this.input.resource.query).get('thread');
 	}
 
-	private get showFileList(): boolean {
-		return this.hasThread && (this.isTurnReview ? this.turnDetailsVisible : this.detailsVisible);
-	}
-
-	private get isTurnReview(): boolean {
-		return this.input instanceof SessionChangesEditorInput && this.input.changesetSelection?.kind === 'turn';
-	}
-
-	public toggleFileList(): void {
-		if (!this.details || !this.hasThread) { return; }
-		// A Turn review starts with the captured comparison; the list browses the whole conversation.
-		if (this.isTurnReview) this.turnDetailsVisible = !this.turnDetailsVisible;
-		else this.detailsVisible = !this.detailsVisible;
-		if (!this.showFileList && this.details.element.contains(this.domNode.ownerDocument.activeElement)) {
-			this.domNode.focus();
+	private updateWorkspaceContext(): void {
+		const selection = this.options.showFileList && this.visible && this.input
+			? this.instantiation.get(ISessionsService).activeSelection : undefined;
+		if (selection?.kind !== 'session' || !extUri.isEqual(this.input?.resource, new SessionChangesEditorInput(selection).resource)) {
+			this.hasWorkspace.set(false);
+			return;
 		}
-		this.details.setVisible(this.visible && this.showFileList);
-		this.layout(this.dimension);
+		const { session, threadId } = selection.active;
+		this.hasWorkspace.set(!!chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId)));
+	}
+
+	public async previewCommit(): Promise<void> {
+		if (!this.visible || !this.hasThread || !this.input || this.gitComparison) return;
+		const cancellation = new CancellationTokenSource();
+		const request = toDisposable(() => cancellation.dispose(true));
+		this.scopeRequest.value = request;
+		try {
+			const input = this.input instanceof SessionChangesEditorInput ? this.input : new SessionChangesEditorInput(this.input.resource);
+			await this.changesService.previewCommit(input.sessionResource, cancellation.token, input.changesetSelection);
+		} catch (error) {
+			if (!cancellation.token.isCancellationRequested) throw error;
+		} finally {
+			if (this.scopeRequest.value === request) this.scopeRequest.clear();
+		}
+	}
+
+	public async selectScope(scope: ChangesScope, groupId: number): Promise<void> {
+		const input = this.input;
+		const threadId = input && new URLSearchParams(input.resource.query).get('thread');
+		if (!input || !threadId || !this.visible) return;
+		this.scopeRequest.clear();
+		if (scope === 'all') {
+			if (input instanceof SessionChangesEditorInput && input.changesetSelection) {
+				this.gitComparison = undefined;
+				this.updateUncommittedWatch();
+				this.scopeContext.reset();
+				await this.changesService.openChangesEditor(input.sessionResource, { forceReload: true }, { groupId });
+			} else if (this.gitComparison) {
+				await this.setGitComparison(undefined);
+			}
+			return;
+		}
+		const session = this.sessions.sessions.find(session => input.resource.path === `/${session.sessionId}`);
+		if (!session) return;
+		const controller = new AbortController();
+		const request = toDisposable(() => controller.abort());
+		this.scopeRequest.value = request;
+		try {
+			if (scope === 'turn') {
+				const captures = await raceCancellationError(this.chat.listTurnChanges(session.sessionId, threadId), controller.signal);
+				const items = getCapturedTurnIds(captures).map((turnId, index) => ({
+					turnId, label: localize('sessions.changes.turn', 'Turn {0}', index + 1),
+				}));
+				if (!items.length) throw new Error(localize('sessions.changes.noTurns', 'No Turn changes are available.'));
+				const selected = await this.pickScopeItem(items, localize('sessions.changes.chooseTurn', 'Changes from Turn'), controller.signal);
+				if (!selected || controller.signal.aborted) return;
+				await this.changesService.openChangesEditor(new SessionChangesEditorInput(input.resource).sessionResource, {
+					changesetSelection: { kind: 'turn', turnId: selected.turnId },
+				}, { groupId });
+				return;
+			}
+			const workspace = chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId));
+			if (!workspace) throw new Error(localize('sessions.changes.noRepository', 'No Git repository is available in this session directory.'));
+			const provider = this.instantiation.get(ISessionProviderScopeService).getScope(session.sessionId);
+			const host = provider.services.host;
+			const directory = { sessionId: provider.backendIdentity(session.sessionId), path: workspace.root };
+			using cancellation = new CancellationTokenSource();
+			using cancel = addDisposableListener(controller.signal, 'abort', () => cancellation.cancel(), { once: true });
+			const repositories = await host.localGit.readRepositoryContexts(directory, cancellation.token);
+			if (controller.signal.aborted) return;
+			provider.assertCurrent();
+			if (!repositories.length) throw new Error(localize('sessions.changes.noRepository', 'No Git repository is available in this session directory.'));
+			const repository = repositories.length === 1 ? repositories[0] : (await this.pickScopeItem(repositories.map(repository => ({
+				label: repository.label, description: repository.rootPath, repository,
+			})), localize('sessions.changes.chooseRepository', 'Choose a session repository'), controller.signal))?.repository;
+			if (!repository || controller.signal.aborted) return;
+			const root = sessionWorkspaceUri(workspace).with({ path: URI.file(repository.rootPath).path });
+			let comparison: GitComparison['comparison'] = { kind: 'uncommitted' };
+			let label = localize('sessions.changes.uncommittedChanges', 'Uncommitted Changes');
+			if (scope === 'branch') {
+				const headObjectId = repository.head.objectId;
+				if (!headObjectId) throw new Error(localize('sessions.changes.noHead', 'The repository has no current commit to compare.'));
+				const result = await host.localGit.readSessionComparison(directory, repository.id, { kind: 'branches' }, controller.signal);
+				if (controller.signal.aborted || result.kind !== 'branches') return;
+				const branches = result.references.filter(ref => !ref.name.endsWith('/HEAD'));
+				if (!branches.length) throw new Error(localize('sessions.changes.noBranches', 'There are no other branches to compare.'));
+				const branch = await this.pickScopeItem(branches.map(ref => ({ label: ref.name, objectId: ref.objectId })),
+					localize('sessions.changes.chooseComparisonBranch', 'Choose a branch to compare against'), controller.signal);
+				if (!branch || controller.signal.aborted) return;
+				comparison = { kind: 'branch', headObjectId, baseObjectId: branch.objectId };
+				label = localize('sessions.changes.branchComparison', '{0} compared with {1}', repository.head.name || headObjectId.slice(0, 7), branch.label);
+			}
+			provider.assertCurrent();
+			await this.setGitComparison({ provider, directory, repository, root, comparison, label });
+		} catch (error) {
+			if (!controller.signal.aborted) throw error;
+		} finally {
+			if (this.scopeRequest.value === request) this.scopeRequest.clear();
+		}
+	}
+
+	private async pickScopeItem<T extends IQuickPickItem>(items: readonly T[], placeholder: string, signal: AbortSignal): Promise<T | undefined> {
+		if (signal.aborted) return undefined;
+		using resources = new DisposableStore();
+		const picker = resources.add(this.instantiation.get(IQuickInputService).createQuickPick<T>());
+		picker.items = items;
+		picker.ariaLabel = picker.placeholder = placeholder;
+		return await new Promise<T | undefined>(resolve => {
+			resources.add(picker.onDidHide(() => resolve(undefined)));
+			resources.add(addDisposableListener(signal, 'abort', () => resolve(undefined), { once: true }));
+			resources.add(picker.onDidAccept(() => resolve(picker.selectedItems[0])));
+			picker.show();
+		});
+	}
+
+	private async loadGitComparison(resource: URI, scope: GitComparison, signal: AbortSignal): Promise<MultiDiffEditorInput> {
+		const { provider, directory, repository, root, comparison, label } = scope;
+		provider.assertCurrent();
+		const result = await provider.services.host.localGit.readSessionComparison(directory, repository.id, comparison, signal);
+		provider.assertCurrent();
+		if (result.kind !== 'changes') throw new TypeError('Expected Git comparison files');
+		const source = resource.with({ scheme: 'ash-session-git-diff', fragment: JSON.stringify([repository.id, comparison]) });
+		const items = result.files.map(file => {
+			const originalPath = file.originalPath ?? file.path;
+			const modifiedResource = URI.joinPath(root, file.path);
+			// Two groups can compare the same worktree before and after an external edit.
+			const revision = hash([file.original, file.modified]);
+			return {
+				id: file.path,
+				label: file.originalPath ? `${file.originalPath} → ${file.path}` : file.path,
+				fileList: { path: file.path },
+				binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
+				contextKeys: { 'sessions.changesGitFile': true },
+				original: {
+					resource: URI.joinPath(source, originalPath).with({ query: `side=before&revision=${revision}` }),
+					preferredResource: URI.joinPath(root, originalPath), readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : ''
+				},
+				modified: {
+					resource: URI.joinPath(source, file.path).with({ query: `side=after&revision=${revision}` }),
+					preferredResource: modifiedResource, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : ''
+				},
+				goToFile: file.modified.kind === 'missing' ? undefined : { resource: modifiedResource },
+			};
+		});
+		return createMultiDiffEditorInput(source, items, label);
+	}
+
+	private setGitComparison(comparison: GitComparison | undefined): Promise<void> {
+		this.gitComparison = comparison;
+		this.updateUncommittedWatch();
+		this.scopeContext.set(comparison?.comparison.kind ?? 'all');
+		this.clearComparison();
+		this.viewState = undefined;
+		return this.refresh();
+	}
+
+	private updateUncommittedWatch(): void {
+		this.uncommittedRefresh.cancel();
+		this.uncommittedWatch.clear();
+		const scope = this.gitComparison;
+		if (!this.visible || scope?.comparison.kind !== 'uncommitted') return;
+		const watch = new DisposableStore();
+		this.uncommittedWatch.value = watch;
+		const root = scope.root;
+		if (this.files.hasProvider(root)) watch.add(this.files.watch(root, { recursive: true, excludes: [] }));
+		watch.add(this.files.onDidChangeFiles(({ resources }) => {
+			if (!resources || resources.some(resource => extUriBiasedIgnorePathCase.isEqualOrParent(resource, root)
+				|| extUriBiasedIgnorePathCase.isEqualOrParent(root, resource))) this.uncommittedRefresh.schedule(150);
+		}));
+	}
+
+	private async refreshUncommitted(): Promise<void> {
+		const watch = this.uncommittedWatch.value;
+		if (!watch) return;
+		const pending = this.pending.value;
+		await pending?.completion;
+		if (this.uncommittedWatch.value === watch && this.pending.value === pending) await this.refresh(undefined, true);
 	}
 
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
-		if (!this.details || !this.detailsDomNode) {
-			this.comparisonDimension = dimension;
-			this.comparison.value?.layout(dimension);
-			return;
-		}
-		const stacked = dimension.width < 720;
-		const orientation = stacked ? Orientation.VERTICAL : Orientation.HORIZONTAL;
-		if (this.split.value?.orientation !== orientation) {
-			this.split.clear();
-			const split = new SplitView(this.domNode, { proportionalLayout: false, orientation: orientation });
-			this.split.value = split;
-			const details = this.details;
-			split.addView({
-				element: this.comparisonDomNode, minimumSize: stacked ? 120 : 300, maximumSize: Infinity,
-				layout: (size, _offset, orthogonalSize) => {
-					this.comparisonDimension = new Dimension(stacked ? orthogonalSize : size, stacked ? size : orthogonalSize);
-					this.comparison.value?.layout(this.comparisonDimension);
-				},
-			}, stacked ? Math.max(120, dimension.height * 0.6) : Math.max(300, dimension.width - 240));
-			split.addView({
-				element: this.detailsDomNode,
-				get minimumSize() { return stacked ? details.minimumSize : 220; },
-				maximumSize: Infinity,
-				onDidChange: details.onDidChange,
-				layout: (size, _offset, orthogonalSize) => details.layout(stacked ? size : orthogonalSize, 0, stacked ? orthogonalSize : size),
-			}, stacked ? Math.min(300, dimension.height * 0.4) : 240);
-		}
-		this.split.value!.setViewVisible(1, this.showFileList);
-		this.split.value!.layout(stacked ? dimension.height : dimension.width, stacked ? dimension.width : dimension.height);
+		this.comparison?.layout(dimension);
 	}
+
 	public override focus(): void {
-		if (this.detailsFocused && this.showFileList && this.details) {
-			this.details.focus();
-		} else if (this.comparison.value) {
-			this.comparison.value.focus();
-		} else {
-			if (this.showFileList && this.details) { this.details.focus(); } else { this.domNode.focus(); }
-		}
+		if (this.comparisonInput) this.comparison?.focus();
+		else this.domNode.focus();
 	}
 
 	public override getControl(): DiffEditorWidget | undefined {
-		return this.comparison.value?.getControl() as DiffEditorWidget | undefined;
+		return this.comparison?.getControl();
 	}
 
 	public saveViewState(): unknown {
-		const pane = this.comparison.value;
-		const state = pane && isEditorPaneWithViewState(pane) ? pane.saveViewState() : undefined;
-		return state ?? this.viewState ?? null;
+		return this.comparison?.saveViewState() ?? this.viewState ?? null;
 	}
 
 	public restoreViewState(state: unknown): void {
-		const pane = this.comparison.value;
-		if (state != null && pane && isEditorPaneWithViewState(pane)) {
-			pane.restoreViewState(state);
+		if (state != null && this.comparisonInput) {
+			this.comparison?.restoreViewState(state);
 		}
 		this.viewState = state;
 	}
@@ -304,7 +440,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		const input = this.input;
 		const item = this.findComparisonItem(resource);
 		const signal = this.pending.value?.signal;
-		if (!this.visible || !input || !comparison || !item || !signal) { return undefined; }
+		if (this.gitComparison || !this.visible || !input || !comparison || !item || !signal) { return undefined; }
 		// A cumulative comparison may start in an earlier Turn; its modified side identifies the capture being reviewed.
 		const currentResource = item.modified.resource;
 		if (currentResource.scheme === 'ash-thread-change') {
@@ -333,21 +469,12 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			throw error;
 		});
 		if (this.isDisposed || this.comparisonInput !== comparison || !changeset?.isEnabled.get() || options.review && !changeset.capabilities?.review) { return undefined; }
-		return findChangesEditorFileChange(currentResource, changeset.changes.get());
+		return changeset.changes.get().find(change => matchesSessionFileChange(change, currentResource));
 	}
 
-	public collapse(resource: URI): void { this.setFileCollapsed(resource, true); }
-	public expand(resource: URI): void { this.setFileCollapsed(resource, false); }
-
-	private setFileCollapsed(resource: URI, collapsed: boolean): void {
+	public setFileCollapsed(resource: URI, collapsed: boolean): void {
 		const item = this.findComparisonItem(resource);
-		const pane = this.comparison.value;
-		if (!item || !pane || !isEditorPaneWithViewState(pane)) { return; }
-		const state = pane.saveViewState() as MultiDiffEditorViewState;
-		const ids = new Set(state.collapsedItemIds);
-		const id = multiDiffEditorItemKey(item);
-		if (collapsed) { ids.add(id); } else { ids.delete(id); }
-		pane.restoreViewState({ ...state, collapsedItemIds: [...ids] });
+		if (item) { this.comparison?.setFileCollapsed(item, collapsed); }
 	}
 
 	private findComparisonItem(resource: URI): MultiDiffEditorInputItem | undefined {
@@ -356,24 +483,43 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		return this.comparisonInput?.items.find(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, resource) || extUri.isEqual(item.modified.resource, modified));
 	}
 
-	private refresh(signal?: AbortSignal): Promise<void> {
-		const loading = this.loadChanges(signal);
+	private clearComparison(): void {
+		this.comparisonInput = undefined;
+		this.comparison?.setFileListAvailable(false);
+		this.comparison?.setVisible(false);
+		this.comparison?.clearInput();
+	}
+
+	private showEmptyComparison(resource: URI): void {
+		const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
+		this.clearComparison();
+		this.changesService.setChangesCount(resource, 0);
+		const message = this.gitComparison?.comparison.kind === 'branch'
+			? localize('sessions.changes.noBranchChanges', 'There are no changes between these branches.')
+			: this.gitComparison ? localize('sessions.changes.noUncommittedChanges', 'There are no uncommitted changes.')
+				: localize('sessions.changes.empty', 'No changes in this conversation.');
+		if (this.messageDomNode.textContent !== message) this.messageDomNode.textContent = message;
+		this.messageDomNode.hidden = false;
+		if (hadFocus && !this.domNode.contains(this.domNode.ownerDocument.activeElement)) this.domNode.focus();
+	}
+
+	private refresh(signal?: AbortSignal, background = false): Promise<void> {
+		const loading = this.loadChanges(signal, background);
 		if (this.pending.value) { this.pending.value.completion = loading; }
 		return loading;
 	}
 
-	private async loadChanges(signal?: AbortSignal): Promise<void> {
+	private async loadChanges(signal: AbortSignal | undefined, background: boolean): Promise<void> {
 		const input = this.input;
 		if (!input || !this.visible || this.isDisposed) {
 			return;
 		}
 		const revision = ++this.revision;
-		// Resolving changes replaces the child pane; keep its snapshot until the new widget can restore it.
+		// The shared pane replaces the comparison model and restores this snapshot once it is ready.
 		this.viewState = this.saveViewState();
 		this.pending.clear();
-		this.messageDomNode.hidden = !!this.comparison.value;
-		// The old count cannot describe a capture that is still loading or failed to resolve.
-		this.changesService.setChangesCount(input.resource, undefined);
+		this.messageDomNode.hidden = !!this.comparisonInput;
+		if (!background) this.changesService.setChangesCount(input.resource, undefined);
 		const threadId = new URLSearchParams(input.resource.query).get('thread');
 		if (!threadId) {
 			this.messageDomNode.textContent = localize('sessions.changes.draft', 'Changes appear after the agent edits files.');
@@ -384,9 +530,11 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		if (!session) {
 			return;
 		}
-		this.messageDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
-		this.messageDomNode.hidden = false;
-		this.domNode.setAttribute('aria-busy', 'true');
+		if (!background) {
+			this.messageDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
+			this.messageDomNode.hidden = false;
+			this.domNode.setAttribute('aria-busy', 'true');
+		}
 		const controller = new AbortController();
 		const abortListener = signal ? addDisposableListener(signal, 'abort', () => controller.abort(), { once: true }) : undefined;
 		if (signal?.aborted) { controller.abort(); }
@@ -396,12 +544,16 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		}), { signal: controller.signal });
 		try {
 			const selected = input instanceof SessionChangesEditorInput ? input.changesetSelection : undefined;
+			const gitComparison = this.gitComparison;
 			let comparison: MultiDiffEditorInput;
-			if (selected?.kind === 'transient' || selected?.kind === 'turn') {
+			if (gitComparison) {
+				comparison = await this.loadGitComparison(input.resource, gitComparison, controller.signal);
+			} else if (selected?.kind === 'transient' || selected?.kind === 'turn') {
 				const read = <T>(promise: Promise<T>) => raceCancellationError(promise, controller.signal);
 				const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
+				const captures = selected.kind === 'turn' ? await read(this.chat.listTurnChanges(session.sessionId, threadId)) : [];
 				const changesets = selected.kind === 'transient' ? [selected.changeset] : await Promise.all(
-					(await read(this.chat.listTurnChanges(session.sessionId, threadId)))
+					captures
 						.filter(capture => capture.turnId === selected.turnId && capture.captureState !== 'discarded' && capture.statistics.files > 0)
 						.map(capture => read(this.changesService.resolveChangeset(sessionResource, capture.changeSetId))),
 				);
@@ -409,14 +561,11 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				const changes = changesets.flatMap(changeset => changeset.isEnabled.get()
 					? changeset.changes.get().map(change => ({ change, canReview: changeset.capabilities?.review === true })) : []);
 				if (!changes.length) {
-					this.comparison.clear();
-					this.comparisonInput = undefined;
-					this.messageDomNode.hidden = false;
-					this.changesService.setChangesCount(input.resource, 0);
-					this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
+					this.showEmptyComparison(input.resource);
 					return;
 				}
-				const label = selected.kind === 'transient' ? selected.changeset.label : localize('sessions.changes.turn', 'Turn {0}', selected.turnId);
+				const label = selected.kind === 'transient' ? selected.changeset.label
+					: localize('sessions.changes.turn', 'Turn {0}', getCapturedTurnIds(captures).indexOf(selected.turnId) + 1);
 				const resource = selected.kind === 'transient' ? input.resource
 					: input.resource.with({ scheme: 'ash-multi-diff', fragment: selected.turnId });
 				comparison = await createTurnChangesSelectionInput(this.chat, resource, label, changes, controller.signal);
@@ -428,11 +577,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
 				const candidates = selected?.id ? changes.filter(change => change.changeSetId === selected.id) : changes;
 				if (!candidates.some(change => change.captureState !== 'discarded' && change.statistics.files > 0)) {
-					this.comparison.clear();
-					this.comparisonInput = undefined;
-					this.messageDomNode.hidden = false;
-					this.changesService.setChangesCount(input.resource, 0);
-					this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
+					this.showEmptyComparison(input.resource);
 					return;
 				}
 				if (selected?.id) { await raceCancellationError(this.changesService.resolveChangeset(new SessionChangesEditorInput(input.resource).sessionResource, selected.id), controller.signal); }
@@ -443,28 +588,29 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				return;
 			}
 			if (!comparison.items.length) {
-				this.comparison.clear();
-				this.comparisonInput = undefined;
-				this.changesService.setChangesCount(input.resource, 0);
-				this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
-				this.messageDomNode.hidden = false;
+				this.showEmptyComparison(input.resource);
 				return;
 			}
-			const pane = await EditorPanes.getEditorPane(comparison)!.create({ ...this.options, input: { ...input, editorId: this.id } });
-			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { pane.dispose(); return; }
-			this.comparisonInput = comparison;
-			this.comparison.value = pane;
-			pane.create(this.comparisonDomNode);
+			if (background && this.comparisonInput && this.comparison?.updateInput(comparison)) {
+				this.comparisonInput = comparison;
+				this.changesService.setChangesCount(input.resource, comparison.items.length);
+				return;
+			}
+			if (!this.comparison) {
+				this.comparison = this._register(this.instantiation.createInstance(MultiDiffEditor, { activeEditorId: this.id }));
+				this.comparison.create(this.domNode);
+				this.comparison.setVisible(false);
+			}
+			const pane = this.comparison;
+			pane.setFileListAvailable(!!this.options.showFileList);
 			this.layout(this.dimension);
-			// setInput waits for visible diff models, which need a nonzero viewport first.
-			pane.layout(this.comparisonDimension);
 			await raceCancellationError(pane.setInput(comparison, controller.signal), controller.signal);
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
 			}
+			this.comparisonInput = comparison;
 			this.messageDomNode.hidden = true;
 			this.changesService.setChangesCount(input.resource, comparison.items.length);
-			pane.layout(this.comparisonDimension);
 			// A new conversation starts at the header; cancel deferred first-change
 			// navigation just as restoring an existing conversation's state does.
 			this.restoreViewState(this.viewState ?? { scrollTop: 0, collapsedItemIds: [], itemViewStates: [] });
@@ -473,19 +619,20 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			if (!this.isDisposed && revision === this.revision && !controller.signal.aborted) {
 				const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
 				// A failed capture cannot keep the previous comparison available for review.
-				this.comparisonInput = undefined;
-				this.comparison.clear();
+				this.clearComparison();
 				this.changesService.setChangesCount(input.resource, undefined);
 				this.messageDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', String(error));
 				this.messageDomNode.hidden = false;
 				if (hadFocus) { this.domNode.focus(); }
 			}
 		} finally {
-			// The caller's open operation ends here; the child pane retains its own controller until hidden or cleared.
+			// The caller's open operation ends here; an open comparison owns its lazy models.
 			abortListener?.dispose();
 			if (!this.isDisposed && revision === this.revision) {
 				this.domNode.setAttribute('aria-busy', 'false');
 				this.layout(this.dimension);
+				// Session worktrees may have no renderer-visible file events. Recheck only while this scope is visible.
+				if (this.uncommittedWatch.value && !this.uncommittedRefresh.isScheduled()) this.uncommittedRefresh.schedule();
 			}
 		}
 	}

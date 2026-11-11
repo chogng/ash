@@ -8,7 +8,7 @@ import { lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { menuHoverBackground } from '../../../platform/theme/common/colors/menuColors.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
-import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/common/creator.js';
+import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/contrib/docs/common/docs.js';
 
 suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
@@ -39,12 +39,12 @@ suite('sessions browser component', () => {
 		const reference = composer.getByRole('button', { name: `${locale === 'zh-CN' ? '打开' : 'Open'} Follow-up chat`, exact: true });
 		await expect(reference).toBeVisible();
 		await expect(input).toBeFocused();
-		expect(await reads()).toEqual(['Host A']);
+		expect(await reads()).toEqual([]);
 		await input.press('ControlOrMeta+z');
 		await expect(reference).toHaveCount(0);
 		await input.press('ControlOrMeta+Shift+z');
 		await expect(reference).toBeVisible();
-		expect(await reads()).toEqual(['Host A']);
+		expect(await reads()).toEqual([]);
 
 		await input.press('ControlOrMeta+z');
 		await composer.getByRole('button', { name: locale === 'zh-CN' ? '添加上下文' : 'Add context', exact: true }).press('Enter');
@@ -58,7 +58,7 @@ suite('sessions browser component', () => {
 		await expect(picker.getByRole('option', { name: /Follow-up chat/u })).toHaveCount(1);
 		await picker.getByRole('combobox').press('Enter');
 		await expect(reference).toBeVisible();
-		expect(await reads()).toEqual(['Host A', 'Host A']);
+		expect(await reads()).toEqual([]);
 	});
 
 
@@ -184,12 +184,16 @@ suite('sessions browser component', () => {
 		await expect(layout.locator('[data-ash-icon-id="layout-grid"]')).toBeVisible();
 		await layout.hover();
 		await expect(page.getByRole('tooltip')).toHaveText('网格布局');
+		await expect(panel.getByRole('heading', { name: '范例' })).toBeVisible();
+		await creator.getByRole('tab', { name: '我的', exact: true }).click();
 		const empty = panel.getByText(/你的作品将显示在这里/u);
 		await expect(empty).toBeVisible();
 		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
 
 		for (let count = 0; count < 2; count++) {
-			await createTiles.getByRole('button', { name: '文档', exact: true }).click();
+			const quick = new QuickAccess(page);
+			await quick.runCommand('sessions.creator.chooseDocsEditor');
+			await quick.select('新建空白文档');
 			await expect(creator).toBeHidden();
 			await home.click();
 		}
@@ -349,7 +353,7 @@ suite('sessions browser component', () => {
 		await expect(buttons).toHaveText(chatNavigation);
 		await codeMode.click();
 		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
-		await expect(buttons).toHaveText(['New', 'Search', 'Customize', 'More']);
+		await expect(buttons).toHaveText(['New', 'Search', 'Bots', 'Customize', 'More']);
 		await more.press('Enter');
 		await expect(page.getByRole('menuitemradio', { name: 'Symphony', exact: true })).toBeVisible();
 		await expect(collaboration).toHaveCount(0);
@@ -408,6 +412,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list-row.selected:has(> .ash-sessions-list-item[aria-current="page"])').first()).toHaveCSS('background-color', selectedBackground);
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			await expect(page.locator('html')).toHaveAttribute('data-color-theme', theme);
 			await chat.click();
 			await page.mouse.move(400, 180);
 			const selectedBackground = await chat.evaluate(element => getComputedStyle(element).backgroundColor);
@@ -700,8 +705,8 @@ suite('sessions browser component', () => {
 			await expect(settings).toHaveCSS('width', '960px');
 			await expect(settings).toHaveCSS('height', '640px');
 			await expect(settings).toHaveCSS('border-radius', '12px');
-			await expect(settings).toHaveCSS('padding', '0px');
-			await expect(settings.locator('.ash-dialog-header')).toHaveCSS('padding', '12px');
+			await expect(settings).toHaveCSS('padding', '12px');
+			await expect(settings.locator('.ash-dialog-header')).toHaveCSS('padding', '0px');
 			await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
 			await expect(settings.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
 			const close = settings.getByRole('button', { name: 'Close Dialog', exact: true });
@@ -713,18 +718,25 @@ suite('sessions browser component', () => {
 			await expect(settingsRows).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			const row = settingsRows.locator('.ash-configuration-setting').first();
 			const title = row.locator('.ash-configuration-setting-title');
+			const control = row.getByRole('combobox');
 			await expect(title).toHaveCSS('font-weight', '400');
+			await expect(row).toHaveCSS('padding-inline-end', '8px');
+			await expect(settings.locator('.ash-setting-item-actions')).toHaveCount(0);
 			await title.hover();
 			await expect(row).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			await expect(row.getByRole('button', { name: 'More actions for Layout scope' })).toHaveCSS('opacity', '0');
 			await title.click({ button: 'right' });
 			const menu = settings.getByRole('menu');
 			await expect(menu.getByRole('menuitem', { name: 'Copy Setting as JSON' })).toBeVisible();
 			await expect(menu.getByRole('menuitem', { name: 'Copy Setting as JSON' }).locator('.ash-menu-leading-slot')).toHaveCSS('display', 'none');
 			await page.keyboard.press('Escape');
 			await expect(menu).toHaveCount(0);
+			await control.press('Shift+F10');
+			await expect(menu.getByRole('menuitem', { name: 'Copy Setting as JSON' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(menu).toHaveCount(0);
+			await expect(control).toBeFocused();
 			await expect(title).toHaveCSS('color', 'rgb(59, 59, 59)');
-			await expect(row.locator('.ash-configuration-setting-description:not([hidden])')).toHaveCSS('color', 'rgb(118, 118, 118)');
+			await expect(row.locator('.ash-configuration-setting-description:not([hidden])')).toHaveCSS('color', 'color(srgb 0.442157 0.442157 0.442157)');
 			const sidebar = settings.locator('.ash-sessions-settings-sidebar');
 			const settingsPage = settings.locator('.ash-sessions-settings-page');
 			const sidebarBounds = await sidebar.boundingBox();
@@ -735,7 +747,7 @@ suite('sessions browser component', () => {
 			expect(sidebarBounds!.y + sidebarBounds!.height).toBeGreaterThanOrEqual(pageBounds!.y + pageBounds!.height - 1);
 			await expect(settings.locator('.ash-dialog-actions')).toHaveCount(0);
 			await page.setViewportSize({ width: 540, height: 500 });
-			await expect(settings).toHaveCSS('width', '508px');
+			await expect(settings).toHaveCSS('width', '500px');
 			await expect(settings).toHaveCSS('height', '410px');
 			const narrowSidebarBounds = await sidebar.boundingBox();
 			const narrowPageBounds = await settingsPage.boundingBox();
@@ -1308,24 +1320,41 @@ suite('sessions browser component', () => {
 		expect(await titleMenu.boundingBox()).toEqual(menu);
 
 		await tools.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
-		const changesHeader = toolHeaders.locator('[data-editor-tool="changes"] > .ash-editor-group-header');
+		const changesPane = editor.locator('[data-editor-tool="changes"] > .ash-workbench-part-frame > [data-part="tool-editor"]');
+		const changesHeader = changesPane.locator('.ash-editor-group-header');
 		await expect(changesHeader).toBeVisible();
 		await expect(filesHeader).toBeVisible();
-		await expect(editor.locator('.ash-editor-group-header:visible')).toHaveCount(0);
-		const changesLabel = changesHeader.locator('.ash-sessions-tool-header-label');
-		await expect(changesLabel).toHaveText('Changes');
-		await expect(changesLabel).toBeVisible();
-		await expect(changesHeader).not.toHaveAttribute('draggable', 'true');
-		await expect(changesHeader).not.toHaveCSS('-webkit-app-region', 'no-drag');
-		await expect(changesHeader.locator('.ash-editor-header-layout > .ash-toolbar')).toHaveCSS('-webkit-app-region', 'no-drag');
-		await filesHeader.locator('[data-action-id="ash.sessions.hideTool"] button').focus();
-		// A mouse activation need not focus the clicked toolbar before running its command.
-		await changesHeader.locator('[data-action-id="ash.sessions.hideTool"] button').evaluate((button: HTMLButtonElement) => button.click());
-		await expect(changesHeader).toHaveCount(0);
+		await expect(toolHeaders.locator('[data-editor-tool="changes"]')).toHaveCount(0);
+		const filesPane = editor.locator('[data-editor-tool="files"] > .ash-workbench-part-frame > [data-part="tool-editor"]');
+		const filesDetails = filesHeader.locator('[data-action-id="ash.sessions.toggleDetails"] button');
+		const changesFiles = changesHeader.locator('[data-action-id="multiDiffEditor.toggleFileList"] button');
+		await expect(filesDetails).toHaveAttribute('aria-pressed', 'true');
+		await expect(changesFiles).toHaveCount(0);
+		await expect(filesPane).toBeVisible();
+		const filesBounds = (await filesPane.boundingBox())!;
+		const changesBounds = (await changesPane.boundingBox())!;
+		expect(changesBounds.x).toBeCloseTo(filesBounds.x, 0);
+		expect(changesBounds.y).toBeGreaterThanOrEqual(filesBounds.y + filesBounds.height);
+		expect((await changesHeader.boundingBox())!.y).toBeCloseTo(changesBounds.y, 0);
+		await expect(changesHeader.getByRole('button', { name: 'Changes', exact: true })).toBeVisible();
+		const filesClose = filesHeader.locator('[data-action-id="ash.sessions.hideTool"] button');
+		await expect(filesHeader.locator('.ash-editor-header-layout > .ash-toolbar')).toHaveCSS('-webkit-app-region', 'no-drag');
+		const changesClose = changesHeader.locator('[data-action-id="ash.sessions.hideTool"] button');
+		await changesClose.focus();
+		await filesClose.evaluate((button: HTMLButtonElement) => button.click());
+		const dockedChanges = toolHeaders.locator('[data-editor-tool="changes"] > .ash-editor-group-header');
+		await expect(dockedChanges.locator('[data-action-id="ash.sessions.hideTool"] button')).toBeFocused();
+		await tools.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
+		const inlineFiles = filesPane.locator('.ash-editor-group-header:visible');
+		await expect(inlineFiles).toHaveCount(1);
+		await expect(dockedChanges).toBeVisible();
+		expect((await filesPane.boundingBox())!.y).toBeGreaterThan((await changesPane.boundingBox())!.y);
+		await dockedChanges.locator('[data-action-id="ash.sessions.hideTool"] button').click();
 		await expect(filesHeader).toBeVisible();
 
 		await titlebar.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
 		await expect(page.locator('[data-part="sidebar"]')).toBeHidden();
+		await filesClose.focus();
 		const dividerX = (await editor.boundingBox())!.x;
 		const dragY = header.y + header.height + 80;
 		await page.mouse.move(dividerX, dragY);
@@ -1337,6 +1366,102 @@ suite('sessions browser component', () => {
 		}
 		await expect(toolHeaders).toBeHidden();
 		await expect(editor.locator('[data-editor-tool="files"] .ash-editor-group-header:visible')).toHaveCount(1);
+		const inlineFilesClose = filesPane.locator('.ash-editor-group-header:visible [data-action-id="ash.sessions.hideTool"] button');
+		await expect(inlineFilesClose).toBeFocused();
+
+		// Widen the conversation again with the tool control still focused.
+		const narrowDividerX = (await editor.boundingBox())!.x;
+		await page.mouse.move(narrowDividerX, dragY);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(dividerX, dragY, { steps: 8 });
+		} finally {
+			await page.mouse.up();
+		}
+		await expect(filesClose).toBeFocused();
+
+		await page.setViewportSize({ width: 480, height: 900 });
+		await expect(toolHeaders).toBeHidden();
+		await expect(inlineFilesClose).toBeFocused();
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await expect(filesClose).toBeFocused();
+	});
+
+	test('Code window actions stay beside the conversation when the editor area is empty', async function () {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 962, height: 1123 });
+		await page.goto('/sessions.html?multiHost&emptyEditorArea');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const tools = titlebar.getByRole('toolbar', { name: 'Code layout', exact: true });
+		const editor = page.locator('[data-part="editor"]');
+		await titlebar.locator('[data-action-id="ash.sessions.toggleSidebar"] button').click();
+		await page.evaluate(() => window.ashSessionsIntegration.showEmptyEditorArea!());
+		await expect(editor).toBeVisible();
+		await expect(editor.locator('[data-editor-tool]:visible')).toHaveCount(0);
+		await expect(titlebar.locator('[data-editor-tool]')).toHaveCount(0);
+		await expect.poll(async () => {
+			const actions = (await tools.boundingBox())!;
+			const split = (await editor.boundingBox())!;
+			return split.x - actions.x - actions.width;
+		}).toBeCloseTo(4, 0);
+		await tools.locator('[data-action-id="ash.sessions.toggleChanges"] button').press('Enter');
+		await expect(titlebar.locator('[data-editor-tool="changes"] .ash-editor-group-header')).toBeVisible();
+	});
+
+	test('Code Flat tools fill their splits and Modern restores their cards without recreating editors', async function () {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await page.goto('/sessions.html?multiHost');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+		const titlebar = page.locator('[data-part="titlebar"]');
+		await titlebar.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
+		await titlebar.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
+		const editor = page.locator('[data-part="editor"]');
+		const retained = await editor.locator('[data-editor-tool="changes"] [data-part="tool-editor"]').elementHandle();
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			for (const style of ['flat', 'modern', 'flat']) {
+				await page.evaluate(style => window.ashSessionsIntegration.updateConfiguration('sessions.layoutStyle', style), style);
+				const inset = style === 'modern' ? 6 : 0;
+				for (const tool of ['files', 'changes']) {
+					const workspace = editor.locator(`[data-editor-tool="${tool}"]`);
+					const part = workspace.locator(':scope > .ash-workbench-part-frame > [data-part="tool-editor"]');
+					await expect(workspace).toBeVisible();
+					await expect.poll(() => part.evaluate(element => {
+						const bounds = element.getBoundingClientRect();
+						const outer = element.parentElement!.parentElement!.getBoundingClientRect();
+						return [bounds.x - outer.x, bounds.y - outer.y, outer.right - bounds.right, outer.bottom - bounds.bottom].map(Math.round);
+					})).toEqual([inset, inset, inset, inset]);
+					await expect(part).toHaveCSS('border-radius', style === 'modern' ? '12px' : '0px');
+					if (style === 'flat' || theme.includes('contrast')) await expect(part).toHaveCSS('box-shadow', 'none');
+				}
+				await expect(editor.locator('[data-editor-tool="files"] .ash-editor-group:not(.ash-code-page-group):visible')).toHaveCSS('border-radius', '0px');
+				const separator = editor.locator('.ash-split-view-separator-border > .ash-split-view-pane:not([hidden]) ~ .ash-split-view-pane:visible').first();
+				await expect(separator).toBeVisible();
+				const color = await separator.evaluate(element => getComputedStyle(element, '::before').backgroundColor);
+				expect(color === 'rgba(0, 0, 0, 0)').toBe(style === 'modern');
+				const title = editor.locator('[data-editor-tool="changes"] .ash-editor-title-with-group-header:visible');
+				const line = await title.evaluate(element => {
+					const paint = getComputedStyle(element, '::after');
+					return { content: paint.content, color: paint.backgroundColor, height: paint.height, width: parseFloat(paint.width) };
+				});
+				if (style === 'flat') {
+					expect(line.content).toBe('""');
+					expect(line.color).toBe(color);
+					expect(line.height).toBe('1px');
+					expect(line.width).toBeCloseTo((await title.boundingBox())!.width);
+				} else {
+					expect(line.content).toBe('none');
+				}
+				await expect.poll(() => retained!.evaluate(element => element.isConnected)).toBe(true);
+			}
+		}
 	});
 
 	test('Sessions titlebar colors resolve under light and dark themes', async function () {
@@ -1424,7 +1549,8 @@ suite('sessions browser component', () => {
 		await page.locator('[data-action-id="sessions.open.projects"]').click();
 		await expect(page.locator('.ash-projects')).toBeVisible();
 		const sidebar = page.locator('[data-part="sidebar"]');
-		const auxiliarybar = page.locator('[data-part="auxiliarybar"]');
+		const auxiliaryFrame = page.locator('.ash-sessions-auxiliarybar-frame');
+		const auxiliaryBorderColor = () => auxiliaryFrame.evaluate(element => getComputedStyle(element, '::after').borderLeftColor);
 		const initialWidth = (await sidebar.boundingBox())!.width;
 		const expectSharedBoundary = async (): Promise<void> => {
 			const boundary = await page.evaluate(() => {
@@ -1458,15 +1584,15 @@ suite('sessions browser component', () => {
 			expect(boundary.feedbackCenter).toBeCloseTo(boundary.borderCenter, 3);
 			expect(boundary.leadingSeparators.every(content => content === 'none')).toBe(true);
 		};
-		for (const [theme, color, auxiliaryColor] of [
-			['ash-light', 'rgb(229, 229, 229)', 'rgba(0, 0, 0, 0)'],
-			['ash-dark', 'rgb(43, 43, 43)', 'rgba(0, 0, 0, 0)'],
-			['ash-high-contrast-dark', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)'],
-			['ash-high-contrast-light', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)'],
+		for (const [theme, color] of [
+			['ash-light', 'rgb(229, 229, 229)'],
+			['ash-dark', 'rgb(43, 43, 43)'],
+			['ash-high-contrast-dark', 'rgb(255, 255, 255)'],
+			['ash-high-contrast-light', 'rgb(0, 0, 0)'],
 		] as const) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await expect(sidebar).toHaveCSS('border-right-color', color);
-			await expect(auxiliarybar).toHaveCSS('border-left-color', auxiliaryColor);
+			await expect.poll(auxiliaryBorderColor).toBe(color);
 			expect((await sidebar.boundingBox())!.width).toBe(initialWidth);
 			await expectSharedBoundary();
 		}
@@ -1475,7 +1601,7 @@ suite('sessions browser component', () => {
 			await window.ashSessionsIntegration.updateConfiguration('workbench.colorCustomizations', { 'sideBar.border': '#123456' });
 		});
 		await expect(sidebar).toHaveCSS('border-right-color', 'rgb(18, 52, 86)');
-		await expect(auxiliarybar).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
+		await expect.poll(auxiliaryBorderColor).toBe('rgb(18, 52, 86)');
 		await expectSharedBoundary();
 		const sash = page.locator('.ash-primary-sidebar-sash');
 		await expect(page.locator('.ash-sessions-window')).toHaveClass(/ash-sash-handle-scope/);
@@ -2267,9 +2393,22 @@ suite('sessions browser component', () => {
 		await accounts.click();
 		await expect(settingsAction).toHaveCSS('font-size', '14px');
 		await settingsAction.click();
+		const settingsDialog = page.getByRole('dialog', { name: chinese ? '设置' : 'Settings', exact: true });
+		const dialogTitle = settingsDialog.locator('.ash-dialog-title');
+		const categoryTitle = settings.locator('.ash-sessions-settings-page-title');
+		for (const title of [dialogTitle, categoryTitle]) {
+			await expect(title).toHaveCSS('font-size', '15px');
+			await expect(title).toHaveCSS('font-weight', '600');
+		}
+		await settings.locator('[data-settings-category-id="account"]').click();
+		await expect(settings.locator('.ash-settings-section > p')).toHaveCSS('font-size', '13px');
 		await expect(settings.getByRole('searchbox')).toHaveCSS('font-size', '14px');
 		await settings.getByRole('searchbox').fill('@id:sessions.experimental.layoutScope');
-		await expect(settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"] .ash-configuration-setting-description:not([hidden])')).toHaveCSS('font-size', '14px');
+		const layoutScope = settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"]');
+		await expect(layoutScope.locator('.ash-configuration-setting-title')).toHaveCSS('font-size', '14px');
+		await expect(layoutScope.locator('.ash-configuration-setting-title')).toHaveCSS('font-weight', '400');
+		await expect(layoutScope.locator('.ash-configuration-setting-description:not([hidden])')).toHaveCSS('font-size', '14px');
+		await expect(layoutScope.getByRole('combobox')).toHaveCSS('font-size', '14px');
 		await page.screenshot({ path: testInfo.outputPath(`sessions-typography-settings-${locale}.png`) });
 		const ide = await context.newPage();
 		try {

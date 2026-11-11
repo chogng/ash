@@ -295,6 +295,7 @@ impl Runtime {
                 ],
                 mode: Default::default(),
                 model: None,
+                model_routing: None,
                 reasoning_effort: None,
                 tool_mode: existing
                     .as_ref()

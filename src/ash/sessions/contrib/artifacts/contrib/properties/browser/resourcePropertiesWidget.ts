@@ -1,19 +1,19 @@
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Color } from '../../../../../../base/common/color.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { createDesignColorPicker } from '../../../browser/widgets/designColorPicker.js';
+import { createCanvasColorPicker } from '../../../browser/widget/canvasColorPicker.js';
 import { describeDesignEffect } from '../../../browser/designEffectLabels.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
-import { getDesignRenderBounds, renderDesignShape } from '../../../browser/svgRenderer.js';
+import { getDesignRenderBounds, renderDesignShape } from '../../../browser/designSvgRenderer.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignDocument, type DesignShape } from '../../../common/model/document.js';
+import { flattenDesignShapes, type DesignDocument, type DesignShape } from '../../../common/model/designDocument.js';
 import { designPropertyTypes, getDesignResourceCatalog, supportsDesignProperty, getDesignProperty, type DesignLibrary, type DesignBindableProperty, type DesignStyleKind, type DesignVariableType } from '../../../common/model/designResources.js';
-import type { DesignSelection } from '../../../common/selection.js';
+import type { DesignSelection } from '../../../common/designSelection.js';
 
 /** Only editor choices live here; all definitions, links and accepted versions belong to the document. */
 export class ResourcePropertiesWidget extends Disposable {
@@ -186,7 +186,7 @@ export class ResourcePropertiesWidget extends Disposable {
 		parent.append(h(this.domNode.ownerDocument, 'label', {}, label, input)); this.controls.add(addDisposableListener(input, 'change', () => this.run(() => change(input.value))));
 	}
 	private color(parent: HTMLElement, key: string, label: string, value: string, change: (value: string) => unknown): void {
-		const widget = this.controls.add(createDesignColorPicker(this.instantiation, this.domNode.ownerDocument, { color: label, value: label, opacity: localize('sessions.design.colorOpacity', '{0}: opacity (%)', label) }));
+		const widget = this.controls.add(createCanvasColorPicker(this.instantiation, this.domNode.ownerDocument, { color: label, value: label, opacity: localize('sessions.design.colorOpacity', '{0}: opacity (%)', label) }));
 		widget.setColor(Color.Format.CSS.parseHex(value)!); widget.enabled = !this.controller.isBusy;
 		parent.append(h(this.domNode.ownerDocument, 'div', {}, h(this.domNode.ownerDocument, 'span', {}, label), widget.domNode));
 		for (const [index, element] of [...widget.domNode.querySelectorAll('button, input')].entries()) { element.setAttribute('data-resource-control', index === 1 ? key : `${key}:${index === 0 ? 'swatch' : 'opacity'}`); }

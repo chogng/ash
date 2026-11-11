@@ -1,7 +1,7 @@
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import { designBounds } from '../core/geometry.js';
-import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, flattenDesignShapes, type DesignOverride, type DesignShape } from '../model/document.js';
+import { getDesignOverrideFields, getDesignOverrideValue, copyDesignOverride, flattenDesignShapes, type DesignOverride, type DesignShape } from '../model/designDocument.js';
 import type { DesignModel } from '../model/designModel.js';
 import { detachDesignInstance, remapDesignInstance, resetDesignOverrides } from '../model/components.js';
 import { getDesignLibraryShapes } from '../model/designResources.js';

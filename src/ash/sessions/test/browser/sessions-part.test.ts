@@ -1,3 +1,4 @@
+import { ChatViewFactory, IChatViewFactory } from '../../contrib/chat/browser/chatViewFactory.js';
 import { ISessionFolderTrustRetryService, SessionFolderTrustRetryService } from '../../services/workspace/browser/sessionFolderTrustRetryService.js';
 import { SharedChatInputComposerContribution } from '../../contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import { ISessionsChatViewStateService, SessionsChatViewStateService } from '../../contrib/chat/browser/chatViewStateService.js';
@@ -20,6 +21,9 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentHostInputCompletionService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../services/sessions/browser/sessionGitActionsService.js';
 
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
@@ -108,11 +112,13 @@ for (const [name, value] of Object.entries({
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 const { registerTitleService } = await import('../../services/title/browser/titleService.js');
-await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
+await import('../../contrib/artifacts/browser/designEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
-const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
-const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } = await import('../../contrib/cowork/browser/chatTipService.js');
+const { NativeChatPaneFactory } = await import('../../contrib/chat/browser/nativeChatPaneFactory.js');
+const { NativeChatModelPreferences } = await import('../../contrib/chat/common/nativeChatModelPreferences.js');
+const { INativeChatModelPreferencesService } = await import('../../contrib/chat/common/nativeChatModelPreferencesService.js');
+const { NativeChatModelPreferencesService } = await import('../../contrib/chat/browser/nativeChatModelPreferencesService.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 
 suiteTeardown(() => {
@@ -176,6 +182,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			if (activeUntitledSessionId === untitledSessionId) activeUntitledSessionId = untitledSessions[0]?.untitledSessionId;
 			onDidChange.fire();
 		},
+		setUntitledSessionArtifactKind() { throw new Error('Unexpected artifact draft edit'); },
 		setUntitledSessionModel() { },
 		setUntitledSessionDefaultModel() { },
 		setUntitledSessionReasoningEffort() { },
@@ -263,6 +270,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async queueTurn() { },
 		async readQueue() { return []; },
 		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
+		movePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		editPendingRequest: async () => { throw new Error('Unexpected queue operation'); },
@@ -313,6 +321,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IHostService, new TestHostService());
 	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -372,9 +381,10 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(ICommandService, commandService);
 	using viewService = services.createInstance(SessionsService);
 	services.registerInstance(ISessionsService, viewService);
+	services.registerSingleton(ISessionGitActionsService, () => services.createInstance(SessionGitActionsService));
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
-	services.registerInstance(ICoworkTipService, resources.add(services.createInstance(CoworkTipService)));
+	services.registerSingleton(INativeChatModelPreferencesService, () => services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
 	const popup = new JSDOM('', { pretendToBeVisual: true });
@@ -419,6 +429,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	paneServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
+	paneServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 
 
 	paneServices.registerInstance(ISearchService, {
@@ -438,12 +449,13 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		createScope: () => paneServices.createChild(),
 	});
 	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
-	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
+	const cowork = resources.add(paneServices.createInstance(NativeChatPaneFactory));
 	paneServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
 	using composerContribution = paneServices.createInstance(SharedChatInputComposerContribution);
+	paneServices.registerSingleton(IChatViewFactory, () => paneServices.createInstance(ChatViewFactory));
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		newDraftVisible: observableValue('draft visibility', false),
-		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
+		createChatPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
 		markVisibleThreadViewed: entry => viewService.markVisibleThreadViewed(entry),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),
@@ -517,8 +529,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 
 	const retainedCodeInput = part.domNode.querySelector('.ash-chat-input-part');
 	const codeView = part.domNode.querySelector('[data-conversation-kind="code"]')!;
-	await part.setConversationKind('cowork');
-	const coworkView = part.domNode.querySelector('[data-conversation-kind="cowork"]')!;
+	await part.setConversationKind('chat');
+	const coworkView = part.domNode.querySelector('[data-conversation-kind="chat"]')!;
 	assert.ok(coworkView.querySelector('.ash-chat-input-part'));
 	assert.equal(coworkView.querySelector('[data-action-id="ash.chat.input.mode"]'), null);
 	assert.ok(coworkView.querySelector('.ash-chat-input-container [data-action-id="ash.chat.input.model"]'));
@@ -536,13 +548,13 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.deepEqual((await part.captureActiveDraft())?.draft, coworkDraft);
 	const transferred = await part.captureActiveDraft();
 	transferred!.clear();
-	await part.setConversationKind('cowork');
+	await part.setConversationKind('chat');
 	assert.equal(coworkView.querySelector('.ash-chat-input-part'), retainedCoworkInput);
 	assert.equal(await part.captureActiveDraft(), undefined);
-	assert.equal(coworkView.querySelectorAll('.ash-cowork-attachment').length, 0);
+	assert.equal(coworkView.querySelectorAll('.ash-native-chat-attachment').length, 0);
 	const grid = part.domNode.querySelector('.ash-sessions-chat-grid');
 	part.restoreDraft(draft);
-	await Promise.all([part.setConversationKind('code'), part.setConversationKind('cowork'), part.setConversationKind('code')]);
+	await Promise.all([part.setConversationKind('code'), part.setConversationKind('chat'), part.setConversationKind('code')]);
 	assert.equal(part.domNode.querySelector('.ash-sessions-chat-grid'), grid);
 	assert.equal(part.domNode.querySelector('[data-conversation-kind="code"]'), codeView);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);

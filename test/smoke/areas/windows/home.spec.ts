@@ -38,12 +38,28 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 		process.env.ASH_DEV_APP_SERVER_RELOAD = '1';
 		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const page = desktop.driver.workbench.page;
+		await page.context().addInitScript(() => {
+			if (!location.pathname.endsWith('/sessions.html')) return;
+			const startupLayout = new Promise<number>(resolve => {
+				let provisionalFrames = 0;
+				const sample = () => {
+					const shell = document.querySelector('.ash-sessions-window');
+					if (shell?.querySelector('.ash-sessions-chat-view-empty')?.checkVisibility({ visibilityProperty: true })) provisionalFrames++;
+					if (shell?.getAttribute('aria-busy') === 'false') resolve(provisionalFrames);
+					else requestAnimationFrame(sample);
+				};
+				requestAnimationFrame(sample);
+			});
+			Object.assign(window, { startupLayout });
+		});
 		const opened = desktop.application.waitForEvent('window');
 		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
 		await expect(agents.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
 		await expect(agents.locator('.ash-sessions-window')).toHaveAttribute('aria-busy', 'false');
+		await expect(agents.locator('.ash-reply-chat-editor .chat-composer:visible')).toHaveCount(1);
+		expect(await agents.evaluate(() => (window as Window & { startupLayout?: Promise<number>; }).startupLayout)).toBe(0);
 		await new QuickAccess(agents).runCommand('sessions.action.manageAgentHosts');
 		const remotes = agents.getByRole('dialog', { name: 'Remote Environments' });
 		await expect(remotes.getByRole('status')).toHaveText('No remote environments');

@@ -78,6 +78,66 @@ suite('Shared chat Markdown rendering', () => {
 	suiteSetup(async function () { this.timeout(600000); math = await startMarkdownMathExtension(); });
 	suiteTeardown(async () => { await math?.dispose(); });
 
+	test('rich streaming reuses closed blocks and keeps canonical output on correction', async () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		const builder = new ChatMarkdownRichContentBuilder('');
+		const child = builder.add({ kind: 'box', style: {}, block: true, markdown: 'Nested card text' });
+		const card = builder.add({ kind: 'details', label: 'Stable card', markdown: child, block: true, data: '' });
+		const initial = `${card}\n\n${'A closed paragraph with ordinary text.\n\n'.repeat(48)}Growing tail`;
+		const initialContent = { ...builder.content!, parts: [...builder.content!.parts] };
+		let didRender: () => void = () => { };
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, asyncRenderCallback: () => didRender() });
+		const update = (value: string, richContent: typeof initialContent, incomplete: boolean) => new Promise<void>(resolve => {
+			didRender = resolve;
+			part.tryIncrementalUpdate({ value, supportHtml: true, richContent }, incomplete);
+		});
+		await update(initial, initialContent, true);
+		const stable = part.domNode.querySelector('details')!;
+		assert.ok(stable);
+		stable.open = false;
+		const additional = builder.add({ kind: 'textLiteral', label: 'New card', block: true });
+		const next = `${initial} continues.\n\n${additional}\n\nLast paragraph.`;
+		const lexer = mock.method(Lexer, 'lex');
+		try {
+			await update(next, { ...builder.content!, parts: [...builder.content!.parts] }, true);
+			assert.equal(part.domNode.querySelector('details'), stable);
+			assert.equal(stable.open, false);
+			assert.match(part.domNode.textContent!, /New card/u);
+			assert.ok(lexer.mock.calls.length && lexer.mock.calls.every(call => call.arguments[0].length < initial.length));
+		} finally { lexer.mock.restore(); }
+		const corrected = { ...builder.content!, parts: builder.content!.parts.map((value, index) => index === 0 ? { ...value, markdown: 'Corrected nested text' } : value) };
+		await update(next, corrected, false);
+		using canonical = renderer.render({ value: next, supportHtml: true }, { markedExtensions: [chatMarkdownRichContentExtension(corrected)] });
+		assert.equal(fragmentContents(part.domNode), canonical.element.innerHTML);
+		assert.match(part.domNode.textContent!, /Corrected nested text/u);
+	});
+
+	test('renders CJK emphasis and bare links without changing literal or explicit Markdown', () => {
+		const literal = '这是**「原样」**内容。https://example.com。句子';
+		const value = [
+			'这是**「重点」**内容。𠮷**重点。**𠮷。これは*「重要」*です。',
+			'这是**「外层 *细节*」**内容。~~**重点。**文~~后。',
+			'详情见 https://example.com/a_(b)。下一句见 www.example.org，后文。',
+			'[显式](https://example.com/路径。保留) 和 <https://example.com/路径。保留>',
+			`\`${literal}\``,
+			String.raw`这是\*\*「转义」\*\*内容。a**"English"**b`,
+		].join('\n\n');
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		using result = renderer.render({ value });
+		assert.deepEqual([...result.element.querySelectorAll('strong, em')].map(node => node.textContent), ['「重点」', '重点。', '「重要」', '「外层 细节」', '细节', '重点。']);
+		assert.equal(result.element.querySelector('del')?.textContent, '重点。文');
+		assert.deepEqual([...result.element.querySelectorAll('a')].map(node => [node.textContent, decodeURI(node.getAttribute('href')!)]), [
+			['https://example.com/a_(b)', 'https://example.com/a_(b)'], ['www.example.org', 'http://www.example.org'],
+			['显式', 'https://example.com/路径。保留'], ['https://example.com/路径。保留', 'https://example.com/路径。保留'],
+		]);
+		assert.equal(result.element.querySelector('code')?.textContent, literal);
+		assert.match(result.element.textContent!, /这是\*\*「转义」\*\*内容。a\*\*"English"\*\*b/u);
+		assert.match(renderChatRichContentText(value, undefined), /这是「重点」内容。𠮷重点。𠮷。これは「重要」です。/u);
+		assert.ok(getChatFindTextParts({ id: 'reply', type: 'agentMessage', text: value, transient: false }).some(part => part.text.includes('这是「重点」内容。')));
+	});
+
 	test('renders response parts from the shared model and keeps internal references out of text consumers', () => {
 		const builder = new ChatMarkdownRichContentBuilder('');
 		const files = [

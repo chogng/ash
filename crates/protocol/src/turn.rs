@@ -85,6 +85,22 @@ pub struct TurnSkillLoad {
     pub after_item_id: Option<crate::ItemId>,
 }
 
+/// Explicitly requests automatic model selection when starting a Turn.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelRoutingMode {
+    Auto,
+}
+
+/// How an automatic Turn obtained its accepted model.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum TurnModelRouting {
+    Selected,
+    Fallback,
+    Reused,
+}
+
 /// Canonical readable state for one user-intent-driven Agent execution.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -109,6 +125,9 @@ pub struct Turn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub model: Option<ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub model_routing: Option<TurnModelRouting>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub reasoning_effort: Option<crate::ReasoningEffort>,

@@ -1253,8 +1253,19 @@ impl ThreadController {
     pub fn start_turn_in_directory(
         &self,
         thread_id: &ThreadId,
+        request: StartTurnRequest,
+        directory: Option<ash_protocol::SessionExecutionTarget>,
+    ) -> Result<StartTurnResult, CoreError> {
+        self.start_turn_with_model_routing(thread_id, request, directory, None)
+    }
+
+    /// Persists the host's automatic model decision in the same receipt as Turn acceptance.
+    pub fn start_turn_with_model_routing(
+        &self,
+        thread_id: &ThreadId,
         mut request: StartTurnRequest,
         directory: Option<ash_protocol::SessionExecutionTarget>,
+        model_routing: Option<ash_protocol::TurnModelRouting>,
     ) -> Result<StartTurnResult, CoreError> {
         self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
@@ -1318,6 +1329,7 @@ impl ThreadController {
                 mode,
                 instructions,
                 model,
+                model_routing: accepted_routing,
                 reasoning_effort,
                 activated_skills,
                 host_activated_skills,
@@ -1334,6 +1346,7 @@ impl ThreadController {
                 || mode != &request.mode
                 || instructions.as_ref() != Some(&request.instructions)
                 || model != &request.model
+                || accepted_routing.is_some() != model_routing.is_some()
                 || reasoning_effort != &request.reasoning_effort
                 || replay_host_activations(host_activated_skills.as_deref(), activated_skills)
                     != request.activated_skills
@@ -1413,6 +1426,7 @@ impl ThreadController {
             mode: request.mode,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
+            model_routing,
             reasoning_effort: request.reasoning_effort,
             advisor: request.advisor.clone(),
             activated_skills: activated_skills.clone(),
@@ -1543,6 +1557,7 @@ impl ThreadController {
             mode: request.mode,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
+            model_routing: None,
             reasoning_effort: request.reasoning_effort,
             advisor: request.advisor.clone(),
             activated_skills: Vec::new(),
@@ -2921,6 +2936,34 @@ impl ThreadController {
                 has_older_turns: start > 0,
                 pending_interactions: index.pending_interactions,
             })
+        })
+    }
+
+    /// Reads one durable Item scoped to its Session and Turn, without loading a current index's other items.
+    pub fn read_history_item(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        ordinal: u32,
+    ) -> Result<Option<ThreadItem>, CoreError> {
+        if let Some(item) = self
+            .store
+            .read_history_item(session_id, thread_id, turn_id, ordinal)?
+        {
+            return Ok(item);
+        }
+        self.with_loaded_thread(thread_id, |loaded| {
+            let snapshot = &loaded.snapshot;
+            if snapshot.session_id != *session_id {
+                return Ok(None);
+            }
+            Ok(snapshot
+                .items
+                .iter()
+                .filter(|item| item.turn_id() == turn_id)
+                .nth(ordinal as usize)
+                .cloned())
         })
     }
 

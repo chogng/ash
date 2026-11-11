@@ -1,0 +1,45 @@
+.ash-chat-edit-stats {
+	white-space: nowrap;
+}
+
+.ash-chat-changed-file-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-chat-changed-file {
+	display: flex;
+	justify-content: space-between;
+	inline-size: 100%;
+}
+
+.ash-chat-changed-file-list .ash-changes-stats {
+	flex-shrink: 0;
+}
+
+.ash-chat-edit-file-actions {
+	display: flex;
+	align-items: center;
+}
+
+.ash-chat-edit-file-actions > .ash-chat-changed-file {
+	flex: 1;
+	min-inline-size: 0;
+}
+
+.ash-chat-edit-preview {
+	margin: var(--ash-spacing-size40) var(--ash-spacing-size80)
+		var(--ash-spacing-size80);
+}
+
+.ash-chat-edit-preview-editor {
+	overflow: hidden;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-chat-edit-preview-status {
+	color: var(--ash-description-foreground);
+}

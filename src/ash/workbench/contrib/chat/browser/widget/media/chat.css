@@ -194,6 +194,16 @@
 	display: none;
 }
 
+.ash-chat-followups:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-chat-followups > button {
+	max-inline-size: 100%;
+}
+
 .ash-chat-interaction {
 	flex: 0 0 auto;
 	margin: 0 10px 8px;
@@ -241,26 +251,6 @@
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 6px;
-}
-
-.ash-chat-interaction-form {
-	display: flex;
-	gap: 8px;
-	flex-direction: column;
-}
-
-.ash-chat-interaction-form label {
-	display: flex;
-	gap: 4px;
-	flex-direction: column;
-}
-
-.ash-chat-interaction-form input,
-.ash-chat-interaction-form select {
-	padding: 6px;
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	color: inherit;
-	background: var(--ash-editor-background);
 }
 
 .ash-chat-input-container {

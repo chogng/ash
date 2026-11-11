@@ -15,7 +15,7 @@ import { IAgentModelsService } from '../../../../platform/models/common/agentMod
 import { ITurnChangesApi } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { QueuedMessage, QueueMessageTarget, ModelRef, SessionId, ThreadId } from '../common/chatService.js';
 import type { AdvisorConfig, ChatSubmissionOptions, ChatInteractionOfferChange, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from '../common/chatService.js';
-import type { ResolvedChatContext } from '../common/chatContextService.js';
+import { parseChatToolSelection, type ResolvedChatContext } from '../common/chatContextService.js';
 import type { ChatCheckpoint, RestoreChatCheckpointOptions } from '../common/chatService.js';
 import type { ThreadChangesSummary, TurnChangeFileContents } from '../common/chatService.js';
 
@@ -306,7 +306,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
-		await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, commandInterpretation: options.commandInterpretation, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input }, options.signal);
+		await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, commandInterpretation: options.commandInterpretation, approvalMode: options.approvalMode, model: options.model, ...(options.modelRouting && { modelRouting: options.modelRouting }), reasoningEffort: options.reasoningEffort, input }, options.signal);
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: options.isNewSession === true, requestSequence: options.expectedSequence });
 	}
 
@@ -324,7 +324,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const generation = this.appServerApi.connectionGeneration;
-		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, commandInterpretation: options.commandInterpretation, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode }, options.signal);
+		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, commandInterpretation: options.commandInterpretation, model: options.model, ...(options.modelRouting && { modelRouting: options.modelRouting }), reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode }, options.signal);
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
 		this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
@@ -346,6 +346,11 @@ export class ChatService extends Disposable implements IChatService {
 	async resumePendingRequest(target: QueueMessageTarget) {
 		// Cancelling an editor restores already admitted work, including after AI is disabled.
 		return this.turnApi.editQueued(target, { type: 'resume' });
+	}
+
+	async movePendingRequest(target: QueueMessageTarget, direction: 'up' | 'down') {
+		this.assertAIEnabled();
+		return this.turnApi.editQueued(target, { type: 'move', direction });
 	}
 
 	async editPendingRequest(target: QueueMessageTarget, text: string, queue?: import('../common/chatService.js').ChatRequestQueueKind) {
@@ -526,11 +531,7 @@ function toContextInput(context: ResolvedChatContext): AgentInput {
 	if (context.kind === 'image') { return { type: 'image', url: context.content }; }
 	if (context.kind === 'instruction') { return { type: 'instruction', path: context.content }; }
 	if (context.kind === 'toolSelection') {
-		const disabled: unknown = JSON.parse(context.content);
-		if (!Array.isArray(disabled) || disabled.length > 4096 || disabled.some(name => typeof name !== 'string' || !name.trim()) || new Set(disabled).size !== disabled.length) {
-			throw new Error(localize('chat.tools.invalidSelection', 'The tool selection is invalid. Configure tools again.'));
-		}
-		return { type: 'toolSelection', disabled };
+		return { type: 'toolSelection', disabled: parseChatToolSelection(context.content) };
 	}
 	return { type: 'context', name: context.name, content: context.content, ...(context.sourceUrl ? { sourceUrl: context.sourceUrl } : {}) };
 }

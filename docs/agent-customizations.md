@@ -20,7 +20,7 @@ Ash 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 位于小写 `.ash/`；共享的 `AGENTS.md` 与 Ash 专属 `ASH.md` 位于目录根，始终加载。其他产品的
 专有目录和格式必须经过 `external-agent-migration`。
 
-内置 Agent 不是 `.ash` 自定义对象。它们随产品发布、在 Agents 设置中只读展示，不会被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
+内置 Agent 不是 `.ash` 自定义对象。它们随产品发布，不会被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
 
 | 用户想表达什么               | Ash 对象             | 何时进入运行时                                   | 典型入口                   |
 | ---------------------------- | -------------------- | ------------------------------------------------ | -------------------------- |
@@ -238,7 +238,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现                                                             |
 | User Instructions authority                                      | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现                                                                               |
 | Directory Instructions authority                                 | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现                                                                         |
-| Directory Agents authority                                       | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；设置可查看、编辑来源及复制常用内置定义为自定义草稿 |
+| Directory Agents authority                                       | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；设置可查看自定义角色，在编辑器中打开授权目录的文件 |
 | `.ash/{instructions,skills,agents}` loader                       | 已实现   | 固定 roots、有界校验、Directory activation 与 watcher refresh                                                                                                                 |
 | External parser、preview 与 apply                                | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成                                                                           |
 | `$name` Skill selector                                           | 已实现   | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文                                                                                    |

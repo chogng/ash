@@ -682,15 +682,30 @@ pub(super) fn parse_output_message(
             ));
         }
     };
-    let text = item
+    let mut text = String::new();
+    let mut citations = Vec::new();
+    for part in item
         .get("content")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter(|part| part.get("type").and_then(Value::as_str) == Some("output_text"))
-        .filter_map(|part| part.get("text").and_then(Value::as_str))
-        .collect();
-    Ok(ash_protocol::AssistantMessage { id, text, phase })
+    {
+        if part.get("type").and_then(Value::as_str) != Some("output_text") {
+            continue;
+        }
+        if let Some(value) = part.get("text").and_then(Value::as_str) {
+            text.push_str(value);
+        }
+        if let Some(annotations) = part.get("annotations") {
+            crate::response_citations::collect_web_citations(&mut citations, annotations);
+        }
+    }
+    Ok(ash_protocol::AssistantMessage {
+        id,
+        text,
+        phase,
+        citations: (!citations.is_empty()).then_some(citations),
+    })
 }
 
 pub(super) fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {

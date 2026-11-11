@@ -1,9 +1,10 @@
 import type { MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
-import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import type { ChatResponseActions } from './chatListRenderer.js';
 import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
+import { getEditorOverrideForChatResource } from './chatEditorAssociations.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import type { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { readWorkspaceChanges } from './input/chatInput.js';
@@ -32,10 +33,14 @@ import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './in
 import type { ChatStreamingResponseUpdate, ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
+import { chatResponseFollowups } from '../../common/model/chatFollowup.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
 import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
 import { addDisposableListener, getActiveWindow, h } from '../../../../../base/browser/dom.js';
+import { RestoreAgentSessionActionId } from '../agentSessions/agentSessionsActions.js';
+import { ChatReadOnlyBanner } from './chatReadOnlyBanner.js';
+import { ChatWindowBlurListener } from './chatWindowBlurListener.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { AgentsVoiceWidget } from '../../../agentsVoice/browser/agentsVoiceWidget.js';
 import { IVoiceModeOnboardingService } from '../../../agentsVoice/browser/voiceModeOnboarding.js';
@@ -89,11 +94,11 @@ export interface IChatWidgetModel extends IDisposable {
 		stop(): Promise<void>;
 	};
 	readResponseResource?(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob>;
-	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
 	getResponseActions?(item: IChatListItem): ChatResponseActions | undefined;
 	submitRequestEdit?(item: IChatListItem, text: string, commandId: string): Promise<void>;
 	getRequestVersions?(item: IChatListItem): Promise<readonly import('../chat.js').ChatRequestVersion[]>;
 	readonly historyStatus?: IChatSessionHistoryStatus;
+	readonly canRestoreArchivedSession?: boolean;
 	readonly olderHistory?: { readonly loading: boolean; readonly error?: string; };
 	loadOlderHistory?(): Promise<void>;
 	prepareConversation?(signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
@@ -130,6 +135,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
 	public readonly input: IChatInputPart;
 	private readonly goalBanner: ChatGoalBannerWidget;
+	private readonly readOnlyBanner: ChatReadOnlyBanner;
 	private readonly olderHistoryElement: HTMLDivElement;
 	private readonly olderHistoryButton: Button;
 	private readonly olderHistoryMessage: HTMLSpanElement;
@@ -141,6 +147,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private readonly welcome: ChatViewWelcomePart;
 	private readonly recapSurface = generateUuid();
 	private readonly recapFocusListeners = this._register(new DisposableStore());
+	private readonly recapBlurListener: ChatWindowBlurListener | undefined;
 	private recapDocument: Document | undefined;
 	private recapView: { sessionId: SessionId; threadId: ThreadId; focused: boolean; } | undefined;
 	private recapPresencePending = Promise.resolve();
@@ -167,6 +174,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IVoiceModeOnboardingService private readonly voiceOnboarding: IVoiceModeOnboardingService,
+		@IConfigurationService configuration: IConfigurationService,
 	) {
 		super();
 		this.model = this._register(model);
@@ -183,7 +191,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, 'div');
 		this.element.id = panelId;
-		this.element.className = 'ash-chat';
+		this.element.className = viewOptions?.classPrefix ?? 'ash-chat';
 		this.element.setAttribute('role', 'tabpanel');
 		this.element.hidden = true;
 		container.append(this.element);
@@ -200,12 +208,22 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		// Detached Markdown fragments still inherit this conversation's command scope.
 		const scopedInstantiation = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, context])));
 		const inQuickChat = ChatContextKeys.inQuickChat.bindTo(context);
-		if (model.reportRecapPresence) this._register(toDisposable(() => this.syncRecapPresence(false)));
+		if (model.reportRecapPresence) {
+			this.recapBlurListener = this._register(new ChatWindowBlurListener(this.element, () => this.syncRecapPresence()));
+			this._register(toDisposable(() => this.syncRecapPresence(false)));
+		}
 		this._register(addDisposableListener(this.element, 'focusin', () => {
 			// Quick Chat borrows this widget by reparenting it; its original scope stays alive.
 			inQuickChat.set(contextKeys.getContext(this.element.parentElement).getValue<boolean>(ChatContextKeys.inQuickChat.key) === true);
 		}));
 		this.goalBanner = new ChatGoalBannerWidget(ownerDocument);
+		this.readOnlyBanner = this._register(new ChatReadOnlyBanner(ownerDocument, async sessionId => {
+			try {
+				await commandService.executeCommand(RestoreAgentSessionActionId, sessionId);
+			} catch (error) {
+				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(String(error));
+			}
+		}));
 		this.olderHistoryElement = h(ownerDocument, 'div');
 		this.olderHistoryElement.className = 'ash-chat-history-pagination';
 		this.olderHistoryElement.hidden = true;
@@ -262,17 +280,19 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			await openChangesForTurn(source, AbortSignal.any([signal, controller.signal]));
 		});
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
+			classPrefix: viewOptions?.classPrefix,
 			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
 			canEditRequest: () => !this.isTranscriptProgressActive,
 			submitRequestEdit: model.submitRequestEdit?.bind(model),
 			getRequestVersions: model.getRequestVersions?.bind(model),
 			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
+			getTurnChanges: this.viewOptions?.getTurnChanges,
 			messagePresentation: this.viewOptions?.messagePresentation,
 			codeBlockPresentation: this.viewOptions?.codeBlockPresentation,
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
 			virtualizeHistoryFrom: this.viewOptions?.virtualizeHistoryFrom,
 			readResponseResource: model.readResponseResource?.bind(model),
-			inspectResponseEntity: model.inspectResponseEntity,
+			inspectResponseEntity: this.viewOptions?.inspectResponseEntity,
 			getResponseActions: model.getResponseActions?.bind(model),
 			openTurnChanges,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
@@ -305,11 +325,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				},
 			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
-				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error('Could not open Markdown link', error));
+				void openChatMarkdownLink(target, openerService, editorService, configuration).catch(error => console.error('Could not open Markdown link', error));
 			},
-			memoryNamespace: model.memoryNamespace,
+			get memoryNamespace() { return model.memoryNamespace; },
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
-			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
+			onDidRequestErrorAction: (action: ChatTurnErrorAction) => this.handleTurnErrorAction(action),
 		});
 		this.listWidget = listWidgets.get();
 		const inputDelegate: ChatInputDelegate = {
@@ -354,8 +374,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				}
 			}),
 			interrupt: () => this.model.interrupt(),
-			openChanges: model.refreshChanges && (async revision => {
-				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision); }
+			openChanges: model.refreshChanges && (async (revision, file) => {
+				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision, file); }
 				finally { void model.refreshChanges!(); }
 			}),
 			readWorkspaceChanges: model.refreshChanges && (() => readWorkspaceChanges(commandService)),
@@ -380,7 +400,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
-		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible);
 		this._register(widgets.register(this));
 		if (model.prepareConversation || model.sessionId) this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
@@ -402,13 +421,14 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			viewOptions.welcomeTitle!.read(reader);
 			this.updateConversationState();
 		}));
-		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.welcome.element, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
+		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.welcome.element, this.listWidget.element, this.historyStatusElement, voiceContainer, this.readOnlyBanner.domNode, this.input.element);
+		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible, this.voiceWidget?.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
 			previous.element.replaceWith(widget.element);
 			this.listWidget = widget;
-			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible);
+			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm, this.input.changesSummaryVisible, this.voiceWidget?.element);
 			widget.restoreViewState(state, this.model.items, this.responseWorking);
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
@@ -443,7 +463,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	public getFindController(): IChatFindController { return this.listWidget.getFindController(); }
 	public focusResponseItem(lastFocused?: boolean): void { this.listWidget.focusResponseItem(lastFocused); }
 	public focusCodeBlock(reverse = false): void { this.listWidget.focusCodeBlock(reverse); }
-	public focusInput(): void { this.input.focus(); }
+	public focusInput(): void {
+		if (this.readOnlyBanner.visible) this.readOnlyBanner.focus();
+		else this.input.focus();
+	}
 	public getFocus(): IChatListItem | undefined { return this.listWidget.getFocus(); }
 	public getFileTreeInfosForResponse(item: IChatListItem) { return this.listWidget.getFileTreeInfosForResponse(item); }
 	public getLastFocusedFileTreeForResponse(item: IChatListItem) { return this.listWidget.getLastFocusedFileTreeForResponse(item); }
@@ -466,6 +489,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	setVisible(visible: boolean): void {
 		const wasVisible = this.visible;
+		// Capture the transcript's reading position while its viewport can still be measured.
+		if (!visible) this.listWidget.setVisible(false);
 		this.element.hidden = !visible;
 		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
@@ -473,8 +498,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const voiceClient = this.voiceSessionController;
 		if (!visible && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
 		this.syncRecapPresence(visible);
-		this.input.setVisible(visible);
-		this.listWidget.setVisible(visible);
+		this.input.setVisible(visible && !this.readOnlyBanner.visible);
+		if (visible) this.listWidget.setVisible(true);
 	}
 
 	public getViewState(): IChatWidgetViewState {
@@ -618,15 +643,18 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		if (!this.model.reportRecapPresence) return;
 		const { sessionId, threadId } = this.model;
 		const document = this.element.ownerDocument;
-		if (visible && this.recapDocument !== document) {
-			this.recapDocument = document;
+		const listeningDocument = visible ? document : undefined;
+		this.recapBlurListener?.update(visible);
+		if (this.recapDocument !== listeningDocument) {
+			this.recapDocument = listeningDocument;
 			this.recapFocusListeners.clear();
-			const report = () => this.syncRecapPresence();
-			if (document.defaultView) {
-				this.recapFocusListeners.add(addDisposableListener(document.defaultView, 'focus', report));
-				this.recapFocusListeners.add(addDisposableListener(document.defaultView, 'blur', report));
+			if (listeningDocument) {
+				const report = () => this.syncRecapPresence();
+				if (listeningDocument.defaultView) {
+					this.recapFocusListeners.add(addDisposableListener(listeningDocument.defaultView, 'focus', report));
+				}
+				this.recapFocusListeners.add(addDisposableListener(listeningDocument, 'visibilitychange', report));
 			}
-			this.recapFocusListeners.add(addDisposableListener(document, 'visibilitychange', report));
 		}
 		const focused = document.visibilityState !== 'hidden' && document.hasFocus();
 		const view = visible && sessionId && threadId ? { sessionId, threadId, focused } : undefined;
@@ -668,6 +696,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				: localize('agentsVoice.connecting', 'Connecting…'));
 		}
 		this.goalBanner.setGoal(this.model.goal);
+		this.renderReadOnlyBanner();
 		this.renderHistoryStatus();
 		this.renderOlderHistory();
 		const items = this.model.items;
@@ -678,13 +707,32 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			this.listWidget.setBusy(phase === 'loading' || phase === 'submitting');
 		}
 		this.listWidget.render(items, working);
-		this.input.render({ ...this.model.inputState, toolInvocations: this.model.items.flatMap(item => item.toolInvocation ? [item.toolInvocation] : []), toolInvocation: this.model.items.find(item => item.toolInvocation?.call.itemId === this.model.inputState.interaction?.itemId)?.toolInvocation, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
+		const inputState = this.model.inputState;
+		this.input.render({
+			...inputState,
+			followups: chatResponseFollowups(this.model.thread?.turns.at(-1)),
+			toolInvocations: items.flatMap(item => item.toolInvocation ? [item.toolInvocation] : []),
+			toolInvocation: items.find(item => item.toolInvocation?.call.itemId === inputState.interaction?.itemId)?.toolInvocation,
+			conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined,
+		});
 	}
 
 	private get responseWorking(): boolean {
 		const { phase, canInterrupt, aiDisabled, inputBlocked, error, status } = this.model.inputState;
 		return !aiDisabled && !inputBlocked && !error && status === undefined
 			&& (phase === 'submitting' || phase === 'ready' && canInterrupt);
+	}
+
+	private renderReadOnlyBanner(): void {
+		const archived = this.model.thread?.status === 'archived';
+		const wasArchived = this.readOnlyBanner.visible;
+		const active = this.element.ownerDocument.activeElement;
+		const restoreFocus = archived ? this.input.element.contains(active) : this.readOnlyBanner.domNode.contains(active);
+		this.element.classList.toggle('ash-chat-readonly', archived);
+		this.readOnlyBanner.render(archived, archived && this.model.canRestoreArchivedSession ? this.model.sessionId : undefined);
+		if (archived === wasArchived) return;
+		this.input.setVisible(this.visible && !archived);
+		if (restoreFocus && this.visible) this.focusInput();
 	}
 
 	private renderHistoryStatus(): void {
@@ -790,6 +838,7 @@ export async function openChatMarkdownLink(
 	target: string,
 	openerService: IOpenerService | undefined,
 	editorService: Pick<IEditorService, 'openEditor'> | undefined,
+	configuration?: IConfigurationService,
 ): Promise<void> {
 	if (target.startsWith('#') || target.startsWith(`${Schemas.internal}:`)) return;
 	if (target.startsWith(`${Schemas.command}:`)) {
@@ -802,7 +851,8 @@ export async function openChatMarkdownLink(
 			const selection = reference.selection;
 			const range = selection && new Range(selection.startLineNumber, selection.startColumn,
 				selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn);
-			await editorService.openEditor({ resource: reference.uri }, { selection: range });
+			const preferredEditorId = getEditorOverrideForChatResource(reference.uri, configuration);
+			await editorService.openEditor({ resource: reference.uri }, { selection: range, ...(preferredEditorId ? { preferredEditorId } : {}) });
 		}
 		return;
 	}
@@ -821,7 +871,10 @@ export async function openChatMarkdownLink(
 		if (workspaceResource && editorService) {
 			const range = selection && new Range(selection.startLineNumber, selection.startColumn,
 				selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn);
-			await editorService.openEditor({ resource: workspaceResource }, range ? { selection: range } : undefined);
+			const preferredEditorId = getEditorOverrideForChatResource(workspaceResource, configuration);
+			await editorService.openEditor({ resource: workspaceResource }, range || preferredEditorId ? {
+				...(range ? { selection: range } : {}), ...(preferredEditorId ? { preferredEditorId } : {}),
+			} : undefined);
 		}
 		return;
 	}

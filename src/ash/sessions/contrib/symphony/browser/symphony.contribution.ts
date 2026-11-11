@@ -17,7 +17,7 @@ import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { ISymphonyService, SymphonyService, SymphonyNavigationId, SymphonyMonitorResource } from './symphonyService.js';
 import { SymphonyTasksView, SymphonyMonitorEditor, symphonyAccessibleContent } from './symphonyViews.js';
 
@@ -37,7 +37,7 @@ registerEditorPane({ id: 'sessions.editor.symphony', name: 'Symphony', canOpen: 
 async function openSymphony(accessor: ServicesAccessor, source?: 'restore'): Promise<void> {
 	const symphony = accessor.get(ISymphonyService);
 	await symphony.refresh();
-	await accessor.get(ISessionsLayoutService).openEntry({
+	await accessor.get(ISessionsEntryService).openEntry({
 		id: 'symphony', workspaceMode: 'current', activityContext: 'sessions.activity.symphonySelected', content: 'editor',
 		sidebarContainerId: SymphonyNavigationId, restoreCommand: 'sessions.open.symphony', focus: 'editor',
 		editorInput: { resource: SymphonyMonitorResource, label: 'Symphony', readOnly: true, showBreadcrumbs: false },

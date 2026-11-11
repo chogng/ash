@@ -50,6 +50,8 @@ import { KeybindingTestServices } from '../../../workbench/services/keybinding/t
 import { AdvisorConfigurationPicker } from '../../../workbench/contrib/advisor/browser/advisor.js';
 import type { IOpenSettingsOptions } from '../../../workbench/services/preferences/common/preferences.js';
 import { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ChatInputEditors } from '../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { createTestModel } from '../../../platform/agentHost/test/common/testAppServerProtocol.js';
@@ -57,10 +59,11 @@ import { ActionWidgetService, IActionWidgetService } from '../../../platform/act
 import { ILanguageModelsService, LanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
-import { CoworkModelPreferences } from '../../contrib/cowork/common/languageModels.js';
-import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
-import { ILanguageModelsConfigurationService as ICoworkModelPreferences } from '../../contrib/cowork/common/languageModelsConfiguration.js';
-import { LanguageModelsConfigurationService as CoworkModelPreferencesService } from '../../contrib/cowork/browser/languageModelsConfigurationService.js';
+import { NativeChatModelPreferences } from '../../contrib/chat/common/nativeChatModelPreferences.js';
+import { AshChatModel } from '../../contrib/chat/browser/ashChatModel.js';
+import { INativeChatModelPreferencesService as INativeChatModelPreferences } from '../../contrib/chat/common/nativeChatModelPreferencesService.js';
+import { NativeChatModelPreferencesService } from '../../contrib/chat/browser/nativeChatModelPreferencesService.js';
+import { migrateSettings } from '../../../workbench/services/configuration/browser/configuration.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -121,6 +124,7 @@ import type { IPaneComposite } from '../../../workbench/common/panecomposite.js'
 import { IViewDescriptorService, ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
 import { IPaneCompositePartService } from '../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from '../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../services/sessions/browser/sessionGitActionsService.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
 import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
@@ -164,7 +168,6 @@ import { TestConfigurationFiles } from '../../../workbench/services/configuratio
 import { parseJsonDocument } from '../../../base/common/json.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
-import { ChatTipService as CoworkChatTipService, IChatTipService as ICoworkChatTipService } from '../../contrib/cowork/browser/chatTipService.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
@@ -224,6 +227,7 @@ function createInputServices(
 	} as unknown as ISessionsService);
 	services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
@@ -336,13 +340,20 @@ const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
 const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 const { ChatWidget, openChatMarkdownLink } = await import('../../../workbench/contrib/chat/browser/widget/chatWidget.js');
-const { CoworkWidget } = await import('../../contrib/cowork/browser/widget/coworkWidget.js');
+const { NativeChatWidget } = await import('../../contrib/chat/browser/widget/nativeChatWidget.js');
 const { SharedChatInputComposer } = await import('../../contrib/chat/browser/sharedChatInputComposer.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { SharedChatInputComposerContribution } = await import('../../contrib/chat/browser/sharedChatInputComposer.contribution.js');
 const { NewChatView } = await import('../../contrib/chat/browser/chatView.js');
 const { ISessionsChatViewStateService, SessionsChatViewStateService } = await import('../../contrib/chat/browser/chatViewStateService.js');
-const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
+const { ReplyChatInputFactory } = await import('../../contrib/chat/browser/replyChatInput.js');
+
+function createSessionAshChatModel(services: InstantiationService, chat: IChatService, selection: ConstructorParameters<typeof AshChatModel>[0], sessions: ISessionsManagementService): AshChatModel {
+	if (!services.has(IChatService)) services.registerInstance(IChatService, chat);
+	if (!services.has(ISessionsManagementService)) services.registerInstance(ISessionsManagementService, sessions);
+	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, undefined);
+	return services.createInstance(AshChatModel, selection, 'session');
+}
 const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import(
@@ -1302,11 +1313,11 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 		readFile: async () => ({ content: sourceText }),
 	} as unknown as IFileService);
 	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
-	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 	using composer = surface === 'chat'
 		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false), undefined)
 		: undefined;
-	using input = composer?.input ?? fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+	using inputOwner = new DisposableStore();
+	using input = composer?.input ?? fixture.services.createInstance(ReplyChatInputFactory).createSessionInput(document.body, fixture.delegate, fixture.model, inputOwner);
 	input.render(fixture.model.inputState);
 	input.appendToDraft('Review ');
 	const values = ['file:///workspace/first.ts', 'file:///workspace/second.ts'];
@@ -1335,8 +1346,8 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	const submissions: { text: string; skills: Parameters<ChatInputDelegate['send']>[2]; }[] = [];
 	using fixture = await sessionsInputFixture(async (text, _mode, skills) => { submissions.push({ text, skills }); });
 	fixture.disposeInput();
-	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
-	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+	using inputOwner = new DisposableStore();
+	using input = fixture.services.createInstance(ReplyChatInputFactory).createSessionInput(document.body, fixture.delegate, fixture.model, inputOwner);
 	const skill = { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:commit' } };
 	input.render({
 		...fixture.model.inputState,
@@ -1635,6 +1646,7 @@ for (const background of [false, true]) test(background
 		const editorRoot = createCodeEditorServices(editorResources);
 		registerTestExtensionService(editorResources, editorRoot);
 		const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
+		editorServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 		editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 		editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
 		editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
@@ -1705,6 +1717,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IContextViewService, contextViewService);
 		using chat = createChatService(fake.api);
 		editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
+		editorServices.registerSingleton(ISessionGitActionsService, () => editorServices.createInstance(SessionGitActionsService));
 		editorServices.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 		editorServices.registerInstance(IContextMenuService, { showContextMenu: () => undefined } as unknown as IContextMenuService);
 		editorServices.registerInstance(IDialogService, recordingDialogService([]));
@@ -2839,6 +2852,7 @@ test('ChatWidgetModel projects a durable Turn failure into the conversation', as
 		detail: 'Choose a model with working credentials before sending another message.',
 		errorCode: 'providerAuth',
 		action: { type: 'chooseModel', label: 'Choose another model' },
+		secondaryAction: undefined,
 	}]);
 	assert.equal(model.state, 'ready');
 });
@@ -3342,11 +3356,11 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using storage = createTestStorage();
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
-		services.registerInstance(ICoworkModelPreferences, preferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: { session: session('session-1'), threadId: 'thread-1' } };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual(scopes, ['session-1']);
 		changed.fire();
@@ -3423,14 +3437,15 @@ test('Language models service applies product visibility defaults and persists m
 	assert.throws(() => definition.parse([{ ...older.model, visible: 'true' }]), /must be a boolean/);
 });
 
-test('Cowork and Code keep independent defaults and model choices for the same draft', async () => {
+test('Chat and Code keep independent defaults and model choices for the same draft', async () => {
 	const efforts = [{ effort: 'high' }] as const;
 	const codeModel = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'Code model', supportedReasoningEfforts: efforts };
 	const coworkModel = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Cowork model', supportedReasoningEfforts: efforts };
 	const fake = fakeApi({ models: [codeModel, coworkModel], createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
 	using configuration = new WorkbenchConfigurationService();
 	using storage = createTestStorage();
-	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'anthropic/claude-opus-5-5');
+	storage.store('cowork.currentLanguageModel', 'auto', StorageScope.PROFILE, StorageTarget.USER);
+	await configuration.updateValue(NativeChatModelPreferences.defaultModelSetting, 'anthropic/claude-opus-5-5');
 	using chat = createChatService(fake.api, configuration, storage);
 	await modelsFor(chat).rememberSelectedModel(codeModel.model);
 	using sessions = new SessionsManagementService(fake.api);
@@ -3444,9 +3459,11 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
-	using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
-	services.registerInstance(ICoworkModelPreferences, preferences);
-	using cowork = services.createInstance(CoworkWidgetModel, chat, { kind: 'untitled', session: draft }, sessions);
+	using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+	assert.equal(storage.get(NativeChatModelPreferences.selectedModelStorageKey, StorageScope.PROFILE), 'auto');
+	assert.equal(storage.get('cowork.currentLanguageModel', StorageScope.PROFILE), undefined);
+	services.registerInstance(INativeChatModelPreferences, preferences);
+	using cowork = createSessionAshChatModel(services, chat, { kind: 'untitled', session: draft }, sessions);
 	await Promise.all([code.initialize(), cowork.initialize()]);
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
 	await code.selectModel(codeModel.model);
@@ -3459,9 +3476,9 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	await code.selectModel(codeModel.model);
 	await cowork.selectModel(coworkModel.model);
 	assert.deepEqual([code.selectedReasoningEffort, cowork.selectedReasoningEffort], [undefined, 'high']);
-	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, '');
+	await configuration.updateValue(NativeChatModelPreferences.defaultModelSetting, '');
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
-	using restoredCoworkPreferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+	using restoredCoworkPreferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
 	const catalog = await modelsFor(chat).listModels();
 	assert.deepEqual([modelsFor(chat).getDefaultNewChatModel(catalog), restoredCoworkPreferences.getDefaultNewChatModel(catalog)], [codeModel.model, coworkModel.model]);
 	assert.deepEqual(sessions.untitledSessions.find(session => session.untitledSessionId === draft.untitledSessionId)?.model, codeModel.model);
@@ -3471,14 +3488,26 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	assert.equal(fake.skillListRequests.at(-1), 'created');
 });
 
-test('Cowork default model settings use the Chinese catalog and reject invalid values', () => {
+test('Chat migrates the former default model setting and respects an explicit new value', async () => {
+	const onError = (error: unknown) => { throw error; };
+	const key = NativeChatModelPreferences.defaultModelSetting;
+	const migrated = await migrateSettings('{\n\t// Keep this comment\n\t"editor.fontSize": 14,\n\t"cowork.defaultmodel": " auto ",\n}', onError);
+	assert.match(migrated, /\/\/ Keep this comment/u);
+	assert.match(migrated, /"editor\.fontSize": 14/u);
+	assert.match(migrated, /"sessions\.chat\.defaultModel": "auto"/u);
+	assert.doesNotMatch(migrated, /cowork\.defaultmodel/u);
+	assert.equal(await migrateSettings(migrated, onError), migrated);
+	assert.deepEqual(JSON.parse(await migrateSettings(JSON.stringify({ 'cowork.defaultmodel': 'auto', [key]: 'provider/model' }), onError)), { [key]: 'provider/model' });
+});
+
+test('Chat default model settings use the Chinese catalog and reject invalid values', () => {
 	initializeTestLocalization('zh-CN');
 	try {
-		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(CoworkModelPreferences.defaultModelSetting)!;
+		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(NativeChatModelPreferences.defaultModelSetting)!;
 		const schema = setting.setting;
 		assert.ok(schema?.valueType === 'text');
-		assert.deepEqual([schema.title, schema.description, schema.placeholder], ['默认 Cowork 模型', '新 Cowork 对话使用的模型。填写 auto 或 provider/model 标识。', 'auto 或 provider/model']);
-		assert.throws(() => setting.parse(42), /默认 Cowork 模型必须是字符串/);
+		assert.deepEqual([schema.title, schema.description, schema.placeholder], ['默认聊天模型', '新 Ash 聊天使用的模型。填写 auto 或 provider/model 标识。', 'auto 或 provider/model']);
+		assert.throws(() => setting.parse(42), /默认聊天模型必须是字符串/);
 		assert.equal(setting.parse(' auto '), 'auto');
 	} finally { resetNlsResolver(); }
 });
@@ -3595,7 +3624,7 @@ test('New Code conversations resolve workspace and profile pairs before the last
 	assert.deepEqual(pair(inherited), [sol, 'low']);
 });
 
-test('New Code defaults preserve inheritance when selecting a model or clearing an effort', async () => {
+test('New Code defaults save staged model and effort changes for the captured workspace', async () => {
 	const { CodeConversationDefaultsSettings } = await import('../../contrib/preferences/browser/codeConversationDefaultsSettings.js');
 	const sol = { provider: 'openai', model: 'gpt-6.1-sol' };
 	const luna = { provider: 'openai', model: 'gpt-6-luna' };
@@ -3612,13 +3641,18 @@ test('New Code defaults preserve inheritance when selecting a model or clearing 
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(ISessionsManagementService, sessions);
+	const workspace = { type: 'local', root: '/workspace/first' } as const;
+	const otherWorkspace = { type: 'local', root: '/workspace/second' } as const;
+	const workspaceKey = codeConversationWorkspaceKey(workspace)!;
+	const otherKey = codeConversationWorkspaceKey(otherWorkspace)!;
+	sessions.createUntitledSession(undefined, workspace);
 	using settings = services.createInstance(CodeConversationDefaultsSettings);
 	const select = (id: string) => {
 		const field = settings.fields.find(field => field.id === id);
 		assert.equal(field?.kind, 'select');
 		return field;
 	};
-	const profile = () => configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting).profile;
+	const read = () => configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting);
 	settings.setVisible(true);
 	await waitFor(() => select('profile-model').enabled);
 	initializeTestLocalization('zh-CN');
@@ -3626,18 +3660,30 @@ test('New Code defaults preserve inheritance when selecting a model or clearing 
 		const solOption = select('profile-model').options.find(option => option.label === 'Sol');
 		assert.ok(solOption);
 		select('profile-model').setValue(solOption.value);
-		await waitFor(() => profile()?.model?.model === sol.model && select('profile-effort').enabled);
-		assert.equal(profile()?.effort, undefined);
+		assert.ok(select('profile-effort').enabled);
+		assert.equal(read().profile, undefined);
 		assert.equal(select('profile-effort').options.find(option => option.value === '')?.label, '使用默认推理强度');
 		select('profile-effort').setValue('high');
-		await waitFor(() => profile()?.effort === 'high' && select('profile-effort').enabled);
+		assert.equal(select('profile-effort').value, 'high');
 		select('profile-effort').setValue('');
-		await waitFor(() => profile()?.effort === undefined && select('profile-model').enabled);
+		assert.equal(select('profile-effort').value, '');
 		const lunaOption = select('profile-model').options.find(option => option.label === 'Luna');
 		assert.ok(lunaOption);
 		select('profile-model').setValue(lunaOption.value);
-		await waitFor(() => profile()?.model?.model === luna.model);
-		assert.equal(profile()?.effort, undefined);
+		select('workspace-model').setValue(solOption.value);
+		select('workspace-effort').setValue('high');
+		sessions.createUntitledSession(undefined, otherWorkspace);
+		assert.ok(settings.description.includes(workspace.root));
+		assert.deepEqual(read(), { workspaces: {} });
+		await configuration.updateValue(codeConversationDefaultsSetting, { workspaces: { [otherKey]: { model: luna, effort: 'low' } } });
+		assert.equal(await settings.save(), true);
+		assert.deepEqual(read(), {
+			profile: { model: luna },
+			workspaces: { [workspaceKey]: { model: sol, effort: 'high' }, [otherKey]: { model: luna, effort: 'low' } },
+		});
+		assert.equal(settings.hasChanges, false);
+		select('workspace-model').setValue('');
+		assert.equal(read().workspaces[workspaceKey]?.effort, 'high');
 	} finally { resetNlsResolver(); }
 });
 
@@ -3792,7 +3838,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const fake = fakeApi({ sessions: [durable], models: [rootModel, childModel, defaultModel].map(model => ({ model, displayName: model.model })), thread: () => currentThread });
 		await fake.api.model.configureDefaults({ model: defaultModel }, (await fake.api.model.readDefaults()).revision);
 		using configuration = new WorkbenchConfigurationService();
-		await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'provider/default-c');
+		await configuration.updateValue(NativeChatModelPreferences.defaultModelSetting, 'provider/default-c');
 		using chat = createChatService(fake.api, configuration);
 		using sessions = new SessionsManagementService(fake.api);
 		await sessions.openThread('session-1', 'thread-1');
@@ -3805,11 +3851,11 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		services.registerInstance(IConfigurationService, configuration);
 		using storage = createTestStorage();
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
-		services.registerInstance(ICoworkModelPreferences, preferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: rootModel });
 		await widget.send('Continue the root');
@@ -3841,11 +3887,11 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using storage = createTestStorage();
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
-		services.registerInstance(ICoworkModelPreferences, preferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await widget.initialize();
 		await widget.selectModel(manualModel);
 		persisted[0] = { ...persisted[0]!, model: nextModel };
@@ -3988,6 +4034,7 @@ for (const phase of ['creating the Session', 'loading the Thread'] as const) tes
 	}
 
 	assert.deepEqual(fake.turnStartRequests[0]?.model, entry.model);
+	assert.equal(fake.turnStartRequests[0]?.modelRouting, undefined);
 	assert.equal(fake.turnStartRequests[0]?.reasoningEffort, 'high');
 	assert.equal(model.inputState.isAutomaticModel, true);
 	assert.equal(model.inputState.selectedReasoningEffort, undefined);
@@ -4013,6 +4060,7 @@ test('ChatWidgetModel Auto retains the configured profile model and leaves Turn 
 	await model.send('Use the session model');
 
 	assert.equal(fake.turnStartRequests[0]?.model, undefined);
+	assert.equal(fake.turnStartRequests[0]?.modelRouting, 'auto');
 	assert.deepEqual((await fake.api.model.readDefaults()).model, sessionModel);
 });
 
@@ -4103,6 +4151,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.inputState.mode, 'plan');
+	await model.selectAutomaticModel();
 	model.selectMode('multitask');
 	model.selectApprovalMode('auto');
 	await model.send('Implement independent steps', 'multitask', undefined, [{ name: 'image.png', content: 'data:image/png;base64,aGVsbG8=', kind: 'image' }]);
@@ -4112,6 +4161,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 		commandId: fake.queuedRequests[0]!.commandId,
 		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
 		model: undefined, reasoningEffort: undefined,
+		modelRouting: 'auto',
 		commandInterpretation: undefined,
 		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: 'Implement independent steps' }],
 		approvalMode: 'auto',
@@ -4187,17 +4237,17 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help s
 	} finally { resetNlsResolver(); }
 });
 
-for (const locale of ['en', 'zh-CN']) test(`Cowork accessibility help composes shared commands once (${locale})`, async () => {
+for (const locale of ['en', 'zh-CN']) test(`Chat accessibility help composes shared commands once (${locale})`, async () => {
 	initializeTestLocalization(locale);
 	try {
 		using fixture = await sessionsInputFixture();
-		fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
-		using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+		using inputOwner = new DisposableStore();
+		using input = fixture.services.createInstance(ReplyChatInputFactory).createSessionInput(document.body, fixture.delegate, fixture.model, inputOwner);
 		input.render(fixture.model.inputState);
 		input.focus();
 		const focused = document.activeElement;
 		const provider = focusedChatHelp(fixture.services);
-		assert.match(provider.provideContent(), locale === 'en' ? /Cowork input/ : /Cowork 输入/);
+		assert.match(provider.provideContent(), locale === 'en' ? /Chat input/ : /聊天输入/);
 		assert.doesNotMatch(provider.provideContent(), /New worktree asks|新建 worktree/);
 		assert.equal(provider.provideContent().match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)?.length, 1);
 		provider.dispose();
@@ -4699,11 +4749,11 @@ test('bounded Chat pages are requested by cursor and retain every message in chr
 	using sessions = new SessionsManagementService(fixture.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: fixture.active, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	assert.deepEqual(fixture.requests, [{ type: 'subscribe', afterSequence: 0, history: { type: 'latest', turnLimit: 20 } }]);
+	assert.deepEqual(fixture.requests, [{ type: 'subscribe', afterSequence: 0, history: { type: 'latest', turnLimit: 20, previewToolResults: true } }]);
 	assert.equal(model.items.length, 20);
 	while (model.olderHistory) await model.loadOlderHistory();
 	assert.deepEqual(model.items.map(item => item.text), Array.from({ length: 65 }, (_, index) => `Answer ${index + 1}`));
-	assert.deepEqual(fixture.requests.slice(1).map(request => request.history), ['turn-46', 'turn-26', 'turn-6'].map(turnId => ({ type: 'before', turnId, turnLimit: 20 })));
+	assert.deepEqual(fixture.requests.slice(1).map(request => request.history), ['turn-46', 'turn-26', 'turn-6'].map(turnId => ({ type: 'before', turnId, turnLimit: 20, previewToolResults: true })));
 });
 
 test('bounded Chat pagination coalesces clicks without replacing live transcript revisions', async () => {
@@ -4796,9 +4846,9 @@ for (const retryFails of [false, true]) {
 		fixture.setCount(44);
 		await model.loadOlderHistory();
 		assert.deepEqual(fixture.requests.slice(1).map(request => request.history), [
-			{ type: 'before', turnId: 'turn-46', turnLimit: 20 },
-			{ type: 'latest', turnLimit: 20 },
-			{ type: 'before', turnId: 'turn-25', turnLimit: 20 },
+			{ type: 'before', turnId: 'turn-46', turnLimit: 20, previewToolResults: true },
+			{ type: 'latest', turnLimit: 20, previewToolResults: true },
+			{ type: 'before', turnId: 'turn-25', turnLimit: 20, previewToolResults: true },
 		]);
 		assert.deepEqual(model.items.map(item => item.text), Array.from({ length: retryFails ? 20 : 40 }, (_, index) => `Answer ${index + (retryFails ? 25 : 5)}`));
 		assert.equal(model.olderHistory?.loading, false);
@@ -5259,7 +5309,7 @@ test('stream updates preserve message order and survive an older refresh snapsho
 	await waitFor(() => reads === 1);
 	emit(6, 'first', 'Completed', false);
 	emit(5, 'first', 'Stale duplicate');
-	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true, timestamp, fileReferenceDirectory: undefined } }, undefined, undefined]);
+	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true, timestamp, fileReferenceDirectory: undefined, citations: undefined } }, undefined, undefined]);
 	assert.deepEqual(model.items.map(item => [item.id, item.text, item.transient]), [['item:first', 'Completed', false], ['item:second', 'Later message', true]]);
 	await read.complete(await fake.api.thread.read({ sessionId: 'session-1', threadId: 'thread-1' }));
 	await nextTask();
@@ -5311,7 +5361,7 @@ for (const kind of ['Code', 'Cowork', 'Code and Cowork']) {
 		services.registerInstance(IStorageService, storage);
 		const models = modelsFor(chat);
 		services.registerInstance(ILanguageModelsService, models);
-		using cowork = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
+		using cowork = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
 		const visibility = kind === 'Code' ? models : cowork;
 		const first = visibility.setModelVisible(entries[0]!.model, true);
 		await started.p;
@@ -5385,8 +5435,8 @@ for (const locale of ['en', 'zh-CN']) for (const kind of ['Code', 'Cowork'] as c
 		const services = createInputServices(contextView, chat);
 		const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 		using widget = kind === 'Code'
-			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
-			: new CoworkWidget(document.body, 'goal-banner', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
+			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService))
+			: services.createInstance(NativeChatWidget, document.body, 'goal-banner', model, () => { }, createInput);
 		widget.setVisible(true);
 		const banner = widget.domNode.querySelector<HTMLDivElement>('.ash-chat-goal-banner')!;
 		assert.ok(banner);
@@ -5425,8 +5475,8 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inl
 	const services = createInputServices(contextView, chat);
 	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 	using widget = kind === 'Code'
-		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
-		: new CoworkWidget(document.body, 'ordered-snapshots', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
+		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService))
+		: services.createInstance(NativeChatWidget, document.body, 'ordered-snapshots', model, () => { }, createInput);
 	widget.setVisible(true);
 	const first = new DeferredPromise<{ name: string; content: string; }>();
 	const second = new DeferredPromise<{ name: string; content: string; }>();
@@ -5467,7 +5517,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 		undefined, undefined, undefined, (container, delegate) => {
 			delegates.push(delegate);
 			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
-		}, undefined, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
+		}, undefined, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService), services.get(IConfigurationService));
 	const delegate = delegates[0]!;
 	assert.ok(delegate.selectApprovalMode);
 	await delegate.selectApprovalMode('auto');
@@ -6213,6 +6263,27 @@ for (const locale of ['en', 'zh-CN']) {
 		} finally { resetNlsResolver(); }
 	});
 }
+
+test('archived Chat shows its transcript and blocks the composer in Chinese', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const fixture = await createNavigationInputPane('{}', undefined, {
+			subscribe: async ({ threadId }) => {
+				const snapshot = navigationThreadSnapshot(threadId);
+				return { ...snapshot, thread: { ...snapshot.thread, status: 'archived' }, updates: [] };
+			},
+		});
+		using resources = fixture.resources;
+		const { pane, fake, chatPane } = fixture;
+		const banner = chatPane.querySelector<HTMLElement>('.ash-chat-readonly-banner')!;
+		await waitFor(() => !banner.hidden);
+		assert.equal(banner.querySelector('[role="status"]')?.textContent, '此对话已归档。');
+		assert.equal(chatPane.classList.contains('ash-chat-readonly'), true);
+		assert.equal(banner.querySelector('button')?.hidden, true);
+		await pane.acceptInput();
+		assert.equal(fake.turnStartRequests.length, 0);
+	} finally { resetNlsResolver(); }
+});
 
 test('Chat history recovery actions expire across A-B-A selection and pane disposal', async () => {
 	const activeSession = session('session-1', 'thread-1');
@@ -7175,9 +7246,9 @@ test('Cowork consumes rich tool evidence from its actual scoped transcript and c
 	using sessions = new SessionsManagementService(fake.api);
 	using contextView = new BrowserContextViewService(document.body);
 	using services = createInputServices(contextView, chat);
-	using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
-	services.registerInstance(ICoworkModelPreferences, preferences);
-	using model = services.createInstance(CoworkWidgetModel, chat, { kind: 'session', active: { session: durable, threadId: 'thread-1' } }, sessions);
+	using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+	services.registerInstance(INativeChatModelPreferences, preferences);
+	using model = createSessionAshChatModel(services, chat, { kind: 'session', active: { session: durable, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.equal(model.items.length, 2);
 	assert.equal(model.items[0]!.toolInvocation?.result?.itemId, 'result-first');
@@ -7324,11 +7395,11 @@ for (const kind of ['Chat', 'Cowork']) {
 		services.registerInstance(IConfigurationService, configuration);
 		using storage = createTestStorage();
 		services.registerInstance(IStorageService, storage);
-		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
-		services.registerInstance(ICoworkModelPreferences, preferences);
+		using preferences = services.createInstance(NativeChatModelPreferencesService, NativeChatModelPreferences);
+		services.registerInstance(INativeChatModelPreferences, preferences);
 		const selection = { kind: 'untitled' as const, session: sessions.createUntitledSession() };
 		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
-		using model = kind === 'Chat' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
+		using model = kind === 'Chat' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : createSessionAshChatModel(services, chat, selection, sessions);
 		await model.initialize();
 		await configuration.updateValue(ChatAIDisabledSettingId, true);
 		assert.equal(model.inputState.aiDisabled, true);

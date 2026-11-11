@@ -160,6 +160,7 @@ impl Fixture {
             command_id: CommandId::new("start").unwrap(),
             expected_sequence: SequenceExpectation::Exact(1),
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             kind: TurnKind::Coding,
             instructions: crate::test_turn_instructions(),
@@ -433,6 +434,7 @@ fn failed_interaction_resume_keeps_the_answer_and_records_terminal_failure() {
                 deadline: None,
                 request: AgentRequest::UserInput {
                     request: RequestUserInput {
+                        plan_review: None,
                         questions: vec![UserInputQuestion {
                             required: true,
                             id: "choice".into(),

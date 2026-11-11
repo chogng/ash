@@ -15,7 +15,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../chat/common/constants.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
@@ -55,7 +55,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		icon: Lxicon.sync,
 	};
 	private readonly workingStatus: ISessionStatusIcon = {
-		label: localize('sessions.chat.coworkRunning', 'Cowork is working…'),
+		label: localize('sessions.chat.linkedTaskRunning', 'Task in progress…'),
 		kind: 'inProgress',
 		icon: Lxicon.sync,
 	};
@@ -63,7 +63,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 	constructor(
 		@IChatGPTService private readonly chat: IChatGPTService,
 		@ICommandService private readonly commands: ICommandService,
-		@IEditorService private readonly editors: IEditorService,
+		@ISessionsConversationService private readonly conversation: ISessionsConversationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IClipboardService private readonly clipboard: IClipboardService,
@@ -109,7 +109,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			preferencesChanged.read(reader);
 			const current = selectedChatConversationId(state);
 			const showSelection = chatSelected.read(reader);
-			const coworkRunning = state.coworkTasks.some(task => {
+			const hasRunningTask = state.linkedTasks.some(task => {
 				const status = task.thread?.turns.at(-1)?.status;
 				return status === 'created' || status === 'running' || status === 'cancelling';
 			});
@@ -144,7 +144,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					selected: selected && showSelection,
 					status: state.loading?.kind === 'conversation' && state.loading.id === id ? this.loadingStatus
 						: selected && state.sending ? this.replyingStatus
-							: selected && coworkRunning ? this.workingStatus : undefined,
+							: selected && hasRunningTask ? this.workingStatus : undefined,
 					// Returning from Ash to the streaming conversation keeps the same ChatGPT selection.
 					disabled: state.managing || state.sending && (showSelection || !selected),
 					actionsDisabled: state.busy || state.sending,
@@ -280,7 +280,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			upload: online ? {
 				limits: chatGPTAttachmentLimits,
 				limitMessage: chatGPTAttachmentLimitMessage(),
-				addFiles: files => this.chat.addProjectFiles(id, scope, files),
+				addFiles: (files, onFileAdded) => this.chat.addProjectFiles(id, scope, files, onFileAdded),
 			} : undefined,
 		};
 	}
@@ -362,7 +362,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		const opened = await this.commands.executeCommand(this.chat.native ? SHOW_EXPERIMENTAL_CHATGPT : 'sessions.show.chatgpt');
 		if (opened === false || signal.aborted) return;
 		await this.chat.select(id);
-		if (!signal.aborted) this.editors.focusActiveEditor();
+		if (!signal.aborted) this.conversation.focus();
 	}
 
 	private conversationCatalogId(id: string): string {

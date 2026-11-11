@@ -1,10 +1,11 @@
+import { findLast } from '../../base/common/arraysFind.js';
 import { observableValue } from '../../base/common/observable.js';
 import type { Thread } from '../../workbench/services/chat/common/chatService.js';
 import type { IActiveSessionThread, ModelRef, ThreadId } from '../services/sessions/common/session.js';
 
 /** Owns unsent model choices for one composer as it switches between durable threads. */
 export class SessionModelSelection {
-	// An entry with no model is explicit Auto. An absent entry restores the durable model.
+	// An entry with no model is explicit Auto. An absent entry restores the durable choice.
 	private readonly choices = observableValue<ReadonlyMap<ThreadId, ModelRef | undefined>>(this, new Map());
 
 	select(threadId: ThreadId, model: ModelRef | undefined): void {
@@ -16,9 +17,12 @@ export class SessionModelSelection {
 		if (choices.delete(threadId)) this.choices.set(choices);
 	}
 
-	isAutomatic(threadId: ThreadId): boolean {
+	isAutomatic(threadId: ThreadId, thread: Thread | undefined): boolean {
 		const choices = this.choices.get();
-		return choices.has(threadId) && choices.get(threadId) === undefined;
+		if (choices.has(threadId)) return choices.get(threadId) === undefined;
+		if (thread?.threadId !== threadId) return false;
+		const lastTurn = findLast(thread.turns, turn => turn.kind === undefined || turn.kind === 'coding');
+		return lastTurn?.modelRouting !== undefined;
 	}
 
 	resolveModel(active: IActiveSessionThread, thread: Thread | undefined): ModelRef | undefined {

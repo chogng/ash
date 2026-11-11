@@ -7,29 +7,9 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
+import { chatSubagentStatusLabel } from '../../../../workbench/contrib/chat/common/model/chatSubagentActivity.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
-import type { AgentThreadExecutionStatus, AgentTreeNode } from '../../../services/sessions/common/session.js';
-
-const statusLabels: Record<AgentThreadExecutionStatus, () => string> = {
-	idle: () => localize('sessions.background.idle', 'Idle'),
-	queued: () => localize('sessions.background.queued', 'Queued'),
-	running: () => localize('sessions.background.running', 'Running'),
-	waiting: () => localize('sessions.background.waiting', 'Waiting'),
-	completed: () => localize('sessions.background.completed', 'Completed'),
-	failed: () => localize('sessions.background.failed', 'Failed'),
-	cancelled: () => localize('sessions.background.cancelled', 'Cancelled'),
-};
-
-function directAgents(nodes: readonly AgentTreeNode[], threadId: string): AgentTreeNode[] {
-	const result: AgentTreeNode[] = [];
-	const pending = [...nodes].reverse();
-	while (pending.length) {
-		const node = pending.pop()!;
-		if (node.origin.type === 'agentSpawn' && node.origin.parentThreadId === threadId && node.membershipStatus === 'active') result.push(node);
-		for (let i = node.children.length - 1; i >= 0; i--) pending.push(node.children[i]!);
-	}
-	return result;
-}
+import { directSessionSubagents } from '../../../common/sessionSubagentActivity.js';
 
 /** Projects the current thread's directly delegated agents from the owning Session tree. */
 export class SessionBackgroundActivitiesControl extends Disposable {
@@ -66,7 +46,7 @@ export class SessionBackgroundActivitiesControl extends Disposable {
 			this.element.open = false;
 			this.owner = owner;
 		}
-		const agents = threadId ? directAgents(this.model.agentTree, threadId) : [];
+		const agents = threadId ? directSessionSubagents(this.model.agentTree, threadId) : [];
 		this.element.hidden = agents.length === 0;
 		setChatInputStackSlot(this.element, agents.length ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
 		const live = new Set(agents.map(agent => agent.threadId));
@@ -74,7 +54,7 @@ export class SessionBackgroundActivitiesControl extends Disposable {
 			if (!live.has(id)) this.rows.deleteAndDispose(id);
 		}
 		for (const agent of agents) {
-			const label = localize('sessions.background.activityLabel', '{0} · {1}', agent.title, statusLabels[agent.executionStatus]());
+			const label = localize('sessions.background.activityLabel', '{0} · {1}', agent.title, chatSubagentStatusLabel(agent));
 			let button = this.rows.get(agent.threadId);
 			if (!button) {
 				button = this.rows.set(agent.threadId, new Button(this.element, {

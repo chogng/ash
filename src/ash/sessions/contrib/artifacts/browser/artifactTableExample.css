@@ -1,0 +1,79 @@
+.ash-artifact-table-example {
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	overflow: auto;
+	padding: var(--ash-spacing-size240);
+}
+
+.ash-artifact-table-example[hidden] {
+	display: none;
+}
+
+.ash-artifact-table-example:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-artifact-table-example table {
+	width: 100%;
+	max-width: 800px;
+	border-collapse: collapse;
+}
+
+.ash-artifact-table-example caption {
+	margin-bottom: var(--ash-spacing-size160);
+	color: var(--ash-description-foreground);
+	text-align: start;
+}
+
+.ash-artifact-table-example th,
+.ash-artifact-table-example td {
+	padding: var(--ash-spacing-size100) var(--ash-spacing-size160);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	text-align: start;
+	white-space: nowrap;
+}
+
+.ash-artifact-table-example .numeric {
+	text-align: end;
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-artifact-table-example.sheet :is(th, td) {
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-artifact-table-example.sheet :is(thead, tr > :first-child) {
+	background: var(--ash-editor-widgetBackground);
+}
+
+.ash-artifact-table-example.sheet
+	:is(thead > tr:first-child > td, tr > :first-child) {
+	text-align: center;
+	color: var(--ash-description-foreground);
+}
+
+.ash-artifact-example-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size160);
+	margin: 0 0 var(--ash-spacing-size240);
+}
+
+.ash-artifact-example-summary > div {
+	min-width: 120px;
+	padding: var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-artifact-example-summary dt {
+	color: var(--ash-description-foreground);
+}
+
+.ash-artifact-example-summary dd {
+	margin: var(--ash-spacing-size80) 0 0;
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}

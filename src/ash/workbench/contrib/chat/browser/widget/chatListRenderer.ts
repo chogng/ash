@@ -4,9 +4,10 @@ import { isPortableLinkTarget } from '../../../../../base/common/htmlContent.js'
 import { equals } from '../../../../../base/common/objects.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { openLinkFromMarkdown } from '../../../../../platform/markdown/browser/markdownRenderer.js';
-import { CHAT_RESPONSE_DOWNLOAD_SCHEME, CHAT_RESPONSE_ENTITY_SCHEME, chatMarkdownRichContentExtension } from './chatMarkdownRichContent.js';
+import { CHAT_RESPONSE_DOWNLOAD_SCHEME, CHAT_RESPONSE_ENTITY_SCHEME } from './chatMarkdownRichContent.js';
 import type { ChatMarkdownEntity } from '../../common/model/chatMarkdownRichContent.js';
 import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js';
+import { ChatQuotaExceededPart } from './chatContentParts/chatQuotaExceededPart.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
@@ -46,6 +47,8 @@ import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 import { ChatThinkingContentPart } from './chatContentParts/chatThinkingContentPart.js';
+import { ChatCollapsibleMarkdownContentPart } from './chatContentParts/chatCollapsibleMarkdownContentPart.js';
+import { ChatTodoListWidget } from './chatContentParts/chatTodoListWidget.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
@@ -53,12 +56,18 @@ import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, getRes
 import { MarkHelpfulActionId, ShowLoadedSkillsActionId } from '../actions/chatTitleActions.js';
 import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction } from '../actions/chatQueueActions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
+import { ChatRestoreCheckpointActionViewItem } from './chatRestoreCheckpointActionViewItem.js';
 import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
-import { ChatLoadedSkillsActionViewItem, ChatTurnChangesPill } from './chatTurnPills.js';
+import { ChatLoadedSkillsActionViewItem } from './chatTurnPills.js';
+import { ChatTurnPillsContentPart } from './chatContentParts/chatTurnPillsPart.js';
+import { ChatReferencesContentPart } from './chatContentParts/chatReferencesContentPart.js';
+import { ChatResponseCitationsContentPart } from './chatContentParts/chatResponseCitationsContentPart.js';
+import type { ChatPendingDragController } from './chatPendingDragAndDrop.js';
+import type { IChatResponseFileChangesService } from '../chatResponseFileChangesService.js';
 import { ChatRequestActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatConfiguration } from '../../common/constants.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import { EditChatRequestActionId, RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
+import { EditChatRequestActionId, RedoChatHistoryActionId } from '../chatEditing/chatEditingActions.js';
 
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
@@ -89,6 +98,8 @@ interface ChatListItemRendererOptions {
 	readonly advisorExpansion: Map<string, boolean>;
 	readonly contextExpansion: Map<string, boolean>;
 	readonly thinkingExpansion: Map<string, boolean>;
+	readonly turnChangesExpansion: Set<string>;
+	readonly pendingDrag?: ChatPendingDragController;
 	readonly onDidChangeHeight: () => void;
 	readonly beginRequestEdit: (close: (restoreFocus: boolean) => boolean) => IDisposable | undefined;
 	readonly onWillCloseRequestEditor: (options: { readonly heightChanges: boolean; readonly sent: boolean; }) => () => void;
@@ -97,8 +108,9 @@ interface ChatListItemRendererOptions {
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
 	readonly memoryNamespace?: MemoryNamespace;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
-	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
+	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void | Promise<void>;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
+	readonly getTurnChanges?: IChatResponseFileChangesService['getChangesForResponse'];
 	readonly onDidRequestLink?: (target: string) => void;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly inspectResponseEntity?: (item: IChatListItem, entity: ChatMarkdownEntity, anchor: HTMLElement) => Promise<void>;
@@ -119,7 +131,9 @@ export class ChatListItemRenderer extends Disposable {
 	private deferredRequestUpdate = false;
 	private responseActionContext: ChatResponseActionContext | undefined;
 	private updateResponseActions: ((beforeLayout?: () => void) => boolean) | undefined;
-	private updateTurnChanges: (() => void) | undefined;
+	private updateTurnChanges: ((beforeLayout?: () => void) => boolean) | undefined;
+	private updateReferences: ((beforeLayout?: () => void) => boolean) | undefined;
+	private updateCitations: ((beforeLayout?: () => void) => boolean) | undefined;
 	private messageTime: HTMLTimeElement | undefined;
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
@@ -130,6 +144,7 @@ export class ChatListItemRenderer extends Disposable {
 	public toolPart: ChatToolInvocationPart | undefined;
 	public markdownPart: ChatMarkdownContentPart | undefined;
 	public thinkingPart: ChatThinkingContentPart | undefined;
+	private advisorPart: ChatCollapsibleMarkdownContentPart | undefined;
 	public context: {
 		readonly disclosure: HTMLDetailsElement;
 		readonly summary: HTMLElement;
@@ -138,6 +153,7 @@ export class ChatListItemRenderer extends Disposable {
 	} | undefined;
 	private attachments: HTMLElement | undefined;
 	private hookPart: ChatHookContentPart | undefined;
+	private planPart: ChatTodoListWidget | undefined;
 	private readonly accessibilityProvider = new ChatAccessibilityProvider();
 
 	constructor(
@@ -167,20 +183,23 @@ export class ChatListItemRenderer extends Disposable {
 	public update(item: IChatListItem, beforeLayout: () => void): 'unchanged' | 'queued' | 'updated' | 'replace' {
 		this.layoutTrace.trace('renderElement', () => `update type=${item.type} chars=${item.text.length} transient=${item.transient}`);
 		const contentPart: IChatContentPart | undefined = this.toolPart ?? this.markdownPart;
-		const same = sameItem(this.item, item);
+		const same = sameItem(this.item, item) && equals(this.item.plan, item.plan);
 		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			const timeChanged = !!this.messageTime && this.item.timestamp !== item.timestamp;
 			if (timeChanged) beforeLayout();
 			this.item = item;
 			if (timeChanged) this.updateMessageTime();
 			this.requestActionContext?.update(item);
+			const turnChangesChanged = this.updateTurnChanges?.(beforeLayout) === true;
+			const referencesChanged = this.updateReferences?.(beforeLayout) === true;
+			const citationsChanged = this.updateCitations?.(beforeLayout) === true;
 			// Providers can gain or lose response actions without changing the transcript.
 			if (this.options.getResponseActions) {
 				if (this.updateResponseActions?.(beforeLayout)) return 'updated';
 			} else {
 				this.responseActionContext?.update(item);
 			}
-			return timeChanged ? 'updated' : 'unchanged';
+			return timeChanged || turnChangesChanged || referencesChanged || citationsChanged ? 'updated' : 'unchanged';
 		}
 		const source = this.item.requestSource;
 		const sameRequest = source
@@ -199,6 +218,10 @@ export class ChatListItemRenderer extends Disposable {
 			this.renderContext(item, this.item.transient && !item.transient);
 			this.item = item;
 			this.updateState();
+		} else if (this.planPart && item.plan) {
+			this.planPart.render(item.plan);
+			this.item = item;
+			this.updateState();
 		} else if (this.hookPart && item.hookPart && this.item.hookPart?.run.runId === item.hookPart.run.runId) {
 			this.hookPart.render(item.hookPart);
 			this.item = item;
@@ -212,9 +235,9 @@ export class ChatListItemRenderer extends Disposable {
 			this.thinkingPart.updateThinking(item);
 			this.item = item;
 			this.updateState();
-		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && equals(this.item.markdown, item.markdown) && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
-			&& (this.item.text === item.text && this.item.transient === item.transient
-				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
+		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && this.sameMarkdownPolicy(item) && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
+			&& (this.item.text === item.text && this.item.transient === item.transient && equals(this.item.markdown, item.markdown)
+				|| this.markdownPart.tryIncrementalUpdate(responseMarkdown(item), item.transient))) {
 			this.item = item;
 			this.updateState();
 		} else if (this.toolPart || !same) {
@@ -230,12 +253,29 @@ export class ChatListItemRenderer extends Disposable {
 		// Keep controls and attachments on the synchronous path when their inputs change.
 		if (!this.markdownPart || item.type !== 'agentMessage' || !previous.transient || !item.transient || !previous.text || previous.text === item.text
 			|| previous.resources?.length || item.resources?.length || this.responseActionContext?.isReading || this.options.getResponseActions
+			|| !equals(previous.citations, item.citations)
 			|| previous.content?.some(part => part.type !== 'text') || item.content?.some(part => part.type !== 'text')
 			|| this.options.onDidRequestMemoryReference && (this.memoryReferences.size || item.text.includes('memory:'))
 			|| previous.timestamp !== item.timestamp || !sameItemPresentation(previous, item)) return false;
-		if (!this.markdownPart.tryQueueIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient)) return false;
+		if (!this.markdownPart.tryQueueIncrementalUpdate(responseMarkdown(item), item.transient)) return false;
 		this.item = item;
 		return true;
+	}
+
+	private richActions(item: IChatListItem) {
+		const parts = item.markdown?.richContent?.parts;
+		return {
+			canDownload: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'resource' && part.uri),
+			canInspect: !!this.options.inspectResponseEntity && !!parts?.some(part => part.kind === 'entity'),
+			canReadGallery: !!this.options.readResponseResource && !!parts?.some(part => part.kind === 'imageGallery'),
+		};
+	}
+
+	private sameMarkdownPolicy(item: IChatListItem): boolean {
+		const previous = this.item.markdown;
+		const next = item.markdown;
+		return previous === next || previous?.supportHtml === next?.supportHtml && previous?.linkPolicy === next?.linkPolicy
+			&& equals(this.richActions(this.item), this.richActions(item));
 	}
 
 	private updateState(): void {
@@ -248,6 +288,8 @@ export class ChatListItemRenderer extends Disposable {
 		this.updateMessageTime();
 		this.updateResponseActions?.();
 		this.updateTurnChanges?.();
+		this.updateReferences?.();
+		this.updateCitations?.();
 		this.renderAttachments();
 		this.renderMemoryReferences();
 	}
@@ -261,12 +303,18 @@ export class ChatListItemRenderer extends Disposable {
 		this.toolPart?.setVisible(visible);
 		if (this.thinkingPart) {
 			this.thinkingPart.setVisible(visible);
+		} else if (this.advisorPart) {
+			this.advisorPart.setVisible(visible);
 		} else {
 			this.markdownPart?.setVisible(visible);
 		}
 	}
 
 	get hasActivePlayback(): boolean { return this.responseActionContext?.isReading === true || this.media.value?.isPlaying === true; }
+
+	public revealCodeBlockContainer(): void {
+		(this.thinkingPart ?? this.advisorPart)?.expandContent();
+	}
 
 	public override dispose(): void {
 		if (this.isDisposed) return;
@@ -347,7 +395,10 @@ export class ChatListItemRenderer extends Disposable {
 			contextKeyService: context,
 			menuOptions: { shouldForwardArgs: true, renderShortTitle: true },
 			actionViewItemProvider: (action, options) => {
-				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
+				const buttonOptions = {
+					...options, iconOnly: true, buttonPresentation: 'quiet' as const,
+					buttonClassName: action.id === MarkHelpfulActionId ? 'ash-chat-helpful-action' : undefined,
+				};
 				if (action.id === ShowLoadedSkillsActionId && this.item.loadedSkills?.length) {
 					return new ChatLoadedSkillsActionViewItem(action, buttonOptions, this.item.loadedSkills.length);
 				}
@@ -495,48 +546,30 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private renderTurnChanges(actions: HTMLElement, lifetime: DisposableStore): void {
-		const open = this.options.openTurnChanges;
-		if (open) {
-			let pill: ChatTurnChangesPill | undefined;
-			this.updateTurnChanges = () => {
-				if (!pill && this.item.turnChanges) {
-					pill = lifetime.add(this.instantiationService.createInstance(ChatTurnChangesPill, actions, this.element, async (signal: AbortSignal) => {
-						if (this.options.isVisible() && this.item.turnChanges && this.item.feedbackSource) await open(this.item.feedbackSource, signal);
-					}));
-				}
-				pill?.render(this.item.turnChanges);
-			};
-		}
-	}
-
-	private renderRestoreCheckpointAction(actions: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
-		const label = localize('chat.restoreCheckpoint.messageAction', 'Restore checkpoint');
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles, label, title: label, icon: Lxicon.history, iconOnly: true, presentation: 'quiet', size: 'small',
-		}));
-		const updateVisibility = () => { button.hidden = this.contextKeys.getValue(ChatContextKeys.enabled.key) !== true; };
-		updateVisibility();
-		lifetime.add(this.contextKeys.onDidChangeContext(event => {
-			if (event.affectsSome(chatEnabledContextKeys)) updateVisibility();
-		}));
-		const { sessionId, threadId, itemId } = source;
-		let pending = false;
-		lifetime.add(button.onDidClick(async event => {
-			event.stopPropagation();
-			if (pending || button.hidden || !this.options.isVisible()) return;
-			pending = true;
-			button.domNode.setAttribute('aria-disabled', 'true');
-			try {
-				await this.commands.executeCommand(RestoreCheckpointActionId, { sessionId, threadId, itemId });
-			} catch (error) {
-				if (!this.isDisposed && !isCancellationError(error)) {
-					this.notifications.error(localize('chat.restoreCheckpoint.failed', 'Could not restore the checkpoint: {0}', String(error)));
-				}
-			} finally {
-				pending = false;
-				if (!this.isDisposed) button.domNode.removeAttribute('aria-disabled');
+		const { openTurnChanges, getTurnChanges, turnChangesExpansion } = this.options;
+		if (!openTurnChanges && !getTurnChanges) return;
+		const id = this.item.id;
+		let part: ChatTurnPillsContentPart | undefined;
+		this.updateTurnChanges = beforeLayout => {
+			const { turnChanges, feedbackSource } = this.item;
+			if (!part && turnChanges) {
+				part = lifetime.add(this.instantiationService.createInstance(ChatTurnPillsContentPart, actions, this.element, async (signal: AbortSignal) => {
+					const source = this.item.feedbackSource;
+					if (!this.options.isVisible() || !this.item.turnChanges || !source) return;
+					if (openTurnChanges) await openTurnChanges(source, signal);
+					else await getTurnChanges?.(source)?.review();
+				}, getTurnChanges && {
+					expanded: turnChangesExpansion.has(id),
+					onChange: (expanded: boolean) => {
+						if (expanded) turnChangesExpansion.add(id);
+						else turnChangesExpansion.delete(id);
+						this.options.onDidChangeHeight();
+					},
+				}));
 			}
-		}));
+			const files = turnChanges && feedbackSource ? getTurnChanges?.(feedbackSource)?.fileDiffs : undefined;
+			return part?.render(turnChanges, files ?? [], beforeLayout) === true;
+		};
 	}
 
 	private installRequestCheckpointMenu(requestText: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
@@ -612,7 +645,7 @@ export class ChatListItemRenderer extends Disposable {
 		const helpful = this.messageAction(MarkHelpfulActionId, localize('chat.response.helpful', 'Helpful'), Lxicon.thumbsup, async () => {
 			const target = getTarget();
 			if (!target || pending) return;
-			const button = actions.querySelector<HTMLElement>(`[data-action-id="${MarkHelpfulActionId}"] > button`);
+			const button = actions.querySelector<HTMLElement>('.ash-chat-helpful-action');
 			const captured = button && captureAnimationTarget(button);
 			pending = true;
 			status.textContent = '';
@@ -866,6 +899,7 @@ export class ChatListItemRenderer extends Disposable {
 		}
 		if (item.type === 'hook' && item.hookPart) {
 			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
+			disposables.add(part.onDidChangeHeight(this.options.onDidChangeHeight));
 			article.append(part.domNode);
 			this.hookPart = part;
 			return;
@@ -902,7 +936,7 @@ export class ChatListItemRenderer extends Disposable {
 			this.renderContext(item, false);
 			return;
 		}
-		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
+		let body: HTMLElement = article;
 		const useImagePopup = this.contextKeys.getValue(ChatContextKeys.imagePreviewPresentation.key) === 'popup';
 		const sentImage = useImagePopup && (item.type === 'userImage' || item.type === 'userImageAttachment');
 		if (item.type === 'userMessage' || item.type === 'queuedMessage') article.classList.add('ash-chat-user-message');
@@ -916,25 +950,21 @@ export class ChatListItemRenderer extends Disposable {
 				if (participant.icon) appendIcon(participant.icon, avatar);
 				article.append(h(document, 'header', { className: 'ash-chat-participant' }, avatar, h(document, 'span', participant.name)));
 			}
-		} else if (item.type !== 'reasoning' && !sentImage) {
-			const label = h(article.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
+		} else if (item.type !== 'reasoning' && item.type !== 'advisor' && !sentImage) {
+			const label = h(article.ownerDocument, 'div');
 			label.className = `${this.options.classPrefix}-item-label`;
 			label.textContent = this.accessibilityProvider.getAriaLabel(item);
 			body.append(label);
 		}
-		if (body !== article) {
-			const disclosure = body as HTMLDetailsElement;
-			disclosure.open = this.options.advisorExpansion.get(item.id) ?? true;
-			disposables.add(addDisposableListener(disclosure, 'toggle', () => { this.options.advisorExpansion.set(item.id, disclosure.open); }));
-			article.append(body);
-		}
 		let markdownPart: ChatMarkdownContentPart | undefined;
 		let requestText: HTMLElement | undefined;
-		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
-			const { richContent, linkPolicy } = item.markdown ?? {};
-			const canDownload = !!this.options.readResponseResource && !!richContent?.parts.some(part => part.kind === 'resource' && part.uri);
-			const canInspect = !!this.options.inspectResponseEntity && !!richContent?.parts.some(part => part.kind === 'entity');
-			const canReadGallery = !!this.options.readResponseResource && !!richContent?.parts.some(part => part.kind === 'imageGallery');
+		if (item.plan) {
+			const part = this.planPart = disposables.add(this.instantiationService.createInstance(ChatTodoListWidget, article.ownerDocument, this.options.onDidRequestLink));
+			part.render(item.plan);
+			body.append(part.domNode);
+		} else if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
+			const { canDownload, canInspect, canReadGallery } = this.richActions(item);
+			const linkPolicy = item.markdown?.linkPolicy;
 			const externalLinks = linkPolicy === 'external';
 			const linkLifetime = canDownload || canInspect || externalLinks ? new AbortController() : undefined;
 			if (linkLifetime) disposables.add(toDisposable(() => linkLifetime.abort()));
@@ -944,13 +974,14 @@ export class ChatListItemRenderer extends Disposable {
 				readGalleryImage: canReadGallery
 					? (uri: URI, signal: AbortSignal) => this.options.readResponseResource!(this.item, uri, signal) : undefined,
 				codeBlockPresentation: item.type === 'agentMessage' ? this.options.codeBlockPresentation : undefined,
-				visible: this.options.isVisible() && (item.type !== 'reasoning' || this.options.thinkingExpansion.get(item.id) === true),
+				visible: this.options.isVisible() && (item.type === 'reasoning' ? this.options.thinkingExpansion.get(item.id) === true
+					: item.type === 'advisor' ? this.options.advisorExpansion.get(item.id) !== false : true),
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
 				synchronousInitialRender: this.options.synchronousInitialRender,
-				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
+				markdown: responseMarkdown(item),
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
-				markedExtensions: richContent && [chatMarkdownRichContentExtension(richContent)],
+				allowInlineDiffs: item.type === 'agentMessage',
 				fileReferenceDirectory: !externalLinks && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
 				actionHandler: linkLifetime
 					? (target: string) => {
@@ -1002,6 +1033,20 @@ export class ChatListItemRenderer extends Disposable {
 				}));
 				this.thinkingPart = thinking;
 				body.append(thinking.domNode);
+			} else if (item.type === 'advisor') {
+				const part = this.advisorPart = disposables.add(new ChatCollapsibleMarkdownContentPart(article.ownerDocument, markdown, {
+					expanded: this.options.advisorExpansion.get(item.id) ?? true,
+					visible: this.options.isVisible(),
+					summaryClassName: `${this.options.classPrefix}-item-label`,
+					title: this.accessibilityProvider.getAriaLabel(item),
+				}));
+				body = part.domNode;
+				article.append(body);
+				disposables.add(part.onDidChangeHeight(() => {
+					this.options.advisorExpansion.set(item.id, part.domNode.open);
+					this.options.onDidChangeHeight();
+					this.options.onDidChangeContent();
+				}));
 			} else {
 				body.append(markdown.domNode);
 			}
@@ -1019,7 +1064,8 @@ export class ChatListItemRenderer extends Disposable {
 			body.append(attachments);
 		}
 		if (item.type === 'turnError') {
-			disposables.add(new ChatErrorContentPart(article, item, this.options.classPrefix, this.options.onDidRequestErrorAction));
+			const ErrorPart = item.errorCode === 'rateLimited' || item.errorCode === 'usageLimited' ? ChatQuotaExceededPart : ChatErrorContentPart;
+			disposables.add(new ErrorPart(article, item, this.options.classPrefix, this.options.onDidRequestErrorAction));
 		} else if (item.detail) {
 			const detail = h(article.ownerDocument, 'p');
 			detail.className = `${this.options.classPrefix}-turn-error-detail`;
@@ -1039,29 +1085,42 @@ export class ChatListItemRenderer extends Disposable {
 				}),
 			}));
 		}
-		const references = this.options.messagePresentation?.getReferences?.(item);
-		if (references?.length) {
-			const actions = h(article.ownerDocument, 'div', { className: 'ash-chat-message-references' });
-			body.append(actions);
-			for (const reference of references) {
-				const button = disposables.add(new Button(actions, {
-					...defaultButtonStyles, label: reference.label, icon: Lxicon.codeReview,
-					presentation: 'quiet', size: 'small',
-				}));
-				button.domNode.dataset.chatReferenceId = reference.id;
-				disposables.add(button.onDidClick(() => reference.open(button.domNode)));
-			}
+		const getReferences = this.options.messagePresentation?.getReferences;
+		if (getReferences) {
+			let part: ChatReferencesContentPart | undefined;
+			this.updateReferences = beforeLayout => {
+				const references = getReferences(this.item);
+				if (!part && references.length) {
+					beforeLayout?.();
+					part = disposables.add(new ChatReferencesContentPart(body, article));
+				}
+				return part?.render(references, beforeLayout) === true;
+			};
 		}
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
 		if (item.type === 'agentMessage') {
+			let citations: ChatResponseCitationsContentPart | undefined;
+			this.updateCitations = beforeLayout => {
+				const sources = this.item.citations;
+				if (!citations && sources?.length) {
+					citations = disposables.add(this.instantiationService.createInstance(
+						ChatResponseCitationsContentPart, body, article,
+						(url: string) => { void this.opener.open(url, { openExternal: true, fromUserGesture: true }); },
+						() => { this.options.onDidChangeHeight(); this.options.onDidChangeContent(); },
+					));
+				}
+				return citations?.render(sources, beforeLayout) === true;
+			};
 			this.renderResponseFooter(disposables);
 		} else if (item.historyRedoTarget) {
 			this.renderMessageCommandActions(this.createMessageActions(), disposables, [{
 				id: RedoChatHistoryActionId, label: localize('chat.history.redoMessage', 'Redo last request'), icon: Lxicon.redo,
 			}], () => this.item.historyRedoTarget);
 		} else if (item.queueTarget) {
-			this.renderMessageCommandActions(this.createMessageActions(), disposables, [
+			const actions = this.createMessageActions();
+			this.options.pendingDrag?.attachDragHandle(article, actions, () => this.item.queueTarget, disposables);
+			this.renderMessageCommandActions(actions, disposables, [
 				{ id: ChatEditPendingRequestAction.ID, label: localize('chat.queue.rowEdit', 'Edit queued message'), icon: Lxicon.edit },
 				{ id: ChatSendPendingImmediatelyAction.ID, label: localize('chat.queue.rowSendNow', 'Send queued message immediately'), icon: Lxicon.enter },
 				{ id: ChatRemovePendingRequestAction.ID, label: localize('chat.queue.rowRemove', 'Remove queued message'), icon: Lxicon.close },
@@ -1070,7 +1129,7 @@ export class ChatListItemRenderer extends Disposable {
 			const actions = this.renderRequestActions(requestText, disposables);
 			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) && item.requestSource) {
 				if (item.canForkBeforeRequest) {
-					this.renderRestoreCheckpointAction(actions, item.requestSource, disposables);
+					disposables.add(this.instantiationService.createInstance(ChatRestoreCheckpointActionViewItem, actions, item.requestSource, this.options.isVisible));
 					const { sessionId, threadId, itemId } = item.requestSource;
 					disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
 				}
@@ -1117,6 +1176,10 @@ function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 	return left.text === right.text && sameContent(left.content, right.content) && sameItemPresentation(left, right);
 }
 
+function responseMarkdown(item: IChatListItem) {
+	return { value: item.text, supportHtml: item.markdown?.supportHtml, richContent: item.markdown?.richContent, supportThemeIcons: true, supportAlertSyntax: true };
+}
+
 function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.contextText === right.contextText && left.contextSourceUrl === right.contextSourceUrl
 		&& left.canGiveModelFeedback === right.canGiveModelFeedback && left.canForkAfterResponse === right.canForkAfterResponse
@@ -1147,7 +1210,7 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& left.attachmentSource?.threadId === right.attachmentSource?.threadId
 		&& left.attachmentSource?.itemId === right.attachmentSource?.itemId
 		&& left.attachmentSource?.kind === right.attachmentSource?.kind
-		&& sameAction(left.action, right.action);
+		&& sameAction(left.action, right.action) && sameAction(left.secondaryAction, right.secondaryAction);
 }
 
 function sameFileReferenceDirectory(left: IChatListItem, right: IChatListItem): boolean {

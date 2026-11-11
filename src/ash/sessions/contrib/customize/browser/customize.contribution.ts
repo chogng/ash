@@ -11,7 +11,7 @@ import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { Menus } from '../../../browser/menus.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { CustomizeEditorPane } from './customizeEditor.js';
 
 registerEditorPane({
@@ -29,7 +29,7 @@ registerAction2(class OpenCustomize extends Action2 {
 		});
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
-		await accessor.get(ISessionsLayoutService).openEntry({
+		await accessor.get(ISessionsEntryService).openEntry({
 			id: 'customize', workspaceMode: 'current', activityContext: 'sessions.activity.customizeSelected', content: 'editor', showEditorTabs: false,
 			restoreCommand: 'sessions.open.customize', focus: 'editor',
 			editorInput: {

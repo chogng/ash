@@ -57,6 +57,7 @@ fn diagnostic_cancellation_preserves_ordered_messages_and_late_phase() {
             id: "progress".into(),
             text: "working".into(),
             phase: Some(ash_protocol::MessagePhase::Commentary),
+            citations: None,
         },
     ));
     attempt.output(&ModelStreamEvent::MessageStarted {

@@ -305,7 +305,7 @@ test('Changes labels managed worktrees with their source repository and branch',
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		for (const session of sessions) {
 			await page.locator(`.ash-sessions-list [data-item="session:${session.sessionId}"] .ash-sessions-list-item`).click();
-			await new QuickAccess(page).runCommand('workbench.agentSessions.action.viewChanges');
+			await new QuickAccess(page).runCommand('workbench.sessions.auxiliaryBar.changesContainer');
 			const changes = page.locator('.ash-sessions-changes:visible');
 			await changes.getByRole('combobox', { name: 'Changes view mode' }).selectOption('tree');
 			await expect(changes.getByRole('treeitem', { name: `${basename(root)} (${session.branch})`, exact: true })).toBeVisible();

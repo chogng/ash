@@ -770,6 +770,8 @@ use crate::protocol::config::SkillSourceRemoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::SkillSourceSetEnablementParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::config::TaskModelSelectionDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::config::TimeContextConfigDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::config::ToolSearchConfigDto;
@@ -2367,6 +2369,12 @@ use crate::protocol::session::ThreadHistoryBoundary;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::ThreadSnapshotHistory;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ToolResultPreview;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ToolResultTextReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ToolResultTextReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::skills::SkillCatalogReloadDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::skills::SkillCompatibilityDto;
@@ -3014,6 +3022,8 @@ use ash_protocol::PermissionResponse;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::Personality;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::PlanReview;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::PlanStep;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::PlanStepStatus;
@@ -3041,6 +3051,8 @@ use ash_protocol::RequestUserInput;
 use ash_protocol::RequestUserInputResponse;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::RequestedDirectoryGrant;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ResponseCitation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ReviewTarget;
 #[cfg(any(test, feature = "export"))]
@@ -4214,6 +4226,11 @@ client_methods! {
     SessionThreadRead => "session/thread/read" {
         params: SessionThreadReadParams,
         response: SessionThreadReadResult,
+        serialization: SessionSharedRead,
+    },
+    ToolResultTextRead => "session/thread/toolResult/text/read" {
+        params: ToolResultTextReadParams,
+        response: ToolResultTextReadResult,
         serialization: SessionSharedRead,
     },
     ThreadGoalGet => "thread/goal/get" {
@@ -5553,6 +5570,11 @@ client_methods! {
         response: crate::protocol::git::GitRepositoryContextsResult,
         serialization: None,
     },
+    GitSessionComparison => "git/sessionComparison" {
+        params: crate::protocol::git::GitSessionComparisonParams,
+        response: crate::protocol::git::GitSessionComparisonResult,
+        serialization: None,
+    },
     GitRepositories => "git/repositories" {
         params: GitDiscoveryParams,
         response: GitRepositoriesResult,
@@ -6437,6 +6459,7 @@ typescript_bindings! {
     ash_protocol::InstructionText,
     ash_protocol::ModelInstructionSelection,
     ash_protocol::ModelInstructionMessages,
+    ash_protocol::ModelRoutingMode,
     crate::protocol::issues::IssueConfigDto,
     crate::protocol::issues::IssueConfigureParams,
     crate::protocol::issues::IssueRepository,
@@ -6934,6 +6957,7 @@ typescript_bindings! {
     DocumentCollaborationSubmitParams,
     DocumentCollaborationSubmitResult,
     ModelRefDto,
+    TaskModelSelectionDto,
     CodebaseModelsDto,
     CodebaseAutomaticContextDto,
     CodebaseConfigDto,
@@ -7292,6 +7316,9 @@ typescript_bindings! {
     ThreadGoalUpdatedNotification,
     ThreadGoalClearedNotification,
     ThreadSnapshotHistory,
+    ToolResultPreview,
+    ToolResultTextReadParams,
+    ToolResultTextReadResult,
     ThreadHistoryBoundary,
     CapabilitySupport,
     ModelAccess,
@@ -7383,6 +7410,7 @@ typescript_bindings! {
     PendingInteraction,
     InteractionDeadline,
     InteractionCancelReason,
+    PlanReview,
     RequestUserInput,
     RequestUserInputResponse,
     UserInputQuestion,
@@ -7392,6 +7420,7 @@ typescript_bindings! {
     DynamicToolCall,
     DynamicToolResponse,
     DynamicToolOutput,
+    ResponseCitation,
     ThreadItem,
     ToolActivity,
     ToolConfirmationPresentation,
@@ -7436,6 +7465,7 @@ typescript_bindings! {
     ReviewTarget,
     TurnKind,
     TurnInstructions,
+    ash_protocol::TurnModelRouting,
     Turn,
     TurnSkillLoad,
     Thread,
@@ -7972,6 +8002,10 @@ typescript_bindings! {
     crate::protocol::git::GitRepositoryContextsParams,
     crate::protocol::git::GitRepositoryContextDto,
     crate::protocol::git::GitRepositoryContextsResult,
+    crate::protocol::git::GitSessionComparisonParams,
+    crate::protocol::git::GitSessionComparisonDto,
+    crate::protocol::git::GitSessionComparisonResult,
+    crate::protocol::git::GitSessionComparisonFileDto,
     GitRepositoriesResult,
     GitRepositoryChangeDto,
     GitStatusResult,

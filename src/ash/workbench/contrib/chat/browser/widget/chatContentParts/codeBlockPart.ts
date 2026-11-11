@@ -15,7 +15,7 @@ import { Disposable, MutableDisposable, toDisposable } from '../../../../../../b
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import type { URI } from '../../../../../../base/common/uri.js';
 import { CodeEditorWidget } from '../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
-import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../../editor/common/config/fontInfo.js';
+import { getChatResultEditorOptions } from '../chatOptions.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
@@ -285,7 +285,7 @@ export class CodeBlockPart extends Disposable {
 			if (!this.measuredHeight) {
 				// Reserve normal-flow geometry before the viewport admits a document.
 				// Stop counting at the visible line limit, even for very large fences.
-				const font = this.font();
+				const { font } = getChatResultEditorOptions(this.configuration);
 				const maximum = data.renderOptions?.maxHeightInLines ?? 20;
 				const lines = data.text.split(/\r\n|\r|\n/, maximum).length;
 				this.editorContainer.style.height = `${Math.max(1, lines) * font.lineHeight + 16}px`;
@@ -352,7 +352,7 @@ export class CodeBlockPart extends Disposable {
 		if (this.isDisposed || !model || !editor) return;
 		width ??= this.editorContainer.clientWidth;
 		this.layoutWidth = width;
-		const font = this.font();
+		const { font } = getChatResultEditorOptions(this.configuration);
 		const maximum = this.data?.renderOptions?.maxHeightInLines ?? 20;
 		const contentHeight = editor.getContentHeight() || model.lineCount * font.lineHeight + 16;
 		const height = Math.max(font.lineHeight + 16, Math.min(contentHeight, maximum * font.lineHeight + 16));
@@ -362,20 +362,11 @@ export class CodeBlockPart extends Disposable {
 	}
 
 	private updateOptions(editor: CodeEditorWidget): void {
-		const font = this.font();
+		const { font, wordWrap } = getChatResultEditorOptions(this.configuration);
 		editor.updateOptions({
 			fontFamily: font.getMassagedFontFamily(), fontSize: font.fontSize, lineHeight: font.lineHeight,
-			wordWrap: this.configuration.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on' ? 'on' : 'off',
+			wordWrap,
 		});
 	}
 
-	private font(): BareFontInfo {
-		const family = this.configuration.getValue<string>(ChatEditorConfiguration.fontFamily)
-			|| this.configuration.getValue<string>(CodeEditorConfiguration.fontFamily) || EDITOR_FONT_DEFAULTS.fontFamily;
-		const size = this.configuration.getValue<number>(ChatEditorConfiguration.fontSize)
-			|| this.configuration.getValue<number>(CodeEditorConfiguration.fontSize);
-		const height = this.configuration.getValue<number>(ChatEditorConfiguration.lineHeight)
-			|| this.configuration.getValue<number>(CodeEditorConfiguration.lineHeight);
-		return BareFontInfo._create(family, 'normal', size, 'normal', 'normal', height, 0, 1, true);
-	}
 }

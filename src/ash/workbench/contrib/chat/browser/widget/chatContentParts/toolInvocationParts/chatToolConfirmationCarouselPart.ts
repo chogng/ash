@@ -5,6 +5,7 @@ import { Disposable, toDisposable } from '../../../../../../../base/common/lifec
 import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../../../../nls.js';
 import type { IChatToolInvocation } from '../../../../common/chatService/chatService.js';
+import { getToolActivityPresentation, getToolGroupSummary } from '../chatToolGroupSummary.js';
 
 /** Reviews adjacent calls while keeping exactly one actionable offer and one set of controls. */
 export class ChatToolConfirmationCarouselPart extends Disposable {
@@ -53,6 +54,7 @@ export class ChatToolConfirmationCarouselPart extends Disposable {
 	public showCurrent(): void { this.selectedId = this.currentId; this.update(); }
 	public render(items: readonly IChatToolInvocation[], currentId: string): void {
 		this.items = items;
+		this.domNode.setAttribute('aria-description', getToolGroupSummary(items));
 		if (currentId !== this.currentId || !items.some(item => item.call.itemId === this.selectedId)) this.selectedId = currentId;
 		this.currentId = currentId;
 		this.update();
@@ -71,6 +73,6 @@ export class ChatToolConfirmationCarouselPart extends Disposable {
 		this.current.enabled = !this.isCurrentSelected;
 		this.live.hidden = !this.isCurrentSelected;
 		this.preview.hidden = this.isCurrentSelected;
-		this.preview.textContent = item ? [item.call.name, item.call.argumentsJson, item.result?.text].filter(value => value !== undefined).join('\n\n') : '';
+		this.preview.textContent = item ? [getToolActivityPresentation(item).label, item.call.argumentsJson, item.result?.text].filter(value => value !== undefined).join('\n\n') : '';
 	}
 }

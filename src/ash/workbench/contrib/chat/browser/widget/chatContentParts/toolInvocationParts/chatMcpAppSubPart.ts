@@ -27,6 +27,7 @@ export class ChatMcpAppSubPart extends Disposable {
 	public readonly onDidChangeHeight = this.height.event;
 	private visible = true;
 	private opened = false;
+	public get keepMounted(): boolean { return this.opened; }
 
 	constructor(document: Document, coordinate: AgentAttachmentSource & { readonly contentIndex: number; }, artifact: Artifact, argumentsJson: string, result: ToolResult, delegate: IChatMcpAppDelegate | undefined,
 		@IInstantiationService instantiation: IInstantiationService,
@@ -51,7 +52,7 @@ export class ChatMcpAppSubPart extends Disposable {
 		this.viewport.className = 'ash-chat-mcp-app-viewport';
 		this.viewport.hidden = true;
 		this.domNode.append(this.viewport);
-		this.model = this._register(instantiation.createInstance(ChatMcpAppModel, coordinate, argumentsJson, result, delegate));
+		this.model = this._register(instantiation.createInstance(ChatMcpAppModel, coordinate, this.identity, argumentsJson, result, delegate));
 		this._register(this.model.onDidChangeHeight(() => this.height.fire()));
 		this._register(autorun(reader => {
 			const state = this.model.loadState.read(reader);
@@ -77,6 +78,7 @@ export class ChatMcpAppSubPart extends Disposable {
 			this.opened = false;
 			this.attachment.clear();
 			this.launch.focus();
+			this.height.fire();
 		}));
 		this._register(toDisposable(() => this.domNode.remove()));
 	}

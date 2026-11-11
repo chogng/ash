@@ -1,40 +1,78 @@
-import { localize2 } from '../../../../nls.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { createGeneralDocument, convertActiveTextToDocument, exportActiveDocument, exportDocumentArtifact, importDocumentArtifact } from './documentActions.js';
-import './documentAccessibility.js';
+import { addDisposableListener, getActiveElement, isHTMLElement } from '../../../../base/browser/dom.js';
+import { Disposable, DisposableMap, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+import { localize } from '../../../../nls.js';
+import { DocumentEditorPane } from './documentEditorPane.js';
+import { DocumentTypes } from '../../../services/documentEditor/common/documentTypes.js';
 
-registerAction2(class NewDocumentAction extends Action2 {
-	constructor() {
-		super({ id: 'workbench.action.document.new', title: localize2('document.new', 'New Document'), f1: true, menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: -0.5 } });
-	}
-	override run(accessor: ServicesAccessor): Promise<void> { return createGeneralDocument(accessor); }
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Document, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('document.accessibility.invalidVerbosity', 'Document accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('document.accessibility.verbosityTitle', 'Document accessibility help'); },
+		get description() { return localize('document.accessibility.verbosityDescription', 'Announce how to open accessibility help when a document receives focus.'); },
+	},
 });
 
-for (const format of ['text', 'markdown'] as const) {
-	registerAction2(class ConvertToDocumentAction extends Action2 {
-		constructor() {
-			super({
-				id: `workbench.action.document.import.${format}`, title: format === 'markdown'
-					? localize2('document.importMarkdown', 'Convert Active Markdown to Document')
-					: localize2('document.importText', 'Convert Active Text to Document'), f1: true
-			});
-		}
-		override run(accessor: ServicesAccessor): Promise<void> { return convertActiveTextToDocument(accessor, format); }
-	});
-	registerAction2(class ExportDocumentAction extends Action2 {
-		constructor() {
-			super({
-				id: `workbench.action.document.export.${format}`, title: format === 'markdown'
-					? localize2('document.exportMarkdown', 'Export Document as Markdown')
-					: localize2('document.exportText', 'Export Document as Plain Text'), f1: true
-			});
-		}
-		override run(accessor: ServicesAccessor): Promise<void> { return exportActiveDocument(accessor, format); }
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	AccessibleViewRegistry.register({
+		name: 'document', type, priority: 110,
+		getProvider(accessor) {
+			const editors = accessor.get(IEditorPart);
+			const pane = editors.activePane;
+			const active = getActiveElement(editors.domNode.ownerDocument);
+			if (!(pane instanceof DocumentEditorPane) || !pane.workingCopy || !isHTMLElement(active) || !active.closest('.stanza-structured-editor-pane')) return undefined;
+			const provider = new AccessibleContentProvider(AccessibleViewProviderId.Document, { type }, () => type === AccessibleViewType.View
+				? pane.workingCopy ? pane.getAccessibleContent() : ''
+				: [
+					...pane.getAccessibilityHelp(),
+					...(DocumentTypes.fileEditorsEnabled ? [
+						localize('document.accessibility.actions', '<keybinding:workbench.action.files.save> saves the document. New Document creates a general document. Convert Active Text to Document and Convert Active Markdown to Document create separate drafts and preserve the source.'),
+						localize('document.accessibility.export', 'Export Document as Markdown or Export Document as Plain Text creates a separate text draft. Markdown conversion reports unsupported content with its source position or node ID.'),
+					] : []),
+					localize('document.accessibility.close', 'Open Accessible View reads the document as text. Escape closes help or the accessible view and returns focus to the document.'),
+				].join('\n\n'),
+				() => { if (active.isConnected) active.focus(); else editors.activePane?.focus(); }, AccessibilityVerbositySettingId.Document);
+			provider.onDidChangeContent = pane.workingCopy.onDidChangeContent;
+			return provider;
+		},
 	});
 }
 
-for (const operation of ['import', 'export'] as const) registerAction2(class DocumentArtifactAction extends Action2 {
-	constructor() { super({ id: `workbench.action.document.${operation}.file`, title: operation === 'import' ? localize2('document.output.import', 'Import Document File…') : localize2('document.output.export', 'Export Document File…'), f1: true, menu: { id: MenuId.MenubarFileMenu, group: '2_files', order: operation === 'import' ? 10 : 11 } }); }
-	override run(accessor: ServicesAccessor): Promise<void> { return operation === 'import' ? importDocumentArtifact(accessor) : exportDocumentArtifact(accessor); }
-});
+class DocumentAccessibilityContribution extends Disposable {
+	constructor(@ILayoutService layout: ILayoutService, @IAccessibleViewService views: IAccessibleViewService, @IAccessibilityService accessibility: IAccessibilityService) {
+		super();
+		const listeners = this._register(new DisposableMap<HTMLElement, IDisposable>());
+		const synchronize = (): void => {
+			const containers = new Set(layout.containers);
+			for (const container of listeners.keys()) if (!containers.has(container)) listeners.deleteAndDispose(container);
+			for (const container of containers) {
+				if (listeners.has(container)) continue;
+				listeners.set(container, addDisposableListener(container, 'focusin', event => {
+					if (!isHTMLElement(event.target)) return;
+					const pane = event.target.closest('.stanza-structured-editor-pane');
+					if (!pane || event.relatedTarget instanceof container.ownerDocument.defaultView!.Node && pane.contains(event.relatedTarget)) return;
+					if (!accessibility.isScreenReaderOptimized()) return;
+					const hint = views.getOpenAriaHint(AccessibilityVerbositySettingId.Document);
+					if (hint) accessibility.status(hint);
+				}));
+			}
+		};
+		synchronize();
+		this._register(layout.onDidChangeActiveContainer(synchronize));
+	}
+}
+
+registerWorkbenchContribution('workbench.contrib.documentAccessibility', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(DocumentAccessibilityContribution));

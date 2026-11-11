@@ -6,8 +6,13 @@ import type { SearchResultImpl } from '../../search/browser/searchTreeModel/sear
 const header = '# Search: ';
 const fileHeader = '# File: ';
 
+export interface SearchEditorQuery extends IContentSearchQuery {
+	/** Canonical workspace root URI when opened from a folder. */
+	readonly workspaceRoot?: string;
+}
+
 /** The editable document is also the saved format; URIs keep multi-root results unambiguous. */
-export function serializeSearchResultForEditor(query: IContentSearchQuery, result?: SearchResultImpl): string {
+export function serializeSearchResultForEditor(query: SearchEditorQuery, result?: SearchResultImpl): string {
 	const lines = [header + JSON.stringify({ version: 1, query }), ''];
 	for (const file of result?.files ?? []) {
 		lines.push(fileHeader + file.resource.toString());
@@ -22,12 +27,12 @@ export function serializeSearchResultForEditor(query: IContentSearchQuery, resul
 }
 
 /** Validate user-edited and persisted headers at the document boundary. */
-export function parseSearchEditor(text: string): IContentSearchQuery {
+export function parseSearchEditor(text: string): SearchEditorQuery {
 	const firstLine = text.split('\n', 1)[0]!;
 	if (!firstLine.startsWith(header)) { throw new TypeError('Invalid search editor header'); }
 	const value = JSON.parse(firstLine.slice(header.length)) as { version?: unknown; query?: unknown; };
 	if (!value || value.version !== 1 || !value.query || typeof value.query !== 'object') { throw new TypeError('Invalid search editor format'); }
-	const query = value.query as Partial<IContentSearchQuery>;
+	const query = value.query as Partial<SearchEditorQuery>;
 	if (typeof query.text !== 'string' || query.text.length > 16384 || query.text.includes('\0')
 		|| !['literal', 'regex'].includes(query.patternKind!)
 		|| !['sensitive', 'insensitive', 'smart'].includes(query.caseSensitivity!)
@@ -35,10 +40,15 @@ export function parseSearchEditor(text: string): IContentSearchQuery {
 		|| !Array.isArray(query.includePatterns) || !query.includePatterns.every(pattern => typeof pattern === 'string')
 		|| !Array.isArray(query.excludePatterns) || !query.excludePatterns.every(pattern => typeof pattern === 'string')
 		|| (query.maxResults !== undefined && (!Number.isInteger(query.maxResults) || query.maxResults < 1 || query.maxResults > 5000))
-		|| (query.freshness !== undefined && query.freshness !== 'current' && query.freshness !== 'indexed')) {
+		|| (query.freshness !== undefined && query.freshness !== 'current' && query.freshness !== 'indexed')
+		|| (query.workspaceRoot !== undefined && (typeof query.workspaceRoot !== 'string' || !query.workspaceRoot))) {
 		throw new TypeError('Invalid search editor query');
 	}
-	return { text: query.text, patternKind: query.patternKind!, caseSensitivity: query.caseSensitivity!, wholeWord: query.wholeWord, includePatterns: query.includePatterns, excludePatterns: query.excludePatterns, maxResults: query.maxResults, freshness: query.freshness };
+	return {
+		text: query.text, patternKind: query.patternKind!, caseSensitivity: query.caseSensitivity!, wholeWord: query.wholeWord,
+		includePatterns: query.includePatterns, excludePatterns: query.excludePatterns, maxResults: query.maxResults, freshness: query.freshness,
+		...(query.workspaceRoot === undefined ? {} : { workspaceRoot: query.workspaceRoot }),
+	};
 }
 
 export function searchEditorLocation(text: string, lineNumber: number): { resource: URI; range: Range; } | undefined {

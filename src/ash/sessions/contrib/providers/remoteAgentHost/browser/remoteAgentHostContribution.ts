@@ -89,7 +89,7 @@ export class RemoteAgentHostContribution extends Disposable {
 			authorizeWorkspace: folderAuthorization && (async (target: SessionExecutionTarget, signal: AbortSignal, onTrustDeclined?: () => void) => {
 				// A tunnel borrows its published root grant and cannot widen permissions on the remote host.
 				if (tunnel) return isPublishedWorkspaceTrusted(target);
-				return folderAuthorization.authorize(target.root, signal, { api, label: connection.name }, onTrustDeclined);
+				return folderAuthorization.authorize([target.root], signal, { host: { api, label: connection.name }, onTrustDeclined });
 			}),
 		}));
 		resources.add(this.providers.registerProvider(provider));

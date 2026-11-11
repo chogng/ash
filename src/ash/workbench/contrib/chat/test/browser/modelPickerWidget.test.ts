@@ -12,6 +12,7 @@ import type { IModelPickerDelegate } from '../../browser/widget/input/modelPicke
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
 import { ChatModelSliderWidget } from '../../browser/widget/input/modelPicker/chatModelSliderWidget.js';
 import { ModelPickerWidget } from '../../browser/widget/input/modelPicker/modelPickerWidget.js';
+import { ChatInputModelSelectionController } from '../../browser/widget/input/chatInputModelSelectionController.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 
@@ -74,7 +75,7 @@ test('The Chat slider displays effective native reasoning effort and adjusts it 
 			selectReasoningEffort: async effort => { selected = effort; },
 		};
 		const panel = document.querySelector('div')!;
-		const picker = resources.add(new ChatModelSliderWidget(delegate, {
+		const picker = resources.add(new ChatModelSliderWidget(delegate, resources.add(new ChatInputModelSelectionController()), {
 			createInstance: () => ({
 				showContent: (options: Parameters<TabbedActionListWidget['showContent']>[0]) => resources.add(options.render(panel, () => { })),
 				dispose() { },
@@ -85,7 +86,7 @@ test('The Chat slider displays effective native reasoning effort and adjusts it 
 		const slider = () => panel.querySelector<HTMLElement>('[role="slider"]')!;
 		assert.equal(slider().getAttribute('aria-valuetext'), 'Medium');
 		slider().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
-		await Promise.resolve();
+		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(selected, 'high');
 		assert.equal(slider().getAttribute('aria-valuetext'), 'High');
 		assert.equal(document.activeElement, slider());

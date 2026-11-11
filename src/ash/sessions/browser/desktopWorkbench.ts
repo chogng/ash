@@ -1,6 +1,8 @@
 import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import { Dimension, h, type IDimension } from '../../base/browser/dom.js';
+import { observeResize } from '../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../base/browser/scheduler.js';
 import type { IPositionedRectangle } from '../../base/browser/geometry.js';
 import {
 	SerializableGrid,
@@ -15,13 +17,15 @@ import {
 	type ILayoutOffsetInfo,
 } from '../../platform/layout/browser/layoutService.js';
 import { DEFAULT_EMPTY_WINDOW_SIZE } from '../../platform/window/common/window.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Part } from '../../workbench/browser/part.js';
-import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
+import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
 import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.js';
+import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import {
 	Workbench,
 	type IWorkbenchOptions,
@@ -29,21 +33,26 @@ import {
 	type SessionsPartVisibilityChangeEvent,
 } from './workbench.js';
 import { SessionsLayoutPolicy } from './layoutPolicy.js';
+import { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
 import { DesktopEditorArea } from './parts/desktopEditorArea.js';
+import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
 import { SessionsPart } from './parts/sessionsPart.js';
+import { TitlebarPart } from './parts/titlebarPart.js';
 import { EDITOR_PART_DEFAULT_WIDTH, EDITOR_PART_MINIMUM_WIDTH } from './parts/editorPartSizing.js';
 import { Position } from '../../workbench/services/layout/browser/layoutService.js';
 
 /** Selects the desktop layout while the shared Workbench owns window services and Parts. */
 export class DesktopWorkbench extends Workbench {
-	constructor(
+	static create(
 		options: IWorkbenchOptions,
 		themes: ExtensionColorThemeService,
 		storage: IStorageService & IDisposable,
 		logger: LogService,
 		userDataFiles: IFileSystemProvider & IDisposable,
-	) {
-		super(DesktopWorkbenchLayout, options, themes, storage, logger, userDataFiles);
+	): DesktopWorkbench {
+		const workbench = new DesktopWorkbench(options.workspaceSelection, logger);
+		workbench.startup(DesktopWorkbenchLayout, options, themes, storage, userDataFiles);
+		return workbench;
 	}
 }
 
@@ -201,20 +210,18 @@ function createSessionsWorkbenchGridDescriptor(
 	): SerializedGridDescriptor => ({ type: 'leaf', data: partId, size, visible, priority });
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
-	const mainWidth = Math.max(0, dimension.width - (state.sidebar.visible ? state.sidebar.width : 0));
 	const editorPrimary = primaryPart === 'editor';
-	const contentWidth = mainWidth;
-	const contentHeight = bodyHeight;
-	const sidePaneWidth =
-		(state.editor.visible && !editorPrimary ? state.editor.width : 0) +
-		(state.auxiliarybar.visible ? state.auxiliarybar.width : 0);
-	const sessionsWidth = Math.max(0, contentWidth - sidePaneWidth);
+	const primaryWidth = Math.max(0, dimension.width - (state.auxiliarybar.visible ? state.auxiliarybar.width : 0));
+	const sidebarWidth = state.sidebar.visible ? state.sidebar.width : 0;
+	const sidePaneWidth = state.editor.visible && !editorPrimary ? state.editor.width : 0;
+	const sessionsWidth = Math.max(0, primaryWidth - sidebarWidth - sidePaneWidth);
 	const content: SerializedGridDescriptor = {
 		type: 'branch',
 		orientation: Orientation.HORIZONTAL,
-		size: contentHeight,
+		size: bodyHeight,
 		priority: SESSIONS_LAYOUT_PRIORITY,
 		children: [
+			leaf('sidebar', state.sidebar.width, state.sidebar.visible),
 			leaf('sessions', sessionsWidth, !editorPrimary, editorPrimary ? LayoutPriority.Normal : SESSIONS_LAYOUT_PRIORITY),
 			...(views.has('customview') ? [leaf('customview', sessionsWidth, false, SESSIONS_LAYOUT_PRIORITY)] : []),
 			leaf(
@@ -223,23 +230,22 @@ function createSessionsWorkbenchGridDescriptor(
 				state.editor.visible,
 				editorPrimary ? SESSIONS_LAYOUT_PRIORITY : LayoutPriority.Normal,
 			),
-			leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		],
 	};
 	return {
 		type: 'branch',
-		orientation: Orientation.VERTICAL,
-		size: dimension.height,
+		orientation: Orientation.HORIZONTAL,
+		size: dimension.width,
 		priority: LayoutPriority.Normal,
 		children: [
-			leaf('titlebar', titlebarHeight),
 			{
 				type: 'branch',
-				orientation: Orientation.HORIZONTAL,
-				size: bodyHeight,
+				orientation: Orientation.VERTICAL,
+				size: primaryWidth,
 				priority: SESSIONS_LAYOUT_PRIORITY,
-				children: [leaf('sidebar', state.sidebar.width, state.sidebar.visible), ...content.children],
+				children: [leaf('titlebar', titlebarHeight), content],
 			},
+			leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		],
 	};
 }
@@ -343,6 +349,7 @@ export class DesktopWorkbenchLayout
 	private readonly gridHandle = this._register(new MutableDisposable<SerializableGrid<ISerializableView>>());
 	private readonly gridChangeHandle = this._register(new MutableDisposable<IDisposable>());
 	private partUpdateDepth = 0;
+	private editorAutoVisibilitySuppressions = 0;
 	private compactTools = false;
 	private compactSidebarWidth = 0;
 	private sidebarSuppressed = false;
@@ -371,6 +378,8 @@ export class DesktopWorkbenchLayout
 
 	private primaryPart: 'sessions' | 'editor' = 'sessions';
 	private customViewVisible = false;
+	private mainEditor: DesktopMainEditorPart | undefined;
+	private auxiliaryBarDocked = false;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
@@ -379,6 +388,7 @@ export class DesktopWorkbenchLayout
 		container: HTMLElement,
 		options: SessionsWorkbenchLayoutOptions,
 		@IStorageService private readonly storageService: IStorageService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super({ root: container, focus: options.focus });
 		this.initialDimension = resolveSessionsInitialDimension(container, options.initialDimension);
@@ -416,11 +426,12 @@ export class DesktopWorkbenchLayout
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
 
-	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void {
+	public createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>, mainEditor?: DesktopMainEditorPart): void {
 		validateParts(parts);
 		if (this.grid) {
 			throw new Error('Sessions Parts are already attached');
 		}
+		this.mainEditor = mainEditor;
 		for (const partId of parts.keys()) {
 			this.views.set(
 				partId,
@@ -434,6 +445,14 @@ export class DesktopWorkbenchLayout
 				),
 			);
 		}
+		const auxiliary = this.view('auxiliarybar');
+		auxiliary.frame.classList.add('ash-sessions-auxiliarybar-frame');
+		const updateAuxiliaryFrame = () => {
+			const height = this.titlebarHeight;
+			auxiliary.setFrameInsets({ ...NoWorkbenchPartFrameInsets, top: height });
+			auxiliary.frame.style.setProperty('--ash-sessions-titlebar-height', `${height}px`);
+		};
+		updateAuxiliaryFrame();
 		this._register(requiredPart(parts, 'editor').onDidChangeConstraints(() => {
 			if (this.responsiveLayout) return;
 			if (this.partUpdateDepth === 0 && this.grid.width > 0 && this.grid.height > 0) {
@@ -447,6 +466,7 @@ export class DesktopWorkbenchLayout
 		this.rebuildGrid(state, this.initialDimension);
 		this._register(
 			this.view('titlebar').part.onDidChangeConstraints(() => {
+				updateAuxiliaryFrame();
 				// Grid and overlays follow the titlebar's new height.
 				if (this.grid.width > 0 && this.grid.height > 0)
 					this.layout(new Dimension(this.grid.width, this.grid.height));
@@ -454,6 +474,29 @@ export class DesktopWorkbenchLayout
 		);
 		// Save before the Grid is disposed; hidden views retain their cached user sizes.
 		this._register(toDisposable(() => this.saveState()));
+
+		const titlebar = this.view('titlebar').part;
+		const editor = this.view('editor').part;
+		if (titlebar instanceof TitlebarPart && editor instanceof DesktopEditorArea) {
+			this.registerToolHeaderLayout(titlebar, editor);
+		}
+	}
+
+	private registerToolHeaderLayout(titlebar: TitlebarPart, editor: DesktopEditorArea): void {
+		const setHost = (host: HTMLElement | undefined) => editor.setToolHeaderHost(host);
+		const update = this._register(new AnimationFrameScheduler(this.domNode.ownerDocument.defaultView!, () => {
+			// An empty editor area still owns its side of the split titlebar.
+			const canDock = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' && !editor.hasProductPage
+				&& this.isPartVisible('sessions') && this.isPartVisible('editor');
+			titlebar.layoutToolHeaders(canDock ? editor.domNode.getBoundingClientRect().left : undefined, setHost);
+		}));
+		this._register(this.onDidLayoutMainContainer(() => update.schedule()));
+		this._register(observeResize([editor.domNode, titlebar.domNode], () => update.schedule(), { box: 'border-box' }));
+		const modeKeys = new Set([SessionsWorkspaceModeContext.key]);
+		this._register(this.contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(modeKeys)) update.schedule();
+		}));
+		update.schedule();
 	}
 
 	override get mainContainerOffset(): ILayoutOffsetInfo {
@@ -499,13 +542,9 @@ export class DesktopWorkbenchLayout
 		this.gridHandle.value = this.grid;
 		this.grid.layout(dimension.width, dimension.height);
 		this.restorePartVisibility();
+		this.updateTitlebarGeometry();
 		this.gridChangeHandle.value = combinedDisposable(this.grid.onDidSashChange(() => {
-			const area = this.view('editor').part;
-			if (area instanceof DesktopEditorArea && !this.compactTools && this.isPartVisible('sessions') && this.isPartVisible('editor')) {
-				const editor = this.getViewSize(this.view('editor')).width;
-				if (this.primaryPart === 'sessions') this.sidePaneWidth = editor;
-				area.rememberWidth(editor / (editor + this.getViewSize(this.view('sessions')).width));
-			}
+			this.rememberToolWidth();
 			this.saveState();
 		}), this.grid.onDidChange(() => {
 			if (this.partUpdateDepth === 0) {
@@ -522,7 +561,7 @@ export class DesktopWorkbenchLayout
 					this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 
 				this.updateContentCorners();
-				this.updateSidebarWidth();
+				this.updateTitlebarGeometry();
 				this.publishPartVisibility();
 				this.saveState();
 				// Publish completed sash geometry to overlays and the shared startup cache.
@@ -530,6 +569,16 @@ export class DesktopWorkbenchLayout
 			}
 		}));
 		if (restoreFocus && focused.isConnected) focused.focus({ preventScroll: true });
+	}
+
+	private rememberToolWidth(): void {
+		const area = this.view('editor').part;
+		if (!(area instanceof DesktopEditorArea) || this.primaryPart !== 'sessions' || this.compactTools
+			|| !this.isPartVisible('sessions') || !this.isPartVisible('editor')) return;
+		const editorWidth = this.getViewSize(this.view('editor')).width;
+		if (this.sidePaneWidth === editorWidth) return;
+		this.sidePaneWidth = editorWidth;
+		area.rememberWidth(editorWidth / (editorWidth + this.getViewSize(this.view('sessions')).width));
 	}
 
 	private restorePartVisibility(): void {
@@ -546,7 +595,6 @@ export class DesktopWorkbenchLayout
 		assertDimension(dimension);
 		if (this.responsiveLayout) return;
 		const wasCompact = this.compactTools;
-		const widthChanged = dimension.width !== this.grid.width;
 		const focused = this.mainContainer.ownerDocument.activeElement;
 		if (this.partUpdateDepth === 0) {
 			this.responsiveLayout = true;
@@ -556,29 +604,22 @@ export class DesktopWorkbenchLayout
 				this.layoutSidebar(dimension);
 				this.updateContentCorners();
 				this.compositionChanged.fire();
-				const editor = this.view('editor').part;
-				const initialWidth = !this.compactTools && this.primaryPart === 'sessions' && this.isPartVisible('editor') && editor instanceof DesktopEditorArea
-					? editor.takeInitialWidth(dimension.width - (this.isPartVisible('sidebar') ? this.getPartSize('sidebar').width : 0)
-						- (this.isPartVisible('auxiliarybar') ? this.detailsWidth : 0)) : undefined;
-				if (initialWidth !== undefined) this.sidePaneWidth = initialWidth;
-				const restoreToolWidth = !this.compactTools && this.primaryPart === 'sessions'
-					&& editor instanceof DesktopEditorArea && !this.grid.hasMaximizedView()
-					&& this.isPartVisible('editor') && (widthChanged || wasCompact || initialWidth !== undefined);
-				if (restoreToolWidth) {
-					this.grid.layout(dimension.width, dimension.height);
-					if (wasCompact) {
-						this.resizeView(this.view('sidebar'), new Dimension(this.compactSidebarWidth, dimension.height));
-						this.resizeView(this.view('auxiliarybar'), new Dimension(this.detailsWidth, dimension.height));
-					}
-					this.resizeView(this.view('editor'), new Dimension(this.sidePaneWidth, dimension.height));
-				}
+				this.grid.layout(dimension.width, dimension.height);
+				this.layoutToolWidth(wasCompact, dimension.height);
 			} finally {
 				this.partUpdateDepth--;
 				this.responsiveLayout = false;
 			}
 		}
+		// Lay out the Parts after the sizing pass, which defers their layout calls.
 		this.grid.layout(dimension.width, dimension.height);
-		this.updateSidebarWidth();
+		if (this.auxiliaryBarDocked) {
+			const width = this.isPartRequested('auxiliarybar') && this.isPartVisible('editor') && !this.customViewVisible
+				? this.detailsWidth : undefined;
+			this.mainEditor!.layoutDockedAuxiliaryBar(width);
+			this.updateContentCorners();
+		}
+		this.updateTitlebarGeometry();
 		if (this.partUpdateDepth > 0) return;
 		if (
 			this.primaryPart === 'editor' &&
@@ -591,7 +632,7 @@ export class DesktopWorkbenchLayout
 		const sidebarLostFocus = this.sidebarSuppressed && focused && this.view('sidebar').part.domNode.contains(focused);
 		if (sidebarLostFocus && this.isPartVisible('sessions')) {
 			this.focus();
-		} else if (sidebarLostFocus || this.compactTools && focused && this.mainContainer.contains(focused) && focused.closest('[hidden]')) {
+		} else if (sidebarLostFocus || (this.compactTools || this.auxiliaryBarDocked) && focused && this.mainContainer.contains(focused) && focused.closest('[hidden]')) {
 			const area = this.view('editor').part;
 			if (area instanceof DesktopEditorArea && this.isPartVisible('editor')) area.focusCurrentTool();
 		}
@@ -600,6 +641,24 @@ export class DesktopWorkbenchLayout
 		super.layout(dimension);
 		// Reload can precede the periodic storage save; commit only the completed Part arrangement.
 		this.saveState();
+	}
+
+	private layoutToolWidth(wasCompact: boolean, height: number): void {
+		if (this.compactTools || this.primaryPart !== 'sessions' || this.grid.hasMaximizedView()
+			|| !this.isPartVisible('sessions') || !this.isPartVisible('editor')) return;
+		const editor = this.view('editor');
+		const conversation = this.view('sessions');
+		if (!(editor.part instanceof DesktopEditorArea)) return;
+		if (wasCompact) {
+			this.resizeView(this.view('sidebar'), new Dimension(this.compactSidebarWidth, height));
+			this.resizeView(this.view('auxiliarybar'), new Dimension(this.detailsWidth, height));
+		}
+		const currentWidth = this.getViewSize(editor).width;
+		if (editor.part.hasTools && !editor.part.hasProductPage) {
+			const available = currentWidth + this.getViewSize(conversation).width;
+			this.sidePaneWidth = editor.part.getPreferredWidth(available, conversation.minimumWidth, this.sidePaneWidth);
+		}
+		if (this.sidePaneWidth !== currentWidth) this.grid.resizeView(editor, { width: this.sidePaneWidth });
 	}
 
 	private layoutSidebar(dimension: IDimension): void {
@@ -611,7 +670,7 @@ export class DesktopWorkbenchLayout
 			return;
 		}
 		const centerWidth = (['sessions', 'editor', 'auxiliarybar', 'customview'] as const)
-			.filter(id => this.isPartVisible(id))
+			.filter(id => this.isPartVisible(id) && !(this.auxiliaryBarDocked && id === 'auxiliarybar'))
 			.reduce((width, id) => width + this.view(id).minimumWidth, 0);
 		const wasSuppressed = this.sidebarSuppressed;
 		this.sidebarSuppressed = requested && dimension.width < sidebar.minimumWidth + centerWidth;
@@ -633,7 +692,7 @@ export class DesktopWorkbenchLayout
 		const wanted = (id: 'sidebar' | 'sessions' | 'editor' | 'auxiliarybar') =>
 			this.desiredViewVisible(id) && !this.unavailableParts.has(id);
 		const sidebar = wanted('sidebar') ? this.view('sidebar').minimumWidth : 0;
-		const details = wanted('auxiliarybar') ? this.view('auxiliarybar').part.minimumWidth : 0;
+		const details = !this.auxiliaryBarDocked && wanted('auxiliarybar') ? this.view('auxiliarybar').part.minimumWidth : 0;
 		const conversationView = this.view('sessions');
 		const workspaceWidth = dimension.width;
 		const eligible = !this.customViewVisible && wanted('editor') && area.hasTools;
@@ -655,13 +714,20 @@ export class DesktopWorkbenchLayout
 		if (this.customViewVisible) {
 			this.applyCustomViewVisibility();
 		} else if (this.compactTools || wasCompact) {
-			const centerWidth = single ? (this.narrowConversation ? conversation : area.currentMinimumWidth) : pairWidth;
+			let centerWidth = single ? (this.narrowConversation ? conversation : area.currentMinimumWidth) : pairWidth;
+			if (single && !this.narrowConversation && this.auxiliaryBarDocked && wanted('auxiliarybar')) {
+				// In the single-editor layout, make room for requested details before navigation.
+				const dockedWidth = centerWidth + DockedAuxiliaryBarController.MIN_WIDTH;
+				if (workspaceWidth >= dockedWidth) centerWidth = dockedWidth;
+			}
 			this.setViewVisible(this.view('sidebar'), wanted('sidebar') && (!this.compactTools || workspaceWidth >= sidebar + centerWidth));
 			this.setViewVisible(this.view('auxiliarybar'), wanted('auxiliarybar') && !this.compactTools);
 			this.setViewVisible(this.view('sessions'), wanted('sessions') && (!single || this.narrowConversation));
 			this.setViewVisible(this.view('editor'), wanted('editor') && (!single || !this.narrowConversation));
 		}
-		conversationView.setConversationOverflow(overflow && this.isPartVisible('editor'));
+		// A body wider than the window must not widen the titlebar above it.
+		conversationView.setConversationOverflow((overflow && this.isPartVisible('editor'))
+			|| (wanted('sessions') && dimension.width < conversationView.part.minimumWidth));
 	}
 
 	/** Part changes share one geometry commit when several Parts change together. */
@@ -722,10 +788,37 @@ export class DesktopWorkbenchLayout
 		this.layout(dimension);
 	}
 
+	public setAuxiliaryBarDocked(docked: boolean): void {
+		if (docked === this.auxiliaryBarDocked) return;
+		const editor = this.mainEditor;
+		if (!editor) throw new Error('Docking the Auxiliary Bar requires the main EditorPart.');
+		const view = this.view('auxiliarybar');
+		this.auxiliaryBarDocked = docked;
+		if (docked) {
+			// The retained frame stays in the outer Grid as a hidden leaf. The same Part moves into the editor.
+			this.setViewVisible(view, false);
+			editor.setDockedAuxiliaryBar({
+				part: view.part,
+				home: view.frame,
+				resize: width => this.resizePart('auxiliarybar', { width, height: 0 }),
+			});
+		} else {
+			editor.setDockedAuxiliaryBar(undefined);
+			this.setViewVisible(view, this.isPartRequested('auxiliarybar') && !this.customViewVisible);
+		}
+	}
+
 	isPartVisible(partId: string): boolean {
 		if (!this.views.has(partId as SessionsPartId)) return false;
-
+		if (partId === 'auxiliarybar' && this.auxiliaryBarDocked) return !this.view(partId).part.domNode.hidden;
 		return this.isViewVisible(this.view(partId as SessionsPartId));
+	}
+	suppressEditorPartAutoVisibility(): IDisposable {
+		this.editorAutoVisibilitySuppressions++;
+		return toDisposable(() => this.editorAutoVisibilitySuppressions--);
+	}
+	isEditorPartAutoVisibilitySuppressed(): boolean {
+		return this.editorAutoVisibilitySuppressions > 0;
 	}
 	isPartAvailable(partId: string): boolean {
 		if (!this.views.has(partId as SessionsPartId)) return false;
@@ -755,6 +848,10 @@ export class DesktopWorkbenchLayout
 	getPartSize(partId: string): Dimension {
 		const view = this.views.get(partId as SessionsPartId);
 		if (!view) return new Dimension(0, 0);
+		if (partId === 'auxiliarybar' && this.auxiliaryBarDocked) {
+			const size = this.mainEditor!.dockedAuxiliaryBarSize;
+			return this.isPartVisible(partId) ? new Dimension(size.width, size.height) : new Dimension(this.detailsWidth, 0);
+		}
 		const size = this.getViewSize(view);
 		const width = partId === 'auxiliarybar' && !this.isPartVisible(partId) ? this.detailsWidth : size.width;
 		return new Dimension(width, size.height);
@@ -767,9 +864,29 @@ export class DesktopWorkbenchLayout
 
 		if (partId === 'auxiliarybar') {
 			this.detailsWidth = dimension.width;
+			if (this.auxiliaryBarDocked) {
+				if (this.isPartVisible(partId)) this.mainEditor!.layoutDockedAuxiliaryBar(this.detailsWidth);
+				this.saveState();
+				return;
+			}
 		}
-		if (this.primaryPart === 'sessions' && partId === 'editor') this.sidePaneWidth = dimension.width;
+		if (!this.auxiliaryBarDocked && (partId === 'sidebar' || partId === 'sessions' || partId === 'editor') && this.isPartVisible(partId) && this.isPartVisible('auxiliarybar')) {
+			const otherMinimum = (['sidebar', 'sessions', 'editor'] as const)
+				.filter(id => id !== partId && this.isPartVisible(id))
+				.reduce((width, id) => width + this.view(id).minimumWidth, 0);
+			const requiredWidth = dimension.width + otherMinimum;
+			// An explicit resize can borrow room from the outer auxiliary column.
+			if (requiredWidth > this.getPartSize('titlebar').width) {
+				this.grid.resizeView(this.view('titlebar'), { width: requiredWidth });
+			}
+		}
 		this.resizeView(this.view(partId as SessionsPartId), dimension);
+		if (this.primaryPart === 'sessions' && partId === 'editor' &&
+			(!(this.view('editor').part instanceof DesktopEditorArea) || !this.isPartVisible('editor') || !this.isPartVisible('sessions'))) {
+			this.sidePaneWidth = dimension.width;
+		} else if (partId === 'editor' || partId === 'sessions') {
+			this.rememberToolWidth();
+		}
 		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
 
@@ -886,11 +1003,10 @@ export class DesktopWorkbenchLayout
 		}
 	}
 
-	private updateSidebarWidth(): void {
-		const width = this.isViewVisible(this.view('sidebar'))
-			? this.getViewSize(this.view('sidebar')).width
-			: 0;
-		this.mainContainer.style.setProperty('--ash-sessions-sidebar-width', `${width}px`);
+	private updateTitlebarGeometry(): void {
+		const visibleWidth = (id: 'sidebar' | 'auxiliarybar') => this.isPartVisible(id) ? this.getViewSize(this.view(id)).width : 0;
+		this.mainContainer.style.setProperty('--ash-sessions-sidebar-width', `${visibleWidth('sidebar')}px`);
+		this.mainContainer.style.setProperty('--ash-titlebar-trailing-region-width', `${this.auxiliaryBarDocked ? 0 : visibleWidth('auxiliarybar')}px`);
 	}
 
 	private publishPartVisibility(): void {
@@ -908,6 +1024,7 @@ export class DesktopWorkbenchLayout
 
 	private isViewVisible(view: ISerializableView): boolean { return this.grid.isViewVisible(view); }
 	private setViewVisible(view: ISerializableView, visible: boolean): void {
+		if (this.auxiliaryBarDocked && view === this.view('auxiliarybar')) visible = false;
 		this.grid.setViewVisible(view, visible && !(!this.compactTools && this.sidebarSuppressed && view === this.view('sidebar')));
 	}
 	private getViewSize(view: ISerializableView): IDimension { return this.grid.getViewSize(view); }

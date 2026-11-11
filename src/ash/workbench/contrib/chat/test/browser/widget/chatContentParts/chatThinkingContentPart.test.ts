@@ -32,7 +32,7 @@ suite('Chat thinking transcript lifecycle', () => {
 	suiteSetup(() => { getWindows(); });
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	for (const classPrefix of ['ash-chat', 'ash-cowork']) {
+	for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 		test(`${classPrefix} retains one disclosure and restores user expansion after completion`, async () => {
 			using resources = new DisposableStore();
 			const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));

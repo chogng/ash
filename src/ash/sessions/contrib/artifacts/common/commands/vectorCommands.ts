@@ -1,7 +1,7 @@
 import { moveDesignNetworkVertices, removeDesignNetworkVertices, splitDesignNetworkEdge, toDesignVectorNetwork, withDesignVectorNetwork } from '../model/designVectorNetwork.js';
 import { mergeDesignNetworkVertices, simplifyDesignNetwork } from '../model/designVectorTopology.js';
 import type { DesignModel } from '../model/designModel.js';
-import { flattenDesignShapes, type DesignEndpoint, type DesignPathNode, type DesignShape } from '../model/document.js';
+import { flattenDesignShapes, type DesignEndpoint, type DesignPathNode, type DesignShape } from '../model/designDocument.js';
 import { designWidthLocation, nearestDesignWidthLocation, supportsDesignVariableWidth } from '../model/designVariableWidth.js';
 import { designPathContours, designShapeContours, splitDesignPathSegment, withDesignPathContours, type DesignPath, type DesignPathContour } from '../model/designVector.js';
 

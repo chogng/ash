@@ -1,10 +1,12 @@
 use super::automatic_recap_model;
+use crate::model_catalog::short_text_reasoning_effort;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_protocol::ModelId;
 use ash_protocol::ModelInfo;
 use ash_protocol::ModelPurpose;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use ash_protocol::ReasoningEffort;
 
 fn entry(provider: &str, name: &str, recommended: bool) -> ModelCatalogEntry {
     let model = ModelRef::new(
@@ -16,6 +18,28 @@ fn entry(provider: &str, name: &str, recommended: bool) -> ModelCatalogEntry {
         info.recommended_for.push(ModelPurpose::ThreadRecap);
     }
     ModelCatalogEntry::from_info(model, &info)
+}
+
+#[test]
+fn recap_effort_uses_the_explicit_choice_or_a_supported_low_cost_level() {
+    let mut model = entry("openai", "gpt-6-luna", true);
+    model.supported_reasoning_efforts = [ReasoningEffort::Low, ReasoningEffort::High]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+
+    assert_eq!(
+        short_text_reasoning_effort(Some(&model), Some(ReasoningEffort::High)),
+        Some(ReasoningEffort::High)
+    );
+    assert_eq!(
+        short_text_reasoning_effort(Some(&model), None),
+        Some(ReasoningEffort::Low)
+    );
+    assert_eq!(
+        short_text_reasoning_effort(Some(&model), Some(ReasoningEffort::Max)),
+        Some(ReasoningEffort::Low)
+    );
 }
 
 #[test]

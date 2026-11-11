@@ -300,6 +300,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				: workspace && !runtime ? workspace : undefined;
 			const target = draft?.workspace ?? (source ? selectionFromResource(sessionWorkspaceUri(source)) : undefined);
 			const devContainer = draft?.devContainer === true || runtime?.providerId === 'ash.dev-containers';
+			// An incomplete Project draft must wait for its own folder instead of using a host default.
+			if (draft?.projectId && target?.type === 'current') {
+				return { providerId, workspace: target, projectId: draft.projectId };
+			}
 			if (target && target.type !== 'current' && await this.canReuseWorkspace(provider, target, devContainer)
 				&& this.isAvailableForNewSession(provider)) {
 				const projectId = draft?.projectId ?? (session && providerId === this.defaultProviderId
@@ -379,6 +383,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			this._activeUntitledSessionId = sessions[0]?.untitledSessionId;
 		}
 		this.restoreSelection();
+		this._onDidChange.fire();
+	}
+
+	setUntitledSessionArtifactKind(untitledSessionId: string, kind: IUntitledChatSession['artifactKind']): void {
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
+		if (!current || current.artifactKind === kind) return;
+		this._untitledSessions = this._untitledSessions.map(session => session === current ? { ...session, artifactKind: kind } : session);
 		this._onDidChange.fire();
 	}
 
@@ -543,7 +554,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (this.isDisposed) return;
 		this.materializations.delete(untitledSessionId);
 		this._untitledSessions = this._untitledSessions.map(draft => draft.untitledSessionId === untitledSessionId
-			? { ...draft, creationId: createUuid() } : draft);
+			? { ...draft, creationId: createUuid(), artifactKind: undefined } : draft);
 		// Catalog refresh may already contain a newer projection of the accepted request.
 		if (!this._sessions.some(session => session.sessionId === active.session.sessionId)) {
 			this._sessions = [active.session, ...this._sessions];

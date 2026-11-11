@@ -538,9 +538,10 @@ function toAgentTreeNode(node: AgentExecutionNode): AgentTreeNode {
 		threadId: node.threadId,
 		threadSequence: node.threadSequence,
 		title: node.title,
-		origin: node.parentThreadId || node.forkedFromId
-			? { type: 'fork', parentThreadId: node.parentThreadId ?? node.forkedFromId!, parentSequence: node.threadSequence }
-			: { type: 'root' },
+		origin: node.origin?.type === 'agentSpawn' ? node.origin
+			: node.parentThreadId || node.forkedFromId
+				? { type: 'fork', parentThreadId: node.parentThreadId ?? node.forkedFromId!, parentSequence: node.threadSequence }
+				: { type: 'root' },
 		membershipStatus: 'active',
 		executionStatus: node.executionStatus,
 		...(node.currentTurnId ? { currentTurnId: node.currentTurnId } : {}),

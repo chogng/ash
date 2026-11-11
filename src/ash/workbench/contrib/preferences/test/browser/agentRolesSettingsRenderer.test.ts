@@ -38,7 +38,7 @@ class RolesFixture extends DisposableStore {
 	public catalog: AgentRoleCatalog = {
 		agents: [definition('reviewer'), definition('develop/intent', 'workflow'), {
 			...definition('reviewer', 'any'), source: { type: 'directory', id: 'project' },
-			resource: URI.file('/workspace/.ash/agents/reviewer.md'), contentDigest: 'custom-reviewer',
+			resource: URI.file('/workspace/.ash/agents/reviewer.md'), contentDigest: 'custom-reviewer', prompt: 'Instructions for the custom reviewer',
 		}], diagnostics: [],
 	};
 	public pending: Promise<AgentRoleCatalog> | undefined;
@@ -66,49 +66,36 @@ class RolesFixture extends DisposableStore {
 
 const settle = (): Promise<void> => new Promise(resolve => setImmediate(resolve));
 
-test('Agent settings group exact sources, retain disclosures and open independent custom drafts', async () => {
+test('Agent settings only show custom definitions and keep their editor links current', async () => {
 	using f = new RolesFixture();
 	f.renderer.setVisible(true); await settle();
-	assert.deepEqual([...f.root.querySelectorAll('h4')].map(node => node.textContent), ['Built-in Agents', 'Workflow roles', 'Custom Agents']);
-	assert.equal(f.root.querySelectorAll('.ash-agent-role').length, 3);
-	assert.equal(f.root.querySelector<HTMLDetailsElement>('.ash-agent-roles-workflow')!.open, false);
-	const builtIn = f.root.querySelector<HTMLDetailsElement>('.ash-agent-role')!;
-	builtIn.open = true;
-	const copy = builtIn.querySelector<HTMLButtonElement>('button')!;
-	copy.click(); await settle();
-	assert.equal(f.inputs.length, 1);
-	const draft = f.inputs[0]!;
-	assert.equal(draft.resource.scheme, 'untitled');
-	const frontmatter = JSON.parse(draft.initialText!.split('\n---\n')[0]!.slice(4));
-	assert.equal(frontmatter.name, 'reviewer-custom');
-	assert.equal(frontmatter.launch, undefined);
-	assert.equal(frontmatter.version, undefined);
-	assert.equal(frontmatter.callers, undefined);
-	assert.equal(frontmatter.delegates, undefined);
-	assert.deepEqual(frontmatter.tools, []);
-	assert.ok(draft.initialText!.endsWith('Instructions for reviewer\n'));
-	assert.equal(f.root.querySelectorAll('.ash-agent-role')[1]!.querySelector('button'), null);
+	assert.deepEqual([...f.root.querySelectorAll('h4')].map(node => node.textContent), ['Custom Agents']);
+	assert.equal(f.root.querySelectorAll('.ash-agent-role').length, 1);
+	const item = f.renderer.getNodes()[0]?.element;
+	assert.ok(item?.kind === 'item');
+	assert.ok(!item.keywords?.includes('develop/intent'), 'Internal workflow roles are not searchable in settings');
+	const custom = f.root.querySelector<HTMLDetailsElement>('.ash-agent-role')!;
+	custom.open = true;
+	const edit = custom.querySelector<HTMLButtonElement>('button')!;
+	edit.click(); await settle();
+	assert.deepEqual(f.inputs.map(input => input.resource.toString()), ['file:///workspace/.ash/agents/reviewer.md']);
 	// A fresh snapshot with the same digest retains DOM and keeps actions usable.
 	f.catalog = { ...f.catalog, agents: f.catalog.agents.map(role => ({ ...role })) };
-	f.root.querySelector<HTMLButtonElement>('button')!.click(); await settle();
-	assert.equal(f.root.querySelector('.ash-agent-role'), builtIn);
-	assert.equal(builtIn.open, true);
-	copy.click(); await settle();
-	assert.equal(f.inputs.length, 2);
-	assert.notEqual(f.inputs[0]!.resource.toString(), f.inputs[1]!.resource.toString());
-	f.root.querySelectorAll('.ash-agent-role')[2]!.querySelector<HTMLButtonElement>('button')!.click(); await settle();
-	assert.equal(f.inputs[2]!.resource.toString(), 'file:///workspace/.ash/agents/reviewer.md');
+	const refresh = f.root.querySelector<HTMLButtonElement>('button')!;
+	refresh.click(); await settle();
+	assert.equal(f.root.querySelector('.ash-agent-role'), custom);
+	assert.equal(custom.open, true);
 	// Source metadata can change without changing the definition's content digest.
 	f.catalog = {
 		...f.catalog, agents: f.catalog.agents.map(role => role.source.type === 'directory'
 			? { ...role, resource: URI.file('/renamed/.ash/agents/reviewer.md') } : role)
 	};
-	f.root.querySelector<HTMLButtonElement>('button')!.click(); await settle();
-	f.root.querySelectorAll('.ash-agent-role')[2]!.querySelector<HTMLButtonElement>('button')!.click(); await settle();
-	assert.equal(f.inputs[3]!.resource.toString(), 'file:///renamed/.ash/agents/reviewer.md');
+	refresh.click(); await settle();
+	f.root.querySelector<HTMLButtonElement>('.ash-agent-role button')!.click(); await settle();
+	assert.equal(f.inputs[1]?.resource.toString(), 'file:///renamed/.ash/agents/reviewer.md');
 	f.catalog = { ...f.catalog, agents: f.catalog.agents.map(role => role.source.type === 'directory' ? { ...role, resource: undefined } : role) };
-	f.root.querySelector<HTMLButtonElement>('button')!.click(); await settle();
-	assert.equal(f.root.querySelectorAll('.ash-agent-role')[2]!.querySelector('button'), null);
+	refresh.click(); await settle();
+	assert.equal(f.root.querySelector('.ash-agent-role button'), null);
 });
 
 test('Agent settings retire late reads on disconnect, report diagnostics and provide accessible content', async () => {
@@ -127,9 +114,10 @@ test('Agent settings retire late reads on disconnect, report diagnostics and pro
 	const providers = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('agentRolesSettings-'));
 	assert.equal(providers.length, 2);
 	const help = f.services.invokeFunction(accessor => providers.find(provider => provider.type === AccessibleViewType.Help)!.getProvider(accessor))!;
-	assert.match(help.provideContent(), /frozen configuration/);
+	assert.match(help.provideContent(), /accessible view lists custom Agents/);
 	const view = f.services.invokeFunction(accessor => providers.find(provider => provider.type === AccessibleViewType.View)!.getProvider(accessor))!;
-	assert.match(view.provideContent(), /Instructions for develop\/intent/);
+	assert.match(view.provideContent(), /Instructions for the custom reviewer/);
+	assert.doesNotMatch(view.provideContent(), /Instructions for reviewer|develop\/intent/);
 	help.dispose(); view.dispose(); assert.equal(browserEnvironment.window.document.activeElement, summary);
 	f.renderer.dispose();
 	assert.equal(AccessibleViewRegistry.getImplementations().some(provider => provider.name.startsWith('agentRolesSettings-')), false);
@@ -140,8 +128,8 @@ test('Agent settings use the Chinese catalog for controls and accessibility help
 	setNlsResolver((bundle, key, fallback, args) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, args));
 	try {
 		using f = new RolesFixture(); f.renderer.setVisible(true); await settle();
-		assert.deepEqual([...f.root.querySelectorAll('h4')].map(node => node.textContent), ['内置 Agent', '工作流角色', '自定义 Agent']);
-		assert.match(f.root.textContent!, /复制为自定义/);
-		assert.match(f.root.textContent!, /冻结定义/);
+		assert.deepEqual([...f.root.querySelectorAll('h4')].map(node => node.textContent), ['自定义 Agent']);
+		assert.match(f.root.textContent!, /编辑定义/);
+		assert.match(f.root.textContent!, /保存后刷新/);
 	} finally { resetNlsResolver(); }
 });

@@ -30,6 +30,8 @@ pub struct QueueInput {
     pub mode: protocol::CollaborationMode,
     #[serde(default)]
     pub model: Option<protocol::ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_routing: Option<protocol::ModelRoutingMode>,
     #[serde(default)]
     pub reasoning_effort: Option<protocol::ReasoningEffort>,
     pub tool_mode: ToolMode,

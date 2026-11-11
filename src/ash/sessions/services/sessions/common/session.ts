@@ -4,9 +4,11 @@ export type { AgentSessionActivity as SessionManagementInfo } from '../../../../
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IObservable } from '../../../../base/common/observable.js';
+import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
+import type { ArtifactKind } from '../../../common/artifactKind.js';
 
 export const enum SessionChangesetOperationScope {
 	Changeset = 'changeset',
@@ -69,6 +71,11 @@ export function createSessionFileChange(summary: TurnChangeSetSummary, file: Tur
 		uri, originalUri: uri.with({ query: `${uri.query}&side=before` }), modifiedUri: uri.with({ query: `${uri.query}&side=after` }),
 		insertions: file.additions, deletions: file.deletions, summary, file,
 	};
+}
+
+/** A captured file and both of its comparison sides share one revision identity. */
+export function matchesSessionFileChange(change: Pick<ISessionFileChange, 'uri' | 'originalUri' | 'modifiedUri'>, resource: URI): boolean {
+	return extUri.isEqual(change.uri, resource) || extUri.isEqual(change.originalUri, resource) || extUri.isEqual(change.modifiedUri, resource);
 }
 
 // Shared Chat identities live below Sessions so both window modes use one contract.
@@ -218,6 +225,7 @@ export interface SessionEnvironmentSelection {
 export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
+	readonly artifactKind?: ArtifactKind;
 	readonly kind?: SessionKind;
 	/** A reusable composer rotates this backend creation identity after a background send. */
 	readonly creationId?: string;

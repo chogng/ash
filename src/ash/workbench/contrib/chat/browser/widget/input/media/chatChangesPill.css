@@ -39,3 +39,10 @@
 .ash-chat-changes-statistics.partial .ash-animated-counter::after {
 	content: "*";
 }
+
+.ash-chat-session-working-set {
+	max-block-size: min(25vh, 14rem);
+	overflow: auto;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+}

@@ -191,6 +191,7 @@ where
             mode: submission.mode,
             approval_mode: Some(approval_mode),
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_mode: None,
             input: {
@@ -440,6 +441,7 @@ where
         thread_id: thread_id.clone(),
         history: Some(ThreadSnapshotHistory::Before {
             turn_id,
+            preview_tool_results: None,
             turn_limit: 50,
         }),
     })?;

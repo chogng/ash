@@ -7,6 +7,8 @@ import type { ModelReasoningEffort } from '../../../../../services/chat/common/m
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import type { ChatChangedFileTarget } from '../../../common/chat.js';
+import type { ThreadChangesSummary } from '../../../../../services/chat/common/chatService.js';
 
 /** Line totals can be partial when the Git provider cannot read some workspace files. */
 export type ChatChangesStatistics = TurnChangeSetSummary['statistics'] & { readonly partial?: boolean; };
@@ -23,7 +25,7 @@ export interface ChatInputServerCommandInvocation {
 	readonly argumentsText: string;
 }
 
-/** A conversation-owned draft can include files already staged at its backing service. */
+/** A conversation-owned draft includes locally staged files and their readiness to send. */
 export interface IChatInputDraft {
 	readonly text: string;
 	readonly readOnly: boolean;
@@ -42,6 +44,7 @@ export interface ChatInputState {
 	readonly draft?: IChatInputDraft;
 	readonly status?: string;
 	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
+	readonly followups?: { readonly responseId: string; readonly prompts: readonly string[]; };
 	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
 	readonly draftIdentity?: { readonly id: string; readonly generation: number; };
 	readonly mode: ChatMode;
@@ -58,6 +61,7 @@ export interface ChatInputState {
 	readonly contextUsage?: ChatContextUsage;
 	readonly changes?: ChatChangesStatistics;
 	readonly changesRevision?: string;
+	readonly changesRepositories?: ThreadChangesSummary['repositories'];
 	readonly changesScope?: 'workspace' | 'conversation';
 	readonly changesError?: string;
 	readonly models: readonly ModelCatalogEntry[];
@@ -89,6 +93,7 @@ export interface ChatInputDelegate {
 	readonly responseProgressInTranscript?: boolean;
 	readonly draft?: {
 		setText(text: string): void;
+		/** Completes when the files are added to the draft. Any remote upload continues independently. */
 		attachFiles(files: readonly File[]): Promise<void>;
 		/** Reads the original staged image from the current draft for local display. */
 		readImage?(id: string): Promise<Blob | undefined>;
@@ -103,7 +108,7 @@ export interface ChatInputDelegate {
 	/** Code supplies this capability; other hosts keep slash text literal and install no command UI. */
 	executeServerCommand?(invocation: ChatInputServerCommandInvocation, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
-	openChanges?(revision?: string): Promise<void>;
+	openChanges?(revision?: string, file?: ChatChangedFileTarget): Promise<void>;
 	readWorkspaceChanges?(): Promise<ChatChangesStatistics | undefined>;
 	selectModel(model: ModelRef): Promise<void>;
 	selectPreset?(presetId: string): Promise<void>;

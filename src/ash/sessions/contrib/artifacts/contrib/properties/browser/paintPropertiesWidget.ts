@@ -8,8 +8,8 @@ import { localize } from '../../../../../../nls.js';
 import type { DesignDocumentController } from '../../../browser/designDocumentController.js';
 import type { DocumentCommands } from '../../../common/commands/documentCommands.js';
 import { createDesignPaint, designBlendModes, designPaints, sampleDesignPaint, type DesignBlendMode, type DesignPaint } from '../../../common/model/designPaint.js';
-import { flattenDesignShapes } from '../../../common/model/document.js';
-import type { DesignSelection } from '../../../common/selection.js';
+import { flattenDesignShapes } from '../../../common/model/designDocument.js';
+import type { DesignSelection } from '../../../common/designSelection.js';
 
 export class PaintPropertiesWidget extends Disposable {
 	public readonly domNode: HTMLElement;

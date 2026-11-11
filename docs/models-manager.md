@@ -708,7 +708,7 @@ Catalog 不应成为错误的授权替代品：
 
 ### 10.3 模型选择与替换
 
-> 状态：Proposed。当前 `ModelsManager::resolve` 只校验一个准确模型；本节规定 Agent、工作流和其他上层以后共用的模型选择契约。
+> 状态：部分落地。Code 和原生 Chat 会话视图的首轮 Auto 已使用 `select_automatic_model` 按用户候选顺序选择模型。App Server 提供就绪连接及有效输入预算，Core 随 Turn 保存选择结果。以下描述 Agent、工作流和其他上层共用的完整目标契约。
 
 `ash-models-manager` 应拥有 provider 无关的候选选择，不能把排序复制到 App Server、Core、Agent 定义或各 provider adapter。`ash-agent-roles` 声明 Agent 的默认值、覆盖权限、替换范围和模型要求；App Server 将这些值连同 Session 或工作流基线转换成通用选择请求，manager 不依赖 `ash-agent-roles`。
 

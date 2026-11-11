@@ -24,7 +24,6 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IAgentSessionActionsService } from '../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from './sessionsActions.js';
 import { createSessionItemActions, createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { renderInlineRenameInput, showInlineRenameInput } from '../../../browser/parts/titlebar/inlineRenameInput.js';
@@ -38,7 +37,7 @@ import { ISessionsListModelService } from '../../../services/sessions/browser/se
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { IChatListCatalog, type ChatListEntry } from '../../chat/browser/chatListModel.js';
-import { ReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
+import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import { IBlockedSessionsIndicatorService } from './blockedSessionsIndicatorModel.js';
 import { BlockedSessionsCIFixModel } from './blockedSessionsCIFixModel.js';
 import { showBlockedSessionsList } from './blockedSessionsList.js';
@@ -82,7 +81,7 @@ export class SessionsTitleBarWidget extends Disposable {
 		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
 		@ISessionsManagementService management: ISessionsManagementService,
 		@IChatListCatalog catalog: IChatListCatalog,
-		@IEditorService editors: IEditorService,
+		@ISessionsConversationService conversation: ISessionsConversationService,
 		@IConfigurationService configuration: IConfigurationService,
 	) {
 		super();
@@ -97,9 +96,8 @@ export class SessionsTitleBarWidget extends Disposable {
 			if (event.affectsSome(modeKeys)) listener(event);
 		}), () => contextKeys.getValue(modeKey));
 		const desktopChat = mode.map(value => environment.runtime === 'electron' && value !== 'code');
-		const inChatEditor = observableFromEvent(this, editors.onDidActiveEditorChange, () => editors.activeEditorPane instanceof ReplyChatEditor);
 		const activeChat = derived(reader => {
-			if (!desktopChat.read(reader) || !inChatEditor.read(reader)) return undefined;
+			if (!desktopChat.read(reader) || !conversation.hasDesktopChatSource.read(reader)) return undefined;
 			for (const source of catalog.sources) {
 				const entry = source.snapshot.read(reader).entries.find(row => row.selected);
 				if (entry) return entry;
@@ -395,7 +393,6 @@ export class SessionsTitleBarWidget extends Disposable {
 					: workspaceDetails;
 			});
 		}));
-		const showAlongsidePage = derived(reader => !!activeChat.read(reader) && !customViews.activeCustomView.read(reader));
-		this._register(getSessionsTitlebarPart(titleService, layout.mainContainer).setSessionContent(element, menuOpen, showAlongsidePage));
+		this._register(getSessionsTitlebarPart(titleService, layout.mainContainer).setSessionContent(element, menuOpen));
 	}
 }

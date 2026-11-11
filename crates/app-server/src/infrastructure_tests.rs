@@ -674,6 +674,11 @@ fn trace_websocket_is_owned_once_by_the_shared_profile() {
 fn assert_trace_endpoint_closed(address: std::net::SocketAddr) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
+        // Windows can time out connecting to a closed loopback port. Rebinding proves
+        // the listener released the address, while refusal also covers TCP TIME_WAIT.
+        if std::net::TcpListener::bind(address).is_ok() {
+            return;
+        }
         let result = std::net::TcpStream::connect_timeout(&address, Duration::from_millis(100));
         if result.is_err_and(|error| error.kind() == std::io::ErrorKind::ConnectionRefused) {
             return;

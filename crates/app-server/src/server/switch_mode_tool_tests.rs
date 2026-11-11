@@ -122,9 +122,34 @@ impl Fixture {
     }
 
     fn respond(&self, mode: CollaborationMode) {
+        self.respond_with_feedback(mode, None);
+    }
+
+    fn respond_with_feedback(&self, mode: CollaborationMode, feedback: Option<&str>) {
         let snapshot = self.wait(TurnStatus::WaitingForUserInput);
-        assert_eq!(snapshot.turns[0].mode.is_analysis(), true);
+        assert!(snapshot.turns[0].mode.is_analysis());
         let interaction = snapshot.turns[0].pending_interaction.as_ref().unwrap();
+        let mut answers = BTreeMap::from([(
+            SWITCH_MODE_TOOL_NAME.into(),
+            UserInputAnswer {
+                value: mode_id(mode),
+            },
+        )]);
+        if let Some(feedback) = feedback {
+            let ash_protocol::AgentRequest::UserInput { request } = &interaction.request else {
+                panic!("expected a Plan review interaction");
+            };
+            let review = request.plan_review.as_ref().unwrap();
+            assert_eq!(review.markdown, "# Proposed plan\n\n1. Add coverage.");
+            assert_eq!(review.approve_value, "agent");
+            assert_eq!(review.revise_value, "plan");
+            answers.insert(
+                review.feedback_question_id.clone(),
+                UserInputAnswer {
+                    value: feedback.into(),
+                },
+            );
+        }
         self.threads
             .resolve_turn_interaction(
                 &self.thread,
@@ -134,14 +159,7 @@ impl Fixture {
                     expected_sequence: SequenceExpectation::Any,
                     request_id: interaction.request_id.clone(),
                     response: AgentResponse::UserInput {
-                        response: RequestUserInputResponse {
-                            answers: BTreeMap::from([(
-                                SWITCH_MODE_TOOL_NAME.into(),
-                                UserInputAnswer {
-                                    value: mode_id(mode),
-                                },
-                            )]),
-                        },
+                        response: RequestUserInputResponse { answers },
                     },
                 },
             )
@@ -211,6 +229,21 @@ fn leaving_analysis_requires_explicit_input_even_with_permission_bypass() {
 }
 
 #[test]
+fn plan_review_sends_feedback_to_the_model_with_the_user_decision() {
+    for mode in [CollaborationMode::Plan, CollaborationMode::Agent] {
+        let fixture = Fixture::new(CollaborationMode::Plan, CollaborationMode::Agent);
+        fixture.start();
+        fixture.respond_with_feedback(mode, Some("Cover the reconnect case."));
+        let snapshot = fixture.wait(TurnStatus::Completed);
+        assert_eq!(snapshot.turns[0].mode, mode);
+        assert!(snapshot.items.iter().any(|item| matches!(item,
+            ash_protocol::ThreadItem::ToolResult { text, is_error: false, .. }
+                if serde_json::from_str::<serde_json::Value>(text).unwrap()["feedback"] == "Cover the reconnect case."
+        )));
+    }
+}
+
+#[test]
 fn invalid_modes_and_empty_reasons_fail_before_execution() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
@@ -256,7 +289,10 @@ impl ModelService for SwitchModel {
                 vec![ResponseItem::ToolCall(ToolCall {
                     id: ToolCallId::new("switch-call").unwrap(),
                     name: ToolName::new(SWITCH_MODE_TOOL_NAME).unwrap(),
-                    arguments: json!({"mode": self.mode, "reason": "Choose the approach for this task"}),
+                    arguments: json!({
+                        "mode": self.mode, "reason": "Choose the approach for this task",
+                        "plan": "# Proposed plan\n\n1. Add coverage."
+                    }),
                 })]
             } else {
                 vec![ResponseItem::Text("done".into())]

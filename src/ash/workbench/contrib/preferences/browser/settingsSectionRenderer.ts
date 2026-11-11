@@ -9,9 +9,12 @@ import './media/settingsSection.css';
 import './media/settingsCard.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { AnchorAlignment } from '../../../../base/browser/ui/contextview/contextview.js';
+import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
+import { Action, Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -21,8 +24,8 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
+import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import type { SettingsMenuOption, SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
 import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
 
 /** Renders service-backed sections from data while preserving controls and focus across updates. */
@@ -35,7 +38,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	private readonly titleDomNode: HTMLElement | undefined;
 	private readonly descriptionDomNode: HTMLElement | undefined;
 	private readonly fieldsDomNode: HTMLElement;
-	private readonly controls = new Map<string, Button | InputBox | SelectBox | Switch | HTMLElement>();
+	private readonly controls = new Map<string, Button | DropdownMenuActionViewItem | InputBox | SelectBox | Switch | HTMLElement>();
 	private readonly actionsDomNode: HTMLElement;
 	private readonly fields = new Map<string, SettingsSectionField>();
 	private isVisible = false;
@@ -44,6 +47,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 
 	constructor(host: HTMLElement | { readonly container: HTMLElement; readonly rowPresentation?: 'general'; readonly hideInnerTitle?: boolean; }, private readonly model: SettingsSectionModel, providerId: AccessibleViewProviderId, verbosity: AccessibilityVerbositySettingId,
 		@IContextViewService private readonly contextView: IContextViewService,
+		@IContextMenuService private readonly contextMenu: IContextMenuService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IAccessibleViewService accessibleView: IAccessibleViewService,
@@ -111,9 +115,13 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 		this._register(toDisposable(() => { this.model.setVisible(false); this.domNode.remove(); }));
 	}
 
-	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
+	public renderSection(): HTMLElement {
 		this.render();
-		const item: SettingsTreeNode<SettingsSectionReference> = { element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } };
+		return this.domNode;
+	}
+
+	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
+		const item: SettingsTreeNode<SettingsSectionReference> = { element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.renderSection()) } };
 		if (this.model.groupId === null) { return [item]; }
 		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [item] }];
 	}
@@ -123,7 +131,9 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 		this.model.setVisible(visible);
 		if (!visible) {
 			this.pendingFocus = undefined;
-			for (const control of this.controls.values()) { if (control instanceof SelectBox) { control.hide(); } }
+			for (const control of this.controls.values()) {
+				if (control instanceof SelectBox || control instanceof DropdownMenuActionViewItem) control.hide();
+			}
 		}
 	}
 
@@ -134,6 +144,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 				case 'action': return field.label;
 				case 'text': return `${field.label}: ${field.value}`;
 				case 'select': return `${field.label}: ${field.options.find(option => option.value === field.value)?.label ?? ''}`;
+				case 'menu': return this.menuValueLabel(field);
 				case 'boolean': return `${field.label}: ${field.value
 					? localize({ bundle: 'ash.settings', key: 'section.on' }, 'On')
 					: localize({ bundle: 'ash.settings', key: 'section.off' }, 'Off')}`;
@@ -211,7 +222,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					}
 					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
 					control = toggle;
-				} else if (field.kind === 'select') {
+				} else if (field.kind === 'select' || field.kind === 'menu') {
 					const label = h(this.domNode.ownerDocument, generalRow ? 'span' : 'p');
 					label.textContent = field.label;
 					if (copy === container) {
@@ -219,12 +230,16 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					} else {
 						copy.prepend(label);
 					}
-					const select = this._register(new SelectBox(container, {
-						options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView,
-						presentation: generalRow ? 'field' : undefined,
-					}, defaultSelectBoxStyles));
-					if (generalRow) select.element.classList.add('ash-general-setting-control');
-					this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
+					if (field.kind === 'menu') {
+						control = this.createMenu(container, field.id);
+					} else {
+						const select = this._register(new SelectBox(container, {
+							options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView,
+							presentation: generalRow ? 'field' : undefined,
+						}, defaultSelectBoxStyles));
+						if (generalRow) select.element.classList.add('ash-general-setting-control');
+						this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
+					}
 				} else {
 					if (!this.actionsDomNode.isConnected) { this.fieldsDomNode.append(this.actionsDomNode); }
 					const button = this._register(new Button(this.actionsDomNode, {
@@ -245,7 +260,48 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			else if (field.kind === 'text' && control instanceof InputBox) { control.value = field.value; control.enabled = field.enabled; }
 			else if (field.kind === 'boolean' && control instanceof Switch) { control.checked = field.value; control.enabled = field.enabled; }
 			else if (field.kind === 'select' && control instanceof SelectBox) { if (JSON.stringify(control.options) !== JSON.stringify(field.options)) { control.setOptions(field.options); } control.value = field.value; control.enabled = field.enabled; }
+			else if (field.kind === 'menu' && control instanceof DropdownMenuActionViewItem && control.action instanceof Action) {
+				control.setLabel(field.valueLabel, this.menuValueLabel(field), field.valueDescription);
+				control.action.enabled = field.enabled;
+			}
 			else if (field.kind === 'action' && control instanceof Button) { control.label = field.label; control.enabled = field.enabled; }
 		}
 	}
+
+	private createMenu(container: HTMLElement, fieldId: string): DropdownMenuActionViewItem {
+		const host = h(container.ownerDocument, 'div', { className: 'ash-settings-menu-field' });
+		container.append(host);
+		const action = this._register(new Action(fieldId));
+		const menu = this._register(new DropdownMenuActionViewItem(action, () => {
+			const field = this.fields.get(fieldId);
+			if (field?.kind !== 'menu') return [];
+			return settingsMenuActions(field.options, field.value, value => {
+				const current = this.fields.get(fieldId);
+				if (current?.kind === 'menu' && current.enabled) current.setValue(value);
+			});
+		}, {
+			showContextMenu: delegate => this.contextMenu.showContextMenu({
+				...delegate, anchorAlignment: AnchorAlignment.Right, gap: 2, iconPlacement: 'trailing',
+				getCheckedActionsRepresentation: () => 'radio',
+			}),
+		}));
+		menu.render(host);
+		return menu;
+	}
+
+	private menuValueLabel(field: Extract<SettingsSectionField, { kind: 'menu'; }>): string {
+		const value = field.valueDescription ? `${field.valueLabel} ${field.valueDescription}` : field.valueLabel;
+		return localize({ bundle: 'ash.settings', key: 'section.menuValue' }, '{0}: {1}', field.label, value);
+	}
+}
+
+function settingsMenuActions(options: readonly SettingsMenuOption[], value: string, select: (value: string) => void): IAction[] {
+	return options.map(option => {
+		if ('separator' in option) return new Separator();
+		if ('options' in option) {
+			const children = settingsMenuActions(option.options, option.selectedValue ?? value, select);
+			return Object.assign(new SubmenuAction(`settings.menu.submenu.${option.id}`, option.label, children), { labelDescription: option.labelDescription });
+		}
+		return { id: `settings.menu.option.${option.value}`, label: option.label, labelDescription: option.labelDescription, tooltip: '', enabled: true, checked: option.value === value, run: () => select(option.value) };
+	});
 }

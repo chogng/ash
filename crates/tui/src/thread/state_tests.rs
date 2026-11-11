@@ -180,6 +180,7 @@ fn upsert_agent(text: &str, transient: bool) -> ThreadTranscriptChange {
             turn_id: turn_id.clone(),
             item: ThreadItem::AgentMessage {
                 phase: None,
+                citations: None,
                 item_id,
                 turn_id,
                 text: text.into(),
@@ -226,6 +227,7 @@ fn thread_snapshot() -> Thread {
             instructions: None,
             directory: None,
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,
@@ -247,6 +249,7 @@ fn thread_snapshot() -> Thread {
                 },
                 ThreadItem::AgentMessage {
                     phase: None,
+                    citations: None,
                     item_id: ItemId::new("item_3").unwrap(),
                     turn_id,
                     text: "canonical response".into(),
@@ -273,6 +276,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
             instructions: None,
             directory: None,
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,

@@ -675,7 +675,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(
         r#"{ "type": "hostResource", name: string, resource: HostResourceRef, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
     ));
-    assert!(typescript.contains("threadRecapModel?: ModelRef | null"));
+    assert!(typescript.contains("threadRecapModel?: TaskModelSelectionDto | null"));
     assert!(typescript.contains("recap?: string | null"));
     assert!(typescript.contains(
         r#"{ "type": "threadRecapUpdated", threadId: ThreadId, turnId: TurnId, text: string, }"#
@@ -906,6 +906,9 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
                 "model": "codex-auto-review"
             }
         },
+        "threadTitleModel": {"provider": "openai", "model": "gpt-6-luna", "reasoningEffort": "high"},
+        "threadRecapModel": {"provider": "openai", "model": "gpt-6-luna"},
+        "codeReviewModel": null,
         "grepBackend": "tgrep"
     });
     let params: ConfigUpdateParams = serde_json::from_value(fixture.clone()).unwrap();
@@ -924,6 +927,15 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
             if model.model == "codex-auto-review" && connection.as_deref() == Some("chatgpt-subscription")
                 && reasoning_effort == &Some(ReasoningEffort::Low)
     ));
+    assert!(matches!(
+        &params.thread_title_model,
+        Patch::Value(selection) if selection.reasoning_effort == Some(ReasoningEffort::High)
+    ));
+    assert!(matches!(
+        &params.thread_recap_model,
+        Patch::Value(selection) if selection.reasoning_effort.is_none()
+    ));
+    assert_eq!(params.code_review_model, Patch::Null);
     assert_eq!(params.expected_revision, 4);
     assert_eq!(params.grep_backend, Patch::Value(GrepBackendDto::Tgrep));
     assert_eq!(serde_json::to_value(params).unwrap(), fixture);

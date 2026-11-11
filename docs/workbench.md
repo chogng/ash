@@ -9,15 +9,15 @@ Ash Desktop 当前只有 Code 工作台。Academy 是独立安装的文档编辑
 | 入口或服务                                  | 负责什么                                                         |
 | ------------------------------------------- | ---------------------------------------------------------------- |
 | `code/common/application.ts` 与两端产品入口 | 固定产品标题与 Sessions 页面；入口向 Workbench 传入标题          |
-| `workbench/workbench.common.main.ts`        | 装配代码、文档宿主及工作台工具；Academy 由扩展注册接入           |
+| `workbench/workbench.common.main.ts`        | 装配代码、共享文档窗格及工作台工具                               |
 | `editor.all.ts`                             | 装配客户端内置 Code 编辑贡献；不装配 Academy 实现                |
 | `workbench/contrib/documentEditor`          | 承载扩展提供的文档视图，接入工作副本、保存、协作与视图生命周期   |
 | `extensions/academy`                        | Academy 文档内容类型、扩展名、schema、引用、节点视图及工具栏配置 |
 | `DocumentEditorTextModelService`            | 按规范化资源地址共享一个模型及工作副本，最后一个视图关闭时释放   |
 
-`DocumentEditorPane` 是 Workbench 的通用承载适配器，负责资源引用、保存、备份、取消和扩展停用；实际富文档编辑表面是 `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts`。宿主不解释段落、引用、分页或图片节点，也不直接导入 Academy 的实现。
+`DocumentEditorPane` 是 Workbench 的通用承载适配器，负责资源引用、保存、备份、取消和扩展停用；实际富文档编辑表面是 `extensions/academy/browser/widget/richTextEditor/richTextEditorWidget.ts`。宿主不解释段落、引用、分页或图片节点，也不直接导入 Academy 的实现。频道笔记使用同一窗格；富文档文件的创建、转换与导入导出由 [Artifacts Docs](../src/ash/sessions/contrib/artifacts/README.md) 注册。
 
-Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。标题由产品入口提供，构建与启动没有模式注册表。两端产品入口在本地化完成后加载各自 Workbench 入口并直接调用启动函数；共同贡献由 `workbench.common.main.ts` 装配，不再经单项模式 loader。工作台不提供运行时模式切换服务、宿主切换回调或切换 IPC。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。Academy 匹配 `.ash-academy`、`.ash-paper` 或其内容类型。
+Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。标题由产品入口提供，构建与启动没有模式注册表。两端产品入口在本地化完成后加载各自 Workbench 入口并直接调用启动函数；共同贡献由 `workbench.common.main.ts` 装配，不再经单项模式 loader。工作台不提供运行时模式切换服务、宿主切换回调或切换 IPC。通用代码编辑器排除已注册的结构化文档，文档编辑器按相同配置完成匹配与实例化。支持富文档文件编辑的宿主通过扩展匹配 `.ash-doc`、`.ash-academy`、`.ash-paper` 或其内容类型。
 
 `TextModel` 是内容、版本与撤销的唯一来源。多个论文视图共享编辑内容、脏状态、保存修订和备份身份；关闭一个视图不销毁其他视图。结构化文件只接受版本化文档格式，损坏 JSON 或纯文本不会被隐式当成论文正文。普通文档、论文和频道笔记由 Academy 注册，宿主通过已注册契约完成转换。
 
@@ -33,7 +33,7 @@ Browser 与 Electron 各保留一个 Workbench 启动入口，只加载 Code。�
 
 存储身份只有 application、profile、workspace 作用域及各自 id，不再传递 `applicationId`。Main 写入 v2 格式前保存 `workbench-state.json.v1`；浏览器将原始文档存为 `ash.storage.v1.<旧身份>.<作用域及 id>`，写入 `ash.storage.<作用域及 id>` 后清除旧键。备份只供检查，不参与后续恢复；中断的迁移可以重试。已有偏好与状态不被覆盖。旧 `configuration.json` 到 `settings.json` 的 profile 迁移仍由现有配置迁移负责，不再执行模式值转换。
 
-开发与测试直接打开已安装扩展支持的文档文件，不存在独立文档工作台模式。旧 Code 存储只在迁移时读取并归档。
+开发与测试在 Agents Window 打开已安装扩展支持的富文档文件。旧 Code 存储只在迁移时读取并归档。
 
 ## 窗口与状态
 

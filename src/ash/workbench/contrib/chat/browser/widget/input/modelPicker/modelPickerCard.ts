@@ -5,7 +5,8 @@ import { DomWidget } from '../../../../../../../platform/domWidget/browser/domWi
 import { IOpenerService } from '../../../../../../../platform/opener/common/opener.js';
 import { IconLabel } from '../../../../../../../base/browser/ui/iconlabel/iconlabel.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
-import { getModelConfigValueLabel, modelPickerEffortOptions, modelPickerAccelerationOptions } from './modelPickerModelConfig.js';
+import { getModelConfigValueLabel, modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { modelPickerAccelerationOptions } from './modelPickerVariants.js';
 import { getMaxContextLabel, renderModelDescription } from './modelPickerDetails.js';
 
 export interface IModelCardOptions {

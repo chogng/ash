@@ -16,6 +16,33 @@
 	border-bottom-right-radius: var(--ash-cornerRadius-xLarge);
 }
 
+.ash-sessions-window.modern-ui .ash-desktop-editor-area {
+	--ash-sessions-tool-separator: transparent;
+}
+
+.ash-sessions-window.modern-ui
+	.ash-desktop-editor-area
+	.ash-tool-editor-workspace:not(.ash-product-page-host)
+	> .ash-workbench-part-frame
+	> .ash-workbench-part {
+	border-radius: var(--ash-cornerRadius-xLarge);
+	box-shadow:
+		0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border),
+		0 2px 8px
+			color-mix(in srgb, var(--ash-sessions-inputShadow) 45%, transparent);
+}
+
+:is(.hc-black, .hc-light)
+	.ash-sessions-window.modern-ui
+	.ash-desktop-editor-area
+	.ash-tool-editor-workspace:not(.ash-product-page-host)
+	> .ash-workbench-part-frame
+	> .ash-workbench-part {
+	box-shadow: none;
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
 .ash-sessions-window.modern-ui
 	.ash-sessions-workbench-layout[data-panel-visible="true"][data-panel-maximized="false"][data-panel-position="bottom"]
 	.ash-sessions-frame-end:not(.ash-workbench-panel),

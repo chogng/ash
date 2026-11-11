@@ -98,7 +98,7 @@ export const EditorLargeFileConfirmationConfiguration = configurationRegistry.re
 	},
 });
 
-function parseEditorAssociations(value: unknown): EditorAssociations {
+export function parseEditorAssociations(value: unknown): EditorAssociations {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('Editor associations must map file patterns to editor IDs');
 	const result: Record<string, string> = {};
 	for (const [pattern, editorId] of Object.entries(value)) {
@@ -126,13 +126,18 @@ export class DynamicEditorConfigurations extends Disposable implements IWorkbenc
 	}
 }
 
-/** Last matching association wins, so a narrow pattern can override a broad one. */
-export function associatedEditorId(path: string, associations: EditorAssociations): string | undefined {
+/** Workbench associations use the last match. Chat can prefer the longest matching pattern. */
+export function associatedEditorId(path: string, associations: EditorAssociations, preferSpecificMatch = false): string | undefined {
 	let matched: string | undefined;
+	let matchLength = 0;
 	const normalized = path.replaceAll('\\', '/');
 	const name = normalized.slice(normalized.lastIndexOf('/') + 1);
 	for (const [pattern, editorId] of Object.entries(associations)) {
-		if (globMatch(pattern.toLowerCase(), (pattern.includes('/') ? normalized : name).toLowerCase())) matched = editorId;
+		if (preferSpecificMatch && pattern.length <= matchLength) continue;
+		if (globMatch(pattern.toLowerCase(), (pattern.includes('/') ? normalized : name).toLowerCase())) {
+			matched = editorId;
+			matchLength = pattern.length;
+		}
 	}
 	return matched;
 }

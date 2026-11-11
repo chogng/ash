@@ -133,7 +133,7 @@ if (new URL(location.href).searchParams.has('cowork')) {
 	}));
 	markdown.element.classList.add('cowork-test-message');
 	container.append(markdown.element);
-	resources.add(services.createInstance(ChatMarkdownDecorationsRenderer, markdown.element));
+	resources.add(services.createInstance(ChatMarkdownDecorationsRenderer, markdown.element, (href: string) => { void opener.open(href); }));
 }
 window.ashGitHubIntegration = {
 	requests: transport.requests, opened, releaseChecks: outcome => transport.releaseChecks(outcome), releaseIssue: () => transport.releaseIssue(),

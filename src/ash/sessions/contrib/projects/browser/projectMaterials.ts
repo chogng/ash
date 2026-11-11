@@ -4,6 +4,7 @@ import { createObjectUrl, pickFiles } from '../../../../base/browser/fileAccess.
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
 import { Badge } from '../../../../base/browser/ui/countBadge/countBadge.js';
+import { createLoadingSpinner } from '../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Checkbox } from '../../../../base/browser/ui/toggle/toggle.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -84,7 +85,7 @@ export class ProjectMaterials extends Disposable {
 	// A native selection can preview its File without granting the referenced directory to the agent.
 	private readonly selectedFiles = new LRUCache<string, File>(64);
 	private fileScope: string | undefined;
-	private readonly pendingAdds = new Set<string>();
+	private readonly pendingAdds = observableValue<ReadonlyMap<string, number>>(this, new Map());
 	private selection: { readonly key: string; readonly ids: ISettableObservable<ReadonlySet<string>>; } | undefined;
 	private readonly removingFiles = observableValue<ReadonlySet<string>>(this, new Set());
 
@@ -159,17 +160,20 @@ export class ProjectMaterials extends Disposable {
 		});
 		const { upload } = model;
 		const add = upload && (async (files: readonly File[]) => {
-			if (this.isDisposed || !model.isCurrent()) return;
+			if (this.isDisposed || !model.isCurrent() || !files.length) return;
 			const { limits } = upload;
 			if (files.length > limits.count || files.some(file => file.size > limits.fileBytes)
 				|| files.reduce((bytes, file) => bytes + file.size, 0) > limits.totalBytes) {
 				throw new Error(upload.limitMessage);
 			}
+			let remaining = files.length;
+			this.setPendingAdd(key, remaining);
+			status(localize('projects.addingMaterials', 'Adding project materials.'));
 			await upload.addFiles(files.map(file => {
 				if (file.type) return file;
 				const type = getMediaOrTextMime(file.name);
 				return type ? new File([file], file.name, { type, lastModified: file.lastModified }) : file;
-			}));
+			}), () => this.setPendingAdd(key, --remaining));
 		});
 		return this.render(target, key, {
 			rows, busy: model.busy, status: model.status, isCurrent: model.isCurrent,
@@ -316,15 +320,14 @@ export class ProjectMaterials extends Disposable {
 		const headingId = generateUuid();
 		const materials = h(document, 'section', { className: 'ash-projects-materials', attributes: { 'aria-labelledby': headingId } });
 		const heading = h(document, 'div', { className: 'ash-projects-section-heading' },
-			h(document, 'h2', { properties: { id: headingId } },
-				h(document, 'span', { className: 'ash-projects-material-context-title' }, localize('projects.context', 'Context')),
-				h(document, 'span', { className: 'ash-projects-material-files-title' }, localize('projects.projectFiles', 'Project files'))));
+			h(document, 'h2', { properties: { id: headingId } }, localize('projects.context', 'Context')));
 		const actions = h(document, 'div', { className: 'ash-projects-material-actions' });
 		heading.append(actions);
 		materials.append(heading);
 		const { pickFiles, pickFolders, dropFiles, addText, isCurrent } = model;
 		let addButton: Button | undefined;
-		if (pickFiles) {
+		let spinner: HTMLSpanElement | undefined;
+		if (pickFiles || (this.pendingAdds.get().get(key) ?? 0) > 0) {
 			const addLabel = localize('projects.addMaterials', 'Add project materials');
 			const button = addButton = content.add(new Button(actions, {
 				...defaultButtonStyles,
@@ -333,6 +336,9 @@ export class ProjectMaterials extends Disposable {
 			button.domNode.dataset.projectControl = 'add-materials';
 			button.domNode.setAttribute('aria-haspopup', 'menu');
 			button.domNode.setAttribute('aria-expanded', 'false');
+			spinner = createLoadingSpinner(document);
+			spinner.hidden = true;
+			button.domNode.append(spinner);
 			const additionalActions: IAction[] = [];
 			if (addText) additionalActions.push({
 				id: 'add-text',
@@ -361,11 +367,13 @@ export class ProjectMaterials extends Disposable {
 			});
 			const menu = content.add(this.instantiation.createInstance(ChatInputAttachMenu, {
 				anchor: button.domNode,
-				onUploadFiles: () => void this.runAdd(key, isCurrent, pickFiles),
+				onUploadFiles: () => { if (pickFiles) void this.runAdd(key, isCurrent, pickFiles); },
 				showUploadKeybinding: false,
 				host: { additionalActions },
 			}));
-			content.add(button.onDidClick(() => menu.show()));
+			content.add(button.onDidClick(() => {
+				if (pickFiles && !model.busy && !this.pendingAdds.get().has(key)) menu.show();
+			}));
 		}
 		const selectable = (model.rows ?? []).filter(row => row.kind === 'file' && (model.removeFiles || row.remove));
 		if (this.selection?.key !== key) {
@@ -430,6 +438,7 @@ export class ProjectMaterials extends Disposable {
 			materials.append(h(document, 'p', { className: 'ash-projects-muted', attributes: { role: 'status' } }, model.status.text));
 			if (model.status.retry) this.action(content, materials, 'retry-details', { label: localize('projects.retry', 'Try again') }, model.status.retry);
 		}
+		let empty: HTMLElement | undefined;
 		if (model.rows?.length === 0) {
 			const illustration = h(document, 'div', {
 				className: 'ash-projects-materials-illustration', attributes: { 'aria-hidden': 'true' },
@@ -439,10 +448,11 @@ export class ProjectMaterials extends Disposable {
 				appendIcon(Lxicon.fileText, sheet);
 				illustration.append(sheet);
 			}
-			materials.append(h(document, 'div', { className: 'ash-projects-materials-empty' }, illustration,
+			empty = h(document, 'div', { className: 'ash-projects-materials-empty' }, illustration,
 				h(document, 'p', {}, pickFiles
 					? localize('projects.contextEmpty', 'Add PDFs, documents, or other files to reference in this project.')
-					: localize('projects.noMaterialsReadOnly', 'No materials in this project.'))));
+					: localize('projects.noMaterialsReadOnly', 'No materials in this project.')));
+			materials.append(empty);
 		}
 		const list = h(document, 'ul', { className: 'ash-projects-material-list' });
 		const previews = new CancellationTokenSource();
@@ -495,7 +505,41 @@ export class ProjectMaterials extends Disposable {
 			}
 			list.append(row);
 		}
-		if (list.childElementCount) materials.append(list);
+		materials.append(list);
+		const placeholders: HTMLElement[] = [];
+		content.add(autorun(reader => {
+			const count = this.pendingAdds.read(reader).get(key) ?? 0;
+			const adding = count > 0;
+			if (addButton && spinner) {
+				spinner.hidden = !adding;
+				addButton.domNode.hidden = !pickFiles && !adding;
+				// Keep keyboard focus on the same control while the operation is pending.
+				addButton.enabled = adding || !model.busy;
+				if (adding) {
+					addButton.domNode.setAttribute('aria-busy', 'true');
+					addButton.domNode.setAttribute('aria-disabled', 'true');
+				} else {
+					addButton.domNode.removeAttribute('aria-busy');
+					addButton.domNode.removeAttribute('aria-disabled');
+				}
+			}
+			while (placeholders.length > count) placeholders.pop()!.remove();
+			for (let index = placeholders.length; index < count; index++) {
+				const placeholder = h(document, 'li', {
+					className: 'ash-projects-material ash-projects-material-card ash-projects-material-placeholder',
+					attributes: { 'aria-hidden': 'true' },
+				}, h(document, 'div', { className: 'ash-projects-material-card-open' },
+					h(document, 'span', { className: 'ash-file-card-name ash-projects-placeholder' }),
+					h(document, 'span', { className: 'ash-file-card-size ash-projects-placeholder' }),
+					h(document, 'span', { className: 'ash-file-card-format ash-projects-placeholder' }),
+				));
+				placeholders.push(placeholder);
+				list.append(placeholder);
+			}
+			list.hidden = list.childElementCount === 0;
+			list.setAttribute('aria-busy', String(adding));
+			if (empty) empty.hidden = adding;
+		}));
 		return materials;
 	}
 
@@ -618,14 +662,23 @@ export class ProjectMaterials extends Disposable {
 	}
 
 	private async performAdd(key: string, isCurrent: () => boolean, run: () => Promise<unknown>): Promise<boolean> {
-		if (this.isDisposed || !isCurrent() || this.pendingAdds.has(key)) return false;
-		this.pendingAdds.add(key);
+		if (this.isDisposed || !isCurrent() || this.pendingAdds.get().has(key)) return false;
+		// Reserve the action while the picker is open. The UI becomes busy after a selection.
+		this.setPendingAdd(key, 0);
 		try {
 			await run();
 			return true;
 		} finally {
-			this.pendingAdds.delete(key);
+			this.setPendingAdd(key, undefined);
 		}
+	}
+
+	private setPendingAdd(key: string, count: number | undefined): void {
+		if (this.isDisposed) return;
+		const pending = new Map(this.pendingAdds.get());
+		if (count === undefined) pending.delete(key);
+		else pending.set(key, count);
+		this.pendingAdds.set(pending, undefined);
 	}
 
 	private action(content: DisposableStore, parent: HTMLElement, key: string, options: IButtonOptions, run: () => unknown): Button {

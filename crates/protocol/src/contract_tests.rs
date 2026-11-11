@@ -835,6 +835,7 @@ fn interaction_request_is_durable_without_connection_ownership() {
             item_id: None,
             request: AgentRequest::UserInput {
                 request: RequestUserInput {
+                    plan_review: None,
                     questions: Vec::new(),
                 },
             },
@@ -891,6 +892,7 @@ fn readable_wait_state_excludes_the_owner_directed_request_payload() {
         item_id: None,
         request: AgentRequest::UserInput {
             request: RequestUserInput {
+                plan_review: None,
                 questions: vec![UserInputQuestion {
                     required: true,
                     id: "secret-question".into(),

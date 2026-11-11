@@ -153,11 +153,15 @@ export class Button extends Disposable {
 	hasFocus(): boolean { return this.domNode.ownerDocument.activeElement === this.domNode; }
 
 	set label(value: string) {
-		if (!value && !this.currentIcon) this.clearContent();
-		else this.getContent().setLabel(value, undefined, { icon: this.currentIcon });
-		if (this.usesLabelAsAriaLabel) setAriaAttribute(this.domNode, 'label', value);
+		this.setLabel(value);
 	}
 	get label(): string { return this.content.value?.labelElement.textContent ?? ''; }
+
+	setLabel(label: string, description?: string): void {
+		if (!label && !description && !this.currentIcon) this.clearContent();
+		else this.getContent().setLabel(label, description, { icon: this.currentIcon });
+		if (this.usesLabelAsAriaLabel) setAriaAttribute(this.domNode, 'label', description ? `${label} ${description}` : label);
+	}
 
 	/** Supplies a visual fallback when the full label cannot fit. */
 	set labelShort(value: string) {

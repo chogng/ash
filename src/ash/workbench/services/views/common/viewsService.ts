@@ -7,6 +7,8 @@ import type { IView, IViewContainerDescriptor, IViewDescriptor, IViewPaneContain
 
 /** Window-scoped access to registered views and their retained container instances. */
 export interface IViewsService {
+	/** Routes a view open to a host that creates the view on first use. */
+	registerViewOpener(id: string, open: () => Promise<void>): IDisposable;
 	/** Borrow a retained View hosted by an editor group. Its host owns creation, placement and disposal. */
 	registerView(view: IView & {
 		readonly onDidFocus: Event<void>;

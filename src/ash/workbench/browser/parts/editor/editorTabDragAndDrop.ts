@@ -15,7 +15,7 @@ export type EditorTabDropPosition = 'before' | 'after';
  */
 export interface IEditorTabDragAndDrop {
 	start(source: EditorGroupView, input: IResourceEditorInput): void;
-	startGroup(source: EditorGroupView): void;
+	startGroup?(source: EditorGroupView): void;
 	isDragging(): boolean;
 	getOperation(target: EditorGroupView, copyRequested: boolean, splitDirection?: Direction): 'move' | 'copy';
 	/** Editor-area drops can split or merge groups, but must not empty a group onto itself. */

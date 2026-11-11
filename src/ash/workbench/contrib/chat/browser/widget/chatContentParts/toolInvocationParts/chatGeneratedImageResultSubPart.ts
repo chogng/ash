@@ -8,7 +8,6 @@ import type { IChatImageRevealOrigin } from '../../../attachments/chatImageRevea
 import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
 import { isImageGenerationToolInvocation } from './chatToolPartUtilities.js';
-import '../media/chatImageGenerationProgressPart.css';
 
 /** Each result retains its own persisted coordinates even when several calls share a gallery. */
 export function getGeneratedImageResultSnapshot(content: readonly IChatListItem[]): { readonly item: IChatListItem; readonly content: readonly ChatContentPart[]; }[] {

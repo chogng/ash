@@ -3,7 +3,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { localize } from '../../../../../nls.js';
 import type { ILanguageModelToolsService, IToolData, IToolSet, ToolSource } from '../../common/tools/languageModelToolsService.js';
 import type { IQuickInputService, IQuickTreeItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import { maxDisabledChatTools } from '../../../../services/chat/common/chatContextService.js';
 import { browserChatToolReferenceNames } from '../../../../../platform/browserView/common/browserChatToolReferenceNames.js';
 import Severity from '../../../../../base/common/severity.js';
 
@@ -23,15 +23,6 @@ export function toolSetLabel(set: IToolSet): string {
 		mcp: localize('chat.tools.mcp', 'MCP tools'),
 	};
 	return set.sourceId ? localize('chat.tools.sourceGroup', '{0}: {1}', labels[set.source], set.sourceId) : labels[set.source];
-}
-
-export function createToolSelectionAttachment(disabled: readonly string[]): ChatContextAttachment {
-	const content = JSON.stringify([...disabled].sort());
-	const name = localize('chat.tools.selection', 'Tool selection: {0} disabled', disabled.length);
-	return {
-		id: 'tool-selection', kind: 'toolSelection', name,
-		resolve: async () => ({ name, content, kind: 'toolSelection' }),
-	};
 }
 
 /** Edits an unsent selection. Escape discards it; Apply commits it to the originating composer. */
@@ -94,7 +85,7 @@ export function showToolsPicker(quickInput: IQuickInputService, toolsService: IL
 			picker.validationMessage = undefined;
 		}));
 		resources.add(picker.onDidAccept(() => {
-			if (disabled.size > 4096) {
+			if (disabled.size > maxDisabledChatTools) {
 				picker.severity = Severity.Error;
 				picker.validationMessage = localize('chat.tools.selectionLimit', 'Select at most 4096 disabled tools. Enable some tools before applying.');
 				return;

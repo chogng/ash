@@ -12,10 +12,12 @@ import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { renderModelConfigurationButton } from './modelPickerConfiguration.js';
+import { getModelPickerLabel } from './modelPickerPresentation.js';
 import { getModelConfigEffortLabel, modelPickerEffortOptions } from './modelPickerModelConfig.js';
 import { TabbedModelPicker } from './modelPickerTabbedWidget.js';
 import { ChatModelSliderWidget } from './chatModelSliderWidget.js';
 import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
+import { ChatInputModelSelectionController } from '../chatInputModelSelectionController.js';
 
 /** Toolbar controls project the delegate and choose a presentation for the model picker panel. */
 export class ModelPickerWidget extends Disposable {
@@ -28,12 +30,16 @@ export class ModelPickerWidget extends Disposable {
 	private actionEnabled = true;
 	private picker: TabbedModelPicker | undefined;
 	private sliderPicker: ChatModelSliderWidget | undefined;
+	private readonly selection: ChatInputModelSelectionController;
 
 	constructor(
 		private readonly delegate: IModelPickerDelegate,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
-	) { super(); }
+	) {
+		super();
+		this.selection = delegate.selection ?? this._register(new ChatInputModelSelectionController());
+	}
 
 	public render(container: HTMLElement): void {
 		const control = h(container.ownerDocument, 'div');
@@ -119,9 +125,7 @@ export class ModelPickerWidget extends Disposable {
 		const selectedEffort = this.delegate.getSelectedReasoningEffort();
 		const selectedPresetId = this.delegate.getSelectedPreset?.();
 		const selectedPreset = model?.presets?.find(p => p.id === selectedPresetId);
-		const label = sliderOpen ? localize('chat.modelPicker.selectModel', 'Select model') : automatic
-			? localize('chat.modelPicker.auto', 'Auto')
-			: model?.displayName ?? selected?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
+		const label = sliderOpen ? localize('chat.modelPicker.selectModel', 'Select model') : getModelPickerLabel(automatic, model, selected);
 		const showPreset = this.delegate.chatModelSlider && selectedPreset && (model?.presets?.length ?? 0) > 1;
 		const displayedEffort = this.delegate.chatModelSlider && this.delegate.useWorkbenchModelManagement !== false
 			? model?.reasoningEffortOverride ?? selectedEffort
@@ -180,7 +184,7 @@ export class ModelPickerWidget extends Disposable {
 	public show(anchor: HTMLElement = this.nameButton!, detailsModel?: ModelRef, focusModelOnOpen = true): void {
 		if (!this.enabled || this.visible) { return; }
 		if (this.delegate.chatModelSlider) {
-			this.sliderPicker ??= this._register(this.instantiationService.createInstance(ChatModelSliderWidget, this.delegate));
+			this.sliderPicker ??= this._register(this.instantiationService.createInstance(ChatModelSliderWidget, this.delegate, this.selection));
 			const width = this.reserveSliderWidth();
 			// Lay out the fixed trigger label before the popup reads its anchor bounds.
 			this.updateButtons(true);
@@ -189,7 +193,7 @@ export class ModelPickerWidget extends Disposable {
 				if (!this.isDisposed) { this.updateButtons(); }
 			}, focusModelOnOpen);
 		} else {
-			this.picker ??= this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate));
+			this.picker ??= this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate, this.selection));
 			this.picker.show(anchor, detailsModel, this.delegate.configureInMenu === true);
 		}
 	}

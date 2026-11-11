@@ -6,6 +6,8 @@ import { getNLSLanguage, localize } from '../../../../../nls.js';
 import { isChatResponseFeedbackTarget, type ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
 import { Lazy } from '../../../../../base/common/lazy.js';
 import { safeIntl } from '../../../../../base/common/date.js';
+import type { ResponseCitation } from '../../../../../platform/agentHost/common/agent.js';
+import { lastChatAgentReply, parseChatFollowupFooter } from './chatFollowup.js';
 
 const messageTimeFormatter = new Lazy(() => safeIntl.DateTimeFormat(getNLSLanguage(), { dateStyle: 'medium', timeStyle: 'short' }).value);
 
@@ -49,6 +51,8 @@ export interface IChatListItem {
 	readonly requestClientId?: string;
 	readonly canGiveModelFeedback?: boolean;
 	readonly canForkAfterResponse?: boolean;
+	readonly citations?: readonly ResponseCitation[];
+	readonly plan?: PlanUpdate;
 	readonly turnChanges?: TurnChangeSetSummary['statistics'];
 	readonly loadedSkills?: readonly LoadedTurnSkill[];
 	readonly queueTarget?: QueueMessageTarget;
@@ -90,6 +94,7 @@ export interface IChatListItem {
 	readonly detail?: string;
 	readonly errorCode?: TurnError['code'];
 	readonly action?: ChatTurnErrorAction;
+	readonly secondaryAction?: ChatTurnErrorAction;
 }
 
 export interface ChatStreamingResponseUpdate {
@@ -149,6 +154,7 @@ function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem
 	return {
 		id: `turn-plan:${turnId}`,
 		type: 'plan',
+		plan,
 		text: [plan.explanation, ...steps].filter((value): value is string => Boolean(value)).join('\n\n'),
 		transient: false,
 	};
@@ -164,6 +170,8 @@ export function chatTranscriptListItems(
 	changeSets: readonly TurnChangeSetSummary[] = [],
 ): readonly IChatListItem[] {
 	const directoryForTurn = source?.directoryForTurn;
+	const latestKind = latestTurnId ? turns.find(turn => turn.turnId === latestTurnId)?.kind : undefined;
+	const canRecoverLatest = !forkHistory?.archived && (latestKind === undefined || latestKind === 'coding' || latestKind === 'review');
 	const responseDirectories = directoryForTurn && new Map(turns.map(turn => [turn.turnId, directoryForTurn(turn)]));
 	const completedTurns = new Map(turns.filter(turn => turn.status === 'completed').map(turn => [turn.turnId, turn]));
 	const turnChanges = new Map<string, TurnChangeSetSummary['statistics']>();
@@ -246,7 +254,7 @@ export function chatTranscriptListItems(
 					waitingFor: !result && !stoppedTurns.has(entry.turnId) && pending?.itemId === call.itemId ? pending.kind : undefined,
 					executionStarted: startedCalls.has(identity),
 				},
-				...(source && result?.content?.some(part => part.type !== 'text') ? { attachmentSource: { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
+				...(source && result && (result.outputPreview || result.content?.some(part => part.type !== 'text')) ? { attachmentSource: { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
 			}];
 		}
 		if (entry.type === 'item' && entry.item.type === 'toolResult') {
@@ -279,7 +287,7 @@ export function chatTranscriptListItems(
 			].filter(Boolean).join(' · ');
 			return [{ id: entry.entryId, type: 'advisor' as const, text: advice, transient: false, isError: item.isError, label: localize('chat.advisor.modelLabel', 'Advisor · {0}', modelLabel), detail: details }];
 		}
-		let item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
+		let item = chatTranscriptListItem(entry, { actionsEnabled: canRecoverLatest && entry.turnId === latestTurnId });
 		const fileReferenceDirectory = item.type === 'agentMessage' && entry.turnId !== undefined ? responseDirectories?.get(entry.turnId) : undefined;
 		if (fileReferenceDirectory) item = { ...item, fileReferenceDirectory };
 		const isFinalReply = finalReplies.get(entry.turnId ?? '') === entry.entryId;
@@ -289,8 +297,12 @@ export function chatTranscriptListItems(
 		}
 		if (source && entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && completedTurns.has(entry.turnId)) {
 			const changes = isFinalReply ? turnChanges.get(entry.turnId) : undefined;
+			const turn = completedTurns.get(entry.turnId);
+			const followups = !turn?.kind || turn.kind === 'coding' ? parseChatFollowupFooter(item.text) : undefined;
+			const isFollowupSource = followups && turn && lastChatAgentReply(turn)?.itemId === entry.item.itemId;
 			item = {
 				...item,
+				text: isFollowupSource ? followups.text : item.text,
 				feedbackSource: { sessionId: source.sessionId, threadId: source.threadId, turnId: entry.turnId, itemId: entry.item.itemId },
 				requestClientId: requestClientIds.get(entry.turnId) ?? completedTurns.get(entry.turnId)?.items.find(item => item.type === 'userMessage')?.clientId ?? undefined,
 				canGiveModelFeedback: !!completedTurns.get(entry.turnId)?.model,
@@ -336,6 +348,7 @@ export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: Tr
 				detail: presentation.detail,
 				errorCode: entry.error.code,
 				action: options.actionsEnabled === false ? undefined : presentation.action,
+				secondaryAction: options.actionsEnabled === false ? undefined : presentation.secondaryAction,
 			};
 		}
 		case 'toolOutput': return {
@@ -358,6 +371,7 @@ export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItem
 	if (turn.status !== 'failed') return undefined;
 	const error = turn.error ?? undefined;
 	const presentation = error ? turnErrorPresentation(turn.turnId, error) : undefined;
+	const actionsEnabled = options.actionsEnabled !== false && (turn.kind === undefined || turn.kind === 'coding' || turn.kind === 'review');
 	return {
 		id: `turn-error:${turn.turnId}`,
 		type: 'turnError',
@@ -367,11 +381,16 @@ export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItem
 		label: presentation?.label,
 		detail: presentation?.detail,
 		errorCode: error?.code,
-		action: options.actionsEnabled === false || turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' ? undefined : presentation?.action,
+		action: actionsEnabled ? presentation?.action : undefined,
+		secondaryAction: actionsEnabled ? presentation?.secondaryAction : undefined,
 	};
 }
 
-function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action?: ChatTurnErrorAction; } {
+function turnErrorPresentation(turnId: string, error: TurnError): { readonly label: string; readonly detail: string; readonly action?: ChatTurnErrorAction; readonly secondaryAction?: ChatTurnErrorAction; } {
+	const retryAction = (): ChatTurnErrorAction | undefined => error.retryable
+		? { type: 'retry', label: localize('chat.turnError.retry', 'Try again'), turnId } : undefined;
+	const retry = (label: string, detail: string) => ({ label, detail, action: retryAction() });
+	const chooseModel = (): ChatTurnErrorAction => ({ type: 'chooseModel', label: localize('chat.turnError.chooseModel', 'Choose another model') });
 	switch (error.code) {
 		case 'policyCircuitBreaker':
 			return {
@@ -382,7 +401,7 @@ function turnErrorPresentation(turnId: string, error: TurnError): { readonly lab
 		case 'providerUnavailable':
 		case 'providerHttp':
 		case 'modelInvocationFailed':
-			return retryPresentation(turnId, localize('chat.turnError.model.label', 'Model error'), localize('chat.turnError.model.detail', 'The model request may have failed temporarily.'));
+			return retry(localize('chat.turnError.model.label', 'Model error'), localize('chat.turnError.model.detail', 'The model request may have failed temporarily.'));
 		case 'contextOverflow':
 			return {
 				label: localize('chat.turnError.context.label', 'Context limit'),
@@ -395,32 +414,34 @@ function turnErrorPresentation(turnId: string, error: TurnError): { readonly lab
 			return {
 				label: localize('chat.turnError.auth.label', 'Authentication'),
 				detail: localize('chat.turnError.auth.detail', 'Choose a model with working credentials before sending another message.'),
-				action: { type: 'chooseModel', label: localize('chat.turnError.chooseModel', 'Choose another model') },
+				action: chooseModel(),
 			};
 		case 'invalidRequest':
 			return revisePresentation(localize('chat.turnError.request.label', 'Invalid request'), localize('chat.turnError.request.detail', 'Revise the request or choose a different model.'));
 		case 'invalidResponse':
-			return retryPresentation(turnId, localize('chat.turnError.response.label', 'Invalid response'), localize('chat.turnError.response.detail', 'The model returned a response Ash could not use.'));
+			return retry(localize('chat.turnError.response.label', 'Invalid response'), localize('chat.turnError.response.detail', 'The model returned a response Ash could not use.'));
 		case 'completionPersistenceFailed':
-			return retryPresentation(turnId, localize('chat.turnError.save.label', 'Save failed'), localize('chat.turnError.save.detail', 'The Turn completion could not be saved. Review the conversation before retrying.'));
+			return retry(localize('chat.turnError.save.label', 'Save failed'), localize('chat.turnError.save.detail', 'The Turn completion could not be saved. Review the conversation before retrying.'));
 		case 'interactionDeadlineElapsed':
-			return retryPresentation(turnId, localize('chat.turnError.expired.label', 'Interaction expired'), localize('chat.turnError.expired.detail', 'The requested interaction expired before it received a response.'));
+			return retry(localize('chat.turnError.expired.label', 'Interaction expired'), localize('chat.turnError.expired.detail', 'The requested interaction expired before it received a response.'));
 		case 'toolRepetition':
 			return revisePresentation(localize('chat.turnError.repetition.label', 'Repeated tool failure'), localize('chat.turnError.repetition.detail', 'The same tool and arguments failed five times. Ask Ash to use a different approach or explain the blocker.'));
 		case 'rateLimited':
+			return {
+				label: localize('chat.turnError.rateLimit.label', 'Rate limit'),
+				detail: localize('chat.turnError.rateLimit.detail', 'The provider is limiting requests. Wait for the limit to clear or choose another model.'),
+				action: retryAction() ?? chooseModel(),
+				secondaryAction: error.retryable ? chooseModel() : undefined,
+			};
 		case 'usageLimited':
 			return {
 				label: localize('chat.turnError.usage.label', 'Usage limit'),
-				detail: localize('chat.turnError.usage.detail', "The model provider's usage limit was reached. Choose another model or try again later."),
-				action: { type: 'chooseModel', label: localize('chat.turnError.chooseModel', 'Choose another model') },
+				detail: localize('chat.turnError.usage.detail', "The model provider's usage limit was reached. Choose another model to continue."),
+				action: chooseModel(),
 			};
 		case 'worktreeCaptureFailed':
-			return retryPresentation(turnId, localize('chat.turnError.capture.label', 'Worktree capture failed'), localize('chat.turnError.capture.detail', 'The Turn could not create its immutable worktree baseline, so write tools were not allowed.'));
+			return retry(localize('chat.turnError.capture.label', 'Worktree capture failed'), localize('chat.turnError.capture.detail', 'The Turn could not create its immutable worktree baseline, so write tools were not allowed.'));
 	}
-}
-
-function retryPresentation(turnId: string, label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction; } {
-	return { label, detail, action: { type: 'retry', label: localize('chat.turnError.retry', 'Try again'), turnId } };
 }
 
 function revisePresentation(label: string, detail: string): { readonly label: string; readonly detail: string; readonly action: ChatTurnErrorAction; } {
@@ -433,6 +454,7 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 		case 'userMessage':
 			return { id: item.itemId, type: item.type, text: item.text, transient, requestClientId: item.clientId ?? undefined };
 		case 'agentMessage':
+			return { id: item.itemId, type: item.type, text: item.text, transient, citations: item.citations ?? undefined };
 		case 'reasoning':
 		case 'plan':
 			return {

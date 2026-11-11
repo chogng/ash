@@ -375,6 +375,7 @@ impl AppServer {
             client_method(&request.method) != Some(ClientMethod::GitWorktreeList)
                 || request.params.get("sourcePath").is_none_or(Value::is_null)
         });
+        let mut admitted_git_runtime = None;
         let serialization_scope = serialization_scope.map(|scope| {
             use ash_app_server_protocol::protocol::registry::ClientRequestSerializationScope as Declared;
             use request_serialization::RequestSerializationScope as Resolved;
@@ -384,9 +385,15 @@ impl AppServer {
                 Declared::HostedRepository { host, owner, name, access } => Resolved::HostedRepository { host, owner, name, access },
                 Declared::Session { session_id, access } => Resolved::Session { session_id, access },
                 Declared::ConnectionResource { namespace, resource_id, access } => Resolved::ConnectionResource { namespace, resource_id, access },
-                Declared::Repository { repository_id, access } => Resolved::Repository {
-                    common_dir: self.git_runtime_service()?.common_dir_for(repository_id.as_deref()).map_err(git_operations::git_error)?,
-                    access,
+                Declared::Repository { repository_id, access } => {
+                    let runtime = self.git_runtime_for_connection(connection, repository_id.as_deref())?;
+                    let common_dir = runtime
+                        .common_dir_for(repository_id.as_deref())
+                        .map_err(git_operations::git_error)?;
+                    // Dispatch must use the same repository owner used for scheduling, even
+                    // if the renderer selects a different Session while this request waits.
+                    admitted_git_runtime = Some(runtime);
+                    Resolved::Repository { common_dir, access }
                 },
             })
         }).transpose().map_err(|error: RpcError| {
@@ -411,6 +418,7 @@ impl AppServer {
             request,
             cancellation,
             scope: serialization_scope,
+            admitted_git_runtime,
             received_at,
             received_time,
         })
@@ -424,6 +432,7 @@ impl AppServer {
         deliver: impl FnOnce(String) -> R,
     ) -> R {
         let mut dispatch_connection = connection.clone();
+        let admitted_git_runtime = prepared.admitted_git_runtime.clone();
         self.execute_request_with(
             connection,
             prepared,
@@ -435,7 +444,14 @@ impl AppServer {
                 } else {
                     Some(crate::git_service::with_invocation(
                         cancellation.clone(),
-                        || self.dispatch(&mut dispatch_connection, request, cancellation),
+                        || {
+                            self.dispatch(
+                                &mut dispatch_connection,
+                                request,
+                                cancellation,
+                                admitted_git_runtime.as_ref(),
+                            )
+                        },
                     ))
                 }
             },
@@ -463,6 +479,7 @@ impl AppServer {
             received_at,
             received_time,
             scope,
+            ..
         } = prepared;
         let request_id = request.id.as_u64().expect("validated request ID");
         let initializing = client_method(&request.method) == Some(ClientMethod::Initialize);

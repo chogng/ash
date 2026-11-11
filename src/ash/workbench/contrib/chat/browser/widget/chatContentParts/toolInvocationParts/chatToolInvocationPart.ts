@@ -4,7 +4,7 @@ import { ChatSimpleToolProgressPart } from './chatSimpleToolProgressPart.js';
 import { TerminalToolAutoExpand } from './terminalToolAutoExpand.js';
 import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
 import { ChatConfiguration } from '../../../../common/constants.js';
-import type { IChatToolInvocation } from '../../../../common/chatService/chatService.js';
+import { chatToolResultPresentation, type IChatToolInvocation } from '../../../../common/chatService/chatService.js';
 import { ChatMcpAppSubPart } from './chatMcpAppSubPart.js';
 import type { IChatMcpAppDelegate } from './chatMcpAppModel.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
@@ -16,6 +16,8 @@ import { ChatToolOutputSubPart } from './chatToolOutputPart.js';
 import { ChatToolProgressSubPart, type ChatToolDisclosureState } from './chatToolProgressPart.js';
 import { isImageGenerationToolInvocation } from './chatToolPartUtilities.js';
 import type { IChatContentPart } from '../chatContentParts.js';
+import { ChatSubagentContentPart } from '../chatSubagentContentPart.js';
+import { equals } from '../../../../../../../base/common/objects.js';
 
 /** A view of one backend call; it never starts a tool or infers success from a closed Turn. */
 export class ChatToolInvocationPart extends Disposable implements IChatContentPart {
@@ -26,7 +28,7 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 	/** Live output and manually opened details retain their interaction state outside the viewport. */
 	public get keepMounted(): boolean {
 		const { result, stopped, waitingFor } = this.invocation;
-		return !!waitingFor || (!result && !stopped) || (this.details.open && this.progress.hasUserInteracted);
+		return !!waitingFor || (!result && !stopped) || this.app.value?.keepMounted === true || (this.details.open && this.progress.hasUserInteracted);
 	}
 	public readonly domNode: HTMLElement;
 	public readonly toolCallId: string;
@@ -37,6 +39,8 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 	private readonly streaming: ChatToolStreamingSubPart;
 	private readonly simple: ChatSimpleToolProgressPart;
 	private readonly app = this._register(new MutableDisposable<ChatMcpAppSubPart>());
+	private readonly subagent = this._register(new MutableDisposable<ChatSubagentContentPart>());
+	private subagentIdentity: string | undefined;
 	private readonly appChanges = this._register(new MutableDisposable());
 	private visible = true;
 	private autoExpanded = false;
@@ -97,6 +101,7 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 		this.invocation = invocation;
 		const { call, result } = invocation;
 		this.progress.render(invocation);
+		this.renderSubagent(invocation, source);
 		const imageGeneration = isImageGenerationToolInvocation(invocation);
 		const content = result?.content ?? [];
 		const command = invocation.call.binding?.activity?.type === 'command';
@@ -107,7 +112,7 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 		this.output.render(invocation, source, {
 			generatedImages: imageGeneration && !!result && !result.isError && content.some(part => part.type === 'imageUrl' || part.type === 'imageAttachment'),
 		});
-		this.output.domNode.hidden = this.simple.render(invocation);
+		this.output.domNode.hidden = this.simple.render(invocation) && !result?.outputPreview;
 		if (focusedOutput && !focusedOutput.isConnected && this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body) {
 			this.output.domNode.querySelector<HTMLElement>('[data-tool-section="input"] pre')?.focus({ preventScroll: true });
 		}
@@ -140,6 +145,24 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 		}
 	}
 
+	private renderSubagent(invocation: IChatToolInvocation, source: IChatListItem['attachmentSource']): void {
+		const activity = invocation.subagentActivity;
+		const target = activity && chatToolResultPresentation(invocation.result);
+		const identity = target?.type === 'sessionTarget' && source ? JSON.stringify([source.sessionId, target]) : undefined;
+		const replaced = identity !== this.subagentIdentity;
+		if (replaced) {
+			this.subagentIdentity = identity;
+			this.subagent.clear();
+			if (identity && target?.type === 'sessionTarget' && source) {
+				const part = this.subagent.value = this.instantiation.createInstance(ChatSubagentContentPart, this.domNode.ownerDocument, target, source.sessionId);
+				part.setVisible(this.visible);
+				this.domNode.prepend(part.domNode);
+			}
+		}
+		const changed = activity && this.subagent.value?.render(activity);
+		if (replaced || changed) this._onDidChangeHeight.fire();
+	}
+
 	public get codeblocks() {
 		return this.output.codeblocks.map(info => ({
 			...info, focus: () => {
@@ -156,12 +179,14 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 		if (current === next) { return true; }
 		return !!next && current.call === next.call && current.result === next.result && current.stopped === next.stopped
 			&& current.waitingFor === next.waitingFor && current.executionStarted === next.executionStarted && current.streaming === next.streaming
+			&& equals(current.subagentActivity, next.subagentActivity)
 			&& current.output.length === next.output.length && current.output.every((output, index) => output === next.output[index]);
 	}
 
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
 		this.app.value?.setVisible(visible && this.details.open);
+		this.subagent.value?.setVisible(visible);
 		this.output.setVisible(visible);
 	}
 }

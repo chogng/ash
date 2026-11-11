@@ -122,6 +122,7 @@ fn start() -> Running {
                 ExtensionCapability::Command,
                 ExtensionCapability::LanguageProvider,
                 ExtensionCapability::CustomTextEditor,
+                ExtensionCapability::DataChannel,
             ],
         },
         NonZeroU64::new(1).unwrap(),
@@ -142,7 +143,7 @@ fn start() -> Running {
     .unwrap();
     let snapshot = host.start().unwrap();
     assert_eq!(snapshot.status, ExtensionHostStatus::Ready);
-    assert_eq!(snapshot.registrations.len(), 21);
+    assert_eq!(snapshot.registrations.len(), 22);
     Running {
         host,
         authority,

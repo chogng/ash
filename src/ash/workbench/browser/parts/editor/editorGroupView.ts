@@ -264,6 +264,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			const configuration = this.configurationService;
 			const settings = [
 				EditorEnablePreviewConfiguration,
+				'editor.wordWrap',
 				'diffEditor.hideUnchangedRegions.enabled',
 				'diffEditor.renderSideBySide',
 				'diffEditor.useInlineViewWhenSpaceIsLimited',
@@ -272,7 +273,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			// The menu state follows configuration, including Settings and restored values.
 			const update = (): void => context.bufferChangeEvents(() => {
 				for (const setting of settings) {
-					context.setContext(`config.${setting}`, configuration.getValue<boolean>(setting));
+					context.setContext(`config.${setting}`, configuration.getValue(setting));
 				}
 				if (configuration.getValue<boolean>(EditorEnablePreviewConfiguration) === false) {
 					for (const input of this.inputs) this.pinEditor(input);
@@ -309,16 +310,16 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
 		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
-		// The inline title moves the retained group. Tabs handle their own drag,
-		// including when the window hosts the tab row outside this title.
+		// The inline title can be dragged by the owning layout. Tabs handle their own drag.
 		if (options.dragAndDrop) {
 			const title = this.titleControl.domNode;
 			title.draggable = true;
 			this._register(addDisposableListener(title, 'dragstart', event => {
 				if (!(event.target instanceof ownerDocument.defaultView!.Element) || event.target.closest('.ash-tab, [role="tab"], button, input, a')) return;
-				if (!this.activeInput) { event.preventDefault(); return; }
+				const dragAndDrop = options.dragAndDrop;
+				if (!this.activeInput || !dragAndDrop?.startGroup) { event.preventDefault(); return; }
 				options.onDidActivate?.();
-				options.dragAndDrop!.startGroup(this);
+				dragAndDrop.startGroup(this);
 				event.dataTransfer?.setData('text/plain', String(this.id));
 				if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
 				event.stopPropagation();

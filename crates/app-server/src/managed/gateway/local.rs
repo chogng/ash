@@ -189,7 +189,7 @@ impl<'scope> LocalTarget<'scope> {
                             server.release_switched_session_directory(&session);
                         }
                         let result = output
-                            .send(super::tag_resource_response(response, route_id).into())
+                            .send(super::tag_route_response(response, route_id).into())
                             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe));
                         drop(admission);
                         result

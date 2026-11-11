@@ -1,23 +1,17 @@
 import './media/chatHookContentPart.css';
 import { h } from '../../../../../../base/browser/dom.js';
-import { DomWidget } from '../../../../../../platform/domWidget/browser/domWidget.js';
 import { localize } from '../../../../../../nls.js';
 import type { IChatHookPart } from '../../../../../services/chat/common/chatService.js';
+import { ChatCollapsibleContentPart } from './chatCollapsibleContentPart.js';
 
 /** Collapsed Hook feedback in the conversation; the transcript owns its execution state. */
-export class ChatHookContentPart extends DomWidget {
-	public readonly domNode: HTMLDetailsElement;
-	public get element(): HTMLElement { return this.domNode; }
-	private readonly summary: HTMLElement;
+export class ChatHookContentPart extends ChatCollapsibleContentPart {
 	private readonly reason: HTMLElement;
 
 	constructor(document: Document, hookPart: IChatHookPart) {
-		super();
-		this.domNode = h(document, 'details');
-		this.domNode.className = 'ash-chat-hook';
-		this.summary = h(document, 'summary');
+		super(document, 'ash-chat-hook');
 		this.reason = h(document, 'p');
-		this.domNode.append(this.summary, this.reason);
+		this.domNode.append(this.reason);
 		this.render(hookPart);
 	}
 

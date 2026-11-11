@@ -626,7 +626,12 @@ export const SettingsNavigation = [
 				description: localize({ bundle: 'ash.settings', key: 'categories.network.description' }, 'Configure application HTTP compatibility and check service connectivity.'),
 				keywords: ['proxy', 'VPN', 'HTTP', 'domains', 'connectivity'],
 				presentation: 'general',
-				groups: [],
+				groups: [{
+					id: 'network',
+					label: localize({ bundle: 'ash.settings', key: 'categories.network.label' }, 'Network'),
+					description: '',
+					settings: ['sessions.chat.shareServiceUrl'],
+				}],
 			},
 			{
 				id: 'interaction',
@@ -760,7 +765,7 @@ export const SettingsNavigation = [
 						id: 'chat-default',
 						label: localize('settings.models.chatDefault.label', 'Chat'),
 						description: localize('settings.models.chatDefault.description', 'Choose the model used for new chats.'),
-						settings: ['cowork.defaultmodel'],
+						settings: ['sessions.chat.defaultModel'],
 					},
 				],
 			},

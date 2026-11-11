@@ -1,6 +1,7 @@
 use super::AppServer;
 use super::update_broker::UpdateBroker;
 use crate::model_catalog::ModelCatalog;
+use crate::model_catalog::short_text_reasoning_effort;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
@@ -9,7 +10,6 @@ use ash_core::ThreadRecapRequest;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelPurpose;
 use ash_protocol::ModelRef;
-use ash_protocol::ReasoningEffort;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdate;
@@ -102,7 +102,8 @@ impl ThreadRecaps {
             return Ok(None);
         };
         let entries = self.catalog.list().unwrap_or_default();
-        let selected = config.values.thread_recap_model.as_ref().or_else(|| {
+        let selection = config.values.thread_recap_model.as_ref();
+        let selected = selection.map(|selection| &selection.model).or_else(|| {
             automatic_recap_model(&entries, &request.conversation_model, |model| {
                 self.catalog
                     .current_access(model)
@@ -112,23 +113,10 @@ impl ThreadRecaps {
         let Some(selected) = selected else {
             return Ok(None);
         };
-        let effort = entries
-            .iter()
-            .find(|entry| &entry.model == selected)
-            .and_then(|entry| {
-                [
-                    ReasoningEffort::None,
-                    ReasoningEffort::Minimal,
-                    ReasoningEffort::Low,
-                ]
-                .into_iter()
-                .find(|effort| {
-                    entry
-                        .supported_reasoning_efforts
-                        .iter()
-                        .any(|option| option.effort == *effort)
-                })
-            });
+        let effort = short_text_reasoning_effort(
+            entries.iter().find(|entry| &entry.model == selected),
+            selection.and_then(|selection| selection.reasoning_effort),
+        );
         if let Some(update) = request.generate(
             &self.threads,
             self.model.as_ref(),

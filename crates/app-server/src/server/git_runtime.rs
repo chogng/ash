@@ -33,6 +33,9 @@ use ash_app_server_protocol::protocol::git::GitRepositoriesResult;
 use ash_app_server_protocol::protocol::git::GitRepositoryChangeDto;
 use ash_app_server_protocol::protocol::git::GitRepositoryDto;
 use ash_app_server_protocol::protocol::git::GitRepositoryIdentityDto;
+use ash_app_server_protocol::protocol::git::GitSessionComparisonDto;
+use ash_app_server_protocol::protocol::git::GitSessionComparisonFileDto;
+use ash_app_server_protocol::protocol::git::GitSessionComparisonResult;
 use ash_app_server_protocol::protocol::git::GitStagedCommitPreviewResult;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
 use ash_app_server_protocol::protocol::git::GitSubmoduleStateDto;
@@ -82,6 +85,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
 
+pub(crate) const SESSION_GIT_REPOSITORY_PREFIX: &str = "session_repo_";
+
 const GIT_WATCH_INTERVAL: Duration = Duration::from_millis(100);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -93,6 +98,44 @@ pub(crate) struct GitRuntime {
     discovery_interests: Mutex<HashMap<u64, Vec<GitDiscoveryOptions>>>,
     registry: RwLock<GitRepositoryRegistry>,
     registry_changed: tokio::sync::watch::Sender<()>,
+}
+
+pub(super) struct SessionGitScope {
+    pub(super) folder_id: String,
+    pub(super) authorization: Authorization,
+    pub(super) watch_authorization: Option<Authorization>,
+    pub(super) runtime: Arc<GitRuntime>,
+    pub(super) _watcher: GitWatcher,
+}
+
+impl std::fmt::Debug for SessionGitScope {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SessionGitScope")
+            .finish_non_exhaustive()
+    }
+}
+
+impl SessionGitScope {
+    pub(super) fn matches(
+        &self,
+        folder_id: &str,
+        authorization: &Authorization,
+        watch_authorization: Option<&Authorization>,
+    ) -> bool {
+        self.folder_id == folder_id
+            && self.authorization.dir() == authorization.dir()
+            && self.authorization.subject() == authorization.subject()
+            && self.authorization.permission() == authorization.permission()
+            && self.authorization.is_active()
+            && match (&self.watch_authorization, watch_authorization) {
+                (None, None) => true,
+                (Some(previous), Some(current)) => {
+                    previous.dir() == current.dir() && previous.is_active()
+                }
+                _ => false,
+            }
+    }
 }
 
 /// Ephemeral query preferences; the frontend configuration service owns persisted values.
@@ -263,25 +306,7 @@ pub(super) fn repository_contexts(
     cancellation: &CancellationToken,
 ) -> Result<Vec<ash_app_server_protocol::protocol::git::GitRepositoryContextDto>, GitRuntimeError> {
     use ash_app_server_protocol::protocol::git::GitRepositoryContextDto;
-    // Discovery directly traverses the authorized directory. Release that operation lease
-    // before GitService performs its own grant checks; recursive read-locks can deadlock
-    // when a revocation writer is waiting.
-    let roots = authorization
-        .execute(
-            authorization.subject(),
-            authorization.dir(),
-            ash_file_access::Permission::InspectRepository,
-            || {
-                discover_repository_roots(
-                    authorization,
-                    &GitDiscoveryOptions::default(),
-                    &mut GitDiscoveryScans::new(),
-                    cancellation,
-                )
-            },
-        )
-        .map_err(|_| GitRuntimeError::Service(GitServiceError::Permission))??;
-    roots
+    session_repository_roots(authorization, cancellation)?
         .into_iter()
         .map(|root| {
             let descriptor = repository_descriptor(None, authorization, &root)?;
@@ -306,6 +331,199 @@ pub(super) fn repository_contexts(
             })
         })
         .collect()
+}
+
+fn session_repository_roots(
+    authorization: &Authorization,
+    cancellation: &CancellationToken,
+) -> Result<Vec<PathBuf>, GitRuntimeError> {
+    // Discovery directly traverses the authorized directory. Release that operation lease
+    // before GitService performs its own grant checks; recursive read-locks can deadlock
+    // when a revocation writer is waiting.
+    authorization
+        .execute(
+            authorization.subject(),
+            authorization.dir(),
+            ash_file_access::Permission::InspectRepository,
+            || {
+                discover_repository_roots(
+                    authorization,
+                    &GitDiscoveryOptions::default(),
+                    &mut GitDiscoveryScans::new(),
+                    cancellation,
+                )
+            },
+        )
+        .map_err(|_| GitRuntimeError::Service(GitServiceError::Permission))?
+}
+
+/// Reads a Session worktree without registering it in the window workspace's Git runtime.
+pub(super) fn session_comparison(
+    authorization: &Authorization,
+    repository_id: &str,
+    comparison: GitSessionComparisonDto,
+    cancellation: &CancellationToken,
+) -> Result<GitSessionComparisonResult, GitRuntimeError> {
+    let mut selected = None;
+    for root in session_repository_roots(authorization, cancellation)? {
+        if repository_descriptor(None, authorization, &root)?.id == repository_id {
+            selected = Some(root);
+            break;
+        }
+    }
+    let root = selected.ok_or(GitRuntimeError::RepositoryNotFound)?;
+    let service =
+        GitService::new(authorization.clone(), root.clone()).map_err(GitRuntimeError::Service)?;
+    let (repository, snapshot) = service
+        .snapshot_for_request(cancellation)
+        .map_err(GitRuntimeError::Service)?;
+    let prefix = root
+        .strip_prefix(repository.worktree_root())
+        .map_err(|_| GitRuntimeError::Boundary)?;
+    let mut files = Vec::new();
+    let mut remaining: usize = 8 * 1024 * 1024;
+    let mut push = |path, original_path, original: Option<&[u8]>, modified: Option<&[u8]>| {
+        let size = original.map_or(0, <[u8]>::len) + modified.map_or(0, <[u8]>::len);
+        remaining = remaining
+            .checked_sub(size)
+            .ok_or(GitRuntimeError::Boundary)?;
+        let content = |bytes| match commit_file_content(bytes) {
+            GitCommitFileContentDto::Binary { .. } => {
+                GitCommitFileContentDto::Binary { data: None }
+            }
+            content => content,
+        };
+        files.push(GitSessionComparisonFileDto {
+            path,
+            original_path,
+            original: content(original),
+            modified: content(modified),
+        });
+        Ok(())
+    };
+    match comparison {
+        GitSessionComparisonDto::Branches => {
+            let state = service
+                .reference_state_for_request(&repository, cancellation)
+                .map_err(GitRuntimeError::Service)?;
+            let mut references = project_references(&state.references);
+            references.retain(|reference| {
+                reference.kind != GitReferenceKindDto::Tag && !reference.current
+            });
+            return Ok(GitSessionComparisonResult::Branches { references });
+        }
+        GitSessionComparisonDto::Branch {
+            base_object_id,
+            head_object_id,
+        } => {
+            let valid_oid = |id: &str| {
+                matches!(id.len(), 40 | 64) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+            };
+            if !valid_oid(&base_object_id)
+                || !valid_oid(&head_object_id)
+                || !matches!(snapshot.head(), GitHead::Branch { object_id, .. } | GitHead::Detached { object_id } if object_id == &head_object_id)
+            {
+                return Err(GitRuntimeError::Boundary);
+            }
+            let changes = service
+                .compare_changes(
+                    &head_object_id,
+                    &base_object_id,
+                    ash_git::GitComparisonMode::Direct,
+                )
+                .map_err(GitRuntimeError::Service)?;
+            for change in changes
+                .changes
+                .iter()
+                .filter_map(|change| dir_commit_change(change, prefix))
+            {
+                let change = change?;
+                let contents = service
+                    .commit_file(
+                        &repository,
+                        &head_object_id,
+                        Path::new(&change.path),
+                        Some(&base_object_id),
+                    )
+                    .map_err(GitRuntimeError::Service)?;
+                push(
+                    change.path,
+                    change.original_path,
+                    contents.original(),
+                    contents.modified(),
+                )?;
+            }
+        }
+        GitSessionComparisonDto::Uncommitted => {
+            for change in snapshot
+                .changes()
+                .iter()
+                .filter_map(|change| dir_change(change, prefix))
+            {
+                let change = change?;
+                let path = Path::new(&change.path);
+                let original = change.original_path.as_deref().map_or(path, Path::new);
+                if change.conflicted {
+                    let contents = service
+                        .conflict_file(path)
+                        .map_err(GitRuntimeError::Service)?;
+                    push(
+                        change.path,
+                        change.original_path,
+                        contents.current(),
+                        contents.result(),
+                    )?;
+                    continue;
+                }
+                let staged = (change.index_status != GitChangeStatusDto::Unmodified)
+                    .then(|| {
+                        service.change_file_at_paths(
+                            &repository,
+                            if matches!(
+                                change.index_status,
+                                GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied
+                            ) {
+                                original
+                            } else {
+                                path
+                            },
+                            path,
+                            GitChangeFileComparison::Staged,
+                        )
+                    })
+                    .transpose()
+                    .map_err(GitRuntimeError::Service)?;
+                let unstaged = (change.worktree_status != GitChangeStatusDto::Unmodified)
+                    .then(|| {
+                        service.change_file_at_paths(
+                            &repository,
+                            if matches!(
+                                change.worktree_status,
+                                GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied
+                            ) {
+                                original
+                            } else {
+                                path
+                            },
+                            path,
+                            GitChangeFileComparison::Unstaged,
+                        )
+                    })
+                    .transpose()
+                    .map_err(GitRuntimeError::Service)?;
+                let before = staged
+                    .as_ref()
+                    .or(unstaged.as_ref())
+                    .and_then(|file| file.original());
+                let after = unstaged
+                    .as_ref()
+                    .or(staged.as_ref())
+                    .and_then(|file| file.modified());
+                push(change.path, change.original_path, before, after)?;
+            }
+        }
+    }
+    Ok(GitSessionComparisonResult::Changes { files })
 }
 impl GitRuntime {
     pub(super) fn new(
@@ -3529,8 +3747,15 @@ fn repository_descriptor(
     } else {
         path.as_bytes()
     });
-    let digest = Sha256::digest(identity);
-    let id = format!("repo_{:x}", digest);
+    let prefix = if let Some(folder_id) = dir_id.as_deref().filter(|id| id.starts_with("session:"))
+    {
+        identity.push(0);
+        identity.extend_from_slice(folder_id.as_bytes());
+        SESSION_GIT_REPOSITORY_PREFIX
+    } else {
+        "repo_"
+    };
+    let id = format!("{prefix}{:x}", Sha256::digest(identity));
     Ok(GitRepositoryDto {
         parent_path: None,
         id,

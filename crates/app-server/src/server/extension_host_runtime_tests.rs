@@ -243,7 +243,8 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
         vec![
             ash_external_ext::ExtensionCapability::Command,
             ash_external_ext::ExtensionCapability::CustomTextEditor,
-            ash_external_ext::ExtensionCapability::LanguageProvider
+            ash_external_ext::ExtensionCapability::LanguageProvider,
+            ash_external_ext::ExtensionCapability::DataChannel,
         ]
     );
     assert!(matches!(

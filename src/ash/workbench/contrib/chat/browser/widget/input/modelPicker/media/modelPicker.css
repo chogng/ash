@@ -444,7 +444,8 @@
 	grid-column: 2;
 }
 
-.ash-chat-slider-speed-row > .ash-action-bar:first-child {
+.ash-chat-slider-speed-row > .ash-action-bar:first-child,
+.ash-chat-slider-speed-row > .ash-chat-slider-speed-menu {
 	grid-column: 1;
 	justify-self: start;
 }

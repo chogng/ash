@@ -11,6 +11,7 @@
 .ash-desktop-editor-area-titlebar-docked::before {
 	content: "";
 	position: absolute;
+	z-index: 4;
 	inset: 0 auto 0 0;
 	border-left: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
@@ -35,6 +36,17 @@
 	content: none;
 }
 
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-tool-editor-workspace:not(.ash-product-page-host)
+	.ash-editor-title-with-group-header:not(
+		.ash-editor-title-header-hosted
+	)::after {
+	content: "";
+	height: var(--ash-strokeThickness);
+	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	pointer-events: none;
+}
+
 .ash-sessions-tool-editor .ash-editor-group-header .ash-tab-list-inset {
 	--ash-tabList-activeBackground: color-mix(
 		in srgb,
@@ -43,6 +55,30 @@
 	);
 	--ash-tab-list-inactive-background: transparent;
 	--ash-actionBar-gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-sessions-tool-editor
+	.ash-editor-group-header {
+	& .ash-tab-list-inset {
+		/* Match the editor group header's leading inset on both block edges. */
+		--ash-tab-height: calc(
+			var(--ash-pane-titleHeight) - 2 * var(--ash-spacing-size40)
+		);
+	}
+
+	&.ash-editor-group-header-hosted {
+		/* The native title bar can be taller than an inline editor header. */
+		& > .ash-editor-tabs-control,
+		& .ash-multi-row-editor-tabs-control > .ash-multi-editor-tabs-control {
+			height: 100%;
+		}
+
+		& .ash-tab-list-inset {
+			--ash-tab-height: 100%;
+			height: calc(100% - 2 * var(--ash-spacing-size40));
+		}
+	}
 }
 
 .ash-sessions-tool-editor
@@ -60,11 +96,35 @@
 	border-radius: var(--ash-cornerRadius-medium);
 }
 
+.ash-sessions-window[data-layout-style="flat"]
+	[data-editor-tool="terminal"]
+	.ash-editor-group-header
+	.ash-tab-list-inset {
+	--ash-tabList-activeBackground: var(--ash-toolbar-hoverBackground);
+	--ash-tabList-hoverBackground: color-mix(
+		in srgb,
+		var(--ash-tabList-activeBackground) 50%,
+		transparent
+	);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size80);
+
+	& .ash-tab {
+		border-radius: var(--ash-cornerRadius-large);
+	}
+
+	& .ash-tab-label .ash-icon-label-icon {
+		display: none;
+	}
+}
+
 .ash-sessions-tool-editor
 	.ash-editor-group-header
 	.ash-tab-list-inset
 	.ash-tab:not(.checked, .selected):hover {
-	background-color: var(--ash-editorGroupHeader-tabsBackground);
+	background-color: var(
+		--ash-tabList-hoverBackground,
+		var(--ash-editorGroupHeader-tabsBackground)
+	);
 }
 
 .ash-sessions-tool-editor
@@ -76,12 +136,28 @@
 }
 
 .ash-sessions-tool-header-slot {
-	display: contents;
+	position: relative;
+	display: flex;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-sessions-tool-header-slot
+	+ .ash-sessions-tool-header-slot::before {
+	content: "";
+	position: absolute;
+	z-index: 4;
+	inset: 0 auto 0 0;
+	width: var(--ash-strokeThickness);
+	background: var(--ash-contrastBorder, var(--ash-editorGroup-border));
+	pointer-events: none;
 }
 
 .ash-sessions-tool-header-slot > .ash-editor-group-header {
 	box-sizing: border-box;
-	flex: 1 0 min(100%, 240px);
+	flex: 1 1 auto;
+	min-width: 0;
 	height: 100%;
 	align-items: center;
 	background: transparent;
@@ -93,13 +169,22 @@
 
 .ash-sessions-tool-header-label {
 	min-width: 0;
+	align-self: center;
 	padding-inline: var(--ash-spacing-size40);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.ash-sessions-tool-header-slot .has-tabs > .ash-sessions-tool-header-label {
+.ash-editor-group-header.has-tabs > .ash-sessions-tool-header-label {
+	display: none;
+}
+
+[data-editor-tool="changes"]
+	.ash-editor-group-header:has(
+		[data-action-id="submenu.SessionsChangesScope"]
+	)
+	> .ash-sessions-tool-header-label {
 	display: none;
 }
 
@@ -137,17 +222,6 @@
 }
 
 .ash-desktop-editor-area
-	.ash-tool-editor-workspace:not(.ash-product-page-host)
-	.ash-workbench-part-frame
-	> .ash-workbench-part {
-	border-radius: var(--ash-cornerRadius-xLarge);
-	box-shadow:
-		0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border),
-		0 2px 8px
-			color-mix(in srgb, var(--ash-sessions-inputShadow) 45%, transparent);
-}
-
-.ash-desktop-editor-area
 	.ash-product-page-host
 	> .ash-workbench-part-frame
 	> .ash-workbench-part {
@@ -156,18 +230,9 @@
 }
 
 .ash-desktop-editor-area
+	.ash-tool-editor-workspace
 	.ash-code-editor-groups
 	.ash-editor-group:not(.ash-code-page-group) {
 	border-radius: 0;
 	box-shadow: none;
-}
-
-:is(.hc-black, .hc-light)
-	.ash-desktop-editor-area
-	.ash-tool-editor-workspace:not(.ash-product-page-host)
-	.ash-workbench-part-frame
-	> .ash-workbench-part {
-	box-shadow: none;
-	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }

@@ -108,6 +108,7 @@ fn skill_load_notification_matches_its_historical_position() {
             instructions: None,
             directory: None,
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             tool_profile: None,
             tool_mode: ash_protocol::ToolMode::Direct,
@@ -621,6 +622,7 @@ fn reconnect_snapshot_keeps_streamed_entries_unique_and_in_first_seen_order() {
                     turn_id: turn_id(),
                     text: "One answer".into(),
                     phase: Some(ash_protocol::MessagePhase::FinalAnswer),
+                    citations: None,
                 },
                 transient: true,
                 timestamp: None,
@@ -780,6 +782,7 @@ fn thread_with_turn(id: TurnId, status: ash_protocol::TurnStatus) -> Thread {
         instructions: None,
         directory: None,
         model: None,
+        model_routing: None,
         reasoning_effort: None,
         tool_profile: None,
         tool_mode: ash_protocol::ToolMode::Direct,
@@ -862,6 +865,7 @@ fn durable(sequence: u64, event: ThreadEvent) -> ThreadUpdateEnvelope {
 fn agent_item(item: &str, text: &str) -> ThreadItem {
     ThreadItem::AgentMessage {
         phase: None,
+        citations: None,
         item_id: item_id(item),
         turn_id: turn_id(),
         text: text.into(),

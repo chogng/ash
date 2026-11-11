@@ -139,10 +139,10 @@ Library、Design 通过 `IEditorService` 打开，暂时隐藏会话面板。
 `ISessionsService` 管理窗口的选择、可见集合和导航；目录更新不会自行
 切换前台会话。`SessionsPart` 保留一个独立的 `SessionGridLayout`，每个可见
 会话对应一个 `SessionView`，不进入文档 EditorPart 或标签生命周期。
-SessionView 按需创建并保留 Code 的 ChatWidget 或 Chat 的 CoworkWidget；
-每次只挂载当前渲染器。切换时转移未发送文字、模式和附件，并清空旧输入，
-防止切回时恢复过期草稿。输入实例管理文字、附件和本次输入操作；各自的
-WidgetModel 管理模式、模型、思考强度与权限选择。
+SessionView 按需创建并保留 Code 和 Chat 两种布局的会话面板，每次只挂载
+当前布局。两者复用 ChatWidget、原生会话模型和草稿存储绑定。切换时转移
+未发送文字、模式和附件，并清空旧输入，防止切回时恢复过期草稿。输入实例
+管理文字、附件和本次输入操作。会话模型管理模式、模型、思考强度与权限选择。
 
 新建、选择、关闭和前进后退作用于窗口的共同选择。关闭已创建会话的面板
 不会归档后端会话；关闭未创建会话会清理其身份和草稿。

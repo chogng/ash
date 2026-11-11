@@ -21,7 +21,8 @@ test('Artifacts recommends the optional Docs editor and switches real rich and M
 	const quick = new QuickAccess(page);
 	const artifacts = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true });
 	await artifacts.click();
-	await page.locator('.ash-creator-home').getByRole('button', { name: 'Docs', exact: true }).click();
+	await quick.runCommand('sessions.creator.chooseDocsEditor');
+	await quick.select('New blank document');
 	const markdown = new Editor(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)'));
 	await markdown.waitForEditorFocus();
 	await markdown.waitForTypeInEditor('# Original Markdown draft');
@@ -45,7 +46,8 @@ test('Artifacts recommends the optional Docs editor and switches real rich and M
 	await expect(details.getByRole('button', { name: 'Revoke execution authorization', exact: true })).toBeVisible();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await artifacts.click();
-	await page.locator('.ash-creator-home').getByRole('button', { name: 'Docs', exact: true }).click();
+	await quick.runCommand('sessions.creator.chooseDocsEditor');
+	await quick.select('New blank document');
 	const rich = page.locator('.stanza-structured-editor-pane:visible textarea.stanza-document-text-input').first();
 	await expect(rich).toBeVisible({ timeout: 20_000 });
 	await rich.fill('Rich Docs round trip');
@@ -55,5 +57,5 @@ test('Artifacts recommends the optional Docs editor and switches real rich and M
 	await expect(rich).toHaveValue('Rich Docs round trip');
 	await page.screenshot({ path: testInfo.outputPath('docs-rich-round-trip.png') });
 	await artifacts.click();
-	await expect(page.locator('.ash-artifacts-card.docs')).toHaveCount(4);
+	await expect(page.locator('.ash-artifacts-card.docs:not([data-artifact-example])')).toHaveCount(4);
 });

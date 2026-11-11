@@ -1,6 +1,11 @@
 .ash-workbench-titlebar.ash-sessions-titlebar {
-	padding: 0 var(--ash-titlebar-controls-rightInset, 0px) 0
-		var(--ash-titlebar-controls-leftInset, 0px);
+	padding: 0
+		max(
+			0px,
+			var(--ash-titlebar-controls-rightInset, 0px) -
+				var(--ash-titlebar-trailing-region-width, 0px)
+		)
+		0 var(--ash-titlebar-controls-leftInset, 0px);
 	background: linear-gradient(
 		to right,
 		var(--ash-sideBar-background) 0 var(--ash-sessions-sidebar-width, 0px),
@@ -97,11 +102,12 @@
 	-webkit-app-region: drag;
 }
 
-.ash-sessions-titlebar-tool-headers .ash-tab,
-.ash-sessions-titlebar-tool-headers .ash-toolbar,
-.ash-sessions-titlebar-tool-headers .ash-scrollbar-track.ash-scrollbar-visible,
-.ash-sessions-titlebar-tool-headers .ash-scrollbar-track.active {
-	-webkit-app-region: no-drag;
+.ash-sessions-window[data-layout-style="flat"]
+	.ash-sessions-titlebar-tool-headers:not([hidden]) {
+	/* Paint the edge without shifting the first tool's header off its column. */
+	border-left-width: 0;
+	box-shadow: inset var(--ash-strokeThickness) 0
+		var(--ash-contrastBorder, var(--ash-border));
 }
 
 .ash-sessions-titlebar.has-tool-headers .ash-sessions-titlebar-right {
@@ -123,14 +129,9 @@
 	padding-inline-start: var(--ash-spacing-size40);
 }
 
-.ash-sessions-titlebar-page-content,
-.ash-sessions-titlebar.has-page-content.show-session-alongside-page
-	.ash-sessions-titlebar-session-content {
+.ash-sessions-titlebar-page-content {
 	box-sizing: border-box;
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
-}
-
-.ash-sessions-titlebar-page-content {
 	padding-inline-end: var(--ash-spacing-size120);
 }
 
@@ -155,32 +156,8 @@
 	-webkit-app-region: no-drag;
 }
 
-.ash-sessions-titlebar.has-page-content:not(.show-session-alongside-page)
-	.ash-sessions-titlebar-session-content {
+.ash-sessions-titlebar.has-page-content .ash-sessions-titlebar-session-content {
 	display: none;
-}
-
-.ash-sessions-titlebar.show-session-alongside-page
-	.ash-sessions-titlebar-page-content {
-	flex: 0 1 auto;
-	padding-inline-end: var(--ash-spacing-size40);
-}
-
-.ash-sessions-titlebar-separator {
-	display: none;
-	flex-shrink: 0;
-	color: var(--ash-description-foreground);
-	user-select: none;
-}
-
-.ash-sessions-titlebar.has-page-content.show-session-alongside-page
-	.ash-sessions-titlebar-separator {
-	display: block;
-}
-
-.ash-sessions-titlebar.has-page-content.show-session-alongside-page
-	.ash-sessions-titlebar-session-content {
-	flex-basis: auto;
 }
 
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {

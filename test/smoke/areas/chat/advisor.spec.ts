@@ -273,32 +273,34 @@ async function expectModelPickerAnchored(picker: import('@playwright/test').Loca
 	expect(popup!.x + popup!.width).toBeGreaterThan(button!.x);
 }
 
-test('Advisor settings and direct questions use one chat command', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Advisor settings and direct questions use one chat command', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+	const chat = page.locator('.ash-chat-view-pane');
+	if (!await chat.isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	await expect(page.locator('.ash-chat-status')).not.toHaveText('Loading chat...');
-	const input = page.locator('.ash-chat-input-editor .stanza-editor-input');
+	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
+	await expect(input).toBeEditable();
 	const command = async (text: string): Promise<void> => {
 		await input.focus();
 		await page.keyboard.press('ControlOrMeta+A');
 		await page.keyboard.insertText(text);
 		await page.keyboard.press('Escape');
-		await page.keyboard.press('Enter');
+		await chat.getByRole('button', { name: 'Send', exact: true }).click();
 	};
 	await command('/advisor');
-	const picker = page.getByRole('dialog', { name: 'Chat settings and advisor model' });
-	await expect(picker).toBeVisible();
-	await expect(picker.getByPlaceholder('Choose an advisor model or open all settings')).toBeVisible();
-	await expect(picker.getByText('Manage Model Connections')).toBeVisible();
-	await expect(picker.getByText('Sol 6.1', { exact: true })).toBeVisible();
-	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
-	await page.keyboard.press('Escape');
+	const settings = page.getByRole('dialog', { name: 'Ash Settings', exact: true });
+	await expect(settings).toBeVisible();
+	await settings.locator('[data-settings-category-id="agents"]').click();
+	const advisor = settings.getByRole('group', { name: 'Advisor', exact: true });
+	const model = advisor.getByRole('button', { name: /^Advisor model:/u });
+	await expect(model).toHaveAccessibleName('Advisor model: Disable');
+	await expect(chat.locator('.ash-chat-item-userMessage')).toHaveCount(0);
+	await settings.getByRole('toolbar', { name: 'Close Ash Settings', exact: true }).getByRole('button').click();
+	await expect(settings).toBeHidden();
 	await command('/advisor Check cancellation');
-	const status = page.locator('.ash-chat:visible .ash-chat-status');
-	await expect(status).toHaveText('Configure an advisor model in Chat Settings before asking for a second opinion');
-	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
+	await expect(chat.getByText('Configure an advisor model in Chat Settings before asking for a second opinion', { exact: true })).toBeVisible();
+	await expect(chat.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 });
 
 test('Model provider key entry uses the App Server and shows only saved status', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {

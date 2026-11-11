@@ -142,6 +142,7 @@ impl ConversationPreview {
         }
         self.request.history = Some(ThreadSnapshotHistory::Before {
             turn_id: boundary.oldest_turn_id.clone()?,
+            preview_tool_results: None,
             turn_limit: 50,
         });
         self.loading = true;

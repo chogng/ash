@@ -17,7 +17,7 @@ import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
-import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsEntryService } from '../../../services/layout/common/sessionsEntryService.js';
 import { BotsEditor, BotsNavigationView, botsFocusContext, botsNavigationId, botsResource } from './botsViews.js';
 
 const title = localize2('sessions.bots.title', 'Bots');
@@ -44,7 +44,7 @@ registerAction2(class OpenBots extends Action2 {
 		});
 	}
 	public override run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
-		return accessor.get(ISessionsLayoutService).openEntry({
+		return accessor.get(ISessionsEntryService).openEntry({
 			id: 'bots', workspaceMode: 'code', activityContext: selectedContext,
 			content: 'editor', sidebarContainerId: botsNavigationId, showWorkspaceModeControl: false, showEditorTabs: false,
 			restoreCommand: 'sessions.open.bots', focus: 'sidebar',

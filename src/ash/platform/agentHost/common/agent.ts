@@ -62,6 +62,7 @@ interface SessionOperations {
 		readonly commandInterpretation?: CommandInterpretation;
 		readonly approvalMode?: ApprovalMode | null;
 		readonly model?: ModelRef | null;
+		readonly modelRouting?: 'auto';
 		readonly reasoningEffort?: ModelReasoningEffort | null;
 		readonly toolMode?: 'direct' | 'codeMode' | 'codeModeOnly' | null;
 		readonly input: AgentInput[];
@@ -169,6 +170,7 @@ export interface AgentExecutionNode {
 	readonly threadId: string;
 	readonly threadSequence: number;
 	readonly title: string;
+	readonly origin?: ThreadOrigin | null;
 	readonly parentThreadId?: string | null;
 	readonly forkedFromId?: string | null;
 	readonly executionStatus: 'idle' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
@@ -266,6 +268,7 @@ export interface QueueEnqueueParams extends SessionMutationParams {
 	readonly threadId: string;
 	readonly mode: SessionMode;
 	readonly model?: ModelRef | null;
+	readonly modelRouting?: 'auto';
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly approvalMode?: ApprovalMode;
 	readonly input: AgentInput[];
@@ -294,6 +297,7 @@ export interface QueueMessageTarget extends QueueListParams {
 
 export type QueueMessageEdit =
 	| { readonly type: 'pause' | 'resume'; }
+	| { readonly type: 'move'; readonly direction: 'up' | 'down'; }
 	| { readonly type: 'replaceText'; readonly text: string; }
 	| { readonly type: 'replaceTextWithDelivery'; readonly text: string; readonly delivery: { readonly type: 'queued' | 'immediate'; } | { readonly type: 'steering'; readonly turnId: string; }; }
 	| { readonly type: 'send'; };
@@ -445,6 +449,10 @@ export type ChatContentPart =
 type MessagePhase = 'commentary' | 'partial_answer' | 'final_answer' | { readonly other: string; };
 
 /** User input clientId identifies the submitting command across all parts; legacy history may omit it. */
+export type ResponseCitation =
+	| { readonly type: 'web'; readonly url: string; readonly title: string; }
+	| { readonly type: 'code'; readonly url: string; readonly license: string; readonly snippet: string; };
+
 export type ThreadItem =
 	| { readonly type: 'userMessage'; readonly clientId?: string | null; readonly itemId: string; readonly turnId: string; readonly text: string; }
 	| {
@@ -477,6 +485,7 @@ export type ThreadItem =
 		readonly turnId: string;
 		readonly text: string;
 		readonly phase?: MessagePhase | null;
+		readonly citations?: readonly ResponseCitation[] | null;
 	}
 	| {
 		readonly type: 'reasoning';
@@ -497,6 +506,7 @@ export type ThreadItem =
 	}
 	| {
 		readonly type: 'toolResult';
+		readonly outputPreview?: { readonly itemOrdinal: number; };
 		readonly itemId: string;
 		readonly turnId: string;
 		readonly toolCallId: string;
@@ -561,6 +571,7 @@ export interface Turn {
 	readonly mode: ChatMode;
 	readonly approvalMode: ApprovalMode;
 	readonly model?: ModelRef | null;
+	readonly modelRouting?: 'selected' | 'fallback' | 'reused';
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly plan?: PlanUpdate | null;
 	/** Durable execution-start evidence; results and pending interactions take precedence. */
@@ -670,6 +681,13 @@ export interface UserInputValidation {
 
 export interface RequestUserInput {
 	readonly questions: readonly UserInputQuestion[];
+	readonly planReview?: {
+		readonly markdown: string;
+		readonly decisionQuestionId: string;
+		readonly approveValue: string;
+		readonly reviseValue: string;
+		readonly feedbackQuestionId: string;
+	} | null;
 }
 
 export interface ActionApprovalCapability {
@@ -962,8 +980,8 @@ export interface ThreadTranscriptUpdateEnvelope {
 
 /** A bounded, chronological Turn window. Omission preserves full-history callers. */
 export type ThreadSnapshotHistory =
-	| { readonly type: 'latest'; readonly turnLimit: number; }
-	| { readonly type: 'before'; readonly turnId: string; readonly turnLimit: number; };
+	| { readonly type: 'latest'; readonly turnLimit: number; readonly previewToolResults?: boolean; }
+	| { readonly type: 'before'; readonly turnId: string; readonly turnLimit: number; readonly previewToolResults?: boolean; };
 
 export interface ThreadHistoryBoundary {
 	readonly hasOlderTurns: boolean;
@@ -1008,6 +1026,19 @@ export interface IRestoreMessageOptions {
 }
 
 /** Locates a stored media part without exposing a backend path or accepting a storage digest. */
+export interface ToolResultTextSource {
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly turnId: string;
+	readonly itemId: string;
+	readonly itemOrdinal: number;
+}
+
+export interface ToolResultTextPage {
+	readonly text: string;
+	readonly nextOffset?: number;
+}
+
 export interface AgentAttachmentSource {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;

@@ -3,12 +3,11 @@ import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import type { AgentRoleCatalog, AgentRoleDefinition } from '../../../../platform/agentHost/common/agent.js';
+import type { AgentRoleDefinition } from '../../../../platform/agentHost/common/agent.js';
 import { IAgentSessionService } from '../../../../platform/agentHost/common/agentService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -17,18 +16,18 @@ import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultS
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 
-/** Shared role disclosure and editing UI; the backend owns the definitions. */
+/** Shared custom Agent management; the backend owns the definitions. */
 export class AgentRolesWidget extends Disposable {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	/** Hosts may mount this root; content and focus remain owned by the widget. */
 	public readonly domNode: HTMLElement;
 	private readonly statusDomNode: HTMLElement;
-	private readonly groupsDomNode: HTMLElement;
+	private readonly listDomNode: HTMLElement;
 	private readonly refresh: Button;
 	private readonly entries = new Map<string, { readonly digest: string; readonly resource: string | undefined; readonly domNode: HTMLElement; }>();
 	private readonly entryResources = this._register(new DisposableMap<string, DisposableStore>());
-	private catalog: AgentRoleCatalog | undefined;
+	private customRoles: readonly AgentRoleDefinition[] | undefined;
 	private visible = false;
 	private loading = false;
 	private revision = 0;
@@ -45,8 +44,12 @@ export class AgentRolesWidget extends Disposable {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'section');
-		this.domNode.className = 'ash-agent-roles-settings';
-		this.domNode.setAttribute('aria-label', localize({ bundle: 'ash.settings', key: 'roles.title' }, 'Agent definitions'));
+		this.domNode.className = 'ash-agent-roles-settings ash-settings-card-section';
+		const title = localize({ bundle: 'ash.settings', key: 'roles.custom' }, 'Custom Agents');
+		this.domNode.setAttribute('aria-label', title);
+		const heading = h(document, 'h4');
+		heading.className = 'ash-settings-card-title';
+		heading.textContent = title;
 		const actions = h(document, 'div');
 		actions.className = 'ash-agent-roles-actions';
 		this.refresh = this._register(new Button(actions, {
@@ -55,17 +58,17 @@ export class AgentRolesWidget extends Disposable {
 		}));
 		this._register(this.refresh.onDidClick(() => { void this.load(); }));
 		const description = h(document, 'p');
-		description.textContent = localize({ bundle: 'ash.settings', key: 'roles.description' }, 'Inspect built-in roles and customize directory Agents. Saved changes apply to new runs after refresh; running Agents keep their frozen definitions.');
+		description.textContent = localize({ bundle: 'ash.settings', key: 'roles.description' }, 'Edit Agents from .ash/agents in the authorized directory. Refresh after saving to apply changes to new runs.');
 		this.statusDomNode = h(document, 'p');
 		this.statusDomNode.setAttribute('role', 'status');
 		this.statusDomNode.setAttribute('aria-live', 'polite');
-		this.groupsDomNode = h(document, 'div');
-		this.domNode.append(description, actions, this.statusDomNode, this.groupsDomNode);
+		this.listDomNode = h(document, 'div');
+		this.domNode.append(heading, description, actions, this.statusDomNode, this.listDomNode);
 		container.append(this.domNode);
 		this._register(toDisposable(() => { this.revision++; this.entries.clear(); this.domNode.remove(); }));
 		this._register(remote.onDidChangeConnectionState(state => {
 			this.revision++;
-			this.catalog = undefined;
+			this.customRoles = undefined;
 			this.clearEntries();
 			this.statusDomNode.textContent = localize({ bundle: 'ash.settings', key: 'roles.disconnected' }, 'Connect to App Server to inspect Agent definitions.');
 			this.refresh.enabled = state === 'connected';
@@ -90,7 +93,7 @@ export class AgentRolesWidget extends Disposable {
 					if (!this.visible || !isHTMLElement(focused) || !this.domNode.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.AgentRolesSettings, { type },
 						() => type === AccessibleViewType.Help
-							? localize({ bundle: 'ash.settings', key: 'roles.help' }, 'Agent definitions\nUse Tab to reach a role. Press Enter or Space to expand its prompt and capability declarations. Built-in definitions are read only. Copy as custom opens an unsaved Markdown draft: save it in the authorized directory under .ash/agents with a lowercase filename matching its name. Workflow roles can be inspected here but remain restricted to their product entry points. Edit definition opens a custom Agent in the editor, where normal save, undo and conflict handling apply. Refresh definitions reloads saved files and reports invalid definitions. Existing runs keep their frozen configuration. The accessible view includes all role definitions. Escape closes help and returns focus.')
+							? localize({ bundle: 'ash.settings', key: 'roles.help' }, 'Custom Agents\nUse Tab to reach a custom Agent. Press Enter or Space to expand its instructions and capabilities. Edit definition opens the file in the editor. Refresh definitions reloads saved files for new runs and reports invalid definitions. The accessible view lists custom Agents. Escape closes help and returns focus.')
 							: this.getAccessibleContent(),
 						() => { if (focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.AgentRolesSettings);
 				},
@@ -99,7 +102,7 @@ export class AgentRolesWidget extends Disposable {
 	}
 
 	public get keywords(): readonly string[] {
-		return ['roles', 'prompt', 'tools', 'skills', ...this.catalog?.agents.flatMap(role => [role.name, role.description]) ?? []];
+		return ['roles', 'prompt', 'tools', 'skills', ...this.customRoles?.flatMap(role => [role.name, role.description]) ?? []];
 	}
 
 	public revealRole(role: Pick<AgentRoleDefinition, 'name' | 'source'>): void {
@@ -108,9 +111,9 @@ export class AgentRolesWidget extends Disposable {
 	}
 
 	private revealPendingRole(): void {
-		if (!this.visible || !this.pendingRole || !this.catalog) return;
+		if (!this.visible || !this.pendingRole || !this.customRoles) return;
 		const requested = this.pendingRole;
-		const role = this.catalog?.agents.find(candidate => candidate.name === requested.name
+		const role = this.customRoles.find(candidate => candidate.name === requested.name
 			&& candidate.source.type === requested.source.type
 			&& (candidate.source.type !== 'directory' || requested.source.type === 'directory' && candidate.source.id === requested.source.id));
 		const entry = role && this.entries.get(JSON.stringify([role.source, role.name]));
@@ -121,8 +124,6 @@ export class AgentRolesWidget extends Disposable {
 			return;
 		}
 		const details = entry.domNode as HTMLDetailsElement;
-		const group = details.closest<HTMLDetailsElement>('.ash-agent-roles-workflow');
-		if (group) group.open = true;
 		details.open = true;
 		details.querySelector('summary')?.focus();
 		this.pendingRole = undefined;
@@ -147,15 +148,15 @@ export class AgentRolesWidget extends Disposable {
 		try {
 			const catalog = await this.agents.readRoleCatalog();
 			if (!this.isCurrent(revision)) { return; }
-			this.catalog = catalog;
-			this.renderCatalog(catalog);
+			this.customRoles = catalog.agents.filter(role => role.source.type === 'directory');
+			this.renderRoles(this.customRoles);
 			this.statusDomNode.textContent = catalog.diagnostics.length
 				? localize({ bundle: 'ash.settings', key: 'roles.diagnostics' }, 'Some custom definitions could not be loaded: {0}', catalog.diagnostics.join('\n'))
 				: '';
 			this.changed.fire();
 		} catch (error) {
 			if (!this.isCurrent(revision)) { return; }
-			this.catalog = undefined;
+			this.customRoles = undefined;
 			this.clearEntries();
 			this.statusDomNode.textContent = localize({ bundle: 'ash.settings', key: 'roles.failed' }, 'Could not load Agent definitions: {0}', String(error));
 		} finally {
@@ -175,58 +176,35 @@ export class AgentRolesWidget extends Disposable {
 	private clearEntries(): void {
 		this.entryResources.clearAndDisposeAll();
 		this.entries.clear();
-		this.groupsDomNode.replaceChildren();
+		this.listDomNode.replaceChildren();
 	}
 
-	private renderCatalog(catalog: AgentRoleCatalog): void {
+	private renderRoles(roles: readonly AgentRoleDefinition[]): void {
 		const focused = this.domNode.ownerDocument.activeElement;
-		const retainedFocus = isHTMLElement(focused) && this.groupsDomNode.contains(focused) ? focused : undefined;
+		const retainedFocus = isHTMLElement(focused) && this.listDomNode.contains(focused) ? focused : undefined;
 		const current = new Set<string>();
-		const workflowOpen = this.groupsDomNode.querySelector<HTMLDetailsElement>('.ash-agent-roles-workflow')?.open ?? false;
-		const groups = [
-			{ id: 'builtIn', title: localize({ bundle: 'ash.settings', key: 'roles.builtIn' }, 'Built-in Agents'), matches: (role: AgentRoleDefinition) => role.source.type === 'builtIn' && (role.launch === 'any' || role.launch === 'host') },
-			{ id: 'workflow', title: localize({ bundle: 'ash.settings', key: 'roles.workflow' }, 'Workflow roles'), matches: (role: AgentRoleDefinition) => role.source.type === 'builtIn' && (role.launch === 'workflow' || role.launch === 'delegation') },
-			{ id: 'custom', title: localize({ bundle: 'ash.settings', key: 'roles.custom' }, 'Custom Agents'), matches: (role: AgentRoleDefinition) => role.source.type === 'directory' },
-		];
-		const sections: HTMLElement[] = [];
-		for (const group of groups) {
-			const section = h(this.domNode.ownerDocument, group.id === 'workflow' ? 'details' : 'section');
-			section.className = 'ash-agent-roles-group';
-			const title = h(section.ownerDocument, 'h4');
-			title.textContent = group.title;
-			if (section instanceof this.domNode.ownerDocument.defaultView!.HTMLDetailsElement) {
-				section.classList.add('ash-agent-roles-workflow');
-				section.open = workflowOpen;
-				const summary = h(section.ownerDocument, 'summary');
-				summary.append(title);
-				section.append(summary);
-			} else {
-				section.append(title);
+		const nodes: HTMLElement[] = [];
+		for (const role of roles) {
+			const id = JSON.stringify([role.source, role.name]);
+			current.add(id);
+			let entry = this.entries.get(id);
+			if (!entry || entry.digest !== role.contentDigest || entry.resource !== role.resource?.toString()) {
+				const resources = new DisposableStore();
+				this.entryResources.set(id, resources);
+				entry = { digest: role.contentDigest, resource: role.resource?.toString(), domNode: this.createEntry(role, resources) };
+				this.entries.set(id, entry);
 			}
-			const roles = catalog.agents.filter(group.matches);
-			for (const role of roles) {
-				const id = JSON.stringify([role.source, role.name]);
-				current.add(id);
-				let entry = this.entries.get(id);
-				if (!entry || entry.digest !== role.contentDigest || entry.resource !== role.resource?.toString()) {
-					const resources = new DisposableStore();
-					this.entryResources.set(id, resources);
-					entry = { digest: role.contentDigest, resource: role.resource?.toString(), domNode: this.createEntry(role, resources) };
-					this.entries.set(id, entry);
-				}
-				section.append(entry.domNode);
-			}
-			if (!roles.length) {
-				const empty = h(section.ownerDocument, 'p');
-				empty.textContent = localize({ bundle: 'ash.settings', key: 'roles.empty' }, 'No definitions are available from this source. Custom Agents are loaded from .ash/agents in the authorized directory.');
-				section.append(empty);
-			}
-			sections.push(section);
+			nodes.push(entry.domNode);
 		}
 		for (const id of this.entries.keys()) {
 			if (!current.has(id)) { this.entries.delete(id); this.entryResources.deleteAndDispose(id); }
 		}
-		this.groupsDomNode.replaceChildren(...sections);
+		if (!roles.length) {
+			const empty = h(this.domNode.ownerDocument, 'p');
+			empty.textContent = localize({ bundle: 'ash.settings', key: 'roles.empty' }, 'No custom Agents found.');
+			nodes.push(empty);
+		}
+		this.listDomNode.replaceChildren(...nodes);
 		// Reparenting retained disclosures can drop native focus even when their content is unchanged.
 		if (retainedFocus?.isConnected && this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body) retainedFocus.focus();
 	}
@@ -248,9 +226,7 @@ export class AgentRolesWidget extends Disposable {
 		const source = h(document, 'p');
 		source.textContent = role.source.type === 'directory'
 			? role.resource?.toString() ?? role.source.id
-			: localize({ bundle: 'ash.settings', key: 'roles.readOnly' }, 'Built-in definition · Read only');
-		const launch = h(document, 'p');
-		launch.textContent = this.launchDescription(role);
+			: '';
 		const prompt = h(document, 'pre');
 		prompt.textContent = role.prompt;
 		prompt.tabIndex = 0;
@@ -259,7 +235,7 @@ export class AgentRolesWidget extends Disposable {
 		declarations.textContent = JSON.stringify({ launch: role.launch, callers: role.callers, delegates: role.delegates, ...this.declarations(role) }, null, 2);
 		declarations.tabIndex = 0;
 		declarations.setAttribute('aria-label', localize({ bundle: 'ash.settings', key: 'roles.declarations' }, 'Model, tools, Skills and instruction references'));
-		content.append(source, launch);
+		content.append(source);
 		const actions = h(document, 'div');
 		actions.className = 'ash-agent-roles-actions';
 		if (role.resource) {
@@ -268,25 +244,10 @@ export class AgentRolesWidget extends Disposable {
 				label: localize({ bundle: 'ash.settings', key: 'roles.edit' }, 'Edit definition'),
 			}));
 			resources.add(edit.onDidClick(() => { void this.openDefinition(role); }));
-		} else if (role.source.type === 'builtIn' && (role.launch === 'any' || role.launch === 'host')) {
-			const copy = resources.add(new Button(actions, {
-				...defaultButtonStyles, presentation: 'secondary',
-				label: localize({ bundle: 'ash.settings', key: 'roles.copy' }, 'Copy as custom…'),
-			}));
-			resources.add(copy.onDidClick(() => { void this.openDefinition(role); }));
 		}
 		content.append(actions, prompt, declarations);
 		details.append(summary, content);
 		return details;
-	}
-
-	private launchDescription(role: AgentRoleDefinition): string {
-		switch (role.launch) {
-			case 'any': return localize({ bundle: 'ash.settings', key: 'roles.launch.any' }, 'Available for explicit Session selection and delegation.');
-			case 'host': return localize({ bundle: 'ash.settings', key: 'roles.launch.host' }, 'Used by a dedicated product action.');
-			case 'workflow': return localize({ bundle: 'ash.settings', key: 'roles.launch.workflow' }, 'Started by its workflow; viewing it here does not make it selectable.');
-			case 'delegation': return localize({ bundle: 'ash.settings', key: 'roles.launch.delegation' }, 'Private workflow role; only its declared callers can delegate to it.');
-		}
 	}
 
 	private declarations(role: AgentRoleDefinition): Record<string, unknown> {
@@ -299,25 +260,12 @@ export class AgentRolesWidget extends Disposable {
 	}
 
 	private async openDefinition(role: AgentRoleDefinition): Promise<void> {
-		const current = this.catalog?.agents.find(candidate => candidate.name === role.name
+		const current = this.customRoles?.find(candidate => candidate.name === role.name
 			&& candidate.contentDigest === role.contentDigest && JSON.stringify(candidate.source) === JSON.stringify(role.source));
-		if (!current) { return; }
-		role = current;
+		if (!current?.resource) { return; }
 		try {
 			await this.options.beforeOpenEditor?.();
-			if (role.resource) {
-				await this.editors.openEditor({ resource: role.resource });
-				return;
-			}
-			// JSON is a YAML subset. Omit product launch/version fields so this is a
-			// standalone custom definition, never an override of the packaged role.
-			const name = `${role.name}-custom`;
-			const frontmatter = { name, description: role.description, ...this.declarations(role) };
-			await this.editors.openEditor({
-				resource: URI.from({ scheme: 'untitled', path: `/${name}.md`, query: generateUuid() }),
-				label: `${name}.md`, languageId: 'markdown',
-				initialText: `---\n${JSON.stringify(frontmatter, null, 2)}\n---\n\n${role.prompt}\n`,
-			});
+			await this.editors.openEditor({ resource: current.resource });
 		} catch (error) {
 			if (this.options.onOpenFailed) this.options.onOpenFailed(error);
 			else if (!this.isDisposed) { this.statusDomNode.textContent = localize({ bundle: 'ash.settings', key: 'roles.openFailed' }, 'Could not open Agent definition: {0}', String(error)); }
@@ -325,7 +273,7 @@ export class AgentRolesWidget extends Disposable {
 	}
 
 	public getAccessibleContent(): string {
-		return [this.statusDomNode.textContent, ...this.catalog?.agents.map(role =>
-			[role.name, role.description, role.resource?.toString(), this.launchDescription(role), role.prompt, JSON.stringify(this.declarations(role), null, 2)].filter(Boolean).join('\n')) ?? []].join('\n\n');
+		return [this.statusDomNode.textContent, ...this.customRoles?.map(role =>
+			[role.name, role.description, role.resource?.toString(), role.prompt, JSON.stringify(this.declarations(role), null, 2)].filter(Boolean).join('\n')) ?? []].join('\n\n');
 	}
 }

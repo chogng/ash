@@ -34,7 +34,8 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		if (!stream || stream.destroyed) throw new Error('The real model response stream is not open');
 		stream.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
 	};
-	const message = (index: number, text: string) => ({ type: 'message', id: `response-message-${index}`, role: 'assistant', phase: index === 0 ? 'commentary' : 'final_answer', content: [{ type: 'output_text', text }] });
+	const source = { type: 'url_citation', url: 'https://example.com/response-source', title: 'Response source', start_index: 0, end_index: 8 };
+	const message = (index: number, text: string, annotations: readonly typeof source[] = []) => ({ type: 'message', id: `response-message-${index}`, role: 'assistant', phase: index === 0 ? 'commentary' : 'final_answer', content: [{ type: 'output_text', text, annotations }] });
 	const delta = (index: number, text: string): void => send({ type: 'response.output_text.delta', output_index: index, item_id: `response-message-${index}`, delta: text });
 	const mark = (stage: string): void => { stages.push({ stage, at: new Date().toISOString() }); };
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -135,7 +136,7 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=';
 		const media = `Synthetic media is ready.\n\n![Synthetic response media](data:image/png;base64,${png}|width=320,height=320)`;
 		const corrected = code.replace('= 1', '= 2') + '\n\n' + paragraphs;
-		const output = [message(0, media), message(1, corrected), message(2, large)];
+		const output = [message(0, media), message(1, corrected), message(2, large, [source])];
 		for (const [index, item] of output.entries()) send({ type: 'response.output_item.done', output_index: index, item });
 		send({ type: 'response.completed', response: { id: 'response-fixture', status: 'completed', output, usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } } });
 		stream!.end();
@@ -153,8 +154,16 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		const durable = await read();
 		const messages = durable.turns.at(-1)!.items.filter(item => item.type === 'agentMessage');
 		expect(messages.map(item => item.text)).toEqual([media, corrected, large]);
+		expect(messages[2]?.citations).toEqual([{ type: 'web', url: source.url, title: source.title }]);
 		await testInfo.attach('reading-after-media.png', { body: await page.screenshot(), contentType: 'image/png' });
 		await testInfo.attach('response-state.json', { body: JSON.stringify({ target, sessionId, threadId, selected, restoredSelection: await selection(), readingBefore: reading, readingAfter: await geometry(paragraph), stages, durable }, null, 2), contentType: 'application/json' });
+		const sources = chat.locator('.ash-chat-response-citations').getByRole('button', { name: 'Sources (1)', exact: true });
+		await sources.press('Enter');
+		const sourceCard = page.getByRole('dialog', { name: 'Sources (1)', exact: true });
+		await expect(sourceCard.getByRole('link', { name: /Response source/u })).toHaveAttribute('href', source.url);
+		await page.keyboard.press('Escape');
+		await expect(sourceCard).toBeHidden();
+		await expect(sources).toBeFocused();
 		await originalEditor?.dispose();
 		await retained?.dispose();
 	} finally {

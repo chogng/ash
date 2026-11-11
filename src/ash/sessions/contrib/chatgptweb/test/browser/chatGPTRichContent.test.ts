@@ -68,15 +68,25 @@ suite('ChatGPT rich content', () => {
 		const references = [{ id: 'turn2search1', title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }];
 		const source = 'A <Cite refs={[["turn2search1"]]}/> B urlPython docsturn2search1 C citeturn2search1\n\n`citeturn2search1`';
 		const root = document.createElement('div'); root.innerHTML = render(source, references);
-		assert.equal(root.querySelectorAll('details.ash-chat-citation').length, 2);
-		assert.match(root.querySelector('details')?.textContent ?? '', /CSV documentation[\s\S]*Read and write tabular data/u);
-		assert.equal(root.querySelector('a')?.href, references[0]!.url);
+		assert.equal(root.querySelectorAll('.ash-chat-citation').length, 2);
+		const citation = root.querySelector('.ash-chat-citation')!;
+		assert.equal(citation.querySelector('.ash-chat-citation-label')?.textContent, '1 source');
+		assert.equal(citation.querySelector('.ash-chat-citation-title')?.textContent, 'CSV documentation');
+		assert.equal(citation.querySelector('.ash-chat-citation-domain')?.textContent, 'docs.python.org');
+		assert.equal(citation.querySelector('a')?.href, references[0]!.url);
+		assert.equal(citation.querySelector('a')?.title, 'CSV documentation\nRead and write tabular data.');
 		const annotatedLink = [...root.querySelectorAll('a')].find(link => link.textContent === 'Python docs');
 		assert.equal(annotatedLink?.href, references[0]!.url);
 		assert.equal(annotatedLink?.title, 'CSV documentation\nRead and write tabular data.');
 		assert.equal(root.querySelector('code')?.textContent, 'citeturn2search1');
 		assert.equal((root.textContent?.match(/cite/gu) ?? []).length, 1);
 		assert.match(getChatGPTRichContentText(source, references), /CSV documentation[\s\S]*Read and write tabular data/u);
+		const attributed = { id: 'turn2search2', title: 'Additional source', url: 'https://example.test/attributed', snippet: '', cited: true } as const;
+		const unused = { id: 'turn2search3', title: 'Unused search result', url: 'https://example.test/unused', snippet: '' };
+		assert.deepEqual(decodeChatGPTReply(source, [...references, attributed, unused]).citations, [
+			{ type: 'web', url: attributed.url, title: attributed.title },
+			{ type: 'web', url: references[0]!.url, title: references[0]!.title },
+		]);
 	});
 
 	test('decodes direct web links, citations and entity labels inside Markdown containers', () => {
@@ -105,7 +115,7 @@ suite('ChatGPT rich content', () => {
 		assert.equal(root.querySelector('ol > li > a')?.textContent, 'Example / Repo');
 		assert.equal(root.querySelector('ol > li > a')?.getAttribute('title'), null);
 		assert.match(root.querySelector('ol > li')?.textContent ?? '', /Repo：使用 Rust。/u);
-		assert.equal(root.querySelector('ol details.ash-chat-citation a')?.textContent, 'Source');
+		assert.equal(root.querySelector('ol .ash-chat-citation .ash-chat-citation-title')?.textContent, 'Source');
 		assert.deepEqual([...root.querySelectorAll('ol ul > li')].map(item => item.textContent), ['GPUI Kit', 'Blocked link', link]);
 		assert.equal(root.querySelector('code')?.textContent, link);
 		assert.match(root.querySelector('blockquote')?.textContent ?? '', /GPUI Kit/u);
@@ -115,6 +125,42 @@ suite('ChatGPT rich content', () => {
 		assert.match(getChatGPTRichContentText(source, references), /使用 Rust。[\s\S]*Source[\s\S]*GPUI Kit/u);
 	});
 
+	test('attaches standalone source markers to the preceding paragraph', () => {
+		const root = document.createElement('div');
+		const references = [{ id: 'turn0search1', title: 'Source', url: 'https://example.com/', snippet: 'Details' }];
+		root.innerHTML = render('Floem paragraph.\n\n<Cite refs={[["turn0search1"]]}/>\n\n<Link url="https://example.com/" title="Floem source"/>', references);
+		assert.equal(root.querySelector('p > .ash-chat-citation .ash-chat-citation-label')?.textContent, '1 source');
+		assert.equal(root.querySelector('p > .ash-chat-external-link'), null);
+	});
+
+	test('renders saved web link actions and subtle dividers within rich reply layouts', () => {
+		const source = [
+			'<row><box>',
+			'  <Link url="https://github.com/lapce/floem" title="Floem 源码"/>',
+			'</box></row>',
+			'<divider color="subtle"/>',
+			'<row><box>',
+			'  <Link url="https://slint.dev" title="Slint 官网"/>',
+			'</box></row>',
+			'<Link url="javascript:alert(1)" title="Unsafe action"/>',
+			'<Link url="https://user:pass@example.com/" title="Credentialed URL"/>',
+		].join('\n');
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const divider = root.querySelector('hr')!;
+		assert.equal(divider.previousElementSibling?.textContent?.trim(), 'Floem 源码');
+		assert.equal(divider.nextElementSibling?.textContent?.trim(), 'Slint 官网');
+		assert.deepEqual([...root.querySelectorAll('a')].map(anchor => [
+			anchor.textContent, anchor.href, anchor.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'),
+		]), [
+			['Floem 源码', 'https://github.com/lapce/floem', 'link-external'],
+			['Slint 官网', 'https://slint.dev/', 'link-external'],
+		]);
+		assert.equal(root.querySelector('details, pre'), null);
+		assert.match(root.textContent ?? '', /Unsafe action[\s\S]*Credentialed URL/u);
+		assert.match(getChatGPTRichContentText(source), /Floem 源码[\s\S]*Slint 官网/u);
+	});
+
 	test('keeps Markdown and nested component text in their original order', () => {
 		const source = 'Before\n\n<box gap={2}><box>**First**</box><row><icon name="arrow-down"/></row><text>Second</text></box>\n\nAfter';
 		const html = render(source);
@@ -122,6 +168,39 @@ suite('ChatGPT rich content', () => {
 		assert.doesNotMatch(html, /<\/?(?:box|row|text|icon)\b/u);
 		assert.match(getChatGPTRichContentText(source), /Before[\s\S]*First[\s\S]*↓[\s\S]*Second[\s\S]*After/u);
 		assert.doesNotMatch(getChatGPTRichContentText(source), /\*\*|<box>/u);
+	});
+
+	test('renders reply grids and captions without exposing their layout properties', () => {
+		const source = `<box>
+  **Architecture**
+  <caption>Application and window</caption>
+  <grid columns={2} gap={2}>
+    <grid-item><box>**Native UI**</box></grid-item>
+    <grid-item><box>**Web engine**</box></grid-item>
+  </grid>
+  <caption textAlign="center">Concept diagram</caption>
+</box>
+
+<table><caption>Table caption</caption><tr><td>Cell</td></tr></table>`;
+		const root = document.createElement('div');
+		root.innerHTML = render(source);
+		const grid = root.querySelector('.ash-chat-rich-grid.columns-2.gap-2');
+		assert.deepEqual([...grid?.children ?? []].map(cell => cell.textContent?.trim()), ['Native UI', 'Web engine']);
+		assert.deepEqual([...root.querySelectorAll('.ash-chat-rich-text.color-secondary')].map(caption => caption.textContent?.trim()), ['Application and window', 'Concept diagram']);
+		assert.equal(root.querySelector('.ash-chat-rich-text.align-center')?.textContent?.trim(), 'Concept diagram');
+		assert.equal(root.querySelector('table > caption')?.textContent, 'Table caption');
+		assert.equal(root.querySelector('details, pre'), null);
+		const accessibleText = getChatGPTRichContentText(source);
+		assert.match(accessibleText, /Architecture[\s\S]*Application and window[\s\S]*Native UI[\s\S]*Web engine[\s\S]*Concept diagram/u);
+		assert.doesNotMatch(accessibleText, /columns|gap|Content/u);
+	});
+
+	test('keeps grid content readable when the reply has invalid or unfinished layout data', () => {
+		const root = document.createElement('div');
+		root.innerHTML = render('<grid columns={globalThis.auditXss = true} gap={99}><grid-item>First</grid-item></grid>');
+		assert.equal(root.querySelector('.ash-chat-rich-grid.columns-1')?.textContent?.trim(), 'First');
+		assert.doesNotMatch(root.innerHTML, /auditXss|gap-99/u);
+		assert.match(render('<grid columns={2}>\n<grid-item>First card</grid-item>\n\nSecond card'), /First card[\s\S]*Second card/u);
 	});
 
 	test('hides image search metadata in complete and streaming replies while preserving literal code', () => {
@@ -139,6 +218,19 @@ suite('ChatGPT rich content', () => {
 		const inline = decodeChatGPTReply(`<row><AsyncImage query="${query}"/>\n\n**Project summary**</row>`, [], 'fixture', [{ query, images: [image] }]);
 		assert.ok(inline.richContent?.parts.some(part => part.kind === 'imageGallery' && part.compact));
 		assert.match(renderChatRichContentText(inline.text, inline.richContent), /Project screenshot[\s\S]*Project summary/u);
+	});
+
+	test('renders entity thumbnail metadata as readable text without exposing the provider payload', () => {
+		const marker = '\uE200genui\uE202' + JSON.stringify({
+			entity_thumbnail_list: {
+				entities: [{ name: 'Zed', desc: 'An editor using <GPUI>.', thumbnail_query: 'private query' }],
+			}
+		}) + '\uE201';
+		const reply = decodeChatGPTReply(`Related projects\n\n${marker}\n\nAfter`);
+		const text = renderChatRichContentText(reply.text, reply.richContent);
+		assert.match(text, /Related projects[\s\S]*Zed[\s\S]*An editor using <GPUI>\.[\s\S]*After/u);
+		assert.doesNotMatch(text, /genui|entity_thumbnail_list|private query/u);
+		assert.doesNotMatch(render(`Related projects ${marker.slice(0, -4)}`), /genui|entity_thumbnail_list/u);
 	});
 
 	test('leaves inline and fenced code examples literal', () => {

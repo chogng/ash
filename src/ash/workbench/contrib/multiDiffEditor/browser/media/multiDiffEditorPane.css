@@ -29,6 +29,32 @@
 	flex: 1;
 }
 
+.ash-multi-diff-comparison {
+	min-width: 0;
+	min-height: 0;
+	flex: 1;
+}
+
+.ash-multi-diff-file-list {
+	height: 100%;
+	min-width: 0;
+	overflow: hidden;
+	background: var(--ash-editor-background);
+}
+
+.ash-multi-diff-file-list-row {
+	display: flex;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.ash-multi-diff-file-list-label {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
 .stanza-multi-diff-editor-toolbar {
 	display: flex;
 	box-sizing: border-box;

@@ -16,7 +16,12 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly cancelledEntityDetails: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void; };
+	var ashNativeFixture: {
+		advance(): void; readonly sends: number; readonly cancelledEntityDetails: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; setClockOffset(milliseconds: number): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; readonly shareRequests: number; setShareUrl(value: string): void;
+		seedProjectMemory(versions: readonly string[]): void;
+		releaseNextUpload(): void;
+		readonly projectMemoryBodies: readonly string[];
+	};
 }
 
 interface FixtureReply {
@@ -44,6 +49,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let heldUploads = 0;
 		const now = Date.now;
 		const uploadedFiles: Record<string, string> = {};
+		const projectMemory = new Map<string, { file_id: string; name: string; body: string; }>();
 		const initializing = new Set<() => void>();
 		const pendingUploads = new Set<() => void>();
 		const message = (id: string, role: string, text: string, create_time?: number) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] }, create_time });
@@ -71,8 +77,17 @@ async function installService(application: ElectronApplication, holdInitializati
 				uploadsHeld = value;
 				if (!value) for (const release of pendingUploads) release();
 			},
+			releaseNextUpload() { pendingUploads.values().next().value?.(); },
 			get heldUploads() { return heldUploads; },
 			get uploadedFiles() { return uploadedFiles; },
+			seedProjectMemory(versions) {
+				for (const [index, body] of versions.entries()) {
+					const file_id = `file-memory-seed-${index}`;
+					const name = `Ash project memory ${1_000_000_000_000 + index}-00000000-0000-0000-0000-000000000000.md`;
+					projectMemory.set(file_id, { file_id, name, body: `<!-- ash-project-memory:g-p-files-fixture -->\n${body}` });
+				}
+			},
+			get projectMemoryBodies() { return [...projectMemory.values()].map(file => file.body); },
 			releaseInitialization() {
 				holdInitialization = false;
 				for (const release of [...initializing]) { release(); }
@@ -116,12 +131,17 @@ async function installService(application: ElectronApplication, holdInitializati
 					uploadedFiles[decodeURIComponent(url.pathname.slice(1))] = Buffer.from(init.body as Uint8Array).toString('utf8');
 					return new Response(null, { status: 204 });
 				}
-				if (url.href === 'https://images.openai.com/static-rsc-4/fixture-zed?purpose=fullsize') {
+				if (url.origin === 'https://images.openai.com' && ['/static-rsc-4/fixture-zed', '/static-rsc-4/fixture-zed-alt'].includes(url.pathname)) {
+					if (offline) return new Response(null, { status: 503 });
 					if (init?.credentials !== 'omit' || new Headers(init.headers).has('Authorization')) throw new Error('Image CDN requests must be unauthenticated');
-					return new Response(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64'), { headers: { 'Content-Type': 'image/png' } });
+					const png = url.pathname.endsWith('-alt')
+						? 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGNQSbn0H4QBEisEs9MpNToAAAAASUVORK5CYII='
+						: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
+					return new Response(Buffer.from(png, 'base64'), { headers: { 'Content-Type': 'image/png' } });
 				}
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
 				if (url.pathname === '/backend-api/sidebar/conversation') {
+					if (offline) return new Response(null, { status: 503 });
 					const input = JSON.parse(String(init?.body));
 					if (input.conversation_id !== 'history-one' || input.message_id !== 'answer' || !['GPUI', 'Floem'].includes(input.generic_entity_params.name) || input.locale !== 'zh-CN'
 						|| new Headers(init?.headers).get('OpenAI-Sentinel-Chat-Requirements-Prepare-Token') !== 'synthetic-sidebar-proof') {
@@ -140,6 +160,10 @@ async function installService(application: ElectronApplication, holdInitializati
 							image_result: {
 								content_url: 'https://images.openai.com/static-rsc-4/fixture-zed?purpose=fullsize', title: 'Zed 截图', url: 'https://example.com/zed',
 							}
+						}, {
+							image_result: {
+								content_url: 'https://images.openai.com/static-rsc-4/fixture-zed-alt?purpose=fullsize', title: 'Zed 第二张截图', url: 'https://example.com/zed-alt',
+							}
 						}]
 					};
 					const frames = [
@@ -156,6 +180,23 @@ async function installService(application: ElectronApplication, holdInitializati
 				}
 				if (url.pathname === '/backend-api/conversations') { recentHistoryRequests++; }
 				if (offline) { return new Response(null, { status: 503 }); }
+				const projectFilePath = '/backend-api/projects/g-p-files-fixture/files';
+				if (projectFiles && url.pathname === projectFilePath && init?.method === 'POST') {
+					const [{ file_id, name }] = JSON.parse(String(init.body)).files;
+					const body = uploadedFiles[name];
+					if (body === undefined) return new Response(null, { status: 400 });
+					projectMemory.set(file_id, { file_id, name, body });
+					return new Response(null, { status: 204 });
+				}
+				if (projectFiles && url.pathname.startsWith(`${projectFilePath}/`) && init?.method === 'DELETE') {
+					const removed = projectMemory.delete(url.pathname.split('/').at(-1)!);
+					return new Response(null, { status: removed ? 204 : 404 });
+				}
+				if (projectFiles && url.pathname === '/backend-api/files/process_upload_stream' && init?.method === 'POST') {
+					return new Response(JSON.stringify({ event: 'file.processing.completed', file_id: JSON.parse(String(init.body)).file_id }) + '\n', {
+						headers: { 'Content-Type': 'application/x-ndjson' },
+					});
+				}
 				if (url.pathname.endsWith('/files') && init?.method === 'POST') {
 					const { file_name: name } = JSON.parse(String(init.body));
 					if (uploadsHeld) {
@@ -191,11 +232,16 @@ async function installService(application: ElectronApplication, holdInitializati
 				if (projectFiles && url.pathname === '/backend-api/gizmos/g-p-files-fixture') {
 					return Response.json({
 						gizmo: { id: 'g-p-files-fixture', display: { name: 'File project fixture' } },
-						files: [{ file_id: 'file-fixture-notes', name: 'project-fixture.txt' }, { file_id: 'file-fixture-other', name: 'other-fixture.txt' }],
+						files: [{ file_id: 'file-fixture-notes', name: 'project-fixture.txt' }, { file_id: 'file-fixture-other', name: 'other-fixture.txt' },
+						...[...projectMemory.values()].map(({ file_id, name }) => ({ file_id, name }))],
 					});
 				}
 				if (projectFiles && url.pathname.startsWith('/backend-api/files/download/file-fixture-')) {
 					return new Response(url.pathname.endsWith('-notes') ? 'Saved project material fixture' : 'Second project file');
+				}
+				if (projectFiles && url.pathname.startsWith('/backend-api/files/download/')) {
+					const file = projectMemory.get(url.pathname.split('/').at(-1)!);
+					if (file) return new Response(file.body);
 				}
 				if (url.pathname.endsWith('/conversations')) {
 					if (recentHistoryRateLimited) return new Response(null, { status: 429 });
@@ -330,7 +376,7 @@ async function createConversationShareServer() {
 	return { origin, records, [Symbol.asyncDispose]: () => server[Symbol.asyncDispose]() };
 }
 
-function createAshModelServer(ashRequests: string[], replySuffix = '') {
+function createAshModelServer(ashRequests: string[], replySuffix = '', codeMatch?: { url: string; license: string; snippet: string; }) {
 	return createServer(async (request, response) => {
 		if (request.method === 'GET') {
 			response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: ashFixtureModel.model }] }));
@@ -340,7 +386,8 @@ function createAshModelServer(ashRequests: string[], replySuffix = '') {
 		for await (const chunk of request) chunks.push(Buffer.from(chunk));
 		ashRequests.push((JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; }).model);
 		const content = JSON.stringify('Answer from Ash' + replySuffix);
-		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(`data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":${content}},"finish_reason":null}]}\n\ndata: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
+		const annotations = codeMatch ? `data: ${JSON.stringify({ choices: [{ index: 0, delta: { copilot_annotations: { IPCodeCitations: [{ citations: codeMatch }] } } }] })}\n\n` : '';
+		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(`data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":${content}},"finish_reason":null}]}\n\n${annotations}data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
 	});
 }
 
@@ -432,6 +479,69 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
+	test('splits the Chat titlebar at the resizable Entity details column', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+		const suffix = '\n\n<Entity category="software" value="GPUI" disambig="Zed Rust GPU UI framework"/>';
+		await installService(application as ElectronApplication, false, { suffix, sources: [] });
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const entity = chat.getByRole('link', { name: 'GPUI', exact: true });
+		const titlebar = page.locator('.ash-sessions-titlebar');
+		const share = titlebar.getByRole('button', { name: '分享', exact: true });
+		await expect(share).toBeVisible();
+		const fullTitlebar = (await titlebar.boundingBox())!;
+		await entity.press('Enter');
+		const closeDetails = page.getByRole('button', { name: '关闭详情', exact: true });
+		await expect(closeDetails).toBeVisible();
+
+		const auxiliary = page.locator('.ash-sessions-auxiliarybar-frame');
+		const auxiliaryTitle = auxiliary.locator('.ash-pane-composite-title');
+		await expect(auxiliaryTitle.getByText('实体详情', { exact: true })).toBeVisible();
+		await expect(auxiliaryTitle.getByRole('button', { name: '关闭详情', exact: true })).toBeFocused();
+		await expect(auxiliaryTitle).toHaveCSS('border-bottom-width', '1px');
+		await expect(auxiliaryTitle.locator('.ash-chat-entity-details-actions')).toHaveCSS('-webkit-app-region', 'no-drag');
+		const closeBounds = (await closeDetails.boundingBox())!;
+		expect(closeBounds.width).toBe(closeBounds.height);
+		const surface = await chat.evaluate(element => getComputedStyle(element.closest('.ash-desktop-editor-area')!).backgroundColor);
+		await expect(auxiliary.locator('.ash-sessions-auxiliarybar')).toHaveCSS('background-color', surface);
+		await expect(auxiliaryTitle).toHaveCSS('background-color', surface);
+		const splitTitlebar = (await titlebar.boundingBox())!;
+		const auxiliaryBounds = (await auxiliary.boundingBox())!;
+		const auxiliaryTitleBounds = (await auxiliaryTitle.boundingBox())!;
+		const shareBounds = (await share.boundingBox())!;
+		expect(auxiliaryBounds.y).toBeCloseTo(splitTitlebar.y, 0);
+		expect(auxiliaryTitleBounds.y).toBeCloseTo(splitTitlebar.y, 0);
+		expect(auxiliaryTitleBounds.height).toBeCloseTo(splitTitlebar.height, 0);
+		expect(auxiliaryBounds.x).toBeCloseTo(splitTitlebar.x + splitTitlebar.width, 0);
+		expect(auxiliaryBounds.x + auxiliaryBounds.width).toBeCloseTo(fullTitlebar.x + fullTitlebar.width, 0);
+		expect(shareBounds.x + shareBounds.width).toBeLessThanOrEqual(auxiliaryBounds.x);
+
+		const sash = page.locator('.ash-sessions-workbench-layout > .ash-grid > .ash-split-view > .ash-sash-vertical');
+		const sashBounds = (await sash.boundingBox())!;
+		expect(sashBounds.y).toBeCloseTo(splitTitlebar.y, 0);
+		expect(sashBounds.height).toBeCloseTo(auxiliaryBounds.height, 0);
+		await expect(sash).toHaveCSS('-webkit-app-region', 'no-drag');
+		const sashY = splitTitlebar.y + splitTitlebar.height / 2;
+		await page.mouse.move(auxiliaryBounds.x, sashY);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(auxiliaryBounds.x - 24, sashY, { steps: 4 });
+			await expect.poll(async () => (await auxiliary.boundingBox())!.x).toBeCloseTo(auxiliaryBounds.x - 24, 0);
+		} finally {
+			await page.mouse.up();
+		}
+		const resizedTitlebar = (await titlebar.boundingBox())!;
+		expect(resizedTitlebar.x + resizedTitlebar.width).toBeCloseTo(auxiliaryBounds.x - 24, 0);
+		const resizedShare = (await share.boundingBox())!;
+		expect(resizedShare.x).toBeCloseTo(shareBounds.x - 24, 0);
+		await testInfo.attach('chat-entity-titlebar-split', { body: await page.screenshot(), contentType: 'image/png' });
+
+		await closeDetails.click();
+		await expect(auxiliary).toBeHidden();
+		await expect(entity).toBeFocused();
+		await expect.poll(async () => (await titlebar.boundingBox())?.width).toBeCloseTo(fullTitlebar.width, 0);
+	});
+
 	test('renders ChatGPT entity labels and previews explicit source links', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
 		const reply = '\n\n' + [
 			'| 框架 | 核心特点 |',
@@ -440,6 +550,15 @@ test.describe('Unified Chat sidebar', () => {
 			'| <Entity data={{"category":"software","value":"Floem","disambig":"Lapce"}}/> | Lapce 使用的响应式 UI |',
 			'',
 			'参见 urlFloem 文档turn2search1。',
+			'',
+			'<Link url="https://github.com/lapce/floem" title="Floem 源码"/>',
+			'',
+			'![正文图片](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==)',
+			'',
+			'```diff:rust',
+			'-let value = 1;',
+			'+let value = 2;',
+			'```',
 		].join('\n');
 		const source = { ref_id: 'turn2search1', url: 'https://example.com/floem', title: 'Floem 文档', snippet: '介绍响应式组件与布局。' };
 		await installService(application as ElectronApplication, false, { suffix: reply, sources: [source] });
@@ -448,6 +567,15 @@ test.describe('Unified Chat sidebar', () => {
 		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
 		const table = chat.getByRole('table');
 		await expect(table).toBeVisible();
+		const inlineImage = chat.getByRole('button', { name: '预览 正文图片', exact: true });
+		await inlineImage.press('Enter');
+		const inlinePreview = page.getByRole('dialog', { name: '预览 正文图片', exact: true });
+		await expect(inlinePreview).toBeVisible();
+		await expect(inlinePreview.getByRole('toolbar', { name: '图片导航', exact: true })).toHaveCount(0);
+		await expect(inlinePreview.getByRole('group', { name: '选择图片', exact: true })).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await expect(inlinePreview).toBeHidden();
+		await expect(inlineImage).toBeFocused();
 		await expect(table.getByRole('cell')).toHaveText(['GPUI', 'Zed 使用的 GPU UI 框架', 'Floem', 'Lapce 使用的响应式 UI']);
 		const entity = table.getByRole('link', { name: 'GPUI', exact: true });
 		await entity.press('Enter');
@@ -456,17 +584,108 @@ test.describe('Unified Chat sidebar', () => {
 		const sourceLink = page.getByRole('link', { name: 'Zed 文档', exact: true });
 		await expect(sourceLink).toBeInViewport({ ratio: 1 });
 		await expect(sourceLink).toHaveAttribute('href', 'https://example.com/zed');
-		const detailPane = page.locator('.ash-chatgpt-entity-details');
+		const detailPane = page.locator('.ash-chat-entity-details');
 		await expect(detailPane.locator('strong')).toHaveText('GPU');
 		const gallery = detailPane.getByRole('group', { name: '图集', exact: true });
 		const image = gallery.getByRole('button', { name: '预览 Zed 截图', exact: true });
 		await expect(image).toBeVisible();
 		await expect(gallery.getByRole('link', { name: 'Zed 截图 的图片来源', exact: true })).toHaveAttribute('href', 'https://example.com/zed');
+		const next = gallery.getByRole('button', { name: '下一张图片', exact: true });
+		const secondImage = gallery.getByRole('button', { name: '预览 Zed 第二张截图', exact: true });
+		await expect(gallery.getByRole('status')).toHaveText('1 / 2');
+		await next.click();
+		await expect(secondImage).toBeVisible();
+		await expect(image).toBeHidden();
+		await expect(gallery.getByRole('status')).toHaveText('2 / 2');
+		await expect(gallery.getByRole('link', { name: 'Zed 第二张截图 的图片来源', exact: true })).toHaveAttribute('href', 'https://example.com/zed-alt');
+		expect(await gallery.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await secondImage.press('ArrowLeft');
+		await expect(image).toBeVisible();
 		await image.press('Enter');
 		const imagePreview = page.getByRole('dialog', { name: '预览 Zed 截图', exact: true });
 		await expect(imagePreview).toBeVisible();
+		const popup = page.locator('.ash-image-preview-popup');
+		const pagination = popup.getByRole('group', { name: '选择图片', exact: true });
+		const firstDot = pagination.getByRole('button', { name: '显示第 1 张图片：Zed 截图', exact: true });
+		const secondDot = pagination.getByRole('button', { name: '显示第 2 张图片：Zed 第二张截图', exact: true });
+		const popupNext = popup.getByRole('button', { name: '下一张图片', exact: true });
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await expect(firstDot).toHaveAttribute('aria-current', 'true');
+		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
+		const appIcon = '.ash-image-preview-app-icon-slot > *';
+		if (process.platform === 'darwin' || process.platform === 'win32') await expect(popup.locator(appIcon)).toBeVisible();
+		const retained = await popup.evaluateHandle((frame, appIcon) => {
+			const viewport = frame.querySelector('.ash-image-viewer')!;
+			const icon = frame.querySelector(appIcon);
+			const animationStarted = new Promise<boolean>(resolve => {
+				const observer = new MutationObserver(() => {
+					observer.disconnect();
+					resolve(viewport.getAnimations({ subtree: true }).some(animation => {
+						const effect = animation.effect;
+						if (animation.playState !== 'running' || !(effect instanceof KeyframeEffect)) return false;
+						const offset = effect.getKeyframes()[0]?.transform;
+						return typeof offset === 'string' && new DOMMatrixReadOnly(offset).m41 > 0;
+					}));
+				});
+				observer.observe(frame, { attributeFilter: ['aria-label'] });
+			});
+			return { viewport, icon, animationStarted };
+		}, appIcon);
+		const decodeGate = await page.evaluateHandle(() => {
+			const prototype = HTMLImageElement.prototype;
+			const decode = prototype.decode;
+			let release!: () => void;
+			const gate = new Promise<void>(resolve => { release = resolve; });
+			prototype.decode = function () {
+				if (!this.src.startsWith('blob:')) return decode.call(this);
+				prototype.decode = decode;
+				return gate.then(() => decode.call(this));
+			};
+			return { release: () => { prototype.decode = decode; release(); } };
+		});
+		try {
+			await popupNext.click();
+			await expect(popup.locator('.ash-image-preview-gallery-message')).toBeVisible();
+			await expect(imagePreview.getByRole('img', { name: 'Zed 截图', exact: true })).toBeVisible();
+			expect(await retained.evaluate(({ viewport, icon }) => viewport.isConnected && (!icon || icon.isConnected))).toBe(true);
+		} finally {
+			await decodeGate.evaluate(gate => gate.release());
+			await decodeGate.dispose();
+		}
+		await expect(popup).toHaveAccessibleName('预览 Zed 第二张截图');
+		await expect(popup.getByRole('img', { name: 'Zed 第二张截图', exact: true })).toHaveJSProperty('naturalWidth', 2);
+		expect(await retained.evaluate(async ({ viewport, icon, animationStarted }) => viewport.isConnected && (!icon || icon.isConnected) && await animationStarted)).toBe(true);
+		await retained.dispose();
+		await expect(secondDot).toHaveAttribute('aria-current', 'true');
+		await firstDot.click();
+		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
+		await expect(firstDot).toHaveAttribute('aria-current', 'true');
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await expect.poll(() => secondDot.evaluate(dot => getComputedStyle(dot, '::before').transitionDuration)).toBe('0s');
+		await secondDot.press('Enter');
+		await expect(secondDot).toHaveAttribute('aria-current', 'true');
+		await secondDot.press('ArrowLeft');
+		await expect(firstDot).toBeFocused();
+		await expect(firstDot).toHaveAttribute('aria-current', 'true');
+		await expect(popup.getByRole('img', { name: 'Zed 截图', exact: true })).toHaveJSProperty('naturalWidth', 1);
+		const popupViewport = popup.locator('.ash-image-viewer');
+		await popupViewport.press('ArrowLeft');
+		await expect(popup.getByRole('img', { name: 'Zed 第二张截图', exact: true })).toHaveJSProperty('naturalWidth', 2);
+		await expect(popupViewport).toBeFocused();
+		expect(await popupViewport.evaluate(viewport => viewport.getAnimations({ subtree: true }).length)).toBe(0);
+		await expect(secondDot).toHaveAttribute('aria-current', 'true');
+		await expect(pagination.locator('[aria-current]')).toHaveCount(1);
+		const markerWidths = await pagination.getByRole('button').evaluateAll(dots => dots.map(dot => parseFloat(getComputedStyle(dot, '::before').inlineSize)));
+		expect(markerWidths[1]!).toBeGreaterThan(markerWidths[0]!);
+		await page.mouse.move(0, 0);
+		await testInfo.attach('chatgpt-gallery-preview', { body: await page.screenshot(), contentType: 'image/png' });
 		await page.keyboard.press('Escape');
-		await expect(imagePreview).toBeHidden();
+		await expect(popup).toBeHidden();
+		await expect(secondImage).toBeFocused();
+		await expect(gallery.getByRole('status')).toHaveText('2 / 2');
+		await secondImage.press('ArrowLeft');
+		await expect(image).toBeVisible();
+		await image.focus();
 		await expect(image).toBeFocused();
 		await expect(table).toBeVisible();
 		const [chatBounds, detailBounds] = await Promise.all([chat.boundingBox(), detailPane.boundingBox()]);
@@ -493,6 +712,27 @@ test.describe('Unified Chat sidebar', () => {
 		await page.keyboard.press('Escape');
 		await expect(preview).toBeHidden();
 		await expect(link).toBeFocused();
+		const replySources = chat.locator('.ash-chat-response-citations').getByRole('button', { name: '来源（1）', exact: true });
+		await replySources.press('Enter');
+		const replySourceCard = page.getByRole('dialog', { name: '来源（1）', exact: true });
+		await expect(replySourceCard.getByRole('link', { name: /Floem 文档/u })).toHaveAttribute('href', source.url);
+		await page.keyboard.press('Escape');
+		await expect(replySourceCard).toBeHidden();
+		await expect(replySources).toBeFocused();
+		const external = chat.getByRole('link', { name: 'Floem 源码', exact: true });
+		await external.focus();
+		await page.keyboard.press(`${modifier}+k`);
+		await page.keyboard.press(`${modifier}+i`);
+		const linkCard = page.getByRole('dialog', { name: '链接预览', exact: true });
+		await expect(linkCard.getByRole('link', { name: 'github.com Floem 源码', exact: true })).toHaveAttribute('href', 'https://github.com/lapce/floem');
+		await page.keyboard.press('Escape');
+		await expect(linkCard).toBeHidden();
+		await expect(external).toBeFocused();
+		const comparison = chat.getByRole('region', { name: '差异编辑器：原始文件 与 修改后的文件' });
+		await expect(comparison.locator('.modified .view-lines')).toContainText('let value = 2;');
+		await comparison.scrollIntoViewIfNeeded();
+		await expect(comparison).toBeInViewport();
+		await testInfo.attach('chatgpt-markdown-diff', { body: await comparison.screenshot(), contentType: 'image/png' });
 		await link.press('Alt+F1');
 		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/如果回复中的链接附有来源摘要/u);
 		await page.keyboard.press('Escape');
@@ -504,10 +744,23 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(chat).toContainText('History two answer');
 		await expect.poll(() => (application as ElectronApplication).evaluate(() => globalThis.ashNativeFixture.cancelledEntityDetails)).toBe(1);
 		expect(await (application as ElectronApplication).evaluate(() => globalThis.ashNativeFixture.sends)).toBe(0);
+
+		const electron = application as ElectronApplication;
+		await page.getByRole('button', { name: 'First native history', exact: true }).click();
+		await expect(entity).toBeVisible();
+		await electron.evaluate(() => ashNativeFixture.setOffline(true));
+		const reopened = await workbench.reopenAgentsWindow(electron, page);
+		await expect(reopened.locator('.ash-chat-response-citations').getByRole('button', { name: '来源（1）', exact: true })).toBeVisible();
+		await reopened.getByRole('region', { name: 'ChatGPT', exact: true }).getByRole('link', { name: 'GPUI', exact: true }).press('Enter');
+		const cachedDetail = reopened.locator('.ash-chat-entity-details');
+		await expect(cachedDetail.getByRole('link', { name: 'Zed 文档', exact: true })).toBeVisible();
+		await expect(cachedDetail.getByRole('button', { name: '预览 Zed 截图', exact: true })).toBeVisible();
+		await cachedDetail.getByRole('button', { name: '下一张图片', exact: true }).click();
+		await expect(cachedDetail.getByRole('button', { name: '预览 Zed 第二张截图', exact: true })).toBeVisible();
 	});
 
-	test('opens one sent SVG thumbnail inside Chat without opening Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
-		await installService(application as ElectronApplication, false, '', true);
+	test('zooms and pans a sent SVG thumbnail inside Chat without opening Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+		await installService(application as ElectronApplication, false, '\n\nScrollable fixture paragraph.'.repeat(40), true);
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('[data-item="chatgpt:history-one"] .ash-sessions-list-item').click();
 		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
@@ -517,6 +770,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(message.locator('img')).toHaveCount(1);
 		await expect(message.locator('pre')).toHaveText('History question');
 		await expect(chat.locator('.ash-chat-media')).toHaveCount(0);
+		await thumbnail.scrollIntoViewIfNeeded();
 		await thumbnail.press('Enter');
 		const preview = page.getByRole('dialog', { name: '预览 diagram.svg' });
 		await expect(preview).toHaveClass('ash-image-preview-popup');
@@ -525,10 +779,61 @@ test.describe('Unified Chat sidebar', () => {
 		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(80);
 		await expect(page.locator('.ash-image-preview')).toHaveCount(0);
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+		const viewport = preview.getByLabel('图片查看区域', { exact: true });
+		const zoomMenu = preview.getByRole('button', { name: /^缩放：[\d,]+%$/u });
+		const bounds = (await viewport.boundingBox())!;
+		const anchor = { x: Math.round(bounds.x + bounds.width * 0.62), y: Math.round(bounds.y + bounds.height / 2) };
+		const imageAtAnchor = () => image.evaluate((element: HTMLImageElement, point) => {
+			const bounds = element.getBoundingClientRect();
+			return { x: (point.x - bounds.left) / bounds.width, y: (point.y - bounds.top) / bounds.height, width: element.offsetWidth };
+		}, anchor);
+		const fitted = await imageAtAnchor();
+		await page.mouse.move(anchor.x, anchor.y);
+		await page.mouse.wheel(0, -60);
+		await expect.poll(async () => (await imageAtAnchor()).width).toBeGreaterThan(fitted.width);
+		const wheeled = await imageAtAnchor();
+		expect(wheeled.x).toBeCloseTo(fitted.x, 2);
+		expect(wheeled.y).toBeCloseTo(fitted.y, 2);
+
+		// Chromium delivers trackpad pinches as wheel events with ctrlKey set.
+		await viewport.dispatchEvent('wheel', { ctrlKey: true, deltaY: -12, clientX: anchor.x, clientY: anchor.y, bubbles: true, cancelable: true });
+		await expect.poll(async () => (await imageAtAnchor()).width).toBeGreaterThan(wheeled.width);
+		const pinched = await imageAtAnchor();
+		expect(pinched.x).toBeCloseTo(wheeled.x, 2);
+		expect(pinched.y).toBeCloseTo(wheeled.y, 2);
+
+		const scroll = () => viewport.evaluate(element => ({ x: element.scrollLeft, y: element.scrollTop }));
+		const beforeDrag = await scroll();
+		await page.mouse.down();
+		await page.mouse.move(anchor.x - 45, anchor.y - 35);
+		await page.mouse.up();
+		await expect.poll(scroll).toEqual({ x: beforeDrag.x + 45, y: beforeDrag.y + 35 });
+		expect((await imageAtAnchor()).width).toBe(pinched.width);
+		await viewport.press('Shift+ArrowRight');
+		await expect.poll(async () => (await scroll()).x).toBeGreaterThan(beforeDrag.x + 45);
+		await viewport.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/双指捏合来缩放.*按住 Shift 并按方向键/u);
+		await page.keyboard.press('Escape');
+		await expect(viewport).toBeFocused();
+		await zoomMenu.click();
+		await page.getByRole('menuitemradio', { name: '适应窗口', exact: true }).click();
+		await expect.poll(async () => (await imageAtAnchor()).width).toBe(fitted.width);
+
 		await testInfo.attach('sent-svg-preview', { body: await preview.screenshot(), contentType: 'image/png' });
 		await page.keyboard.press('Escape');
 		await expect(preview).toHaveCount(0);
 		await expect(thumbnail).toBeFocused();
+
+		await thumbnail.press('Enter');
+		await expect(preview).toBeVisible();
+		const transcript = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const outside = (await transcript.boundingBox())!;
+		const scrollTop = () => transcript.evaluate(element => element.scrollTop);
+		const beforeWheel = await scrollTop();
+		await page.mouse.move(outside.x + 8, outside.y + 8);
+		await page.mouse.wheel(0, 150);
+		await expect.poll(scrollTop).toBeGreaterThan(beforeWheel);
 	});
 
 	test('renders colored file icons and quiet links in the conversation', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
@@ -558,9 +863,10 @@ test.describe('Unified Chat sidebar', () => {
 		const application = browser as ElectronApplication;
 		const lines = ['const label: string = "Ash code card";', 'const count = 42;'];
 		const fence = '\n\n```ts\n' + lines.join('\n') + '\n```';
+		const codeMatch = { url: 'https://github.com/example/repo/blob/main/example.ts', license: 'MIT', snippet: lines.join('\n') };
 		await installService(application, false, fence);
 		await application.evaluate(({ clipboard }) => { clipboard.writeText = async () => { }; });
-		await using catalog = createAshModelServer([], fence);
+		await using catalog = createAshModelServer([], fence, codeMatch);
 		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
 		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 		try {
@@ -580,6 +886,8 @@ test.describe('Unified Chat sidebar', () => {
 				},
 			});
 			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
+			const answer = (await readThread()).turns[0]?.items.find(item => item.type === 'agentMessage');
+			expect(answer?.citations).toEqual([{ type: 'code', ...codeMatch }]);
 			const page = await workbench.openAgentsWindow(target.kind);
 			for (const [source, selector, canApply] of [
 				['ChatGPT', 'chatgpt:history-one', false],
@@ -639,6 +947,17 @@ test.describe('Unified Chat sidebar', () => {
 				else await expect(apply).toBeDisabled();
 				await page.keyboard.press('Escape');
 				await expect(more).toBeFocused();
+				const codeMatches = reply.locator('.ash-chat-code-citations');
+				if (source === 'Ash') {
+					const summary = codeMatches.locator('summary');
+					await expect(summary).toHaveText('匹配代码（1）');
+					await summary.press('Enter');
+					await expect(codeMatches.getByText('许可证：MIT', { exact: true })).toBeVisible();
+					await expect(codeMatches.getByRole('link')).toHaveAttribute('href', codeMatch.url);
+					await expect(codeMatches.locator('pre code')).toHaveText(codeMatch.snippet);
+				} else {
+					await expect(codeMatches).toHaveCount(0);
+				}
 			}
 		} finally { await connection.close(); }
 	});
@@ -1019,8 +1338,10 @@ test.describe('Unified Chat sidebar', () => {
 			await input.press('Enter');
 			await expect(titlebar.getByRole('button', { name: `重命名会话（${title}）` })).toBeFocused();
 		};
-		const sidebar = page.locator('.ash-chat-navigation');
-		const editor = page.locator('.ash-chatgpt-widget');
+		const sidebar = page.locator('[data-part="sidebar"] .ash-chat-navigation');
+		const grid = page.locator('[data-part="sessions"] .ash-sessions-chat-grid');
+		const retainedGrid = await grid.elementHandle();
+		const editor = grid.locator('.ash-sessions-chat-slot .ash-chatgpt-widget');
 		const chatGPTComposer = new Editor(editor);
 		const modeControl = page.locator('.ash-window-mode-control');
 		const chatMode = modeControl.getByRole('button', { name: '聊天 / Agents', exact: true });
@@ -1056,7 +1377,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(picker.getByText('选择模型新建 Ash 对话…', { exact: true })).toHaveCount(0);
 		await picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true }).click();
 
-		const ash = page.locator('.ash-native-chat-widget .ash-chat');
+		const ash = grid.locator('.ash-sessions-chat-slot .ash-native-chat-widget .ash-chat');
 		const ashComposer = new Editor(ash);
 		await ashComposer.waitForEditorFocus();
 		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
@@ -1085,6 +1406,8 @@ test.describe('Unified Chat sidebar', () => {
 		const sentAfter = Date.now();
 		await page.keyboard.press('Enter');
 		await expect(ash).toContainText('Answer from Ash');
+		expect(await grid.evaluate((element, original) => element === original, retainedGrid)).toBe(true);
+		await retainedGrid?.dispose();
 		const ashRequestTime = ash.locator('.ash-chat-item-userMessage time');
 		const ashReplyTime = ash.locator('.ash-chat-item-agentMessage time').first();
 		await expect(ashRequestTime).toHaveCount(0);
@@ -1345,6 +1668,75 @@ test.describe('Unified Chat sidebar', () => {
 test.describe('Ash project file copies', () => {
 	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
+	test('shows project material skeletons and an in-place Add spinner until each file is confirmed', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, '', false, true);
+		const page = await workbench.openAgentsWindow('electron');
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+		await page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		const materials = page.getByRole('region', { name: '上下文', exact: true });
+		const add = materials.getByRole('button', { name: '添加项目资料', exact: true });
+		const placeholders = materials.locator('.ash-projects-material-placeholder');
+		const spinner = add.locator('.ash-loading-spinner');
+		await expect(materials.getByRole('button', { name: 'project-fixture.txt', exact: true })).toBeVisible();
+		const initialAdd = (await add.boundingBox())!;
+		await application.evaluate(() => ashNativeFixture.holdUploads(true));
+		const select = async (names: readonly string[]) => {
+			await add.click();
+			const chooser = page.waitForEvent('filechooser');
+			await page.getByRole('menuitem', { name: '上传或添加文件', exact: true }).click();
+			await expect(spinner).toBeHidden();
+			await (await chooser).setFiles(names.map(name => ({ name, mimeType: 'text/plain', buffer: Buffer.from(name) })));
+		};
+		try {
+			await select(['first-upload.txt', 'second-upload.txt']);
+			await expect.poll(() => application.evaluate(() => ashNativeFixture.heldUploads)).toBe(1);
+			await expect(placeholders).toHaveCount(2);
+			await expect(placeholders.first()).toHaveAttribute('aria-hidden', 'true');
+			await expect(placeholders.first()).toHaveText('');
+			await expect(spinner).toHaveCSS('animation-name', 'ash-loading-spinner-spin');
+			await expect(add).toBeDisabled();
+			const pendingAdd = (await add.boundingBox())!;
+			expect(pendingAdd.width).toBeCloseTo(initialAdd.width);
+			expect(pendingAdd.height).toBeCloseTo(initialAdd.height);
+			expect(pendingAdd.x).toBeCloseTo(initialAdd.x);
+			expect(pendingAdd.y).toBeCloseTo(initialAdd.y);
+			const pendingCard = (await placeholders.first().boundingBox())!;
+			await testInfo.attach('project-material-upload', { body: await materials.screenshot(), contentType: 'image/png' });
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await expect(spinner).toHaveCSS('animation-name', 'none');
+			await expect(spinner).toBeVisible();
+			await application.evaluate(() => ashNativeFixture.releaseNextUpload());
+			await expect.poll(() => application.evaluate(() => ashNativeFixture.heldUploads)).toBe(2);
+			await expect(placeholders).toHaveCount(1);
+			const firstCard = materials.locator('.ash-projects-material-card').filter({ hasText: 'first-upload.txt' });
+			await expect(firstCard.getByRole('button', { name: 'first-upload.txt', exact: true })).toBeVisible();
+			const confirmed = (await firstCard.boundingBox())!;
+			expect(confirmed.width).toBeCloseTo(pendingCard.width);
+			expect(confirmed.height).toBeCloseTo(pendingCard.height);
+			await application.evaluate(() => ashNativeFixture.releaseNextUpload());
+			await expect(materials.getByRole('button', { name: 'second-upload.txt', exact: true })).toBeVisible();
+			await expect(placeholders).toHaveCount(0);
+			await expect(spinner).toBeHidden();
+			await expect(add).toBeEnabled();
+			await select(['failed-upload.txt']);
+			await expect.poll(() => application.evaluate(() => ashNativeFixture.heldUploads)).toBe(3);
+			await expect(placeholders).toHaveCount(1);
+			await application.evaluate(() => {
+				ashNativeFixture.setOffline(true);
+				ashNativeFixture.releaseNextUpload();
+			});
+			await expect(placeholders).toHaveCount(0);
+			await expect(spinner).toBeHidden();
+			await expect(add).toBeEnabled();
+			await expect(materials.getByRole('button', { name: 'failed-upload.txt', exact: true })).toHaveCount(0);
+			await expect(page.locator('.ash-projects-feedback > p')).toContainText('503');
+		} finally {
+			await application.evaluate(() => { ashNativeFixture.setOffline(false); ashNativeFixture.holdUploads(false); });
+		}
+	});
+
 	test('saves project files locally and changes their Ash folder while ChatGPT is unavailable', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
 		const application = browser as ElectronApplication;
 		await installService(application, false, '', false, true);
@@ -1366,8 +1758,7 @@ test.describe('Ash project file copies', () => {
 		await expect(project).toBeVisible();
 		expect(await saved(originalRoot, 'project-fixture.txt')).toBeUndefined();
 		await project.click();
-		await page.locator('.ash-projects').getByRole('tab', { name: '文件', exact: true }).click();
-		const materials = page.getByRole('region', { name: '项目文件', exact: true });
+		const materials = page.getByRole('region', { name: '上下文', exact: true });
 		const file = materials.getByRole('button', { name: 'project-fixture.txt', exact: true });
 		await expect(file).toBeVisible();
 		await expect.poll(() => saved(originalRoot, 'project-fixture.txt')).toBe('Saved project material fixture');
@@ -1409,65 +1800,96 @@ test.describe('Ash project file copies', () => {
 		if (await showSidebar.isVisible()) await showSidebar.click();
 		await restored.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click({ timeout: 5000 });
 		await restored.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
-		await restored.locator('.ash-projects').getByRole('tab', { name: '文件', exact: true }).click();
-		await restored.getByRole('region', { name: '项目文件', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
+		await restored.getByRole('region', { name: '上下文', exact: true }).getByRole('button', { name: 'project-fixture.txt', exact: true }).press('Enter');
 		const restoredEditor = restored.getByRole('tabpanel', { name: 'project-fixture.txt', exact: true });
 		await new Editor(restoredEditor).waitForEditorContents(text => text === 'Saved project material fixture');
+	});
+});
+
+test.describe('ChatGPT project memory', () => {
+	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
+
+	test('keeps the draft and offers every saved version after a project memory conflict', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }) => {
+		const application = browser as ElectronApplication;
+		await installService(application, false, '', false, true);
+		const page = await workbench.openAgentsWindow('electron');
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+		const projects = page.locator('.ash-projects');
+		await projects.getByRole('button', { name: 'File project fixture', exact: true }).click();
+		const view = projects.getByRole('button', { name: '查看记忆', exact: true });
+		const dialog = page.getByRole('dialog', { name: '项目记忆', exact: true });
+		const editor = new Editor(dialog);
+		const save = dialog.getByRole('button', { name: '保存', exact: true });
+		await view.press('Enter');
+		await expect(editor.input).toBeEditable();
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('当前草稿');
+		await application.evaluate(() => ashNativeFixture.seedProjectMemory(['较早版本', '另一个窗口保存的版本']));
+		await save.press('Enter');
+		await expect(dialog.getByRole('alert')).toHaveText('编辑期间，项目记忆已更改。你的草稿仍保留在编辑器中。');
+		await editor.waitForEditorContents(text => text === '当前草稿');
+		const latest = dialog.getByText('已保存的版本 1 另一个窗口保存的版本', { exact: true });
+		const older = dialog.getByText('已保存的版本 2 较早版本', { exact: true });
+		await expect(latest).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(older).toBeFocused();
+		expect(await application.evaluate(() => ashNativeFixture.projectMemoryBodies)).toHaveLength(2);
+
+		const merged = '当前草稿\n另一个窗口保存的版本\n较早版本';
+		await editor.waitForEditorFocus();
+		await editor.input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(merged);
+		await editor.waitForEditorContents(text => text === merged);
+		await save.press('Enter');
+		await expect(dialog).toBeHidden();
+		expect(await application.evaluate(() => ashNativeFixture.projectMemoryBodies)).toEqual([`<!-- ash-project-memory:g-p-files-fixture -->\n${merged}`]);
+		await view.press('Enter');
+		await editor.waitForEditorContents(text => text === merged);
+		await expect(older).toBeHidden();
 	});
 });
 
 test.describe('ChatGPT project conversation title', () => {
 	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
-	test('shows the active conversation title next to the project shortcut', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
+	test('uses the shared session title for a ChatGPT project conversation', { tag: ['@electron-app-server'] }, async ({ application: browser, workbench }, testInfo) => {
 		const application = browser as ElectronApplication;
 		await installService(application, false, '', false, true);
 		const page = await workbench.openAgentsWindow('electron');
 		const sidebar = page.locator('.ash-chat-navigation-list');
 		const titleBar = page.locator('.ash-sessions-titlebar');
 		const conversation = titleBar.getByRole('button', { name: '重命名会话（First native history）', exact: true });
-		const project = titleBar.getByRole('button', { name: 'File project fixture', exact: true });
-		const separator = titleBar.locator('.ash-sessions-titlebar-separator');
+		const pageTitle = titleBar.locator('.ash-sessions-titlebar-page-content');
+		const sessionTitle = titleBar.locator('.ash-sessions-titlebar-widget');
 		await sidebar.getByRole('button', { name: 'File project fixture', exact: true }).press('ArrowRight');
 		await sidebar.getByRole('button', { name: 'First native history', exact: true }).press('Enter');
 		await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
-		await expect(project).toBeVisible();
-		await expect(conversation).toBeVisible();
-		await expect(separator).toHaveText('/');
-		await expect(separator).toHaveAttribute('aria-hidden', 'true');
-		const assertTitlePlacement = async () => {
-			const [projectBounds, separatorBounds, titleBounds] = await Promise.all([project.boundingBox(), separator.boundingBox(), conversation.boundingBox()]);
-			expect(projectBounds).not.toBeNull();
-			expect(separatorBounds).not.toBeNull();
-			expect(titleBounds).not.toBeNull();
-			expect(separatorBounds!.x).toBeGreaterThanOrEqual(projectBounds!.x + projectBounds!.width);
-			expect(separatorBounds!.x + separatorBounds!.width).toBeLessThanOrEqual(titleBounds!.x);
-			const gap = titleBounds!.x - (projectBounds!.x + projectBounds!.width);
-			expect(gap).toBeGreaterThanOrEqual(0);
-			expect(gap).toBeLessThanOrEqual(16);
-			expect(titleBounds!.y + titleBounds!.height / 2).toBeCloseTo(projectBounds!.y + projectBounds!.height / 2, 0);
-		};
-		await assertTitlePlacement();
-		await page.screenshot({ path: testInfo.outputPath('project-and-conversation-title.png') });
+		await expect(pageTitle).toBeHidden();
+		await expect(sessionTitle.getByRole('button', { name: '重命名会话（First native history）', exact: true })).toBeVisible();
+		await expect(sessionTitle.getByRole('button', { name: '更多会话操作', exact: true })).toBeVisible();
+		await page.screenshot({ path: testInfo.outputPath('project-conversation-title.png') });
 		const browserWindow = await application.browserWindow(page);
 		await browserWindow.evaluate(value => value.setSize(720, 780));
 		await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(720);
-		await assertTitlePlacement();
-		await page.screenshot({ path: testInfo.outputPath('project-and-conversation-title-narrow.png') });
+		await expect(conversation).toBeInViewport({ ratio: 1 });
+		await expect(pageTitle).toBeHidden();
+		await page.screenshot({ path: testInfo.outputPath('project-conversation-title-narrow.png') });
 
 		await page.getByRole('textbox', { name: '询问 ChatGPT', exact: true }).press('Alt+F1');
-		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/聚焦回复中的文件链接并按 Enter 可下载文件/u);
+		const help = page.locator('.ash-accessible-view-content');
+		await expect(help).toHaveValue(/聚焦回复中的文件链接并按 Enter 可下载文件/u);
+		await expect(help).not.toHaveValue(/激活窗口标题栏中的项目名称/u);
 		await page.keyboard.press('Escape');
-		await project.press('Enter');
-		await expect(titleBar.getByRole('navigation', { name: '项目导航', exact: true })).toBeVisible();
-		await expect(conversation).toBeHidden();
-		await expect(separator).toBeHidden();
 		const showSidebar = titleBar.getByRole('button', { name: '显示侧边栏', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '项目', exact: true }).click();
+		await page.locator('.ash-projects').getByRole('button', { name: 'File project fixture', exact: true }).click();
+		await expect(pageTitle.getByRole('navigation', { name: '项目导航', exact: true })).toBeVisible();
+		await expect(conversation).toBeHidden();
+		if (await showSidebar.isVisible()) await showSidebar.click();
 		await sidebar.getByRole('button', { name: 'Second native history', exact: true }).press('Enter');
-		await expect(titleBar.getByRole('button', { name: '重命名会话（Second native history）', exact: true })).toBeVisible();
-		await expect(project).toBeHidden();
-		await expect(separator).toBeHidden();
+		await expect(sessionTitle.getByRole('button', { name: '重命名会话（Second native history）', exact: true })).toBeVisible();
+		await expect(pageTitle).toBeHidden();
 	});
 });
 
@@ -1504,9 +1926,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(thumbnail.locator('img')).toBeVisible();
 			const pending = form.locator('.ash-chat-staged-file.image.pending');
 			await expect(pending).toHaveCount(1);
-			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '0.5');
-			await expect(pending.getByText(locale === 'en' ? 'Uploading…' : '正在上传…', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
-			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('ash-chat-staged-image-sweep');
+			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '1');
+			await expect(pending.getByText(locale === 'en' ? 'Added to draft. Uploading in background.' : '已添加到草稿，正在后台上传。', { exact: true })).toHaveCSS('clip-path', 'inset(50%)');
+			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
+			const send = form.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true });
+			await expect(send).toBeDisabled();
 			await history.hover();
 			await expect(remove).toHaveCSS('opacity', '0');
 			await expect(remove).toHaveCSS('pointer-events', 'none');
@@ -1525,6 +1949,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await application.evaluate(() => globalThis.ashNativeFixture.holdUploads(false));
 			await expect.poll(() => application.evaluate(() => Object.keys(globalThis.ashNativeFixture.uploadedFiles))).toContain(name);
 			await expect(pending).toHaveCount(0);
+			await expect(send).toBeEnabled();
 			await expect(thumbnail.locator('img')).toHaveCSS('opacity', '1');
 			expect(await thumbnail.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none');
 			await thumbnail.click();
@@ -1888,7 +2313,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 				await expect(viewport).toHaveJSProperty('scrollTop', 96);
 				if (entry.action === 'sessions.open.creator') {
-					await page.locator('.ash-creator-home').getByRole('button', { name: locale === 'en' ? 'Design' : '设计', exact: true }).click();
+					await commands.runCommand('sessions.creator.open.design');
 					await expect(page.locator('.ash-sessions-design-view')).toBeVisible();
 					await expect(history).toBeVisible();
 					expect(await history.evaluate((element, retained) => element === retained, retainedHistory)).toBe(true);

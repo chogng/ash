@@ -117,7 +117,7 @@ class AuxiliaryElectronTitlebarPart extends AuxiliaryBrowserTitlebarPart {
 }
 
 /** Keep the caption reservation stable while Windows delivers viewport and overlay geometry separately. */
-export function bindWindowsTitlebarInsets(titlebar: HTMLElement): IDisposable {
+export function bindWindowsTitlebarInsets(titlebar: HTMLElement, windowFrame = titlebar): IDisposable {
 	if (!isWindows) return Disposable.None;
 	const target = getWindow(titlebar);
 	const overlay = (target.navigator as Navigator & { windowControlsOverlay?: EventTarget & { readonly visible: boolean; }; }).windowControlsOverlay;
@@ -135,7 +135,7 @@ export function bindWindowsTitlebarInsets(titlebar: HTMLElement): IDisposable {
 	resources.add(toDisposable(clear));
 	const settled = resources.add(new RunOnceScheduler(() => {
 		const area = getVisibleWCOTitlebarAreaRect(target);
-		const bounds = titlebar.getBoundingClientRect();
+		const bounds = windowFrame.getBoundingClientRect();
 		if (!area?.width || !bounds.width) {
 			clear();
 			return;

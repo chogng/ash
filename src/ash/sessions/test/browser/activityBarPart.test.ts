@@ -34,7 +34,8 @@ const { ContextKeyService, IContextKeyService } = await import('../../../platfor
 const { CommandRegistry, CommandsRegistry, ICommandService } = await import('../../../platform/commands/common/commands.js');
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
-const { ISessionsLayoutService } = await import('../../services/layout/common/sessionsLayoutService.js');
+const { ISessionsEntryService } = await import('../../services/layout/common/sessionsEntryService.js');
+const { IProjectsService } = await import('../../contrib/projects/browser/projectsService.js');
 const { IDesignEditorService } = await import('../../contrib/artifacts/browser/designEditorService.js');
 const { URI } = await import('../../../base/common/uri.js');
 const { DisposableStore } = await import('../../../base/common/lifecycle.js');
@@ -388,7 +389,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	assert.deepEqual(JSON.parse(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE)!), [...chatOrder, ...codeOrder.slice(1)]);
 	const newButton = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.newSession"] button')!;
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Customize', 'Symphony', 'More']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Customize', 'Symphony', 'Bots', 'More']);
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.newSession"] button'), newButton);
 	const more = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.activity.more"] button')!;
 	assert.equal(more.getAttribute('aria-haspopup'), 'menu');
@@ -402,7 +403,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	setARIAContainer(document.body);
 	bar.domNode.querySelector('[data-action-id="sessions.open.customize"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown[0]!.run();
-	assert.deepEqual(labels(), ['New', 'Customize', 'Search', 'Symphony', 'More']);
+	assert.deepEqual(labels(), ['New', 'Customize', 'Search', 'Symphony', 'Bots', 'More']);
 	contexts.setContext('sessions.workspaceMode', 'chat');
 	assert.deepEqual(labels(), ['Artifacts', 'New', 'Customize', 'Projects', 'Search', 'Scheduled', 'More']);
 	more.click();
@@ -411,7 +412,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	contexts.setContext('sessions.workspaceMode', 'code');
 	bar.domNode.querySelector('[data-action-id="sessions.open.symphony"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown.find(action => action.id === 'sessions.activity.unpin')!.run();
-	assert.deepEqual(labels(), ['New', 'Customize', 'Search', 'More']);
+	assert.deepEqual(labels(), ['New', 'Customize', 'Search', 'Bots', 'More']);
 	assert.equal(document.activeElement, more);
 
 	const navigation = bar.domNode.querySelector<HTMLElement>('.ash-sessions-navigation')!;
@@ -423,7 +424,7 @@ test('Chat and Code show their own actions and retain shared navigation preferen
 	const buttons = () => [...navigation.querySelectorAll<HTMLButtonElement>('button')];
 	const actionIds = () => buttons().map(button => button.closest<HTMLElement>('[data-action-id]')!.dataset.actionId);
 	const wideIds = actionIds();
-	assert.equal(wideIds.length, 5);
+	assert.equal(wideIds.length, 6);
 	buttons().at(-1)!.focus();
 	width = 88;
 	bar.setLocation(ActivityBarPosition.BOTTOM, document.body, document.body);
@@ -487,14 +488,16 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 		contexts.setContext('sessions.activity.newSessionDraftVisible', id === 'chat' || id === 'code');
 		for (const [candidate, key] of keys) { key.set(candidate === id); }
 	});
-	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: { id: string; }) => select(entry.id) } as unknown as import('../../services/layout/common/sessionsLayoutService.js').ISessionsLayoutService);
+	services.registerInstance(ISessionsEntryService, { openEntry: async (entry: { id: string; }) => select(entry.id) } as unknown as import('../../services/layout/common/sessionsEntryService.js').ISessionsEntryService);
+	services.registerInstance(IProjectsService, { state: { get: () => ({ selectedId: undefined, conversationProjectId: undefined }) } } as import('../../contrib/projects/browser/projectsService.js').IProjectsService);
 	resources.add(registry.register('sessions.open.customize', CommandsRegistry.getCommand('sessions.open.customize')!));
 	resources.add(registry.register('sessions.newSession', () => select(contexts.getValue('sessions.workspaceMode') === 'code' ? 'code' : 'chat')));
 	for (const id of ['chat', 'collaboration', 'teams', 'code', 'symphony']) { resources.add(registry.register(`sessions.open.${id}`, () => select(id))); }
 	for (const id of ['projects', 'creator']) {
 		resources.add(registry.register(`sessions.open.${id}`, CommandsRegistry.getCommand(`sessions.open.${id}`)!));
-		resources.add(registry.register(`sessions.show.${id}`, () => select(id)));
 	}
+	resources.add(registry.register('sessions.show.projects', CommandsRegistry.getCommand('sessions.show.projects')!));
+	resources.add(registry.register('sessions.show.creator', () => select('creator')));
 	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-projects' ? 'projects' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/artifacts/browser/designEditorService.js').IDesignEditorService);
 	return resources;

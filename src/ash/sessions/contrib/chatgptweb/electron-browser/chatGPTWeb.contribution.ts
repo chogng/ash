@@ -16,10 +16,9 @@ import { SESSIONS_GENERAL_SETTINGS_TAG } from '../../../common/configuration.js'
 import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
 import { registerChatGPTResponseActions } from './chatGPTResponseActions.js';
-import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ElectronChatGPTNativeTransport, ElectronChatGPTTransport } from './electronChatGPTTransport.js';
-import { ChatGPTDraftModelSource, ChatGPTExperimentalContribution, experimentalChatGPTEditor, ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SESSIONS_CHATGPT_DEFAULT_BACKEND, SHOW_CHATGPT_COMMAND, SHOW_PREFERRED_CHATGPT_COMMAND } from './chatGPTWeb.js';
+import { ChatGPTDraftModelSource, ChatGPTExperimentalContribution, experimentalChatGPTViewSource, ChatGPTWebContribution, chatGPTViewSource, chatGPTScrollOptimization, chatGPTSelectedContext, SESSIONS_CHATGPT_DEFAULT_BACKEND, SHOW_CHATGPT_COMMAND, SHOW_PREFERRED_CHATGPT_COMMAND } from './chatGPTWeb.js';
 import { ChatGPTNativeService, ChatGPTService, IChatGPTNativeService, IChatGPTService } from '../browser/chatGPTService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -32,15 +31,12 @@ import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../commo
 import { canUseAshModels } from './chatGPTWidgetModel.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
-import { ViewContainerLocation } from '../../../../workbench/common/views.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
-import { chatGPTEntityDetailsActiveContext, chatGPTEntityDetailsContainerId, chatGPTEntityDetailsViewId, ChatGPTEntityDetails, ChatGPTEntityDetailsView, IChatGPTEntityDetails, registerChatGPTEntityDetailsAccessibility } from './chatGPTEntityDetails.js';
 
 export const chatGPTWorkspaceSource = {
 	catalog: new SyncDescriptor(ChatGPTList),
 	additionalCatalog: new SyncDescriptor(ChatGPTNativeList),
 	draftModels: new SyncDescriptor(ChatGPTDraftModelSource),
-	accessibility: chatGPTReplyEditor.accessibility,
+	accessibility: chatGPTViewSource.accessibility,
 	openCommand: SHOW_PREFERRED_CHATGPT_COMMAND,
 	createDraft: (commands: ICommandService, origin: unknown) => commands.executeCommand<void>(SHOW_PREFERRED_CHATGPT_COMMAND, origin, true),
 };
@@ -49,19 +45,6 @@ registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
 registerSingleton(IChatGPTNativeService, ChatGPTNativeService, InstantiationType.Delayed);
 registerSingleton(IChatGPTNativeTransport, ElectronChatGPTNativeTransport, InstantiationType.Delayed);
-registerSingleton(IChatGPTEntityDetails, ChatGPTEntityDetails, InstantiationType.Delayed);
-const entityDetailsTitle = localize('sessions.chatgpt.entityDetails', 'Entity details');
-SessionsViewRegistry.registerStaticViewContainer({
-	id: chatGPTEntityDetailsContainerId, title: entityDetailsTitle, localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.entityDetails' },
-	location: ViewContainerLocation.AuxiliaryBar, hideIfEmpty: true,
-});
-SessionsViewRegistry.registerStaticViews(chatGPTEntityDetailsContainerId, [{
-	id: chatGPTEntityDetailsViewId, title: entityDetailsTitle, localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.entityDetails' },
-	ctorDescriptor: new SyncDescriptor(ChatGPTEntityDetailsView), canToggleVisibility: false, when: ContextKeyExpr.has(chatGPTEntityDetailsActiveContext),
-}]);
-registerChatGPTEntityDetailsAccessibility();
-registerReplyChatEditor(chatGPTReplyEditor);
-registerReplyChatEditor(experimentalChatGPTEditor);
 registerChatGPTResponseActions();
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatGPT, defaultValue: true,
@@ -75,8 +58,8 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
-registerChatGPTAccessibility(chatGPTReplyEditor.accessibility.focusContext, IChatGPTService);
-registerChatGPTAccessibility(experimentalChatGPTEditor.accessibility.focusContext, IChatGPTNativeService, true);
+registerChatGPTAccessibility(chatGPTViewSource.accessibility.focusContext, IChatGPTService);
+registerChatGPTAccessibility(experimentalChatGPTViewSource.accessibility.focusContext, IChatGPTNativeService, true);
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: chatGPTScrollOptimization, defaultValue: true, scope: ConfigurationScope.APPLICATION,
@@ -138,7 +121,7 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 		const state = chat.state.get();
 		if (!canOpen() || state.localConversationId !== source || chat.newDraftRevision !== revision || !canUseAshModels(state)
 			|| state.sending || state.managing || state.voice !== 'idle') return undefined;
-		return state.draft;
+		return { text: state.draft, artifactKind: state.draftArtifactKind };
 	});
 });
 

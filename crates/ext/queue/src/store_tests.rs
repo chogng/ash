@@ -242,6 +242,7 @@ fn input(id: &str) -> QueueInput {
         command_interpretation: protocol::CommandInterpretation::Product,
         mode: Default::default(),
         model: None,
+        model_routing: None,
         reasoning_effort: None,
         command_id: CommandId::new(id).unwrap(),
         session_id: SessionId::new("session").unwrap(),

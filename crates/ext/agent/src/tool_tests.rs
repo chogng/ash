@@ -533,6 +533,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
                 deadline: None,
                 request: protocol::AgentRequest::UserInput {
                     request: protocol::RequestUserInput {
+                        plan_review: None,
                         questions: vec![protocol::UserInputQuestion {
                             required: true,
                             id: "answer".into(),

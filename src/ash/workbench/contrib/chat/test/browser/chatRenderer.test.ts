@@ -18,7 +18,7 @@ import { createTestEditorServices } from '../../../../test/common/testEditorServ
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import { chatTranscriptListItem, chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry, TurnError } from '../../../../services/chat/common/chatService.js';
-import type { IChatListItem } from '../../common/model/chatViewModel.js';
+import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { CodeBlockPart } from '../../browser/widget/chatContentParts/codeBlockPart.js';
 import type { URI } from '../../../../../base/common/uri.js';
@@ -71,7 +71,7 @@ suite('Chat message renderer lifecycle', () => {
 		assert.throws(() => incomplete.createInstance(ChatListWidget, document.createElement('main'), {}), /loggerService/);
 	});
 
-	for (const classPrefix of ['ash-chat', 'ash-cowork']) {
+	for (const classPrefix of ['ash-chat', 'ash-native-chat']) {
 		test(`${classPrefix} shares bounded diagnostics across streaming, replacement, removal and disposal`, () => {
 			using resources = new DisposableStore();
 			const entries: LogEntry[] = [];
@@ -460,6 +460,42 @@ test('correcting a linked resource cancels its original read and suppresses a re
 });
 
 
+test('provider limit rows dispatch the permitted action once and retire actions with the failed turn', async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const pending = new DeferredPromise<void>();
+	const calls: string[] = [];
+	const container = document.createElement('main');
+	document.body.append(container);
+	resources.add(toDisposable(() => container.remove()));
+	const widget = resources.add(services.createInstance(ChatListWidget, container, {
+		onDidRequestErrorAction: async (action: ChatTurnErrorAction) => { calls.push(action.type); await pending.p; },
+	}));
+	const error = { type: 'turnError' as const, entryId: 'limit', turnId: 'turn', error: { code: 'rateLimited' as const, message: '<provider response>', retryable: true } };
+	widget.render([chatTranscriptListItem(error)]);
+	const actions = () => Array.from(widget.element.querySelectorAll<HTMLButtonElement>('.ash-chat-quota-error-actions button'));
+	const [retry, model] = actions();
+	assert.deepEqual(actions().map(button => button.textContent), ['Try again', 'Choose another model']);
+	retry.click();
+	model.click();
+	assert.deepEqual(calls, ['retry']);
+	assert.equal(model.getAttribute('aria-disabled'), 'true');
+	await pending.complete();
+	await Promise.resolve();
+	assert.equal(model.hasAttribute('aria-disabled'), false);
+	model.click();
+	assert.deepEqual(calls, ['retry', 'chooseModel']);
+	widget.render([chatTranscriptListItem(error, { actionsEnabled: false })]);
+	assert.equal(actions().length, 0);
+	retry.click();
+	assert.deepEqual(calls, ['retry', 'chooseModel']);
+	widget.render([chatTranscriptListItem({ ...error, error: { ...error.error, code: 'usageLimited' as const, retryable: false } })]);
+	assert.deepEqual(actions().map(button => button.textContent), ['Choose another model']);
+	assert.equal(widget.element.querySelector('pre')?.textContent, '<provider response>');
+	assert.equal(chatTranscriptListItem({ ...error, error: { ...error.error, code: 'providerHttp' as const, retryable: false } }).action, undefined);
+	assert.equal(chatTranscriptListItems([error], error.turnId, [], undefined, { archived: true })[0].action, undefined);
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`renderer feedback presents plan, Advisor, failures and recovery actions in ${locale} without changing provider text`, () => {
 		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
@@ -476,6 +512,7 @@ for (const locale of ['en', 'zh-CN']) {
 				['completionPersistenceFailed', 'Save failed', '保存失败', 'Try again', '重试'],
 				['interactionDeadlineElapsed', 'Interaction expired', '交互已过期', 'Try again', '重试'],
 				['toolRepetition', 'Repeated tool failure', '工具反复失败', 'Change approach', '改变方式'],
+				['rateLimited', 'Rate limit', '请求频率限制', 'Try again', '重试'],
 				['usageLimited', 'Usage limit', '用量限制', 'Choose another model', '选择其他模型'],
 				['worktreeCaptureFailed', 'Worktree capture failed', '工作树快照失败', 'Try again', '重试'],
 			];
@@ -486,6 +523,8 @@ for (const locale of ['en', 'zh-CN']) {
 				assert.equal(item.action?.label, locale === 'en' ? actionEn : actionZh);
 				assert.equal(item.isError, true);
 			}
+			const limited = chatTranscriptListItem({ type: 'turnError', entryId: 'limited', turnId: 'turn', error: { code: 'rateLimited', message: raw, retryable: true } });
+			assert.equal(limited.secondaryAction?.label, locale === 'en' ? 'Choose another model' : '选择其他模型');
 			const call: ThreadTranscriptEntry = { type: 'item', entryId: 'call', turnId: 'turn', transient: true, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'advisor', name: 'advisor', argumentsJson: '{}' } };
 			const pending = chatTranscriptListItems([call])[0];
 			assert.equal(pending.text, locale === 'en' ? 'Consulting the selected model…' : '正在咨询所选模型…');

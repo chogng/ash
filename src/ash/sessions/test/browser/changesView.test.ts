@@ -9,6 +9,7 @@ import { SessionChangesEditorInput } from '../../contrib/changes/browser/session
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { IDecorationsService } from '../../../workbench/services/decorations/common/decorations.js';
+import { DecorationsService } from '../../../workbench/services/decorations/browser/decorationsService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -22,7 +23,7 @@ import { Event, Emitter } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
-import { registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { createTestEditorServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
@@ -46,6 +47,7 @@ import { IEditorService, type EditorOpenOptions } from '../../../workbench/servi
 import { isDiffEditorInput } from '../../../workbench/common/editor/diffEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import { ChangesViewPane } from '../../contrib/changes/browser/changesView.js';
+import { ISessionGitActionsService, SessionGitActionsService } from '../../services/sessions/browser/sessionGitActionsService.js';
 import { setNlsMessages, resetNlsResolver } from '../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { createTurnCommitPreviewInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
@@ -57,8 +59,8 @@ import { IGitHubService as IGitHubApi } from '../../../platform/github/common/gi
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
-import { IChecksOperationService } from '../../contrib/changes/common/checksOperationService.js';
-import { ChecksOperationService } from '../../contrib/changes/browser/checksOperationService.js';
+import { IChecksOperationService } from '../../contrib/github/common/checksOperationService.js';
+import { ChecksOperationService } from '../../contrib/github/browser/checksOperationService.js';
 import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
 import { AnimatedCounterWidget } from '../../../workbench/browser/animatedCounterWidget.js';
@@ -141,7 +143,8 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 		services.registerInstance(IStorageService, storage);
 		services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
-		using view = services.createInstance(ChangesViewPane, browser.window.document.body, { id: 'changes', title: 'Changes' });
+		using viewServices = createTestEditorServices(config, services, browser.window.document);
+		using view = viewServices.createInstance(ChangesViewPane, browser.window.document.body, { id: 'changes', title: 'Changes' });
 		services.registerInstance(IViewsService, { getViewWithId: (id: string) => id === CHANGES_VIEW_ID ? view : undefined } as unknown as IViewsService);
 		view.setVisible(true);
 		selection = selected('current', true);
@@ -154,7 +157,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		const modePicker = view.element.querySelectorAll<HTMLSelectElement>('select')[1]!;
 		modePicker.value = 'tree';
 		modePicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
-		assert.ok(Array.from(view.element.querySelectorAll('.ash-sessions-change-path')).some(row => row.textContent === repositoryLabel));
+		assert.ok(Array.from(view.element.querySelectorAll('.ash-sessions-changes-tree .ash-multi-diff-file-list-row')).some(row => row.textContent === repositoryLabel));
 		modePicker.value = 'list';
 		modePicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		const initialPicker = view.element.querySelector<HTMLSelectElement>('select')!;
@@ -304,6 +307,7 @@ function registerChecksServices(services: InstantiationService, document: Docume
 	}));
 	services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
+	services.registerSingleton(ISessionGitActionsService, () => services.createInstance(SessionGitActionsService));
 	services.registerInstance(ISessionsManagementService, {
 		get sessions() {
 			const selection = services.get(ISessionsService).activeSelection;
@@ -311,7 +315,7 @@ function registerChecksServices(services: InstantiationService, document: Docume
 		},
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
-	services.registerInstance(IDecorationsService, { registerDecorationsProvider: () => toDisposable(() => { }) } as unknown as IDecorationsService);
+	services.registerSingleton(IDecorationsService, () => services.createInstance(DecorationsService, document));
 	services.registerInstance(ICommandService, { executeCommand: async () => [] } as unknown as ICommandService);
 	services.registerInstance(ISessionGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as ISessionGitHubService);
 	services.registerInstance(IGitHubApi, {} as IGitHubApi);
@@ -413,7 +417,8 @@ suite('Changes visibility lifecycle', () => {
 		services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
-		using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
+		using viewServices = createTestEditorServices(undefined, registerTestComponentServices(services, browser.window.document), browser.window.document);
+		using view = viewServices.createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
 		view.setVisible(true);
 		await settle();
 		const picker = view.element.querySelector<HTMLSelectElement>('select')!;
@@ -481,7 +486,8 @@ suite('Changes visibility lifecycle', () => {
 		services.registerInstance(IQuickInputService, { input: async () => pendingMessage.p } as unknown as IQuickInputService);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerSingleton(IChangesViewService, () => services.createInstance(ChangesViewService));
-		using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
+		using viewServices = createTestEditorServices(undefined, registerTestComponentServices(services, browser.window.document), browser.window.document);
+		using view = viewServices.createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
 		services.registerInstance(IViewsService, { getViewWithId: (id: string) => id === CHANGES_VIEW_ID ? view : undefined } as unknown as IViewsService);
 
 		changed.fire();

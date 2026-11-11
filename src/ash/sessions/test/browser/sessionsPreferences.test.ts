@@ -8,7 +8,7 @@ import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widge
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { IAgentSessionService } from '../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
+import { IAgentModelsService, type AgentModelDefaults, type AgentModelDefaultsUpdate } from '../../../platform/models/common/agentModels.js';
 import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
 import { constObservable } from '../../../base/common/observable.js';
 import { DeferredPromise } from '../../../base/common/async.js';
@@ -126,7 +126,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		this.dispatchEvent(new window.Event('close'));
 	};
 	await import('../../browser/activityBarAccessibility.js');
-	await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
+	await import('../../contrib/artifacts/browser/designEditor.contribution.js');
 	const [{ SessionsPreferences }, { testConfigurationService }, { ContextKeyService }] = await Promise.all([
 		import('../../contrib/preferences/browser/sessionsPreferences.js'),
 		import('../../../workbench/services/configuration/test/common/testServices.js'),
@@ -182,8 +182,15 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using chatWidgets = services.createInstance(ChatWidgetService);
 	services.registerInstance(IChatWidgetService, chatWidgets);
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	let modelDefaults: AgentModelDefaults = { revision: 1, model: null, reasoningEffort: null, codeReviewModel: otherModel, commitMessageModel: null, commitMessageEnabled: false };
+	const modelWrites: AgentModelDefaultsUpdate[] = [];
 	services.registerInstance(IAgentModelsService, {
-		readDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null, codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false }),
+		readDefaults: async () => modelDefaults,
+		configureDefaults: async (update, revision) => {
+			assert.equal(revision, modelDefaults.revision);
+			modelWrites.push(update);
+			modelDefaults = { ...modelDefaults, ...update, revision: revision + 1 };
+		},
 	} as IAgentModelsService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -454,9 +461,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const openCopyMenu = (category = 'Design', copyLabel = 'Copy Setting as JSON') => {
 		const dialog = window.document.querySelector<HTMLDialogElement>('dialog')!;
 		[...dialog.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === category)!.click();
-		const more = dialog.querySelector<HTMLButtonElement>('[data-settings-item-id="accessibility.verbosity.designCanvas"] .ash-setting-item-actions-trigger')!;
-		more.focus();
-		more.click();
+		const control = dialog.querySelector<HTMLInputElement>('[data-configuration-key="accessibility.verbosity.designCanvas"][role="switch"]')!;
+		control.focus();
+		control.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
 		const menu = dialog.querySelector<HTMLElement>('[role="menu"]')!;
 		assert.ok(menu);
 		menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
@@ -466,18 +473,18 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.ok(copy);
 		assert.equal(window.document.activeElement, copy);
 		assert.equal(dialog.querySelectorAll('.ash-context-view').length, 1);
-		return { copy, menu, more };
+		return { copy, menu, control };
 	};
 	const firstMenu = openCopyMenu();
 	firstMenu.copy.click();
 	await Promise.resolve();
 	assert.deepEqual(copied, ['"accessibility.verbosity.designCanvas": false']);
 	assert.equal(firstMenu.menu.isConnected, false);
-	assert.equal(window.document.activeElement, firstMenu.more);
+	assert.equal(window.document.activeElement, firstMenu.control);
 	const cancelledMenu = openCopyMenu();
 	cancelledMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(cancelledMenu.menu.isConnected, false);
-	assert.equal(window.document.activeElement, cancelledMenu.more);
+	assert.equal(window.document.activeElement, cancelledMenu.control);
 	assert.equal([...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'), false);
 	await preferences.open({ section: 'chat-usage' });
 	const usageButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Usage');
@@ -612,15 +619,23 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await Promise.resolve();
 	await Promise.resolve();
 	assert.equal(window.document.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
-	const titleSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.threadTitle"] [role="combobox"]');
+	const titleSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.threadTitle"] button[aria-haspopup="menu"]');
 	assert.ok(titleSelector);
 	assert.equal(titleSelector.textContent?.trim(), 'Automatic');
-	const recapSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.threadRecap"] [role="combobox"]');
+	const recapSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.threadRecap"] button[aria-haspopup="menu"]');
 	assert.equal(recapSelector?.textContent?.trim(), 'Automatic');
-	const advisorSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]');
+	const reviewSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.codeReview"] button[aria-haspopup="menu"]')!;
+	assert.equal(reviewSelector.textContent?.trim(), 'Claude Test');
+	reviewSelector.click();
+	const followCurrent = [...window.document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Follow Current Model')!;
+	followCurrent.click();
+	await new Promise(resolve => setImmediate(resolve));
+	assert.deepEqual(modelWrites, [{ codeReviewModel: null }]);
+	assert.equal(reviewSelector.textContent?.trim(), 'Follow Current Model');
+	const advisorSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] button[aria-haspopup="menu"]');
 	assert.ok(advisorSelector);
 	advisorSelector.click();
-	const off = window.document.querySelector<HTMLElement>('[role="listbox"] [role="option"][data-index="1"]');
+	const off = [...window.document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Disable');
 	assert.ok(off);
 	off.click();
 	await Promise.resolve();
@@ -661,7 +676,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await Promise.resolve();
 		assert.deepEqual(copied, ['"accessibility.verbosity.designCanvas": false', '"accessibility.verbosity.designCanvas": false']);
 		assert.equal(reopenedMenu.menu.isConnected, false);
-		assert.equal(window.document.activeElement, reopenedMenu.more);
+		assert.equal(window.document.activeElement, reopenedMenu.control);
 		await preferences.open({ section: 'general' });
 		assert.equal(window.document.querySelector('[data-configuration-key="workbench.locale"] [role="combobox"]')?.getAttribute('aria-label'), '界面语言');
 		await preferences.open({ section: 'dictation' });
@@ -755,10 +770,30 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await openCategoryAction('browser', 'Open Browser settings');
 	await openCategoryAction('tab', 'Open Tab settings');
 	await openCategoryAction('code-intelligence', 'Language servers');
-	await openCategoryAction('environment', 'Open Environment settings');
+	const terminalSettings = preferences.open({ section: 'environment', query: '@id:sessions.terminal.*' });
+	assert.ok(window.document.querySelector('dialog[open] [data-settings-item-id="sessions.terminal.fontSize"]'));
+	assert.equal(window.document.querySelector('[data-settings-item-id="terminal.integrated.fontSize"]'), null);
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await terminalSettings;
+	const terminalProfilePicked = new DeferredPromise<void>();
+	using profileCommand = CommandsRegistry.register('workbench.action.terminal.selectDefaultProfile', () => {
+		assert.ok(window.document.querySelector('dialog[open]'), 'the profile picker opens from the active Settings dialog');
+		void terminalProfilePicked.complete();
+	});
+	const environmentSettings = preferences.open({ section: 'environment' });
+	const profile = [...window.document.querySelectorAll<HTMLButtonElement>('dialog[open] .ash-sessions-settings-page button')]
+		.find(button => button.textContent === 'Select Default Profile');
+	assert.ok(profile);
+	assert.equal(profile.disabled, true);
+	contextKeys.setContext('appServerAvailable', true);
+	assert.equal(profile.disabled, false);
+	profile.click();
+	await terminalProfilePicked.p;
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await environmentSettings;
 	assert.deepEqual(editorOpens.map(open => ({ section: new URL(open.resource).searchParams.get('target'), target: open.target })), [
 		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
-		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' }, { section: 'terminal', target: 'modalGroup' },
+		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' },
 	]);
 	assert.equal(editorReveals, 1);
 	let accountOpens = 0;

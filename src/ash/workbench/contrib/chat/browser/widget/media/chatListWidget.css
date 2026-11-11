@@ -96,32 +96,6 @@
 	padding: 6px var(--ash-chat-content-inset, var(--ash-spacing-size120)) 16px;
 }
 
-.ash-chat-transcript-working {
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-chat-transcript-working-sticky {
-	position: absolute;
-	inset-inline-start: var(
-		--ash-chat-content-inset,
-		var(--ash-spacing-size120)
-	);
-	inset-block-end: calc(
-		var(--ash-chat-transcript-composer-overlap, 0px) +
-			var(--ash-spacing-size80)
-	);
-	z-index: 2;
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-medium);
-	background-color: var(
-		--ash-chat-transcript-surface,
-		var(--ash-editor-background)
-	);
-	pointer-events: none;
-}
-
 @media (forced-colors: none) {
 	.ash-chat-transcript-overlaps-composer:not(
 		:where([data-color-scheme="hcDark"] *, [data-color-scheme="hcLight"] *)
@@ -293,6 +267,17 @@ article.ash-chat-user-message > pre {
 	margin: 0 8px 8px;
 	color: var(--ash-description-foreground);
 }
+.ash-chat-quota-error-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	margin-inline: var(--ash-spacing-size80);
+	margin-block-end: var(--ash-spacing-size40);
+}
+.ash-chat-quota-error-actions
+	> :is(.ash-chat-turn-error-action, .ash-cowork-turn-error-action) {
+	margin: 0;
+}
 .ash-chat-turn-error-action {
 	margin: 0 8px 4px;
 	padding: 4px 8px;
@@ -381,9 +366,7 @@ article.ash-chat-user-message > pre {
 	visibility: hidden;
 }
 
-.ash-chat-message-actions
-	[data-action-id="workbench.action.chat.markHelpful"]
-	> .ash-button.checked {
+.ash-chat-message-actions .ash-chat-helpful-action.checked {
 	background: var(--ash-button-activeBackground);
 }
 
@@ -432,6 +415,14 @@ article.ash-chat-user-message > pre {
 	position: absolute;
 }
 .ash-chat-item:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+.ash-chat-pending-drag-handle {
+	cursor: grab;
+}
+
+.ash-chat-pending-drop-target {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }

@@ -4,6 +4,7 @@ mod endpoint;
 mod error;
 mod headers;
 mod requests;
+mod response_citations;
 mod sse;
 mod token_count;
 mod websocket;

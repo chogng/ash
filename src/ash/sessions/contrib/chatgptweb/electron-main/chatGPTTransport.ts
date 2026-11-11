@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { VSBuffer, decodeBase64, encodeBase64 } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -141,7 +142,8 @@ export class ChatGPTTransport extends Disposable {
 				credentials: 'omit', redirect: 'error', signal,
 			});
 			await response.body?.cancel();
-			return new Response(null, { status: response.status });
+			const retryAfter = response.ok ? null : response.headers.get('Retry-After');
+			return new Response(null, { status: response.status, headers: retryAfter === null ? undefined : { 'Retry-After': retryAfter } });
 		}
 		if (request.path.startsWith('/service/.resource?')) {
 			return this.fetchResource(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!, signal, context, authorization);
@@ -176,7 +178,7 @@ export class ChatGPTTransport extends Disposable {
 			const response = gate && authorization.cacheScope ? await gate.request(authorization.cacheScope, this.options.native === true, signal, send) : await send();
 			const contentType = response.headers.get('content-type') ?? '';
 			const headers = new Headers();
-			const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : null;
+			const retryAfter = response.status === 429 || response.status === 503 ? response.headers.get('Retry-After') : null;
 			if (retryAfter !== null) { headers.set('Retry-After', retryAfter); }
 			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
 			const audio = url.pathname === synthesisPath && /^audio\/(?:mpeg|mp3)(?:;|$)/iu.test(contentType);
@@ -265,14 +267,26 @@ export class ChatGPTTransport extends Disposable {
 	}
 
 	private async fetchAuthorized(runtime: IChatGPTVerificationRuntime, url: URL, init: RequestInit, authorization: IChatGPTAuthorization): Promise<Response> {
-		const send = (credentials: Headers): Promise<Response> => {
+		let canRetryConnectionClose = init.method === undefined || init.method === 'GET';
+		const send = async (credentials: Headers): Promise<Response> => {
 			const headers = new Headers(init.headers);
 			for (const [name, value] of credentials) { headers.set(name, value); }
 			if (init.method === 'GET' && (conversationPath(url.pathname) || nativeHistoryPath(url.pathname))) {
 				// ChatGPT drops rich reply markup from history for the Electron UA.
 				headers.set('User-Agent', runtime.session.getUserAgent().replace(/ Electron\/[^\s]+/gu, ''));
 			}
-			return runtime.session.fetch(url.href, { ...init, headers });
+			const request = { ...init, headers };
+			try {
+				return await runtime.session.fetch(url.href, request);
+			} catch (error) {
+				// Chromium may lose a TLS connection before it can return headers.
+				// Give the connection time to recover before repeating a read once.
+				if (!canRetryConnectionClose || !(error instanceof Error) || error.message !== 'net::ERR_CONNECTION_CLOSED') { throw error; }
+				canRetryConnectionClose = false;
+				await delay(500, undefined, { signal: authorization.signal });
+				authorization.signal.throwIfAborted();
+				return runtime.session.fetch(url.href, request);
+			}
 		};
 		let response = await send(authorization.headers);
 		if (response.status === 401) {

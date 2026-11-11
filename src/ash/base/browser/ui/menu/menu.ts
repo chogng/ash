@@ -53,6 +53,7 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 	private readonly shortcut = this._register(new MutableDisposable<KeybindingLabel>());
 	private shortcutValue: ResolvedKeybinding | undefined;
 	private renderedLabel: string | undefined;
+	private renderedLabelDescription: string | undefined;
 	private renderedClass: string | undefined;
 	private renderedIcon: IAction['icon'];
 	private actionIcon: HTMLElement | undefined;
@@ -125,9 +126,9 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 		this.button.enabled = action.enabled;
 		this.button.domNode.classList.toggle('ash-menu-destructive-action', action.destructive === true);
 		const parsed = parseMenuLabel(action.label, this.menuOptions.enableMnemonics === true);
-		if (this.renderedLabel !== action.label) {
-			this.button.label = parsed.label;
-			this.button.domNode.setAttribute('aria-label', parsed.label);
+		if (this.renderedLabel !== action.label || this.renderedLabelDescription !== action.labelDescription) {
+			this.button.setLabel(parsed.label, action.labelDescription);
+			this.button.domNode.setAttribute('aria-label', action.labelDescription ? `${parsed.label} ${action.labelDescription}` : parsed.label);
 			const label = this.button.domNode.querySelector<HTMLElement>('.ash-button-label');
 			if (label && this.menuOptions.enableMnemonics && parsed.index !== undefined) {
 				const key = h(label.ownerDocument, 'u');
@@ -135,6 +136,7 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 				label.replaceChildren(parsed.label.slice(0, parsed.index), key, parsed.label.slice(parsed.index + 1));
 			}
 			this.renderedLabel = action.label;
+			this.renderedLabelDescription = action.labelDescription;
 		}
 		if (this.mnemonic) this.button.domNode.setAttribute('aria-keyshortcuts', this.mnemonic);
 		else this.button.domNode.removeAttribute('aria-keyshortcuts');

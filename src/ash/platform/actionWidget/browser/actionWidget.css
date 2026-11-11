@@ -193,10 +193,11 @@
 .ash-action-widget-selection {
 	display: inline-flex;
 	flex: 0 0 auto;
+	visibility: hidden;
 }
 
-.ash-action-widget-primary:not(.checked) > .ash-action-widget-selection {
-	visibility: hidden;
+.ash-action-widget-primary.checked > .ash-action-widget-selection {
+	visibility: visible;
 }
 
 .ash-action-widget-check-trailing > .ash-action-widget-command-icon {

@@ -156,7 +156,7 @@ export class TeamsPanel extends Disposable {
 			this.paragraph(row, `${member.name} · ${member.responsibility}${member.agentId === team.coordinatorId ? ` · ${localize('sessions.teams.lead', 'Lead')}` : ''}`);
 			this.paragraph(row, member.role.type === 'exact' ? member.role.name : localize('sessions.teams.defaultRole', 'Default Agent'));
 			const role = member.role;
-			if (role.type === 'exact') {
+			if (role.type === 'exact' && role.source.type === 'directory') {
 				this.button(row, localize('sessions.teams.viewRole', 'View role'), () => this.openRole(role));
 			}
 			if (team.status === 'active') {

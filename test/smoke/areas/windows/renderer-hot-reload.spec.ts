@@ -14,25 +14,23 @@ import { createServer as createHttpServer } from 'node:http';
 import type { DisposableStore } from '../../../../src/ash/base/common/lifecycle.js';
 import type { ChatInputTipPresenter } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
 import type { ChatWidget } from '../../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
-import type { CoworkWidget } from '../../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
+import type { NativeChatWidget } from '../../../../src/ash/sessions/contrib/chat/browser/widget/nativeChatWidget.js';
 import type { ViewPane } from '../../../../src/ash/workbench/browser/parts/views/viewPane.js';
-import type { ModelPickerWidget } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.js';
+import type { IModelPickerDelegate } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem.js';
 import type { Emitter } from '../../../../src/ash/base/common/event.js';
+import type { IUntitledChatSession } from '../../../../src/ash/sessions/services/sessions/common/session.js';
 
 declare global {
 	var uiHotReloadEvidence: {
 		readonly scope: DisposableStore;
-		readonly host: HTMLElement;
 		readonly document: Document;
 		readonly editor: ReturnType<typeof Stanza.editor.getEditors>[number];
 		readonly model: ReturnType<typeof Stanza.editor.getModels>[number];
-		readonly chat: ChatWidget | CoworkWidget;
+		readonly chat: ChatWidget | NativeChatWidget;
 		readonly chatListClass: string;
 		readonly sidebar: ViewPane;
-		readonly picker: ModelPickerWidget;
 		readonly changes: Emitter<void>;
 		readonly opened: string[];
-		readonly selection: object;
 		previous: HTMLElement;
 		previousButton: HTMLButtonElement | undefined;
 	};
@@ -58,7 +56,7 @@ declare global {
 	};
 }
 
-for (const chatSurface of ['code', 'cowork'] as const) {
+for (const chatSurface of ['code', 'chat'] as const) {
 	test(`development rebuilds model cards, chat transcripts, and the Sessions sidebar while retaining their state (${chatSurface})`, { tag: ['@browser-ui', '@electron-ui'] }, async ({ playwright }, testInfo) => {
 
 		test.setTimeout(180_000);
@@ -94,48 +92,66 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			await page.goto('http://127.0.0.1:5195/');
 			await expect(page.locator('.stanza-editor-placeholder-text')).toHaveCount(1);
 			await page.evaluate(async ({ root, chatSurface }) => {
+				const clientUrl = '/@vite/client';
+				const client = await import(clientUrl);
+				globalThis.hotReloadUpdateCount = 0;
+				client.createHotContext('/ash-ui-widgets-hmr').on('vite:afterUpdate', () => globalThis.hotReloadUpdateCount++);
 				const moduleUrl = (path: string): string => `/@fs/${root.replaceAll('\\', '/').replace(/^\//u, '')}/src/ash/${path}`;
 				const { DisposableStore, toDisposable } = await import(moduleUrl('base/common/lifecycle.ts'));
 				const { Emitter, Event } = await import(moduleUrl('base/common/event.ts'));
+				const { constObservable } = await import(moduleUrl('base/common/observable.ts'));
 				const { createTestEditorServices } = await import(moduleUrl('workbench/test/common/testEditorServices.ts'));
 				const { registerCodeEditorServices } = await import(moduleUrl('editor/test/browser/testCodeEditor.ts'));
 				const { IAccessibleViewService } = await import(moduleUrl('platform/accessibility/browser/accessibleView.ts'));
 				const { IAgentVoiceService } = await import(moduleUrl('platform/agentHost/common/agentService.ts'));
+				const { IVoiceModeOnboardingService, VoiceModeOnboardingService } = await import(moduleUrl('workbench/contrib/agentsVoice/browser/voiceModeOnboarding.ts'));
 				const { IDialogService } = await import(moduleUrl('platform/dialogs/common/dialogs.ts'));
 				const { DialogService } = await import(moduleUrl('workbench/services/dialogs/common/dialogService.ts'));
 				const { ModelPickerWidget } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts'));
 				const { ILanguageModelsService } = await import(moduleUrl('workbench/contrib/chat/common/languageModels.ts'));
-				const chatModule = await import(moduleUrl(chatSurface === 'code' ? 'workbench/contrib/chat/browser/widget/chatWidget.ts' : 'sessions/contrib/cowork/browser/widget/coworkWidget.ts'));
-				const ChatWidget = chatSurface === 'code' ? chatModule.ChatWidget : chatModule.CoworkWidget;
+				const chatModule = await import(moduleUrl(chatSurface === 'code' ? 'workbench/contrib/chat/browser/widget/chatWidget.ts' : 'sessions/contrib/chat/browser/widget/nativeChatWidget.ts'));
+				const ChatWidget = chatSurface === 'code' ? chatModule.ChatWidget : chatModule.NativeChatWidget;
 				const { SessionsViewRegistry } = await import(moduleUrl('sessions/common/views.ts'));
-				const { registerSessionsNavigation, SESSIONS_NAVIGATION_CONTAINER_ID } = await import(moduleUrl('sessions/browser/parts/sidebarPart.ts'));
+				const { registerSessionsNavigation, SESSIONS_NAVIGATION_CONTAINER_ID } = await import(moduleUrl('sessions/contrib/sessions/browser/views/sessionsView.ts')) as typeof import('../../../../src/ash/sessions/contrib/sessions/browser/views/sessionsView.js');
 				const { ISessionsManagementService } = await import(moduleUrl('sessions/services/sessions/common/sessionsManagement.ts'));
 				const { ISessionsService } = await import(moduleUrl('sessions/services/sessions/browser/sessionsService.ts'));
 				const { IGitHubService } = await import(moduleUrl('sessions/contrib/github/browser/githubService.ts'));
 				const { ISessionGroupsService } = await import(moduleUrl('sessions/services/sessions/browser/sessionGroupsService.ts'));
+				const { ISessionsListModelService, SessionsListModelService } = await import(moduleUrl('sessions/services/sessions/browser/sessionsListModelService.ts'));
+				const { ISessionSectionOrderService, SessionSectionOrderService } = await import(moduleUrl('sessions/services/sessions/browser/sessionSectionOrderService.ts'));
+				const { IBlockedSessionsIndicatorService } = await import(moduleUrl('sessions/contrib/sessions/browser/blockedSessionsIndicatorModel.ts'));
+				const { IProjectService } = await import(moduleUrl('platform/projects/common/projectService.ts'));
+				const { IProjectDialogService } = await import(moduleUrl('sessions/contrib/projects/browser/projectDialogService.ts'));
+				const { IProjectsService, ProjectsService } = await import(moduleUrl('sessions/contrib/projects/browser/projectsService.ts'));
+				const { ISessionProviderScopeService } = await import(moduleUrl('sessions/browser/agentHost/sessionProviderScopeService.ts'));
+				const { IAgentSessionActionsService } = await import(moduleUrl('workbench/contrib/chat/browser/agentSessions/agentSessionsService.ts'));
+				const { IStorageService } = await import(moduleUrl('platform/storage/common/storage.ts'));
+				const { writeNewChatDraftState } = await import(moduleUrl('sessions/contrib/chat/common/newChatDraftState.ts'));
+				const chatInputStatePersistence = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.ts'));
 				const scope = new DisposableStore();
 				const services = scope.add(createTestEditorServices());
 				services.registerInstance(IAgentVoiceService, undefined);
 				services.registerInstance(IDialogService, scope.add(new DialogService()));
 				registerCodeEditorServices(services);
+				services.registerInstance(IVoiceModeOnboardingService, scope.add(services.createInstance(VoiceModeOnboardingService)));
 				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined, show: () => undefined });
 				const host = document.createElement('main');
 				host.id = 'ui-hot-reload-host';
 				const style = document.createElement('style');
-				style.textContent = '#ui-hot-reload-host { position: fixed; inset: 0; background: white; overflow: auto; z-index: 100; } #ui-hot-reload-host .ash-chat, #ui-hot-reload-host .ash-cowork { width: 700px; height: 350px; } #ui-hot-reload-host .ash-chat-list-widget, #ui-hot-reload-host .ash-cowork-list-widget { height: 160px; flex: none; } #ui-hot-reload-host .ash-sessions-list { height: 300px; width: 300px; box-sizing: border-box; }';
+				style.textContent = '#ui-hot-reload-host { position: fixed; inset: 0; background: white; overflow: auto; z-index: 100; } #ui-hot-reload-host .ash-chat, #ui-hot-reload-host .ash-native-chat { width: 700px; height: 350px; } #ui-hot-reload-host .ash-chat-list-widget, #ui-hot-reload-host .ash-native-chat-list-widget { height: 160px; flex: none; } #ui-hot-reload-host .ash-sessions-list { height: 300px; width: 300px; box-sizing: border-box; }';
 				host.append(style);
 				document.body.append(host);
 				scope.add(toDisposable(() => host.remove()));
 				const opened: string[] = [];
 				const models = [{ model: { provider: 'test', model: 'first' }, displayName: 'Test Model', description: 'Retained description', longContext: false }, { model: { provider: 'test', model: 'second' }, displayName: 'Second Model', description: 'Second description', longContext: false }];
-				const delegate = {
+				const delegate: IModelPickerDelegate = {
 					onDidChangePresentation: Event.None,
-					getModels: () => models, getSelectedModel: () => models[0].model, getSelectedReasoningEffort: () => undefined,
+					getModels: () => models, getSelectedModel: () => models[0]!.model, getSelectedModelEntry: () => models[0], getSelectedReasoningEffort: () => undefined,
 					isAutomaticModel: () => false, getModelsError: () => undefined,
 					selectModel: async () => { opened.push('model'); }, selectAutomaticModel: async () => undefined,
 					selectReasoningEffort: async () => undefined, openSettings: async () => undefined,
 				};
-				services.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None });
+				services.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, listModelProviders: async () => [] });
 				const picker = scope.add(services.createInstance(ModelPickerWidget, delegate));
 				picker.render(host);
 				const editor = globalThis.stanza.editor.getEditors()[0]!;
@@ -157,19 +173,33 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				};
 				const chat = scope.add(chatSurface === 'code'
 					? services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, createInput, undefined)
-					: services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, createInput));
+					: services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), createInput));
 				chat.setVisible(true);
-				const selections = Array.from({ length: 40 }, (_, index) => ({ kind: 'untitled', session: { untitledSessionId: `draft-${index}`, title: `Draft ${index}` } }));
-				const selection = selections[3];
-				services.registerInstance(ISessionsManagementService, { sessions: [], state: 'ready' });
-				services.registerInstance(ISessionsService, { onDidChange: changes.event, visibleSelections: selections, activeSelection: selection, openNewSession: () => opened.push('new'), openUntitledSession: (id: string) => opened.push(id) });
+				const storage = services.get(IStorageService);
+				const drafts = Array.from({ length: 40 }, (_, index): IUntitledChatSession => ({
+					untitledSessionId: `draft-${index}`, kind: 'code', title: `Draft ${index}`, model: undefined, agent: undefined, workspace: { type: 'current' },
+				}));
+				for (const draft of drafts) {
+					writeNewChatDraftState(storage, { mode: 'agent', text: draft.title, contexts: [] }, `untitled:${draft.untitledSessionId}`, chatInputStatePersistence);
+				}
+				const selection = { kind: 'untitled', session: drafts[3]! };
+				services.registerInstance(ISessionsManagementService, { onDidChange: changes.event, sessions: [], untitledSessions: drafts, state: 'ready' });
+				services.registerInstance(ISessionsService, { onDidChange: changes.event, visibleSelections: [selection], activeSelection: selection, openUntitledSession: async (id: string) => { opened.push(id); } });
 				services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [] });
 				services.registerInstance(ISessionGroupsService, { onDidChange: Event.None, groups: [] });
-				scope.add(registerSessionsNavigation(async () => []));
+				services.registerInstance(ISessionsListModelService, services.createInstance(SessionsListModelService));
+				services.registerInstance(ISessionSectionOrderService, services.createInstance(SessionSectionOrderService));
+				services.registerInstance(IBlockedSessionsIndicatorService, { blockedSessions: constObservable([]) });
+				services.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] });
+				services.registerInstance(IProjectDialogService, { close: () => undefined });
+				services.registerInstance(IProjectsService, scope.add(services.createInstance(ProjectsService)));
+				services.registerInstance(ISessionProviderScopeService, undefined);
+				services.registerInstance(IAgentSessionActionsService, undefined);
+				scope.add(registerSessionsNavigation());
 				const descriptor = SessionsViewRegistry.getViews(SESSIONS_NAVIGATION_CONTAINER_ID)[0]!.ctorDescriptor!;
 				const sidebar = scope.add(services.createInstance(descriptor, host, { id: 'hmr-sidebar', title: 'Sessions' }));
 				sidebar.setVisible(true);
-				globalThis.uiHotReloadEvidence = { scope, host, document, editor, model, chat, chatListClass: chatSurface === 'code' ? 'ash-chat-list-widget' : 'ash-cowork-list-widget', sidebar, picker, changes, opened, selection, previous: host, previousButton: undefined };
+				globalThis.uiHotReloadEvidence = { scope, document, editor, model, chat, chatListClass: chatSurface === 'code' ? 'ash-chat-list-widget' : 'ash-native-chat-list-widget', sidebar, changes, opened, previous: host, previousButton: undefined };
 			}, { root: desktopDirectory, chatSurface });
 			const host = page.locator('#ui-hot-reload-host');
 			const patch = async (name: string, marker: string, statement: string, version: string): Promise<void> => {
@@ -192,7 +222,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				await patch('card', 'this.domNode.tabIndex = -1;', 'this.domNode.dataset.hotReloadVersion', version);
 				await expect(menu.locator('.ash-chat-model-card')).toHaveAttribute('data-hot-reload-version', version);
 				await expect(menu.locator('.ash-chat-model-card')).toHaveCount(1);
-				await expect(menu.locator('.ash-chat-model-card')).toHaveText('Retained description');
+				await expect(menu.locator('.ash-chat-model-card-description')).toHaveText('Retained description');
 				await expect(menu.locator('.ash-chat-model-card')).toBeFocused();
 				await expect(filter).toHaveValue('Test');
 				expect(await page.evaluate(() => !globalThis.uiHotReloadEvidence.previous.isConnected)).toBe(true);
@@ -201,11 +231,12 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			await expect(menu).toHaveCount(0);
 			await host.locator('[data-item-id="advisor"] summary').click();
 			await expect(host.locator('[data-item-id="advisor"] details')).not.toHaveAttribute('open');
-			const transcript = host.locator(chatSurface === 'code' ? '.ash-chat-list-widget' : '.ash-cowork-list-widget');
+			const transcript = host.locator(chatSurface === 'code' ? '.ash-chat-list-widget' : '.ash-native-chat-list-widget');
+			const transcriptViewport = transcript.locator(':scope > .ash-scrollbar-viewport');
 			// Use the scrollbar's keyboard path so its reading/following state sees the scroll.
 			await transcript.press('Home');
 			for (let line = 0; line < 3; line++) await transcript.press('ArrowDown');
-			await expect.poll(() => transcript.locator(':scope > .ash-scrollbar-viewport').evaluate(element => element.scrollTop)).toBe(120);
+			await expect.poll(() => transcriptViewport.evaluate(element => element.scrollTop)).toBe(120);
 			await page.evaluate(() => {
 				const evidence = globalThis.uiHotReloadEvidence;
 				evidence.editor.focus();
@@ -218,12 +249,12 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 					evidence.previousButton = evidence.previous.querySelector('[data-item-id="error"] button')!;
 					if (focus) evidence.previousButton.focus({ preventScroll: true });
 				}, version === 'second');
-				const top = await host.locator('.ash-scrollbar-viewport').first().evaluate(element => element.scrollTop);
-				await patch('chat', 'this.transcript.setAttribute("aria-live", "polite");', 'this.domNode.dataset.hotReloadVersion', version);
-				await expect(host.locator(chatSurface === 'code' ? '.ash-chat-list-widget' : '.ash-cowork-list-widget')).toHaveAttribute('data-hot-reload-version', version);
+				const top = await transcriptViewport.evaluate(element => element.scrollTop);
+				await patch('chat', "this.transcript.setAttribute('aria-live', 'polite');", 'this.domNode.dataset.hotReloadVersion', version);
+				await expect(transcript).toHaveAttribute('data-hot-reload-version', version);
 				await expect(host.locator('[data-item-id]')).toHaveCount(37);
 				await expect(host.locator('[data-item-id="advisor"] details')).not.toHaveAttribute('open');
-				await expect.poll(() => host.locator('.ash-scrollbar-viewport').first().evaluate(element => element.scrollTop)).toBeCloseTo(top, 0);
+				await expect.poll(() => transcriptViewport.evaluate(element => element.scrollTop)).toBeCloseTo(top, 0);
 				await page.evaluate(() => { globalThis.uiHotReloadEvidence.previousButton!.click(); });
 				expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.opened)).toEqual([]);
 				expect(await page.evaluate(() => !globalThis.uiHotReloadEvidence.previous.isConnected)).toBe(true);
@@ -232,44 +263,52 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			}
 			await host.getByRole('button', { name: 'Start a new chat', exact: true }).press('Enter');
 			expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.opened)).toEqual(['chat']);
-			const readingTop = await host.locator('.ash-scrollbar-viewport').first().evaluate(element => element.scrollTop);
+			const readingTop = await transcriptViewport.evaluate(element => element.scrollTop);
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.chat.setVisible(false); });
-			await patch('chat', 'this.transcript.setAttribute("aria-live", "polite");', 'this.domNode.dataset.hotReloadVersion', 'hidden');
-			await expect(host.locator(chatSurface === 'code' ? '.ash-chat-list-widget' : '.ash-cowork-list-widget')).toHaveAttribute('data-hot-reload-version', 'hidden');
+			await patch('chat', "this.transcript.setAttribute('aria-live', 'polite');", 'this.domNode.dataset.hotReloadVersion', 'hidden');
+			await expect(transcript).toHaveAttribute('data-hot-reload-version', 'hidden');
+			await expect(transcript).toBeHidden();
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.chat.setVisible(true); });
-			await expect.poll(() => host.locator('.ash-scrollbar-viewport').first().evaluate(element => element.scrollTop)).toBeCloseTo(readingTop, 0);
+			await expect.poll(() => transcriptViewport.evaluate(element => element.scrollTop)).toBeCloseTo(readingTop, 0);
 			const search = host.locator('.ash-sessions-list input[type="search"]');
 			const sidebarViewport = host.locator('.ash-sessions-list-items > .ash-scrollbar-viewport');
+			const selectedDraft = host.getByRole('button', { name: 'Draft 3 (draft)', exact: true });
+			await host.locator('.ash-sessions-list').press('ControlOrMeta+f');
 			await search.fill('Draft');
 			await sidebarViewport.evaluate(element => { element.scrollTop = 70; });
+			await expect.poll(() => sidebarViewport.evaluate(element => element.scrollTop)).toBe(70);
 			for (const version of ['first', 'second']) {
-				if (version === 'second') await host.getByRole('button', { name: 'Draft 3', exact: true }).focus();
+				if (version === 'second') await selectedDraft.focus();
 				await page.evaluate(() => {
 					const evidence = globalThis.uiHotReloadEvidence;
 					evidence.previous = evidence.sidebar.element.querySelector('.ash-sessions-list')!;
 					evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 				});
 				const top = await sidebarViewport.evaluate(element => element.scrollTop);
-				await patch('sidebar', 'this.domNode.className = "ash-sessions-list";', 'this.domNode.dataset.hotReloadVersion', version);
+				await patch('sidebar', "this.domNode.className = 'ash-sessions-list';", 'this.domNode.dataset.hotReloadVersion', version);
 				await expect(host.locator('.ash-sessions-list')).toHaveAttribute('data-hot-reload-version', version);
 				await expect(host.locator('.ash-sessions-list')).toHaveCount(1);
 				await expect(search).toHaveValue('Draft');
-				await expect(host.getByRole('button', { name: 'Draft 3', exact: true })).toHaveAttribute('aria-current', 'page');
+				await expect(selectedDraft).toHaveAttribute('aria-current', 'page');
 				expect(await sidebarViewport.evaluate(element => element.scrollTop)).toBe(top);
 				if (version === 'first') await expect(search).toBeFocused();
-				else await expect(host.getByRole('button', { name: 'Draft 3', exact: true })).toBeFocused();
+				else await expect(selectedDraft).toBeFocused();
 				await page.evaluate(() => { globalThis.uiHotReloadEvidence.previousButton!.click(); });
 				expect(await page.evaluate(() => !globalThis.uiHotReloadEvidence.previous.isConnected)).toBe(true);
 				expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.opened)).toEqual(['chat']);
 			}
-			await host.getByRole('button', { name: 'Draft 3', exact: true }).press('Enter');
+			await selectedDraft.press('Enter');
 			expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.opened)).toEqual(['chat', 'draft-3']);
 			const sidebarTop = await sidebarViewport.evaluate(element => element.scrollTop);
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.sidebar.setVisible(false); globalThis.uiHotReloadEvidence.editor.focus(); });
-			await patch('sidebar', 'this.domNode.className = "ash-sessions-list";', 'this.domNode.dataset.hotReloadVersion', 'hidden');
-			await expect(host.locator('.ash-sessions-list')).toHaveAttribute('data-hot-reload-version', 'hidden');
+			await expect(host.locator('.ash-sessions-list')).toHaveCount(0);
+			const updates = await page.evaluate(() => globalThis.hotReloadUpdateCount);
+			await patch('sidebar', "this.domNode.className = 'ash-sessions-list';", 'this.domNode.dataset.hotReloadVersion', 'hidden');
+			await expect.poll(() => page.evaluate(() => globalThis.hotReloadUpdateCount)).toBeGreaterThan(updates);
+			await expect(host.locator('.ash-sessions-list')).toHaveCount(0);
 			expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.editor.hasTextFocus())).toBe(true);
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.sidebar.setVisible(true); });
+			await expect(host.locator('.ash-sessions-list')).toHaveAttribute('data-hot-reload-version', 'hidden');
 			await expect(search).toHaveValue('Draft');
 			expect(await sidebarViewport.evaluate(element => element.scrollTop)).toBe(sidebarTop);
 			expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.editor.hasTextFocus())).toBe(true);
@@ -279,7 +318,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				const editor = globalThis.stanza.editor.getEditors()[0]!;
 				return { document: document === evidence.document, editor: editor === evidence.editor, model: editor.getModel() === evidence.model, draft: evidence.model.getValue(), selection: editor.getSelection(), active: evidence.sidebar.element.querySelector('[aria-current="page"]')?.textContent };
 			});
-			expect(retained).toEqual({ document: true, editor: true, model: true, draft: 'retained composer draft', selection: { selectionStartLineNumber: 1, selectionStartColumn: 2, positionLineNumber: 1, positionColumn: 7, startLineNumber: 1, startColumn: 2, endLineNumber: 1, endColumn: 7 }, active: 'Draft 3' });
+			expect(retained).toEqual({ document: true, editor: true, model: true, draft: 'retained composer draft', selection: { selectionStartLineNumber: 1, selectionStartColumn: 2, positionLineNumber: 1, positionColumn: 7, startLineNumber: 1, startColumn: 2, endLineNumber: 1, endColumn: 7 }, active: 'Draft 3 (draft)' });
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.scope.dispose(); });
 			await expect(host).toHaveCount(0);
 			expect(errors).toEqual([]);
@@ -357,7 +396,9 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const presenter = scope.add(services.createInstance(ChatInputTipPresenter, { container: host, isEligible: () => true, focusInput: () => editor.focus() }, noticeHost)) as ChatInputTipPresenter;
 			editor.focus();
 			editor.setSelection({ startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 9 });
-			globalThis.widgetHotReloadEvidence = { scope, presenter, editor, model, root: editor.getDomNode(), host, document, previous: presenter.current!.domNode, previousButton: presenter.current!.domNode.querySelector<HTMLButtonElement>('button')! };
+			const previous = presenter.current!.domNode;
+			const previousButton = previous.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.dismissTipToolbar"] button')!;
+			globalThis.widgetHotReloadEvidence = { scope, presenter, editor, model, root: editor.getDomNode(), host, document, previous, previousButton };
 		}, desktopDirectory);
 		const host = page.locator('#widget-hot-reload-host');
 		for (const version of ['first', 'second']) {
@@ -374,7 +415,7 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 				// A detached button must have lost its old listener and cannot dismiss the current tip.
 				evidence.previousButton.click();
 				evidence.previous = evidence.presenter.current!.domNode;
-				evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('button')!;
+				evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.dismissTipToolbar"] button')!;
 				const editor = globalThis.stanza.editor.getEditors()[0]!;
 				return { document: evidence.document === document, host: evidence.host.isConnected, editor: editor === evidence.editor, model: editor.getModel() === evidence.model, root: editor.getDomNode() === evidence.root, draft: evidence.model.getValue(), selection: editor.getSelection(), previousRemoved: !previous.isConnected, currentVisible: evidence.presenter.current!.domNode.isConnected };
 			});
@@ -527,7 +568,8 @@ test('development Sessions applies successive CSS saves without reloading its pa
 
 	test.setTimeout(120_000);
 	const desktopDirectory = resolve(import.meta.dirname, '../../../..');
-	const sourceFile = resolve(desktopDirectory, 'src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css');
+	const stylesheetPath = 'sessions/browser/parts/media/titlebarpart.css';
+	const sourceFile = resolve(desktopDirectory, 'src/ash', stylesheetPath);
 	const original = await readFile(sourceFile, 'utf8');
 	let written = original;
 	const isBrowser = testInfo.project.name === 'browser-ui';
@@ -565,7 +607,7 @@ test('development Sessions applies successive CSS saves without reloading its pa
 		// CSS delivery should not depend on the configured navigation presentation.
 		const titlebar = page.locator('.ash-sessions-titlebar-left');
 		await expect(titlebar).toBeVisible();
-		const stylesheet = page.locator('link[rel="stylesheet"][href*="/sessions/browser/parts/titlebar/media/titlebarpart.css"]');
+		const stylesheet = page.locator(`link[rel="stylesheet"][href*="/${stylesheetPath}"]`);
 		await expect(page.locator('script[type="importmap"]')).toHaveCount(1);
 		await expect(stylesheet).toHaveCount(1);
 		await expect(page.locator('style[data-vite-dev-id$="titlebarpart.css"]')).toHaveCount(0);

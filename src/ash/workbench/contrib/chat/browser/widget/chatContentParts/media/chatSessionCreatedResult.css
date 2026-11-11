@@ -1,0 +1,16 @@
+.ash-chat-created-result {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+
+.ash-chat-created-result > p {
+	margin: 0;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-created-result button {
+	max-inline-size: 100%;
+}

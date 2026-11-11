@@ -10,6 +10,20 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase")]
 pub struct RequestUserInput {
     pub questions: Vec<UserInputQuestion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub plan_review: Option<PlanReview>,
+}
+
+/// Displays a proposed plan alongside the existing user-input decision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanReview {
+    pub markdown: String,
+    pub decision_question_id: String,
+    pub approve_value: String,
+    pub revise_value: String,
+    pub feedback_question_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

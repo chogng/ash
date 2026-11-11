@@ -1,7 +1,7 @@
 import { prototypePath, prototypeScrollTargets } from '../model/prototypeScroll.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import { flattenDesignShapes, type DesignShape } from '../model/document.js';
+import { flattenDesignShapes, type DesignShape } from '../model/designDocument.js';
 import { getDesignLibraryShapes } from '../model/designResources.js';
 import type { DesignModel } from '../model/designModel.js';
 import { defaultPrototypeTransition, prototypeVariants, prototypeFrames, prototypeOwner, type PrototypeInteraction } from '../model/prototype.js';

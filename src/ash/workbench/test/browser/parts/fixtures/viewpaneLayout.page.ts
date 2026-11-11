@@ -1,3 +1,4 @@
+import { createTestEditorServices } from '../../../common/testEditorServices.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { CustomViewService, ICustomViewService } from '../../../../../sessions/services/customView/browser/customViewService.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../sessions/browser/agentHost/sessionProviderScopeService.js';
@@ -21,8 +22,8 @@ import type { IKeybindingService } from '../../../../../platform/keybinding/comm
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { IChangesViewService } from '../../../../../sessions/contrib/changes/common/changesViewService.js';
 import { ChangesViewService } from '../../../../../sessions/contrib/changes/browser/changesViewService.js';
-import { IChecksOperationService } from '../../../../../sessions/contrib/changes/common/checksOperationService.js';
-import { ChecksOperationService } from '../../../../../sessions/contrib/changes/browser/checksOperationService.js';
+import { IChecksOperationService } from '../../../../../sessions/contrib/github/common/checksOperationService.js';
+import { ChecksOperationService } from '../../../../../sessions/contrib/github/browser/checksOperationService.js';
 import type { ISessionChangesService } from '../../../../../sessions/contrib/changes/common/sessionChangesService.js';
 import '../../../../../base/browser/ui/styles.css';
 import '../../../../browser/media/style.css';
@@ -46,6 +47,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ChangesViewPane } from '../../../../../sessions/contrib/changes/browser/changesView.js';
+import { SessionGitActionsService } from '../../../../../sessions/services/sessions/browser/sessionGitActionsService.js';
 import { SessionsWorkspaceFolderLabelService } from '../../../../../sessions/services/workspaceFolderLabel/browser/workspaceFolderLabelService.js';
 import { ISessionsService } from '../../../../../sessions/services/sessions/browser/sessionsService.js';
 import { IChatService, type TurnChangeDetails } from '../../../../services/chat/common/chatService.js';
@@ -116,7 +118,7 @@ changesServices.registerInstance(IAccountService, { onDidChangeAccounts: Event.N
 changesServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 changesServices.registerInstance(INotificationService, notifications);
 changesServices.registerInstance(ISessionsService, {
-	activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } },
+	activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture', chats: [] } } },
 	onDidChange: Event.None,
 } as unknown as ISessionsService);
 changesServices.registerInstance(IChecksOperationService, resources.add(changesServices.createInstance(ChecksOperationService)));
@@ -130,6 +132,7 @@ const debugViewModel = resources.add(new ViewModel());
 changesServices.registerInstance(IStorageService, storage);
 changesServices.registerInstance(ILogService, new NullLoggerService());
 changesServices.registerSingleton(ICustomViewService, () => changesServices.createInstance(CustomViewService));
+const changedFilesServices = resources.add(createTestEditorServices(configuration, changesServices));
 const changesViewState = resources.add(changesServices.createInstance(ChangesViewService));
 changesServices.registerInstance(IChangesViewService, changesViewState);
 const commands: string[] = [];
@@ -159,9 +162,11 @@ const changes: TurnChangeDetails = {
 };
 changesServices.registerInstance(IChatService, {
 	onDidUpdateTurnChanges: Event.None,
+	onDidUpdateThread: Event.None,
 	onDidBecomeReady: Event.None,
 	listTurnChanges: async () => [changes.summary],
 	readTurnChange: async () => changes,
+	readThreadChanges: async () => ({ sequence: 1, revision: 'fixture', statistics: changes.summary.statistics, repositories: [{ repositoryId: changes.summary.repositoryId, files: changes.files }], warnings: [] }),
 } as unknown as IChatService);
 const workspace = resources.add(new TestWorkspaceService(params.has('emptyWorkspace') ? { id: 'empty' } : { id: 'fixture', uri: URI.file('/fixture') }));
 const contextMenus = resources.add(new BrowserContextMenuService(
@@ -266,10 +271,10 @@ const pane = resources.add(view === 'timeline' ? createTimelinePane() : view ===
 					: view === 'changes'
 						? new ChangesViewPane(root, { id: 'fixture.changes', title: 'Changes' },
 							changesServices.get(ISessionsService), changesServices.get(IChatService),
-							editors, configuration, contextKeys, notifications, {} as IQuickInputService,
-							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
+							editors, configuration, contextKeys, notifications,
+							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changedFilesServices, changesViewState,
 							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService,
-							storage, changesServices.createInstance(SessionsWorkspaceFolderLabelService))
+							storage, changesServices.createInstance(SessionsWorkspaceFolderLabelService), resources.add(changesServices.createInstance(SessionGitActionsService)))
 						: view === 'console'
 							? replScope.createInstance(Repl, root, { id: 'fixture.console', title: 'Console' })
 							: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,

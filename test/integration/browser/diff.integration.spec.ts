@@ -318,6 +318,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const host = page.locator('#title-comparison');
 		const sections = host.locator('.stanza-multi-diff-editor-section');
 		await expect(sections).toHaveCount(2);
+		const toggleFiles = host.getByRole('button', { name: localized(locale, 'Toggle Changed Files', '切换变更文件列表'), exact: true });
+		const fileList = host.getByRole('tree', { name: localized(locale, 'Changed Files', '变更文件'), exact: true });
+		await expect(fileList).toBeHidden();
+		await toggleFiles.press('Enter');
+		await expect(toggleFiles).toHaveAttribute('aria-pressed', 'true');
+		await expect(fileList.getByRole('treeitem')).toHaveText(['src/first.ts', 'src/second.ts']);
 		await sections.first().locator('.stanza-multi-diff-editor-header-toggle').click();
 		await sections.nth(1).locator('.stanza-multi-diff-editor-header-toggle').focus();
 		const tabs = host.getByRole('tab');
@@ -326,6 +332,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/latest.ts'], 3));
 		await expect(sections).toHaveCount(3);
 		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-text')).toHaveText(['first.ts', 'second.ts', 'latest.ts']);
+		await expect(fileList.getByRole('treeitem')).toHaveText(['src/first.ts', 'src/second.ts', 'src/latest.ts']);
 		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-description')).toHaveText(['src', 'src', 'src']);
 		await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'false');
 		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe('src/second.ts');
@@ -335,10 +342,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit([], 4));
 		await expect(sections).toHaveCount(0);
 		await expect(host.locator('.stanza-multi-diff-editor-empty')).toHaveText(localized(locale, 'No changes in this selection.', '此选择中没有更改。'));
+		await expect(fileList).toBeHidden();
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/returned.ts'], 5));
 		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-text')).toHaveText(['returned.ts']);
 		await expect(host.locator('.stanza-multi-diff-editor-empty')).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/returned.ts revision 5\nshared']);
+		await expect(fileList.getByRole('treeitem')).toHaveText(['src/returned.ts']);
+		await toggleFiles.press('Space');
+		await expect(fileList).toBeHidden();
 	});
 }
 
@@ -461,6 +472,12 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes reveals a l
 	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 	await expect(row.locator('.stanza-diff-editor')).toBeVisible();
 	const viewed = row.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
+	const actions = row.getByRole('toolbar', { name: localized(locale, 'file-7.ts actions', 'file-7.ts 操作'), exact: true });
+	for (const icon of ['check', 'go-to-file', 'unfold', 'fold', 'git-commit']) {
+		const glyph = actions.locator(`[data-ash-icon-id="${icon}"]`);
+		await expect(glyph).toBeVisible();
+		await expect(glyph.locator('xpath=ancestor::button').locator('.ash-button-label')).toBeHidden();
+	}
 	await viewed.focus();
 	await page.keyboard.press('Space');
 	await expect(toggle).toHaveAttribute('aria-expanded', 'false');

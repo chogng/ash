@@ -24,7 +24,46 @@
 	inset: 0;
 }
 
+/* Keep the provisional Grid measurable while the first entry restores. */
+.ash-sessions-window.restoring-entry > .ash-sessions-workbench-layout {
+	visibility: hidden;
+}
+
 .ash-sessions-workbench-layout .ash-primary-sidebar-sash {
 	/* The sidebar paints its border inside the trailing edge. */
 	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / -2);
+}
+
+.ash-sessions-auxiliarybar-frame {
+	position: relative;
+	background: var(--ash-sideBar-background);
+}
+
+.ash-sessions-auxiliarybar-frame::after {
+	/* Keep one border across the window chrome and the detail body. */
+	position: absolute;
+	inset: 0 auto 0 0;
+	border-left: var(--ash-strokeThickness) solid
+		var(--ash-sideBar-border, var(--ash-contrastBorder, var(--ash-border)));
+	content: "";
+	pointer-events: none;
+}
+
+.ash-sessions-auxiliarybar-frame > .ash-sessions-auxiliarybar {
+	border-left-color: transparent;
+}
+
+.ash-workbench[data-runtime="electron"] .ash-sessions-auxiliarybar-frame {
+	-webkit-app-region: drag;
+}
+
+.ash-workbench[data-runtime="electron"]
+	.ash-sessions-auxiliarybar-frame
+	> .ash-sessions-auxiliarybar,
+.ash-workbench[data-runtime="electron"]
+	.ash-sessions-workbench-layout
+	> .ash-grid
+	> .ash-split-view
+	> .ash-sash {
+	-webkit-app-region: no-drag;
 }

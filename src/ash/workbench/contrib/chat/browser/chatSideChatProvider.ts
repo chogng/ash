@@ -72,6 +72,7 @@ export class ChatSideChatProvider extends Disposable implements IChatSideChatPro
 		await this.chat.startTurn({
 			...branch, commandId: createUuid(), expectedSequence: thread.sequence, text: query, mode: state.mode,
 			model: state.isAutomaticModel ? undefined : state.selectedModel, reasoningEffort: state.selectedReasoningEffort,
+			...(state.isAutomaticModel && { modelRouting: 'auto' as const }),
 			approvalMode: state.approvalMode, contexts, signal: options?.signal,
 		});
 		current();

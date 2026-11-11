@@ -36,6 +36,7 @@ export class ProjectMemoryDialog extends Disposable {
 	private readonly bodyEditor: CodeEditorWidget;
 	private readonly fields: HTMLElement;
 	private readonly feedback: HTMLElement;
+	private readonly savedVersions: HTMLElement;
 	private readonly status: HTMLElement;
 	private readonly validation: HTMLElement;
 	private readonly save: Button;
@@ -63,8 +64,9 @@ export class ProjectMemoryDialog extends Disposable {
 		this.fields = h(document, 'div', { className: 'ash-projects-form' });
 		this.validation = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'status' } });
 		this.feedback = h(document, 'p', { className: 'ash-projects-form-error', attributes: { role: 'alert' } });
+		this.savedVersions = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
 		const retryRow = this.retryRow = h(document, 'div', { properties: { hidden: true } });
-		form.append(pickerRow, this.status, this.fields, this.validation, this.feedback, retryRow);
+		form.append(pickerRow, this.status, this.fields, this.validation, this.feedback, this.savedVersions, retryRow);
 		const statusText = h(document, 'span', { attributes: { role: 'status' } });
 		const memoryStatus = h(document, 'div', { className: 'ash-project-memory-status', properties: { hidden: true } });
 		appendIcon(Lxicon.brain, memoryStatus);
@@ -184,7 +186,8 @@ export class ProjectMemoryDialog extends Disposable {
 					const memory = await open(controller.signal);
 					if (this.isDisposed) return;
 					this.catalogMemory = memory;
-					this.bodyModel.setValue(memory.body);
+					this.bodyModel.setValue(memory.versions[0] ?? '');
+					if (memory.versions.length > 1) this.showSavedVersions(memory);
 					this.loaded = true;
 				}, load);
 				if (this.isDisposed) return;
@@ -211,7 +214,7 @@ export class ProjectMemoryDialog extends Disposable {
 
 	private get dirty(): boolean {
 		if (!this.canEdit) return false;
-		const originalBody = this.selected?.body ?? this.catalogMemory?.body ?? '';
+		const originalBody = this.selected?.body ?? this.catalogMemory?.versions[0] ?? '';
 		return this.bodyValue !== originalBody.replace(/\r\n?/g, '\n')
 			|| this.title.value !== (this.selected?.title ?? this.initialTitle);
 	}
@@ -231,7 +234,7 @@ export class ProjectMemoryDialog extends Disposable {
 		this.title.readOnly = readOnly;
 		this.bodyEditor.updateOptions({ readOnly, domReadOnly: readOnly });
 		this.save.hidden = !this.source || (this.loaded && !this.canEdit);
-		this.save.enabled = !this.busy && dirty && valid;
+		this.save.enabled = !this.busy && this.canEdit && valid && (dirty || (this.catalogMemory?.versions.length ?? 0) > 1);
 		const status = !this.source ? localize('projects.memoryEditingUnavailable', 'Project memory editing is unavailable.')
 			: !this.loaded && this.busy ? localize('projects.loadingMemories', 'Loading project memory…')
 				: this.catalogMemory?.storageDescription
@@ -294,6 +297,22 @@ export class ProjectMemoryDialog extends Disposable {
 		}
 	}
 
+	private showSavedVersions(memory: CatalogProjectMemoryEditor): void {
+		const document = this.savedVersions.ownerDocument;
+		const { versions } = memory;
+		const entries = versions.map((body, index) => {
+			const label = localize('projects.savedMemoryVersion', 'Saved version {0}', index + 1);
+			return h(document, 'span', { properties: { tabIndex: 0 } }, `${label}\n${body}`);
+		});
+		if (!entries.length) {
+			entries.push(h(document, 'span', { properties: { tabIndex: 0 } }, localize('projects.noSavedMemory', 'There is no saved project memory.')));
+		}
+		this.savedVersions.replaceChildren(...entries);
+		if (memory.save) this.savedVersions.prepend(h(document, 'p', { className: 'ash-projects-muted' },
+			localize('projects.reviewSavedMemory', 'Review the saved content below and edit your draft above. Saving replaces the saved versions with your draft.')));
+		this.savedVersions.hidden = false;
+	}
+
 	private async saveMemory(): Promise<void> {
 		if (!this.source || !this.save.enabled) return;
 		this.busy = this.saving = true;
@@ -305,7 +324,15 @@ export class ProjectMemoryDialog extends Disposable {
 				if (this.selected) await memories.update(this.selected, this.title.value, this.bodyValue, this.commandId);
 				else await memories.add(scope, this.title.value, this.bodyValue, this.commandId);
 			} else {
-				await this.catalogMemory?.save?.(this.bodyValue);
+				const conflict = await this.catalogMemory?.save?.(this.bodyValue);
+				if (conflict) {
+					if (this.isDisposed) return;
+					this.catalogMemory = conflict;
+					this.feedback.textContent = localize('projects.memorySaveConflict', 'Project memory changed while you were editing. Your draft is still in the editor.');
+					this.showSavedVersions(conflict);
+					this.savedVersions.querySelector('span')?.focus();
+					return;
+				}
 			}
 			if (!this.isDisposed) this.dialog.dispose();
 		} catch (error) {

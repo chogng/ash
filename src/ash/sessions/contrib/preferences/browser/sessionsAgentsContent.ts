@@ -57,20 +57,15 @@ export class SessionsAgentsContent extends SettingsPageRenderer<SettingsSectionR
 		this.domNode = h(document, 'section');
 		this.domNode.className = 'ash-sessions-agents';
 		this.domNode.setAttribute('aria-label', localize('sessions.settings.agents', 'Agents'));
-		const createSection = (title: string): HTMLElement => {
-			const section = h(document, 'div');
-			section.className = 'ash-settings-card-section';
-			const heading = h(document, 'h4');
-			heading.className = 'ash-settings-card-title';
-			heading.textContent = title;
-			section.append(heading);
-			this.domNode.append(section);
-			return section;
-		};
-		const rolesContainer = createSection(localize({ bundle: 'ash.settings', key: 'roles.title' }, 'Agent definitions'));
-		this.teamsContainer = createSection(localize('sessions.teams.title', 'Teams'));
-		this.roles = this._register(instantiation.createInstance(AgentRolesWidget, rolesContainer, { beforeOpenEditor, onOpenFailed }));
+		this.roles = this._register(instantiation.createInstance(AgentRolesWidget, this.domNode, { beforeOpenEditor, onOpenFailed }));
 		this._register(this.roles.onDidChange(() => this.changed.fire()));
+		this.teamsContainer = h(document, 'div');
+		this.teamsContainer.className = 'ash-settings-card-section';
+		const teamsHeading = h(document, 'h4');
+		teamsHeading.className = 'ash-settings-card-title';
+		teamsHeading.textContent = localize('sessions.teams.title', 'Teams');
+		this.teamsContainer.append(teamsHeading);
+		this.domNode.append(this.teamsContainer);
 		const listRoles = async () => (await agents.listAgents()).agents.map(agent => ({
 			name: agent.name, description: agent.description,
 			role: { type: 'exact' as const, name: agent.name, source: agent.source },
@@ -96,7 +91,7 @@ export class SessionsAgentsContent extends SettingsPageRenderer<SettingsSectionR
 					if (!this.visible || !isHTMLElement(focused) || !this.domNode.contains(focused)) return undefined;
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsAgents, { type },
 						() => type === AccessibleViewType.Help
-							? localize('sessions.agents.help', 'Agent settings\nUse Tab to move through Agent definitions and Teams. Expand a role to inspect its instructions and capabilities, edit a custom definition or copy an eligible built-in role. Teams manages fixed members, their roles, the lead, tasks and discussion. View role opens the exact definition used by a member. Role changes apply to new runs; existing tasks keep their member and definition snapshots. Escape closes help and returns focus.')
+							? localize('sessions.agents.help', 'Agent settings\nUse Tab to move through Custom Agents and Teams. Teams manages fixed members, their roles, the lead, tasks and discussion. View role opens the custom definition used by a member. Role changes apply to new runs; existing tasks keep their member and definition snapshots. Escape closes help and returns focus.')
 							: this.teamsContainer.contains(focused) ? this.teams.getAccessibleContent() : this.roles.getAccessibleContent(),
 						() => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.SessionsAgents);
 				},
@@ -108,7 +103,7 @@ export class SessionsAgentsContent extends SettingsPageRenderer<SettingsSectionR
 		return [{
 			element: {
 				kind: 'item', id: 'agents.management', title: localize('sessions.settings.agents', 'Agents'), description: '',
-				keywords: [...this.roles.keywords, localize({ bundle: 'ash.settings', key: 'roles.title' }, 'Agent definitions'), localize('sessions.teams.title', 'Teams'), 'teams', 'members'],
+				keywords: [...this.roles.keywords, localize({ bundle: 'ash.settings', key: 'roles.custom' }, 'Custom Agents'), localize('sessions.teams.title', 'Teams'), 'teams', 'members'],
 				value: this.retainElement('agents.management', this.domNode),
 			},
 		}];

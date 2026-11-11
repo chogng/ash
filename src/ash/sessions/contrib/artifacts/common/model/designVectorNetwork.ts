@@ -2,7 +2,7 @@ import { isRecord } from '../../../../../base/common/types.js';
 import { generateUuid, isUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import type { DesignPoint } from '../core/geometry.js';
-import { designEndpointStyles, type DesignEndpoint, type DesignPathNode } from './document.js';
+import { designEndpointStyles, type DesignEndpoint, type DesignPathNode } from './designDocument.js';
 import type { DesignPath, DesignPathContour } from './designVector.js';
 
 /** Edges own their handles. A junction is one vertex, regardless of its degree. */

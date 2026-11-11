@@ -752,53 +752,45 @@ impl LocalConnectorRuntime {
         self.reconcile_sources()
     }
 
-    fn reconcile_plugin_activation(&mut self) -> Result<(), OpenAppServerError> {
-        let Some(authority) = &self.plugin_authority else {
-            return Ok(());
-        };
-        let snapshot = authority.snapshot();
-        let catalog = connectors::ConnectorCatalog::from_activation(snapshot.activation())
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-        let mcp = PluginConnectorMcpRuntimeProvider::from_authority(authority)
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
-        self.base_definitions = catalog
-            .snapshot()
-            .entries()
-            .iter()
-            .map(|entry| entry.definition().clone())
-            .collect();
-        self.base_mcp = Arc::new(mcp);
-        self.reconcile_sources()
-    }
-
-    fn reconcile_extension_packages(&mut self) -> Result<(), OpenAppServerError> {
-        self.reconcile_sources()
-    }
-
     fn reconcile_sources(&mut self) -> Result<(), OpenAppServerError> {
-        let mut definitions = self.base_definitions.clone();
-        self.mcp = Arc::clone(&self.base_mcp);
+        let (mut definitions, mut mcp) = if let Some(authority) = &self.plugin_authority {
+            let snapshot = authority.snapshot();
+            let catalog = connectors::ConnectorCatalog::from_activation(snapshot.activation())
+                .map_err(open_error)?;
+            let definitions = catalog
+                .snapshot()
+                .entries()
+                .iter()
+                .map(|entry| entry.definition().clone())
+                .collect();
+            let provider =
+                PluginConnectorMcpRuntimeProvider::from_authority(authority).map_err(open_error)?;
+            (
+                definitions,
+                Arc::new(provider) as Arc<dyn ConnectorMcpRuntimeProvider>,
+            )
+        } else {
+            (self.base_definitions.clone(), Arc::clone(&self.base_mcp))
+        };
         if let Some(manager) = &self.plugins_manager {
             let catalog =
                 ash_mcp_extension::ExtensionsConnectorCatalog::from_manager(Arc::clone(manager))
                     .map_err(OpenAppServerError)?;
             definitions.extend(catalog.definitions().iter().cloned());
-            self.mcp = ash_mcp_extension::combined_provider(
-                Arc::clone(&self.base_mcp),
-                catalog.provider(),
-            );
+            mcp = ash_mcp_extension::combined_provider(mcp, catalog.provider());
         }
         self.service
             .authority()
             .reconcile_definitions(definitions)
-            .map(|_| ())
-            .map_err(|error| OpenAppServerError(error.to_string()))
+            .map_err(open_error)?;
+        self.mcp = mcp;
+        Ok(())
     }
 
     fn ptr_eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.service, &other.service)
             && Arc::ptr_eq(&self.secrets, &other.secrets)
-            && Arc::ptr_eq(&self.mcp, &other.mcp)
+            && Arc::ptr_eq(&self.base_mcp, &other.base_mcp)
     }
 }
 
@@ -850,9 +842,9 @@ impl std::error::Error for OpenAppServerError {}
 /// Process-wide durable authority shared by all Directory runtimes for one profile.
 ///
 /// The profile runtime owns the single recovered Session projection, config store, secret store,
-/// Extensions Manager/change watcher, and live profile notification graph. Directory filesystem,
-/// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
-/// instances.
+/// Connector and Extensions authorities, and live profile notification graph. Directory
+/// filesystem, terminal, Git, language, and execution services remain in separately composed
+/// [`AppServer`] instances.
 pub struct LocalProfileRuntime {
     config_notifications: Arc<crate::server::config_runtime::ConfigSubscription>,
     ide_registry: Arc<crate::ide_registry::IdeRegistry>,
@@ -877,6 +869,7 @@ pub struct LocalProfileRuntime {
     secrets: Arc<dyn SecretStore>,
     mcp_oauth_transports: Arc<ash_mcp_extension::McpOAuthTransports>,
     plugin_authority: PluginActivationAuthority,
+    connectors: Mutex<Option<ProfileConnectors>>,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
     extension_packages: Mutex<Option<ProfileExtensionsAuthority>>,
@@ -991,6 +984,12 @@ struct ProfileExtensionsAuthority {
         BTreeMap<ash_utils_plugins::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
     manager: Arc<ash_core_plugins::ExtensionPackageManager>,
     _watcher: Option<crate::server::extension_packages_runtime::ExtensionsChangeWatcher>,
+}
+
+#[derive(Clone)]
+struct ProfileConnectors {
+    runtime: Arc<Mutex<LocalConnectorRuntime>>,
+    watcher: Arc<crate::server::connector_runtime::ConnectorWatcher>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -1144,6 +1143,7 @@ impl LocalProfileRuntime {
             secrets,
             mcp_oauth_transports: Arc::default(),
             plugin_authority,
+            connectors: Mutex::new(None),
             updates,
             update_scopes: Mutex::new(BTreeMap::new()),
             extension_packages: Mutex::new(None),
@@ -1215,6 +1215,53 @@ impl LocalProfileRuntime {
                 .entry(key)
                 .or_insert_with(|| Arc::new(self.updates.fork_scope())),
         ))
+    }
+
+    fn connector_runtime(
+        &self,
+        injected: Option<LocalConnectorRuntime>,
+        manager: Option<&Arc<ash_core_plugins::ExtensionPackageManager>>,
+    ) -> Result<ProfileConnectors, OpenAppServerError> {
+        let mut shared = self.connectors.lock().map_err(open_error)?;
+        if let Some(shared) = shared.as_ref() {
+            let mut runtime = shared.runtime.lock().map_err(open_error)?;
+            let same_manager = match (runtime.plugins_manager.as_ref(), manager) {
+                (Some(current), Some(requested)) => Arc::ptr_eq(current, requested),
+                (None, None) => true,
+                _ => false,
+            };
+            if !same_manager
+                || injected
+                    .as_ref()
+                    .is_some_and(|injected| !runtime.ptr_eq(injected))
+            {
+                return Err(open_error("Connector profile configuration conflict"));
+            }
+            // Package sources can change while no Directory watcher is running.
+            runtime.reconcile_sources()?;
+            return Ok(shared.clone());
+        }
+        let mut runtime = match injected {
+            Some(runtime) => runtime,
+            None => LocalConnectorRuntime::from_plugin_authority(
+                &self.state,
+                self.plugin_authority.clone(),
+                Arc::clone(&self.secrets),
+            )?,
+        };
+        if let Some(manager) = manager {
+            runtime.bind_plugins_manager(Arc::clone(manager))?;
+        }
+        let watcher = crate::server::connector_runtime::ConnectorWatcher::start(
+            runtime.service.authority(),
+            Arc::clone(&self.updates),
+        );
+        let connectors = ProfileConnectors {
+            runtime: Arc::new(Mutex::new(runtime)),
+            watcher: Arc::new(watcher),
+        };
+        *shared = Some(connectors.clone());
+        Ok(connectors)
     }
 
     fn plugins_manager(
@@ -1567,25 +1614,30 @@ pub fn open_app_server_with_codebase_providers(
             std::env::var("ASH_USE_DEVELOPMENT_SECRETSTORAGE"),
         )?,
     };
-    let mut connector_runtime = match options.connector_runtime.take() {
-        Some(runtime) => Some(runtime),
-        None => {
-            // Directory and empty-window hosts observe the same enable/grant/revocation commits.
-            let plugin_authority = match &profile_runtime {
-                Some(runtime) => runtime.plugin_authority.clone(),
-                None => PluginActivationAuthority::open(options.profile_root.join("plugins"))
-                    .map_err(|error| OpenAppServerError(error.to_string()))?,
-            };
-            Some(LocalConnectorRuntime::from_plugin_authority(
-                &state_runtime,
-                plugin_authority,
-                Arc::clone(&profile_secrets),
-            )?)
+    let injected = options.connector_runtime.take();
+    let (connector_sources, connector_watcher) = if let Some(profile) = &profile_runtime {
+        let shared = profile.connector_runtime(injected, plugins_manager.as_ref())?;
+        (shared.runtime, Some(shared.watcher))
+    } else {
+        let mut runtime = match injected {
+            Some(runtime) => runtime,
+            None => {
+                let plugins = PluginActivationAuthority::open(options.profile_root.join("plugins"))
+                    .map_err(open_error)?;
+                LocalConnectorRuntime::from_plugin_authority(
+                    &state_runtime,
+                    plugins,
+                    Arc::clone(&profile_secrets),
+                )?
+            }
+        };
+        if let Some(manager) = &plugins_manager {
+            runtime.bind_plugins_manager(Arc::clone(manager))?;
         }
+        (Arc::new(Mutex::new(runtime)), None)
     };
-    if let (Some(runtime), Some(manager)) = (&mut connector_runtime, &plugins_manager) {
-        runtime.bind_plugins_manager(Arc::clone(manager))?;
-    }
+    // OAuth adapters use this Directory's HTTP client and the shared credential service.
+    let mut connector_runtime = connector_sources.lock().map_err(open_error)?.clone();
     drop(profile_services);
     let node_runtime = StartupTrace::span("directory-node-runtime");
     let managed_node = ManagedNodeRuntime::from_install_context(&InstallContext::current()).ok();
@@ -1686,9 +1738,9 @@ pub fn open_app_server_with_codebase_providers(
             }
         }
     }
-    if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
+    if let Some(services) = product_services {
         configure_product_connector_oauth(
-            runtime,
+            &mut connector_runtime,
             services.connector_oauth,
             Arc::clone(&application_http),
         )?;
@@ -2372,26 +2424,18 @@ pub fn open_app_server_with_codebase_providers(
             .with_http_provider(oauth_http, options.profile_root.join("mcp-oauth-locks")),
     );
     server = server.with_mcp_oauth_service(Arc::clone(&mcp_oauth));
-    let mcp = match &connector_runtime {
-        Some(connectors) => compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
-            &runtime_config,
-            1,
-            &mcp_runtime_intent_snapshot,
-            connectors.service.authority().clone(),
-            ash_mcp_extension::McpAuthentication {
-                secrets: Arc::clone(&connectors.secrets),
-                oauth: Arc::clone(&mcp_oauth),
-            },
-            Arc::clone(&connectors.mcp),
-            mcp_updates.clone(),
-        ),
-        None => compose_mcp_tools_at_generation_with_runtime_intents_and_updates(
-            &runtime_config,
-            1,
-            &mcp_runtime_intent_snapshot,
-            mcp_updates.clone(),
-        ),
-    }
+    let mcp = compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
+        &runtime_config,
+        1,
+        &mcp_runtime_intent_snapshot,
+        connector_runtime.service.authority().clone(),
+        ash_mcp_extension::McpAuthentication {
+            secrets: Arc::clone(&connector_runtime.secrets),
+            oauth: Arc::clone(&mcp_oauth),
+        },
+        Arc::clone(&connector_runtime.mcp),
+        mcp_updates.clone(),
+    )
     .map_err(|error| OpenAppServerError(error.to_string()))?;
     let mcp_status = mcp
         .as_ref()
@@ -2399,17 +2443,19 @@ pub fn open_app_server_with_codebase_providers(
         .unwrap_or_else(|| McpRuntimeStatusSnapshot::empty(1));
     let mcp = mcp.map(|mcp| ToolPort::mcp(mcp.tools, mcp.policy));
     server = server.with_mcp_status_snapshot(mcp_status);
-    if let Some(connectors) = &connector_runtime {
-        server = server.with_connector_service(Arc::clone(&connectors.service));
-        if let Some(authority) = &connectors.plugin_authority {
-            server = server.with_plugin_authority(authority.clone());
-        }
-        if let Some(oauth) = &connectors.oauth {
-            server = server.with_connector_oauth_service(Arc::clone(oauth));
-        }
-        if let Some(oauth) = &connectors.device_oauth {
-            server = server.with_connector_device_oauth_service(Arc::clone(oauth));
-        }
+    server = if let Some(watcher) = connector_watcher {
+        server.with_profile_connector_service(connector_runtime.service, watcher)
+    } else {
+        server.with_connector_service(connector_runtime.service)
+    };
+    if let Some(authority) = connector_runtime.plugin_authority {
+        server = server.with_plugin_authority(authority);
+    }
+    if let Some(oauth) = connector_runtime.oauth {
+        server = server.with_connector_oauth_service(oauth);
+    }
+    if let Some(oauth) = connector_runtime.device_oauth {
+        server = server.with_connector_device_oauth_service(oauth);
     }
     {
         let mut launcher = ash_external_ext::ProductNodeLauncher::default();
@@ -2520,7 +2566,7 @@ pub fn open_app_server_with_codebase_providers(
         dir_config,
         env_tools,
         env_runtime,
-        connector_runtime,
+        connector_runtime: Some(connector_sources),
         mcp_oauth,
         mcp_runtime_intents,
         mcp_updates,
@@ -2573,7 +2619,7 @@ struct ToolConfigWatcherInputs {
     dir_config: Option<Arc<DirConfigTracker>>,
     env_tools: Arc<EnvToolPorts>,
     env_runtime: crate::server::EnvRuntimeControl,
-    connector_runtime: Option<LocalConnectorRuntime>,
+    connector_runtime: Option<Arc<Mutex<LocalConnectorRuntime>>>,
     mcp_oauth: Arc<McpOAuthService>,
     mcp_runtime_intents: crate::mcp_runtime::McpRuntimeIntents,
     mcp_updates: McpCatalogUpdates,
@@ -2590,7 +2636,7 @@ impl ToolConfigWatcher {
             dir_config,
             env_tools,
             env_runtime,
-            mut connector_runtime,
+            connector_runtime,
             mcp_oauth,
             mcp_runtime_intents,
             mcp_updates,
@@ -2599,21 +2645,27 @@ impl ToolConfigWatcher {
         } = inputs;
         let changes = config.subscribe_changes();
         let mut semantic_binding = None;
-        let connector_changes = connector_runtime
+        let connectors = connector_runtime.as_ref().map(|runtime| {
+            runtime
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        let connector_changes = connectors
             .as_ref()
             .map(|runtime| runtime.service.authority().subscribe());
-        let plugin_changes = connector_runtime
+        let plugin_changes = connectors
             .as_ref()
             .and_then(|runtime| runtime.plugin_authority.as_ref())
             .map(PluginActivationAuthority::subscribe);
-        let extension_packages_changes = connector_runtime
+        let extension_packages_changes = connectors
             .as_ref()
             .and_then(|runtime| runtime.plugins_manager.as_ref())
             .and_then(|manager| manager.subscribe().ok());
-        let mut plugin_activation_generation = connector_runtime
+        let mut plugin_activation_generation = connectors
             .as_ref()
             .and_then(|runtime| runtime.plugin_authority.as_ref())
             .map(|authority| authority.snapshot().activation().generation());
+        drop(connectors);
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("ash-tool-config".into())
@@ -2749,19 +2801,17 @@ impl ToolConfigWatcher {
                             }
                         }
                     }
-                    if plugin_dirty && let Some(connectors) = connector_runtime.as_mut() {
-                        match connectors.reconcile_plugin_activation() {
+                    if (plugin_dirty || extension_packages_dirty)
+                        && let Some(connectors) = &connector_runtime
+                    {
+                        // Serialize source reads and catalog commits across Directory watchers.
+                        let result = connectors
+                            .lock()
+                            .map_err(open_error)
+                            .and_then(|mut connectors| connectors.reconcile_sources());
+                        match result {
                             Ok(()) => {
                                 plugin_dirty = false;
-                                catalog_dirty = true;
-                            }
-                            Err(error) => env_tools.record_reconcile_failure(error.to_string()),
-                        }
-                    }
-                    if extension_packages_dirty && let Some(connectors) = connector_runtime.as_mut()
-                    {
-                        match connectors.reconcile_extension_packages() {
-                            Ok(()) => {
                                 extension_packages_dirty = false;
                                 catalog_dirty = true;
                             }
@@ -2780,17 +2830,28 @@ impl ToolConfigWatcher {
                     };
                     let composition = match &connector_runtime {
                         Some(connectors) => {
+                            let (authority, secrets, provider) = match connectors.lock() {
+                                Ok(connectors) => (
+                                    connectors.service.authority().clone(),
+                                    Arc::clone(&connectors.secrets),
+                                    Arc::clone(&connectors.mcp),
+                                ),
+                                Err(error) => {
+                                    env_tools.record_reconcile_failure(error.to_string());
+                                    continue;
+                                }
+                            };
                             let runtime_intents = mcp_runtime_intents.snapshot();
                             compose_mcp_tools_with_connectors_and_runtime_intents_and_updates(
                                 &snapshot.values,
                                 catalog_generation,
                                 &runtime_intents,
-                                connectors.service.authority().clone(),
+                                authority,
                                 ash_mcp_extension::McpAuthentication {
-                                    secrets: Arc::clone(&connectors.secrets),
+                                    secrets,
                                     oauth: Arc::clone(&mcp_oauth),
                                 },
-                                Arc::clone(&connectors.mcp),
+                                provider,
                                 mcp_updates.clone(),
                             )
                         }
@@ -3388,6 +3449,65 @@ impl ModelCatalog for ConfigBackedModelService {
 
     fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
         Ok(self.resolved_config()?.model)
+    }
+
+    fn select_automatic_model(
+        &self,
+        input: &[ash_protocol::UserInput],
+    ) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
+        use ash_protocol::ModelInputModality;
+        use ash_protocol::UserInput;
+
+        let snapshot = self.config_snapshot()?;
+        if snapshot.values.auto_model_candidates.is_empty() {
+            return Ok(None);
+        }
+        let (mut config, preferred) = self.resolve_config_connections(&snapshot)?;
+        let ready: BTreeSet<_> = preferred.keys().cloned().collect();
+        config.providers.extend(preferred);
+        let contexts = self.context_catalog(&config)?;
+        let candidates = config.auto_model_candidates.iter().filter_map(|model| {
+            if !ready.contains(&model.provider) {
+                return None;
+            }
+            let provider = config.providers.get(&model.provider)?;
+            let entry = contexts.resolve_entry(model).ok()?;
+            let context = ModelContext::resolve(&entry, provider, contexts.registry()).ok()?;
+            Some((entry, context.usable_input()?))
+        });
+
+        let mut text_bytes = 0usize;
+        let mut modalities = Vec::new();
+        for item in input {
+            let (bytes, modality) = match item {
+                UserInput::Text { text } => (text.len(), None),
+                UserInput::Context { name, content, .. } => {
+                    (name.len().saturating_add(content.len()), None)
+                }
+                UserInput::Image { .. }
+                | UserInput::LocalImage { .. }
+                | UserInput::ImageAttachment { .. } => (0, Some(ModelInputModality::Image)),
+                UserInput::Audio { .. } | UserInput::AudioAttachment { .. } => {
+                    (0, Some(ModelInputModality::Audio))
+                }
+                _ => (0, None),
+            };
+            text_bytes = text_bytes.saturating_add(bytes);
+            if let Some(modality) = modality
+                && !modalities.contains(&modality)
+            {
+                modalities.push(modality);
+            }
+        }
+        // This is a lower-cost first-pass estimate. Core budgets the full prompt at execution.
+        let input_tokens =
+            u32::try_from(ash_utils_string::approx_tokens_from_byte_count(text_bytes))
+                .unwrap_or(u32::MAX);
+        Ok(ash_models_manager::select_automatic_model(
+            candidates,
+            input_tokens,
+            &modalities,
+        ))
     }
 
     fn execution_availability(

@@ -1,3 +1,6 @@
+import { BaseSecretStorageService, ISecretStorageService } from '../../../src/ash/platform/secrets/common/secrets.js';
+import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
+import { ISessionsProvidersService, SessionsProvidersService } from '../../../src/ash/sessions/services/sessions/browser/sessionsProvidersService.js';
 import './chatFixtureLocalization.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
@@ -8,6 +11,12 @@ import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/bro
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
+import type { ChatTurnChangeSource, ChatTurnFileChange } from '../../../src/ash/workbench/contrib/chat/browser/chatResponseFileChangesService.js';
+import { ChatOutputPartStateCache, IChatOutputPartStateCache } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatOutputPartStateCache.js';
+import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
+import { IDiffService } from '../../../src/ash/workbench/services/diff/common/diffService.js';
+import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
 import { wrapTablesWithScrollable } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
@@ -26,15 +35,15 @@ import { ITerminalConfigurationService } from '../../../src/ash/workbench/contri
 import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { readNewChatDraftState } from '../../../src/ash/sessions/contrib/chat/common/newChatDraftState.js';
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { CoworkWidget } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
-import { NewCoworkInputWidget } from '../../../src/ash/sessions/contrib/cowork/browser/newCoworkInput.js';
+import { NativeChatWidget } from '../../../src/ash/sessions/contrib/chat/browser/widget/nativeChatWidget.js';
+import { ReplyChatInputFactory } from '../../../src/ash/sessions/contrib/chat/browser/replyChatInput.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
-import { ChatTipService, IChatTipService } from '../../../src/ash/sessions/contrib/cowork/browser/chatTipService.js';
+import { ChatTipService, IChatTipService } from '../../../src/ash/workbench/contrib/chat/browser/chatTipService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { registerTestVoiceInputServices, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { LocalTranscriptionService } from '../../../src/ash/workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
-import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
+import { DictationModelState, ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService, type IDictationModelStatus } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IDevContainerAgentHostService } from '../../../src/ash/sessions/common/devContainerAgentHostService.js';
@@ -174,12 +183,14 @@ if (new URLSearchParams(location.search).has('workbench')) {
 	document.body.classList.add('ash-workbench');
 }
 const resources = new DisposableStore();
+setIconResolver(document, icon => getIconDefinition(icon));
 const appLogs: LogEntry[] = [];
 const parentServices = resources.add(new InstantiationService());
 const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks: [{ log: entry => appLogs.push(entry) }] }));
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerSingleton(IChatOutputPartStateCache, () => new ChatOutputPartStateCache());
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
 	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService),
 })));
@@ -218,6 +229,7 @@ let builtinStop: DeferredPromise<void> | undefined;
 let builtinAudio: ReturnType<typeof installTestDictationAudio> | undefined;
 const builtinBackend = new URLSearchParams(location.search).get('builtinBackend');
 if (builtinBackend) {
+	const modelStatus = resources.add(new Emitter<{ resourceId: string; model: string; status: IDictationModelStatus; }>());
 	const start = async (resourceId: string) => { builtinResource = resourceId; builtinOperations.push('start'); };
 	const stop = async (resourceId: string) => {
 		builtinOperations.push('stop');
@@ -234,12 +246,16 @@ if (builtinBackend) {
 		pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${atob(audio).length}`); },
 	});
 	services.registerInstance(ILocalTranscriptionBackendService, {
-		isConnected: true, onDidDisconnect: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None, onDidChangeModels: Event.None, onDidChangeModelStatus: Event.None,
+		isConnected: true, onDidDisconnect: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None, onDidChangeModels: Event.None, onDidChangeModelStatus: modelStatus.event,
 		getModelCacheInfo: async () => ({ directory: '/fixture/models', version: 1 }),
 		getModelStatus: async model => ({ model, available: true, sizeBytes: 1024 }), listModels: async () => [],
 		cancelModel: async () => { throw new Error('Unexpected model cancellation'); }, deleteModel: async () => { throw new Error('Unexpected model deletion'); },
 		startModelOperation: async () => { throw new Error('Unexpected model preparation'); }, stopModelOperation: async () => { throw new Error('Unexpected model operation'); },
-		start, stop, cancel, pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${audio.byteLength}`); },
+		async start(resourceId, model) {
+			await start(resourceId);
+			modelStatus.fire({ resourceId, model, status: { state: DictationModelState.Ready } });
+		},
+		stop, cancel, pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${audio.byteLength}`); },
 	});
 	services.registerSingleton(ILocalTranscriptionService, () => services.createInstance(LocalTranscriptionService));
 	services.registerSingleton(ILocalTranscriptionModelService, () => services.get(ILocalTranscriptionService) as LocalTranscriptionService);
@@ -261,6 +277,7 @@ services.registerSingleton(ITerminalLogService, () => services.createInstance(Te
 services.registerInstance(ILanguageModelsService, { listModelCatalog: async () => [] } as unknown as ILanguageModelsService);
 services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], sourceGroups: [] }) }));
 registerCodeEditorServices(services);
+services.registerSingleton(IDiffService, () => services.createInstance(DiffService));
 const skillResourceRequests: unknown[] = [];
 const prompts = resources.add(new PromptsService({
 	onDidChangeSkills: Event.None,
@@ -362,6 +379,9 @@ const accessibleView = resources.add(services.createInstance(AccessibleViewServi
 services.registerInstance(IAccessibleViewService, accessibleView);
 let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
+services.registerInstance(IChatService, {
+	movePendingRequest: async () => { throw new Error('Unexpected queue reorder'); },
+} satisfies Pick<IChatService, 'movePendingRequest'> as unknown as IChatService);
 const appServices = resources.add(services.createChild());
 if (new URLSearchParams(location.search).has('sentImageViewer')) {
 	ChatContextKeys.imagePreviewPresentation.bindTo(appServices.get(IContextKeyService)).set('popup');
@@ -372,17 +392,34 @@ if (new URLSearchParams(location.search).has('sentImageViewer')) {
 	});
 }
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
+let turnFiles: readonly Omit<ChatTurnFileChange, 'review'>[] = [];
+let messageReferences: readonly { readonly id: string; readonly label: string; readonly target: string; }[] = [];
 const listOptions = {
 	codeBlockPresentation: new URLSearchParams(location.search).has('codeCard') ? 'card' as const : undefined,
 	openTurnChanges: new URLSearchParams(location.search).has('turnChanges') ? async (source: NonNullable<IChatListItem['feedbackSource']>) => {
 		root.dataset.openedTurn = JSON.stringify(source);
+	} : undefined,
+	getTurnChanges: new URLSearchParams(location.search).has('turnChanges') ? (source: ChatTurnChangeSource) => ({
+		files: turnFiles.length, insertions: 3, deletions: 1,
+		review: () => { root.dataset.openedTurn = JSON.stringify(source); },
+		fileDiffs: turnFiles.map(file => ({
+			...file, review: () => { root.dataset.openedTurnFile = JSON.stringify({ source, id: file.id }); },
+		})),
+	}) : undefined,
+	messagePresentation: new URLSearchParams(location.search).has('messageReferences') ? {
+		user: { name: 'You' }, assistant: { name: 'Assistant' },
+		getReferences: () => messageReferences.map(reference => ({
+			id: reference.id, label: reference.label,
+			open: () => { root.dataset.openedMessageReference = reference.target; },
+		})),
 	} : undefined,
 	promptTimelineChanges: new URLSearchParams(location.search).has('promptTimeline')
 		? (prompt: IChatListItem) => prompt.id === 'second' ? {
 			files: 1, insertions: 2, deletions: 1,
 			review: () => { root.dataset.reviewedTurn = prompt.id; },
 			fileDiffs: [{
-				id: 'change', path: 'src/example.ts', review: () => { root.dataset.reviewedPrompt = prompt.id; },
+				id: 'change', path: 'src/example.ts', additions: 2, deletions: 1,
+				review: () => { root.dataset.reviewedPrompt = prompt.id; },
 			}],
 		} : undefined : undefined,
 	imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
@@ -468,7 +505,7 @@ let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let hasConversationChanges = false;
 let responseWorking = false;
-let appChat: ChatWidget | CoworkWidget | undefined;
+let appChat: ChatWidget | NativeChatWidget | undefined;
 let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
 let dictationStarts = 0;
@@ -703,6 +740,8 @@ declare global {
 			refresh(): void;
 			imageReadCount(): number;
 			renderItems(items: readonly IChatListItem[]): void;
+			setTurnFiles(files: readonly Omit<ChatTurnFileChange, 'review'>[]): void;
+			setMessageReferences(references: typeof messageReferences): void;
 			setUpvoteAnimation(value: string): Promise<void>;
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
@@ -756,7 +795,7 @@ declare global {
 			showAcceptedContext(text: string, cowork?: boolean): void;
 			updateAcceptedContext(text: string): void;
 			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean, virtualizeHistory?: boolean): void;
-			showLongCodeHistory(turns: number, virtualizeHistory: boolean): void;
+			showLongCodeHistory(turns: number, virtualizeHistory: boolean, withTools?: boolean): void;
 			voiceState(): readonly string[];
 			showVoiceIntroduction(): void;
 			toggleIntroductionFocus(): void;
@@ -806,10 +845,19 @@ const readSnapshot: ExtensionHostFleetSnapshot = {
 };
 const readApi: IExtensionHostApi = {
 	onDidChange: Event.None, onConnectionState: Event.None, isAvailable: async () => true, getConnectionState: async () => 'ready',
-	list: async () => readSnapshot, start: async () => readSnapshot, reconcile: async () => readSnapshot, activateByEvent: async () => readSnapshot,
+	list: async () => {
+		if (!new URLSearchParams(location.search).has('mermaid')) { return readSnapshot; }
+		const response = await fetch('/__chat_mermaid');
+		return response.json();
+	},
+	start: async () => readSnapshot, reconcile: async () => readSnapshot, activateByEvent: async () => readSnapshot,
 	registerClientHandler: () => Disposable.None,
 	invoke: async (request, signal): Promise<JsonValue> => {
 		signal.throwIfAborted();
+		if (request.registrationId === 'markdown.mermaid.render.v1') {
+			const response = await fetch('/__chat_mermaid', { method: 'POST', body: JSON.stringify(request.payload), signal });
+			return response.json();
+		}
 		const payload = request.payload as { sessionId: string; kind?: string; text?: string; };
 		if (request.operation === 'createSpeechSession') {
 			if (payload.kind !== 'textToSpeech') throw new Error('Unexpected media session');
@@ -828,7 +876,6 @@ services.registerInstance(IExtensionHostApi, readApi);
 
 window.ashChatTranscriptIntegration = {
 	prepareBuiltinDictation: async (cowork, backend) => {
-		services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected model settings'); } } as unknown as IPreferencesService);
 		await services.get(IConfigurationService).updateValue('dictation.backend', backend);
 		builtinAudio = resources.add(installTestDictationAudio(window));
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
@@ -842,7 +889,6 @@ window.ashChatTranscriptIntegration = {
 	finishBuiltinStop: () => { void builtinStop?.complete(); builtinStop = undefined; },
 	builtinDictationState: () => ({ operations: builtinOperations, busy: services.get(IChatSpeechToTextService).isBusy, state: services.get(IChatSpeechToTextService).state }),
 	prepareDictation: cowork => {
-		services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected model preparation'); } } as unknown as IPreferencesService);
 		resources.add(services.get(ISpeechService).registerSpeechProvider('command-fixture', {
 			metadata: { extension: new ExtensionIdentifier('test.speech'), displayName: 'Controlled recognition' },
 			createSpeechToTextSession: token => {
@@ -920,6 +966,8 @@ window.ashChatTranscriptIntegration = {
 		await scope.invokeFunction(CommandsRegistry.getCommand(command)!);
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },
+	setTurnFiles: files => { turnFiles = files; list.render(rendererItems); },
+	setMessageReferences: references => { messageReferences = references; list.render(rendererItems); },
 	setUpvoteAnimation: value => services.get(IConfigurationService).updateValue('chat.upvoteAnimation', value),
 	prepareRequestEditing: (cowork, text, unanswered, hasCheckpoint) => {
 		requestEditMode = true;
@@ -1355,11 +1403,12 @@ window.ashChatTranscriptIntegration = {
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
-		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(NativeChatWidget, container, 'app-chat', model, () => { }, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(ReplyChatInputFactory).createSessionInput(host, delegate, model, resources))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, virtualizeHistory ? { virtualizeHistoryFrom: constObservable(48) } : undefined));
 		appChat.setVisible(true);
 	},
-	showLongCodeHistory: (turns, virtualizeHistory) => {
+	showLongCodeHistory: (turns, virtualizeHistory, withTools = false) => {
 		window.ashChatTranscriptIntegration.showChatApp(false, false, false, virtualizeHistory);
+		const appRows = appItems;
 		const host = appChat!.domNode.parentElement!;
 		host.style.position = 'fixed';
 		host.style.inset = '20px auto auto 20px';
@@ -1381,6 +1430,15 @@ window.ashChatTranscriptIntegration = {
 			for (const item of items) entries.push({ type: 'item', entryId: item.itemId, turnId, transient: false, item });
 		}
 		appItems = chatTranscriptListItems(entries);
+		if (withTools) {
+			const media: ThreadTranscriptEntry[] = [
+				{ type: 'item', entryId: 'long-image-call', turnId: 'long-media', transient: false, item: { type: 'toolCall', itemId: 'long-image-call', turnId: 'long-media', toolCallId: 'long-image', name: 'imagegen', argumentsJson: '{}' } },
+				{ type: 'item', entryId: 'long-image-result', turnId: 'long-media', transient: false, item: { type: 'toolResult', itemId: 'long-image-result', turnId: 'long-media', toolCallId: 'long-image', isError: false, text: '', content: [
+					{ type: 'imageAttachment', detail: 'auto', attachment: { contentDigest: 'sha256:long-image', mediaType: 'png', encodedBytes: imageBytes.length, width: 2, height: 1 } },
+				] } },
+			];
+			appItems = [...appItems, ...appRows, ...chatTranscriptListItems(media, undefined, [], { sessionId: 'app-session', threadId: 'app-thread' })];
+		}
 		chatChanges.fire();
 	},
 	showHistoryPagination: (fail = false) => {
@@ -1470,6 +1528,8 @@ window.ashChatTranscriptIntegration = {
 		await import('../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js');
 		await services.get(IConfigurationService).updateValue(ChatSessionArchiveActionWordingSettingId, wording);
 		const lifecycleServices = resources.add(services.createChild());
+		lifecycleServices.registerInstance(ISecretStorageService, resources.add(new BaseSecretStorageService()));
+		lifecycleServices.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
 		lifecycleCommands = resources.add(new CommandService(lifecycleServices));
 		lifecycleServices.registerInstance(ICommandService, lifecycleCommands);
 		lifecycleServices.registerInstance(IViewsService, { focusView: async () => { file.focus(); return true; } } as unknown as IViewsService);
@@ -1504,7 +1564,14 @@ window.ashChatTranscriptIntegration = {
 			},
 		});
 		lifecycleServices.registerSingleton(IDevContainerAgentHostService, () => lifecycleServices.createInstance(DevContainerAgentHostService));
-		lifecycleSessions = resources.add(lifecycleServices.createInstance(SessionsManagementService, lifecycleServices.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined })));
+		const providers = resources.add(new SessionsProvidersService());
+		lifecycleServices.registerInstance(ISessionsProvidersService, providers);
+		const provider = resources.add(lifecycleServices.createInstance(AppServerSessionsProvider, {
+			workspace: () => ({ type: 'current' }),
+			selectWorkspace: async () => undefined,
+		}));
+		resources.add(providers.registerProvider(provider));
+		lifecycleSessions = resources.add(lifecycleServices.createInstance(SessionsManagementService, provider.id));
 		await lifecycleSessions.initialize();
 		lifecycleServices.registerInstance(ISessionsManagementService, lifecycleSessions);
 		lifecycleServices.registerInstance(IChatSessionNavigationService, {

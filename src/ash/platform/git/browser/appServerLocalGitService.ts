@@ -3,7 +3,7 @@ import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import type { GitRepositoryContext, ILocalGitService } from '../common/localGitService.js';
+import type { GitRepositoryContext, GitSessionComparison, GitSessionComparisonSnapshot, ILocalGitService } from '../common/localGitService.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { canceled } from '../../../base/common/errors.js';
@@ -80,6 +80,15 @@ export class AppServerLocalGitService implements ILocalGitService {
 		}
 	}
 
+	async readSessionComparison(directory: { readonly sessionId: string; readonly path: string; }, repositoryId: string, comparison: GitSessionComparison, signal: AbortSignal): Promise<GitSessionComparisonSnapshot> {
+		const generation = this.connection.generation;
+		const result = await this.connection.request(APP_SERVER_METHODS['git/sessionComparison'], { sessionDirectory: directory, repositoryId, comparison }, { signal });
+		if (signal.aborted || generation !== this.connection.generation || this.connection.state !== 'ready') throw canceled();
+		return result.kind === 'branches'
+			? { kind: 'branches', references: result.references.map(({ name, objectId }) => ({ name, objectId })) }
+			: { kind: 'changes', files: result.files.map(({ path, originalPath, original, modified }) => ({ path, originalPath, original, modified })) };
+	}
+
 	async cancel(operationId: string): Promise<void> {
 		await appServerRequest(this.connection, 'git/cloneTo/cancel', { operationId });
 	}
@@ -90,6 +99,7 @@ export function createDisconnectedLocalGitService(unavailable: UnavailableOperat
 		_serviceBrand: undefined,
 		listWorktrees: () => unavailable('git/worktree/list'),
 		readRepositoryContexts: () => unavailable('git/repositoryContexts'),
+		readSessionComparison: () => unavailable('git/sessionComparison'),
 		clone: () => unavailable('git/cloneTo'),
 		cancel: () => unavailable('git/cloneTo/cancel'),
 	};

@@ -2,7 +2,7 @@ import { getErrorMessage } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { IChecksOperationService } from '../../changes/common/checksOperationService.js';
+import { IChecksOperationService } from '../../github/common/checksOperationService.js';
 import type { IBlockedSession } from './blockedSessionsIndicatorModel.js';
 
 /** Submits one repair request per affected conversation through its captured backend. */

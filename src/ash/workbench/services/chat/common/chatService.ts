@@ -164,6 +164,7 @@ export interface StartTurnOptions extends ChatSubmissionOptions {
 	readonly mode: ChatMode;
 	readonly approvalMode?: ApprovalMode;
 	readonly model?: ModelRef;
+	readonly modelRouting?: 'auto';
 	/** Overrides this Turn's model effort without changing the user's model settings. */
 	readonly reasoningEffort?: ModelReasoningEffort;
 	readonly contexts?: readonly ResolvedChatContext[];
@@ -360,6 +361,7 @@ export interface IChatService {
 	getPendingRequests(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]>;
 	pausePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	resumePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
+	movePendingRequest(target: QueueMessageTarget, direction: 'up' | 'down'): Promise<QueuedMessage>;
 	editPendingRequest(target: QueueMessageTarget, text: string, queue?: ChatRequestQueueKind): Promise<QueuedMessage>;
 	removePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	/** Promote the durable message before interrupting the captured active task. */

@@ -15,10 +15,10 @@ import type { CanvasViewport } from '../../../canvas/common/canvasViewport.js';
 import type { DesignDocumentController } from '../designDocumentController.js';
 import type { DocumentCommands } from '../../common/commands/documentCommands.js';
 import { cubicBezierPoint, toDesignLocal, type DesignPoint } from '../../common/core/geometry.js';
-import type { DesignShape } from '../../common/model/document.js';
+import type { DesignShape } from '../../common/model/designDocument.js';
 import { getDesignShapeEntries, hitTestDesignShapes } from '../../common/model/hitTest.js';
-import type { DesignSelection } from '../../common/selection.js';
-import { DesignMode, DesignTool } from '../../common/config/editorConfiguration.js';
+import type { DesignSelection } from '../../common/designSelection.js';
+import { DesignMode, DesignTool } from '../../common/config/designEditorConfiguration.js';
 import type { DesignDrawingParticipant } from '../designEditorBrowser.js';
 
 type PathHandle = { readonly edge?: number; readonly contourIndex: number; readonly nodeIndex: number; readonly point: 'anchor' | 'incoming' | 'outgoing'; };

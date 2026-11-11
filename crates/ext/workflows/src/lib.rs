@@ -75,9 +75,16 @@ impl Runtime<'_> {
         command: Command,
         request: StartTurnRequest,
     ) -> Result<Receipt, CoreError> {
-        self.execute_with_turn_submission(root, command, request, |thread, request| {
-            self.threads.start_turn(thread, request)
-        })
+        self.execute_with_turn_submission(
+            root,
+            command,
+            request,
+            None,
+            |thread, request, routing| {
+                self.threads
+                    .start_turn_with_model_routing(thread, request, None, routing)
+            },
+        )
     }
 
     /// Binds the root's product execution context before creating or dispatching children.
@@ -86,17 +93,33 @@ impl Runtime<'_> {
         root: &ThreadId,
         command: Command,
         request: StartTurnRequest,
-        submit: impl FnOnce(&ThreadId, StartTurnRequest) -> Result<ash_core::StartTurnResult, CoreError>,
+        model_routing: Option<protocol::TurnModelRouting>,
+        submit: impl FnOnce(
+            &ThreadId,
+            StartTurnRequest,
+            Option<protocol::TurnModelRouting>,
+        ) -> Result<ash_core::StartTurnResult, CoreError>,
     ) -> Result<Receipt, CoreError> {
-        let plan = self.prepare(root, command, request)?;
+        let plan = self.prepare_with_model_routing(root, command, request, model_routing)?;
         self.finish(root, plan, submit)
     }
 
+    #[cfg(test)]
     fn prepare(
         &self,
         root: &ThreadId,
         command: Command,
         request: StartTurnRequest,
+    ) -> Result<Plan, CoreError> {
+        self.prepare_with_model_routing(root, command, request, None)
+    }
+
+    fn prepare_with_model_routing(
+        &self,
+        root: &ThreadId,
+        command: Command,
+        request: StartTurnRequest,
+        model_routing: Option<protocol::TurnModelRouting>,
     ) -> Result<Plan, CoreError> {
         let parent = self.threads.read_thread(root)?;
         if parent.agent_context_seed.is_some() {
@@ -107,6 +130,7 @@ impl Runtime<'_> {
             request.mode,
             request.tool_mode,
             request.approval_mode,
+            model_routing.is_some(),
         )?;
         let command_id = request.command_id.clone();
         self.store.commit(
@@ -114,7 +138,7 @@ impl Runtime<'_> {
             root,
             &command_id,
             &request_key,
-            |previous| self.plan(&parent, &command, request, previous),
+            |previous| self.plan(&parent, &command, request, model_routing, previous),
         )
     }
 
@@ -123,6 +147,7 @@ impl Runtime<'_> {
         parent: &ash_core::ThreadSnapshot,
         command: &Command,
         request: StartTurnRequest,
+        model_routing: Option<protocol::TurnModelRouting>,
         mut previous: Option<Work>,
     ) -> Result<Plan, CoreError> {
         if command.mode == Mode::ParallelDevelop {
@@ -226,7 +251,7 @@ impl Runtime<'_> {
             response_sequence: None,
             transition,
             agent,
-            submission: model::Submission::new(request, parent.sequence),
+            submission: model::Submission::new(request, parent.sequence, model_routing),
         })
     }
 
@@ -235,8 +260,9 @@ impl Runtime<'_> {
         let pending = self.store.pending()?;
         let count = pending.len();
         for (root, plan) in pending {
-            self.finish(&root, plan, |thread, request| {
-                self.threads.start_turn(thread, request)
+            self.finish(&root, plan, |thread, request, routing| {
+                self.threads
+                    .start_turn_with_model_routing(thread, request, None, routing)
             })?;
         }
         Ok(count)
@@ -246,10 +272,18 @@ impl Runtime<'_> {
         &self,
         root: &ThreadId,
         mut plan: Plan,
-        submit: impl FnOnce(&ThreadId, StartTurnRequest) -> Result<ash_core::StartTurnResult, CoreError>,
+        submit: impl FnOnce(
+            &ThreadId,
+            StartTurnRequest,
+            Option<protocol::TurnModelRouting>,
+        ) -> Result<ash_core::StartTurnResult, CoreError>,
     ) -> Result<Receipt, CoreError> {
         if plan.turn.is_none() {
-            let started = match submit(root, plan.submission.request()) {
+            let started = match submit(
+                root,
+                plan.submission.request(),
+                plan.submission.model_routing(),
+            ) {
                 Ok(started) => started,
                 Err(error) => {
                     if matches!(

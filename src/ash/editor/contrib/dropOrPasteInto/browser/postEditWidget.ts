@@ -220,7 +220,7 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		const abort = new AbortController();
 		const cancellation = token.onCancellationRequested(() => abort.abort());
 		try {
-			const result = await this.bulkEdits.apply(resourceEdits, { editor: this.editor, token: abort.signal });
+			const result = await this.bulkEdits.apply(resourceEdits, { editor: this.editor, token: abort.signal, showPreview: false });
 			if (!result.isApplied || token.isCancellationRequested) return;
 			undo = result.undo;
 			// Workspace edits force markers to the insertion end. Recover the inserted

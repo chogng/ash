@@ -48,6 +48,9 @@ class AgentsFixture extends DisposableStore {
 		status: 'active', coordinatorId: 'agent:lead', members: [{
 			agentId: 'agent:lead', name: 'Lead reviewer', responsibility: 'Review the result',
 			role: { type: 'exact', name: 'reviewer', source: { type: 'directory', id: 'project' } },
+		}, {
+			agentId: 'agent:built-in', name: 'Built-in reviewer', responsibility: 'Provide a second review',
+			role: { type: 'exact', name: 'reviewer', source: { type: 'builtIn' } },
 		}],
 	};
 	pending: Promise<AgentRoleCatalog> | undefined;
@@ -96,7 +99,7 @@ class AgentsFixture extends DisposableStore {
 
 const settle = (): Promise<void> => new Promise(resolve => setImmediate(resolve));
 
-test('Agents shows role definitions and teams together and reveals the exact member role', async () => {
+test('Agents shows custom roles and teams together and reveals the exact custom member role', async () => {
 	using f = new AgentsFixture();
 	const panel = f.create();
 	assert.equal(f.roleReads, 0);
@@ -104,19 +107,17 @@ test('Agents shows role definitions and teams together and reveals the exact mem
 	panel.setVisible(true);
 	await settle();
 	assert.equal(f.root.querySelector('[role="tablist"]'), null);
-	const builtIn = f.root.querySelector<HTMLDetailsElement>('.ash-agent-role')!;
-	builtIn.open = true;
-	f.button('Review team · 1').click();
+	assert.doesNotMatch(f.root.textContent!, /Instructions from builtIn/);
+	f.button('Review team · 2').click();
 	await settle();
 	assert.match(f.root.querySelector('.ash-teams-detail')!.textContent!, /Keep the decision/);
+	assert.equal([...f.root.querySelectorAll('.ash-teams-member button')].filter(button => button.textContent === 'View role').length, 1);
 	f.button('View role').click();
 	await settle();
-	const custom = f.root.querySelector<HTMLDetailsElement>('.ash-agent-roles-group:last-child .ash-agent-role')!;
+	const custom = f.root.querySelector<HTMLDetailsElement>('.ash-agent-role')!;
 	assert.equal(custom.open, true);
 	assert.equal(browserEnvironment.window.document.activeElement, custom.querySelector('summary'));
-	assert.equal(f.root.querySelector('.ash-agent-role'), builtIn);
-	assert.equal(builtIn.open, true);
-	assert.equal(f.button('Review team · 1').getAttribute('aria-current'), 'true');
+	assert.equal(f.button('Review team · 2').getAttribute('aria-current'), 'true');
 });
 
 test('Agents retires pending role reads when the category is hidden', async () => {
@@ -131,7 +132,7 @@ test('Agents retires pending role reads when the category is hidden', async () =
 	assert.equal(f.root.querySelectorAll('.ash-agent-role').length, 0);
 	panel.setVisible(true);
 	await settle();
-	assert.equal(f.root.querySelectorAll('.ash-agent-role').length, 2);
+	assert.equal(f.root.querySelectorAll('.ash-agent-role').length, 1);
 });
 
 test('Agents reports a missing member role instead of revealing a same-name definition from another source', async () => {
@@ -140,12 +141,12 @@ test('Agents reports a missing member role instead of revealing a same-name defi
 	const panel = f.create();
 	panel.setVisible(true);
 	await settle();
-	f.button('Review team · 1').click();
+	f.button('Review team · 2').click();
 	await settle();
 	f.button('View role').click();
 	await settle();
 	assert.match(f.root.textContent!, /The role is no longer available: reviewer/);
-	assert.equal(f.root.querySelector<HTMLDetailsElement>('.ash-agent-role')!.open, false);
+	assert.equal(f.root.querySelector('.ash-agent-role'), null);
 	assert.equal(browserEnvironment.window.document.activeElement, f.button('Refresh definitions'));
 });
 
@@ -154,14 +155,14 @@ test('Agents provides Team help and readable discussion and disposes its scoped 
 	const panel = f.create();
 	panel.setVisible(true);
 	await settle();
-	f.button('Review team · 1').click();
+	f.button('Review team · 2').click();
 	await settle();
 	const post = f.button('Post message');
 	post.focus();
 	const providers = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('ash-agents-'));
 	assert.equal(providers.length, 2);
 	const help = f.services.invokeFunction(accessor => providers.find(provider => provider.type === AccessibleViewType.Help)!.getProvider(accessor))!;
-	assert.match(help.provideContent(), /Use Tab to move through Agent definitions and Teams/);
+	assert.match(help.provideContent(), /Use Tab to move through Custom Agents and Teams/);
 	assert.match(help.provideContent(), /snapshots/);
 	const view = f.services.invokeFunction(accessor => providers.find(provider => provider.type === AccessibleViewType.View)!.getProvider(accessor))!;
 	assert.match(view.provideContent(), /Lead reviewer: Review the result · reviewer · Lead/);
@@ -181,12 +182,11 @@ test('Agents localizes management headings and help with the Chinese catalog', a
 		f.create().setVisible(true);
 		await settle();
 		assert.equal(f.root.querySelector('section')!.getAttribute('aria-label'), '智能体');
-		assert.deepEqual([...f.root.querySelectorAll('.ash-settings-card-title')].map(heading => heading.textContent), ['Agent 定义', '团队']);
+		assert.deepEqual([...f.root.querySelectorAll('.ash-settings-card-title')].map(heading => heading.textContent), ['自定义 Agent', '团队']);
 		f.button('新建团队').focus();
 		const provider = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('ash-agents-') && provider.type === AccessibleViewType.Help)!;
 		const help = f.services.invokeFunction(accessor => provider.getProvider(accessor))!;
-		assert.match(help.provideContent(), /角色.*团队/);
-		assert.match(help.provideContent(), /按 Tab 在 Agent 定义和团队控件之间移动/);
+		assert.match(help.provideContent(), /按 Tab 在自定义 Agent 和团队控件之间移动/);
 		help.dispose();
 	} finally { resetNlsResolver(); }
 });

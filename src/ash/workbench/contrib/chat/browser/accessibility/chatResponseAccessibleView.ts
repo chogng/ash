@@ -1,4 +1,3 @@
-import { renderAsPlaintext } from '../../../../../base/browser/markdownRenderer.js';
 import type { Event } from '../../../../../base/common/event.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
@@ -7,9 +6,10 @@ import type { IAccessibleViewImplementation } from '../../../../../platform/acce
 import type { ChatToolCallBinding } from '../../../../../platform/agentHost/common/agent.js';
 import type { ChatContentPart } from '../../../../services/chat/common/chatService.js';
 import { formatChatMessageTime, formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
-import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
+import { chatToolResultPresentation, reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
+import { chatSubagentStatusLabel } from '../../common/model/chatSubagentActivity.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
-import { renderChatRichContentText } from '../widget/chatMarkdownRichContent.js';
+import { renderChatMarkdownPlaintext, renderChatRichContentText } from '../widget/chatMarkdownRichContent.js';
 
 interface ChatResponseSource {
 	readonly getItems: () => readonly IChatListItem[];
@@ -50,7 +50,12 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 		}
 		const invocation = item.toolInvocation;
 		if (invocation) {
-			const { call, output, result, stopped, waitingFor, executionStarted } = invocation;
+			const { call, output, result, stopped, waitingFor, executionStarted, subagentActivity } = invocation;
+			if (subagentActivity) {
+				const target = chatToolResultPresentation(result);
+				if (target?.type === 'sessionTarget') sections.push(target.label);
+				sections.push(chatSubagentStatusLabel(subagentActivity), subagentActivity.result?.summary ?? '');
+			}
 			if (result) {
 				sections.push(result.isError ? localize('chat.tool.failed', '{0} · Failed', call.name) : localize('chat.tool.completed', '{0} · Completed', call.name));
 			} else if (!stopped && waitingFor) {
@@ -87,6 +92,7 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 			}
 			if (result) {
 				sections.push(result.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'));
+				if (result.outputPreview) sections.push(localize('chat.tool.outputPreviewHelp', 'For a large tool result, open Result and choose Read full output. Use Next page and Previous page to read one page at a time. Back to preview returns to the excerpt.'));
 				sections.push(result.text, ...this.attachments(result.content ?? []));
 			}
 		} else if (item.hookPart) {
@@ -101,7 +107,7 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 		} else {
 			const markdown = item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor';
 			const rich = item.markdown?.richContent;
-			sections.push(markdown ? rich ? renderChatRichContentText(item.text, rich) : renderAsPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
+			sections.push(markdown ? rich ? renderChatRichContentText(item.text, rich) : renderChatMarkdownPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
 			sections.push(...this.attachments(item.content ?? []));
 			if (item.loadedSkills?.length) {
 				sections.push(localize('chat.skills.loadedTitle', 'Skills loaded in this turn'));

@@ -26,15 +26,20 @@ use ash_app_server_protocol::protocol::session::SessionThreadSubscribeResult;
 use ash_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
 use ash_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use ash_app_server_protocol::protocol::session::ThreadSnapshotHistory;
+use ash_app_server_protocol::protocol::session::ToolResultPreview;
+use ash_app_server_protocol::protocol::session::ToolResultTextReadParams;
+use ash_app_server_protocol::protocol::session::ToolResultTextReadResult;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use ash_app_server_protocol::protocol::turn::TurnInterruptResult;
 use ash_app_server_protocol::protocol::turn::TurnStartResult;
 use ash_app_server_protocol::protocol::turn::TurnSteerResult;
 use ash_protocol::AgentRequestEnvelope;
+use ash_protocol::ContentPart;
 use ash_protocol::HookEvent;
 use ash_protocol::ModelAccess;
 use ash_protocol::Session;
+use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
 use ash_protocol::UserInput;
 
@@ -112,7 +117,22 @@ pub(super) enum TurnToolModeSelection {
 
 pub(super) enum TurnModelSelection {
     Current,
+    Auto,
     Explicit(ash_protocol::ModelRef),
+}
+
+impl TurnModelSelection {
+    pub(super) fn from_request(
+        model: Option<ash_protocol::ModelRef>,
+        routing: Option<ash_protocol::ModelRoutingMode>,
+    ) -> Result<Self, RpcError> {
+        match (model, routing) {
+            (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
+            (Some(model), None) => Ok(Self::Explicit(model)),
+            (None, Some(ash_protocol::ModelRoutingMode::Auto)) => Ok(Self::Auto),
+            (None, None) => Ok(Self::Current),
+        }
+    }
 }
 
 enum RewritePhase {
@@ -920,6 +940,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 mode,
                 approval_mode,
                 model,
+                model_routing,
                 reasoning_effort,
                 tool_mode,
                 input,
@@ -931,7 +952,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 thread_id,
                 approval_mode,
                 mode,
-                model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
+                TurnModelSelection::from_request(model, model_routing)?,
                 reasoning_effort,
                 tool_mode,
                 command_interpretation.unwrap_or_default(),
@@ -1133,6 +1154,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 mode,
                 approval_mode,
                 model,
+                model_routing,
                 reasoning_effort,
                 tool_mode,
                 ..
@@ -1149,7 +1171,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 let Some(turn) = target.turns.iter().find(|turn| turn.turn_id == turn_id) else {
                     return Ok(None);
                 };
-                if approval_mode.is_some_and(|mode| mode != turn.approval_mode)
+                TurnModelSelection::from_request(model.clone(), *model_routing)?;
+                if model_routing.is_some() != turn.model_routing.is_some()
+                    || approval_mode.is_some_and(|mode| mode != turn.approval_mode)
                     || model
                         .as_ref()
                         .is_some_and(|model| Some(model) != turn.model.as_ref())
@@ -1171,6 +1195,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     tool_mode.unwrap_or(turn.tool_mode),
                     turn.approval_mode,
                     &selection,
+                    model_routing.is_some(),
                 )?;
                 Ok(receipt.map(SessionRequestResult::Turn))
             }
@@ -1231,6 +1256,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     tool_mode.unwrap_or(turn.tool_mode),
                     turn.approval_mode,
                     &selection,
+                    turn.model_routing.is_some(),
                 )?
                 else {
                     return Ok(None);
@@ -1254,6 +1280,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         tool_mode: ash_protocol::ToolMode,
         approval_mode: ash_protocol::ApprovalMode,
         selection: &TurnInstructionSelection,
+        automatic_model: bool,
     ) -> Result<Option<TurnStartResult>, RpcError> {
         let receipt = if matches!(selection, TurnInstructionSelection::Workflow(_)) {
             self.context.workflow_store().replay_completed(
@@ -1264,6 +1291,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 mode,
                 tool_mode,
                 approval_mode,
+                automatic_model,
             )
         } else {
             self.context.agent_runtime().replay_turn(
@@ -1274,6 +1302,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     mode,
                     tool_mode,
                     input,
+                    automatic_model,
                 },
             )
         };
@@ -1572,10 +1601,14 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                             &mutation.session_id,
                             Some(source_turn.approval_mode),
                         )?,
-                        source_turn
-                            .model
-                            .clone()
-                            .map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
+                        if source_turn.model_routing.is_some() {
+                            TurnModelSelection::Auto
+                        } else {
+                            source_turn
+                                .model
+                                .clone()
+                                .map_or(TurnModelSelection::Current, TurnModelSelection::Explicit)
+                        },
                         source_turn.reasoning_effort,
                     )
                 } else {
@@ -1649,6 +1682,37 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             transcript,
             history,
         })
+    }
+
+    pub(super) fn tool_result_text_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ToolResultTextReadParams = decode(params)?;
+        let source = params.source;
+        let item = self
+            .context
+            .agent_runtime()
+            .read_history_item(
+                &params.session_id,
+                &params.thread_id,
+                &source.turn_id,
+                source.item_ordinal,
+            )
+            .map_err(core_error)?;
+        let Some(ThreadItem::ToolResult {
+            item_id,
+            text,
+            content,
+            ..
+        }) = item
+        else {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotFound));
+        };
+        if item_id != source.item_id {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotFound));
+        }
+        let page =
+            tool_result_text_page(&text, content.as_deref().unwrap_or_default(), params.offset)
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        result(&page)
     }
 
     pub(super) fn thread_goal_get(&self, params: &Value) -> Result<Value, RpcError> {
@@ -1826,6 +1890,16 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             self.fill_missing_reply_directories(&mut thread)?;
             return Ok((thread, None, pending));
         };
+        let preview = match &history {
+            ThreadSnapshotHistory::Latest {
+                preview_tool_results,
+                ..
+            }
+            | ThreadSnapshotHistory::Before {
+                preview_tool_results,
+                ..
+            } => *preview_tool_results == Some(true),
+        };
         let mut page = self
             .context
             .agent_runtime()
@@ -1846,6 +1920,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         let boundary = ThreadHistoryBoundary {
             has_older_turns: page.has_older_turns,
             oldest_turn_id: page.thread.turns.first().map(|turn| turn.turn_id.clone()),
+            tool_result_previews: preview
+                .then(|| preview_tool_results(&mut page.thread))
+                .filter(|items| !items.is_empty()),
         };
         self.fill_missing_reply_directories(&mut page.thread)?;
         Ok((page.thread, Some(boundary), page.pending_interactions))
@@ -2023,14 +2100,19 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             role.role_instructions(),
         )
         .expect("validated reviewer instructions");
-        let model = self
+        let selection = self
             .config
             .as_ref()
             .map(|config| config.read_snapshot())
             .transpose()
             .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
-            .and_then(|snapshot| snapshot.values.code_review_model)
-            .map_or(TurnModelSelection::Current, TurnModelSelection::Explicit);
+            .and_then(|snapshot| snapshot.values.code_review_model);
+        let (model, effort) = selection.map_or((TurnModelSelection::Current, None), |selection| {
+            (
+                TurnModelSelection::Explicit(selection.model),
+                selection.reasoning_effort,
+            )
+        });
         self.start_agent_turn_request(
             mutation,
             thread_id,
@@ -2041,8 +2123,61 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             ash_protocol::TurnKind::Review,
             TurnInstructionSelection::Product(instructions),
             model,
-            None,
+            effort,
         )
+    }
+
+    fn resolve_turn_model(
+        &self,
+        thread: &ThreadView,
+        selection: TurnModelSelection,
+        input: &[UserInput],
+    ) -> Result<
+        (
+            Option<ash_protocol::ModelRef>,
+            Option<ash_protocol::TurnModelRouting>,
+        ),
+        RpcError,
+    > {
+        use ash_protocol::TurnModelRouting;
+
+        let routing = match selection {
+            TurnModelSelection::Explicit(model) => return Ok((Some(model), None)),
+            TurnModelSelection::Current => None,
+            TurnModelSelection::Auto => {
+                match thread
+                    .turns
+                    .iter()
+                    .find(|turn| turn.kind == ash_protocol::TurnKind::Coding)
+                {
+                    Some(first) => {
+                        if let Some(model) = first.model.as_ref()
+                            && first.model_routing.is_some()
+                        {
+                            return Ok((Some(model.clone()), Some(TurnModelRouting::Reused)));
+                        }
+                    }
+                    None => {
+                        if let Some(model) = self
+                            .model_catalog
+                            .select_automatic_model(input)
+                            .map_err(core_error)?
+                        {
+                            return Ok((Some(model), Some(TurnModelRouting::Selected)));
+                        }
+                    }
+                }
+                Some(TurnModelRouting::Fallback)
+            }
+        };
+        let model = match thread.agent_configuration().and_then(|agent| agent.model()) {
+            Some(model) => Some(model.clone()),
+            None => self
+                .model_catalog
+                .configured_default()
+                .map_err(core_error)?,
+        };
+        Ok((model, routing))
     }
 
     pub(super) fn start_agent_turn_request(
@@ -2100,6 +2235,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                         tool_mode,
                         mode,
                         input: &input,
+                        automatic_model: matches!(&model_selection, TurnModelSelection::Auto),
                     },
                 )
                 .map_err(core_error)?
@@ -2170,19 +2306,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             return Err(RpcError::new(-32125, AppServerErrorName::FeatureDisabled));
         }
         self.context.refresh_analytics()?;
-        let model = match model_selection {
-            TurnModelSelection::Explicit(model) => Some(model),
-            TurnModelSelection::Current => match thread_before
-                .agent_configuration()
-                .and_then(|agent| agent.model())
-            {
-                Some(model) => Some(model.clone()),
-                None => self
-                    .model_catalog
-                    .configured_default()
-                    .map_err(core_error)?,
-            },
-        };
+        let (model, model_routing) =
+            self.resolve_turn_model(&thread_before, model_selection, &input)?;
         let base = thread_before
             .agent_configuration()
             .and_then(|agent| agent.base_instructions.clone())
@@ -2255,6 +2380,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             command_id: mutation.command_id,
             expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
             model,
+            model_routing,
             reasoning_effort,
             advisor,
             kind,
@@ -2795,7 +2921,7 @@ fn history_window(
     history: ThreadSnapshotHistory,
 ) -> Result<thread_store::ThreadHistoryWindow, RpcError> {
     let limit = match &history {
-        ThreadSnapshotHistory::Latest { turn_limit }
+        ThreadSnapshotHistory::Latest { turn_limit, .. }
         | ThreadSnapshotHistory::Before { turn_limit, .. } => *turn_limit,
     };
     if limit == 0 || limit > MAX_THREAD_SNAPSHOT_TURNS {
@@ -2812,6 +2938,121 @@ fn history_window(
                 turn_limit,
             }
         }
+    })
+}
+
+const TOOL_RESULT_PREVIEW_BYTES: usize = 4 * 1024;
+const TOOL_RESULT_PAGE_BYTES: usize = 64 * 1024;
+
+fn clip_text(text: &mut String, budget: usize) -> bool {
+    if text.len() <= budget {
+        return false;
+    }
+    *text = text[..text.floor_char_boundary(budget)].to_owned();
+    true
+}
+
+fn preview_tool_results(thread: &mut ash_protocol::Thread) -> Vec<ToolResultPreview> {
+    let mut previews = Vec::new();
+    for turn in &mut thread.turns {
+        // Advisor and interactive shell results carry structured presentation data.
+        // An MCP App consumes its original tool result through the app bridge.
+        let calls = turn
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ThreadItem::ToolCall {
+                    name, tool_call_id, ..
+                } if !matches!(name.as_str(), "advisor" | "shell-session") => {
+                    Some(tool_call_id.clone())
+                }
+                _ => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        for (ordinal, item) in turn.items.iter_mut().enumerate() {
+            let ThreadItem::ToolResult {
+                item_id,
+                turn_id,
+                tool_call_id,
+                text,
+                content,
+                ..
+            } = item
+            else {
+                continue;
+            };
+            if !calls.contains(tool_call_id) || content.iter().flatten().any(|part| matches!(
+                part, ContentPart::Artifact { artifact } if matches!(artifact.source, ash_protocol::ToolOutputArtifactSource::McpApp { .. })
+            )) {
+                continue;
+            }
+            let Ok(item_ordinal) = u32::try_from(ordinal) else {
+                continue;
+            };
+            let mut budget = TOOL_RESULT_PREVIEW_BYTES;
+            let mut has_parts = false;
+            let mut parts_clipped = false;
+            for part in content.iter_mut().flatten() {
+                if let ContentPart::Text(text) = part {
+                    if has_parts {
+                        budget = budget.saturating_sub(1);
+                    }
+                    has_parts = true;
+                    if clip_text(text, budget) {
+                        parts_clipped = true;
+                        budget = 0;
+                    } else {
+                        budget -= text.len();
+                    }
+                }
+            }
+            let text_clipped = clip_text(text, TOOL_RESULT_PREVIEW_BYTES);
+            if parts_clipped || (!has_parts && text_clipped) {
+                previews.push(ToolResultPreview {
+                    turn_id: turn_id.clone(),
+                    item_id: item_id.clone(),
+                    item_ordinal,
+                });
+            }
+        }
+    }
+    previews
+}
+
+/// Page the same literal text that the tool Result disclosure displays. Part indexes in
+/// the original Item remain unchanged, including media and interactive app coordinates.
+fn tool_result_text_page(
+    text: &str,
+    content: &[ContentPart],
+    offset: u64,
+) -> Option<ToolResultTextReadResult> {
+    let mut skip = usize::try_from(offset).ok()?;
+    let mut text_parts = content.iter().filter_map(|part| match part {
+        ContentPart::Text(text) => Some(text.as_str()),
+        _ => None,
+    });
+    let first = text_parts.next().unwrap_or(text);
+    let segments = std::iter::once(first).chain(text_parts.flat_map(|text| ["\n", text]));
+    let mut page = String::new();
+    for segment in segments {
+        if skip >= segment.len() {
+            skip -= segment.len();
+            continue;
+        }
+        let remaining = segment.get(skip..)?;
+        skip = 0;
+        let end = remaining.floor_char_boundary(TOOL_RESULT_PAGE_BYTES - page.len());
+        page.push_str(&remaining[..end]);
+        if end < remaining.len() {
+            return Some(ToolResultTextReadResult {
+                next_offset: Some(offset + page.len() as u64),
+                text: page,
+            });
+        }
+    }
+    (skip == 0).then_some(ToolResultTextReadResult {
+        text: page,
+        next_offset: None,
     })
 }
 

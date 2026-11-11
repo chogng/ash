@@ -1,9 +1,9 @@
 ---
-description: Design-system size tokens (spacing, corner radius, font size, lxicon size, stroke). Use when writing or editing CSS to size, space, or round UI — prefer the `--ash-*` token vars over hardcoded px values.
+description: Design-system size and text color tokens. Use when writing or editing CSS for spacing, corner radius, typography, icons, stroke, or text foreground.
 applyTo: src/ash/**/*.css
 ---
 
-# Design tokens for sizing, spacing & radii
+# Design tokens for CSS
 
 IDE and Agent Window share token registration, CSS variable naming, and the default values below. Agent Window-only assignments and overrides belong to [Sessions style](../../src/ash/sessions/STYLE.md); unoverridden rules keep the shared defaults. Reuse existing tokens for the same semantic role, and apply window-specific values in the owning window or component's scope instead of changing shared defaults. A window-specific assignment does not by itself require a separate token namespace.
 
@@ -12,6 +12,17 @@ IDE and Agent Window share token registration, CSS variable naming, and the defa
 Ash ships a design-system **size** ramp. These tokens are registered in [baseSizes.ts](../../src/ash/platform/theme/common/sizes/baseSizes.ts) and emitted as `--ash-*` CSS variables. **When generating or editing CSS, use the token variable instead of a raw `px` value** wherever a token exists for that value. This keeps new UI visually consistent with the design system.
 
 > Every `--ash-*` size var you reference must already exist in [ash-known-variables.json](../../build/lib/stylelint/ash-known-variables.json) (`"sizes"` array, alphabetically sorted) or stylelint/hygiene fails. Adding a *new* token means adding it both in `baseSizes.ts` and that JSON file.
+> List component-owned CSS variables referenced through `var()` in the `"others"` array.
+
+## Text foreground
+
+| CSS variable | Use |
+| --- | --- |
+| `--ash-foreground` | Titles, primary labels, and main content. |
+| `--ash-description-foreground` | Supporting text that users should read, including help beneath labels, instruction previews, status details, and empty-state guidance. |
+| `--ash-muted-foreground` | Low-emphasis metadata or secondary UI details. Check contrast against the surface before using it for readable text. |
+
+Set the description foreground explicitly to give supporting text less visual emphasis than its heading. Choose the font size for legibility and content density. If a surface needs a lighter description color, derive it from theme tokens in the owning component and check normal-size text for at least 4.5:1 contrast against the actual background. Preserve the high-contrast theme's foreground.
 
 ## Rows and toolbar actions
 

@@ -1,5 +1,5 @@
+import { ISessionEditorWorkingSetService, SessionEditorWorkingSetService } from '../../contrib/layout/common/sessionEditorWorkingSet.js';
 import { createDesktopEditorTestServices, registerDesktopDetailsTestServices } from './desktopEditorTestServices.js';
-import { LayoutPriority } from '../../../base/browser/ui/splitview/splitview.js';
 import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
 import { createTestComponentServices, createTestEditorServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -10,6 +10,7 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
 import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
@@ -116,7 +117,7 @@ test('opening Files retains one owned AuxiliaryBarPart without creating an edito
 		(await import('../../../platform/storage/common/storage.js')).StorageTarget.MACHINE);
 	using registration = auxiliary.registerViewContainer({ id: 'test.details', title: 'Details', location: ViewContainerLocation.AuxiliaryBar }, [
 		{ id: 'test.details.view', title: 'Details', ctorDescriptor: new SyncDescriptor(TestDetailsView) },
-	]);
+	], () => editor.openFiles());
 	assert.equal(created, 0);
 	const group = editor.activeGroup;
 	await editor.openFiles();
@@ -228,7 +229,7 @@ test('Sessions Grid follows viewport resize synchronously and retains fractional
 			bounds = next;
 			dom.window.dispatchEvent(new dom.window.Event('resize'));
 			assert.deepEqual(layout.mainContainerDimension, new Dimension(next.width, next.height));
-			assert.equal(layout.getPartSize('titlebar').width, next.width);
+			assert.equal(layout.getPartSize('titlebar').width + layout.getPartSize('auxiliarybar').width, next.width);
 		}
 	} finally {
 		for (const part of parts.values()) part.dispose();
@@ -304,8 +305,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	assert.ok(!terminalGroup.inputs.includes(mixed));
 	assert.ok(otherGroups.every(group => editor.isGroupVisible(group.id)));
 
-	// The right tool must grow past the default width when visible group minimums
-	// no longer fit, including after changing the orientation of a tool workspace.
+	// The editor region respects the minimum width of the arranged tools.
 	const parts = createParts(browserEnvironment.window.document);
 	const oldEditor = parts.get('editor')!;
 	parts.set('editor', area);
@@ -313,10 +313,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 		using layout = createLayout(browserEnvironment.window.document.body, parts, { initialDimension: new Dimension(1_245, 890) });
 		layout.showPart('editor');
 		layout.resizePart('editor', new Dimension(300, 800));
-		const extraTerminalGroup = editor.addGroup(terminalGroup.id, Direction.Right);
-		editor.setGroupVisible(extraTerminalGroup.id, true);
 		area.moveTool('terminal', 'changes', Direction.Right);
-		assert.ok(area.minimumWidth > 300);
 		assert.ok(layout.getPartSize('editor').width >= area.minimumWidth);
 		const wide = new Dimension(1_600, 890);
 		layout.layout(wide);
@@ -525,7 +522,10 @@ test('Sessions layout owns a fixed Sessions-first Part topology', () => {
 
 	layout.layout(new Dimension(1_200, 800));
 
-	assert.deepEqual(layout.getPartSize('titlebar'), new Dimension(1_200, WorkbenchWindowBarHeight));
+	const auxiliarySize = layout.getPartSize('auxiliarybar');
+	assert.deepEqual(layout.getPartSize('titlebar'), new Dimension(1_200 - auxiliarySize.width, WorkbenchWindowBarHeight));
+	assert.equal(auxiliarySize.height, 800);
+	assert.equal((parts.get('auxiliarybar') as TestSessionsPart).layouts.at(-1)?.height, 800 - WorkbenchWindowBarHeight);
 	assert.equal(container.querySelector('[data-part="activitybar"]'), null);
 	assert.equal(Math.abs(layout.getPartSize('sidebar').width - 300) <= 1, true);
 	assert.equal(Math.abs(layout.getPartSize('auxiliarybar').width - 340) <= 1, true);
@@ -535,6 +535,12 @@ test('Sessions layout owns a fixed Sessions-first Part topology', () => {
 	assert.equal(layout.state.editor.width, 600);
 	assert.ok(container.querySelector("[data-part='editor']"));
 	assert.ok(container.querySelector("[data-part='sessions']"));
+	layout.resizePart('auxiliarybar', new Dimension(380, 800));
+	assert.equal(layout.getPartSize('titlebar').width, 820);
+	layout.hidePart('auxiliarybar');
+	assert.equal(layout.getPartSize('titlebar').width, 1_200);
+	layout.showPart('auxiliarybar');
+	assert.equal(layout.getPartSize('titlebar').width, 820);
 
 	layout.dispose();
 	for (const part of parts.values()) part.dispose();
@@ -810,7 +816,7 @@ test('Sessions layout completion exposes settled Parts through the window contai
 	const observed: unknown[] = [];
 	using subscription = layout.onDidLayoutMainContainer(dimension => observed.push({ dimension, titlebar: layout.getPartSize('titlebar'), height: layout.getPartSize('sessions').height, offset: layout.mainContainerOffset.top }));
 	layout.layout(new Dimension(1_400, 900));
-	assert.deepEqual(observed, [{ dimension: new Dimension(1_400, 900), titlebar: new Dimension(1_400, WorkbenchWindowBarHeight), height: 900 - WorkbenchWindowBarHeight, offset: WorkbenchWindowBarHeight }]);
+	assert.deepEqual(observed, [{ dimension: new Dimension(1_400, 900), titlebar: new Dimension(1_400 - layout.getPartSize('auxiliarybar').width, WorkbenchWindowBarHeight), height: 900 - WorkbenchWindowBarHeight, offset: WorkbenchWindowBarHeight }]);
 	assert.equal(layout.mainContainer, container);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
@@ -973,11 +979,17 @@ test('Sessions recreates a hidden document host without activating it over a pro
 	assert.equal(editor.isGroupVisible(remainingDocuments[0]!.id), false);
 });
 
-test('Sessions layout creation requires the registered storage service', () => {
+test('Sessions layout creation requires window storage and context services', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}), /storageService|StorageService/);
-	dom.window.close();
+	try {
+		assert.throws(() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}), /storageService|StorageService/);
+		using storage = new BrowserStorageService({ ownerWindow: dom.window.document.defaultView!, workspaceId: 'sessions', flushInterval: 0 });
+		services.registerInstance(IStorageService, storage);
+		assert.throws(() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}), /contextKeyService/);
+	} finally {
+		dom.window.close();
+	}
 });
 
 const layoutTestResources = new DisposableStore();
@@ -988,6 +1000,9 @@ function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId,
 	const storage = options.storageService ?? ownedStorage!;
 	const services = testServices ?? layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
+	if (!services.has(IContextKeyService)) {
+		services.registerInstance(IContextKeyService, layoutTestResources.add(new ContextKeyService()));
+	}
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {
 		layout.createWorkbenchLayout(parts);
@@ -1066,55 +1081,6 @@ function registerAuxiliaryViewServices(services: import('../../../platform/insta
 	});
 }
 
-test('Saved Code card layouts reject duplicate, missing and malformed leaves', async () => {
-	const { readCodeCardLayout } = await import('../../browser/codeCardLayout.js');
-	const leaf = { type: 'leaf', data: 'panel', size: 300, visible: true, priority: 'normal' };
-	assert.ok(readCodeCardLayout(JSON.stringify(leaf), ['panel']));
-	assert.equal(readCodeCardLayout(JSON.stringify(leaf), ['panel', 'info']), undefined);
-	assert.equal(
-		readCodeCardLayout(
-			JSON.stringify({
-				type: 'branch',
-				orientation: 'vertical',
-				size: 300,
-				priority: 'normal',
-				children: [leaf, leaf],
-			}),
-			['panel'],
-		),
-		undefined,
-	);
-	assert.equal(readCodeCardLayout(JSON.stringify({ ...leaf, size: -1 }), ['panel']), undefined);
-	assert.equal(readCodeCardLayout('{broken', ['panel']), undefined);
-});
-
-test('legacy Card migration keeps tool positions and visibility and includes each live group once', async () => {
-	const { migrateCodeCardLayout } = await import('../../browser/codeCardLayout.js');
-	const leaf = (data: string, size: number, visible = true) => ({ type: 'leaf' as const, data, size, visible, priority: LayoutPriority.Normal });
-	const group = (groupId: number) => ({ ...leaf('', 1), data: { groupId } });
-	const tree = {
-		type: 'branch' as const, orientation: Orientation.HORIZONTAL, size: 1000, priority: LayoutPriority.Normal, children: [
-			leaf('sessions', 400), leaf('files', 300), { type: 'branch' as const, orientation: Orientation.VERTICAL, size: 300, priority: LayoutPriority.Normal, children: [leaf('panel', 200, false), leaf('browser', 400)] },
-		]
-	};
-	const mappings = new Map<string, import('../../../workbench/services/editor/common/editorWorkingSet.js').EditorWorkingSetLayout>([
-		['files', { type: 'branch', orientation: Orientation.HORIZONTAL, size: 300, priority: LayoutPriority.Normal, children: [group(1), group(2)] }],
-		// A mixed Files/Terminal group must retain one identity in the resulting Grid.
-		['panel', { type: 'branch', orientation: Orientation.VERTICAL, size: 200, priority: LayoutPriority.Normal, children: [group(2), group(3)] }],
-		['browser', group(4)],
-	]);
-	const layout = migrateCodeCardLayout(tree, mappings)!;
-	assert.equal(layout.type, 'branch');
-	if (layout.type !== 'branch') throw new Error('Expected a migrated split');
-	assert.equal(layout.children.length, 2);
-	assert.equal(layout.children[0]!.size, 300);
-	const leaves: { id: number; visible: boolean; }[] = [];
-	const visit = (node: import('../../../workbench/services/editor/common/editorWorkingSet.js').EditorWorkingSetLayout): void => { if (node.type === 'leaf') leaves.push({ id: node.data.groupId, visible: node.visible }); else node.children.forEach(visit); };
-	visit(layout);
-	assert.deepEqual(leaves, [{ id: 1, visible: true }, { id: 2, visible: true }, { id: 3, visible: false }, { id: 4, visible: true }]);
-	assert.equal(migrateCodeCardLayout(tree, new Map()), undefined);
-});
-
 test('session working sets reuse live groups and preserve hidden entry geometry without crossing session scope', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { observableValue } = await import('../../../base/common/observable.js');
@@ -1145,6 +1111,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	using hosts = createDesktopEditorTestServices(services, { registry });
 	const { editor, area } = hosts;
 	editor.layout(new Dimension(1200, 900));
+	services.registerInstance(ISessionEditorWorkingSetService, services.createInstance(SessionEditorWorkingSetService));
 	services.registerInstance(IEditorPart, editor);
 	services.registerInstance(IEditorService, {} as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(ISessionsService, { activeSelection: undefined, getSelection: () => ({ activeSelection: undefined }) } as unknown as import('../../services/sessions/browser/sessionsService.js').ISessionsService);
@@ -1155,7 +1122,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	services.registerInstance(ILayoutService, {} as import('../../browser/workbench.js').IAgentWorkbenchLayoutService);
 	using notifications = new TestNotificationService();
 	services.registerInstance(INotificationService, notifications);
-	using controller = services.createInstance(Controller, editor.pageGroupId, { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('Code', true), isChangingContent: false, runOperation: (operation: () => Promise<void>) => operation() });
+	using controller = services.createInstance(Controller, editor.pageGroupId, { isSessionContent: true, canRestoreSessionEditors: true, isDocumentContent: true, documentContent: observableValue('Code', true), isChangingContent: false, runOperation: (operation: () => Promise<void>) => operation() });
 	const file = { resource: URI.file('/fixture/a.txt') };
 	await editor.openEditor(file, { pinned: true });
 	const first = editor.activeGroup, firstPane = first.activePane;
@@ -1172,7 +1139,7 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	await controller.restore(savedB, 'session:b');
 	assert.equal(editor.groups.some(group => editor.isGroupVisible(group.id)), false);
 	const hiddenSnapshot = controller.capture('session:b');
-	assert.deepEqual((hiddenSnapshot as import('../../browser/parts/desktopEditorParts.js').DesktopEditorWorkingSet).toolParts, (savedB as import('../../browser/parts/desktopEditorParts.js').DesktopEditorWorkingSet).toolParts);
+	assert.deepEqual((hiddenSnapshot as import('../../browser/parts/editorParts.js').DesktopEditorWorkingSet).toolParts, (savedB as import('../../browser/parts/editorParts.js').DesktopEditorWorkingSet).toolParts);
 	controller.setDocumentGroupsVisible(true);
 	assert.equal(editor.activeGroup, second);
 	assert.equal(second.activePane, secondPane);

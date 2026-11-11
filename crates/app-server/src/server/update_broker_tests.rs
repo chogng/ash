@@ -581,6 +581,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
             instructions: None,
             directory: None,
             model: None,
+            model_routing: None,
             reasoning_effort: None,
             advisor: None,
             tool_profile: None,

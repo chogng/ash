@@ -189,6 +189,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	if (!services.has(IViewsService)) services.registerInstance(IViewsService, {
 		getViewProgressIndicator: () => undefined,
 		registerView() { throw new Error('This fixture does not host an editor view'); },
+		registerViewOpener() { throw new Error('This fixture does not host an editor view'); },
 		onDidChangeViewContainerVisibility: Event.None, onDidChangeViewVisibility: Event.None, onDidChangeFocusedView: Event.None,
 		isViewContainerVisible: () => false, isViewContainerActive: () => false,
 		openViewContainer: async () => null, closeViewContainer: () => { },

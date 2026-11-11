@@ -1,5 +1,61 @@
 import { expect, test } from '@playwright/test';
 
+test('Chat renders language-specific Markdown diffs through completion, resize and correction', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/chatTranscript.html?locale=zh-CN');
+	const diffText = [
+		'diff --git a/app.ts b/app.ts', 'index a1b2c3d..b2c3d4e 100644',
+		'--- a/app.ts', '+++ b/app.ts', '@@ -1,2 +1,2 @@',
+		' export function answer() {', '-  return 41;', '+  return 42;',
+	].join('\n');
+	const source = ['```diff:typescript', diffText, '```'].join('\n');
+	const render = (value: string, complete: boolean) => page.evaluate(({ value, complete }) => {
+		window.ashChatTranscriptIntegration.stream(value, complete);
+	}, { value, complete });
+	await render(source, false);
+	const comparison = page.getByRole('region', { name: '差异编辑器：原始文件 与 修改后的文件' });
+	await expect(comparison).toHaveCount(0);
+	await expect(page.locator('.ash-chat-code-block')).toHaveCount(1);
+	await page.locator('main').first().evaluate(element => element.style.width = '1100px');
+	await render(source, true);
+	await expect(comparison).toBeVisible();
+	await expect(comparison.locator('.original .view-lines')).toContainText('return 41;');
+	await expect(comparison.locator('.modified .view-lines')).toContainText('return 42;');
+	await expect(comparison).not.toContainText('diff --git');
+	await page.locator('main').first().evaluate(element => element.style.width = '420px');
+	await expect(comparison).toHaveClass(/\binline-view\b/u);
+	const modified = comparison.locator('.modified .stanza-editor-input');
+	await modified.focus();
+	await page.keyboard.type('changed');
+	await expect(comparison.locator('.modified .view-lines')).not.toContainText('changed');
+	await render(source.replace('return 42;', 'return 43;'), true);
+	await expect(comparison.locator('.modified .view-lines')).toContainText('return 43;');
+	await expect(modified).toBeFocused();
+	await render(source.replace('diff:typescript', 'diff'), true);
+	await expect(comparison).toHaveCount(0);
+	await expect(page.locator('.ash-chat-code-block')).toHaveCount(1);
+	expect(errors).toEqual([]);
+});
+
+test('Chat Markdown diffs keep each patched file in its own comparison', async ({ page }) => {
+	await page.goto('/chatTranscript.html?locale=zh-CN');
+	const patch = ['```diff:typescript',
+		'diff --git a/first.ts b/first.ts', '--- a/first.ts', '+++ b/first.ts', '@@ -1 +1 @@', '-const first = 1;', '+const first = 2;',
+		'diff --git a/second.ts b/second.ts', '--- a/second.ts', '+++ b/second.ts', '@@ -1 +1 @@', '-const second = 3;', '+const second = 4;',
+		'```',
+	].join('\n');
+	await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), patch);
+	const picker = page.getByRole('combobox', { name: '对比中的文件' });
+	const comparison = page.locator('.ash-chat-markdown-diff .modified .view-lines');
+	await expect(picker.locator('option')).toHaveText(['first.ts', 'second.ts']);
+	await expect(comparison).toContainText('const first = 2;');
+	await expect(comparison).not.toContainText('second');
+	await picker.selectOption({ label: 'second.ts' });
+	await expect(comparison).toContainText('const second = 4;');
+	await expect(comparison).not.toContainText('first');
+});
+
 test('Chat bounded history response comparison uses the same decoded content and visible endpoint', async ({ page }, testInfo) => {
 	test.setTimeout(120_000);
 	await page.goto('/chatTranscript.html');
@@ -155,6 +211,58 @@ test('removing an attachment cancels its read and rejects a late media result', 
 	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().aborted)).toBe(true);
 	await page.evaluate(() => window.ashChatTranscriptIntegration.finishMedia());
 	await expect(page.locator('.ash-chat-media')).toHaveCount(0);
+});
+
+test('long history virtualizes around a live MCP App and retains visited image results', async ({ page }) => {
+	await page.goto('/chatTranscript.html?sessions');
+	await page.evaluate(() => window.ashChatTranscriptIntegration.showLongCodeHistory(64, true, true));
+	const chat = page.locator('#app-chat');
+	await expect(chat.locator('.ash-chat-transcript-virtualized')).toHaveCount(1);
+	const rows = chat.locator('article[data-item-id]');
+	const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+	const bottom = () => viewport.evaluate(node => { node.scrollTop = node.scrollHeight; });
+	await bottom();
+	const gallery = chat.locator('.ash-chat-generated-image-result img');
+	await expect.poll(() => gallery.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(2);
+	const original = await gallery.elementHandle();
+	const tool = chat.locator('.ash-chat-tool-invocation').filter({ has: page.locator('.ash-chat-mcp-app') });
+	await tool.locator('summary').first().click();
+	await tool.getByRole('button', { name: 'Open interactive view', exact: true }).click();
+	const frame = page.frameLocator('iframe[title="Interactive MCP App"]').frameLocator('iframe');
+	await frame.getByRole('button', { name: 'Increment', exact: true }).click();
+	await expect(frame.locator('#count')).toHaveText('1');
+	await viewport.evaluate(node => { node.scrollTop = 0; });
+	await expect(gallery).toHaveCount(0);
+	await expect(frame.locator('#count')).toHaveText('1');
+	expect(await rows.count()).toBeLessThan(48);
+	await bottom();
+	await expect(gallery).toBeVisible();
+	expect(await gallery.evaluate((image, old) => image === old, original)).toBe(true);
+	await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests.filter(request => (request as { itemId?: string; }).itemId === 'long-image-result').length)).toBe(1);
+	await tool.getByRole('button', { name: 'Close interactive view', exact: true }).click();
+	await expect(tool.getByRole('button', { name: 'Open interactive view', exact: true })).toBeFocused();
+});
+
+test('streamed CJK Markdown matches a full render after append, completion and correction', async ({ page }) => {
+	await page.goto('/chatTranscript.html?sessions&locale=zh-CN');
+	const prefix = 'Stable **bold** [link](https://example.org) text. '.repeat(36);
+	const opening = `${prefix}这是**「重点`;
+	const linked = `${opening}」**内容。详情见 https://example.com`;
+	const completed = `${linked}。下一句。`;
+	const corrected = completed.replace('「重点」', '「修正」').replace('https://example.com', 'https://example.net');
+	const body = page.locator('[data-item-id="stream"] .ash-chat-markdown-part');
+	for (const [value, complete, emphasized, url] of [
+		[opening, false, undefined, undefined],
+		[linked, false, '「重点」', 'https://example.com'],
+		[completed, true, '「重点」', 'https://example.com'],
+		[corrected, true, '「修正」', 'https://example.net'],
+	] as const) {
+		const { actual, expected } = await page.evaluate(({ value, complete }) => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, complete), { value, complete });
+		expect(actual).toBe(expected);
+		if (emphasized) await expect(body.locator('strong').last()).toHaveText(emphasized);
+		if (url) await expect(body.getByRole('link', { name: url, exact: true })).toHaveAttribute('href', url);
+	}
+	await expect(body).toContainText('https://example.net。下一句。');
 });
 
 test('streaming Markdown controlled rendering comparison', async ({ page }, testInfo) => {
@@ -403,6 +511,15 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.appState().messages)).toContainEqual({ jsonrpc: '2.0', id: 'ash-teardown', result: {} });
 		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 		await expect(part).toHaveCount(0);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showApp());
+		const summary = page.locator('.ash-chat-tool-invocation > summary');
+		if (await summary.evaluate(element => !(element.parentElement as HTMLDetailsElement).open)) await summary.click();
+		const restoredHeight = await open.evaluate(button => {
+			(button as HTMLButtonElement).click();
+			return button.parentElement!.querySelector<HTMLElement>('.ash-chat-mcp-app-viewport')!.style.height;
+		});
+		expect(restoredHeight).toBe('240px');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 		expect(errors).toEqual([]);
 	});
 }

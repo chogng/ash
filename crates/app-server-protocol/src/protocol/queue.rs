@@ -26,6 +26,9 @@ pub struct QueueEnqueueParams {
     #[ts(optional = nullable)]
     pub model: Option<ash_protocol::ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub model_routing: Option<ash_protocol::ModelRoutingMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

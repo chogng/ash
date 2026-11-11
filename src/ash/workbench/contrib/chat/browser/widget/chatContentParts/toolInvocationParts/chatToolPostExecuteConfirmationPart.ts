@@ -4,14 +4,17 @@ import type { AgentResponse, ToolResultReviewRequest } from '../../../../../../.
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../../../../nls.js';
-import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
+import { ChatToolOutputContentSubPart } from '../chatToolOutputContentSubPart.js';
 import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
 
 /** Reviews disclosure of a captured result. Reply authority stays with the input's exact offer. */
 export class ChatToolPostExecuteConfirmationPart extends BaseChatToolInvocationSubPart {
+	private readonly preview: ChatToolOutputContentSubPart;
+	private visible = true;
+
 	constructor(
 		document: Document,
-		request: ToolResultReviewRequest,
+		private readonly request: ToolResultReviewRequest,
 		resolve: (response: AgentResponse) => Promise<void>,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -34,11 +37,10 @@ export class ChatToolPostExecuteConfirmationPart extends BaseChatToolInvocationS
 		}).join('\n\n');
 		preview.hidden = !preview.textContent;
 		this.domNode.append(reason, explanation, preview);
-		if (request.review.content.some(part => part.type !== 'text' && part.type !== 'artifact')) {
-			const media = this._register(instantiation.createInstance(ChatAttachmentsContentPart, { ownerDocument: document, variables: request.review.content }));
-			this._register(media.onDidChangeHeight(() => this.changedHeight.fire()));
-			this.domNode.append(media.domNode);
-		}
+		this.preview = this._register(instantiation.createInstance(ChatToolOutputContentSubPart, document));
+		this._register(this.preview.onDidChangeHeight(() => this.changedHeight.fire()));
+		this.preview.render(request.review.content);
+		this.domNode.append(this.preview.domNode);
 		const actions = h(document, 'div');
 		actions.className = 'ash-chat-interaction-actions';
 		for (const decision of ['skip', 'share'] as const) {
@@ -50,5 +52,13 @@ export class ChatToolPostExecuteConfirmationPart extends BaseChatToolInvocationS
 			}));
 		}
 		this.domNode.append(actions);
+	}
+
+	setVisible(visible: boolean): void {
+		if (this.visible === visible) return;
+		this.visible = visible;
+		this.preview.setVisible(visible);
+		if (visible) this.preview.render(this.request.review.content);
+		else this.preview.clearMedia();
 	}
 }

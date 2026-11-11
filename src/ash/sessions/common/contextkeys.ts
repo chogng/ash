@@ -9,6 +9,8 @@ export const SessionsWorkspaceModeContext = new RawContextKey<'chat' | 'code'>('
 /** Whether the visible entry allows the title bar workspace mode control. */
 export const SessionsEntryShowsWorkspaceModeControlContext = new RawContextKey<boolean>('sessions.entryShowsWorkspaceModeControl', true);
 
+export const SessionsEntryDetailsContext = new RawContextKey<string | undefined>('sessions.entryDetails', undefined);
+
 /** The Code conversation page is active. Other pages can share its workspace mode. */
 export const CodeConversationPageContext = new RawContextKey<boolean>('sessions.activity.codeSelected', false);
 

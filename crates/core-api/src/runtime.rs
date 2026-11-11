@@ -75,6 +75,7 @@ pub struct SubmitTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub model_routing: Option<ash_protocol::TurnModelRouting>,
     pub reasoning_effort: Option<ash_protocol::ReasoningEffort>,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
@@ -122,6 +123,7 @@ pub enum SubmittedCommand<'a> {
         mode: ash_protocol::CollaborationMode,
         input: &'a [UserInput],
         tool_mode: ToolMode,
+        automatic_model: bool,
     },
     Input {
         input: &'a [UserInput],
@@ -135,6 +137,7 @@ pub enum AcceptedCommand<'a> {
         input: &'a [UserInput],
         tool_mode: ToolMode,
         approval_mode: ApprovalMode,
+        automatic_model: bool,
     },
     Steer {
         input: &'a [UserInput],
@@ -166,6 +169,13 @@ pub trait AgentRuntime {
         thread_id: &ThreadId,
         window: &ash_thread_store::ThreadHistoryWindow,
     ) -> Result<ash_thread_store::ThreadHistoryPage, CoreError>;
+    fn read_history_item(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        ordinal: u32,
+    ) -> Result<Option<ash_protocol::ThreadItem>, CoreError>;
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
     fn read_session(&self, session_id: &SessionId) -> Result<SessionView, CoreError>;
     fn list_sessions(&self) -> Result<Vec<ash_protocol::Session>, CoreError>;

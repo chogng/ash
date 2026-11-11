@@ -16,17 +16,3 @@
 	height: 100%;
 	font-family: var(--ash-font-family-monospace);
 }
-
-.ash-chat-generated-image-result {
-	min-width: 0;
-}
-
-.ash-chat-generated-image-result > .ash-chat-media-attachments {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size120);
-}
-
-.ash-chat-generated-image-result .ash-chat-media {
-	max-width: 100%;
-}

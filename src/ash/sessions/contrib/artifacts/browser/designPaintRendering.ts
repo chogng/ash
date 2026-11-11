@@ -1,6 +1,6 @@
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { designGradientPosition, sampleDesignPaint, type DesignPaint } from '../common/model/designPaint.js';
-import type { DesignShape } from '../common/model/document.js';
+import type { DesignShape } from '../common/model/designDocument.js';
 const ns = 'http://www.w3.org/2000/svg';
 interface PaintBounds {
 	x: number;

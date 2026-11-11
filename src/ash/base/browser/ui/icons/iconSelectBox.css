@@ -46,6 +46,9 @@
 .ash-icon-select-item:hover {
 	background: var(--ash-list-hoverBackground);
 }
+.ash-icon-select-item.selected {
+	border-color: var(--ash-icon-select-selected-border, transparent);
+}
 .ash-icon-select-item.focused {
 	background: var(--ash-list-activeSelectionBackground);
 	color: var(--ash-list-activeSelectionForeground);

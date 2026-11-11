@@ -5,6 +5,11 @@ export interface ModelRef {
 	readonly model: string;
 }
 
+/** A model override for a task, with an optional explicit reasoning effort. */
+export interface TaskModelSelection extends ModelRef {
+	readonly reasoningEffort?: ModelReasoningEffort | null;
+}
+
 /** Backend admission evidence for the next request on this host. */
 export type ModelExecutionAvailability = 'ready' | 'unknown' | 'retired' | 'modelUnavailable' | 'connectionUnavailable';
 
@@ -187,10 +192,10 @@ export interface AgentModelDefaults {
 	readonly commitMessageModel: ModelRef | null;
 	readonly commitMessageEnabled: boolean;
 	/** Null follows the reviewing Thread's current model. */
-	readonly codeReviewModel: ModelRef | null;
+	readonly codeReviewModel: TaskModelSelection | null;
 	/** Null selects a recommended model on the conversation provider. */
-	readonly threadTitleModel?: ModelRef | null;
-	readonly threadRecapModel?: ModelRef | null;
+	readonly threadTitleModel?: TaskModelSelection | null;
+	readonly threadRecapModel?: TaskModelSelection | null;
 	readonly threadRecapEnabled?: boolean;
 	readonly revision: number;
 	readonly model: ModelRef | null;
@@ -200,9 +205,9 @@ export interface AgentModelDefaults {
 export interface AgentModelDefaultsUpdate {
 	readonly commitMessageModel?: ModelRef | null;
 	readonly commitMessageEnabled?: boolean;
-	readonly codeReviewModel?: ModelRef | null;
-	readonly threadTitleModel?: ModelRef | null;
-	readonly threadRecapModel?: ModelRef | null;
+	readonly codeReviewModel?: TaskModelSelection | null;
+	readonly threadTitleModel?: TaskModelSelection | null;
+	readonly threadRecapModel?: TaskModelSelection | null;
 	readonly threadRecapEnabled?: boolean;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;

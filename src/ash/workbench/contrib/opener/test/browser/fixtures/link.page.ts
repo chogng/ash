@@ -11,7 +11,6 @@ import { ILogService, NullLoggerService } from '../../../../../../platform/log/c
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../../../../../test/fixtures/browser/notificationFixture.js';
 import { openChatMarkdownLink } from '../../../../chat/browser/widget/chatWidget.js';
-import { openChatMarkdownLink as openCoworkMarkdownLink } from '../../../../../../sessions/contrib/cowork/browser/widget/coworkWidget.js';
 import '../../../../commands/common/commands.contribution.js';
 import '../../../../../../editor/editor.all.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -59,7 +58,7 @@ declare global {
 	interface Window {
 		ashLinkIntegration: {
 			readonly commandCalls: readonly unknown[];
-			commandLink(trusted: boolean, failure?: boolean, cowork?: boolean): void;
+			commandLink(trusted: boolean, failure?: boolean): void;
 			readonly opened: readonly string[];
 			readonly customOpened: readonly string[];
 			readonly files: readonly { resource: string; line: number; column: number; }[];
@@ -177,15 +176,14 @@ resources.add(CommandsRegistry.registerMany([
 ]));
 window.ashLinkIntegration = {
 	opened, customOpened, files, contributed, settingsRevealed, commandCalls,
-	commandLink: (trusted, failure, cowork) => {
-		const router = cowork ? openCoworkMarkdownLink : openChatMarkdownLink;
+	commandLink: (trusted, failure) => {
 		const commands: unknown[] = [{ command: 'test.link.first', args: { text: '%20 中文' } }];
 		if (failure) commands.push('test.link.missing');
 		commands.push('test.link.second');
 		const href = `command:runCommands?${encodeURIComponent(JSON.stringify({ commands }))}`;
 		const rendered = resources.add(renderMarkdown({ value: `[Run linked commands](${href})`, isTrusted: trusted }, {
 			ownerDocument: document,
-			actionHandler: target => { void router(target, opener, undefined).catch(error => { throw error; }); }
+			actionHandler: target => { void openChatMarkdownLink(target, opener, undefined).catch(error => { throw error; }); }
 		}));
 		commandHost.replaceChildren(rendered.element);
 	},

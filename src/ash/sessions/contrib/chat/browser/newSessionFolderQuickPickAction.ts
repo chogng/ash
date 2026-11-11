@@ -93,7 +93,7 @@ export class NewSessionFolderQuickPickAction extends Action2 {
 			canSelectFiles: false, canSelectFolders: true, canSelectMany: false, availableFileSystems: ['file'],
 		}))?.[0];
 		if (!folder || !isLocalFolder(folder) || signal.signal.aborted) return;
-		if (!await authorization.authorize(folder.fsPath, signal.signal) || signal.signal.aborted) return;
+		if (!await authorization.authorize([folder.fsPath], signal.signal) || signal.signal.aborted) return;
 		const catalog = await readCodeProjects(projects);
 		if (signal.signal.aborted) return;
 		const project = await projectForFolder(projects, catalog, folder);

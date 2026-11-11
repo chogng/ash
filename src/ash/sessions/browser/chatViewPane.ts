@@ -46,10 +46,10 @@ import type { IAction } from '../../base/common/actions.js';
 import { ForkConversationActionId } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
 import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
+import { CODE_HISTORY_VIRTUALIZE_FROM } from '../contrib/chat/common/constants.js';
 
 let chatPaneInstanceId = 0;
-// A 20-turn history page can already contain 60 prompt, tool and reply rows.
-const codeHistoryVirtualizeFrom = constObservable(48);
+const codeHistoryVirtualizeFrom = constObservable(CODE_HISTORY_VIRTUALIZE_FROM);
 
 /**
  * Retains opened conversations behind a shared tab row or list switcher.

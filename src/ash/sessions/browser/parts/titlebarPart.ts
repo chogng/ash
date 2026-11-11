@@ -167,10 +167,6 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 				action, options, instantiationService, getWindowId(ownerWindow) ?? 0,
 			),
 		}));
-		this.pageContent.append(h(container.ownerDocument, 'span', {
-			className: 'ash-sessions-titlebar-separator',
-			attributes: { 'aria-hidden': 'true' },
-		}, '/'));
 		const updatePageVisibility = (): void => {
 			this.pageContent.hidden = pageActions.element.hidden;
 			this.domNode.classList.toggle('has-page-content', !this.pageContent.hidden);
@@ -227,7 +223,7 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element, this.toolHeaders], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
-	public setToolHeaderStart(left: number | undefined): HTMLElement | undefined {
+	public layoutToolHeaders(left: number | undefined, setHost: (host: HTMLElement | undefined) => void): void {
 		let width = 0;
 		if (left !== undefined) {
 			// A very narrow conversation split still needs its title menu and tool overflow trigger.
@@ -239,29 +235,29 @@ export class TitlebarPart extends WebTitlebarPart implements ITitlebarPart {
 			}
 		}
 		const visible = width > 0;
+		// Return the focused row to its group before hiding the titlebar slot.
+		if (!visible) setHost(undefined);
 		this.toolHeaders.hidden = !visible;
 		this.domNode.classList.toggle('has-tool-headers', visible);
 		this.toolHeaders.style.flexBasis = `${width}px`;
-		return visible ? this.toolHeaders : undefined;
+		if (visible) setHost(this.toolHeaders);
 	}
 
 	public override updateStyles(): void {
 		this.domNode.style.setProperty('--ash-sessions-titlebar-background', getSessionsTitlebarBackground(this.theme) ?? '');
 	}
 
-	public setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>, showAlongsidePage: IObservable<boolean>): IDisposable {
+	public setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable {
 		this.sessionContent.replaceChildren(content);
 		const menuState = autorun(reader => {
 			if (content.parentElement === this.sessionContent) {
 				this.sessionContent.classList.toggle('session-menu-open', menuOpen.read(reader));
-				this.domNode.classList.toggle('show-session-alongside-page', showAlongsidePage.read(reader));
 			}
 		});
 		return toDisposable(() => {
 			menuState.dispose();
 			if (content.parentElement === this.sessionContent) {
 				this.sessionContent.classList.remove('session-menu-open');
-				this.domNode.classList.remove('show-session-alongside-page');
 				content.remove();
 			}
 		});

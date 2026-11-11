@@ -1,0 +1,12 @@
+.ash-chat-agent-feedback-review > pre {
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-text-codeBlockBackground);
+}
+
+.ash-chat-agent-feedback-review > pre:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

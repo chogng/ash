@@ -106,7 +106,7 @@ readline.createInterface({input: process.stdin}).on('line', line => {
 		expect(await readFile(effects, 'utf8')).toBe('0\n1\n2\n3\n4\n');
 		const automation = chat.locator('.ash-chat-tool-invocation').last();
 		await automation.locator(':scope > summary').click();
-		await automation.getByRole('button', { name: 'Review automation', exact: true }).click();
+		await automation.getByRole('button', { name: 'Review task', exact: true }).click();
 		await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Fixture automation');
 		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 		const tool = chat.locator('.ash-chat-tool-invocation').first();

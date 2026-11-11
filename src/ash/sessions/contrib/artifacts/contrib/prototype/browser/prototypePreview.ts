@@ -5,7 +5,7 @@ import { addDisposableListener, h, svg } from '../../../../../../base/browser/do
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
-import { renderDesignShape } from '../../../browser/svgRenderer.js';
+import { renderDesignShape } from '../../../browser/designSvgRenderer.js';
 import type { DesignEditorContributionContext } from '../../../browser/designEditorBrowser.js';
 import { defaultPrototypeTransition, prototypeFrames, prototypeOwner, type PrototypeFrame, type PrototypeInteraction, type PrototypeTransition, type PrototypeTrigger } from '../../../common/model/prototype.js';
 import { PrototypePlayback, samplePrototypeTransition, prototypeTransitionDuration, prototypeProgress, springProgress, type PrototypeEffect, type PrototypeSnapshot } from '../../../common/model/prototypePlayback.js';
@@ -223,7 +223,7 @@ export class PrototypePreview extends Disposable {
 		const element = this.scene.querySelector<SVGGraphicsElement>(`[data-shape-id="${this.playback?.activeFrame.id}"]`), matrix = element?.getScreenCTM?.()?.inverse();
 		return matrix ? { x: matrix.a * x + matrix.c * y, y: matrix.b * x + matrix.d * y } : { x, y };
 	}
-	private renderShape(shape: PrototypeFrame | import('../../../common/model/document.js').DesignShape): SVGGraphicsElement {
+	private renderShape(shape: PrototypeFrame | import('../../../common/model/designDocument.js').DesignShape): SVGGraphicsElement {
 		const element = renderDesignShape(shape, undefined, this.context.documentController.getEmbeddedImageSources());
 		for (const guide of element.querySelectorAll('[data-layout-guide]')) { guide.remove(); }
 		return element;

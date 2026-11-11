@@ -1,0 +1,65 @@
+.ash-chat-input-artifact-pill {
+	min-inline-size: 0;
+	align-items: center;
+	align-self: center;
+	gap: var(--ash-spacing-size40);
+	padding-inline-end: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-large);
+	font-size: var(--ash-fontSize-label1);
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-chat-input-artifact-pill:not([hidden]) {
+	display: inline-flex;
+}
+
+.ash-chat-input-artifact-pill-label {
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--ash-foreground);
+}
+
+.ash-chat-input-artifact-pill
+	> .ash-chat-input-artifact-pill-remove.ash-button {
+	box-sizing: border-box;
+	flex: none;
+	inline-size: var(--ash-toolbar-actionSize);
+	block-size: var(--ash-toolbar-actionSize);
+	padding: 0;
+	color: inherit;
+}
+
+.ash-chat-input-artifact-pill-remove > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-chat-input-artifact-pill-remove > svg {
+	flex: none;
+	inline-size: var(--ash-lxiconFontSize-large);
+	block-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-chat-input-artifact-pill-remove > .ash-icon-close {
+	color: var(--ash-foreground);
+}
+
+.ash-chat-input-artifact-pill-remove > .ash-artifact-kind-icon {
+	display: none;
+}
+
+@media (hover: hover) {
+	.ash-chat-input-artifact-pill:not(:hover)
+		.ash-chat-input-artifact-pill-remove:not(:focus-visible)
+		> .ash-artifact-kind-icon {
+		display: inline-flex;
+	}
+
+	.ash-chat-input-artifact-pill:not(:hover)
+		.ash-chat-input-artifact-pill-remove:not(:focus-visible)
+		> .ash-icon-close {
+		display: none;
+	}
+}

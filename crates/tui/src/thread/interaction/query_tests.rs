@@ -286,6 +286,7 @@ fn optional_question_projects_the_protocol_and_preserves_explicit_false() {
         ash_protocol::TurnId::new("turn").unwrap(),
         ash_protocol::RequestId::new("request").unwrap(),
         ash_protocol::RequestUserInput {
+            plan_review: None,
             questions: vec![ash_protocol::UserInputQuestion {
                 required: false,
                 id: "notify".into(),

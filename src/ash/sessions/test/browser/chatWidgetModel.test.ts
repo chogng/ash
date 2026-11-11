@@ -13,21 +13,21 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../base/common/errors.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
-import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
+import { AshChatModel } from '../../contrib/chat/browser/ashChatModel.js';
 import { codeConversationWorkspaceKey } from '../../common/codeConversationDefaults.js';
 import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
 import type { ISessionProviderScope, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import type { AgentInteractionOffer, QueuedMessage, ThreadRead, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, QueuedMessage, ThreadRead, ThreadSnapshotHistory, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
 import type { AdvisorConfig, IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import type { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerApi, IServerEventApi, AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import type { IAgentSkill, IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import type { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import type { ILanguageModelsConfigurationService } from '../../contrib/cowork/common/languageModelsConfiguration.js';
+import type { INativeChatModelPreferencesService } from '../../contrib/chat/common/nativeChatModelPreferencesService.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../services/sessions/common/session.js';
 import { resolveChatContextAttachment, type ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
@@ -58,11 +58,20 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const steers: SessionOperationInput<'steerTurn'>[] = [];
 	const consults: SessionOperationInput<'consultAdvisor'>[] = [];
 	const compacts: SessionOperationInput<'compactContext'>[] = [];
+	const historyRequests: (ThreadSnapshotHistory | undefined)[] = [];
 	let generation = 1;
 	const threadApi = {
 		...createDisconnectedAgentThreadService(async operation => { throw new Error(`Unexpected ${operation}`); }), onDidOfferInteraction: offers.event, onDidUpdateThread: updates.event, onDidUpdateThreadTranscript: transcripts.event,
-		read: async ({ threadId }: { threadId: string; }) => snapshot(threadId, 1, waiting),
-		subscribe: async ({ threadId }: { threadId: string; }) => subscribe ? subscribe(threadId) : { ...snapshot(threadId, 1, waiting), updates: [] }, unsubscribe: async () => { }, readContext: async () => ({ context: { estimatedTokens: 0, categories: [] } }),
+		read: async ({ threadId, history }: { threadId: string; history?: ThreadSnapshotHistory; }) => {
+			historyRequests.push(history);
+			return snapshot(threadId, 1, waiting);
+		},
+		subscribe: async ({ threadId, history }: { threadId: string; history?: ThreadSnapshotHistory; }) => {
+			historyRequests.push(history);
+			return subscribe ? subscribe(threadId) : { ...snapshot(threadId, 1, waiting), updates: [] };
+		},
+		unsubscribe: async () => { },
+		readContext: async () => ({ context: { estimatedTokens: 0, categories: [] } }),
 	};
 	const modelApi = { readAdvisorDefault: async (): Promise<AdvisorConfig | null> => ({ model: { provider: 'provider', model: 'advisor' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 }) } as IAgentModelsService;
 	const turnApi = {
@@ -84,7 +93,13 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 		readModelAvailability: async () => ({ selected: 'unknown', configuredDefault: null, defaultAvailability: 'unknown' }),
 		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
 	} as unknown as ILanguageModelsService;
-	const preferences = { onDidChangeModels: Event.None } as ILanguageModelsConfigurationService;
+	const preferences: INativeChatModelPreferencesService = {
+		onDidChangeModels: Event.None,
+		getDefaultNewChatModel: () => undefined,
+		rememberSelectedModel: () => undefined,
+		isModelVisible: () => true,
+		setModelVisible: async () => undefined,
+	};
 	const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
 	// Tests select a thread explicitly. An empty catalog keeps fork-version reads out of transcript tests.
 	const sessions = { onDidChange: Event.None, sessions: [], untitledSessions: [] } as unknown as ISessionsManagementService;
@@ -92,13 +107,39 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const storage = { get: () => undefined, store: () => { } } as unknown as IStorageService;
 	const contextKeys = resources.add(new ContextKeyService());
 	SessionsWorkspaceModeContext.bindTo(contextKeys).set(kind === 'Code' ? 'code' : 'chat');
-	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, contextKeys) : new CoworkWidgetModel(routedChat, selection, sessions, prompts, models, preferences, execution, configuration));
-	return { resources, model, configuration, storage, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, sessions, reconnect: () => { generation++; connection.fire('ready'); } };
+	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, contextKeys) : new AshChatModel(selection, 'session', sessions, routedChat, prompts, models, execution, configuration, storage, undefined, preferences));
+	return { resources, model, configuration, storage, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, historyRequests, updates, transcripts, offers, session, sessions, reconnect: () => { generation++; connection.fire('ready'); } };
 }
 
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind === 'Code' ? 'Code' : 'Native Chat'} restores Auto from the accepted Turn and sends it on the next request`, async () => {
+		const value = messageHistory('A', 3, 'First response');
+		const turn = value.thread.turns[0]!;
+		const restored: ThreadSubscription = {
+			...value,
+			thread: {
+				...value.thread,
+				turns: [
+					{ ...turn, model: { provider: 'provider', model: 'routed' }, modelRouting: 'selected' },
+					{ ...turn, turnId: 'shell-turn', kind: 'shell', items: [] },
+				],
+			},
+			updates: [],
+		};
+		const f = fixture(kind, async () => restored);
+		using resources = f.resources;
+		f.threadApi.read = async () => restored;
+		await f.model.initialize();
+		assert.equal(f.model.inputState.isAutomaticModel, true);
+		await f.model.send('Continue');
+		assert.equal(f.starts[0]?.modelRouting, 'auto');
+		assert.equal(f.starts[0]?.model, undefined);
+	});
+}
 
 test('Code reconnect restores recap presence for open surfaces', async () => {
 	const f = fixture('Code');
@@ -705,7 +746,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		f.threadApi.read = async () => { throw new Error('Latest read failed'); };
 		await f.model.send('Acknowledged input');
-		assert.equal(f.starts.length, 1); assert.equal(f.model.state, 'error'); assert.equal(f.model.error, kind === 'Code' ? 'Could not refresh this chat: Error: Latest read failed' : 'Latest read failed');
+		assert.equal(f.starts.length, 1); assert.equal(f.model.state, 'error'); assert.equal(f.model.error, 'Could not refresh this chat: Error: Latest read failed');
 	});
 }
 
@@ -958,7 +999,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using configuration = new TestConfigurationService();
 		using model = kind === 'Code'
 			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.contextKeys)
-			: new CoworkWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as ILanguageModelsConfigurationService, f.execution, configuration);
+			: new AshChatModel({ kind: 'untitled', session: draft }, 'session', sessions, f.chat, f.prompts, f.models, f.execution, configuration, f.storage, undefined, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as INativeChatModelPreferencesService);
 		await model.initialize();
 		model.selectMode('plan');
 		model.selectApprovalMode('auto');
@@ -1131,12 +1172,11 @@ test('Cancelling a queue editor restores already admitted input after AI is disa
 });
 
 
-test('Cowork does not expose Code command execution and submits slash text literally for start and queue', async () => {
+test('Cowork submits slash text literally for start and queue', async () => {
 	for (const route of ['start', 'queue'] as const) {
 		const f = fixture('Cowork', undefined, route === 'queue');
 		using resources = f.resources;
 		await f.model.initialize();
-		assert.equal('executeServerCommand' in f.model, false);
 		assert.deepEqual(f.model.inputState.slashCommands, []);
 		await f.model.send('/develop Keep this as a message', 'agent', undefined, undefined, route === 'queue' ? { queue: ChatRequestQueueKind.Queued } : undefined);
 		const request = route === 'start' ? f.starts[0]! : f.queues[0]!;
@@ -1146,6 +1186,27 @@ test('Cowork does not expose Code command execution and submits slash text liter
 		assert.equal(f.consults.length, 0);
 	}
 });
+
+test('Cowork shared command adapter treats Code commands as literal messages', async () => {
+	const f = fixture('Cowork');
+	using resources = f.resources;
+	await f.model.initialize();
+	await f.model.executeServerCommand('compact', 'keep this text');
+	assert.deepEqual(f.starts[0]!.input, [{ type: 'text', text: '/compact keep this text' }]);
+	assert.equal(f.starts[0]!.commandInterpretation, 'literal');
+	assert.equal(f.compacts.length, 0);
+});
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} retains its history policy for subscription and refresh`, async () => {
+		const f = fixture(kind);
+		using resources = f.resources;
+		await f.model.initialize();
+		await f.model.send('Refresh after acknowledgement');
+		const history = kind === 'Code' ? { type: 'latest', turnLimit: 20, previewToolResults: true } : undefined;
+		assert.deepEqual(f.historyRequests, [history, history]);
+	});
+}
 
 
 for (const kind of ['Code', 'Cowork'] as const) test(`${kind} retains Skill catalog loading until the newest owned read settles`, async () => {

@@ -69,6 +69,7 @@ pub(super) fn unix_time_millis() -> u64 {
         .min(u128::from(u64::MAX)) as u64
 }
 
+#[derive(Clone)]
 pub(crate) struct UpdateBroker {
     pub(super) recap_presence: Arc<super::thread_recap::RecapPresence>,
     hooks: Arc<RwLock<Option<Arc<dyn HookService>>>>,
@@ -82,6 +83,7 @@ pub(crate) struct UpdateBroker {
     extension_packages_change_gate: Arc<Mutex<()>>,
     extension_packages_source_generations: Arc<Mutex<BTreeMap<String, u64>>>,
     scope_id: u64,
+    git_connection_id: Option<u64>,
 }
 
 #[derive(Default)]
@@ -204,6 +206,7 @@ impl Default for UpdateBroker {
             extension_packages_change_gate: Arc::new(Mutex::new(())),
             extension_packages_source_generations: Arc::new(Mutex::new(BTreeMap::new())),
             scope_id: 1,
+            git_connection_id: None,
         }
     }
 }
@@ -239,21 +242,23 @@ impl UpdateBroker {
 
     pub(crate) fn fork_scope(&self) -> Self {
         Self {
-            recap_presence: Arc::clone(&self.recap_presence),
-            hooks: Arc::clone(&self.hooks),
-            hook_events: Arc::clone(&self.hook_events),
-            state: Arc::clone(&self.state),
-            transcripts: Arc::clone(&self.transcripts),
-            next_connection_id: Arc::clone(&self.next_connection_id),
-            next_scope_id: Arc::clone(&self.next_scope_id),
-            extension_packages_instance_id: Arc::clone(&self.extension_packages_instance_id),
-            extension_packages_generation: Arc::clone(&self.extension_packages_generation),
-            extension_packages_change_gate: Arc::clone(&self.extension_packages_change_gate),
-            extension_packages_source_generations: Arc::clone(
-                &self.extension_packages_source_generations,
-            ),
             scope_id: self.next_scope_id.fetch_add(1, Ordering::Relaxed),
+            ..self.clone()
         }
+    }
+
+    pub(super) fn for_git_connection(&self, connection_id: u64) -> Self {
+        Self {
+            git_connection_id: Some(connection_id),
+            ..self.clone()
+        }
+    }
+
+    fn receives_git_updates(&self, connection_id: u64, subscriber: &Subscriber) -> bool {
+        subscriber.scope_id == self.scope_id
+            && self
+                .git_connection_id
+                .is_none_or(|target| target == connection_id)
     }
 
     pub(super) fn allocate_connection_id(&self) -> u64 {
@@ -1323,11 +1328,11 @@ impl UpdateBroker {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        state.subscribers.retain(|_, subscriber| {
+        state.subscribers.retain(|connection_id, subscriber| {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.scope_id != self.scope_id {
+            if !self.receives_git_updates(*connection_id, subscriber) {
                 return true;
             }
             queue.push(notification(
@@ -1344,11 +1349,11 @@ impl UpdateBroker {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        state.subscribers.retain(|_, subscriber| {
+        state.subscribers.retain(|connection_id, subscriber| {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.scope_id == self.scope_id {
+            if self.receives_git_updates(*connection_id, subscriber) {
                 queue.push(notification(
                     ServerNotificationMethod::GitIgnoreChanged,
                     &change,
@@ -1380,11 +1385,11 @@ impl UpdateBroker {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
-        state.subscribers.retain(|_, subscriber| {
+        state.subscribers.retain(|connection_id, subscriber| {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.scope_id == self.scope_id {
+            if self.receives_git_updates(*connection_id, subscriber) {
                 queue.push(notification(
                     ServerNotificationMethod::GitRepositoriesChanged,
                     &EmptyParams {},

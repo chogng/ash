@@ -9,6 +9,9 @@ import { chatGPTEntityDetailPath, chatGPTHistoryCooldownMs, chatGPTPrepareTokenH
 import type { CatalogProjectMemoryMode } from '../../sessions/browser/views/sessionsCatalogList.js';
 
 const projectFileId = /^file[-_][A-Za-z0-9_-]{1,240}$/u;
+const uploadRetryDelays = [500, 1_500] as const;
+const retryableUploadStatuses = new Set([408, 429, 500, 502, 503, 504]);
+const retryableUploadNetworkError = /^net::ERR_(?:CONNECTION_(?:CLOSED|RESET|REFUSED|ABORTED|FAILED|TIMED_OUT)|NETWORK_CHANGED|INTERNET_DISCONNECTED|TIMED_OUT)$/u;
 export interface ChatGPTBranchSource {
 	readonly conversationId: string;
 	readonly messageId: string;
@@ -601,7 +604,7 @@ export class ChatGPTClient {
 			if (history.parentId !== previousHead || Date.now() >= deadline) {
 				throw new Error(localize('sessions.chatgpt.editUnconfirmed', 'Reload the conversation to check whether ChatGPT accepted the edit.'));
 			}
-			await waitForChatGPTProcessing(signal);
+			await waitForChatGPTRequest(signal);
 		}
 	}
 
@@ -657,28 +660,36 @@ export class ChatGPTClient {
 			file_name: file.name, file_size: file.size, use_case: dimensions ? 'multimodal' : 'ace_upload', ...dimensions,
 		}, { 'Content-Type': 'application/json' }, signal);
 		for (let attempt = 0; attempt < 20; attempt++) {
-			const confirmed: unknown = await (await this.request(`/files/${encodeURIComponent(id)}/uploaded`, signal, {
+			const confirmed: unknown = await retryChatGPTUploadRequest(signal, async () => (await this.request(`/files/${encodeURIComponent(id)}/uploaded`, signal, {
 				method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-			})).json();
+			})).json());
 			if (!isRecord(confirmed)) { throw this.invalidResponse(); }
 			if (confirmed.status === 'success') {
 				return { id, name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, ...dimensions };
 			}
 			if (confirmed.status !== 'pending' && confirmed.status !== 'processing') { throw this.invalidResponse(); }
-			await waitForChatGPTProcessing(signal);
+			await waitForChatGPTRequest(signal);
 		}
 		throw new Error(localize('sessions.chatgpt.uploadNotReady', 'The file is still processing. Retry the attachment.'));
 	}
 
 	private async uploadBytes(file: File, metadata: object, headers: Record<string, string>, signal: AbortSignal): Promise<string> {
-		const value: unknown = await (await this.request('/files', signal, { method: 'POST', headers, body: JSON.stringify(metadata) })).json();
+		const body = JSON.stringify(metadata);
+		const value: unknown = await retryChatGPTUploadRequest(signal, async () => (await this.request('/files', signal, { method: 'POST', headers, body })).json());
 		if (!isRecord(value) || typeof value.file_id !== 'string' || !projectFileId.test(value.file_id)
 			|| typeof value.upload_url !== 'string' || value.upload_url.length > 8192) throw this.invalidResponse();
-		const response = await this.fetcher('/service/.upload?' + new URLSearchParams({ url: value.upload_url }), {
-			method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, body: file, signal,
+		const path = '/service/.upload?' + new URLSearchParams({ url: value.upload_url });
+		// Reuse the reserved ID and signed URL when a byte transfer fails.
+		await retryChatGPTUploadRequest(signal, async () => {
+			const response = await this.fetcher(path, {
+				method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, body: file, signal,
+			});
+			await response.body?.cancel().catch(() => undefined);
+			if (!response.ok) {
+				const retryAt = readChatGPTRetryAfter(response.headers.get('Retry-After'), Date.now());
+				throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.uploadFailed', 'File upload failed ({0}).', response.status), retryAt);
+			}
 		});
-		if (!response.ok) throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.uploadFailed', 'File upload failed ({0}).', response.status));
-		await response.body?.cancel().catch(() => undefined);
 		return value.file_id;
 	}
 
@@ -711,7 +722,7 @@ export class ChatGPTClient {
 				if (!(error instanceof ChatGPTRequestError) || error.status !== 404 || !messageId) { throw error; }
 			}
 			if (Date.now() >= deadline) { throw new Error(localize('sessions.chatgpt.voiceHistoryPending', 'The voice conversation has not finished saving. Reload it before sending another message.')); }
-			await waitForChatGPTProcessing(signal);
+			await waitForChatGPTRequest(signal);
 		}
 	}
 
@@ -877,7 +888,7 @@ export class ChatGPTClient {
 			const retryAt = readChatGPTRetryAfter(retryAfter, Date.now());
 			return new ChatGPTRequestError(status, localize('sessions.chatgpt.rateLimited', 'ChatGPT is limiting requests. Try again later.'), retryAt);
 		}
-		return new ChatGPTRequestError(status, localize('sessions.chatgpt.requestFailed', 'ChatGPT request failed ({0}).', status));
+		return new ChatGPTRequestError(status, localize('sessions.chatgpt.requestFailed', 'ChatGPT request failed ({0}).', status), status === 503 ? readChatGPTRetryAfter(retryAfter, Date.now()) : undefined);
 	}
 
 	private invalidResponse(): Error { return new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
@@ -1109,7 +1120,7 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	}
 	const references: ChatGPTReference[] = [];
 	const imageGroups: ChatGPTImageGroup[] = [];
-	const addReference = (entry: unknown): string | undefined => {
+	const addReference = (entry: unknown, cited?: true): string | undefined => {
 		if (!isRecord(entry) || typeof entry.url !== 'string') return;
 		let url: URL; try { url = new URL(entry.url); } catch { return; }
 		if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return;
@@ -1117,14 +1128,16 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 			typeof ref === 'string' ? [ref] : isRecord(ref) && typeof ref.turn_index === 'number' && typeof ref.ref_type === 'string' && typeof ref.ref_index === 'number'
 				? [`turn${ref.turn_index}${ref.ref_type}${ref.ref_index}`] : []);
 		for (const id of ids.length ? ids : [url.href]) {
-			if (!references.some(item => item.id === id)) references.push({ id, url: url.href, title: typeof entry.title === 'string' ? entry.title : url.hostname, snippet: typeof entry.snippet === 'string' ? entry.snippet : '' });
+			const index = references.findIndex(item => item.id === id);
+			if (index < 0) references.push({ id, url: url.href, title: typeof entry.title === 'string' ? entry.title : url.hostname, snippet: typeof entry.snippet === 'string' ? entry.snippet : '', ...(cited && { cited }) });
+			else if (cited && references[index].url === url.href) references[index] = { ...references[index], cited };
 		}
 		return url.href;
 	};
 	if (isRecord(value.metadata)) {
 		imageGroups.push(...readAsyncImages(value.metadata));
 		for (const group of Array.isArray(value.metadata.search_result_groups) ? value.metadata.search_result_groups : []) {
-			if (isRecord(group) && Array.isArray(group.entries)) group.entries.forEach(addReference);
+			if (isRecord(group) && Array.isArray(group.entries)) group.entries.forEach(entry => addReference(entry));
 		}
 		for (const reference of Array.isArray(value.metadata.content_references) ? value.metadata.content_references : []) {
 			if (!isRecord(reference)) continue;
@@ -1133,16 +1146,16 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 				if (group) imageGroups.push(group);
 				continue;
 			}
-			addReference(reference);
-			addReference(reference.item);
-			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(addReference);
+			addReference(reference, true);
+			addReference(reference.item, true);
+			for (const key of ['sources', 'items']) if (Array.isArray(reference[key])) reference[key].forEach(entry => addReference(entry, true));
 			// Sidebar replies can bind a whole citation marker to URLs without supplying per-result IDs.
 			const marker = reference.matched_text;
 			if (reference.type === 'grouped_webpages' && typeof marker === 'string' && /^\uE200cite\uE202[^\uE200\uE201\r\n]+\uE201$/u.test(marker)
 				&& text.includes(marker) && Array.isArray(reference.safe_urls) && !reference.url && !reference.item
 				&& ![reference.sources, reference.items].some(items => Array.isArray(items) && items.length)) {
 				const urls = reference.safe_urls.slice(0, 20).flatMap(url => {
-					const href = typeof url === 'string' && url.length <= 8192 ? addReference({ url }) : undefined;
+					const href = typeof url === 'string' && url.length <= 8192 ? addReference({ url }, true) : undefined;
 					return href ? [href] : [];
 				});
 				if (urls.length) text = text.replaceAll(marker, `\uE200cite\uE202${urls.join('\uE202')}\uE201`);
@@ -1286,11 +1299,30 @@ class SidebarConversationDeltas {
 	}
 }
 
-function waitForChatGPTProcessing(signal: AbortSignal): Promise<void> {
+async function retryChatGPTUploadRequest<T>(signal: AbortSignal, request: () => Promise<T>): Promise<T> {
+	for (const delay of uploadRetryDelays) {
+		signal.throwIfAborted();
+		try {
+			return await request();
+		} catch (error) {
+			const retryable = error instanceof ChatGPTRequestError ? retryableUploadStatuses.has(error.status)
+				: error instanceof Error && retryableUploadNetworkError.test(error.message);
+			if (!retryable) { throw error; }
+			const retryAfter = error instanceof ChatGPTRequestError ? (error.retryAt ?? 0) - Date.now() : 0;
+			// Long server cooldowns require a later manual retry.
+			if (retryAfter >= 60_000) { throw error; }
+			await waitForChatGPTRequest(signal, Math.max(delay, retryAfter));
+		}
+	}
+	signal.throwIfAborted();
+	return request();
+}
+
+function waitForChatGPTRequest(signal: AbortSignal, delay = 500): Promise<void> {
 	signal.throwIfAborted();
 	return new Promise((resolve, reject) => {
 		const abort = (): void => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(signal.reason); };
-		const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, 500);
+		const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, delay);
 		signal.addEventListener('abort', abort, { once: true });
 	});
 }

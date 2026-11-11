@@ -1,3 +1,4 @@
+import './media/chatImageGenerationBatchPart.css';
 import { h } from '../../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';

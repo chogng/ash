@@ -3,7 +3,7 @@ import { applyPrototypeScroll, prototypePath, prototypeScrollVector, prototypeSc
 import type { DesignPoint } from '../core/geometry.js';
 import { evaluatePrototypeExpression, type PrototypeValue } from './prototypeExpression.js';
 import { resolveDesignLayout } from './layout.js';
-import { flattenDesignShapes, type DesignShape } from './document.js';
+import { flattenDesignShapes, type DesignShape } from './designDocument.js';
 import { remapDesignInstance, resolveDesignComponents } from './components.js';
 import { emptyDesignResources, getDesignResourceCatalog, resolveDesignVariable, getDesignLibraryShapes, resolveDesignResources, type DesignResources } from './designResources.js';
 import { prototypeComponent, prototypeVariants, prototypeFrames, type PrototypeFrame, type PrototypeInteraction, type PrototypeTransition, type PrototypeStep, type PrototypeSpring } from './prototype.js';

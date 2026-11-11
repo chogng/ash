@@ -3,10 +3,10 @@ import type { IAction } from '../../../../base/common/actions.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { DocumentCommands } from '../common/commands/documentCommands.js';
-import type { DesignMode, DesignTool } from '../common/config/editorConfiguration.js';
+import type { DesignMode, DesignTool } from '../common/config/designEditorConfiguration.js';
 import type { DesignPoint } from '../common/core/geometry.js';
-import type { DesignDocument, DesignShape } from '../common/model/document.js';
-import type { DesignSelection } from '../common/selection.js';
+import type { DesignDocument, DesignShape } from '../common/model/designDocument.js';
+import type { DesignSelection } from '../common/designSelection.js';
 import type { DesignDocumentController } from './designDocumentController.js';
 
 /** A sampled scene carries presentation geometry without changing the editable document. */

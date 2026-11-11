@@ -51,6 +51,7 @@ use ash_app_server_protocol::protocol::config::SkillSourceConfigDto;
 use ash_app_server_protocol::protocol::config::SkillSourceEnablementDto;
 use ash_app_server_protocol::protocol::config::SkillSourceRemoveParams;
 use ash_app_server_protocol::protocol::config::SkillSourceSetEnablementParams;
+use ash_app_server_protocol::protocol::config::TaskModelSelectionDto;
 use ash_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use ash_app_server_protocol::protocol::config::ToolSearchConfigureParams;
 use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
@@ -455,10 +456,10 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
-                    thread_title_model: model_ref_update_from_dto(params.thread_title_model)?,
-                    thread_recap_model: model_ref_update_from_dto(params.thread_recap_model)?,
+                    thread_title_model: task_model_update_from_dto(params.thread_title_model)?,
+                    thread_recap_model: task_model_update_from_dto(params.thread_recap_model)?,
                     thread_recap_enabled: params.thread_recap_enabled,
-                    code_review_model: model_ref_update_from_dto(params.code_review_model)?,
+                    code_review_model: task_model_update_from_dto(params.code_review_model)?,
                     commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     commit_message_enabled: params.commit_message_enabled,
                     advisor: params.advisor,
@@ -973,10 +974,10 @@ fn config_read_result(
         model: snapshot.values.model.map(model_ref_dto),
         model_reasoning_effort: snapshot.values.model_reasoning_effort,
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
-        thread_title_model: snapshot.values.thread_title_model.map(model_ref_dto),
-        thread_recap_model: snapshot.values.thread_recap_model.map(model_ref_dto),
+        thread_title_model: snapshot.values.thread_title_model.map(task_model_dto),
+        thread_recap_model: snapshot.values.thread_recap_model.map(task_model_dto),
         thread_recap_enabled: snapshot.values.thread_recap_enabled,
-        code_review_model: snapshot.values.code_review_model.map(model_ref_dto),
+        code_review_model: snapshot.values.code_review_model.map(task_model_dto),
         commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
         commit_message_enabled: snapshot.values.commit_message_enabled,
         advisor: snapshot.values.advisor,
@@ -1395,6 +1396,31 @@ fn model_ref_update_from_dto(update: Patch<ModelRefDto>) -> Result<Patch<ModelRe
         Patch::Missing => Ok(Patch::Missing),
         Patch::Null => Ok(Patch::Null),
         Patch::Value(model_ref) => model_ref_from_dto(model_ref).map(Patch::Value),
+    }
+}
+
+fn task_model_dto(selection: ash_config::TaskModelSelection) -> TaskModelSelectionDto {
+    let model = model_ref_dto(selection.model);
+    TaskModelSelectionDto {
+        provider: model.provider,
+        model: model.model,
+        reasoning_effort: selection.reasoning_effort,
+    }
+}
+
+fn task_model_update_from_dto(
+    update: Patch<TaskModelSelectionDto>,
+) -> Result<Patch<ash_config::TaskModelSelection>, RpcError> {
+    match update {
+        Patch::Missing => Ok(Patch::Missing),
+        Patch::Null => Ok(Patch::Null),
+        Patch::Value(selection) => Ok(Patch::Value(ash_config::TaskModelSelection {
+            model: model_ref_from_dto(ModelRefDto {
+                provider: selection.provider,
+                model: selection.model,
+            })?,
+            reasoning_effort: selection.reasoning_effort,
+        })),
     }
 }
 

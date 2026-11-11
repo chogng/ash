@@ -1,23 +1,36 @@
 import './makeWorkspace.css';
 import { h } from '../../../../../../base/browser/dom.js';
-import type { IAction } from '../../../../../../base/common/actions.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
-import { localize } from '../../../../../../nls.js';
+import { localize, localize2 } from '../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
-import { CreatorCanvasWorkspace } from '../../../browser/creatorCanvasWorkspace.js';
-import { registerCreatorMode } from '../../../browser/creatorWorkspace.js';
-import { CreatorMode, getCreatorModeTitle } from '../../../common/creator.js';
-import { DesignMode } from '../../../common/config/editorConfiguration.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { CanvasWorkspace } from '../../../browser/canvasWorkspace.js';
+import { registerArtifactWorkspace } from '../../../browser/artifactWorkspaceRegistry.js';
+import { ArtifactWorkspaceId, getArtifactWorkspaceTitle } from '../../../common/artifactWorkspace.js';
+import { DesignMode } from '../../../common/config/designEditorConfiguration.js';
 import { generateDesignCode } from '../../code/browser/designCodeGenerator.js';
 
-class MakeWorkspace extends CreatorCanvasWorkspace {
+class MakeWorkspace extends CanvasWorkspace {
 	public override readonly usesCanvasPanels = false;
 	private previewDomNode!: HTMLIFrameElement;
 	private promptDomNode!: HTMLTextAreaElement;
 	private visible = false;
-	constructor(ownerDocument: Document, mode: CreatorMode, @IInstantiationService instantiation: IInstantiationService, @IContextMenuService contextMenus: IContextMenuService, @ICommandService private readonly commandService: ICommandService) { super(ownerDocument, mode, instantiation, contextMenus); }
+	constructor(
+		ownerDocument: Document,
+		mode: ArtifactWorkspaceId,
+		@IInstantiationService instantiation: IInstantiationService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@ICommandService private readonly commandService: ICommandService,
+	) { super(ownerDocument, mode, instantiation, contextKeys); }
+
+	public static registerToolbarActions(): void {
+		this.registerWorkspaceActions(ArtifactWorkspaceId.Make, [
+			{ id: 'agent', title: localize2('sessions.creator.make.agent', 'Build with Agent'), run: workspace => workspace.buildWithAgent() },
+			{ id: 'edit', title: localize2('sessions.creator.make.edit', 'Edit canvas'), run: workspace => workspace.editor.setMode(DesignMode.Design) },
+			{ id: 'code', title: localize2('sessions.creator.make.code', 'View code'), run: workspace => workspace.editor.setMode(DesignMode.Code) },
+		]);
+	}
 	protected override createModeContent(): void {
 		this.editor.setMode(DesignMode.Code);
 		this.domNode.classList.add('ash-creator-make');
@@ -29,12 +42,11 @@ class MakeWorkspace extends CreatorCanvasWorkspace {
 		this._register(this.document.model.onDidChange(refresh));
 		refresh();
 	}
-	protected override getModeActions(): readonly IAction[] {
-		return [
-			this.action('agent', localize('sessions.creator.make.agent', 'Build with Agent'), () => this.commandService.executeCommand('sessions.creator.buildWithAgent', { prompt: this.promptDomNode.value, content: generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()) })),
-			this.action('edit', localize('sessions.creator.make.edit', 'Edit canvas'), () => this.editor.setMode(DesignMode.Design)),
-			this.action('code', localize('sessions.creator.make.code', 'View code'), () => this.editor.setMode(DesignMode.Code)),
-		];
+	private buildWithAgent(): Promise<unknown> {
+		return this.commandService.executeCommand('sessions.creator.buildWithAgent', {
+			prompt: this.promptDomNode.value,
+			content: generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()),
+		});
 	}
 	public override setVisible(visible: boolean): void {
 		this.visible = visible;
@@ -44,11 +56,12 @@ class MakeWorkspace extends CreatorCanvasWorkspace {
 	}
 }
 
-registerCreatorMode({
-	id: CreatorMode.Make,
-	title: getCreatorModeTitle(CreatorMode.Make),
+MakeWorkspace.registerToolbarActions();
+registerArtifactWorkspace({
+	id: ArtifactWorkspaceId.Make,
+	title: getArtifactWorkspaceTitle(ArtifactWorkspaceId.Make),
 	description: localize('sessions.creator.make.description', 'View generated code, run a preview and continue with an Agent.'),
 	icon: Lxicon.code,
 	help: localize('sessions.creator.make.help', 'View code shows generated HTML, CSS and scene JSON. Edit canvas returns to visual editing and updates the running preview. Describe what to build and choose Build with Agent to prepare a Code conversation with the current HTML attached; review and send the request there.'),
-	create: (instantiation, ownerDocument) => instantiation.createInstance(MakeWorkspace, ownerDocument, CreatorMode.Make),
+	create: (instantiation, ownerDocument) => instantiation.createInstance(MakeWorkspace, ownerDocument, ArtifactWorkspaceId.Make),
 });

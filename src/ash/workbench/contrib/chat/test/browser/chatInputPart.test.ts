@@ -3,6 +3,8 @@ import { IVoiceInputModeService } from '../../browser/voiceInputMode/voiceInputM
 import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ChatContextService, IChatContextService } from '../../browser/contextContrib/chatContextService.js';
+import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
+import { createTestLanguageModelToolsService } from '../common/tools/testLanguageModelToolsService.js';
 import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 import { ChatContextPickService, IChatContextPickService } from '../../browser/attachments/chatContextPickService.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
@@ -11,9 +13,17 @@ import { IChatWidgetService, type IChatWidget } from '../../browser/chat.js';
 import { ChatQueuePickerRendering } from '../../browser/widget/input/chatQueuePickerActionItem.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
+import { parseChatFollowupFooter } from '../../common/model/chatFollowup.js';
+import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
+import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
+import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
+import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../common/widget/chatResponseResourceFileSystemProvider.js';
+import { IWebviewService } from '../../../webview/browser/webview.js';
+import { WebviewService } from '../../../webview/browser/webviewService.js';
 import { readFileSync } from 'node:fs';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -142,6 +152,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	if (!partServices.has(IChatContextPickService)) partServices.registerInstance(IChatContextPickService, new ChatContextPickService());
 	if (!partServices.has(IExtensionService)) registerTestExtensionService(inputResources, partServices);
 	if (!partServices.has(IChatContextService)) partServices.registerSingleton(IChatContextService, () => partServices.createInstance(ChatContextService));
+	if (!partServices.has(ILanguageModelToolsService)) partServices.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService());
 	if (!partServices.has(IFileService)) partServices.registerInstance(IFileService, { hasProvider: () => false } as unknown as IFileService);
 	if (!partServices.has(IChatPasteTargetService)) partServices.registerSingleton(IChatPasteTargetService, () => new ChatPasteTargetService());
 	if (!partServices.has(IChatAttachmentResolveService)) {
@@ -160,6 +171,10 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	if (!partServices.has(IMessageHistoryService)) partServices.registerInstance(IMessageHistoryService, undefined);
 	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new TestQuickInputService({ container: document.body }));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+	if (!partServices.has(IMarkdownRendererService)) partServices.registerSingleton(IMarkdownRendererService, () => partServices.createInstance(MarkdownRendererService));
+	if (!partServices.has(IAgentThreadService)) partServices.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
+	if (!partServices.has(IChatResponseResourceFileSystemProvider)) partServices.registerSingleton(IChatResponseResourceFileSystemProvider, () => new ChatResponseResourceFileSystemProvider());
+	if (!partServices.has(IWebviewService)) partServices.registerSingleton(IWebviewService, () => partServices.createInstance(WebviewService));
 	partServices.registerInstance(ICommandService, { executeCommand: async (id: string, context?: unknown) => { const handler = CommandsRegistry.getCommand(id); if (handler) return handler(partServices, context); } } as ICommandService);
 	partServices.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 	partServices.registerSingleton(IMenuService, () => partServices.createInstance(MenuService));
@@ -1287,6 +1302,41 @@ test('Failed file preparation blocks the waiting send and notifies once while pr
 	assert.equal(sends, 0);
 	assert.equal(part.element.querySelector('textarea')!.value, 'Keep original');
 	assert.equal(messages.length, 1);
+});
+
+test('The Ash composer keeps staged attachments editable and waits for readiness before sending', async () => {
+	const sent: string[] = [];
+	let retries = 0;
+	using part = inputPart(sharedNotifications, undefined, 'ask', {
+		draft: { setText() { }, attachFiles: async () => { }, retryFile: async () => { retries++; }, removeFile() { } },
+		send: async text => { sent.push(text); },
+	});
+	const state: ChatInputState = { mode: 'ask', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const draft = { text: 'My draft', readOnly: false, canAttachFiles: true };
+	const attachment = { id: 'local-file', name: 'notes.txt' };
+	part.render({ ...state, draft: { ...draft, files: [{ ...attachment, status: 'uploading' }] } });
+	const row = part.element.querySelector('.ash-chat-staged-file')!;
+	const status = row.querySelector('.ash-chat-staged-file-status')!;
+	const retry = row.querySelector<HTMLElement>('.ash-chat-staged-file-retry')!;
+	assert.equal(status.textContent, 'Added to draft. Uploading in background.');
+	assert.equal(retry.hidden, true);
+	assert.equal(part.element.querySelector('textarea')!.readOnly, false);
+	await part.acceptInput();
+	assert.deepEqual(sent, []);
+
+	part.render({ ...state, draft: { ...draft, files: [{ ...attachment, status: 'failed', error: 'Connection closed' }] } });
+	assert.equal(status.textContent, 'Upload failed');
+	assert.equal(retry.hidden, false);
+	await part.acceptInput();
+	assert.deepEqual(sent, []);
+	retry.click();
+	assert.equal(retries, 1);
+
+	part.render({ ...state, draft: { ...draft, files: [{ ...attachment, status: 'ready' }] } });
+	assert.equal(status.textContent, 'Ready');
+	assert.equal(retry.hidden, true);
+	await part.acceptInput();
+	assert.deepEqual(sent, ['My draft']);
 });
 
 test('Hiding an input cancels pending file preparation without sending or notifying', async () => {
@@ -4055,6 +4105,22 @@ suite('chatInput browser component', () => {
 		});
 	}
 
+	test('result review previews an explicitly typed Markdown diff before sharing', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode&locale=zh-CN&theme=hcDark');
+		const patch = ['```diff:ts', '-const previous = 1;', '+const next = 2;', '```'].join('\n');
+		await page.evaluate(markdown => window.ashChatInputIntegration.showResultReview(markdown), patch);
+		const review = page.locator('.ash-chat-tool-result-review');
+		await expect(review.getByRole('region', { name: '等待复核的结果' })).toContainText(patch.replaceAll('\n', ' '));
+		const summary = review.getByText('预览格式化结果', { exact: true });
+		await summary.press('Enter');
+		const comparison = review.locator('.ash-chat-markdown-diff');
+		await expect(comparison.locator('.modified .view-lines')).toContainText('const next = 2;');
+		await expect(page.getByRole('status', { name: 'Decision' })).toBeEmpty();
+		await review.getByRole('button', { name: '分享结果', exact: true }).click();
+		await expect(page.getByRole('status', { name: 'Decision' })).toHaveText('share');
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
 			test(`result review preserves literal evidence and accessible keyboard actions in ${locale} ${theme}`, async function () {
@@ -4308,6 +4374,41 @@ suite('chatInput browser component', () => {
 		await expect(page.getByRole('dialog', { name: 'Choose a chat model' })).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(model).toBeFocused();
+	});
+
+	test('model picker serializes selection across reopen and retires the previous composer', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?surface=chat&modelSet=multiple&holdModelSelection');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('.ash-chat-input-model-action');
+		const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
+		const search = picker.getByRole('combobox');
+		const select = async (query: string) => {
+			await search.fill(query);
+			await search.press('Enter');
+		};
+		const requests = () => page.evaluate(() => window.ashChatInputIntegration.modelSelections());
+		await trigger.press('ArrowDown');
+		await select('extended-model');
+		await expect.poll(requests).toEqual(['extended-model']);
+		await expect(picker).toHaveAttribute('aria-busy', 'true');
+		await page.keyboard.press('Escape');
+		await expect(picker).toHaveCount(0);
+		await trigger.press('ArrowDown');
+		await select('test-model');
+		expect(await requests()).toEqual(['extended-model']);
+		await expect(picker).toHaveAttribute('aria-busy', 'true');
+		await page.evaluate(() => window.ashChatInputIntegration.switchModelSelectionInput());
+		await expect(picker).toHaveCount(0);
+		await trigger.press('ArrowDown');
+		await select('extended-model');
+		await expect.poll(requests).toEqual(['extended-model', 'extended-model']);
+		await page.evaluate(() => window.ashChatInputIntegration.finishModelSelection(0, false));
+		await expect(picker).toHaveAttribute('aria-busy', 'true');
+		await expect(picker.getByText('Could not select model', { exact: true })).toBeHidden();
+		await page.evaluate(() => window.ashChatInputIntegration.finishModelSelection(1, true));
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toHaveText('Extended model with a longer display name for coding');
 	});
 
 	for (const surface of ['chat', 'cowork']) {
@@ -4653,6 +4754,38 @@ suite('chatInput browser component', () => {
 			await expect(trigger).toBeFocused();
 		});
 	}
+
+	test('Chat working set reviews exact files and closes across conversation switches', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?locale=zh-CN&theme=hcDark');
+		const input = page.locator('.ash-chat-textarea-input');
+		await input.fill('Keep the draft');
+		await page.evaluate(() => {
+			const { setChanges, setWorkingSet } = window.ashChatInputIntegration;
+			setChanges({ files: 2, additions: 2, deletions: 0 });
+			setWorkingSet('first', 'checkpoint-1', ['repo-a', 'repo-b'].map(repositoryId => ({
+				repositoryId, files: [{ path: 'src/same.ts', kind: 'modified', binary: false, additions: 1, deletions: 0 }],
+			})));
+		});
+		const trigger = page.getByRole('button', { name: '审查变更文件', exact: true });
+		const list = page.getByRole('region', { name: '审查变更文件' });
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		await trigger.press('Enter');
+		await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+		const second = list.getByRole('button', { name: /仓库 2.*src\/same\.ts/ });
+		await expect(list.getByRole('button')).toHaveCount(2);
+		await second.press('Enter');
+		await expect(page.getByLabel('Opened sources')).toHaveText('[{"revision":"checkpoint-1","file":{"repositoryId":"repo-b","path":"src/same.ts"}}]');
+		await second.press('Escape');
+		await expect(list).toBeHidden();
+		await expect(trigger).toBeFocused();
+		await expect(input).toHaveValue('Keep the draft');
+		await trigger.press('Space');
+		await second.focus();
+		await page.evaluate(() => window.ashChatInputIntegration.setWorkingSet('second', 'checkpoint-2', []));
+		await expect(trigger).toBeHidden();
+		await expect(input).toBeFocused();
+	});
 
 	test('Chat changes animate the latest values and preserve partial, error and focus states', async function () {
 		const { page } = browserTests;
@@ -5596,6 +5729,83 @@ test('Question choices require selection and retain both presets and custom answ
 	} finally { initializeTestLocalization('en'); }
 });
 
+test('Plan review renders Markdown and resolves the original request with localized controls and feedback', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const responses: unknown[] = [];
+		using part = inputPart(sharedNotifications, undefined, 'plan', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+		const state: ChatInputState = {
+			mode: 'plan', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			interaction: {
+				requestId: 'review-plan',
+				request: {
+					type: 'userInput', request: {
+						questions: [
+							{ id: 'mode', header: 'Mode', question: 'Proceed?', required: true, allowFreeForm: false, options: [{ label: 'agent', description: '' }, { label: 'plan', description: '' }] },
+							{ id: 'feedback', header: 'Feedback', question: 'Changes?', required: false, allowFreeForm: true },
+						],
+						planReview: { markdown: '## Reconnect\n\n- Verify `retry()`.', decisionQuestionId: 'mode', approveValue: 'agent', reviseValue: 'plan', feedbackQuestionId: 'feedback' },
+					}
+				},
+			},
+		};
+		part.render(state);
+		const review = part.element.querySelector<HTMLFormElement>('.ash-chat-plan-review')!;
+		assert.equal(review.querySelector('h2')?.textContent, 'Reconnect');
+		assert.equal(review.querySelector('code')?.textContent, 'retry()');
+		const revise = review.querySelector<HTMLButtonElement>('button[type="button"]')!;
+		assert.equal(revise.textContent, '继续规划');
+		assert.equal(review.querySelector('button[type="submit"]')?.textContent, '批准并继续');
+		const field = review.querySelector('textarea')!;
+		field.value = 'Cover a timeout';
+		part.render({ ...state });
+		assert.equal(part.element.querySelector('.ash-chat-plan-review textarea'), field);
+		revise.click();
+		assert.deepEqual(responses, [{
+			requestId: 'review-plan',
+			response: { type: 'userInput', response: { answers: { mode: { value: 'plan' }, feedback: { value: 'Cover a timeout' } } } },
+		}]);
+		part.render({ ...state, interaction: undefined });
+		await Promise.resolve();
+		revise.click();
+		assert.equal(responses.length, 1);
+	} finally { initializeTestLocalization('en'); }
+});
+
+test('Follow-up footer recognizes only a final list of plain suggestions outside Markdown literals', () => {
+	const suggestion = '- [Check the reconnect log](#ash-followup)';
+	assert.deepEqual(parseChatFollowupFooter(`Done.\r\n\r\n${suggestion}\r\n${suggestion}\r\n`), { text: 'Done.', prompts: ['Check the reconnect log'] });
+	for (const markdown of [
+		`Done.\n\n\`\`\`markdown\n${suggestion}\n\`\`\``,
+		`Done.\n\n${suggestion}\n\nMore detail follows.`,
+		`Done.\n\n${suggestion}\n- [External site](https://example.com)`,
+		'Done.\n\n- [**Bold instruction**](#ash-followup)',
+	]) assert.equal(parseChatFollowupFooter(markdown), undefined);
+});
+
+test('Follow-up buttons append a draft and retire when the conversation changes', () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		using part = inputPart(sharedNotifications);
+		const state: ChatInputState = {
+			mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			conversation: { sessionId: 'session', threadId: 'first' },
+			followups: { responseId: 'reply', prompts: ['Run the reconnect tests'] },
+		};
+		part.render(state);
+		edit(part, 'Keep my draft');
+		const suggestions = part.element.querySelector<HTMLElement>('.ash-chat-followups')!;
+		assert.equal(suggestions.getAttribute('aria-label'), '后续建议');
+		const button = suggestions.querySelector('button')!;
+		button.click();
+		assert.equal(part.element.querySelector('textarea')?.value, 'Keep my draft\n\nRun the reconnect tests');
+		part.render({ ...state, conversation: { sessionId: 'session', threadId: 'second' }, followups: undefined });
+		assert.equal(suggestions.hidden, true);
+		button.click();
+		assert.equal(part.element.querySelector('textarea')?.value, 'Keep my draft\n\nRun the reconnect tests');
+	} finally { initializeTestLocalization('en'); }
+});
+
 test('MCP type and bounds errors keep the request open for correction', () => {
 	const responses: unknown[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
@@ -5821,6 +6031,27 @@ test('typed confirmation evidence reaches the real approval factory and retains 
 	}
 });
 
+test('extension approval can find a package without resolving the tool offer', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const searches: unknown[] = [];
+		const responses: unknown[] = [];
+		using command = CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => { searches.push(options); });
+		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+		part.render(richApprovalState(reviewTool({ type: 'extensionsInstall', extensions: ['publisher.valid', '@installed', '<script>literal</script>'] })));
+		const list = part.element.querySelector('.ash-chat-extension-requests')!;
+		const buttons = list.querySelectorAll('button');
+		assert.equal(buttons.length, 1);
+		assert.equal(buttons[0].getAttribute('aria-label'), '在扩展中查找 publisher.valid');
+		buttons[0].click();
+		assert.deepEqual(searches, [{ mode: 'browse', query: 'publisher.valid' }]);
+		assert.deepEqual(responses, []);
+		assert.equal(list.querySelector('script'), null);
+		await part.acceptActiveToolConfirmation();
+		assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveOnce' } }]);
+	} finally { initializeTestLocalization('en'); }
+});
+
 test('confirmation carousel reviews adjacent evidence without granting another call approval', async () => {
 	const responses: unknown[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
@@ -5828,6 +6059,7 @@ test('confirmation carousel reviews adjacent evidence without granting another c
 	const adjacent = reviewTool({ type: 'agentFeedbackReview', message: 'feedback' }, 'adjacent');
 	const state = { ...richApprovalState(current), toolInvocations: [current, adjacent] };
 	part.render(state);
+	assert.equal(part.element.querySelector('.ash-chat-rich-tool-confirmation')?.getAttribute('aria-description'), '2 pending');
 	edit(part, 'Keep the draft');
 	const click = (label: string) => [...part.element.querySelectorAll('button')].find(button => button.textContent === label)!.click();
 	click('Next tool');
@@ -5856,17 +6088,54 @@ test('authentication uses the bound MCP host and cancels hidden login without ap
 	signIn.click();
 	assert.equal(attempts[0]?.serverId, 'source-host:mcp');
 	assert.equal(attempts[0]?.signal?.aborted, false);
+	assert.equal(signIn.closest('section')?.getAttribute('aria-busy'), 'true');
+	const feedback = signIn.closest('section')?.querySelector('[role="status"]');
+	assert.equal(feedback?.textContent, 'Waiting for sign-in…');
 	part.setVisible(false);
 	assert.equal(attempts[0]?.signal?.aborted, true);
+	assert.equal(signIn.closest('section')?.hasAttribute('aria-busy'), false);
+	assert.equal(feedback?.textContent, '');
 	await login.complete();
 	await Promise.resolve();
 	assert.deepEqual(responses, []);
 	part.setVisible(true);
 	assert.equal(signIn.disabled, false);
+	signIn.click();
+	await Promise.resolve();
+	await Promise.resolve();
+	assert.equal(attempts.length, 2);
+	assert.equal(feedback?.textContent, 'Sign-in completed. Review the tool approval to continue.');
+	assert.equal(signIn.disabled, true);
+	assert.deepEqual(responses, []);
 	await part.acceptActiveToolConfirmation();
 	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveOnce' } }]);
 });
 
+
+test('result review retires its media when hidden and restores it for the same offer', () => {
+	using part = inputPart(sharedNotifications);
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'review-image', request: {
+				type: 'toolResultReview', request: {
+					toolCallId: 'call', toolName: 'read_resource', review: {
+						reason: 'Review an image', isError: false,
+						content: [{ type: 'imageUrl', url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2fcAAAAASUVORK5CYII=', detail: 'auto' }],
+					},
+				}
+			},
+		},
+	});
+	const review = part.element.querySelector('.ash-chat-tool-result-review')!;
+	const original = review.querySelector('figure')!;
+	assert.equal(original.isConnected, true);
+	part.setVisible(false);
+	assert.equal(original.isConnected, false);
+	part.setVisible(true);
+	assert.notEqual(review.querySelector('figure'), original);
+	assert.equal(review.querySelector('figure')?.isConnected, true);
+});
 
 test('Attaching a Skill retains its accepted source and digest through text edits and catalog refresh before submission', async () => {
 	const accepted = { id: { source: 'plugin:review-tools@1', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:accepted' } };

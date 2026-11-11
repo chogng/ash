@@ -5,15 +5,15 @@ import { Disposable, MutableDisposable } from '../../../../../../../base/common/
 export const markdownFrameThreshold = 1024;
 
 /** Buffers the latest response snapshot and commits it through the owning Markdown part. */
-export class IncrementalDOMMorpher extends Disposable {
+export class IncrementalDOMMorpher<T extends IMarkdownString = IMarkdownString> extends Disposable {
 	private readonly frame = this._register(new MutableDisposable());
-	private snapshot: { readonly markdown: IMarkdownString; readonly incomplete: boolean; } | undefined;
+	private snapshot: { readonly markdown: T; readonly incomplete: boolean; } | undefined;
 
 	constructor(
 		private readonly element: HTMLElement,
 		private visible: boolean,
 		private readonly sizeLimit: number,
-		private readonly commit: (markdown: IMarkdownString, incomplete: boolean, fromFrame: boolean) => void,
+		private readonly commit: (markdown: T, incomplete: boolean, fromFrame: boolean) => void,
 	) {
 		super();
 	}
@@ -22,7 +22,7 @@ export class IncrementalDOMMorpher extends Disposable {
 	get pending() { return this.snapshot; }
 
 	/** Accepts a snapshot that can be queued without touching the live DOM. */
-	tryMorph(markdown: IMarkdownString, incomplete: boolean): boolean {
+	tryMorph(markdown: T, incomplete: boolean): boolean {
 		if (this.isDisposed || !this.visible || markdown.value.length > this.sizeLimit) return false;
 		// Corrections and completion can supersede any snapshot in this frame.
 		this.snapshot = { markdown, incomplete };
@@ -37,7 +37,7 @@ export class IncrementalDOMMorpher extends Disposable {
 		return true;
 	}
 
-	update(markdown: IMarkdownString, incomplete: boolean, defer = true): void {
+	update(markdown: T, incomplete: boolean, defer = true): void {
 		// Keep size admission synchronous, including while the response is hidden.
 		if (markdown.value.length <= this.sizeLimit) {
 			if (!this.visible) {

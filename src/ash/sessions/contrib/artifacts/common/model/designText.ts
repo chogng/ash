@@ -1,7 +1,7 @@
 import { localize } from '../../../../../nls.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { isUuid } from '../../../../../base/common/uuid.js';
-import type { DesignShape } from './document.js';
+import type { DesignShape } from './designDocument.js';
 
 /** Offsets use UTF-16, matching DOM Selection and JavaScript strings. Ranges never overlap. */
 export interface DesignTextRun {

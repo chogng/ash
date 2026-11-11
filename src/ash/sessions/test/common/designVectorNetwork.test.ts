@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
 import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
-import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/artifacts/common/model/document.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/artifacts/common/model/designDocument.js';
 import { designPathContours, type DesignPath } from '../../contrib/artifacts/common/model/designVector.js';
 import { connectDesignNetwork, designNetworkRegions, moveDesignNetworkVertices, paintDesignNetworkFromPath, splitDesignNetworkEdge, toDesignVectorNetwork, withDesignVectorNetwork } from '../../contrib/artifacts/common/model/designVectorNetwork.js';
 import { cubicBezierPoint } from '../../contrib/artifacts/common/core/geometry.js';

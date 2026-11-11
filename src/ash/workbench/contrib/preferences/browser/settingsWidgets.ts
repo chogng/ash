@@ -138,7 +138,7 @@ export class SettingsSearchWidget extends Disposable {
 export interface SettingWidgetOptions {
 	readonly configurationOverrides?: IConfigurationOverrides;
 	readonly configurationTarget?: ConfigurationTarget;
-	readonly actionsOnContextMenu?: boolean;
+	readonly actionsOnContextMenuOnly?: boolean;
 	readonly onStatus: (message: string, isError: boolean) => void;
 	readonly onOpenSettings?: (key: string) => Promise<void>;
 	readonly onRevealSetting?: (key: string) => void;
@@ -154,38 +154,27 @@ export interface SettingWidget extends IDisposable {
 interface SettingActionsOptions {
 	readonly reference: SettingReference;
 	readonly canReset: () => boolean;
-	readonly actionsOnContextMenu?: boolean;
+	readonly actionsOnContextMenuOnly?: boolean;
 	readonly onError: (error: unknown) => void;
 	readonly copySettingAsJSON?: () => string;
 	readonly editInJSON?: () => Promise<void>;
 }
 
 class SettingActions extends Disposable {
-	private readonly actionsDomNode: HTMLSpanElement;
-	private readonly trigger: Button;
+	private readonly actionsDomNode?: HTMLSpanElement;
+	private readonly trigger?: Button;
+	private menuOpen = false;
 
-	constructor(container: HTMLElement, label: string, private readonly options: SettingActionsOptions,
+	constructor(private readonly container: HTMLElement, label: string, private readonly options: SettingActionsOptions,
 		@IClipboardService private readonly clipboardService: IClipboardService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
 		super();
-		this.actionsDomNode = h(container.ownerDocument, 'span');
-		this.actionsDomNode.className = 'ash-setting-item-actions';
-		this.trigger = this._register(new Button(this.actionsDomNode, {
-			...defaultButtonStyles,
-			label: '',
-			icon: Lxicon.gear,
-			onClick: () => this.show(),
-		}));
-		this.trigger.toggleClassName('ash-setting-item-actions-trigger', true);
-		this.trigger.domNode.setAttribute('aria-haspopup', 'menu');
-		this.trigger.domNode.setAttribute('aria-expanded', 'false');
-		this.updateLabel(label);
 		container.dataset.settingsItemId = options.reference.id;
 		container.dataset.settingsItemKind = 'setting';
 		container.classList.add('ash-setting-item');
-		container.prepend(this.actionsDomNode);
-		if (options.actionsOnContextMenu) {
+		if (options.actionsOnContextMenuOnly) {
+			container.setAttribute('aria-keyshortcuts', 'Shift+F10');
 			this._register(addDisposableListener(container, 'contextmenu', (event: MouseEvent) => {
 				if (event.defaultPrevented || (isElement(event.target) && event.target.closest('input, textarea, a, [contenteditable]'))) return;
 				stopEvent(event);
@@ -194,22 +183,43 @@ class SettingActions extends Disposable {
 					: container;
 				this.show(anchor);
 			}));
+			this._register(addDisposableListener(container, 'keydown', (event: KeyboardEvent) => {
+				if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return;
+				if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+				stopEvent(event);
+				if (!event.repeat) this.show(isElement(event.target) ? event.target : container);
+			}));
+		} else {
+			this.actionsDomNode = h(container.ownerDocument, 'span');
+			this.actionsDomNode.className = 'ash-setting-item-actions';
+			this.trigger = this._register(new Button(this.actionsDomNode, {
+				...defaultButtonStyles,
+				label: '',
+				icon: Lxicon.gear,
+				onClick: event => this.show(isElement(event.currentTarget) ? event.currentTarget : container),
+			}));
+			this.trigger.toggleClassName('ash-setting-item-actions-trigger', true);
+			this.trigger.domNode.setAttribute('aria-haspopup', 'menu');
+			this.trigger.domNode.setAttribute('aria-expanded', 'false');
+			this.updateLabel(label);
+			container.prepend(this.actionsDomNode);
 		}
 		this._register(toDisposable(() => {
 			container.classList.remove('ash-setting-item');
-			this.actionsDomNode.remove();
+			this.actionsDomNode?.remove();
 		}));
 	}
 
 	public updateLabel(label: string): void {
+		if (!this.trigger) return;
 		const actionLabel = localize({ bundle: 'ash.settings', key: 'actions.more' }, 'More actions for {0}', label);
 		this.trigger.label = actionLabel;
 		this.trigger.setTitle(actionLabel);
 		this.trigger.domNode.setAttribute('aria-label', actionLabel);
 	}
 
-	private show(anchor: ContextMenuAnchor = this.trigger.domNode): void {
-		if (this.actionsDomNode.classList.contains('is-open')) return;
+	private show(anchor: ContextMenuAnchor): void {
+		if (this.menuOpen) return;
 		const actions: IAction[] = [
 			{
 				id: 'settings.resetSetting',
@@ -262,12 +272,14 @@ class SettingActions extends Disposable {
 	}
 
 	focus(): void {
-		this.trigger.focus();
+		if (this.trigger) this.trigger.focus();
+		else this.container.focus();
 	}
 
 	private setOpen(open: boolean): void {
-		this.actionsDomNode.classList.toggle('is-open', open);
-		this.trigger.domNode.setAttribute('aria-expanded', String(open));
+		this.menuOpen = open;
+		this.actionsDomNode?.classList.toggle('is-open', open);
+		this.trigger?.domNode.setAttribute('aria-expanded', String(open));
 	}
 }
 
@@ -321,7 +333,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 					reset: () => this.resetSetting(),
 				},
 				canReset: () => !this.hasPolicyValue,
-				actionsOnContextMenu: options.actionsOnContextMenu,
+				actionsOnContextMenuOnly: options.actionsOnContextMenuOnly,
 				editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
 				onError: (error: unknown) => this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 				copySettingAsJSON: descriptor.binding ? undefined : () => {
@@ -352,7 +364,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	}
 
 	public focus(): void {
-		this.domNode.tabIndex = -1;
+		if (!this.domNode.hasAttribute('tabindex')) this.domNode.tabIndex = -1;
 		this.domNode.focus();
 	}
 
@@ -363,6 +375,8 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			this.indicators.update({ isPending: state.isPending, isConfigured, hasPolicyValue: this.hasPolicyValue });
 			this.domNode.classList.toggle('is-configured', isConfigured);
 			this.updateIndicatorDescriptions();
+			// A policy-disabled control still needs a keyboard target for its setting menu.
+			if (this.options.actionsOnContextMenuOnly) this.domNode.tabIndex = this.hasPolicyValue ? 0 : -1;
 			const document = this.domNode.ownerDocument;
 			const activeBeforeRender = getActiveElement(document);
 			if (state.isPending && !this.pendingFocus) {

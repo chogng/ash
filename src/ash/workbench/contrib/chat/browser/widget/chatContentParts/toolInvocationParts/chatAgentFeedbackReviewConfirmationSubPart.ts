@@ -1,3 +1,4 @@
+import '../media/chatAgentFeedbackReviewConfirmation.css';
 import { h } from '../../../../../../../base/browser/dom.js';
 import type { ActionApprovalRequest, AgentResponse, ToolConfirmationPresentation } from '../../../../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../../../../nls.js';
@@ -8,7 +9,7 @@ export class ChatAgentFeedbackReviewConfirmationSubPart extends AbstractToolConf
 	constructor(document: Document, resolve: (response: AgentResponse) => Promise<void>, private readonly presentation: Extract<ToolConfirmationPresentation, { type: 'agentFeedbackReview'; }>) { super(document, resolve); }
 	protected createContentElement(request: ActionApprovalRequest): HTMLElement {
 		const root = h(this.domNode.ownerDocument, 'section');
-		root.className = 'ash-chat-rich-tool-confirmation';
+		root.className = 'ash-chat-rich-tool-confirmation ash-chat-agent-feedback-review';
 		const region = h(root.ownerDocument, 'pre');
 		region.tabIndex = 0;
 		region.setAttribute('role', 'region');

@@ -164,7 +164,7 @@ test('Side Chat selection accepts only text owned by its transcript, including C
 	range.selectNodeContents(f.widget.domNode.querySelector('p')!);
 	selection.removeAllRanges(); selection.addRange(range);
 	assert.deepEqual(captureSideChatSelection(f.widget), { text: 'Source selection' });
-	f.widget.domNode.querySelector('p')!.parentElement!.className = 'ash-cowork-list-widget';
+	f.widget.domNode.querySelector('p')!.parentElement!.className = 'ash-native-chat-list-widget';
 	assert.deepEqual(captureSideChatSelection(f.widget), { text: 'Source selection' });
 	range.selectNodeContents(f.widget.domNode.querySelector('.outside')!);
 	selection.removeAllRanges(); selection.addRange(range);
