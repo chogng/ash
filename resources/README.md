@@ -165,8 +165,10 @@ font loading belongs to each product host.
 
 Ash Sans and Ash Sans SC share a 900-unit ascender and 100-unit descender on a
 1000-unit em. Keep the `hhea` and `OS/2` typographic metrics in sync across
-weights. The runtime TTFs apply these metrics to the original font tables
-with FontTools, preserving the supplied outlines and advance widths.
+weights. The runtime TTFs keep the supplied advance widths. Ash Sans SemiBold
+uses the lighter Medium outlines centered on the original SemiBold advances.
+Keep its 600 weight metadata so existing headings and emphasis use the new
+outlines.
 
 Saving and reopening the SFDs preserves the imported quadratic outlines,
 available layout lookups and TrueType instructions. Re-export checks retain the

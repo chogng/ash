@@ -1,4 +1,5 @@
 .ash-sessions-settings-dialog.ash-dialog {
+	--ash-fontSize-heading3: 15px;
 	width: 960px;
 	height: min(640px, calc(100dvh - min(90px, 20dvh)));
 	container-type: inline-size;
@@ -12,6 +13,11 @@
 
 .ash-sessions-settings-dialog > .ash-dialog-header {
 	position: relative;
+}
+
+.ash-sessions-settings-dialog > .ash-dialog-header > .ash-dialog-title,
+.ash-sessions-settings-page-title {
+	font-size: var(--ash-fontSize-heading3);
 }
 
 .ash-sessions-settings-dialog > .ash-dialog-header::after {
@@ -127,6 +133,7 @@
 }
 
 .ash-sessions-settings-page {
+	--ash-fontSize-body2: 13px;
 	grid-column: 2;
 	grid-row: 1;
 	min-width: 0;
@@ -149,7 +156,6 @@
 .ash-sessions-settings-page-title {
 	margin: 0 0 var(--ash-spacing-size160);
 	color: var(--ash-foreground);
-	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 
@@ -178,6 +184,13 @@
 
 .ash-sessions-settings-page .ash-settings-tree-group-description:empty {
 	display: none;
+}
+
+.ash-sessions-settings-page
+	:is(.ash-sessions-settings-group-description, .ash-settings-section > p) {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.5;
 }
 
 .ash-sessions-settings-page
@@ -319,8 +332,8 @@
 }
 
 .ash-sessions-settings-page .ash-local-transcription-model-table thead {
-	color: var(--ash-muted-foreground);
-	font-size: var(--ash-fontSize-label2);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .ash-sessions-settings-page .ash-local-transcription-model-language-tags {
@@ -386,8 +399,24 @@
 		.ash-configuration-setting-description,
 		.ash-settings-field-description
 	) {
-	color: var(--ash-muted-foreground);
+	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-body1);
+	line-height: 1.5;
+}
+
+:where([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-settings-page
+	:is(
+		.ash-configuration-setting-description,
+		.ash-settings-field-description,
+		.ash-sessions-settings-group-description,
+		.ash-settings-section > p
+	) {
+	color: color-mix(
+		in srgb,
+		var(--ash-description-foreground) 25%,
+		var(--ash-muted-foreground)
+	);
 }
 
 .ash-sessions-settings-page .ash-configuration-setting > .ash-select-box {

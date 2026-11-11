@@ -2274,9 +2274,22 @@ suite('sessions browser component', () => {
 		await accounts.click();
 		await expect(settingsAction).toHaveCSS('font-size', '14px');
 		await settingsAction.click();
+		const settingsDialog = page.getByRole('dialog', { name: chinese ? '设置' : 'Settings', exact: true });
+		const dialogTitle = settingsDialog.locator('.ash-dialog-title');
+		const categoryTitle = settings.locator('.ash-sessions-settings-page-title');
+		for (const title of [dialogTitle, categoryTitle]) {
+			await expect(title).toHaveCSS('font-size', '15px');
+			await expect(title).toHaveCSS('font-weight', '600');
+		}
+		await settings.locator('[data-settings-category-id="account"]').click();
+		await expect(settings.locator('.ash-settings-section > p')).toHaveCSS('font-size', '13px');
 		await expect(settings.getByRole('searchbox')).toHaveCSS('font-size', '14px');
 		await settings.getByRole('searchbox').fill('@id:sessions.experimental.layoutScope');
-		await expect(settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"] .ash-configuration-setting-description:not([hidden])')).toHaveCSS('font-size', '14px');
+		const layoutScope = settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"]');
+		await expect(layoutScope.locator('.ash-configuration-setting-title')).toHaveCSS('font-size', '14px');
+		await expect(layoutScope.locator('.ash-configuration-setting-title')).toHaveCSS('font-weight', '400');
+		await expect(layoutScope.locator('.ash-configuration-setting-description:not([hidden])')).toHaveCSS('font-size', '14px');
+		await expect(layoutScope.getByRole('combobox')).toHaveCSS('font-size', '14px');
 		await page.screenshot({ path: testInfo.outputPath(`sessions-typography-settings-${locale}.png`) });
 		const ide = await context.newPage();
 		try {
