@@ -411,8 +411,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	}
 
 	private applyDimensions(cols: number, rows: number): void {
-		if (this.isDisposed || !this.terminal || cols === this.terminal.cols && rows === this.terminal.rows) return;
-		this.terminal.resize(cols, rows);
+		if (this.isDisposed || !this.terminal) return;
+		if (cols !== this.terminal.cols || rows !== this.terminal.rows) this.terminal.resize(cols, rows);
+		// An unchanged grid is still a valid first measurement for a new PTY.
 		this.instance.resize(this.dimensions());
 	}
 

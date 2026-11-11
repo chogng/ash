@@ -97,22 +97,29 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 		let retired = false;
 		lifetime.add(parent.onDidChangeState(() => retired = true));
 		if (parent.onDidChangeTarget) lifetime.add(parent.onDidChangeTarget(() => retired = true));
+		const assertCurrent = (): void => {
+			if (this.isDisposed || retired || !this.terminals.instances.includes(parent)
+				|| !input.contains(source) || !this.editorGroups.getGroup(group.id)?.inputs.includes(input)) throw canceled();
+		};
 		const instance = await this.terminals.createTerminal({
 			location: { parentTerminal: parent, viewColumn: group.id },
-			deferEditorOpen: true,
 			skipContributedProfileCheck: true,
+			placeInEditor: instance => {
+				assertCurrent();
+				if (!instance.resource) throw canceled();
+				input.addPane(instance.resource, direction, source, candidate => this.getInstanceFromResource(candidate) !== undefined);
+			},
 		});
-		if (this.isDisposed || retired || !instance.resource || !this.terminals.instances.includes(instance)
-			|| !this.terminals.instances.includes(parent) || !input.contains(source)
-			|| !this.editorGroups.getGroup(group.id)?.inputs.includes(input)) {
+		try {
+			assertCurrent();
+			if (!instance.resource || !input.contains(instance.resource)) throw canceled();
+		} catch (error) {
 			if (this.terminals.instances.includes(instance)) await this.terminals.closeTerminal(instance);
-			throw canceled();
+			throw error;
 		}
-		const resource = instance.resource;
-		input.addPane(resource, direction, source, candidate => this.getInstanceFromResource(candidate) !== undefined);
 		const pane = this.editors.activeEditorPane;
 		if (!preserveFocus && this.editors.activeEditor === input && pane) {
-			input.activeResource = resource;
+			input.activeResource = instance.resource;
 			pane.focus();
 		}
 	}

@@ -151,7 +151,12 @@ function splitFixture() {
 	const closed: ITerminalInstance[] = [];
 	const removed: IEditorGroup[] = [];
 	const requests: ICreateTerminalOptions[] = [];
-	let create = async (options: ICreateTerminalOptions): Promise<ITerminalInstance> => { requests.push(options); instances.push(created); return created; };
+	let create = async (options: ICreateTerminalOptions): Promise<ITerminalInstance> => {
+		requests.push(options);
+		instances.push(created);
+		options.placeInEditor?.(created);
+		return created;
+	};
 	const terminals = { instances, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, createTerminal: (options: ICreateTerminalOptions) => create(options), closeTerminal: async (instance: ITerminalInstance) => { closed.push(instance); instances.splice(instances.indexOf(instance), 1); } } as unknown as ITerminalService;
 	const groups = {
 		groups: allGroups, onDidChangeGroups: Event.None,
@@ -163,11 +168,11 @@ function splitFixture() {
 	return { lifetime, input, source, created, destination, allGroups, instances, state, closed, removed, requests, service, setCreate: (value: typeof create) => create = value };
 }
 
-test('splitting within a tab adds an unplaced shell and detaching one pane keeps its sibling', async () => {
+test('splitting within a tab mounts the shell in the tab and detaching one pane keeps its sibling', async () => {
 	const f = splitFixture();
 	using lifetime = f.lifetime;
 	await f.service.splitPane(f.input, true);
-	assert.deepEqual(f.requests, [{ location: { parentTerminal: f.source, viewColumn: 7 }, deferEditorOpen: true, skipContributedProfileCheck: true }]);
+	assert.deepEqual(f.requests, [{ location: { parentTerminal: f.source, viewColumn: 7 }, placeInEditor: f.requests[0]?.placeInEditor, skipContributedProfileCheck: true }]);
 	assert.deepEqual(f.input.panes.get().map(pane => pane.resource), [f.source.resource, f.created.resource]);
 	await f.service.detachInstance(f.source);
 	assert.deepEqual(f.input.panes.get().map(pane => pane.resource), [f.created.resource]);

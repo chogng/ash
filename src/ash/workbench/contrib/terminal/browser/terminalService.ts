@@ -169,7 +169,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			await this.whenConnected;
 		}
 		const location = options.location ?? this.getDefaultLocation();
-		const deferEditorOpen = options.deferEditorOpen === true && isEditorLocation(location);
+		const deferEditorOpen = (options.deferEditorOpen === true || options.placeInEditor !== undefined) && isEditorLocation(location);
 		const preserveFocus = options.preserveFocus ?? (isEditorLocation(location) && typeof location === 'object' && location.preserveFocus);
 		const parent = typeof location === 'object' && 'parentTerminal' in location ? await location.parentTerminal
 			: typeof location === 'object' && 'splitActiveTerminal' in location && location.splitActiveTerminal ? this.activeInstance : undefined;
@@ -281,20 +281,34 @@ export class TerminalService extends Disposable implements ITerminalService {
 			};
 		}
 		assertCurrent();
-		const instance = await this.createTerminalCore(launch, isEditorLocation(location) ? TerminalLocation.Editor : undefined, !preserveFocus && !deferEditorOpen);
-		return this.placeCreatedTerminal(instance, location, parent, assertCurrent, deferEditorOpen);
+		const editor = isEditorLocation(location);
+		const target = editor ? TerminalLocation.Editor : undefined;
+		const activate = !preserveFocus && !deferEditorOpen;
+		const placeInEditor = options.placeInEditor;
+		let rollback: (() => void) | void;
+		const mount = placeInEditor && ((instance: ITerminalInstance) => { rollback = placeInEditor(instance); });
+		const place = (instance: ITerminalInstance) => this.placeCreatedTerminal(instance, location, parent, assertCurrent, deferEditorOpen, mount);
+		const canLayOut = editor ? !deferEditorOpen || mount !== undefined : activate;
+		const waitForLayout = !options.dimensions && !launch.config && !launch.execution && !launch.deferStart && !launch.attachPersistentProcess
+			&& canLayOut;
+		if (waitForLayout) return this.createTerminalCore(launch, target, activate, { place, assertCurrent, rollback: () => rollback?.() });
+		return place(await this.createTerminalCore(launch, target, activate));
 	}
 
-	private async placeCreatedTerminal(instance: ITerminalInstance, location: ITerminalLocationOptions | undefined, parent: ITerminalInstance | undefined, assertCurrent: () => void, skipEditorOpen = false): Promise<ITerminalInstance> {
+	private async placeCreatedTerminal(instance: ITerminalInstance, location: ITerminalLocationOptions | undefined, parent: ITerminalInstance | undefined, assertCurrent: () => void, skipEditorOpen = false, placeInEditor?: (instance: ITerminalInstance) => void): Promise<ITerminalInstance> {
 		try {
 			assertCurrent();
 			if (!this.instances.includes(instance)) throw new CancellationError();
 			if (isEditorLocation(location)) {
 				// Extension providers can finish opening the requested editor during
 				// recursive creation. Keep placement with that completed operation.
-				if (!skipEditorOpen) await this.terminalEditors.openEditor(instance, typeof location === 'object' ? location : undefined);
+				if (placeInEditor) placeInEditor(instance);
+				else if (!skipEditorOpen) await this.terminalEditors.openEditor(instance, typeof location === 'object' ? location : undefined);
 			}
-			else if (parent) this.groups.joinInstances([parent, instance]);
+			else if (parent) {
+				this.groups.createGroup(instance);
+				this.groups.joinInstances([parent, instance]);
+			}
 			return instance;
 		} catch (error) {
 			if (this.instances.includes(instance)) await this.closeTerminal(instance);
@@ -427,23 +441,40 @@ export class TerminalService extends Disposable implements ITerminalService {
 		}
 	}
 
-	private async createTerminalCore(options: ITerminalCreateOptions, target?: TerminalLocation, activate = true): Promise<ITerminalInstance> {
+	private async createTerminalCore(options: ITerminalCreateOptions, target?: TerminalLocation, activate = true, initialLayout?: {
+		readonly place: (instance: ITerminalInstance) => Promise<ITerminalInstance>;
+		readonly assertCurrent: () => void;
+		readonly rollback: () => void;
+	}): Promise<ITerminalInstance> {
 		if (this.isDisposed) throw new CancellationError();
+		let rollbackPlacement = initialLayout?.rollback;
 		const instance = await this.instanceFactory.createInstance(options, {
 			getConnectionState: () => this.connectionState,
-			onClosed: instance => this.removeInstance(instance),
+			onClosed: instance => {
+				try { rollbackPlacement?.(); }
+				finally { this.removeInstance(instance); }
+			},
 			onTitleChanged: () => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
-		});
+		}, initialLayout && (async instance => {
+			this.addInstance(instance, target);
+			if (activate) this.setActiveInstance(instance);
+			this._onDidChangeInstances.fire();
+			await initialLayout.place(instance);
+			const dimensions = await instance.waitForInitialDimensions();
+			initialLayout.assertCurrent();
+			return dimensions;
+		}));
 		try {
 			if (this.isDisposed) throw new CancellationError();
-			if (target !== undefined) instance.target = target;
-			this.ownedInstances.set(instance.id, instance);
-			this._instances.push(instance);
+			if (!initialLayout) this.addInstance(instance, target);
+			else initialLayout.assertCurrent();
+			if (instance.isClosing) throw new CancellationError();
+			rollbackPlacement = undefined;
 			this.refreshInstanceTitles();
 			if (options.deferStart && this.connectionState !== 'ready') instance.loseConnection();
 			this._onDidCreateInstance.fire(instance);
 			if (this.isDisposed || !this._instances.includes(instance)) throw new CancellationError();
-			if (activate) this.setActiveInstance(instance);
+			if (activate && !initialLayout) this.setActiveInstance(instance);
 			if (!options.deferStart) instance.start();
 			this._onDidChangeInstances.fire();
 			return instance;
@@ -451,6 +482,12 @@ export class TerminalService extends Disposable implements ITerminalService {
 			await instance.close().catch(onUnexpectedError);
 			throw error;
 		}
+	}
+
+	private addInstance(instance: TerminalInstance, target: TerminalLocation | undefined): void {
+		if (target !== undefined) instance.target = target;
+		this.ownedInstances.set(instance.id, instance);
+		this._instances.push(instance);
 	}
 
 	private readonly pendingRelaunches = new Map<ITerminalInstance, Promise<void>>();
