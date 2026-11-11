@@ -25,23 +25,24 @@ suite('appTools browser component', () => {
 				const titleButton = page.getByRole('button', { name: title, exact: true });
 				const row = list.locator('.ash-sessions-list-row').filter({ has: titleButton });
 				const button = row.getByRole('button', { name: title, exact: true });
-				const label = button.locator('.ash-sessions-list-label');
-				const text = label.locator('span');
+				const label = button.locator('.ash-sessions-list-title-viewport');
+				const text = label.locator('> span');
 				const toolbar = row.locator('.ash-sessions-list-actions');
 				await expect(label).toHaveCSS('text-overflow', 'clip');
 				await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
 				await button.hover();
-				await expect(toolbar).toBeVisible();
+				await expect(toolbar).toHaveCSS('opacity', '1');
 				await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
 				expect(await text.evaluate(element => {
 					element.getAnimations()[0]!.finish();
 					const viewport = element.parentElement!.getBoundingClientRect();
-					const actions = element.closest('.ash-sessions-list-row')!.querySelector('.ash-sessions-list-actions')!.getBoundingClientRect();
-					return Math.min(viewport.right, actions.left) - element.getBoundingClientRect().right;
-				})).toBeGreaterThanOrEqual(15);
+					return viewport.right - element.getBoundingClientRect().right;
+				})).toBeCloseTo(0, 0);
+				const viewport = (await label.boundingBox())!;
+				expect(viewport.x + viewport.width).toBeLessThan((await toolbar.boundingBox())!.x);
 				await short.hover();
 				await expect(text).toHaveCSS('transform', 'none');
-				await expect(short.locator('.ash-sessions-list-label')).toHaveCSS('mask-image', 'none');
+				await expect(short.locator('.ash-sessions-list-title-viewport')).toHaveCSS('mask-image', 'none');
 			}
 		});
 	}

@@ -172,8 +172,8 @@ test('ChatGPT sidebar fades long titles at rest and uses ellipsis in forced colo
 	}));
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
 	const sidebar = page.locator('.ash-chat-navigation');
-	const longLabel = sidebar.getByRole('button', { name: longTitle, exact: true }).locator('.ash-sessions-list-label');
-	const shortLabel = sidebar.getByRole('button', { name: '短标题', exact: true }).locator('.ash-sessions-list-label');
+	const longLabel = sidebar.getByRole('button', { name: longTitle, exact: true }).locator('.ash-sessions-list-title-viewport');
+	const shortLabel = sidebar.getByRole('button', { name: '短标题', exact: true }).locator('.ash-sessions-list-title-viewport');
 
 	await expect(longLabel).toHaveCSS('text-overflow', 'clip');
 	await expect(longLabel).toHaveCSS('mask-image', /^linear-gradient/);
@@ -355,11 +355,12 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	const defaultIcon = trigger.locator('[data-ash-icon-id="chat-session"]');
 	await expect(defaultIcon).toBeVisible();
 	await expect(defaultIcon).toHaveCSS('width', '18px');
+	// This fixture uses the window defaults: a 28px button with a 2px row inset.
 	await expect.poll(async () => {
 		const bounds = (await row.boundingBox())!;
 		const button = (await trigger.boundingBox())!;
 		return [button.x - bounds.x, button.y - bounds.y, button.width, button.height];
-	}).toEqual([7, 2, 28, 28]);
+	}).toEqual([2, 2, 28, 28]);
 	const moreAction = row.locator('.ash-sessions-list-actions button').last();
 	await title.hover();
 	await moreAction.hover();
@@ -376,7 +377,7 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(picker).toBeHidden();
 	await expect(trigger).toBeFocused();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
-	await expect(title).not.toHaveAttribute('aria-current');
+	await expect(title).toHaveAttribute('aria-current', 'false');
 	let releaseHistory!: () => void;
 	const holdHistory = new Promise<void>(resolve => { releaseHistory = resolve; });
 	await page.route('**/service/backend-api/conversation/fixture-chat', async route => {
@@ -405,7 +406,7 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('.ash-session-status-icon-layer')).toHaveCount(1);
 	await expect(title).toHaveAttribute('aria-current', 'page');
 	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(true));
-	await expect(title).not.toHaveAttribute('aria-current');
+	await expect(title).toHaveAttribute('aria-current', 'false');
 	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(false));
 	await expect(title).toHaveAttribute('aria-current', 'page');
 	await page.reload();

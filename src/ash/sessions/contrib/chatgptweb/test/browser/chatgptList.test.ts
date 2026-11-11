@@ -168,6 +168,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(more).toHaveAttribute('aria-expanded', 'false');
 		await editor.getByRole('button', { name: '取消', exact: true }).click();
 		await expect(editor).toHaveCount(0);
+		await expect(more).toBeFocused();
 
 		await project('Writing').click({ button: 'right' });
 		const deleteAction = action('删除');
@@ -749,8 +750,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		}));
 		await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
 		const button = page.getByRole('button', { name: longTitle, exact: true });
-		const label = button.locator('.ash-sessions-list-label');
-		const text = label.locator('span');
+		const label = button.locator('.ash-sessions-list-title-viewport');
+		const text = label.locator('> span');
 		const short = page.getByRole('button', { name: '短标题', exact: true });
 		await expect(label).toHaveCSS('text-overflow', 'clip');
 		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
@@ -762,16 +763,19 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
 			expect(await text.evaluate((element, dir) => {
 				element.getAnimations()[0]!.finish();
-				const viewport = element.parentElement!.getBoundingClientRect();
+				const label = element.parentElement!;
+				label.getAnimations()[0]!.finish();
+				const viewport = label.getBoundingClientRect();
 				const content = element.getBoundingClientRect();
 				return dir === 'rtl' ? content.left - viewport.left : viewport.right - content.right;
-			}, direction)).toBeGreaterThanOrEqual(15);
-			await expect(label).toHaveCSS('mask-size', '100% 100%');
+			}, direction)).toBeCloseTo(0, 0);
+			await expect(label).toHaveCSS('mask-size', 'calc(100% + 24px) 100%');
+			await expect(label).toHaveCSS('mask-position', direction === 'rtl' ? '100% 50%' : '0% 50%');
 
 			await short.hover();
 			await expect(text).toHaveCSS('transform', 'none');
 			await expect(label).toHaveCSS('animation-name', 'none');
-			await expect(short.locator('.ash-sessions-list-label')).toHaveCSS('mask-image', 'none');
+			await expect(short.locator('.ash-sessions-list-title-viewport')).toHaveCSS('mask-image', 'none');
 		}
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await button.hover();
@@ -786,6 +790,65 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(label).toHaveCSS('mask-image', 'none');
 		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
 		await expect(text).toHaveCSS('animation-name', 'none');
+	});
+
+	test('project titles retain their width while the fade moves to the floating actions', async () => {
+		const { page } = browserTests;
+		const longTitle = '用于测试侧栏渐隐和行尾操作布局的超长项目标题';
+		const shortTitle = '短项目';
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: {
+				items: [longTitle, shortTitle].map((name, index) => ({
+					gizmo: { id: `g-p-title-${index}`, display: { name } },
+				})),
+				cursor: null,
+			},
+		}));
+		await page.goto('/chatgptNavigation.html?projects&locale=zh-CN&theme=light');
+		const sidebar = page.locator('.ash-chat-navigation-list');
+		const row = sidebar.locator('[data-project-id="g-p-title-0"]');
+		const project = row.getByRole('button', { name: longTitle, exact: true });
+		const label = project.locator('.ash-sessions-list-title-viewport');
+		const text = label.locator('> span');
+		const actions = row.locator('.ash-sessions-list-actions');
+		const short = sidebar.getByRole('button', { name: shortTitle, exact: true });
+		await expect(project).toHaveAttribute('title', longTitle);
+		await expect(actions).toHaveCSS('opacity', '0');
+		await expect(actions).toHaveCSS('pointer-events', 'none');
+		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
+		await expect(label).toHaveCSS('text-overflow', 'clip');
+		const resting = (await label.boundingBox())!;
+		const buttonBounds = await project.boundingBox();
+		const actionBounds = (await actions.boundingBox())!;
+
+		await project.hover();
+		await expect(actions).toHaveCSS('opacity', '1');
+		const hovered = (await label.boundingBox())!;
+		expect(hovered.x).toBe(resting.x);
+		expect(hovered.width).toBeLessThan(resting.width);
+		expect(actionBounds.x - (hovered.x + hovered.width)).toBeCloseTo(4, 0);
+		expect(await project.boundingBox()).toEqual(buttonBounds);
+		expect(await actions.boundingBox()).toEqual(actionBounds);
+		await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
+
+		await short.hover();
+		await expect(actions).toHaveCSS('opacity', '0');
+		expect(await label.boundingBox()).toEqual(resting);
+		await expect(short.locator('.ash-sessions-list-title-viewport')).toHaveCSS('mask-image', 'none');
+
+		const navigation = page.locator('#navigation');
+		await navigation.evaluate(node => { node.style.width = '460px'; });
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await navigation.evaluate(node => { node.style.removeProperty('width'); });
+		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
+
+		await project.focus();
+		await expect(actions).toHaveCSS('opacity', '1');
+		await expect(text).toHaveCSS('animation-name', 'none');
+		await page.emulateMedia({ forcedColors: 'active' });
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
 	});
 
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {

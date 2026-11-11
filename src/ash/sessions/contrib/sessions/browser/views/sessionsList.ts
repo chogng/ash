@@ -22,7 +22,7 @@ import { localize } from '../../../../../nls.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Event } from '../../../../../base/common/event.js';
-import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableMap, DisposableStore, type IDisposable, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
 import { getSessionsListEntries, sessionSortTime } from './sessionsListFilters.js';
 import { catalogConversationActions, conversationMenuActions, sessionListProjectActions, sessionProjectOrganization, sessionSortActions, startConversationRename, type ConversationMenuTarget, type SessionListOrganization, type SessionListProjectOrganization } from './sessionsListActions.js';
@@ -1637,7 +1637,7 @@ class SessionListItem extends AbstractDisposable {
 		kind: 'conversation' | 'draft' | 'project', icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon,
 	) {
 		super();
-		this.row = new SessionListRowRenderer(ownerDocument, kind === 'project' ? 'static' : 'scrollOnHover', leadingIcon?.element);
+		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);
 		this.domNode = this.row.element;
 		this.button = this.row.button;
 		this.actions = new WorkbenchToolBar(this.domNode, contextMenus, {
@@ -1647,6 +1647,7 @@ class SessionListItem extends AbstractDisposable {
 		if (kind === 'project') this.domNode.classList.add('ash-sessions-list-project-row');
 		this.actions.element.classList.add('ash-sessions-list-actions');
 		this.actions.element.hidden = true;
+		this.row.observeActions(this.actions.element);
 		this.statusAnnouncement = h(ownerDocument, 'span', {
 			className: 'ash-aria-live',
 			attributes: { 'aria-live': 'polite' },
@@ -1856,7 +1857,7 @@ class SessionListSection extends Disposable {
 	readonly domNode: HTMLElement;
 	readonly button: HTMLButtonElement;
 	private readonly heading: HTMLElement;
-	private readonly label: HTMLElement;
+	private readonly label: SessionListTitle;
 	private readonly icon: HTMLElement;
 	private readonly appearanceIcon: HTMLElement;
 	private readonly actions: WorkbenchToolBar | undefined;
@@ -1867,7 +1868,7 @@ class SessionListSection extends Disposable {
 	private collapsed = true;
 
 	private get subgroup(): boolean { return this.kind !== 'section'; }
-	get title(): string { return this.label.textContent ?? ''; }
+	get title(): string { return this.label.title; }
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
 	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code', contextMenus: IContextMenuService,
@@ -1882,8 +1883,8 @@ class SessionListSection extends Disposable {
 		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
 		if (kind === 'project') this.icon.classList.add('ash-sessions-list-project-icon');
 		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
-		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
-		this.button.append(...(this.subgroup ? [this.icon, this.label] : [this.label, this.icon]));
+		this.label = this._register(new SessionListTitle(document, 'ash-sessions-list-section-label', kind === 'project' ? 'fade' : 'static'));
+		this.button.append(...(this.subgroup ? [this.icon, this.label.element] : [this.label.element, this.icon]));
 		this.heading.append(this.button);
 		this.domNode.append(this.heading);
 		if (kind === 'project') {
@@ -1893,6 +1894,7 @@ class SessionListSection extends Disposable {
 			}));
 			this.actions.element.classList.add('ash-sessions-list-actions');
 			this.actions.element.hidden = true;
+			this.label.observeActions(this.actions.element);
 			// The toolbar owns activation. A tree click would return focus to the row and dismiss the menu.
 			this._register(addDisposableListener(this.actions.element, 'click', event => event.stopPropagation()));
 			this.actions.setActions([rowMoreAction(() => {
@@ -1967,7 +1969,7 @@ class SessionListSection extends Disposable {
 
 	update(title: string, options?: { readonly open?: () => void; readonly actionLabel?: string; readonly icon?: Icon; readonly color?: string; }): void {
 		this.open = options?.open;
-		this.label.textContent = title;
+		this.label.setTitle(title);
 		this.button.title = options?.actionLabel ?? title;
 		if (options?.actionLabel) this.button.setAttribute('aria-label', options.actionLabel);
 		else this.button.removeAttribute('aria-label');
@@ -1986,7 +1988,7 @@ class SessionListSection extends Disposable {
 				appendIcon(customIcon, this.appearanceIcon);
 			}
 			this.appearanceIcon.style.color = color;
-			if (!this.appearanceIcon.parentElement) this.label.before(this.appearanceIcon);
+			if (!this.appearanceIcon.parentElement) this.label.element.before(this.appearanceIcon);
 		} else {
 			this.appearanceIcon.remove();
 		}
@@ -1995,14 +1997,14 @@ class SessionListSection extends Disposable {
 	renderCollapse(collapsed: boolean, collapsible: boolean): void {
 		this.collapsed = collapsed;
 		if (!collapsible && !(this.kind === 'project' && this.contextMenu)) {
-			if (this.label.parentElement !== this.heading) {
+			if (this.label.element.parentElement !== this.heading) {
 				this.heading.classList.add('ash-sessions-list-section-static');
-				this.heading.replaceChildren(...(this.subgroup ? [this.icon, this.label] : [this.label]));
+				this.heading.replaceChildren(...(this.subgroup ? [this.icon, this.label.element] : [this.label.element]));
 			}
 			if (!this.subgroup) return;
 		} else {
 			if (this.button.parentElement !== this.heading) {
-				this.button.append(...(this.subgroup ? [this.icon, this.label] : [this.label, this.icon]));
+				this.button.append(...(this.subgroup ? [this.icon, this.label.element] : [this.label.element, this.icon]));
 				this.heading.replaceChildren(this.button);
 				this.heading.classList.remove('ash-sessions-list-section-static');
 			}
@@ -2039,23 +2041,81 @@ class SessionListSection extends Disposable {
 	}
 }
 
+class SessionListTitle extends AbstractDisposable {
+	readonly element: HTMLSpanElement;
+	private readonly text: HTMLSpanElement;
+	private readonly viewport: HTMLSpanElement | undefined;
+	private resize: IDisposable | undefined;
+
+	constructor(document: Document, className: string, behavior: 'static' | 'fade') {
+		super();
+		this.element = h(document, 'span', { className });
+		this.text = this.element;
+		if (behavior === 'fade') {
+			this.viewport = h(document, 'span', { className: 'ash-sessions-list-title-viewport' });
+			this.text = h(document, 'span');
+			this.viewport.append(this.text);
+			this.element.append(this.viewport);
+		}
+	}
+
+	observeActions(actions: HTMLElement): void {
+		const viewport = this.viewport!;
+		this.resize = observeResize([viewport, actions], () => {
+			const toolbar = actions.getBoundingClientRect();
+			if (toolbar.width > 0) {
+				const title = this.element.getBoundingClientRect();
+				const rtl = getWindow(actions).getComputedStyle(actions).direction === 'rtl';
+				const overlap = rtl ? toolbar.right - title.left : title.right - toolbar.left;
+				this.element.style.setProperty('--sessions-row-actions-space', `max(0px, ${overlap}px + var(--ash-spacing-size40))`);
+			} else {
+				this.element.style.removeProperty('--sessions-row-actions-space');
+			}
+			this.updateTitleOverflow(viewport);
+		});
+	}
+
+	get title(): string {
+		return this.text.textContent ?? '';
+	}
+
+	setTitle(title: string): void {
+		if (this.title === title) {
+			return;
+		}
+		this.text.textContent = title;
+		if (this.viewport?.isConnected) {
+			this.updateTitleOverflow(this.viewport);
+		}
+	}
+
+	private updateTitleOverflow(viewport: HTMLElement): void {
+		const width = viewport.getBoundingClientRect().width;
+		const overflow = this.text.getBoundingClientRect().width - width;
+		const hasOverflow = width > 0 && overflow > 0;
+		viewport.classList.toggle('ash-sessions-list-title-overflows', hasOverflow);
+		if (hasOverflow) {
+			viewport.style.setProperty('--sessions-row-title-distance', `${overflow}px`);
+			viewport.style.setProperty('--sessions-row-title-duration', `${Math.max(650, overflow * 32)}ms`);
+		}
+	}
+
+	protected override disposeCore(): void {
+		this.resize?.dispose();
+	}
+}
+
 class SessionListRowRenderer extends Disposable {
 	readonly element: HTMLElement;
 	readonly button: HTMLButtonElement;
-	private readonly titleText: HTMLSpanElement;
-	private readonly titleViewport: HTMLSpanElement;
+	private readonly label: SessionListTitle;
 
-	constructor(document: Document, titleBehavior: 'static' | 'scrollOnHover', leading?: HTMLElement) {
+	constructor(document: Document, leading?: HTMLElement) {
 		super();
 		this.element = h(document, 'div', { className: 'ash-sessions-list-row' });
 		this.button = h(document, 'button', { className: 'ash-sessions-list-item', attributes: { type: 'button' } });
-		this.titleViewport = h(document, 'span', { className: 'ash-sessions-list-label' });
-		this.titleText = titleBehavior === 'scrollOnHover' ? h(document, 'span') : this.titleViewport;
-		if (titleBehavior === 'scrollOnHover') {
-			this.titleViewport.append(this.titleText);
-			this._register(observeResize(this.titleViewport, () => this.updateTitleOverflow()));
-		}
-		this.button.append(this.titleViewport);
+		this.label = this._register(new SessionListTitle(document, 'ash-sessions-list-label', 'fade'));
+		this.button.append(this.label.element);
 		if (leading) {
 			this.element.classList.add('has-leading-icon');
 			this.element.append(leading);
@@ -2070,28 +2130,15 @@ class SessionListRowRenderer extends Disposable {
 	}
 
 	get title(): string {
-		return this.titleText.textContent ?? '';
+		return this.label.title;
 	}
 
 	setTitle(title: string): void {
-		if (this.title === title) {
-			return;
-		}
-		this.titleText.textContent = title;
-		if (this.titleText !== this.titleViewport && this.titleViewport.isConnected) {
-			this.updateTitleOverflow();
-		}
+		this.label.setTitle(title);
 	}
 
-	private updateTitleOverflow(): void {
-		const width = this.titleViewport.clientWidth;
-		const overflow = this.titleText.offsetWidth - width;
-		const hasOverflow = width > 0 && overflow > 0;
-		this.titleViewport.classList.toggle('title-overflows', hasOverflow);
-		if (hasOverflow) {
-			this.titleViewport.style.setProperty('--sessions-row-title-distance', `${overflow}px`);
-			this.titleViewport.style.setProperty('--sessions-row-title-duration', `${Math.max(650, overflow * 18)}ms`);
-		}
+	observeActions(actions: HTMLElement): void {
+		this.label.observeActions(actions);
 	}
 
 	protected setCollapseRenderer(renderCollapse: (collapsed: boolean) => void): void {

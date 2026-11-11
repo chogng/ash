@@ -10,6 +10,7 @@ import { IProjectsService } from '../../../src/ash/sessions/contrib/projects/bro
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
 import { Menus } from '../../../src/ash/sessions/browser/menus.js';
+import { ISessionFolderAuthorizationService } from '../../../src/ash/sessions/common/sessionWorkspace.js';
 import { ProjectTitleBarContribution } from '../../../src/ash/sessions/contrib/projects/browser/projectTitleBarWidget.js';
 import { MenuWorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
@@ -252,6 +253,7 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
+services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 services.registerSingleton(IProjectDialogService, () => services.createInstance(ProjectDialogService, { readEnabled: async () => true }));
 registerTestVoiceInputServices(services);
 registerTestComponentServices(services);

@@ -159,12 +159,27 @@
 	text-align: start;
 }
 
-.ash-sessions-list-label {
+.ash-sessions-list-label,
+.ash-sessions-list-project-row .ash-sessions-list-section-label {
 	flex: 1;
+}
+
+.ash-sessions-list-label,
+.ash-sessions-list-section-label,
+.ash-sessions-list-title-viewport {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.ash-sessions-list-title-viewport {
+	display: block;
+	/* The title and its button retain their width when the toolbar appears. */
+	margin-inline-end: calc(
+		var(--sessions-row-actions-visible, 0) *
+			var(--sessions-row-actions-space, 0px)
+	);
 }
 
 .ash-sessions-window
@@ -221,12 +236,15 @@
 	color: var(--ash-description-foreground);
 }
 
-[dir="rtl"] .ash-sessions-list-row {
+[dir="rtl"] :is(.ash-sessions-list-row, .ash-sessions-list-project-row) {
 	--sessions-row-title-fade-direction: to left;
 	--sessions-row-title-scroll-direction: 1;
+	--sessions-row-title-mask-start: left;
+	--sessions-row-title-mask-end: right;
 }
 
-.ash-sessions-list-label.title-overflows {
+.ash-sessions-list-title-overflows {
+	--sessions-row-title-fade-width: var(--ash-spacing-size240);
 	text-overflow: var(--sessions-row-title-overflow, clip);
 	/* Fade the glyphs over the single row background. */
 	mask-image: var(
@@ -235,67 +253,74 @@
 			var(--sessions-row-title-fade-direction, to right),
 			transparent,
 			#000 var(--ash-spacing-size120),
-			#000 calc(100% - var(--ash-spacing-size160)),
+			#000 calc(100% - var(--sessions-row-title-fade-width)),
 			transparent
 		)
 	);
 	/* Keep the leading fade outside the viewport until the text moves. */
 	mask-size: calc(100% + var(--ash-spacing-size120)) 100%;
 	mask-repeat: no-repeat;
-	mask-position: right;
-}
-
-[dir="rtl"] .ash-sessions-list-label.title-overflows {
-	mask-position: left;
+	mask-position: var(--sessions-row-title-mask-start, right);
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) and (forced-colors: none) {
-	.ash-sessions-list-row:hover:not(
+	:is(.ash-sessions-list-row, .ash-sessions-list-project-row):hover:not(
 			.menu-visible,
 			.ash-reduce-motion *,
 			.ash-high-contrast *
 		)
-		.title-overflows {
-		animation: ash-sessions-row-title-leading-fade
-			var(--ash-animation-durationNormal) ease-out 450ms forwards;
+		.ash-sessions-list-title-overflows {
+		animation: ash-sessions-row-title-mask
+			var(--sessions-row-title-duration) linear 350ms forwards;
 
 		> span {
 			display: inline-block;
 			animation: ash-sessions-row-title-scroll
-				var(--sessions-row-title-duration) linear forwards;
+				var(--sessions-row-title-duration) ease-in-out forwards;
 			animation-delay: inherit;
 		}
 	}
 }
 
-@keyframes ash-sessions-row-title-leading-fade {
-	to {
+@keyframes ash-sessions-row-title-mask {
+	15%,
+	75% {
 		mask-size: 100% 100%;
+	}
+
+	15% {
+		mask-position: var(--sessions-row-title-mask-start, right);
+	}
+
+	75%,
+	100% {
+		mask-position: var(--sessions-row-title-mask-end, left);
+	}
+
+	100% {
+		/* Move the trailing fade outside the viewport as the last glyphs arrive. */
+		mask-size: calc(100% + var(--sessions-row-title-fade-width)) 100%;
 	}
 }
 
 @keyframes ash-sessions-row-title-scroll {
 	to {
-		/* Move the last character past the fade so the whole ending is readable. */
 		transform: translateX(
 			calc(
 				var(--sessions-row-title-scroll-direction, -1) *
-					(
-						var(--sessions-row-title-distance) +
-							var(--ash-spacing-size160)
-					)
+					var(--sessions-row-title-distance)
 			)
 		);
 	}
 }
 
-.ash-high-contrast .ash-sessions-list-row {
+.ash-high-contrast :is(.ash-sessions-list-row, .ash-sessions-list-project-row) {
 	--sessions-row-title-mask: none;
 	--sessions-row-title-overflow: ellipsis;
 }
 
 @media (forced-colors: active) {
-	.ash-sessions-list-row {
+	:is(.ash-sessions-list-row, .ash-sessions-list-project-row) {
 		--sessions-row-title-mask: none;
 		--sessions-row-title-overflow: ellipsis;
 	}
@@ -344,13 +369,14 @@
 	align-items: center;
 	gap: var(--ash-spacing-size40);
 	/* Keep the last action outside the scroll track in either scroll host. */
-	padding-inline-end: max(
+	--sessions-row-action-inset: max(
 		var(--ash-spacing-size40),
 		calc(
 			var(--ash-scrollbar-vertical-size, 0px) -
 				var(--ash-list-row-inset-end)
 		)
 	);
+	padding-inline-end: var(--sessions-row-action-inset);
 }
 
 :is(.ash-sessions-list-section-with-actions, .ash-sessions-list-project-row)
@@ -468,13 +494,6 @@
 	visibility: visible;
 }
 
-.ash-sessions-list-section-label {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .ash-sessions-list-row {
 	position: relative;
 	min-width: 0;
@@ -508,29 +527,6 @@
 
 .ash-sessions-list-row.selected {
 	--sessions-row-background: var(--ash-sessions-sidebar-selection-background);
-}
-
-.ash-sessions-list-row .ash-sessions-list-actions {
-	opacity: 0;
-	pointer-events: none;
-	transition: opacity var(--ash-animation-durationFast) ease-out;
-}
-
-.ash-sessions-list-row:hover .ash-sessions-list-actions,
-.ash-sessions-list-row:focus-within:not(.menu-dismissed-by-pointer)
-	.ash-sessions-list-actions,
-.ash-sessions-list-row.menu-visible .ash-sessions-list-actions {
-	opacity: 1;
-	pointer-events: auto;
-}
-
-.ash-sessions-list-row:focus-within .ash-sessions-list-actions,
-.ash-reduce-motion .ash-sessions-list-actions {
-	transition: none;
-}
-
-.ash-sessions-list-actions[hidden] {
-	display: none;
 }
 
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
@@ -590,6 +586,19 @@
 	justify-content: center;
 }
 
+.ash-sessions-list
+	.ash-sessions-list-project-row.ash-sessions-list-subgroup
+	> :is(
+		.ash-sessions-list-section-static,
+		h3 > .ash-sessions-list-section-toggle
+	) {
+	padding-inline-end: 0;
+}
+
+.ash-sessions-list-project-row.ash-sessions-list-subgroup {
+	position: relative;
+}
+
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
 	.ash-sessions-list-row
 	> .ash-session-leading-icon {
@@ -611,9 +620,22 @@
 
 .ash-sessions-list .ash-sessions-list-actions {
 	--ash-button-border-radius: var(--ash-cornerRadius-medium);
-	display: none;
-	flex: 0 0 auto;
+	position: absolute;
+	inset-block-start: 50%;
+	inset-inline-end: var(--sessions-row-action-inset, 0px);
 	padding-inline-end: var(--ash-sessions-sidebar-item-inset);
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-50%);
+	transition: opacity var(--ash-animation-durationFast) ease-out;
+}
+
+.ash-sessions-list .ash-sessions-list-actions:not([hidden]) {
+	display: flex;
+}
+
+.ash-sessions-list .ash-sessions-list-actions[hidden] {
+	display: none;
 }
 
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)
@@ -621,40 +643,41 @@
 	padding-inline-end: 0;
 }
 
-.ash-sessions-list .ash-tree-row:hover .ash-sessions-list-actions:not([hidden]),
 .ash-sessions-list
-	.ash-sessions-list-row:is(
+	.ash-tree-row:hover
+	:is(.ash-sessions-list-row, .ash-sessions-list-project-row),
+.ash-sessions-list
+	:is(.ash-sessions-list-row, .ash-sessions-list-project-row):is(
 		.menu-visible,
 		:focus-within:not(.menu-dismissed-by-pointer)
-	)
-	.ash-sessions-list-actions:not([hidden]) {
-	display: flex;
-	opacity: 1;
-	pointer-events: auto;
-}
+	) {
+	--sessions-row-actions-visible: 1;
 
-.ash-sessions-list
-	.ash-sessions-list-project-row
-	> .ash-sessions-list-actions:not([hidden]) {
-	display: flex;
-	opacity: 1;
-	pointer-events: auto;
-}
-
-@media (hover: hover) {
-	.ash-sessions-list
-		.ash-sessions-list-project-row:not(:focus-within, .menu-visible)
-		> .ash-sessions-list-actions:not([hidden]) {
-		opacity: 0;
-		pointer-events: none;
-	}
-
-	.ash-sessions-list
-		.ash-tree-row:hover
-		.ash-sessions-list-project-row
-		> .ash-sessions-list-actions:not([hidden]) {
+	> .ash-sessions-list-actions {
 		opacity: 1;
 		pointer-events: auto;
+	}
+}
+
+.ash-sessions-list :focus-within > .ash-sessions-list-actions,
+.ash-reduce-motion .ash-sessions-list-actions {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-sessions-list .ash-sessions-list-actions {
+		transition: none;
+	}
+}
+
+@media (hover: none) {
+	.ash-sessions-list .ash-sessions-list-project-row {
+		--sessions-row-actions-visible: 1;
+
+		> .ash-sessions-list-actions {
+			opacity: 1;
+			pointer-events: auto;
+		}
 	}
 }
 
