@@ -781,7 +781,7 @@
     "searchEditor.title": "搜索编辑器",
     "searchEditor.new": "搜索：新建搜索编辑器",
     "searchEditor.open": "在搜索编辑器中打开结果",
-    "searchEditor.help": "你正在使用搜索编辑器。用 Tab 在查询、搜索选项、文件筛选和可编辑结果之间移动。在查询中按 Ctrl 或 Command+Enter 重新搜索；在结果行中按同样的快捷键打开源文件匹配。按 Escape 停止正在运行的搜索。Search 头部保存查询和选项。另存为 .code-search 文件会保存查询与结果，重新打开会恢复搜索编辑器。按 Escape 关闭此帮助并返回之前的控件。",
+    "searchEditor.help": "你正在使用搜索编辑器。用 Tab 在查询、搜索选项、文件筛选和可编辑结果之间移动。在查询中按 Ctrl 或 Command+Enter 重新搜索；在结果行中按同样的快捷键打开源文件匹配。按 Escape 停止正在运行的搜索。Search 头部保存查询和选项。使用“保存”将临时查询及其结果保留在 .code-search 文件中。重新打开该文件即可恢复搜索编辑器。按 Escape 关闭此帮助并返回之前的控件。",
     "webview.verbosity.invalid": "网页视图编辑器的无障碍提示开关必须为布尔值。",
     "webview.verbosity.title": "网页视图编辑器无障碍帮助",
     "webview.verbosity.description": "网页视图编辑器获得焦点时，提示如何打开无障碍帮助。",

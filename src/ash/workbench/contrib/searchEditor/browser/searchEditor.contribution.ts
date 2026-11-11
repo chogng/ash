@@ -71,7 +71,7 @@ AccessibleViewRegistry.register({
 		if (!(pane instanceof SearchEditor)) { return undefined; }
 		const focused = pane.domNode.ownerDocument.activeElement as HTMLElement | null;
 		return new AccessibleContentProvider(AccessibleViewProviderId.SearchEditorHelp, { type: AccessibleViewType.Help },
-			() => localize('searchEditor.help', 'You are in a search editor. Use Tab to move between the query, search options, file filters, and editable results. Ctrl or Command+Enter in the query runs the search; in a result row it opens the source match. Escape stops a running search. The Search header stores the query and options. Save As writes the query and results to a .code-search file; reopening it restores the search editor. Press Escape to close this help and return to the previous control.'),
+			() => localize('searchEditor.help', 'You are in a search editor. Use Tab to move between the query, search options, file filters, and editable results. Ctrl or Command+Enter in the query runs the search; in a result row it opens the source match. Escape stops a running search. The Search header stores the query and options. Use Save to keep a temporary query and its results in a .code-search file. Reopen the file to restore the search editor. Press Escape to close this help and return to the previous control.'),
 			() => { if (focused?.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.Find);
 	},
 });

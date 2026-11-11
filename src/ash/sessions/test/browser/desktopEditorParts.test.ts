@@ -230,6 +230,28 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.files.fileGroups.flatMap(group => group.inputs).some(input => input.resource.toString() === search.resource.toString()), false);
 	});
 
+	test('repairs a misplaced Search tab when the working set already contains a hidden Search group', async () => {
+		using hosts = fixture();
+		const file = { resource: URI.file('/fixture/a.txt') };
+		const misplaced = { resource: URI.file('/fixture/old.code-search') };
+		const existing = { resource: URI.parse('untitled:/current.code-search'), editorId: SearchEditorID };
+		await hosts.editor.openEditor(existing, { pinned: true });
+		const searchPart = hosts.tools.get('search')!;
+		hosts.editor.setGroupVisible(searchPart.activeGroup.id, false);
+		await hosts.editor.openEditor(file, { pinned: true });
+		const filesGroup = hosts.editor.activeGroup;
+		await hosts.files.openEditor(misplaced, { pinned: true }, { groupId: filesGroup.id });
+		const saved = hosts.editor.saveWorkingSet('mixed-search');
+
+		await hosts.editor.applyWorkingSet(saved);
+
+		assert.equal(hosts.editor.activeGroup, searchPart.activeGroup);
+		assert.equal(searchPart.activeInput?.resource.toString(), misplaced.resource.toString());
+		assert.deepEqual(searchPart.activeGroup.inputs.map(input => input.resource.toString()), [existing.resource.toString(), misplaced.resource.toString()]);
+		assert.deepEqual(hosts.files.fileGroups.flatMap(group => group.inputs.map(input => input.resource.toString())), [file.resource.toString()]);
+		assert.equal(hosts.area.isToolVisible('search'), true);
+	});
+
 	test('restacks an older Files and Changes pair and preserves a recorded manual split', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });

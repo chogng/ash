@@ -392,12 +392,17 @@ export class DesktopEditorParts extends EditorParts {
 		} : metadata;
 	}
 
-	/** Move Search tabs from older Files groups into the Search tool while retaining file group identities. */
+	/** Repair Files membership for Search tabs even if the saved layout already has a Search tool. */
 	public migrateWorkingSet(saved: EditorWorkingSet): DesktopEditorWorkingSet {
-		const oldParts = (saved as DesktopEditorWorkingSet).toolParts;
-		if (!oldParts || oldParts.parts?.search !== undefined) return saved;
-		const toolParts = this.readParts(saved)!;
+		const toolParts = this.readParts(saved);
+		if (!toolParts) return saved;
 		const files = toolParts.parts.files;
+		const search = toolParts.parts.search;
+		const existingSearchIndex = saved.groups.findIndex(group => group.id !== undefined && search.groups.includes(group.id));
+		const existingSearch = saved.groups[existingSearchIndex];
+		const movedEditors: EditorGroupWorkingSet['editors'][number][] = [];
+		let movedActiveIndex: number | undefined;
+		let revealMovedSearch = false;
 		const searchGroupIds = new Map<number, number>();
 		const searchGroups: EditorGroupWorkingSet[] = [];
 		let nextId = Math.max(0, ...saved.groups.map(group => group.id ?? 0));
@@ -409,23 +414,49 @@ export class DesktopEditorParts extends EditorParts {
 			const editors = group.editors.filter(entry => !searchEditors.includes(entry));
 			const active = group.editors[group.activeEditorIndex];
 			const activeSearch = active ? searchEditors.indexOf(active) : -1;
-			const searchId = ++nextId;
-			if (!Number.isSafeInteger(searchId)) throw new TypeError('Invalid migrated Search group ID');
-			searchGroupIds.set(group.id, searchId);
-			if (index === activeGroupIndex && activeSearch >= 0) activeGroupIndex = saved.groups.length + searchGroups.length;
-			searchGroups.push({ ...group, id: searchId, editors: searchEditors, activeEditorIndex: Math.max(0, activeSearch) });
+			if (existingSearch) {
+				if (index === saved.activeGroupIndex && activeSearch >= 0) {
+					activeGroupIndex = existingSearchIndex;
+					movedActiveIndex = existingSearch.editors.length + movedEditors.length + activeSearch;
+					const sourceLayout = files.layout && projectLayout(files.layout, new Set([group.id]));
+					revealMovedSearch = !sourceLayout || hasVisibleGroup(sourceLayout);
+				}
+				movedEditors.push(...searchEditors);
+			} else {
+				const searchId = ++nextId;
+				if (!Number.isSafeInteger(searchId)) throw new TypeError('Invalid migrated Search group ID');
+				searchGroupIds.set(group.id, searchId);
+				if (index === saved.activeGroupIndex && activeSearch >= 0) activeGroupIndex = saved.groups.length + searchGroups.length;
+				searchGroups.push({ ...group, id: searchId, editors: searchEditors, activeEditorIndex: Math.max(0, activeSearch) });
+			}
 			return { ...group, editors, activeEditorIndex: editors.length ? Math.max(0, active ? editors.indexOf(active) : -1) : -1 };
 		});
-		const search = {
-			groups: [...searchGroupIds.values()],
-			layout: files.layout && projectLayout(files.layout, new Set(searchGroupIds.keys()), searchGroupIds),
-		};
+		if (existingSearch && movedEditors.length) {
+			groups[existingSearchIndex] = {
+				...existingSearch,
+				editors: [...existingSearch.editors, ...movedEditors],
+				activeEditorIndex: movedActiveIndex ?? Math.max(0, existingSearch.activeEditorIndex),
+			};
+			// A selected Search tab moved out of a visible Files group must stay visible.
+			const layout = revealMovedSearch && search.layout && !hasVisibleGroup(search.layout) ? undefined : search.layout;
+			return { ...saved, groups, activeGroupIndex, toolParts: { ...toolParts, parts: { ...toolParts.parts, search: { ...search, layout } } } };
+		}
+		if (!searchGroups.length) return saved;
 		return {
 			...saved,
 			layout: undefined,
 			groups: [...groups, ...searchGroups],
 			activeGroupIndex,
-			toolParts: { ...toolParts, parts: { ...toolParts.parts, search } },
+			toolParts: {
+				...toolParts,
+				parts: {
+					...toolParts.parts,
+					search: {
+						groups: [...searchGroupIds.values()],
+						layout: files.layout && projectLayout(files.layout, new Set(searchGroupIds.keys()), searchGroupIds),
+					},
+				},
+			},
 		};
 	}
 

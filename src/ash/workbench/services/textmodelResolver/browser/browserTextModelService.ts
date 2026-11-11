@@ -252,6 +252,9 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.undoRedoParticipant.restore(resource, model);
 		const dirtyEmitter = new Emitter<void>();
 		const externalChangeEmitter = new Emitter<void>();
+		const untitled = resource.scheme === Schemas.untitled;
+		const isBaselineChange = untitled ? input.isUntitledBaselineChange : undefined;
+		const startsDirty = untitled && !isBaselineChange && model.getText().length > 0;
 		const entry: TextModelEntry = {
 			isSnapshot: input.initialText !== undefined && input.readOnly === true,
 			identityLifetime: this.uriIdentity.retainUri(resource),
@@ -259,23 +262,25 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			model,
 			dirtyEmitter,
 			externalChangeEmitter,
-			modelChangeListener: model.onDidChangeContent(() => {
+			modelChangeListener: model.onDidChangeContent(change => {
 				if (!entry.updatingFile) {
 					entry.refresh?.controller.abort();
+					if (isBaselineChange?.(change, entry.dirty)) {
+						entry.savedText = model.getText();
+					}
 					this.refreshDirty(entry);
 				}
 			}),
 			languageChangeListener: model.onDidChangeLanguage(event => this.modelLanguageChanged.fire({ model, oldLanguageId: event.oldLanguage })),
 			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
-			// Untitled content has no persisted baseline, including caller supplied initial text.
-			savedText: resource.scheme === Schemas.untitled ? '' : model.getText(),
+			savedText: untitled && !isBaselineChange ? '' : model.getText(),
 			revision: content.revision,
 			encoding: content.encoding,
 			savedEncoding: content.encoding,
 			updatingFile: false,
 			completingSave: false,
-			dirty: resource.scheme === Schemas.untitled && model.getText().length > 0,
-			notifiedDirty: resource.scheme === Schemas.untitled && model.getText().length > 0,
+			dirty: startsDirty,
+			notifiedDirty: startsDirty,
 			hasExternalChange: false,
 			disposed: false,
 			saveQueue: Promise.resolve(),
@@ -353,6 +358,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		this.ensureEntryAlive(entry);
 		if (this.uriIdentity.extUri.isEqual(resource, entry.resource)) return this.save(entry, signal);
 		const text = entry.model.getText();
+		const baseline = entry.savedText;
 		const languageId = entry.model.getLanguageId();
 		const encoding = entry.encoding;
 		// Save As runs against the destination so providers receive its URI and inferred language.
@@ -365,8 +371,8 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		}
 		target.model.applyOperations([{ range: target.model.getFullModelRange(), text }]);
 		await target.save(signal);
-		if (!entry.disposed && entry.resource.scheme === Schemas.untitled && !target.isDirty) {
-			// Only the captured draft was saved. Edits made during the write remain dirty.
+		if (!entry.disposed && entry.resource.scheme === Schemas.untitled && !target.isDirty && entry.savedText === baseline) {
+			// Only the captured draft was saved. A generated baseline may have advanced during the write.
 			entry.savedText = text;
 			entry.savedEncoding = encoding;
 			this.refreshDirty(entry);

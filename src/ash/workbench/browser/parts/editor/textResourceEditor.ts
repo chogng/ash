@@ -21,7 +21,7 @@ import { TextEditorSelectionSource } from '../../../../platform/editor/common/ed
 import { type ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { type ICodeEditorViewState, type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
-import { ITextModelResourceService, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { type EditorTextDirection } from '../../../../editor/browser/view.js';
 import { EditorLineWrapping, type ConfigurationChangedEvent, type EditorLayoutInfo, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { EditorMinimapConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
@@ -298,7 +298,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		}));
 	}
 
-	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
+	public override async setInput(input: IResourceEditorInput & TextModelInput, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
 		throwIfCancelled(signal, 'Code editor input loading was cancelled');
 		const isProvidedResource = input.resource.scheme !== Schemas.file && this.textModelService.canHandleResource(input.resource);

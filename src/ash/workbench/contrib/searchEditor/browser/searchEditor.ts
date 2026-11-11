@@ -3,7 +3,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { ISearchService } from '../../../services/search/common/search.js';
 import { QueryBuilder, splitGlobPatterns } from '../../../services/search/common/queryBuilder.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
-import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, type TextModelInput } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
@@ -21,15 +21,26 @@ import { localize } from '../../../../nls.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { SearchResultImpl } from '../../search/browser/searchTreeModel/searchResult.js';
 import { SearchEditorID, InSearchEditor } from './constants.js';
 import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor, type SearchEditorQuery } from './searchEditorSerialization.js';
+
+const queryEdit = 'searchEditor.query';
+const resultsEdit = 'searchEditor.results';
+
+const isUntitledBaselineChange: NonNullable<TextModelInput['isUntitledBaselineChange']> = (change, wasDirty) => {
+	if (change.detailedReasons.length !== 1) return false;
+	const source = change.detailedReasons[0]!.getType();
+	// A new result replaces the entire snapshot. Editing the form only replaces its header.
+	return source === resultsEdit || (source === queryEdit && !wasDirty);
+};
 
 /** Query controls own transient input; the shared text editor owns the editable, saved search document. */
 export class SearchEditor extends EditorPane implements IEditorPane {
@@ -44,6 +55,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 	private status!: HTMLElement;
 	private body!: HTMLElement;
 	private query!: SearchEditorQuery;
+	private input: IResourceEditorInput | undefined;
 	private controller: AbortController | undefined;
 	private readonly inputListeners = this._register(new DisposableStore());
 	private dimension: IDimension | undefined;
@@ -54,9 +66,11 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		@IFileTextModelService private readonly textModels: IFileTextModelService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEditorService private readonly editors: IEditorService,
+		@IEditorPartsService private readonly editorParts: IEditorPartsService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
@@ -66,8 +80,29 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 
 	public override getControl(): ReturnType<TextResourceEditor['getControl']> { return this.textEditor.getControl(); }
 	public get workingCopy(): TextResourceEditor['workingCopy'] { return this.textEditor.workingCopy; }
-	public save(): Promise<void> { return this.textEditor.save(); }
+	public async save(): Promise<void> {
+		if (this.input?.resource.scheme === Schemas.untitled) {
+			await this.saveDraft();
+		} else {
+			await this.textEditor.save();
+		}
+	}
 	public saveAs(resource: URI): Promise<void> { return this.textEditor.saveAs(resource); }
+
+	public async saveDraft(): Promise<IResourceEditorInput | undefined> {
+		const input = this.input;
+		const model = this.getControl()?.getModel();
+		const group = this.editorParts.groups.find(group => group.id === this.group?.id);
+		if (!input || !model || !group) return undefined;
+		const resource = await this.fileDialogs.pickFileToSave(URI.file('/Search.code-search'));
+		if (!resource || this.input !== input) return undefined;
+		const version = model.version;
+		await this.saveAs(resource);
+		if (this.input !== input || model.version !== version || this.workingCopy?.isDirty) return undefined;
+		const replacement = { resource, editorId: SearchEditorID };
+		await this.editorParts.replaceEditorResource(group, input, replacement);
+		return replacement;
+	}
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
@@ -164,7 +199,8 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
-		await this.textEditor.setInput({ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false }, signal);
+		await this.textEditor.setInput({ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false, isUntitledBaselineChange }, signal);
+		this.input = input;
 		this.readQuery();
 		this.inputListeners.add(this.getControl()!.onDidChangeModelContent(() => this.readQuery()));
 		this.inputListeners.add(this.workspace.onDidChangeWorkspace(() => this.controller?.abort()));
@@ -172,6 +208,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 	}
 
 	public override clearInput(): void {
+		this.input = undefined;
 		this.controller?.abort();
 		this.controller = undefined;
 		this.inputListeners.clear();
@@ -247,7 +284,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 			excludePatterns: splitGlobPatterns(this.exclude.value),
 		};
 		const header = serializeSearchResultForEditor(this.query).split('\n', 1)[0]!;
-		control!.executeEdits('searchEditor.query', [{ range: new Range(1, 1, 1, model.getLineMaxColumn(1)), text: header }]);
+		control!.executeEdits(queryEdit, [{ range: new Range(1, 1, 1, model.getLineMaxColumn(1)), text: header }]);
 	}
 
 	private async runSearch(): Promise<void> {
@@ -303,7 +340,7 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 				});
 				if (!confirmed.confirmed || controller.signal.aborted || this.isDisposed) { return; }
 			}
-			control.executeEdits('searchEditor.results', [{ range: model.getFullModelRange(), text: serializeSearchResultForEditor(query, result) }]);
+			control.executeEdits(resultsEdit, [{ range: model.getFullModelRange(), text: serializeSearchResultForEditor(query, result) }]);
 			this.status.textContent = complete.limitHit
 				? localize('search.limitReached', '{0} results (result limit reached)', result.count)
 				: localize('search.results', '{0} results', result.count);
