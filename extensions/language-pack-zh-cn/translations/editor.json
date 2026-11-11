@@ -230,6 +230,7 @@
     "media.image.closePreview": "关闭图片预览",
     "media.image.popupSummary": "图片预览：{0}\n尺寸：{1} × {2}\n按 Escape 或选择“关闭图片预览”返回。此视图标识图片，不描述图片内容。",
     "media.image.popupZoomHelp": "打开缩放百分比菜单，选择倍率或适应窗口。聚焦图片视区，按加号或减号缩放，或按 0 适应窗口。在图片预览工具栏中，按左箭头或右箭头切换操作。",
+    "media.image.popupGesturesHelp": "在图片视区内滚动滚轮或用双指捏合来缩放。放大后，拖动图片或按住 Shift 并按方向键来平移。",
     "media.image.popupGalleryHelp": "第 {0} 张，共 {1} 张。激活圆点可跳到对应图片。聚焦图片视区或切换按钮，按左、右方向键切换图片。",
     "media.image.galleryPosition": "第 {0} 张，共 {1} 张：{2}",
     "media.image.galleryPagination": "选择图片",

@@ -277,9 +277,10 @@ export class ImagePreviewPopup {
 							? localize('media.image.popupSummary', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', name, size.width, size.height)
 							: localize('media.image.empty', 'No image loaded.');
 						const zoom = localize('media.image.popupZoomHelp', 'Open the zoom percentage menu to choose a level or Zoom to fit. In the image viewport, press Plus or Minus to zoom, or 0 to fit. Use Left or Right Arrow to move between image preview actions.');
+						const gestures = localize('media.image.popupGesturesHelp', 'In the image viewport, scroll or pinch to zoom. When zoomed in, drag the image or press Shift with an arrow key to pan.');
 						const galleryHelp = gallery && gallery.labels.length > 1
 							? localize('media.image.popupGalleryHelp', 'Image {0} of {1}. Activate a dot to jump to its image. In the image viewport or gallery controls, press Left or Right Arrow to change images.', selected + 1, gallery.labels.length) : undefined;
-						return [summary, zoom, galleryHelp, target?.accessibleHelp].filter(Boolean).join('\n');
+						return [summary, zoom, gestures, galleryHelp, target?.accessibleHelp].filter(Boolean).join('\n');
 					}, () => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.ImagePreview);
 				},
 			}));
@@ -291,7 +292,12 @@ export class ImagePreviewPopup {
 		const { menus, instantiation, notifications, host, workers } = this;
 		const annotation = target && resources.add(new ImageAnnotation(document, source.url));
 		// The dialog and the viewer's context menu use the same popup host.
-		const viewer = resources.add(instantiation.createInstance(ImageViewer, viewport, { contextMenu: false, overlay: annotation?.overlay }));
+		const viewer = resources.add(instantiation.createInstance(ImageViewer, viewport, {
+			contextMenu: false,
+			overlay: annotation?.overlay,
+			wheelZoom: true,
+			dragPan: true,
+		}));
 		const lifetime = new AbortController();
 		resources.add(toDisposable(() => lifetime.abort()));
 		if (target) resources.add(addDisposableListener(target.signal, 'abort', hide));

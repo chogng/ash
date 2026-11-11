@@ -14,7 +14,7 @@
 	min-height: 100%;
 	width: max-content;
 	height: max-content;
-	/* A transient pinch must not change the enclosing scroll range. */
+	/* A transient zoom must not change the enclosing scroll range. */
 	overflow: clip;
 }
 
@@ -57,6 +57,14 @@
 
 .ash-image-viewer.ready {
 	cursor: zoom-in;
+}
+
+.ash-image-viewer.ready.pannable {
+	cursor: grab;
+}
+
+.ash-image-viewer.ready.panning {
+	cursor: grabbing;
 }
 
 .ash-image-viewer:focus-visible {

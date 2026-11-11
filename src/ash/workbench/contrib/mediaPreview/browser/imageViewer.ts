@@ -1,5 +1,7 @@
 import './media/imageViewer.css';
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
+import { GlobalPointerMoveMonitor } from '../../../../base/browser/globalPointerMoveMonitor.js';
+import { StandardWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { animateElement } from '../../../../base/browser/ui/animations/animations.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -34,23 +36,23 @@ export interface IImageViewerSourceOptions {
 
 const zoomLevels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.5, 2, 3, 4, 5, 7, 10, 15, 20];
 
-interface PinchAxis {
+interface WheelZoomAxis {
 	readonly viewport: number;
 	readonly scroll: number;
 	readonly start: number;
-	readonly center: number;
+	zoomedStart: number;
 }
 
-function capturePinchAxis(viewport: number, scroll: number, imageSize: number, scale: number): PinchAxis {
-	const start = Math.max(0, (viewport - imageSize * scale) / 2) - scroll;
-	return { viewport, scroll, start, center: (viewport / 2 - start) / scale };
+function captureWheelZoomAxis(viewport: number, scroll: number, scaledSize: number): WheelZoomAxis {
+	const start = Math.max(0, (viewport - scaledSize) / 2) - scroll;
+	return { viewport, scroll, start, zoomedStart: start };
 }
 
-/** Image origin relative to the viewport, respecting centering and scroll limits. */
-function pinchImageStart(axis: PinchAxis, scaledSize: number, scale: number): number {
-	return scaledSize <= axis.viewport
+/** Keep the point under the pointer fixed as far as the viewport permits. */
+function zoomAround(axis: WheelZoomAxis, anchor: number, ratio: number, scaledSize: number): void {
+	axis.zoomedStart = scaledSize <= axis.viewport
 		? (axis.viewport - scaledSize) / 2
-		: -clamp(axis.center * scale - axis.viewport / 2, 0, scaledSize - axis.viewport);
+		: clamp(anchor + (axis.zoomedStart - anchor) * ratio, axis.viewport - scaledSize, 0);
 }
 
 /** Owns image geometry, scrolling and input; its host owns the source URL and placement. */
@@ -61,9 +63,10 @@ export class ImageViewer extends Disposable {
 	private readonly media: HTMLElement;
 	private readonly pending = this._register(new MutableDisposable());
 	private readonly sourceTransition = this._register(new MutableDisposable());
-	private readonly pinchZoomFrame: AnimationFrameScheduler;
-	private readonly pinchZoomIdle = this._register(new RunOnceScheduler(() => this.finishPinchZoom(), 120));
-	private pinchZoom: { readonly baseScale: number; readonly x: PinchAxis; readonly y: PinchAxis; scale: number; } | undefined;
+	private readonly wheelZoomFrame: AnimationFrameScheduler;
+	private readonly wheelZoomIdle = this._register(new RunOnceScheduler(() => this.finishWheelZoom(), 120));
+	private wheelZoom: { readonly baseScale: number; readonly x: WheelZoomAxis; readonly y: WheelZoomAxis; scale: number; } | undefined;
+	private readonly pan: GlobalPointerMoveMonitor | undefined;
 	private readonly scaleChanged = this._register(new Emitter<ImageViewerScale>());
 	public readonly onDidChangeScale = this.scaleChanged.event;
 	private readonly displayScaleChanged = this._register(new Emitter<number>());
@@ -75,7 +78,7 @@ export class ImageViewer extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		options: { readonly contextMenu?: boolean; readonly overlay?: SVGSVGElement; },
+		options: { readonly contextMenu?: boolean; readonly overlay?: SVGSVGElement; readonly wheelZoom?: boolean; readonly dragPan?: boolean; },
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -94,7 +97,8 @@ export class ImageViewer extends Disposable {
 		stage.append(this.media);
 		this.domNode.append(stage);
 		container.append(this.domNode);
-		this.pinchZoomFrame = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => this.renderPinchZoom()));
+		this.wheelZoomFrame = this._register(new AnimationFrameScheduler(getWindow(this.domNode), () => this.renderWheelZoom()));
+		this.pan = options.dragPan ? this._register(new GlobalPointerMoveMonitor()) : undefined;
 		this._register(toDisposable(() => { this.clear(); this.domNode.remove(); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ImagePreviewConfiguration.defaultZoom)) {
@@ -105,22 +109,51 @@ export class ImageViewer extends Disposable {
 			}
 		}));
 		this._register(addDisposableListener(this.domNode, 'wheel', event => {
-			if (!event.ctrlKey && !(isMacintosh && event.altKey)) {
-				this.finishPinchZoom();
+			if (!options.wheelZoom && !event.ctrlKey && !(isMacintosh && event.altKey)) {
+				this.finishWheelZoom();
 				return;
 			}
 			event.preventDefault();
 			event.stopPropagation();
-			if (!this.hasImage || event.deltaY === 0) return;
-			if (event.ctrlKey) this.queuePinchZoom(event.deltaY);
-			else if (event.deltaY < 0) this.zoomIn();
+			if (!this.hasImage || this.pan?.isMonitoring()) return;
+			const { deltaY } = new StandardWheelEvent(event, { pageHeight: this.domNode.clientHeight });
+			if (deltaY === 0) return;
+			if (options.wheelZoom) {
+				const bounds = this.domNode.getBoundingClientRect();
+				this.queueWheelZoom(deltaY, { x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+			} else if (event.ctrlKey) this.queueWheelZoom(deltaY);
+			else if (deltaY < 0) this.zoomIn();
 			else this.zoomOut();
 		}, { passive: false }));
 		this._register(addDisposableListener(this.domNode, 'scroll', () => {
-			const pinch = this.pinchZoom;
-			if (pinch && (pinch.x.scroll !== this.domNode.scrollLeft || pinch.y.scroll !== this.domNode.scrollTop)) this.finishPinchZoom();
+			const zoom = this.wheelZoom;
+			if (zoom && (zoom.x.scroll !== this.domNode.scrollLeft || zoom.y.scroll !== this.domNode.scrollTop)) this.finishWheelZoom();
 		}));
 		let clickCanZoom = false;
+		const pan = this.pan;
+		if (pan) {
+			this._register(addDisposableListener(this.domNode, 'pointerdown', event => {
+				// The annotation overlay claims drawing before the event reaches the viewer.
+				if (event.defaultPrevented || event.button !== 0 || event.pointerType !== 'mouse' || (isMacintosh && event.ctrlKey)) return;
+				this.finishWheelZoom();
+				if (!this.canPan()) return;
+				const { clientX, clientY } = event;
+				const { scrollLeft, scrollTop } = this.domNode;
+				let dragging = false;
+				pan.startMonitoring(this.domNode, event.pointerId, event.buttons, move => {
+					const dx = move.clientX - clientX;
+					const dy = move.clientY - clientY;
+					if (!dragging) {
+						if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) return;
+						dragging = true;
+						clickCanZoom = false;
+						this.domNode.classList.add('panning');
+					}
+					this.domNode.scrollLeft = scrollLeft - dx;
+					this.domNode.scrollTop = scrollTop - dy;
+				}, () => this.domNode.classList.remove('panning'), event.pointerType);
+			}));
+		}
 		this._register(addDisposableListener(this.domNode, 'mousedown', event => {
 			clickCanZoom = event.button === 0 && this.hasFocus();
 			this.domNode.focus({ preventScroll: true });
@@ -150,7 +183,7 @@ export class ImageViewer extends Disposable {
 			else if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) {
 				if (!this.hasImage || options.contextMenu === false) return;
 				this.menus.showContextMenu({ getAnchor: () => this.domNode, getActions: () => this.getActions() });
-			} else return;
+			} else if (!(pan && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && this.panWithArrow(event.key))) return;
 			event.preventDefault();
 			event.stopPropagation();
 		}));
@@ -174,7 +207,8 @@ export class ImageViewer extends Disposable {
 		try {
 			await probe.decode();
 			if (this.isDisposed || generation !== this.generation) return false;
-			this.cancelPinchZoom();
+			this.cancelWheelZoom();
+			this.pan?.stopMonitoring(true);
 			this.size = { width: probe.naturalWidth, height: probe.naturalHeight };
 			this.sourceData = options.data;
 			this.imageDomNode.src = src;
@@ -210,22 +244,23 @@ export class ImageViewer extends Disposable {
 
 	public clear(): void {
 		this.cancelPendingSource();
-		this.cancelPinchZoom();
+		this.cancelWheelZoom();
+		this.pan?.stopMonitoring(true);
 		this.size = undefined;
 		this.sourceData = undefined;
 		this.currentScale = 'fit';
-		this.domNode.classList.remove('ready');
+		this.domNode.classList.remove('ready', 'pannable');
 		this.imageDomNode.removeAttribute('src');
 		this.imageDomNode.alt = '';
 	}
 
 	public getViewState(): IImageViewerViewState {
-		const pinch = this.pinchZoom;
-		if (pinch && this.size) {
+		const zoom = this.wheelZoom;
+		if (zoom) {
 			return {
-				scale: pinch.scale,
-				scrollLeft: Math.max(0, -pinchImageStart(pinch.x, this.size.width * pinch.scale, pinch.scale)),
-				scrollTop: Math.max(0, -pinchImageStart(pinch.y, this.size.height * pinch.scale, pinch.scale)),
+				scale: zoom.scale,
+				scrollLeft: Math.max(0, -zoom.x.zoomedStart),
+				scrollTop: Math.max(0, -zoom.y.zoomedStart),
 			};
 		}
 		return { scale: this.scale, scrollLeft: this.domNode.scrollLeft, scrollTop: this.domNode.scrollTop };
@@ -238,46 +273,72 @@ export class ImageViewer extends Disposable {
 	}
 
 	public setScale(scale: ImageViewerScale): void {
-		const pinch = this.pinchZoom;
-		this.cancelPinchZoom();
+		const zoom = this.wheelZoom;
+		this.cancelWheelZoom();
 		if (!this.size) return;
-		const previous = this.effectiveScale();
-		const centerX = pinch
-			? pinch.x.center + (this.domNode.scrollLeft - pinch.x.scroll) / pinch.scale
-			: (this.domNode.scrollLeft + this.domNode.clientWidth / 2) / previous;
-		const centerY = pinch
-			? pinch.y.center + (this.domNode.scrollTop - pinch.y.scroll) / pinch.scale
-			: (this.domNode.scrollTop + this.domNode.clientHeight / 2) / previous;
+		this.pan?.stopMonitoring(true);
+		const previous = zoom?.scale ?? this.effectiveScale();
+		const { clientWidth, clientHeight, scrollLeft, scrollTop } = this.domNode;
+		const offsetX = zoom ? zoom.x.scroll + zoom.x.zoomedStart : 0;
+		const offsetY = zoom ? zoom.y.scroll + zoom.y.zoomedStart : 0;
 		this.currentScale = scale === 'fit' ? scale : clamp(scale, 0.1, 20);
 		this.layout();
 		const next = this.effectiveScale();
-		this.domNode.scrollLeft = Math.max(0, centerX * next - this.domNode.clientWidth / 2);
-		this.domNode.scrollTop = Math.max(0, centerY * next - this.domNode.clientHeight / 2);
+		const ratio = next / previous;
+		// Committing a wheel zoom keeps its viewport coordinates even if a scrollbar appears.
+		const committingWheelZoom = zoom?.scale === scale;
+		const nextWidth = committingWheelZoom ? clientWidth : this.domNode.clientWidth;
+		const nextHeight = committingWheelZoom ? clientHeight : this.domNode.clientHeight;
+		this.domNode.scrollLeft = Math.max(0, (scrollLeft - offsetX + clientWidth / 2) * ratio - nextWidth / 2);
+		this.domNode.scrollTop = Math.max(0, (scrollTop - offsetY + clientHeight / 2) * ratio - nextHeight / 2);
 		this.scaleChanged.fire(this.scale);
 	}
 
 	public zoomIn(): void {
-		const scale = this.pinchZoom?.scale ?? this.effectiveScale();
+		const scale = this.wheelZoom?.scale ?? this.effectiveScale();
 		// A tiny fitted image can already exceed the manual zoom limit.
 		if (scale >= 20) return;
 		this.setScale(zoomLevels.find(level => level > scale + 0.0001) ?? 20);
 	}
 	public zoomOut(): void {
-		const scale = this.pinchZoom?.scale ?? this.effectiveScale();
+		const scale = this.wheelZoom?.scale ?? this.effectiveScale();
 		this.setScale([...zoomLevels].reverse().find(level => level < scale - 0.0001) ?? 0.1);
 	}
 
 	public layout(): void {
 		if (!this.size) return;
-		if (this.pinchZoom) {
-			this.finishPinchZoom();
+		if (this.wheelZoom) {
+			this.finishWheelZoom();
 			return;
 		}
 		const scale = this.effectiveScale();
 		this.imageDomNode.style.width = `${this.size.width * scale}px`;
 		this.imageDomNode.style.height = `${this.size.height * scale}px`;
 		this.imageDomNode.classList.toggle('pixelated', scale >= 3 && this.sourceData?.mimeType !== 'image/svg+xml');
+		if (this.pan) this.domNode.classList.toggle('pannable', this.canPan());
 		this.displayScaleChanged.fire(scale);
+	}
+
+	private canPan(): boolean {
+		const { scrollWidth, clientWidth, scrollHeight, clientHeight } = this.domNode;
+		return this.hasImage && (scrollWidth > clientWidth || scrollHeight > clientHeight);
+	}
+
+	private panWithArrow(key: string): boolean {
+		const step = 40;
+		let dx = 0;
+		let dy = 0;
+		switch (key) {
+			case 'ArrowLeft': dx = -step; break;
+			case 'ArrowRight': dx = step; break;
+			case 'ArrowUp': dy = -step; break;
+			case 'ArrowDown': dy = step; break;
+			default: return false;
+		}
+		this.finishWheelZoom();
+		if (!this.canPan()) return false;
+		this.domNode.scrollBy(dx, dy);
+		return true;
 	}
 
 	private getActions(): IAction[] {
@@ -307,50 +368,52 @@ export class ImageViewer extends Disposable {
 	public readonly onDidFailCopy = this.copyFailed.event;
 	private runCopy(): void { void this.copyImage().catch(error => this.copyFailed.fire(error)); }
 
-	private queuePinchZoom(deltaY: number): void {
+	private queueWheelZoom(deltaY: number, anchor?: { readonly x: number; readonly y: number; }): void {
 		const size = this.size;
 		if (!size) return;
-		let pinch = this.pinchZoom;
-		const previous = pinch?.scale ?? this.effectiveScale();
+		let zoom = this.wheelZoom;
+		const previous = zoom?.scale ?? this.effectiveScale();
 		const scale = clamp(previous * Math.exp(-deltaY / 100), 0.1, 20);
-		// Wheel-based pinches have no end event. Hold the native scroll geometry fixed
-		// until input settles, then commit the scale and scroll together.
-		if (!pinch) {
-			if (scale === this.scale) return;
-			pinch = this.pinchZoom = {
+		// Hold the native scroll geometry fixed until wheel or pinch input settles.
+		if (!zoom) {
+			// Fit can exceed the manual range. A gesture must still move in the requested direction.
+			if (deltaY < 0 ? scale <= previous : scale >= previous) return;
+			zoom = this.wheelZoom = {
 				baseScale: previous,
-				x: capturePinchAxis(this.domNode.clientWidth, this.domNode.scrollLeft, size.width, previous),
-				y: capturePinchAxis(this.domNode.clientHeight, this.domNode.scrollTop, size.height, previous),
+				x: captureWheelZoomAxis(this.domNode.clientWidth, this.domNode.scrollLeft, size.width * previous),
+				y: captureWheelZoomAxis(this.domNode.clientHeight, this.domNode.scrollTop, size.height * previous),
 				scale: previous,
 			};
 			this.media.style.willChange = 'transform';
 		}
-		if (scale !== pinch.scale) {
-			pinch.scale = scale;
-			this.pinchZoomFrame.schedule();
+		if (scale !== previous) {
+			const ratio = scale / previous;
+			zoomAround(zoom.x, anchor?.x ?? zoom.x.viewport / 2, ratio, size.width * scale);
+			zoomAround(zoom.y, anchor?.y ?? zoom.y.viewport / 2, ratio, size.height * scale);
+			zoom.scale = scale;
+			this.wheelZoomFrame.schedule();
 		}
-		this.pinchZoomIdle.schedule();
+		this.wheelZoomIdle.schedule();
 	}
 
-	private renderPinchZoom(): void {
-		const pinch = this.pinchZoom;
-		const size = this.size;
-		if (!pinch || !size) return;
-		const x = pinchImageStart(pinch.x, size.width * pinch.scale, pinch.scale) - pinch.x.start;
-		const y = pinchImageStart(pinch.y, size.height * pinch.scale, pinch.scale) - pinch.y.start;
-		this.media.style.transform = `translate(${x}px, ${y}px) scale(${pinch.scale / pinch.baseScale})`;
-		this.displayScaleChanged.fire(pinch.scale);
+	private renderWheelZoom(): void {
+		const zoom = this.wheelZoom;
+		if (!zoom) return;
+		const x = zoom.x.zoomedStart - zoom.x.start;
+		const y = zoom.y.zoomedStart - zoom.y.start;
+		this.media.style.transform = `translate(${x}px, ${y}px) scale(${zoom.scale / zoom.baseScale})`;
+		this.displayScaleChanged.fire(zoom.scale);
 	}
 
-	private finishPinchZoom(): void {
-		if (this.pinchZoom) this.setScale(this.pinchZoom.scale);
+	private finishWheelZoom(): void {
+		if (this.wheelZoom) this.setScale(this.wheelZoom.scale);
 	}
 
-	private cancelPinchZoom(): void {
-		this.pinchZoomFrame.cancel();
-		this.pinchZoomIdle.cancel();
-		if (this.pinchZoom) {
-			this.pinchZoom = undefined;
+	private cancelWheelZoom(): void {
+		this.wheelZoomFrame.cancel();
+		this.wheelZoomIdle.cancel();
+		if (this.wheelZoom) {
+			this.wheelZoom = undefined;
 			this.media.style.transform = '';
 			this.media.style.willChange = '';
 		}

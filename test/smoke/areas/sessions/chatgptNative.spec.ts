@@ -759,8 +759,8 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(cachedDetail.getByRole('button', { name: '预览 Zed 第二张截图', exact: true })).toBeVisible();
 	});
 
-	test('opens one sent SVG thumbnail inside Chat without opening Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
-		await installService(application as ElectronApplication, false, '', true);
+	test('zooms and pans a sent SVG thumbnail inside Chat without opening Code', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }, testInfo) => {
+		await installService(application as ElectronApplication, false, '\n\nScrollable fixture paragraph.'.repeat(40), true);
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('[data-item="chatgpt:history-one"] .ash-sessions-list-item').click();
 		const chat = page.getByRole('region', { name: 'ChatGPT', exact: true });
@@ -770,6 +770,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(message.locator('img')).toHaveCount(1);
 		await expect(message.locator('pre')).toHaveText('History question');
 		await expect(chat.locator('.ash-chat-media')).toHaveCount(0);
+		await thumbnail.scrollIntoViewIfNeeded();
 		await thumbnail.press('Enter');
 		const preview = page.getByRole('dialog', { name: '预览 diagram.svg' });
 		await expect(preview).toHaveClass('ash-image-preview-popup');
@@ -778,10 +779,61 @@ test.describe('Unified Chat sidebar', () => {
 		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(80);
 		await expect(page.locator('.ash-image-preview')).toHaveCount(0);
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+		const viewport = preview.getByLabel('图片查看区域', { exact: true });
+		const zoomMenu = preview.getByRole('button', { name: /^缩放：[\d,]+%$/u });
+		const bounds = (await viewport.boundingBox())!;
+		const anchor = { x: Math.round(bounds.x + bounds.width * 0.62), y: Math.round(bounds.y + bounds.height / 2) };
+		const imageAtAnchor = () => image.evaluate((element: HTMLImageElement, point) => {
+			const bounds = element.getBoundingClientRect();
+			return { x: (point.x - bounds.left) / bounds.width, y: (point.y - bounds.top) / bounds.height, width: element.offsetWidth };
+		}, anchor);
+		const fitted = await imageAtAnchor();
+		await page.mouse.move(anchor.x, anchor.y);
+		await page.mouse.wheel(0, -60);
+		await expect.poll(async () => (await imageAtAnchor()).width).toBeGreaterThan(fitted.width);
+		const wheeled = await imageAtAnchor();
+		expect(wheeled.x).toBeCloseTo(fitted.x, 2);
+		expect(wheeled.y).toBeCloseTo(fitted.y, 2);
+
+		// Chromium delivers trackpad pinches as wheel events with ctrlKey set.
+		await viewport.dispatchEvent('wheel', { ctrlKey: true, deltaY: -12, clientX: anchor.x, clientY: anchor.y, bubbles: true, cancelable: true });
+		await expect.poll(async () => (await imageAtAnchor()).width).toBeGreaterThan(wheeled.width);
+		const pinched = await imageAtAnchor();
+		expect(pinched.x).toBeCloseTo(wheeled.x, 2);
+		expect(pinched.y).toBeCloseTo(wheeled.y, 2);
+
+		const scroll = () => viewport.evaluate(element => ({ x: element.scrollLeft, y: element.scrollTop }));
+		const beforeDrag = await scroll();
+		await page.mouse.down();
+		await page.mouse.move(anchor.x - 45, anchor.y - 35);
+		await page.mouse.up();
+		await expect.poll(scroll).toEqual({ x: beforeDrag.x + 45, y: beforeDrag.y + 35 });
+		expect((await imageAtAnchor()).width).toBe(pinched.width);
+		await viewport.press('Shift+ArrowRight');
+		await expect.poll(async () => (await scroll()).x).toBeGreaterThan(beforeDrag.x + 45);
+		await viewport.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/双指捏合来缩放.*按住 Shift 并按方向键/u);
+		await page.keyboard.press('Escape');
+		await expect(viewport).toBeFocused();
+		await zoomMenu.click();
+		await page.getByRole('menuitemradio', { name: '适应窗口', exact: true }).click();
+		await expect.poll(async () => (await imageAtAnchor()).width).toBe(fitted.width);
+
 		await testInfo.attach('sent-svg-preview', { body: await preview.screenshot(), contentType: 'image/png' });
 		await page.keyboard.press('Escape');
 		await expect(preview).toHaveCount(0);
 		await expect(thumbnail).toBeFocused();
+
+		await thumbnail.press('Enter');
+		await expect(preview).toBeVisible();
+		const transcript = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const outside = (await transcript.boundingBox())!;
+		const scrollTop = () => transcript.evaluate(element => element.scrollTop);
+		const beforeWheel = await scrollTop();
+		await page.mouse.move(outside.x + 8, outside.y + 8);
+		await page.mouse.wheel(0, 150);
+		await expect.poll(scrollTop).toBeGreaterThan(beforeWheel);
 	});
 
 	test('renders colored file icons and quiet links in the conversation', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
