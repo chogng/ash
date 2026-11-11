@@ -59,4 +59,6 @@ Pure helpers may stay beside browser feature orchestration; absence of DOM acces
 
 Register shared dependencies in `workbench.common.main.ts`, desktop-only dependencies in `workbench.desktop.main.ts`, and web-only dependencies in `workbench.web.main.ts`.
 
+Application entry points explicitly sequence the startup phases the application needs, such as service registration, Part creation, layout and restoration. Keep each phase's implementation with its owner. When refactoring startup, verify startup, failure, restoration and disposal through the production entry point.
+
 Service assembly rules: [Dependency Injection](typescript-services.instructions.md#dependency-injection).

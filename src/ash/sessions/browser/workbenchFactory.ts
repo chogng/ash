@@ -16,7 +16,7 @@ import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { Workbench, IWorkbenchOptions } from './workbench.js';
 import { DesktopWorkbench } from './desktopWorkbench.js';
 
-/** Prepares the window resources before constructing its supported desktop presentation. */
+/** Prepares the window resources and starts its supported desktop presentation. */
 export async function createSessionsWorkbench(options: IWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(options.api.extensions, options.api.events);
 	const logger = options.createLogService();
@@ -46,7 +46,7 @@ export async function createSessionsWorkbench(options: IWorkbenchOptions): Promi
 			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, files, logger);
 			options = { ...options, initialConfiguration: (await settings.loadConfiguration()).toJSON() };
 		}
-		return new DesktopWorkbench(options, themes, storage, logger, userDataFiles);
+		return DesktopWorkbench.create(options, themes, storage, logger, userDataFiles);
 	} catch (error) {
 		userDataFiles?.dispose();
 		logger.error('startup', 'Agents startup failed', error);
