@@ -526,7 +526,7 @@
 }
 
 .ash-sessions-list-row.selected {
-	--sessions-row-background: var(--ash-sessions-sidebar-selection-background);
+	--sessions-row-background: var(--ash-sessions-selectionBackground);
 }
 
 .ash-sessions-list:is([data-mode="code"], .ash-chat-navigation)

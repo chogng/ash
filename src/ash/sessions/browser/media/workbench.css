@@ -36,7 +36,7 @@
 
 .ash-sessions-auxiliarybar-frame {
 	position: relative;
-	background: var(--ash-sideBar-background);
+	background: var(--ash-auxiliaryBar-background);
 }
 
 .ash-sessions-auxiliarybar-frame::after {

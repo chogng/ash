@@ -16,6 +16,10 @@
 	font-size: var(--ash-fontSize-body1);
 }
 
+.ash-workbench[data-color-scheme="light"] .ash-session-info {
+	background: var(--ash-sessions-conversation-background);
+}
+
 .ash-session-info[hidden],
 .ash-session-info progress[hidden] {
 	display: none;

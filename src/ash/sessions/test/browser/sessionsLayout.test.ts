@@ -4,8 +4,6 @@ import { QuickAccess } from '../../../../../test/automation/quickaccess.js';
 import { Color } from '../../../base/common/color.js';
 import { URI } from '../../../base/common/uri.js';
 import { StorageTarget } from '../../../platform/storage/common/storage.js';
-import { lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
-import { menuHoverBackground } from '../../../platform/theme/common/colors/menuColors.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/contrib/docs/common/docs.js';
@@ -408,8 +406,7 @@ suite('sessions browser component', () => {
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText('Navigation draft');
 		await expect(chat).not.toHaveAttribute('aria-current');
-		const selectedBackground = Color.Format.CSS.formatRGB(lightColorTheme.getColor(menuHoverBackground)!);
-		await expect(page.locator('.ash-sessions-list-row.selected:has(> .ash-sessions-list-item[aria-current="page"])').first()).toHaveCSS('background-color', selectedBackground);
+		await expect(page.locator('.ash-sessions-list-row.selected:has(> .ash-sessions-list-item[aria-current="page"])').first()).toHaveCSS('background-color', 'rgb(212, 212, 212)');
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await expect(page.locator('html')).toHaveAttribute('data-color-theme', theme);
@@ -781,7 +778,7 @@ suite('sessions browser component', () => {
 			await expect(navigation.getByRole('button', { name: 'Customize' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'briefcase');
 			await expect(navigation.getByRole('button', { name: 'Voice', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
 			await expect(navigation.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
-			await expect(navigation.getByRole('button', { name: 'General' })).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+			await expect(navigation.getByRole('button', { name: 'General' })).toHaveCSS('background-color', 'rgb(212, 212, 212)');
 			await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
 			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toHaveCount(0);
 			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toHaveCount(0);
@@ -1464,12 +1461,72 @@ suite('sessions browser component', () => {
 		}
 	});
 
-	test('Sessions titlebar colors resolve under light and dark themes', async function () {
+	test('Sessions background color updates the light conversation, editor tools, session information and titlebar', async function () {
 		const { page } = browserTests;
-		for (const [id, color] of [['ash-dark', '#1e1e1e'], ['ash-light', '#ffffff']]) {
-			await page.evaluate(id => window.ashSessionsIntegration.setTheme(id), id!);
-			await expect.poll(() => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-titleBar-background').trim())).toBe(color);
+		await page.goto('/sessions.html?multiHost');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+		const conversation = page.locator('[data-part="sessions"]');
+		const titlebar = page.locator('.ash-sessions-titlebar');
+		await titlebar.locator('[data-action-id="ash.sessions.toggleChanges"] button').click();
+		await titlebar.locator('[data-action-id="ash.sessions.toggleFiles"] button').click();
+		await titlebar.locator('[data-action-id="ash.sessions.toggleInfo"] button').click();
+		const changes = page.locator('[data-editor-tool="changes"] [data-part="tool-editor"]');
+		const files = page.locator('.ash-sessions-files-view:visible');
+		const info = conversation.locator('.ash-session-info:visible');
+		const auxiliary = page.locator('.ash-sessions-auxiliarybar-frame');
+		const checkedTools = titlebar.locator('[data-action-id] button.checked');
+		await expect(changes).toBeVisible();
+		await expect(files).toBeVisible();
+		await expect(info).toBeVisible();
+		const shellBackground = () => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-titleBar-background').trim());
+		const setTheme = (theme: string) => page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+		const setBackground = (value: 'warm' | 'cool') => page.evaluate(value => window.ashSessionsIntegration.updateConfiguration('sessions.backgroundColor', value), value);
+		const expectBackground = async (color: string) => {
+			const rgb = Color.Format.CSS.formatRGB(Color.fromHex(color));
+			await expect(conversation).toHaveCSS('background-color', rgb);
+			await expect(changes).toHaveCSS('background-color', rgb);
+			await expect(changes).toHaveCSS('--ash-multiDiffEditor-background', color);
+			await expect(files).toHaveCSS('background-color', rgb);
+			await expect(info).toHaveCSS('background-color', rgb);
+			await expect(auxiliary).toHaveCSS('background-color', rgb);
+			await expect.poll(() => titlebar.evaluate(element => element.style.getPropertyValue('--ash-sessions-titlebar-background'))).toBe(color);
+		};
+		const expectCheckedTools = async (background: string) => {
+			for (const id of ['toggleChanges', 'toggleFiles']) {
+				await expect(checkedTools.and(titlebar.locator(`[data-action-id="ash.sessions.${id}"] button`))).toHaveCSS('background-color', background);
+			}
+		};
+		await setTheme('ash-light');
+		await expect.poll(shellBackground).toBe('#ffffff');
+		await expectBackground('#fdfcfb');
+		await expectCheckedTools('rgb(212, 212, 212)');
+		await setBackground('cool');
+		await expectBackground('#ffffff');
+		await expectCheckedTools('rgb(212, 212, 212)');
+		for (const theme of ['ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await setTheme(theme);
+			if (theme === 'ash-dark') {
+				await expect.poll(shellBackground).toBe('#1e1e1e');
+				await expectCheckedTools('rgb(65, 65, 65)');
+			}
+			const readColors = () => page.evaluate(() => ({
+				conversation: getComputedStyle(document.querySelector('[data-part="sessions"]')!).backgroundColor,
+				changes: getComputedStyle(document.querySelector('[data-editor-tool="changes"] [data-part="tool-editor"]')!).backgroundColor,
+				files: getComputedStyle(document.querySelector('.ash-sessions-files-view')!).backgroundColor,
+				info: getComputedStyle(document.querySelector('.ash-session-info')!).backgroundColor,
+				titlebar: getComputedStyle(document.querySelector('.ash-sessions-titlebar')!).backgroundImage,
+			}));
+			const coolColors = await readColors();
+			await setBackground('warm');
+			await expect.poll(readColors).toEqual(coolColors);
+			await setBackground('cool');
 		}
+		await setTheme('ash-light');
+		await expectBackground('#ffffff');
+		await setBackground('warm');
+		await expectBackground('#fdfcfb');
 	});
 
 
@@ -2047,11 +2104,16 @@ suite('sessions browser component', () => {
 		await expect(appearance).toBeFocused();
 		await submit.click();
 		await expect(dialog.getByRole('alert')).toHaveText('Synthetic save failure');
+		await expect(name).toBeFocused();
 		await expect(name).toHaveValue(chinese ? expectedName : '');
 		await expect(names).toHaveText(['second']);
 		await submit.click();
 		await expect(dialog).toHaveCount(0);
-		await expect(create).toBeFocused();
+		const draft = page.locator('.ash-sessions-chat-slot.active');
+		const workspace = draft.locator('.ash-sessions-workspace-picker');
+		await expect(draft.locator('.ash-chat-input-editor').getByRole('textbox')).toBeFocused();
+		await expect(workspace).toHaveText(expectedName);
+		await expect(workspace).toHaveAttribute('aria-label', /\/workspace\/second$/u);
 		const created = list.getByRole('button', { name: expectedName, exact: true });
 		await expect(created.locator('[data-ash-icon-id="clockface"]')).toHaveCSS('color', previewColor);
 	});

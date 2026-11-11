@@ -2159,8 +2159,8 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 			styles: highlightRows ? {
 				...defaultListStyles,
 				listHoverBackground: 'var(--ash-sessions-sidebar-hover-background)',
-				listActiveSelectionBackground: 'var(--ash-sessions-sidebar-selection-background)',
-				listInactiveSelectionBackground: 'var(--ash-sessions-sidebar-selection-background)',
+				listActiveSelectionBackground: 'var(--ash-sessions-selectionBackground)',
+				listInactiveSelectionBackground: 'var(--ash-sessions-selectionBackground)',
 				listActiveSelectionForeground: 'var(--ash-foreground)',
 			} : {
 				...defaultListStyles,

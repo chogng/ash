@@ -48,11 +48,7 @@
 }
 
 .ash-sessions-tool-editor .ash-editor-group-header .ash-tab-list-inset {
-	--ash-tabList-activeBackground: color-mix(
-		in srgb,
-		var(--ash-editorGroupHeader-tabsBackground) 94%,
-		var(--ash-foreground)
-	);
+	--ash-tabList-activeBackground: var(--ash-sessions-selectionBackground);
 	--ash-tab-list-inactive-background: transparent;
 	--ash-actionBar-gap: var(--ash-spacing-size40);
 }
@@ -100,7 +96,6 @@
 	[data-editor-tool="terminal"]
 	.ash-editor-group-header
 	.ash-tab-list-inset {
-	--ash-tabList-activeBackground: var(--ash-toolbar-hoverBackground);
 	--ash-tabList-hoverBackground: color-mix(
 		in srgb,
 		var(--ash-tabList-activeBackground) 50%,

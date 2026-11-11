@@ -53,10 +53,8 @@
 }
 
 .ash-sessions-activity-item:is(.selected, .active):not(:disabled) {
-	--ash-popup-trigger-background: var(
-		--ash-sessions-sidebar-selection-background
-	);
-	background: var(--ash-sessions-sidebar-selection-background);
+	--ash-popup-trigger-background: var(--ash-sessions-selectionBackground);
+	background: var(--ash-sessions-selectionBackground);
 }
 
 .ash-sessions-activity-item .ash-icon {

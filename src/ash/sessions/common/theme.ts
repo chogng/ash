@@ -1,9 +1,14 @@
+import { Color } from '../../base/common/color.js';
+import type { ColorValue } from '../../platform/theme/common/colorRegistry.js';
 import { registerColor, transparent } from '../../platform/theme/common/colorUtils.js';
 import { primaryButtonBackground } from '../../platform/theme/common/colors/inputColors.js';
-import { hoverBorder } from '../../platform/theme/common/colors/componentColors.js';
+import { actionBarToggledBackground, hoverBorder, tabListActiveBackground } from '../../platform/theme/common/colors/componentColors.js';
 import { accentForeground, foreground } from '../../platform/theme/common/colors/baseColors.js';
 import { editorBackground } from '../../platform/theme/common/colors/editorColors.js';
+import { listActiveSelectionBackground, listActiveSelectionForeground, listInactiveSelectionBackground } from '../../platform/theme/common/colors/listColors.js';
+import { ColorScheme } from '../../platform/theme/common/theme.js';
 import { localize } from '../../nls.js';
+import type { SessionsBackgroundColor } from './configuration.js';
 
 // Sessions-only colors stay here; Agent colors shared by both windows belong in workbench/common/agentsColors.ts.
 export const sessionsConversationBackground = registerColor('sessions.conversation.background', {
@@ -15,6 +20,24 @@ export const sessionsConversationBackground = registerColor('sessions.conversati
 	description: localize('sessions.conversation.background', 'Background of the main conversation in the Sessions window.'),
 	owner: 'sessions.chat',
 });
+
+/** Keep shared Workbench controls on the Agent Window palette without changing IDE defaults. */
+export function getSessionsWindowColorOverrides(scheme: ColorScheme, backgroundColor: SessionsBackgroundColor): Readonly<Record<string, ColorValue>> | undefined {
+	if (scheme !== ColorScheme.Light && scheme !== ColorScheme.Dark) return undefined;
+	const overrides: Record<string, ColorValue> = {
+		[actionBarToggledBackground]: sessionsSelectionBackground,
+		[tabListActiveBackground]: sessionsSelectionBackground,
+		[listActiveSelectionBackground]: sessionsSelectionBackground,
+		[listInactiveSelectionBackground]: sessionsSelectionBackground,
+		[listActiveSelectionForeground]: foreground,
+	};
+	if (scheme === ColorScheme.Light) {
+		overrides[editorBackground] = sessionsConversationBackground;
+		overrides['auxiliaryBar.background'] = sessionsConversationBackground;
+		if (backgroundColor === 'cool') overrides[sessionsConversationBackground] = Color.white;
+	}
+	return overrides;
+}
 
 // Sessions keeps black tooltips in every theme; the shared hover defaults belong to Workbench.
 registerColor('sessions.tooltip.background', {
@@ -61,9 +84,9 @@ registerColor('sessions.activityBar.inactiveForeground', {
 	hcLight: '#000000',
 }, { description: 'Unselected Activity Bar icon color in the Sessions window.', owner: 'sessions.activitybar' });
 
-registerColor('sessions.selectionBackground', {
-	dark: '#303030',
-	light: '#f0f0f0',
+const sessionsSelectionBackground = registerColor('sessions.selectionBackground', {
+	dark: '#414141',
+	light: '#d4d4d4',
 	hcDark: '#333333',
 	hcLight: '#dddddd',
 }, { description: 'Selected item background in the Sessions window.', owner: 'sessions' });

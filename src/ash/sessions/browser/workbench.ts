@@ -344,7 +344,8 @@ import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPref
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../common/windowNavigation.js';
 import { OPEN_ASH_WINDOW_COMMAND_ID } from '../common/sessionCommands.js';
-import { SessionsConfiguration, type SessionsActivityBarLocation } from '../common/configuration.js';
+import { SessionsConfiguration, type SessionsActivityBarLocation, type SessionsBackgroundColor } from '../common/configuration.js';
+import { getSessionsWindowColorOverrides } from '../common/theme.js';
 import { SessionsManagementService } from '../services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
@@ -646,7 +647,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IHostColorSchemeService, this._register(options.createHostColorSchemeService(services)));
 		const themeService = this._register(services.createInstance(WorkbenchThemeService, options.container));
 		services.registerInstance(IThemeService, themeService);
-		themeService.initialize();
+		themeService.initialize({
+			settings: [SessionsConfiguration.backgroundColor],
+			resolve: theme => getSessionsWindowColorOverrides(theme.colorScheme, configurationService.getValue<SessionsBackgroundColor>(SessionsConfiguration.backgroundColor)),
+		});
 		services.registerInstance(IAuxiliaryWindowService, this._register(options.createAuxiliaryWindowService ? options.createAuxiliaryWindowService(ownerWindow, options.container, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, options.container)));
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: options.container,

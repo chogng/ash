@@ -1,9 +1,10 @@
 import './sessionsSplash.css';
+import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import type { IPartsSplash } from '../../../../platform/theme/common/themeService.js';
 import { showPartsSplash } from '../../../../workbench/contrib/splash/browser/splash.js';
 
 export function showSessionsSplash(document: Document, splash: IPartsSplash): void {
-	splash = identifyLegacyChrome(splash);
+	splash = alignLightConversationBackground(identifyLegacyChrome(splash));
 	const shell = showPartsSplash(document, splash);
 	const parts = splash.layoutInfo?.partBounds;
 	const titlebarRegion = shell.querySelector('[data-part="titlebar"]');
@@ -20,6 +21,28 @@ export function showSessionsSplash(document: Document, splash: IPartsSplash): vo
 	separator.style.left = `${sidebar.left + sidebar.width - titlebar.left - border.width}px`;
 	separator.style.borderRight = `${border.width}px ${border.style} ${border.color}`;
 	titlebarRegion.append(separator);
+}
+
+function alignLightConversationBackground(splash: IPartsSplash): IPartsSplash {
+	const layout = splash.layoutInfo;
+	if (!layout || splash.baseTheme !== ColorScheme.Light) return splash;
+
+	// The live conversation and editor share one surface in light themes. An older
+	// cache can still contain the editor default (white) for the conversation alone.
+	const editor = layout.partBounds.find(part => part.id === 'editor');
+	const titlebar = layout.partBounds.find(part => part.id === 'titlebar');
+	const background = editor?.background ?? titlebar?.backgroundGradient?.stops.at(-1)?.color;
+	if (!background) return splash;
+
+	const sidebar = layout.partBounds.find(part => part.id === 'sidebar');
+	const contentLeft = sidebar ? sidebar.left + sidebar.width : 0;
+	const contentTop = titlebar ? titlebar.top + titlebar.height : 0;
+	const partBounds = layout.partBounds.map(part => {
+		// Older snapshots only identify the leading content region by its bounds.
+		const legacyContent = !part.id && part.left === contentLeft && part.top === contentTop;
+		return part.id === 'sessions' || legacyContent ? { ...part, background } : part;
+	});
+	return { ...splash, layoutInfo: { ...layout, partBounds } };
 }
 
 function identifyLegacyChrome(splash: IPartsSplash): IPartsSplash {

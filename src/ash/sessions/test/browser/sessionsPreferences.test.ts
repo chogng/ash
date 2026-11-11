@@ -421,6 +421,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		['sessions.interfaceFontFamily', 'Ash Sans', 'System font', 'system'],
 		['chat.fontFamily', 'Follow interface font', 'Ash Sans SC', 'Ash Sans SC'],
 		['chat.editor.fontFamily', 'Use editor font', 'Ash Mono SC', 'Ash Mono SC'],
+		['sessions.backgroundColor', 'Warm', 'Cool', 'cool'],
 	]) {
 		const picker = window.document.querySelector<HTMLElement>(`[data-settings-item-id="${key}"] [role="combobox"]`)!;
 		assert.equal(picker.textContent, initialLabel);
